@@ -46,6 +46,7 @@ import System.FilePath ((</>), makeRelative, splitDirectories, takeExtension, ta
 import qualified System.Info as Info
 import THC.Interface
 import THC.Compact.Module (readModuleValue, writeModuleValue)
+import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
@@ -412,12 +413,14 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
     :: IO (Either Exception.IOException FilePath)
   check (case wrongAbi of Left _ -> True; Right _ -> False)
     "Original CAPI acquisition accepted a symbol with a different ABI"
+  foreignRecords <- mapM (publishCoreUnit cache False) (Project.installedRecords foreignUnit foreignBundle)
+  records <- mapM (publishCoreUnit cache False) (Project.installedRecords unit first)
   writeJson (root </> directory </> "foreign-packages.json") $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-     "units" .= Project.installedRecords foreignUnit foreignBundle]
+     "units" .= foreignRecords]
   writeJson (root </> directory </> "packages.json") $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-     "units" .= Project.installedRecords unit first]
+     "units" .= records]
   writeJson (root </> directory </> "driver-controls.json") $ object
     ["sourceDeleted" .= True, "bundle" .= Project.bundlePath artifact,
      "sha256" .= Project.bundleHash artifact, "unchangedReuse" .= True,

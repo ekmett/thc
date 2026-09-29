@@ -30,6 +30,7 @@ import System.Exit (die)
 import System.FilePath ((</>), takeDirectory, takeExtension)
 import qualified System.Info as Host
 import GHC.ResponseFile (escapeArgs)
+import THC.Compact.Module (readModuleValue)
 import THC.Driver.Project (prepareWindowsRuntime)
 
 -- Execute the real opaque boxer/projector and its Exception dictionary. Native
@@ -82,7 +83,7 @@ prepareWindowsBridge root = do
   exported <- runLogged 180 root logs "export"
     [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> logs </> "objects")]
     powershell ["-NoProfile","-File",root </> "bin/export-core.ps1","@" ++ response]
-  modules <- map ((root </> core) </>) . filter ((==".json") . takeExtension) <$> listDirectory (root </> core)
+  modules <- map ((root </> core) </>) . filter ((==".cbd") . takeExtension) <$> listDirectory (root </> core)
   let linked = modules ++ ["@" ++ supportManifest]
   support <- readValue supportManifest
   selected <- field "foreignExceptionBridgeUnit" support
@@ -93,10 +94,10 @@ prepareWindowsBridge root = do
   -- its indexed catalogue to finish and close; scalar fixtures remain bounded
   -- separately. This is acquisition/audit time, not a compiled guest-call retry.
   audits <- forM entries $ \entry -> runLogged 300 root logs ("audit-" ++ entry) [] python
-    (["bin/audit-core.py","--entry",entry,"--package-manifest",supportManifest,
+    (["bin/audit-core.py","--entry","main:WindowsBridgeAudit." ++ entry,"--package-manifest",supportManifest,
       "--output",root </> logs </> entry ++ ".audit.json"] ++ modules)
   rejected <- runLoggedExpect 1 60 root logs "audit-missing-support" [] python
-    (["bin/audit-core.py","--entry","roundTripScalar","--output",root </> logs </> "missing-support.audit.json"] ++ modules)
+    (["bin/audit-core.py","--entry","main:WindowsBridgeAudit.roundTripScalar","--output",root </> logs </> "missing-support.audit.json"] ++ modules)
   negative <- readValue (root </> logs </> "missing-support.audit.json")
   issues <- field "issues" negative :: IO [Value]
   unless (any (\value -> case value of
@@ -137,7 +138,7 @@ prepareWindowsSmoke root = do
       logs = directory </> stamp
       native = "build/native"
       oracle = native </> "native-oracle.exe"
-      modules = ["build/core/THC.Prim.Test.json", "build/core/Fixtures.json"]
+      modules = ["build/core/THC.Prim.Test.cbd", "build/core/Fixtures.cbd"]
   createDirectoryIfMissing True (root </> native)
   powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
   exported <- runLogged 300 root logs "export" [] powershell
@@ -153,14 +154,14 @@ prepareWindowsSmoke root = do
   let entries = Set.toAscList (Set.fromList [entry | entry:_ <- rows])
   audits <- forM entries $ \entry ->
     runLogged 60 root logs ("audit-" ++ entry) [] python
-      (["bin/audit-core.py", "--entry", entry, "--output", root </> logs </> entry ++ ".audit.json"] ++ modules)
+      (["bin/audit-core.py", "--entry", "main:Fixtures." ++ entry, "--output", root </> logs </> entry ++ ".audit.json"] ++ modules)
   rejected <- runLoggedExpect 1 60 root logs "audit-missing-entry" [] python
     (["bin/audit-core.py", "--entry", "missingWindowsSmokeEntry", "--output",
       root </> logs </> "missing.audit.json"] ++ modules)
   (cstringCommands, cstringArtifacts) <- prepareCString root logs ghc
   compiler <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  let sources = ["t/fixtures/core/NativeOracle.hs", "t/fixtures/core/Fixtures.hs",
+  let sources = ["t/fixtures/core/NativeOracle.hs", "t/fixtures/core/NativeTiming.hs", "t/fixtures/core/Fixtures.hs",
         "t/fixtures/compiler/THC/Prim/Test.hs", "t/fixtures/core/MapWorkload.hs",
         "t/haskell-fixtures/WindowsSmokeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs",
@@ -191,7 +192,7 @@ prepareCString root logs ghc = do
   let source = "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs"
       overlay = logs </> "cstring-interfaces"
       interface = overlay </> "GHC/Internal/CString.hi"
-      output = "build/map/boot-core/GHC.Internal.CString.json"
+      output = "build/map/boot-core/GHC.Internal.CString.cbd"
       pkg = takeDirectory ghc </> "ghc-pkg.exe"
       oneLine = reverse . dropWhile (\c -> c == '\r' || c == '\n') . reverse
   digest <- hashFile (root </> source)
@@ -217,12 +218,12 @@ prepareCString root logs ghc = do
   exported <- runLogged 60 root logs "cstring-interface" [] helper
     ["--libdir", libdir, "--unit", unit, "--module", "GHC.Internal.CString",
      "--interface", root </> interface, "--way", "vanilla", "--source-notes"]
-  case eitherDecodeStrict (commandStdout exported) of
-    Right (Object envelope) | KeyMap.lookup "status" envelope == Just (String "loaded"),
-      Just core@(Object _) <- KeyMap.lookup "core" envelope -> do
+  case readModuleValue (commandStdout exported) of
+    Right (Object core) | KeyMap.lookup "unit" core == Just (String "ghc-internal"),
+      KeyMap.lookup "module" core == Just (String "GHC.Internal.CString") -> do
         createDirectoryIfMissing True (takeDirectory (root </> output))
-        writeJson (root </> output) core
-    _ -> die "CString helper did not return genuine loaded Core"
+        BS.writeFile (root </> output) (commandStdout exported)
+    _ -> die "CString helper did not return genuine loaded CBD Core"
   pure ([compiled, exported], output : interface : copied)
 
 interfaceFiles :: FilePath -> FilePath -> IO [FilePath]

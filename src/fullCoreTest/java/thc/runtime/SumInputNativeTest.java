@@ -8,6 +8,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.EntryValue;
 import thc.Json;
 import thc.Language;
@@ -51,7 +52,7 @@ public class SumInputNativeTest {
         var tests = new ArrayList<DynamicTest>();
         for (String stage : List.of("pre", "post")) {
             assertEquals(true, json(new File(directory, stage + "/audit.json")).get("accepted"));
-            var source = json(new File(directory, stage + "/core/SumInputAudit.json"));
+            var source = CoreCbdFixtures.read(new File(directory, stage + "/core/SumInputAudit.cbd").toPath());
             for (var group : rows.entrySet()) {
                 String entry = group.getKey(); var cases = group.getValue();
                 String name = "main:SumInputAudit." + entry;

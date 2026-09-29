@@ -129,9 +129,9 @@ class CStringTest {
         var matches = constructors.stream().filter(value -> Objects.equals(value.get("name"), name)).toList(); assertEquals(1, matches.size()); return (String) matches.getFirst().get("id");
     }
     @Test void genuineGhcCStringDecoderConsumesLiteralBytesBeforeAndAfterCompilation() throws Exception {
-        var root = Path.of(System.getProperty("thc.projectRoot")); var exported = object(Json.parse(Files.readString(root.resolve("build/map/boot-core/GHC.Internal.CString.json"))));
+        var root = Path.of(System.getProperty("thc.projectRoot")); var exported = CoreCbdFixtures.read(root.resolve("build/map/boot-core/GHC.Internal.CString.cbd"));
         var constructors = objects(exported.get("constructors")); var bindings = objects(exported.get("bindings"));
-        var matches = bindings.stream().filter(value -> Objects.equals(value.get("name"), "unpackCString#")).toList(); assertEquals(1, matches.size()); var unpack = (String) matches.getFirst().get("id");
+        var matches = bindings.stream().filter(value -> Objects.equals(value.get("id"), "ghc-internal:GHC.Internal.CString.unpackCString#")).toList(); assertEquals(1, matches.size()); var unpack = (String) matches.getFirst().get("id");
         var summed = primitive("+#", primitive("ord#", variable("char")), apply(variable("sumChars"), list(variable("tail")), list(true)));
         var unbox = list("case", variable("head"), "boxedChar", list(list("data", constructor(constructors, "C#"), list("char"), summed)));
         var traverse = list("case", variable("list"), "spine", list(list("data", constructor(constructors, "[]"), list(), integer(0)), list("data", constructor(constructors, ":"), list("head", "tail"), unbox)));

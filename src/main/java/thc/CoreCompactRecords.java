@@ -371,17 +371,39 @@ public final class CoreCompactRecords {
                 field(cursor, result, "packageScalarLink", () -> scalarLink(cursor));
                 field(cursor, result, "packageNativeLink", () -> nativeLink(cursor));
                 field(cursor, result, "packageNativeArchive", () -> nativeArchive(cursor));
-                if (cursor.getRemaining() != 0) {
-                    require(cursor.readByte() == 1, "Invalid compact Core provenance extension");
-                    field(cursor, result, "roots", () -> texts(cursor));
-                    field(cursor, result, "sourceModules", () -> texts(cursor));
-                    field(cursor, result, "missingDefinitions", () -> list(cursor, () -> strings(cursor, "id", "type", "reason")));
-                    result.put("bindingOrigins", list(cursor, () -> {
-                        var binding = map("id", text(cursor));
-                        field(cursor, binding, "origin", () -> text(cursor));
-                        field(cursor, binding, "originModule", () -> text(cursor));
-                        return binding;
-                    }));
+                int extensions = 0;
+                while (cursor.getRemaining() != 0) {
+                    int tag = cursor.readByte();
+                    require(tag == 1 || tag == 2, "Invalid compact Core metadata extension");
+                    require((extensions & (1 << tag)) == 0, "Duplicate compact Core metadata extension");
+                    extensions |= 1 << tag;
+                    if (tag == 1) {
+                        field(cursor, result, "roots", () -> texts(cursor));
+                        field(cursor, result, "sourceModules", () -> texts(cursor));
+                        field(cursor, result, "missingDefinitions", () -> list(cursor, () -> strings(cursor, "id", "type", "reason")));
+                        result.put("bindingOrigins", list(cursor, () -> {
+                            var binding = map("id", text(cursor));
+                            field(cursor, binding, "origin", () -> text(cursor));
+                            field(cursor, binding, "originModule", () -> text(cursor));
+                            return binding;
+                        }));
+                    } else {
+                        var policy = map();
+                        int defaultBackend = cursor.readByte();
+                        require(defaultBackend <= 2, "Invalid compact Core default backend");
+                        if (defaultBackend != 0) policy.put("default", defaultBackend == 1 ? "ast" : "bytecode");
+                        var bindings = new LinkedHashMap<String,String>();
+                        byte[] previous = null;
+                        for (int count = cursor.count(); count > 0; count--) {
+                            String id = text(cursor);
+                            byte[] key = id.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                            require(previous == null || Arrays.compareUnsigned(previous, key) < 0, "Unsorted or duplicate compact Core backend binding");
+                            int backend = cursor.readByte();
+                            require(backend == 1 || backend == 2, "Invalid compact Core binding backend");
+                            bindings.put(id, backend == 1 ? "ast" : "bytecode"); previous = key;
+                        }
+                        policy.put("bindings", bindings); result.put("backendPolicy", policy);
+                    }
                 }
                 cursor.expectEnd();
                 return result;

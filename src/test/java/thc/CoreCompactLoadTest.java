@@ -27,6 +27,7 @@ class CoreCompactLoadTest {
         final ByteArrayOutputStream strings = new ByteArrayOutputStream();
         final Bytes data = new Bytes();
         final List<Key> keys = new ArrayList<>();
+        Map<String,Object> backendPolicy;
         record Key(String id, long offset) {}
         Model(String name) { this.name = name; }
         final class Bytes extends ByteArrayOutputStream {
@@ -64,6 +65,13 @@ class CoreCompactLoadTest {
             facts.u(1); facts.text("9.14.1"); facts.text("unit"); facts.text(headerName); facts.text(boundary);
             facts.writeBytes(new byte[6]); // provided/layout/constructors/foreign/bridge/bridgeUnit.
             facts.writeBytes(badProvenance ? new byte[]{2} : new byte[8]);
+            if (backendPolicy != null) {
+                facts.write(2);
+                facts.write(backendPolicy.get("default") == null ? 0 : backendPolicy.get("default").equals("ast") ? 1 : 2);
+                var policies = new TreeMap<String,String>((Map<String,String>) backendPolicy.get("bindings"));
+                facts.u(policies.size());
+                policies.forEach((id, backend) -> { facts.text(id); facts.write(backend.equals("ast") ? 1 : 2); });
+            }
             var rows = new ArrayList<byte[]>();
             for (var key : keys) rows.add(ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
                 .put(MessageDigest.getInstance("MD5").digest(key.id().getBytes(StandardCharsets.UTF_8))).putLong(key.offset()).array());
@@ -80,11 +88,17 @@ class CoreCompactLoadTest {
     }
     private Path fixture() throws Exception { return fixture(false, false, false, false); }
     private Path fixture(boolean badB, boolean recursive, boolean wrongIdentity, boolean badProvenance) throws Exception {
+        return fixture(badB, recursive, wrongIdentity, badProvenance, null, null);
+    }
+    private Path fixture(boolean badB, boolean recursive, boolean wrongIdentity, boolean badProvenance,
+            Map<String,Object> aPolicy, Map<String,Object> bPolicy) throws Exception {
         var a = new Model("A");
+        a.backendPolicy = aPolicy;
         a.function("entry", out -> out.choice(zero -> zero.literal(7), nonzero -> nonzero.call("unit:B.entry")));
         a.function("untouched", out -> out.write(255));
         var aModule = a.write("A", false);
         var b = new Model("B");
+        b.backendPolicy = bPolicy;
         b.function("entry", out -> {
             if (badB) out.write(255);
             else if (recursive) {
@@ -190,6 +204,38 @@ class CoreCompactLoadTest {
             assertEquals(7L, entry.execute(1).asLong()); assertEquals(2L, count(entry, "coreCompactDecodedBindings"));
         }
     }
+    @Test void backendPoliciesSelectColdBindingsAndKeepUnusedBodiesCold() throws Exception {
+        for (String fallback : List.of("ast", "bytecode")) for (boolean override : List.of(false, true)) {
+            CoreFileMappings.shared.evictIdleBelow(directory);
+            String other = fallback.equals("ast") ? "bytecode" : "ast";
+            var aPolicy = map("default", other, "bindings", override ? map("unit:A.entry", fallback) : map());
+            var bPolicy = map("default", override ? other : fallback, "bindings", map());
+            var path = fixture(false, false, false, false, aPolicy, bPolicy);
+            try (var context = Main.executionContext(false)) {
+                var entry = context.eval("thc", CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", fallback, false, false, false));
+                String initial = override ? fallback : other;
+                assertEquals(initial, document(entry.getMember("diagnostics").asString()).get("backend"));
+                assertEquals(initial.equals("bytecode"), entry.hasMember("bytecode"));
+                assertEquals(7L, entry.execute(0).asLong());
+                assertEquals(1L, count(entry, "coreCompactDecodedBindings"));
+                assertEquals(6L, entry.execute(5).asLong());
+                assertEquals("mixed", document(entry.getMember("diagnostics").asString()).get("backend"));
+                assertTrue(entry.hasMember("bytecode"));
+                assertEquals(2L, count(entry, "coreCompactDecodedBindings"));
+                long read = count(entry, "coreCompactDataBytesRead");
+                assertEquals(10L, entry.execute(9).asLong());
+                assertEquals(read, count(entry, "coreCompactDataBytesRead"));
+            }
+        }
+    }
+    @Test void reusablePreparationRejectsReachableBytecodePolicy() throws Exception {
+        var path = fixture(false, false, false, false, null, map("default", "bytecode", "bindings", map()));
+        try (var context = Main.executionContext(false)) {
+            var failure = assertThrows(RuntimeException.class,
+                () -> context.eval("thc", NativeCache.request(List.of("@" + path), "unit:A.entry")));
+            assertTrue(failure.getMessage().contains("Reusable AST code cannot honor bytecode backend policy"), failure.getMessage());
+        }
+    }
     @Test void sourceEnabledOrdinaryLoadAndExecutionDoNotReadOptionalDebugTables() throws Exception {
         var path = fixture();
         for (String backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
@@ -229,7 +275,9 @@ class CoreCompactLoadTest {
             try (var second = Context.newBuilder("thc").engine(engine).build()) {
                 try {
                     var one = first.eval("thc", request(path, "ast", false));
-                    var two = second.eval("thc", request(path, "ast", false));
+                    var two = second.eval("thc", request(path, "bytecode", false));
+                    assertEquals("ast", document(one.getMember("diagnostics").asString()).get("backend"));
+                    assertEquals("bytecode", document(two.getMember("diagnostics").asString()).get("backend"));
                     assertEquals(1L, count(one, "coreCompactPhysicalMappingOpens")); assertEquals(1L, count(two, "coreCompactMappingCacheHits"));
                     assertEquals(1L, count(two, "coreCompactDecodedBindings")); first.close();
                     assertEquals(4L, two.execute(3).asLong()); assertEquals(2L, count(two, "coreCompactDecodedBindings"));

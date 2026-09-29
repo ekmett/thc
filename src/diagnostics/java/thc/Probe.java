@@ -54,7 +54,7 @@ public final class Probe {
                     System.out.println(entry + "\t" + (sample + 1) + "\t" + result.calls() + "\t" + base + "\t" + result.checksum() + "\t" + result.elapsed());
                 }
                 System.err.println("PHASE VERIFY BEGIN");
-                fn.invokeMember("compile");
+                Main.installed((java.util.Map<?, ?>) Json.parse(fn.getMember("diagnostics").asString()));
                 System.err.println("PHASE VERIFY END guestLastTierInstalled=true");
             } else {
                 int repetitions = Integer.parseInt(args[2]);

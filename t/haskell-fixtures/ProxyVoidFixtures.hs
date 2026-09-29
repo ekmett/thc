@@ -69,10 +69,11 @@ prepareProxyVoid root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         map ("-fplugin-opt=THC.Plugin:closure=" ++) entries ++ [source])
-    modules <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
-    let paths = map (core </>) modules
+    modules <- sort <$> listDirectory (root </> core)
+    let paths = [core </> name | name <- modules, takeExtension name == ".cbd"]
+        diagnostics = [core </> name | name <- modules, takeExtension name == ".json"]
     audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
-      (["bin/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", entry]) entries ++ paths)
+      (["bin/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", "main:ProxyVoidAudit." ++ entry]) entries ++ paths)
     result <- json report
     case result of
       Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
@@ -80,7 +81,7 @@ prepareProxyVoid root = do
         KeyMap.lookup "missingGlobals" fields == Just (Array mempty),
         KeyMap.lookup "runtimeExternals" fields == Just (Array mempty) -> pure ()
       _ -> die ("Proxy# strict audit rejected " ++ stage)
-    pure (report : paths ++ commandArtifacts exported ++ commandArtifacts audited)
+    pure (report : paths ++ diagnostics ++ commandArtifacts exported ++ commandArtifacts audited)
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source, driver, predicate, "thc.cabal",

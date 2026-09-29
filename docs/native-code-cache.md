@@ -4,6 +4,12 @@ Compile a selected pure Core entry ahead of time, then run it in a fresh process
 with guest JIT compilation disabled. This produces a native launcher and matching
 code-cache file. Ordinary `thc run` does not use this workflow.
 
+Image builds disable automatic vectorization for both image code and the runtime
+compiler by default, while retaining explicit Vector API intrinsics. Set
+`THC_NATIVE_IMAGE_AUTOVECTORIZE=true` when building the native launcher to enable
+automatic vectorization in both compilers. Use matching settings when comparing
+JVM and native-code-cache runs.
+
 The cache supports the synchronous AST backend: numeric computation, ordinary
 functions and partial applications, lazy data, tuples, sums, vectors and admitted
 managed byte-array operations. Each load gets fresh heap state and CAFs. IO,

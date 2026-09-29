@@ -216,8 +216,9 @@ interfaceCoreCBD options core = serializePostTidyCoreWithAnnotationsCBD (interfa
   (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)
   (interfaceForeign core) (md_anns (interfaceDetails core))
 
--- | Explicit JSON inspection output, derived from CBD rather than a second
--- executable writer. Never used for normal acquisition or execution.
+-- | Explicit JSON inspection output. With "pretty-diagnostics", retain the
+-- rich producer model, including names, types and source Core; otherwise derive
+-- inspection from CBD. Never used for normal acquisition or execution.
 interfaceCoreJSON :: [CommandLineOption] -> InterfaceCore -> IO String
 interfaceCoreJSON options core = serializePostTidyCoreWithAnnotations (interfaceFlags core) options
   (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)

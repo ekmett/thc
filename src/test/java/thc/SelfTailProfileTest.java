@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SelfTailProfileTest {
     private final Path project = Path.of(System.getProperty("thc.projectRoot"));
     private final List<String> modules = List.of("THC.Prim.Test", "Fixtures").stream()
-        .map(name -> project.resolve("build/core/" + name + ".json").toString()).toList();
+        .map(name -> project.resolve("build/core/" + name + ".cbd").toString()).toList();
     private long count(Value function, String name) {
         return ((Number) ((Map<?, ?>) Json.parse(function.getMember("diagnostics").asString())).get(name)).longValue();
     }
@@ -24,7 +24,7 @@ class SelfTailProfileTest {
     }
     @Test void firstSelfTailAfterCompiledBaseCaseRemainsStackSafeAndRecompiles() {
         try (var context = Main.executionContext(false)) {
-            var function = Main.loadEntry(context, modules, "sumLoop");
+            var function = Main.loadEntry(context, modules, "main:Fixtures.sumLoop");
             compileBaseCase(function, 0L);
             long reentries = count(function, "selfTailReentries"), bounces = count(function, "tailBounces");
             assertEquals(5_000_050_000L, function.execute(100_000L).asLong());
@@ -39,7 +39,7 @@ class SelfTailProfileTest {
     }
     @Test void firstSelfTailAfterCompiledBaseCaseRestoresChangingCaptures() {
         try (var context = Main.executionContext(false)) {
-            var function = Main.loadEntry(context, modules, "capturedChangingEnv");
+            var function = Main.loadEntry(context, modules, "main:Fixtures.capturedChangingEnv");
             compileBaseCase(function, 17L);
             long reentries = count(function, "selfTailReentries"), bounces = count(function, "tailBounces");
             assertEquals(100_017L, function.execute(100_000L).asLong());

@@ -35,6 +35,7 @@ import GHC.Types.Error (isEmptyMessages)
 import GHC.Types.ForeignCall (CExportSpec(..), CCallConv(..), CCallTarget(..))
 import qualified GHC.Unit.Module.WholeCoreBindings as Foreign
 import THC.ForeignExports (ExportName(..))
+import THC.BackendAnnotations (knownBackendHook)
 
 data Product = Product
   (Maybe (String, String, [(Bool,String,String,String)], [(Bool,String,String,String)]))
@@ -62,13 +63,15 @@ productOf (Foreign.IfaceForeign stubs files) = Product (fmap stub stubs) (map fi
 -- unit/module whose plugin closure GHC actually resolved, without loading its
 -- interface or linking the guest's native dependencies. TypeRep identifies the
 -- package actually containing this producer's code. Mixed pipelines stay closed.
-knownPipeline :: HscEnv -> Bool
-knownPipeline environment = null (staticPlugins plugins) && noHooks (hsc_hooks environment) &&
-  case (loadedPlugins plugins, externalPlugins plugins) of
-    ([loaded], []) -> let owner = mi_module (lpModule loaded) in
-      sameProducer (unitString (moduleUnit owner)) (moduleNameString (moduleName owner))
-    ([], [loaded]) -> sameProducer (epUnit loaded) (epModule loaded)
-    _ -> False
+knownPipeline :: HscEnv -> IO Bool
+knownPipeline environment = do
+  knownHook <- knownBackendHook (runPhaseHook (hsc_hooks environment))
+  pure $ knownHook && null (staticPlugins plugins) && noHooks (hsc_hooks environment) &&
+    case (loadedPlugins plugins, externalPlugins plugins) of
+      ([loaded], []) -> let owner = mi_module (lpModule loaded) in
+        sameProducer (unitString (moduleUnit owner)) (moduleNameString (moduleName owner))
+      ([], [loaded]) -> sameProducer (epUnit loaded) (epModule loaded)
+      _ -> False
   where
     plugins = hsc_plugins environment
     producerUnit = Typeable.tyConPackage (Typeable.typeRepTyCon (Typeable.typeRep (Proxy :: Proxy RegistrationProof)))
@@ -77,7 +80,7 @@ knownPipeline environment = null (staticPlugins plugins) && noHooks (hsc_hooks e
       [ isNothing (dsForeignsHook hooks), isNothing (tcForeignImportsHook hooks)
       , isNothing (tcForeignExportsHook hooks), isNothing (hscFrontendHook hooks)
       , isNothing (hscCompileCoreExprHook hooks), isNothing (ghcPrimIfaceHook hooks)
-      , isNothing (runPhaseHook hooks), isNothing (runMetaHook hooks)
+      , isNothing (runMetaHook hooks)
       , isNothing (linkHook hooks), isNothing (runRnSpliceHook hooks)
       , isNothing (getValueSafelyHook hooks), isNothing (createIservProcessHook hooks)
       , isNothing (stgToCmmHook hooks), isNothing (cmmToRawCmmHook hooks)
@@ -88,6 +91,7 @@ recordProvenance options environment
   | "foreign-export-registration" `notElem` options = pure environment
   | otherwise = do
       top <- getTopEnv
+      pipeline <- liftIO (knownPipeline top)
       pendingPlugins <- liftIO (readIORef (tcg_th_coreplugins environment))
       let flags = hsc_dflags top
           native = platformArch (targetPlatform flags) `elem` [ArchX86_64, ArchAArch64]
@@ -100,7 +104,7 @@ recordProvenance options environment
             not (gopt Opt_Hpc flags) && not (gopt Opt_InfoTableMap flags)
       evidence <- if "foreign-export-associations" `notElem` options
         then pure (Unclassified "missing-typed-associations")
-        else if not (knownPipeline top) || not (null pendingPlugins)
+        else if not pipeline || not (null pendingPlugins)
           then pure (Unclassified "unclassified-plugin-or-hook-pipeline")
           else if not allowed then pure (Unclassified "unclassified-target-or-instrumentation")
           else case roots of

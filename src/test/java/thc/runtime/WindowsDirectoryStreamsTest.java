@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
+import thc.CoreCbdFixtures;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -31,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 class WindowsDirectoryStreamsTest {
     @TempDir Path directory;
+    private Map<String,Object> cbd(String path) throws Exception { return CoreCbdFixtures.read(new File(root,path).toPath()); }
+    private String entryId(String name) { return "main:WindowsDirectoryAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/windows-directory";
     private final Map<String, OriginalStdioOp> operations = new LinkedHashMap<>();
@@ -43,7 +46,7 @@ class WindowsDirectoryStreamsTest {
     private Map<String, Object> json(String path) throws Exception {
         return (Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.toPath().resolve(path)));
     }
-    private Map<String, Object> source(String stage) throws Exception { return json(prefix + "/" + stage + ".json"); }
+    private Map<String, Object> source(String stage) throws Exception { return cbd(prefix + "/" + stage + ".cbd"); }
     private Map<String, Object> source() throws Exception { return source("post"); }
     private ManagedAddress path(String value) {
         return ManagedAddress.fromByteArray((value + '\0').getBytes(StandardCharsets.UTF_16LE));
@@ -76,7 +79,7 @@ class WindowsDirectoryStreamsTest {
         throw new IllegalStateException("Unterminated find-data name");
     }
     private List<Object> original(String name) throws Exception {
-        var calls = OriginalStdioChecks.foreignCalls(CoreModules.INSTANCE.reachable(source(), name, false));
+        var calls = OriginalStdioChecks.foreignCalls(CoreModules.INSTANCE.reachable(source(),entryId(name), false));
         assertEquals(1, calls.size());
         return calls.getFirst();
     }
@@ -98,7 +101,7 @@ class WindowsDirectoryStreamsTest {
             "t/fixtures/compiler/WindowsDirectoryAudit.hsc", "t/haskell-fixtures/WindowsDirectoryFixtures.hs",
             "bin/core_original_foreign.py", "bin/core-capabilities.json"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"),
-            Set.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/oracle.json", prefix + "/win32-source.json"), prefix + "/");
+            Set.of(prefix + "/pre.cbd", prefix + "/post.cbd", prefix + "/oracle.json", prefix + "/win32-source.json"), prefix + "/");
         var receipt = json(prefix + "/win32-source.json");
         assertEquals(true, receipt.get("sourcesUnchangedAfterBuild"));
         assertEquals("69d15a9fb4ef718353aaf8700a64c5885743d4f34a94f7da273fa12584df0315", receipt.get("archiveSha256"));
@@ -135,7 +138,7 @@ class WindowsDirectoryStreamsTest {
                     module.put("instrument", true);
                     var executable = program(language, backend, module);
                     var targets = new LinkedHashMap<String, RootCallTarget>();
-                    for (var entry : operations.keySet()) targets.put(entry, executable.entryTarget(entry));
+                    for (var entry : operations.keySet()) targets.put(entry, executable.entryTarget(entryId(entry)));
                     class Exercise {
                         boolean compiled;
                         Object invoke(String entry, Object... args) throws Exception {

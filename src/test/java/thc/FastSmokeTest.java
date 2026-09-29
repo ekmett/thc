@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class FastSmokeTest {
     private final Path project = Path.of(System.getProperty("thc.projectRoot"));
     private final List<String> modules = List.of("THC.Prim.Test", "Fixtures").stream()
-        .map(name -> project.resolve("build/core/" + name + ".json").toString()).toList();
+        .map(name -> project.resolve("build/core/" + name + ".cbd").toString()).toList();
     private record Row(String entry, long input, long expected) {}
     private Map<String, List<Row>> nativeRows() throws Exception {
         Map<String, List<Row>> result = new LinkedHashMap<>();
@@ -40,7 +40,7 @@ class FastSmokeTest {
         }
         for (String backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
             for (String entry : List.of("under", "sumLoop")) {
-                var function = Main.loadEntry(context, modules, entry, true, backend);
+                var function = Main.loadEntry(context, modules, "main:Fixtures." + entry, true, backend);
                 assertEquals(backend, diagnostics(function).get("backend"));
                 for (Row row : rows.get(entry)) assertEquals(row.expected, function.execute(row.input).asLong(),
                     backend + "/" + entry + "(" + row.input + ") interpreted");

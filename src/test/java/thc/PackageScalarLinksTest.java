@@ -136,6 +136,18 @@ class PackageScalarLinksTest {
         assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule,
             "packageNativeLink", with(link, "abi", List.of()))), "ordinary typed ABI proof is still required");
     }
+    @Test void completeCallInventoriesIgnoreTraversalOrderButKeepDescriptorsAndCounts() {
+        var first = map("target", map("unit", "scalar-fixture", "symbol", "first"),
+            "safety", "unsafe", "argumentReps", list("AddrRep", "IntRep"));
+        var second = with(first, "target", map("unit", "scalar-fixture", "symbol", "second"));
+        var expected = list(first, second, first);
+        // CBD enumerates bindings by fingerprint; this is not call execution order.
+        assertDoesNotThrow(() -> CoreCallInventory.check(expected, list(second, first, first), true));
+        for (var actual : List.of(list(first, second), list(first, second, first, second),
+                list(first, first, first), list(second, first, with(first, "safety", "safe")),
+                list(second, first, with(first, "argumentReps", list("IntRep", "AddrRep")))))
+            assertThrows(IllegalArgumentException.class, () -> CoreCallInventory.check(expected, actual, true));
+    }
     @Test void demandedBindingsUseOriginalInventoriesWithoutClaimingCompleteness() throws Exception {
         var base = module(); var proof = object(base, "staticForeignImports"); var call = map("target", map("unit", base.get("unit"), "symbol", "scalar_value"));
         var first = binding("first", list(call)); var second = binding("second", list(call));

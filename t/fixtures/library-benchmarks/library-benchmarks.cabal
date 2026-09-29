@@ -1,0 +1,72 @@
+cabal-version: 3.0
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: library-benchmarks
+version: 0.1.0.0
+build-type: Simple
+license: UPL-1.0 AND BSD-3-Clause
+
+executable library-core
+  main-is: CoreMain.hs
+  other-modules: ByteStringBenchmarks
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0
+  default-language: GHC2021
+  ghc-options: -O2
+
+executable aeson-native
+  main-is: AesonOracle.hs
+  hs-source-dirs: ., ../core
+  other-modules: AesonBenchmarks, NativeTiming
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0,
+                aeson ==2.3.2.0, deepseq, vector
+  default-language: GHC2021
+  ghc-options: -O2 -rtsopts
+
+executable bytestring-native
+  main-is: LibraryOracle.hs
+  hs-source-dirs: ., ../core
+  other-modules: ByteStringBenchmarks, NativeTiming
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0
+  default-language: GHC2021
+  ghc-options: -O2 -rtsopts
+
+executable text-native
+  main-is: TextOracle.hs
+  hs-source-dirs: ., ../core
+  other-modules: TextBenchmarks, NativeTiming
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0, text ==2.1.3
+  default-language: GHC2021
+  ghc-options: -O2 -rtsopts
+
+test-suite oracle-checks
+  type: exitcode-stdio-1.0
+  main-is: CheckCorpora.hs
+  other-modules: AesonBenchmarks, ByteStringBenchmarks, TextBenchmarks
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0,
+                text ==2.1.3, aeson ==2.3.2.0, deepseq, vector
+  default-language: GHC2021
+  ghc-options: -O2
+
+executable text-core
+  main-is: TextCoreMain.hs
+  other-modules: TextBenchmarks
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0, text ==2.1.3
+  default-language: GHC2021
+  ghc-options: -O2
+
+executable aeson-core
+  main-is: AesonCoreMain.hs
+  other-modules: AesonBenchmarks
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0,
+                aeson ==2.3.2.0, deepseq, vector
+  default-language: GHC2021
+  ghc-options: -O2
+
+test-suite aeson-content-checks
+  type: exitcode-stdio-1.0
+  main-is: CheckAesonContent.hs
+  other-modules: AesonBenchmarks
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0,
+                aeson ==2.3.2.0, deepseq, vector
+  default-language: GHC2021
+  ghc-options: -O2

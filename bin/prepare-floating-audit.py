@@ -88,10 +88,10 @@ def main():
         entries.add(name)
     assert len(entries) == 15 and len(rows.splitlines()) == 441
     (OUT / 'oracle.tsv').write_text(rows)
-    subprocess.run(['bin/export-core.sh', str(FIXTURE)], cwd=ROOT, check=True,
+    subprocess.run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', str(FIXTURE)], cwd=ROOT, check=True,
                    env=dict(os.environ, THC_CORE_OUT=str(OUT / 'core'), THC_GHC_OUT=str(OUT / 'ghc')))
-    module_path = OUT / 'core/FloatingAudit.json'
-    module = json.loads(module_path.read_text())
+    module_path = OUT / 'core/FloatingAudit.cbd'
+    module = json.loads(module_path.with_suffix('.json').read_text())
     primitives = {node[1] for node in walk(module['bindings']) if isinstance(node, list) and node and node[0] == 'prim'}
     assert set(PRIMITIVES) <= primitives, sorted(set(PRIMITIVES) - primitives)
     bindings = {b['name']: b for b in module['bindings']}
@@ -127,7 +127,7 @@ def main():
         floatingJoinFormals=join_formals,
         ordinaryCprResult=dict(entry='floatingTupleFrontier', summary=audits['floatingTupleFrontier']),
         conversionDomain='Finite representable Int results only; non-finite/out-of-range conversions excluded',
-        artifacts=[record(module_path), record(OUT / 'oracle.tsv'), record(native / 'floating-oracle')],
+        artifacts=[record(module_path), record(module_path.with_suffix('.json')), record(OUT / 'oracle.tsv'), record(native / 'floating-oracle')],
         toolchain=dict(ghc=GHC, version='9.14.1', nativeFlags=['-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint']),
         sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()),
                  record(ROOT / 'bin/audit-core.py'), record(ROOT / 'bin/core-capabilities.json'),

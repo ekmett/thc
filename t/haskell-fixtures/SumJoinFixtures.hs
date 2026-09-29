@@ -24,6 +24,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
+import THC.Compact.Module (readModuleValue)
 
 walk :: Value -> [Value]
 walk value = value : case value of
@@ -53,12 +54,13 @@ prepareSumJoins root = do
   BS.writeFile (output </> "oracle.tsv") (commandStdout observations)
   artifacts <- fmap concat $ forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        modulePath = core </> "SumJoinAudit.json"
+        modulePath = core </> "SumJoinAudit.cbd"
     exported <- runLogged 180 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     bytes <- BS.readFile (root </> modulePath)
-    let nodes = maybe [] walk (decodeStrict' bytes)
+    value <- either die pure (readModuleValue bytes)
+    let nodes = walk value
         joins = [fields | Object fields <- nodes,
                           KeyMap.member "joinValueArity" fields]
     unless (length joins >= 6 && all (\fields -> case KeyMap.lookup "joinResultRep" fields of
@@ -75,7 +77,7 @@ prepareSumJoins root = do
     unless (length states >= 2) (die "Sum-join fixture lost its genuine runRW# state lambdas")
     forM_ [("tupleForward", "unboxed-tuple"), ("sumForward", "unboxed-sum")] $ \(name, aggregate) -> do
       let preserved = [() | Object binding <- nodes,
-                            KeyMap.lookup "name" binding == Just (String name),
+                            KeyMap.lookup "id" binding == Just (String ("main:SumJoinAudit." <> name)),
                             Just (Array lambda) <- [KeyMap.lookup "expr" binding],
                             String "lam" : _ : Array body : Object metadata : _ <- [toList lambda],
                             Just (Object result) <- [KeyMap.lookup "resultRep" metadata],
@@ -90,10 +92,10 @@ prepareSumJoins root = do
       unless (length preserved == 1) (die "Sum-case fixture lost its genuine three-slot result boundary")
     let report = directory </> stage </> "audit.json"
     audited <- runLogged 30 root logs (stage ++ "-audit") [] "python3"
-      (["bin/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", entry]) entries ++ [modulePath])
+      (["bin/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", "main:SumJoinAudit." ++ entry]) entries ++ [modulePath])
     auditBytes <- BS.readFile (root </> report)
     case decodeStrict' auditBytes of
-      Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True) -> pure ()
+      Just (Object audit) | KeyMap.lookup "accepted" audit == Just (Bool True) -> pure ()
       _ -> die ("Strict sum-join audit rejected " ++ stage)
     pure (modulePath : report : commandArtifacts exported ++ commandArtifacts audited)
   sourceHashes <- hashes root [source, driver, "t/haskell-fixtures/SumJoinFixtures.hs",

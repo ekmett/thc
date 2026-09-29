@@ -26,6 +26,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import THC.Compact.Module (readModuleValue)
 
 walk :: Value -> [Value]
 walk value = value : case value of
@@ -66,8 +67,8 @@ prepareSumInputs root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ [source])
-    let path = core </> "SumInputAudit.json"
-    nodes <- walk <$> readJson (root </> path)
+    let path = core </> "SumInputAudit.cbd"
+    nodes <- BS.readFile (root </> path) >>= either die (pure . walk) . readModuleValue
     let inputs = [() | Array parts <- nodes, String "lam" : Array binders : _ <- [toList parts],
           Object binder <- toList binders, Just (Object proof) <- [KeyMap.lookup "rep" binder],
           KeyMap.lookup "aggregate" proof == Just (String "unboxed-sum")]
@@ -76,7 +77,7 @@ prepareSumInputs root = do
           String "var" : String name : _ <- [toList function], ".consume" `Text.isSuffixOf` name,
           length (toList arguments) < 3]
         overArities = [length (toList parameters) | Object binding <- nodes,
-          KeyMap.lookup "name" binding == Just (String "over"),
+          KeyMap.lookup "id" binding == Just (String "main:SumInputAudit.over"),
           Just (Array rhs) <- [KeyMap.lookup "expr" binding],
           String "lam" : Array parameters : _ <- [toList rhs]]
         captures = [() | Array parts <- nodes, String "lam" : Array parameters : body : _ <- [toList parts],

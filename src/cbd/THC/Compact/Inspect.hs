@@ -277,7 +277,14 @@ moduleJSON facts bindings = object $ ["schema" .= factsSchema facts,"ghc" .= str
   ++ concat (zipWith (\key -> p (Key.fromText (Text.decodeUtf8 key)) provenance)
        pendingProvenanceNames (factsPendingProvenance facts))
   ++ maybe [] closureFields (factsClosureProvenance facts)
+  ++ maybe [] (\(BackendPolicy def overrides) -> ["backendPolicy" .= object
+       (maybe [] (\backend -> ["default" .= backendName backend]) def ++
+        ["bindings" .= object [Key.fromText (Text.decodeUtf8 key) .= backendName backend | (key,backend) <- overrides]])])
+       (factsBackendPolicy facts)
+
   where
+    backendName AstBackend = String "ast"
+    backendName BytecodeBackend = String "bytecode"
     closureFields (ClosureProvenance roots modules missing _) =
       p "roots" (arr str) roots ++ p "sourceModules" (arr str) modules ++
       p "missingDefinitions" (arr (\(MissingDefinition key ty reason) -> object

@@ -189,7 +189,7 @@ public final class Main {
         }
     }
     private static List<String> modules(String text) { return Arrays.asList(text.split(",", -1)); }
-    private static void installed(Map<?, ?> diagnostics) {
+    static void installed(Map<?, ?> diagnostics) {
         var observation = (Map<?, ?>) diagnostics.get("explicitCompilation");
         check(((Number) observation.get("targetCount")).intValue() > 0 && Boolean.TRUE.equals(observation.get("sameTargets")) && Boolean.TRUE.equals(observation.get("validLastTier")),
             "Explicitly installed guest targets changed or became invalid");

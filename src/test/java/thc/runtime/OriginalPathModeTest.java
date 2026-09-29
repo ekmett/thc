@@ -26,12 +26,14 @@ import static thc.runtime.OriginalStdioChecks.*;
 @SuppressWarnings("unchecked")
 class OriginalPathModeTest {
     @TempDir Path directory;
+    private Map<String,Object> cbd(String path) throws Exception { return CoreCbdFixtures.read(new File(root,path).toPath()); }
+    private String entryId(String name) { return "main:OriginalPathModeAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-path-mode";
     private final Map<String,OriginalStdioOp> operations = new LinkedHashMap<>();
     OriginalPathModeTest() { operations.put("pathMkdir",OriginalStdioOp.MKDIR); operations.put("pathChmod",OriginalStdioOp.CHMOD); }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> source(String stage) throws Exception { return json(prefix + "/" + stage + ".json"); }
+    private Map<String,Object> source(String stage) throws Exception { return cbd(prefix + "/" + stage + ".cbd"); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private ManagedAddress cstring(String value) { return ManagedAddress.fromByteArray((value + "\0").getBytes(StandardCharsets.UTF_8)); }
     private ExecutableProgram program(Language language,String backend,Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
@@ -41,7 +43,7 @@ class OriginalPathModeTest {
     private void released(Language language) { var handoff = language.getHandoffState().get(); assertEquals(0,handoff.getArguments().getDepth()); assertEquals(0,handoff.getResults().getDepth()); assertEquals(0,handoff.getArguments().retainedReferences()); assertEquals(0,handoff.getResults().retainedReferences()); }
     private OriginalStdioOp validate(List<Object> call) { var reps = new ArrayList<Object>(); for (var arg : (List<List<Object>>) call.get(2)) { var metadata = CoreRepresentations.metadata(arg); reps.add(metadata == null ? null : metadata.get("rep")); } return CoreOriginalStdio.validate(call.get(6),reps,(List<?>) call.get(3),((Map<?,?>) call.get(6)).get("rep")); }
     private List<Object> original(String name) throws Exception { return original(name,"post"); }
-    private List<Object> original(String name,String stage) throws Exception { return single(foreignCalls(CoreModules.reachable(source(stage),name)),ignored -> true); }
+    private List<Object> original(String name,String stage) throws Exception { return single(foreignCalls(CoreModules.reachable(source(stage),entryId(name))),ignored -> true); }
     private Map<String,Object> raw(List<Object> call) throws Exception { return rawModule(call,source("post")); }
     private ManagedAddress path(Path scratch,byte[] bytes) {
         byte[] prefix = bytes.length == 0 ? new byte[0] : (Path.of(Language.currentState().getEnv().getCurrentWorkingDirectory().getPath()).relativize(scratch) + "/").getBytes(StandardCharsets.UTF_8);
@@ -56,7 +58,7 @@ class OriginalPathModeTest {
     @Test void originalNativeModesMatchBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(new ArrayList<>(operations.keySet()),manifest.get("entries")); assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest.get("unixUnit")));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalPathModeAudit.hs","t/haskell-fixtures/OriginalPathModeFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + ".json"); for (var name : operations.keySet()) artifacts.add(prefix + "/" + stage + "-" + name + ".audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + ".cbd"); for (var name : operations.keySet()) artifacts.add(prefix + "/" + stage + "-" + name + ".audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var oracle = json(prefix + "/oracle.json"); var rows = (List<Map<String,Object>>) oracle.get("rows"); var mkdir = new ArrayList<Object>(); var chmod = new ArrayList<Object>(); for (var row : rows) { if (Objects.equals(row.get("entry"),"pathMkdir")) mkdir.add(row.get("name")); if (Objects.equals(row.get("entry"),"pathChmod")) chmod.add(row.get("name")); }
         assertEquals(List.of("create","zero","wide","existing-file","existing-directory","missing-parent","not-directory","empty","relative","raw"),mkdir);
         assertEquals(List.of("file","zero","wide","directory","link","dangling","missing","not-directory","empty","relative","raw"),chmod);
@@ -64,10 +66,10 @@ class OriginalPathModeTest {
         var probe = Files.createDirectory(directory.resolve("mask-probe"),PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxrwxrwx"))); long creationMask = unixMode(probe), nativeMask = (Long) oracle.get("creationMask");
         for (var stage : List.of("pre","post")) for (var operationEntry : operations.entrySet()) {
             var name = operationEntry.getKey(); var operation = operationEntry.getValue(); var audit = json(prefix + "/" + stage + "-" + name + ".audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals"));
-            var linked = with(CoreModules.reachable(source(stage),name),"instrument",true); var evidence = new ArrayCoreEvidence(linked,name); assertEquals(1,evidence.getBindings().size()); assertEquals(1,evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(operation,validate(original(name,stage)));
+            var linked = with(CoreModules.reachable(source(stage),entryId(name)),"instrument",true); var evidence = new ArrayCoreEvidence(linked,entryId(name)); assertEquals(1,evidence.getBindings().size()); assertEquals(1,evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(operation,validate(original(name,stage)));
             if (operation == OriginalStdioOp.MKDIR) assertEquals(manifest.get("unixUnit"),((Map<?,?>) ((Map<?,?>) ((Map<?,?>) original(name,stage).get(6)).get("foreignCall")).get("target")).get("unit"));
             for (var backend : List.of("ast","bytecode")) try (var context = context()) { entered(context,() -> {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable = program(language,backend,linked); var entry = executable.entryTarget(name); var stdio = Language.currentState().getStdio();
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable = program(language,backend,linked); var entry = executable.entryTarget(entryId(name)); var stdio = Language.currentState().getStdio();
                 class Exercise { void run(boolean compiled) throws Exception {
                     for (var row : rows) if (Objects.equals(row.get("entry"),name)) {
                         var scratch = setup(); var raw = (List<Long>) row.get("path"); byte[] bytes = new byte[raw.size()]; for (int i = 0; i < bytes.length; i++) bytes[i] = raw.get(i).byteValue();

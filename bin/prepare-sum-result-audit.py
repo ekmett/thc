@@ -72,7 +72,7 @@ def main():
     inventories=[]
     for stage in ('pre','post'):
         flags=['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []
-        run(['bin/export-core.sh',*flags,'t/fixtures/compiler/SumResultAudit.hs'],
+        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics',*flags,'t/fixtures/compiler/SumResultAudit.hs'],
             dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         path=OUT/f'{stage}-core/SumResultAudit.json'; module=json.loads(path.read_text())
         require(module['ghc']=='9.14.1' and module['schema']==1 and module['boundary']==

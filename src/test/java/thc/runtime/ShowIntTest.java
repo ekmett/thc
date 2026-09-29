@@ -63,9 +63,10 @@ class ShowIntTest {
         }
         for (var stage : object(manifest.get("stages")).entrySet()) {
             var modules = new ArrayList<Map<String, Object>>();
-            for (var path : expression(stage.getValue())) modules.add(object(Json.parse(Files.readString(root.resolve((String) path)))));
+            for (var path : expression(stage.getValue())) modules.add(CoreCbdFixtures.read(root.resolve((String) path)));
             var module = CoreModules.merge(modules);
             for (var name : list("showChecksum", "showCharacter")) {
+                var entry = "main:ShowIntAudit." + name;
                 var audit = object(Json.parse(Files.readString(root.resolve("build/show-int/" + stage.getKey() + "-" + name + ".audit.json"))));
                 assertEquals(true, audit.get("accepted")); assertTrue(objects(audit.get("reachableBindings")).stream().anyMatch(binding -> worker.equals(binding.get("id"))));
                 var selected = rows.stream().filter(row -> row.name().equals(name)).toList();
@@ -73,10 +74,10 @@ class ShowIntTest {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var instrumented = with(CoreModules.reachable(module, name), "instrument", true);
+                        var instrumented = with(CoreModules.reachable(module, entry), "instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, instrumented) : new BytecodeProgram(language, instrumented);
-                        int arity = name.equals("showChecksum") ? 1 : 2; var function = context.asValue(new EntryValue(program, name, arity));
-                        var host = program.hostEntryTarget(arity); var original = program.entryTarget(name); var digitWorker = program.entryTarget(worker);
+                        int arity = name.equals("showChecksum") ? 1 : 2; var function = context.asValue(new EntryValue(program, entry, arity));
+                        var host = program.hostEntryTarget(arity); var original = program.entryTarget(entry); var digitWorker = program.entryTarget(worker);
                         var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
                         // Warm the retained lengths, signs and selector exits once; no retry/recompile loop.
                         for (var row : selected) check(function, arity, row, label, language);

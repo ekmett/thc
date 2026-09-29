@@ -101,7 +101,7 @@ def main():
         assert version == '9.14.1', f'Exact GHC 9.14.1 required, got {version}'
         commands = []
         for stage in ('pre', 'post'):
-            command = ['bin/export-core.sh'] + (['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []) + [str(SOURCE.relative_to(ROOT))]
+            command = ['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics'] + (['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []) + [str(SOURCE.relative_to(ROOT))]
             env = dict(os.environ, THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'))
             subprocess.run(command, cwd=ROOT, env=env, check=True); commands.append(command)
         native = OUT/'native'; native.mkdir(exist_ok=True)
@@ -110,7 +110,7 @@ def main():
         subprocess.run(command, cwd=ROOT, check=True); commands.append(command)
         (OUT/'oracle.tsv').write_text(subprocess.check_output([str(native/'oracle')], text=True))
         inputs = [SOURCE, NATIVE, ROOT/'src/compiler/THC/Plugin.hs', ROOT/'bin/export-core.sh', ROOT/'bin/toolchain.sh']
-        artifacts = [OUT/'oracle.tsv', OUT/'pre-core/TupleJoinAudit.json', OUT/'post-core/TupleJoinAudit.json', native/'oracle']
+        artifacts = [OUT/'oracle.tsv', native/'oracle'] + [OUT/f'{s}-core/TupleJoinAudit.{ext}' for s in ('pre','post') for ext in ('cbd','json')]
         provenance = dict(ghc=version, ghcInfo=subprocess.check_output([ghc, '--info'], text=True), commands=commands,
                           inputs=list(map(record, inputs)), artifacts=list(map(record, artifacts)))
         (OUT/'provenance.json').write_text(json.dumps(provenance, indent=2)+'\n')

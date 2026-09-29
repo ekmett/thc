@@ -55,7 +55,7 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), makeRelative, takeDirectory, takeExtension)
 import qualified THC.Interface as Interface
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 
 operations :: [(String,String)]
@@ -207,10 +207,10 @@ prepareWindowsCodePages root = do
         adapted = optimized { mg_binds = [NonRec value body | (value,body) <- guests],
           mg_exports = filter (\available -> availName available `elem` map (varName . fst) guests) (mg_exports optimized) }
     liftIO $ do
-      serializeOptimizedCore flagsNow ["unit-qualified"] adapted >>= writeFile (root </> logs </> "pre.json")
+      serializeOptimizedCoreCBD flagsNow ["unit-qualified"] adapted >>= BS.writeFile (root </> logs </> "pre.cbd")
       (tidied,_) <- hscTidy current adapted
-      serializePostTidyCore flagsNow ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-        (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> logs </> "post.json")
+      serializePostTidyCoreCBD flagsNow ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+        (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> logs </> "post.cbd")
     natives <- forM operations $ \(name,symbol) -> liftIO $ do
       let nativeName = case name of first:rest -> "native" ++ toUpper first:rest; [] -> error "Empty entry"
       (value,_,_) <- hscCompileCoreExpr current noSrcSpan (mkLets (mg_binds optimized) (snd (specialize nativeName symbol)))
@@ -219,8 +219,8 @@ prepareWindowsCodePages root = do
     liftIO $ observe (Map.fromList natives)
   writeJson (root </> logs </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre","post"] $ \stage -> forM (map fst operations) $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] python ["bin/audit-core.py","--entry",name,
-      "--output",logs </> stage ++ "-" ++ name ++ ".audit.json",logs </> stage ++ ".json"]
+    execute (stage ++ "-audit-" ++ name) [] python ["bin/audit-core.py","--entry","main:WindowsCodePageAudit." ++ name,
+      "--output",logs </> stage ++ "-" ++ name ++ ".audit.json",logs </> stage ++ ".cbd"]
   afterHashes <- hashes root usedSources
   unless (sourceHashes == afterHashes) (die "Compiling declaration interfaces changed upstream sources")
   let commands = [version,library,registration,rtsRegistration] ++ compiled ++ audits
@@ -229,7 +229,7 @@ prepareWindowsCodePages root = do
         "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
         "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java","src/main/c/windows-directory-abi.c"]
   inputHashes <- hashes root inputs
-  rawArtifacts <- hashes root ([logs </> file | file <- ["pre.json","post.json","oracle.json"]] ++
+  rawArtifacts <- hashes root ([logs </> file | file <- ["pre.cbd","post.cbd","oracle.json"]] ++
     [makeRelative root (overlay </> relative name ++ ".hi") | name <- modules] ++ concatMap commandArtifacts commands ++
     [logs </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"],name <- map fst operations])
   let artifactHashes = Map.mapKeys (map (\c -> if c == '\\' then '/' else c)) rawArtifacts

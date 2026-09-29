@@ -163,15 +163,20 @@ application {
 // Defer to opaque @argument files too, without opening or parsing them here.
 def inheritedJvmOptions = ["JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"]
 def memoryOptionNames = ["UseCompressedOops", "MaxRAM", "MinRAM", "InitialRAM", "@"]
-def defaultCompressedOops = { JavaForkOptions options ->
+def defaultRuntimeOptions = { JavaForkOptions options ->
     def explicit = (options.jvmArgs ?: []) + inheritedJvmOptions.collect { options.environment[it]?.toString() ?: "" }
-    return explicit.any { option -> memoryOptionNames.any { option.contains(it) } } ? [] : ["-XX:+UseCompressedOops"]
+    def defaults = explicit.any { option -> memoryOptionNames.any { option.contains(it) } } ? [] : ["-XX:+UseCompressedOops"]
+    if (!options.systemProperties.containsKey("jdk.graal.Vectorization") &&
+        !explicit.any { it.contains("jdk.graal.Vectorization=") || it.contains("@") }) {
+        defaults.add("-Djdk.graal.Vectorization=false")
+    }
+    return defaults
 }
 tasks.withType(JavaExec).configureEach { task ->
-    jvmArgumentProviders.add({ defaultCompressedOops(task) } as CommandLineArgumentProvider)
+    jvmArgumentProviders.add({ defaultRuntimeOptions(task) } as CommandLineArgumentProvider)
 }
 tasks.withType(Test).configureEach { task ->
-    jvmArgumentProviders.add({ defaultCompressedOops(task) } as CommandLineArgumentProvider)
+    jvmArgumentProviders.add({ defaultRuntimeOptions(task) } as CommandLineArgumentProvider)
 }
 tasks.startScripts {
     // This must happen before Java starts. HotSpot's suspend handler cannot be
@@ -183,18 +188,22 @@ tasks.startScripts {
     // Query these variables rather than expanding their contents into cmd syntax:
     // an otherwise valid quoted -D property can contain shell metacharacters.
     def windowsMemoryPolicy = "(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | \"%SystemRoot%\\System32\\findstr.exe\" /L /C:\"UseCompressedOops\" /C:\"MaxRAM\" /C:\"MinRAM\" /C:\"InitialRAM\" /C:\"@\" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% \"-XX:+UseCompressedOops\""
+    def unixVectorPolicy = 'case "${JAVA_TOOL_OPTIONS-} ${JDK_JAVA_OPTIONS-} ${_JAVA_OPTIONS-} ${JAVA_OPTS-} ${THC_OPTS-}" in\n  *jdk.graal.Vectorization=*|*@*) ;;\n  *) DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS \\"-Djdk.graal.Vectorization=false\\"" ;;\nesac'
+    def windowsVectorPolicy = '(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | "%SystemRoot%\\System32\\findstr.exe" /L /C:"jdk.graal.Vectorization=" /C:"@" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% "-Djdk.graal.Vectorization=false"'
     inputs.property("linuxSignalPolicy", policy)
     inputs.property("unixMemoryPolicy", unixMemoryPolicy)
     inputs.property("windowsMemoryPolicy", windowsMemoryPolicy)
+    inputs.property("unixVectorPolicy", unixVectorPolicy)
+    inputs.property("windowsVectorPolicy", windowsVectorPolicy)
     doLast {
         def unixMarker = "# Collect all arguments for the java command:"
         def unix = unixScript.getText("UTF-8")
         checkBuild(unix.contains(unixMarker)) { "Missing Gradle Unix launcher insertion point" }
-        unixScript.setText(unix.replace(unixMarker, policy + "\n" + unixMemoryPolicy + "\n\n" + unixMarker), "UTF-8")
+        unixScript.setText(unix.replace(unixMarker, policy + "\n" + unixMemoryPolicy + "\n" + unixVectorPolicy + "\n\n" + unixMarker), "UTF-8")
         def windowsMarker = "@rem Execute thc"
         def windows = windowsScript.getText("UTF-8")
         checkBuild(windows.contains(windowsMarker)) { "Missing Gradle Windows launcher insertion point" }
-        windowsScript.setText(windows.replace(windowsMarker, windowsMemoryPolicy.replace("\n", "\r\n") + "\r\n\r\n" + windowsMarker), "UTF-8")
+        windowsScript.setText(windows.replace(windowsMarker, (windowsMemoryPolicy + "\n" + windowsVectorPolicy).replace("\n", "\r\n") + "\r\n\r\n" + windowsMarker), "UTF-8")
     }
 }
 tasks.named("run", JavaExec) {
@@ -215,6 +224,7 @@ tasks.withType(Test).configureEach {
     // Exported Core and native expectations are test inputs even when JVM sources
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
+        include("backend-annotations/**/*.cbd")
         include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "vector-api/core/**/*.json", "vector-api/*.tsv", "java-arrays/core/**/*.json", "java-arrays/packages.json",
             "truffle-strings/core/**/*.json", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",
@@ -234,11 +244,21 @@ tasks.withType(Test).configureEach {
             "bignat-literals/**/*.json", "bignat-literals/*.tsv", "bignat-literals/native/**", "bignat-literals/commands/**",
             "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
             "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
-            "bytestring-sort/*.json", "bytestring-sort/logs/*.stdout", "bytestring-sort/logs/*.stderr", "bytestring-sort/logs/*.command.json",
-            "bytestring-decimal/*.json", "bytestring-decimal/logs/*.stdout", "bytestring-decimal/logs/*.stderr", "bytestring-decimal/logs/*.command.json",
-            "unix-libc/*.json", "unix-libc/logs/*.stdout", "unix-libc/logs/*.stderr", "unix-libc/logs/*.command.json",
-            "proxy-void/**/*.json", "proxy-void/*.tsv", "proxy-void/native/**", "proxy-void/api/**", "proxy-void/commands/**",
-            "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
+            "bytestring-sort/*.cbd", "bytestring-sort/*.json", "bytestring-sort/logs/*.stdout", "bytestring-sort/logs/*.stderr", "bytestring-sort/logs/*.command.json",
+            "bytestring-decimal/*.cbd", "bytestring-decimal/*.json", "bytestring-decimal/logs/*.stdout", "bytestring-decimal/logs/*.stderr", "bytestring-decimal/logs/*.command.json",
+            "original-path-mode/**/*.cbd",
+            "original-path-access/**/*.cbd",
+            "original-path-link/**/*.cbd",
+            "original-path-stat/**/*.cbd",
+            "original-directory-paths/**/*.cbd", "original-directory-streams/**/*.cbd",
+            "original-current-directory/**/*.cbd",
+            "original-unlinkat/**/*.cbd",
+            "original-fstatat/**/*.cbd",
+            "windows-directory/**/*.cbd",
+            "windows-codepages/**/*.cbd",
+            "unix-libc/*.cbd", "unix-libc/*.json", "unix-libc/logs/*.stdout", "unix-libc/logs/*.stderr", "unix-libc/logs/*.command.json",
+            "proxy-void/**/*.cbd", "proxy-void/**/*.json", "proxy-void/*.tsv", "proxy-void/native/**", "proxy-void/api/**", "proxy-void/commands/**",
+            "unsafe-equality/**/*.cbd", "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
             "sum-layout/**/*.json", "sum-layout/*.tsv", "sum-layout/native/**",
@@ -302,7 +322,7 @@ tasks.withType(Test).configureEach {
             "native-addresses/manifest.json", "native-addresses/oracle.json",
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
-            "process-lifecycle/core/*.json", "process-lifecycle/core/logs/*.json",
+            "process-lifecycle/core/*.cbd", "process-lifecycle/core/*.json", "process-lifecycle/core/logs/*.json",
             "process-lifecycle/core/logs/*.stdout", "process-lifecycle/core/logs/*.stderr",
             "process-lifecycle/native/process-oracle", "process-lifecycle/native/sigchld-policy",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
@@ -344,7 +364,7 @@ tasks.withType(Test).configureEach {
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
             "managed-md5-native/**",
             "text-cbits/**/*.json", "text-cbits/*.tsv", "text-cbits/logs/*.stdout", "text-cbits/logs/*.stderr",
-            "unix-wait-status/**/*.json", "unix-wait-status/*.tsv", "unix-wait-status/logs/*.stdout", "unix-wait-status/logs/*.stderr",
+            "unix-wait-status/**/*.cbd", "unix-wait-status/**/*.json", "unix-wait-status/*.tsv", "unix-wait-status/logs/*.stdout", "unix-wait-status/logs/*.stderr",
             "original-stack/manifest.json", "original-stack/run-*/**",
             "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
             "original-stack-formatter/run-*/pre-core/*.json", "original-stack-formatter/run-*/post-core/*.json",
@@ -575,7 +595,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.RtsEventNativeTest") }
-        inputs.files(fileTree("build/rts-event") { include("*.json") })
+        inputs.files(fileTree("build/rts-event") { include("*.cbd", "*.json") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original event prerequisites require fresh first-compiled-entry checks") { true }
@@ -590,7 +610,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.GcStatsNativeTest") }
-        inputs.files(fileTree("build/gc-stats") { include("*.json") })
+        inputs.files(fileTree("build/gc-stats") { include("*.cbd", "*.json") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original GC/statistics native and first-entry checks require a fresh process") { true }
@@ -605,7 +625,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.CompilerRtsNativeTest") }
-        inputs.files(fileTree("build/compiler-rts") { include("*.json", "*.tsv", "UniqueOracle.hs", "unique-oracle") })
+        inputs.files(fileTree("build/compiler-rts") { include("*.cbd", "*.json", "*.tsv", "UniqueOracle.hs", "unique-oracle") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original compiler RTS native/first-entry checks require a fresh process") { true }
@@ -620,7 +640,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.FloatForeignNativeTest") }
-        inputs.files(fileTree("build/float-foreign") { include("*.json", "*.tsv") })
+        inputs.files(fileTree("build/float-foreign") { include("*.cbd", "*.json", "*.tsv") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original floating FFI native/first-entry checks require a fresh process") { true }
@@ -700,7 +720,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.TupleJoinNativeTest") }
-        inputs.files(fileTree("build/tuple-join-input") { include("**/*.json", "*.tsv") })
+        inputs.files(fileTree("build/tuple-join-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled tuple join checks require a fresh process") { true }
@@ -715,7 +735,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.SumInputNativeTest") }
-        inputs.files(fileTree("build/sum-input") { include("**/*.json", "*.tsv") })
+        inputs.files(fileTree("build/sum-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled sum checks require a fresh process") { true }
@@ -745,7 +765,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.SumJoinInputNativeTest") }
-        inputs.files(fileTree("build/sum-join-input") { include("**/*.json", "*.tsv") })
+        inputs.files(fileTree("build/sum-join-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled sum join checks require a fresh process") { true }

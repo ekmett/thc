@@ -45,7 +45,43 @@ import THC.Compact.Writer
 
 semanticTests :: Test
 semanticTests = TestList
-  [ TestLabel "independent nested shared-shape wire golden" $ TestCase $ do
+  [ TestLabel "optional backend policy and header extension rejection" $ TestCase $ do
+      let policy = BackendPolicy (Just AstBackend) [("main:Typed.answer",BytecodeBackend)]
+          both = completeFacts {factsBackendPolicy=Just policy,
+            factsClosureProvenance=Just (ClosureProvenance Missing Missing Missing [])}
+      withEncoded (\_ encoder -> encodeFacts encoder both) $ \_ strings bytes ->
+        assertEqual "closure and policy coexist" (Right both) (decodeFacts bytes strings)
+      withEncoded (\_ encoder -> encodeFacts encoder completeFacts) $ \_ strings bytes -> do
+        assertEqual "old header has no required extension" (Right completeFacts) (decodeFacts bytes strings)
+        forM_ [ [3], [1,0,0,0,0,1,0,0,0,0], [2,1,0,2,1,0], [2,3,0] ] $ \suffix ->
+          assertBool "unknown, duplicate or invalid backend extension" (isLeft (decodeFacts (bytes <> BS.pack suffix) strings))
+      original <- case moduleJSON completeFacts [completeBinding] of
+        Object fields -> pure fields
+        _ -> fail "expected module object"
+      forM_ [object ["default" .= ("other" :: String),"bindings" .= object []],
+             object ["vectorize" .= True,"bindings" .= object []]] $ \invalid ->
+        assertBool "unknown policy rejected" (isLeft (parseModuleWithoutDebug (Object (KM.insert "backendPolicy" invalid original))))
+      let document = moduleJSON both [completeBinding]
+      encoded <- encodeModuleValue document
+      decoded <- either fail pure (readModuleValue encoded)
+      assertEqual "policy inspection" (case document of Object fields -> KM.lookup "backendPolicy" fields; _ -> Nothing)
+        (case decoded of Object fields -> KM.lookup "backendPolicy" fields; _ -> Nothing)
+      withSystemTempDirectory "backend-policy-finalize" $ \directory -> do
+        let destination = directory </> "module.cbd"
+            originalModule = moduleJSON completeFacts [completeBinding]
+            selected = moduleJSON completeFacts {factsBackendPolicy=Just policy} [completeBinding]
+        _ <- writeModuleValue destination originalModule
+        before <- BS.readFile destination
+        finalizeModuleMetadata destination selected
+        after <- BS.readFile destination
+        (_,_,beforeSegments) <- either fail pure (unpackContainer before)
+        (_,_,afterSegments) <- either fail pure (unpackContainer after)
+        assertEqual "policy amendment preserves all payload/debug segments" beforeSegments afterSegments
+        finalizeModuleMetadata destination originalModule
+        retained <- BS.readFile destination
+        assertEqual "later linkage metadata preserves root policy" (Right selected) (readModuleValue retained)
+  , TestLabel "independent nested shared-shape wire golden"
+ $ TestCase $ do
       tokens <- words <$> readFile "t/compact-core/golden/nested-shared-rep-v1.hex"
       golden <- BS.pack <$> mapM (\token -> case readHex token of
         [(value,"")] | value <= (255::Integer) -> pure (fromInteger value)
@@ -582,7 +618,7 @@ completeFacts = Facts 2 "9.14.1" "main" "Typed" "optimized-Core-before-Tidy" (Kn
     [ForeignFile "C" "foreign source" ".c"]))
   (Known (ExceptionBridge 1 "main" "Typed" "main:Typed.box" "main:Typed.project"
     "main:Typed.Payload" "ghc-internal:GHC.Internal.Exception.Type.SomeException"))
-  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing] Nothing
+  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing] Nothing Nothing
 
 completeImports :: ImportProof
 completeImports = ImportProof 1 "retained-static-import-products" "not-linked"

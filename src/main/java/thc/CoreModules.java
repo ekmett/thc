@@ -37,6 +37,19 @@ public final class CoreModules {
     private static Map<String,Object> without(Map<String,Object> map, String... keys) { var copy = new LinkedHashMap<>(map); for (String key : keys) copy.remove(key); return copy; }
     private static Map<String,Object> with(Map<String,Object> map, String key, Object value) { var copy = new LinkedHashMap<>(map); copy.put(key, value); return copy; }
 
+    /** Resolve an admitted module's policy only when its binding needs code. */
+    static String backend(Map<String,Object> module, String binding, String fallback) {
+        if (!module.containsKey("backendPolicy")) return fallback;
+        require(module.get("backendPolicy") instanceof Map<?,?>, "Invalid Core backend policy");
+        var policy = (Map<?,?>) module.get("backendPolicy");
+        require(policy.get("bindings") instanceof Map<?,?>, "Missing Core backend binding policies");
+        var bindings = (Map<?,?>) policy.get("bindings");
+        Object selected = bindings.containsKey(binding) ? bindings.get(binding) : policy.get("default");
+        if (selected == null && !bindings.containsKey(binding) && !policy.containsKey("default")) return fallback;
+        require(Objects.equals(selected, "ast") || Objects.equals(selected, "bytecode"), "Invalid Core backend policy for " + binding);
+        return (String) selected;
+    }
+
     /** Retain linked definitions, never the complete raw package request. */
     public static final class Merger {
         private final Set<String> availableModules;

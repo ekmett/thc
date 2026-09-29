@@ -96,10 +96,10 @@ def main():
         commands.append(dict(argv=[str(OUT / 'native/state-tuple')], stdout=str(OUT / 'oracle.tsv')))
         (OUT / 'oracle.tsv').write_text(subprocess.check_output([str(OUT / 'native/state-tuple')], text=True))
         for stage in STAGES:
-            run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
-            run([sys.executable, 'bin/audit-core.py', str(OUT / f'{stage}-core/StateTupleAudit.json'),
-                 *[part for entry in ENTRIES for part in ('--entry', entry)], '--output', str(OUT / f'{stage}-audit.json')])
+            run([sys.executable, 'bin/audit-core.py', str(OUT / f'{stage}-core/StateTupleAudit.cbd'),
+                 *[part for entry in ENTRIES for part in ('--entry', f'main:StateTupleAudit.{entry}')], '--output', str(OUT / f'{stage}-audit.json')])
         sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh', ROOT / 'bin/export-core.sh',
                    ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')), *audit_inputs()]
         artifacts = [p for folder in ('native', 'pre-core', 'post-core') for p in sorted((OUT / folder).rglob('*')) if p.is_file()]

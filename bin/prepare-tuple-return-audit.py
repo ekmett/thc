@@ -167,7 +167,7 @@ def prepare():
     commands.append(dict(argv=[str(native / 'tuple-return')], stdout=str(OUT / 'oracle.tsv')))
     (OUT / 'oracle.tsv').write_text(output([str(native / 'tuple-return')]) + '\n')
     for stage in STAGES:
-        run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
             dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh',
                ROOT / 'bin/export-core.sh', ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')),

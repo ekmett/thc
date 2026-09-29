@@ -14,15 +14,18 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.ScalarValueTestSupport.*;
 
 class ByteStringDecimalTest {
+    private Map<String,Object> cbd(String path) throws Exception { return CoreCbdFixtures.read(root.resolve(prefix + "/" + path)); }
+    private String entryId(String name) { return "main:ByteStringDecimalAudit." + name; }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/bytestring-decimal";
     private final List<String> entries = list("decimal", "padded18");
     private final boolean nativeAvailable = "Linux".equals(System.getProperty("os.name")) && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"));
     private Object json(String name) throws Exception { return Json.parse(Files.readString(root.resolve(prefix + "/" + name))); }
-    private Map<String, Object> source(String stage) throws Exception { return object(json(stage + ".json")); }
+    private Map<String, Object> source(String stage) throws Exception { return object(cbd(stage + ".cbd")); }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> module) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
@@ -109,7 +112,7 @@ class ByteStringDecimalTest {
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("t/fixtures/compiler/ByteStringDecimalAudit.hs", "t/haskell-fixtures/ByteStringDecimalFixtures.hs",
             "src/test/resources/core/original-bytestring-decimal-descriptors.json", "src/main/java/thc/runtime/CoreByteStringDecimal.java", "src/main/java/thc/runtime/ByteStringDecimal.java",
             "src/main/java/thc/runtime/ByteStringDecimalOp.java", "src/main/java/thc/runtime/ByteStringDecimalExpression.java"), null);
-        var artifacts = new HashSet<>(list(prefix + "/pre.json", prefix + "/post.json", prefix + "/oracle.json"));
+        var artifacts = new HashSet<>(list(prefix + "/pre.cbd", prefix + "/post.cbd", prefix + "/oracle.json"));
         for (var stage : list("pre", "post")) for (var entry : entries) artifacts.add(prefix + "/" + stage + "-" + entry + ".audit.json");
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), artifacts, prefix + "/");
         var retained = object(Json.parse(Files.readString(root.resolve("src/test/resources/core/original-bytestring-decimal-descriptors.json"))));
@@ -127,7 +130,7 @@ class ByteStringDecimalTest {
             }
             for (var entry : entries) {
                 var audit = object(json(stage + "-" + entry + ".audit.json")); assertEquals(true, audit.get("accepted")); assertEquals(list(), audit.get("issues")); assertEquals(list(), audit.get("missingGlobals"));
-                var proof = new ArrayCoreEvidence(source(stage), entry); assertEquals(1, proof.getBindings().size());
+                var proof = new ArrayCoreEvidence(source(stage),entryId(entry)); assertEquals(1, proof.getBindings().size());
                 assertEquals(1, proof.guestLambdas(proof.getRoot().get("expr")).size(), "One typed consumer root");
             }
         }
@@ -149,7 +152,7 @@ class ByteStringDecimalTest {
         var rows = fixture();
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) inside(language -> {
             for (var entry : entries) {
-                var p = program(language, backend, with(CoreModules.reachable(source(stage), entry, true), "instrument", true)); var target = p.entryTarget(entry);
+                var p = program(language, backend, with(CoreModules.reachable(source(stage),entryId(entry), true), "instrument", true)); var target = p.entryTarget(entryId(entry));
                 CheckedConsumer<Boolean> exercise = compiled -> {
                     for (int kind = 0; kind <= (nativeAvailable ? 3 : 2); kind++) for (var row : rows) if (entry.equals(row.get("entry"))) {
                         var base = switch (kind) {
@@ -160,7 +163,7 @@ class ByteStringDecimalTest {
                         try {
                             for (int i = 0; i < 48; i++) base.writeWord8(i, 165);
                             var address = base.plus(7); long before = ((Number) p.diagnostics().get("compiledEntries")).longValue(); if (compiled) valid(target);
-                            var result = Calls.target(target, new Object[]{0L, row.get("input"), address});
+                            var result = callScalarTestTarget(target, new Object[]{0L, row.get("input"), address});
                             assertArrayEquals(HexFormat.of().parseHex((String) row.get("bytes")), bytes(base), stage + "/" + backend + "/" + entry + "/" + kind + "/" + row.get("input"));
                             if (entry.equals("decimal")) {
                                 var end = (ManagedAddress) result; assertTrue(end.sameLocation(address.plus((Long) row.get("end")))); assertEquals(row.get("end"), end.difference(address));
@@ -179,17 +182,17 @@ class ByteStringDecimalTest {
         fixture();
         for (var backend : list("ast", "bytecode")) inside(language -> {
             for (var entry : entries) {
-                var p = program(language, backend, CoreModules.reachable(source("pre"), entry, true)); var target = p.entryTarget(entry);
+                var p = program(language, backend, CoreModules.reachable(source("pre"),entryId(entry), true)); var target = p.entryTarget(entryId(entry));
                 var writable = ManagedAddress.fromByteArray(sentinel(48));
                 for (var address : list(writable.plus(48), writable.plus(-1), ManagedAddress.nullAddress(),
                     ManagedAddress.fromHex("a5".repeat(48)), ManagedAddress.unownedNumeric(1))) {
-                    assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, 10L, address})); assertArrayEquals(sentinel(48), bytes(writable));
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, 10L, address})); assertArrayEquals(sentinel(48), bytes(writable));
                 }
                 int length = entry.equals("decimal") ? 19 : 17; var shortBuffer = ManagedAddress.fromByteArray(sentinel(length));
-                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, entry.equals("decimal") ? Long.MIN_VALUE : 0L, shortBuffer}));
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, entry.equals("decimal") ? Long.MIN_VALUE : 0L, shortBuffer}));
                 for (byte value : bytes(shortBuffer, length)) assertEquals((byte) 0xa5, value);
                 if (entry.equals("padded18")) for (long invalid : list(Long.MIN_VALUE, -1L, 1_000_000_000_000_000_000L, Long.MAX_VALUE)) {
-                    var error = assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, invalid, writable.plus(7)}));
+                    var error = assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, invalid, writable.plus(7)}));
                     assertTrue(Objects.requireNonNull(error.getMessage()).contains("0 <= value < 10^18")); assertArrayEquals(sentinel(48), bytes(writable));
                 }
                 released(language);
@@ -223,7 +226,7 @@ class ByteStringDecimalTest {
                 }
                 var raw = program(language, backend, OriginalStdioChecks.rawModule(original, source("pre"), null));
                 var address = ManagedAddress.fromByteArray(sentinel(48));
-                assertThrows(RuntimeFault.class, () -> Calls.target(raw.entryTarget("entry"), new Object[]{0L, 1L, address, 7L}));
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(raw.entryTarget("entry"), new Object[]{0L, 1L, address, 7L}));
                 assertArrayEquals(sentinel(48), bytes(address)); released(language);
             }
         });

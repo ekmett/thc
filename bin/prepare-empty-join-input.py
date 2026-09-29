@@ -110,7 +110,7 @@ def main():
         commands = [['bin/build-compiler.sh']]
         subprocess.run(commands[0], cwd=ROOT, check=True)
         for stage in ('pre', 'post'):
-            command = ['bin/export-core.sh'] + (['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []) + [str(SOURCE.relative_to(ROOT))]
+            command = ['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics'] + (['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []) + [str(SOURCE.relative_to(ROOT))]
             env = dict(os.environ, THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'))
             subprocess.run(command, cwd=ROOT, env=env, check=True); commands.append(command)
         native = OUT/'native'; native.mkdir(exist_ok=True)
@@ -123,7 +123,7 @@ def main():
                   *sorted((ROOT/'bin').glob('core_*.py')), ROOT/'bin/core-capabilities.json',
                   ROOT/'src/main/resources/thc/scalar-primop-signatures.json']
         verify()
-        artifacts = [OUT/'checks.json', OUT/'pre-audit.json', OUT/'post-audit.json', OUT/'oracle.tsv', OUT/'pre-core/EmptyJoinInputAudit.json', OUT/'post-core/EmptyJoinInputAudit.json', native/'oracle']
+        artifacts = [OUT/'checks.json', OUT/'pre-audit.json', OUT/'post-audit.json', OUT/'oracle.tsv', native/'oracle'] + [OUT/f'{s}-core/EmptyJoinInputAudit.{ext}' for s in ('pre','post') for ext in ('cbd','json')]
         provenance = dict(ghc=version, ghcInfo=subprocess.check_output([ghc, '--info'], text=True), commands=commands,
                           inputs=list(map(record, inputs)), artifacts=list(map(record, artifacts)))
         (OUT/'provenance.json').write_text(json.dumps(provenance, indent=2)+'\n')

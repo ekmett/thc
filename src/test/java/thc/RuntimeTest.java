@@ -6,6 +6,7 @@ import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.nio.file.*;
+import java.security.MessageDigest;
 import java.util.*;
 import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,7 @@ import static thc.CoreExecutionTestSupport.*;
 
 class RuntimeTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private final List<String> modules = list("THC.Prim.Test", "Fixtures").stream().map(name -> root.resolve("build/core/" + name + ".json").toString()).toList();
+    private final List<String> modules = list("THC.Prim.Test", "Fixtures").stream().map(name -> root.resolve("build/core/" + name + ".cbd").toString()).toList();
     record Example(String entry, long input, long expected) {}
     private List<Example> oracle() throws Exception {
         var result = new ArrayList<Example>();
@@ -26,12 +27,34 @@ class RuntimeTest {
     }
     private Map<String, Object> diagnostics(Value value) { return object(Json.parse(value.getMember("diagnostics").asString())); }
     private long count(Value value, String key) { return ((Number) diagnostics(value).get(key)).longValue(); }
+    private String thunkLabel(String owner, String name) throws Exception {
+        var path = root.resolve("build/core/Fixtures.cbd");
+        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
+        try (var file = new CoreCompactFile(path, hash, true)) {
+            var records = new CoreCompactRecords(file, path.toString());
+            var binding = records.binding(Objects.requireNonNull(file.lookup("main:Fixtures." + owner)));
+            var matches = new HashSet<String>();
+            thunkLabels(binding, name, matches);
+            assertEquals(1, matches.size(), owner + "/" + name + " must identify one actual local thunk");
+            return matches.iterator().next();
+        }
+    }
+    private void thunkLabels(Object value, String name, Set<String> matches) {
+        if (value instanceof Map<?, ?> fields) {
+            if (fields.containsKey("expr") && fields.get("id") instanceof String id && id.startsWith("\u0000compact-local:")
+                    && fields.get("compactOrigin") instanceof CoreCompactRecords.Origin origin) {
+                long ordinal = Long.parseLong(id.substring(id.lastIndexOf(':') + 1));
+                if (name.equals(origin.debug().name(origin.bindingOffset(), ordinal + 1))) matches.add(id);
+            }
+            fields.values().forEach(child -> thunkLabels(child, name, matches));
+        } else if (value instanceof List<?> values) values.forEach(child -> thunkLabels(child, name, matches));
+    }
     @Test void exportedHaskellMatchesNativeGhcBeforeAndAfterGuestCompilation() throws Exception {
         try (var context = Main.executionContext(false)) {
             var grouped = new LinkedHashMap<String, List<Example>>();
             for (var row : oracle()) grouped.computeIfAbsent(row.entry, ignored -> new ArrayList<>()).add(row);
             for (var group : grouped.entrySet()) {
-                String entry = group.getKey(); var rows = group.getValue(); var fn = Main.loadEntry(context, modules, entry);
+                String entry = group.getKey(); var rows = group.getValue(); var fn = Main.loadEntry(context, modules, "main:Fixtures." + entry);
                 for (var r : rows) assertEquals(r.expected, fn.execute(r.input).asLong(), entry + "(" + r.input + ") interpreted");
                 for (int i = 0; i < 40; i++) { var r = rows.get(i % rows.size()); assertEquals(r.expected, fn.execute(r.input).asLong()); }
                 assertTrue(fn.invokeMember("compile").asBoolean(), "Guest compilation: " + entry); long before = count(fn, "compiledEntries");
@@ -41,25 +64,25 @@ class RuntimeTest {
             }
         }
     }
-    @Test void sharingPapAndOverapplicationHaveObservableRuntimeCoverage() {
+    @Test void sharingPapAndOverapplicationHaveObservableRuntimeCoverage() throws Exception {
         try (var context = Main.executionContext(false)) {
-            var shared = Main.loadEntry(context, modules, "shared"); assertEquals(120L, shared.execute(7L).asLong());
+            var shared = Main.loadEntry(context, modules, "main:Fixtures.shared"); assertEquals(120L, shared.execute(7L).asLong());
             assertTrue(count(shared, "thunkEvaluations") > 0);
             var entries = (Map<?, ?>) diagnostics(shared).get("thunkEvaluationsByLabel");
-            assertEquals(1L, ((Number) entries.get("x")).longValue(), "Shared Core binding x entered exactly once");
-            var under = Main.loadEntry(context, modules, "under"); assertEquals(14L, under.execute(7L).asLong());
+            assertEquals(1L, ((Number) entries.get(thunkLabel("shared", "x"))).longValue(), "Shared Core binding x entered exactly once");
+            var under = Main.loadEntry(context, modules, "main:Fixtures.under"); assertEquals(14L, under.execute(7L).asLong());
             assertTrue(count(under, "papAllocations") > 0); long updates = count(under, "thunkEvaluations");
             assertEquals(15L, under.execute(8L).asLong());
             assertEquals(updates, count(under, "thunkEvaluations"), "GHC-known WHNF constructors and PAPs need no per-call update thunk");
-            var over = Main.loadEntry(context, modules, "over"); assertEquals(13L, over.execute(0L).asLong()); assertEquals(42L, over.execute(7L).asLong());
+            var over = Main.loadEntry(context, modules, "main:Fixtures.over"); assertEquals(13L, over.execute(0L).asLong()); assertEquals(42L, over.execute(7L).asLong());
         }
     }
     @Test void unusedBottomRemainsLazyAndDemandedBottomBlackholes() {
         try (var context = Main.executionContext(false)) {
             for (String entry : list("lazyArgument", "lazyField")) {
-                var fn = Main.loadEntry(context, modules, entry); assertEquals(123L, fn.execute(123L).asLong()); assertEquals(0L, count(fn, "blackholes"));
+                var fn = Main.loadEntry(context, modules, "main:Fixtures." + entry); assertEquals(123L, fn.execute(123L).asLong()); assertEquals(0L, count(fn, "blackholes"));
             }
-            var bottom = Main.loadEntry(context, modules, "blackhole");
+            var bottom = Main.loadEntry(context, modules, "main:Fixtures.blackhole");
             var error = assertThrows(PolyglotException.class, () -> bottom.execute(0L));
             assertTrue(Objects.toString(error.getMessage(), "").contains("Blackhole"), error.getMessage()); assertEquals(1L, count(bottom, "blackholes"));
             var repeated = assertThrows(PolyglotException.class, () -> bottom.execute(0L)); assertTrue(Objects.toString(repeated.getMessage(), "").contains("Blackhole"));
@@ -68,26 +91,26 @@ class RuntimeTest {
     }
     @Test void cadenzaTailLoopsAndProductiveCafUseBoundedHostStack() {
         try (var context = Main.executionContext(false)) {
-            var sum = Main.loadEntry(context, modules, "sumLoop"); assertEquals(5_000_050_000L, sum.execute(100_000L).asLong());
+            var sum = Main.loadEntry(context, modules, "main:Fixtures.sumLoop"); assertEquals(5_000_050_000L, sum.execute(100_000L).asLong());
             assertTrue(count(sum, "selfTailReentries") >= 100_000L); assertEquals(0L, count(sum, "tailBounces"));
-            var cyclic = Main.loadEntry(context, modules, "recursiveCaf"); assertEquals(100_000L, cyclic.execute(100_000L).asLong());
-            var list = Main.loadEntry(context, modules, "caseList"); assertEquals(50_005_000L, list.execute(10_000L).asLong());
+            var cyclic = Main.loadEntry(context, modules, "main:Fixtures.recursiveCaf"); assertEquals(100_000L, cyclic.execute(100_000L).asLong());
+            var list = Main.loadEntry(context, modules, "main:Fixtures.caseList"); assertEquals(50_005_000L, list.execute(10_000L).asLong());
         }
     }
     @Test void boundedDispatchCacheSurvivesMoreThanThreeTargets() throws Exception {
         try (var context = Main.executionContext(false)) {
-            var fn = Main.loadEntry(context, modules, "cacheSaturation");
+            var fn = Main.loadEntry(context, modules, "main:Fixtures.cacheSaturation");
             var rows = oracle().stream().filter(row -> row.entry.equals("cacheSaturation")).toList(); assertFalse(rows.isEmpty());
             for (int i = 0; i < 4; i++) for (var r : rows) assertEquals(r.expected, fn.execute(r.input).asLong());
             assertTrue(count(fn, "indirectCalls") > 0, "Fixture must reach megamorphic fallback");
             fn.invokeMember("compile"); for (var r : rows) assertEquals(r.expected, fn.execute(r.input).asLong());
-            var mutual = Main.loadEntry(context, modules, "mutualTail"); assertEquals(100_000L, mutual.execute(100_000L).asLong());
-            var mixed = Main.loadEntry(context, modules, "selfMutualTail"); assertEquals(100_000L, mixed.execute(100_000L).asLong());
+            var mutual = Main.loadEntry(context, modules, "main:Fixtures.mutualTail"); assertEquals(100_000L, mutual.execute(100_000L).asLong());
+            var mixed = Main.loadEntry(context, modules, "main:Fixtures.selfMutualTail"); assertEquals(100_000L, mixed.execute(100_000L).asLong());
         }
     }
     @Test void selfTailCallsRefreshChangingPrimitiveCapturesAndReplayOriginalCaf() {
         try (var context = Main.executionContext(false)) {
-            var fn = Main.loadEntry(context, modules, "capturedChangingEnv"); assertEquals(10_017L, fn.execute(10_000L).asLong());
+            var fn = Main.loadEntry(context, modules, "main:Fixtures.capturedChangingEnv"); assertEquals(10_017L, fn.execute(10_000L).asLong());
             assertTrue(fn.invokeMember("compile").asBoolean()); long before = count(fn, "selfTailReentries"), bounces = count(fn, "tailBounces");
             assertEquals(100_017L, fn.execute(100_000L).asLong()); assertTrue(count(fn, "selfTailReentries") - before >= 100_000L);
             assertEquals(bounces, count(fn, "tailBounces"), "Direct self entry needs no tail packet");
@@ -100,18 +123,19 @@ class RuntimeTest {
         Object count = ((Map<?, ?>) diagnostics(value).get("thunkEvaluationsByLabel")).get(label);
         return count instanceof Number number ? number.longValue() : 0;
     }
-    @Test void recursiveCapturedCellsAndEscapedThunksKeepTheirOwnLexicalValues() {
+    @Test void recursiveCapturedCellsAndEscapedThunksKeepTheirOwnLexicalValues() throws Exception {
         try (var context = Main.executionContext(false)) {
-            var mutual = Main.loadEntry(context, modules, "localMutualClosures"); assertEquals(20_040L, mutual.execute(10_000L).asLong());
+            var mutual = Main.loadEntry(context, modules, "main:Fixtures.localMutualClosures"); assertEquals(20_040L, mutual.execute(10_000L).asLong());
             assertTrue(mutual.invokeMember("compile").asBoolean());
             for (long input : new long[]{10_001L, -5L, 0L, 10_000L}) assertEquals(2L * input + 40L, mutual.execute(input).asLong());
-            var escaped = Main.loadEntry(context, modules, "nestedCaptureThunk");
+            var escaped = Main.loadEntry(context, modules, "main:Fixtures.nestedCaptureThunk");
             for (int i = 0; i < 20; i++) escaped.execute((long) i).asLong();
             assertTrue(escaped.invokeMember("compile").asBoolean());
-            long outer = labelCount(escaped, "outer"), middle = labelCount(escaped, "middle");
+            String outerLabel = thunkLabel("escapingFactory", "outer"), middleLabel = thunkLabel("escapingFactory", "middle");
+            long outer = labelCount(escaped, outerLabel), middle = labelCount(escaped, middleLabel);
             long[] inputs = {3_000_000_000L, -3_000_000_000L, 7, 0, 13, -5, 7};
             for (long input : inputs) assertEquals(input * input + 23L, escaped.execute(input).asLong());
-            assertEquals((long) inputs.length, labelCount(escaped, "outer") - outer); assertEquals((long) inputs.length, labelCount(escaped, "middle") - middle);
+            assertEquals((long) inputs.length, labelCount(escaped, outerLabel) - outer); assertEquals((long) inputs.length, labelCount(escaped, middleLabel) - middle);
             assertEquals(0L, count(escaped, "blackholes"));
         }
     }
@@ -223,7 +247,7 @@ class RuntimeTest {
     }
     @Test void repeatedHostEntryKeepsGuestAndInteropCompilable() {
         try (var context = Main.executionContext(false)) {
-            var fn = Main.loadEntry(context, modules, "under", false);
+            var fn = Main.loadEntry(context, modules, "main:Fixtures.under", false);
             for (int i = 0; i < 40; i++) fn.execute(100L + (i & 15)).asLong();
             assertTrue(fn.invokeMember("compile").asBoolean());
             for (int i = 0; i < 20_000; i++) { long input = 100L + (i & 15); assertEquals(input + 7L, fn.execute(input).asLong()); }
@@ -244,7 +268,7 @@ class RuntimeTest {
     }
     @Test void hostKernelAbiRejectsNonIntegralArgumentsAndWrongArity() {
         try (var context = Main.executionContext(false)) {
-            var fn = Main.loadEntry(context, modules, "sumLoop"); assertEquals(6L, fn.execute(3).asLong());
+            var fn = Main.loadEntry(context, modules, "main:Fixtures.sumLoop"); assertEquals(6L, fn.execute(3).asLong());
             assertThrows(PolyglotException.class, () -> fn.execute(1.5)); assertThrows(PolyglotException.class, () -> fn.execute());
         }
     }

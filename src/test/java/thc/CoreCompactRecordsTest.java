@@ -219,6 +219,25 @@ class CoreCompactRecordsTest {
             assertNull(origin.get("originModule")); assertEquals(0L, file.getCounters().statistics().dataBytesRead());
         });
     }
+    @Test void backendPolicyExtensionsAreColdOptionalAndUnique() throws Exception {
+        byte[] text = bytes(0, id.length);
+        byte[] facts = concat(bytes(1), text, text, text, text, new byte[14]);
+        byte[] policy = concat(bytes(2, 1, 1), text, bytes(2));
+        byte[] provenance = bytes(1, 0, 0, 0, 0);
+        for (byte[] extensions : List.of(policy, concat(policy, provenance), concat(provenance, policy))) {
+            module(bytes(255), id, concat(facts, extensions), (records, file) -> {
+                assertEquals(map("default", "ast", "bindings", map("unit:M.f", "bytecode")), records.header().get("backendPolicy"));
+                assertEquals(0L, file.getCounters().statistics().dataBytesRead());
+            });
+        }
+        module(bytes(255), id, facts, (records, file) -> assertFalse(records.header().containsKey("backendPolicy")));
+        module(bytes(255), id, concat(facts, bytes(2, 0, 0)), (records, file) ->
+            assertEquals(map("bindings", map()), records.header().get("backendPolicy")));
+        for (byte[] invalid : List.of(concat(policy, policy), concat(provenance, provenance), bytes(3), bytes(2, 3, 0),
+                concat(bytes(2, 0, 1), text, bytes(0)), concat(bytes(2, 0, 2), text, bytes(1), text, bytes(2)))) {
+            module(bytes(255), id, concat(facts, invalid), (records, file) -> assertThrows(RuntimeException.class, records::header));
+        }
+    }
     @Test void nativeBuildInputsKeepProductProofSeparateFromDependencyReferences() throws Exception {
         byte[] pool = concat(id, "localrepo-tarpathremoteuri".getBytes(StandardCharsets.UTF_8));
         byte[] text = bytes(0, 8), local = bytes(8, 5), repo = bytes(13, 8), path = bytes(21, 4);

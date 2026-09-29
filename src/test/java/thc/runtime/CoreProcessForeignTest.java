@@ -16,6 +16,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import thc.Json;
+import thc.CoreCbdFixtures;
 import static org.junit.jupiter.api.Assertions.*;
 
 @EnabledOnOs(OS.LINUX)
@@ -23,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 public class CoreProcessForeignTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private Object source(String stage) throws Exception { return Json.parse(Files.readString(root.resolve("build/process-lifecycle/core/" + stage + ".json"))); }
+    private Object source(String stage) throws Exception { return CoreCbdFixtures.read(root.resolve("build/process-lifecycle/core/" + stage + ".cbd")); }
     private List<List<Object>> calls(Object value) {
         var result = new ArrayList<List<Object>>();
         if (value instanceof Map<?, ?> map) for (var item : map.values()) result.addAll(calls(item));

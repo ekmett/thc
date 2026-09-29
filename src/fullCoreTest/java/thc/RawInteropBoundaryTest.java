@@ -21,7 +21,7 @@ class RawInteropBoundaryTest {
 
     private static Map<String, Object> source(boolean compact) throws Exception {
         var source = ForeignExceptionFixtureSupport.source("post"); // Checks every producer input and artifact.
-        var original = object(Json.parse(Files.readString(DIRECTORY.resolve("InteropPrimitives.json"))));
+        var original = CoreCbdFixtures.read(DIRECTORY.resolve("InteropPrimitives.cbd"));
         var originalBindings = objects(original.get("bindings"));
         var replacements = new LinkedHashMap<String, Map<String, Object>>();
         if (compact) {

@@ -11,14 +11,17 @@ import thc.*;
 import java.nio.file.*;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.ScalarValueTestSupport.*;
 
 class ByteStringSortTest {
+    private Map<String,Object> cbd(String path) throws Exception { return CoreCbdFixtures.read(root.resolve(prefix + "/" + path)); }
+    private String entryId(String name) { return "main:ByteStringSortAudit." + name; }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/bytestring-sort";
     private final boolean nativeAvailable = "Linux".equals(System.getProperty("os.name")) && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"));
     private Object json(String name) throws Exception { return Json.parse(Files.readString(root.resolve(prefix + "/" + name))); }
-    private Map<String, Object> source(String stage) throws Exception { return object(json(stage + ".json")); }
+    private Map<String, Object> source(String stage) throws Exception { return object(cbd(stage + ".cbd")); }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> module) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
@@ -48,7 +51,7 @@ class ByteStringSortTest {
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("t/fixtures/compiler/ByteStringSortAudit.hs", "t/haskell-fixtures/ByteStringSortFixtures.hs",
             "src/test/resources/core/original-bytestring-sort-descriptor.json", "src/main/java/thc/runtime/CoreByteStringSort.java",
             "src/main/java/thc/runtime/ByteStringSort.java", "src/main/java/thc/runtime/ByteStringSortExpression.java"), null);
-        OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), Set.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/oracle.json",
+        OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), Set.of(prefix + "/pre.cbd", prefix + "/post.cbd", prefix + "/oracle.json",
             prefix + "/pre-sortBytes.audit.json", prefix + "/post-sortBytes.audit.json"), prefix + "/");
         var retained = object(object(Json.parse(Files.readString(root.resolve("src/test/resources/core/original-bytestring-sort-descriptor.json")))).get("fps_sort"));
         for (var stage : list("pre", "post")) {
@@ -60,7 +63,7 @@ class ByteStringSortTest {
             }
             assertTrue(CoreByteStringSort.validate(metadata, arguments, expression(call.get(3)), metadata.get("rep")));
             var audit = object(json(stage + "-sortBytes.audit.json")); assertEquals(true, audit.get("accepted")); assertEquals(list(), audit.get("issues")); assertEquals(list(), audit.get("missingGlobals"));
-            var proof = new ArrayCoreEvidence(source(stage), "sortBytes"); assertEquals(1, proof.getBindings().size()); assertEquals(1, proof.guestLambdas(proof.getRoot().get("expr")).size());
+            var proof = new ArrayCoreEvidence(source(stage),entryId("sortBytes")); assertEquals(1, proof.getBindings().size()); assertEquals(1, proof.guestLambdas(proof.getRoot().get("expr")).size());
         }
         var rows = objects(json("oracle.json")); assertTrue(rows.stream().anyMatch(row -> Long.valueOf(0).equals(row.get("count"))));
         assertTrue(rows.stream().anyMatch(row -> (Long) row.get("count") >= 256L));
@@ -75,7 +78,7 @@ class ByteStringSortTest {
     @Test void originalSortMatchesNativeAtFirstInstalledEntry() throws Exception {
         var rows = fixture();
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) inside(language -> {
-            var p = program(language, backend, with(CoreModules.reachable(source(stage), "sortBytes", true), "instrument", true)); var target = p.entryTarget("sortBytes");
+            var p = program(language, backend, with(CoreModules.reachable(source(stage),entryId("sortBytes"), true), "instrument", true)); var target = p.entryTarget(entryId("sortBytes"));
             CheckedConsumer<Boolean> exercise = compiled -> {
                 for (int kind = 0; kind <= (nativeAvailable ? 3 : 2); kind++) for (var row : rows) {
                     var input = HexFormat.of().parseHex((String) row.get("input"));
@@ -87,7 +90,7 @@ class ByteStringSortTest {
                     try {
                         for (int i = 0; i < input.length; i++) base.writeWord8(i, input[i]);
                         long before = ((Number) p.diagnostics().get("compiledEntries")).longValue(); if (compiled) valid(target);
-                        var result = Calls.target(target, new Object[]{0L, base.plus((Long) row.get("offset")), row.get("count")}); assertEquals(row.get("count"), result);
+                        var result = callScalarTestTarget(target, new Object[]{0L, base.plus((Long) row.get("offset")), row.get("count")}); assertEquals(row.get("count"), result);
                         assertArrayEquals(HexFormat.of().parseHex((String) row.get("bytes")), bytes(base, input.length), stage + "/" + backend + "/" + kind + "/" + row.get("case"));
                         if (compiled) { assertEquals(before + 1, ((Number) p.diagnostics().get("compiledEntries")).longValue()); valid(target); }
                         released(language);
@@ -100,16 +103,16 @@ class ByteStringSortTest {
     @Test void boundsStorageAndLifetimesRejectBeforeMutation() throws Exception {
         fixture();
         for (var backend : list("ast", "bytecode")) inside(language -> {
-            var target = program(language, backend, CoreModules.reachable(source("pre"), "sortBytes", true)).entryTarget("sortBytes");
+            var target = program(language, backend, CoreModules.reachable(source("pre"),entryId("sortBytes"), true)).entryTarget(entryId("sortBytes"));
             byte[] original = {9, 8, 7, 6}; var storage = ManagedAddress.fromByteArray(original.clone());
             record Range(ManagedAddress address, long count) {}
             for (var range : list(new Range(storage, -1L), new Range(storage, Long.MIN_VALUE), new Range(storage, Long.MAX_VALUE),
                 new Range(storage.plus(-1), 1), new Range(storage.plus(4), 1), new Range(storage.plus(2), 3), new Range(ManagedAddress.nullAddress(), 1),
                 new Range(ManagedAddress.unownedNumeric(1), 0), new Range(ManagedAddress.fromHex("09080706"), 4))) {
-                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, range.address(), range.count()})); assertArrayEquals(original, bytes(storage, 4));
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, range.address(), range.count()})); assertArrayEquals(original, bytes(storage, 4));
             }
-            assertEquals(0L, Calls.target(target, new Object[]{0L, ManagedAddress.nullAddress(), 0L}));
-            assertEquals(0L, Calls.target(target, new Object[]{0L, storage.plus(4), 0L}));
+            assertEquals(0L, callScalarTestTarget(target, new Object[]{0L, ManagedAddress.nullAddress(), 0L}));
+            assertEquals(0L, callScalarTestTarget(target, new Object[]{0L, storage.plus(4), 0L}));
             var cells = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8)); cells.writeAddressElementIndex(0, storage);
             assertThrows(RuntimeFault.class, () -> ByteStringSort.sort(cells, 8)); assertTrue(cells.readAddressElementIndex(0).sameLocation(storage));
             if (nativeAvailable) {
@@ -141,7 +144,7 @@ class ByteStringSortTest {
             }
             var raw = program(language, backend, OriginalStdioChecks.rawModule(original, source("pre"), null));
             var storage = ManagedAddress.fromByteArray(new byte[]{3, 2, 1});
-            assertThrows(RuntimeFault.class, () -> Calls.target(raw.entryTarget("entry"), new Object[]{0L, storage, 3L, 7L}));
+            assertThrows(RuntimeFault.class, () -> callScalarTestTarget(raw.entryTarget("entry"), new Object[]{0L, storage, 3L, 7L}));
             assertArrayEquals(new byte[]{3, 2, 1}, bytes(storage, 3)); released(language);
         });
     }

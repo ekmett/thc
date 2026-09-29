@@ -69,7 +69,7 @@ public class SumJoinInputNativeTest {
         }
         assertEquals(7, rows.size()); assertEquals(259, count); var tests = new ArrayList<DynamicTest>();
         for (String stage : List.of("pre", "post")) {
-            assertEquals(true, json(new File(directory, stage + "/audit.json")).get("accepted")); var source = json(new File(directory, stage + "/core/SumJoinInputAudit.json"));
+            assertEquals(true, json(new File(directory, stage + "/audit.json")).get("accepted")); var source = CoreCbdFixtures.read(new File(directory, stage + "/core/SumJoinInputAudit.cbd").toPath());
             for (var group : rows.entrySet()) {
                 String entry = group.getKey(), name = "main:SumJoinInputAudit." + entry; var cases = group.getValue();
                 if (List.of("recursiveSwap", "changingTag").contains(entry)) assertRecursiveWrapper(source, name);

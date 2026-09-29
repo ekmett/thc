@@ -21,6 +21,8 @@ import static thc.runtime.OriginalStdioChecks.*;
 @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
 @SuppressWarnings("unchecked")
 class UnixWaitStatusTest {
+    private Map<String,Object> cbd(String path) throws Exception { return CoreCbdFixtures.read(new File(directory,path).toPath()); }
+    private String entryId(String name) { return "main:UnixWaitStatusAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/unix-wait-status");
     private final List<OriginalStdioOp> operations = new ArrayList<>();
@@ -48,10 +50,10 @@ class UnixWaitStatusTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var group : grouped(rows()).entrySet()) {
-                    var name = group.getKey(); var corpus = group.getValue(); var source = with(CoreModules.reachable(json(stage + ".json"),name),"instrument",true);
+                    var name = group.getKey(); var corpus = group.getValue(); var source = with(CoreModules.reachable(cbd(stage + ".cbd"),entryId(name)),"instrument",true);
                     var bindings = (List<Map<String,Object>>) source.get("bindings"); assertEquals(1,bindings.size());
                     int lambdas = 0; for (var node : nodes(bindings.getFirst().get("expr"))) if (!node.isEmpty() && Objects.equals(node.getFirst(),"lam")) lambdas++; assertEquals(1,lambdas);
-                    var program = program(language,source,backend); var entry = program.entryValue(name); var host = program.hostEntryTarget(1);
+                    var program = program(language,source,backend); var entry = program.entryValue(entryId(name)); var host = program.hostEntryTarget(1);
                     var targets = new ArrayList<RootCallTarget>(); for (var binding : bindings) targets.add(program.entryTarget((String) binding.get("id")));
                     class Check { void call(Row row) { assertEquals(row.result(),Calls.target(host,new Object[]{entry,new Object[]{row.input()}}),stage + "/" + backend + "/inlining=" + inlining + "/" + name + "/" + row.input()); }}
                     var check = new Check(); for (var row : corpus) check.call(row);
@@ -79,7 +81,7 @@ class UnixWaitStatusTest {
                 assertEquals(hash.getValue(),HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file.toPath()))),path); }
         }
         for (var stage : List.of("pre","post")) {
-            var calls = foreignApps(json(stage + ".json")); var expected = new HashSet<String>(); for (var operation : operations) expected.add(symbol(operation,owner));
+            var calls = foreignApps(cbd(stage + ".cbd")); var expected = new HashSet<String>(); for (var operation : operations) expected.add(symbol(operation,owner));
             var actual = new HashSet<Object>(); for (var call : calls) actual.add(target(call).get("symbol")); assertEquals(expected,actual);
             for (var call : calls) assertEquals(owner,target(call).get("unit"));
             for (var operation : operations) { var audit = json(stage + "-wait" + operation.name() + ".audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("missingGlobals")); assertEquals(List.of(),audit.get("issues")); }
@@ -105,7 +107,7 @@ class UnixWaitStatusTest {
         for (var backend : List.of("ast","bytecode")) for (var variant : List.of("unit","safety","convention","arity","width","result","head","flags")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = CoreModules.reachable(json("post.json"),"waitWCOREDUMP");
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = CoreModules.reachable(cbd("post.cbd"),entryId("waitWCOREDUMP"));
                 var app = single(foreignApps(source),ignored -> true); var call = (Map<String,Object>) ((Map<?,?>) app.get(6)).get("foreignCall");
                 switch (variant) {
                     case "unit" -> ((Map<String,Object>) call.get("target")).put("unit","ghc-internal"); case "safety" -> call.put("safety","safe");
@@ -125,7 +127,7 @@ class UnixWaitStatusTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 class Control { Map<String,Object> module(String owner,String symbol) throws Exception {
-                    var source = CoreModules.reachable(json("post.json"),"wait" + operation.name()); var target = target(single(foreignApps(source),ignored -> true)); target.put("unit",owner); target.put("symbol",symbol); return source;
+                    var source = CoreModules.reachable(cbd("post.cbd"),entryId("wait" + operation.name())); var target = target(single(foreignApps(source),ignored -> true)); target.put("unit",owner); target.put("symbol",symbol); return source;
                 }}
                 var control = new Control(); for (var owner : List.of("unix-2.8.8.0-inplace","unix-2.8.8.0-460b","unix-2.8.8.0-deadbeef")) program(language,control.module(owner,symbol(operation,owner)),backend);
                 var owner = "unix-2.8.8.0-460b";
@@ -142,7 +144,7 @@ class UnixWaitStatusTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var operation : operations) {
-                    var source = CoreModules.reachable(json("post.json"),"wait" + operation.name()); var call = single(foreignApps(source),ignored -> true);
+                    var source = CoreModules.reachable(cbd("post.cbd"),entryId("wait" + operation.name())); var call = single(foreignApps(source),ignored -> true);
                     for (int i = 0; i <= 1; i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(language,rawModule(call,source,index),backend)); }
                     var target = program(language,rawModule(call,source),backend).entryTarget("entry");
                     assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,137L,9L}));

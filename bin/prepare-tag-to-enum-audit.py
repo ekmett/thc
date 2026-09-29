@@ -107,10 +107,10 @@ def main():
         commands.append(dict(argv=argv, stdout=str(OUT / 'oracle.tsv')))
         (OUT / 'oracle.tsv').write_text(subprocess.check_output(argv, text=True)); verify_native()
         for stage in ['pre', 'post']:
-            run(['bin/export-core.sh', '-it/fixtures/compiler', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(SOURCES[0]), str(SOURCES[3])],
+            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', '-it/fixtures/compiler', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(SOURCES[0]), str(SOURCES[3])],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
-            run([sys.executable, 'bin/audit-core.py', *[str(p) for p in sorted((OUT / f'{stage}-core').glob('*.json'))],
-                 *[v for name in ENTRIES for v in ['--entry', name]], '--output', str(OUT / f'{stage}-audit.json')])
+            run([sys.executable, 'bin/audit-core.py', *[str(p) for p in sorted((OUT / f'{stage}-core').glob('*.cbd'))],
+                 *[v for name in ENTRIES for v in ['--entry', f'main:TagToEnumAudit.{name}']], '--output', str(OUT / f'{stage}-audit.json')])
             inventory(stage)
         sources = SOURCES + [Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh', ROOT / 'bin/export-core.sh',
                              ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')), *audit_inputs()]

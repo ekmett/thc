@@ -288,7 +288,10 @@ renderShell revision pages = do
         "<button type=\"button\" data-thc-appearance=\"system\" aria-pressed=\"true\">Follow OS</button>" ++
         "</div></fieldset>" ++
         "<nav aria-label=\"THC documentation\"><p class=\"thc-nav-label\">Start</p>" ++
-        item "home.html" "Overview" ++ "<p class=\"thc-nav-label\">Guides</p>" ++
+        item "home.html" "Overview" ++
+        "<a class=\"thc-nav-link\" href=\"" ++ repo ++
+        "\" target=\"_blank\" rel=\"noopener noreferrer\">GitHub ↗</a>" ++
+        "<p class=\"thc-nav-label\">Guides</p>" ++
         concatMap guideItem guides ++ "<p class=\"thc-nav-label\">Reference</p>" ++
         item "api/runtime/index.html" "Haskell runtime API" ++
         item "api/haskell/index.html" "Compiler API" ++ item "api/jvm/index.html" "JVM internals" ++

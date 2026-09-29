@@ -6,6 +6,7 @@
     "thc.runtime.ExplicitInteropLibraryTest",
     "thc.runtime.JavaArrayTest",
     "thc.runtime.SemanticForeignOverrideTest",
+    "thc.runtime.PackageNativeArchiveTest",
     "thc.runtime.PackageNativeForeignTest",
     "thc.runtime.PackageScalarForeignTest",
     "thc.runtime.StockGraphRecoveryTest",
@@ -86,6 +87,12 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "backend-annotations": {
+      "junit": ["thc.CoreBackendPolicyTest"],
+      "commands": [{"argv": ["sh", "-c", "set -e; cabal build exe:thc-fixtures --offline; mkdir -p build; fixture_bin=$(cabal list-bin exe:thc-fixtures --offline); printf '%s\\n' \"$fixture_bin\" > build/thc-fixtures.path; \"$fixture_bin\" backend-annotations"]}],
+      "outputs": ["build/thc-fixtures.path", "build/backend-annotations"],
+      "sources": ["t/fixtures/compiler/BackendAnnotations.hs", "t/haskell-fixtures/BackendAnnotationFixtures.hs", "t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "src/compiler/THC/BackendAnnotations.hs", "src/compiler/THC/Plugin.hs", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/Encode.hs", "thc.cabal"]
+    },
     "compact-model": {
       "junit": ["thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest", "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest", "thc.LauncherDiagnosticsTest", "thc.CoreRequestTest", "thc.CoreUnitManagedExportTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactRecordsTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; cabal build exe:thc-fixtures --offline; mkdir -p build; cabal list-bin exe:thc-fixtures --offline > build/thc-fixtures.path"]}],
@@ -1288,14 +1295,15 @@
         {"argv": ["bin/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}
       ],
       "outputs": [
-        "build/core/THC.Prim.Test.json",
-        "build/core/Fixtures.json",
+        "build/core/THC.Prim.Test.cbd",
+        "build/core/Fixtures.cbd",
         "build/native/oracle.tsv"
       ],
       "sources": [
         "t/fixtures/compiler/THC/Prim/Test.hs",
         "t/fixtures/core/Fixtures.hs",
         "t/fixtures/core/NativeOracle.hs",
+        "t/fixtures/core/NativeTiming.hs",
         "t/fixtures/core/MapWorkload.hs",
         "bin/native-oracle.sh"
       ]

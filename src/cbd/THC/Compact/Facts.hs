@@ -32,7 +32,13 @@ data Facts = Facts
   , factsExceptionBridgeUnit :: !(Presence BS.ByteString)
   , factsPendingProvenance :: ![Presence ModuleProvenance]
   , factsClosureProvenance :: !(Maybe ClosureProvenance)
+  , factsBackendPolicy :: !(Maybe BackendPolicy)
   } deriving (Eq, Show)
+
+-- | Root selection only; GHC workers and inlined copies do not inherit overrides.
+data Backend = AstBackend | BytecodeBackend deriving (Eq, Ord, Show)
+data BackendPolicy = BackendPolicy !(Maybe Backend) ![(BS.ByteString,Backend)]
+  deriving (Eq, Show)
 
 -- | Actual interface frontier and binding origins used by source acquisition
 -- and provenance audits. These are facts, not executable bodies or display maps.

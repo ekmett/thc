@@ -8,7 +8,7 @@ import com.oracle.truffle.api.TruffleLanguage;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
-import thc.Json;
+import thc.CoreCbdFixtures;
 import thc.Language;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SumJoinResultTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(root.resolve("build/sum-join/" + stage + "/core/SumJoinAudit.json")));
+        return CoreCbdFixtures.read(root.resolve("build/sum-join/" + stage + "/core/SumJoinAudit.cbd"));
     }
     private Context context(boolean inlining) {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
@@ -69,7 +69,7 @@ class SumJoinResultTest {
             };
             assertEquals(model, Long.parseLong(row[2]), "Independent native model: " + name + "/" + x);
             long before = count(program, "compiledEntries");
-            assertEquals(model, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(name), new Object[]{x}}), stage + "/" + backend + "/" + name + "/" + x);
+            assertEquals(model, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:SumJoinAudit." + name), new Object[]{x}}), stage + "/" + backend + "/" + name + "/" + x);
             if (compiled) assertTrue(count(program, "compiledEntries") > before,
                 "First installed compiled call: " + stage + "/" + backend + "/" + name + "/" + x + "/inlining=" + inlining);
             released(language);
@@ -87,7 +87,7 @@ class SumJoinResultTest {
                 var names = new LinkedHashSet<String>();
                 for (var row : rows) names.add(row[0]);
                 var ids = new LinkedHashSet<Object>();
-                for (var name : names) for (var binding : bindings(CoreModules.reachable(module, name))) ids.add(binding.get("id"));
+                for (var name : names) for (var binding : bindings(CoreModules.reachable(module, "main:SumJoinAudit." + name))) ids.add(binding.get("id"));
                 var selected = new ArrayList<Map<String, Object>>();
                 for (var binding : bindings(module)) if (ids.contains(binding.get("id"))) selected.add(binding);
                 var selectedModule = new LinkedHashMap<>(module); selectedModule.put("bindings", selected);
@@ -102,7 +102,7 @@ class SumJoinResultTest {
     }
     private static Map<String, Object> forward(Map<String, Object> module) {
         Map<String, Object> result = null;
-        for (var binding : bindings(module)) if ("forward".equals(binding.get("name"))) {
+        for (var binding : bindings(module)) if ("main:SumJoinAudit.forward".equals(binding.get("id"))) {
             if (result != null) throw new IllegalArgumentException("Collection contains more than one matching element.");
             result = binding;
         }
@@ -115,12 +115,13 @@ class SumJoinResultTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var module = module("pre"); var source = forward(module);
-                var lambda = (List<Object>) source.get("expr");
+                var lambda = new ArrayList<>((List<Object>) source.get("expr"));
+                source.put("expr", lambda);
                 var proof = (Map<String, Object>) ((Map<String, Object>) lambda.get(3)).get("resultRep");
                 var zero = Map.of("id", "zero-sum", "name", "zeroSum", "lifted", false, "rep", proof,
                     "joinValueArity", 0, "joinResultRep", proof, "info", Map.of("joinArity", 0), "expr", lambda.get(2));
                 lambda.set(2, List.of("let", false, List.of(zero), List.of("var", "zero-sum", Map.of("rep", proof)), Map.of("rep", proof)));
-                var program = program(language, CoreModules.reachable(module, "forwardCase"), backend);
+                var program = program(language, CoreModules.reachable(module, "main:SumJoinAudit.forwardCase"), backend);
                 var target = program.entryTarget((String) source.get("id"));
                 var shape = new TupleShape(CoreRepresentations.parse(proof), language);
                 var layout = new FrameLayout();
@@ -157,7 +158,7 @@ class SumJoinResultTest {
                 if (join == null) throw new NoSuchElementException("Collection contains no element matching the predicate.");
                 var proof = (Map<String, Object>) (lambdaProof ? ((Map<String, Object>) ((List<?>) join.get("expr")).get(3)).get("resultRep") : join.get("joinResultRep"));
                 proof.put("alternativeSlots", List.of(List.of(2L), List.of(1L)));
-                assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, "forwardCase"), backend));
+                assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, "main:SumJoinAudit.forwardCase"), backend));
             } finally { context.leave(); }
         }
     }

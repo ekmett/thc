@@ -129,8 +129,11 @@ if args.frontier in ('cstring', 'lists', 'show', 'bignum'):
                plugin_info['unitId'] + ';THC.Plugin;' + json.dumps(options)]
 for name in source_modules:
     subprocess.run(common + plugin + [str(module_root / 'GHC/Internal' / (name + '.hs'))], cwd=root, check=True)
-    shutil.copyfile(build / 'boot-core' / ('GHC.Internal.' + name.replace('/', '.') + '.json'),
-                    build / 'core' / ('GHC.Internal.' + name.replace('/', '.') + '.json'))
+    shutil.copyfile(build / 'boot-core' / ('GHC.Internal.' + name.replace('/', '.') + '.cbd'),
+                    build / 'core' / ('GHC.Internal.' + name.replace('/', '.') + '.cbd'))
+    if args.pretty_diagnostics:
+        shutil.copyfile(build / 'boot-core' / ('GHC.Internal.' + name.replace('/', '.') + '.json'),
+                        build / 'core' / ('GHC.Internal.' + name.replace('/', '.') + '.json'))
 # This compiler-only source holds an actual installed-interface reference behind
 # GHC's noinline fence. The plugin then reads genuine non-boot unfoldings.
 if args.frontier == 'exceptions':
@@ -142,7 +145,9 @@ if args.frontier == 'exceptions':
                     '-package', 'ghc-internal',
                     '-fplugin-opt=THC.Plugin:closure=exceptionInterfaceRoot',
                     't/fixtures/package-roots/InterfaceRoots.hs'], cwd=root, env=env, check=True)
-    shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.json', build / 'core/GHC.InterfaceClosure.json')
+    shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.cbd', build / 'core/GHC.InterfaceClosure.cbd')
+    if args.pretty_diagnostics:
+        shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.json', build / 'core/GHC.InterfaceClosure.json')
 (build / 'boot-provenance.json').write_text(json.dumps({
     'ghcTag': 'ghc-9.14.1-release', 'sourcePatches': [], 'frontier': args.frontier,
     'sourceNotes': (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true',

@@ -25,9 +25,9 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
 # Includes raw vector/string Core exports and their native scalar oracles.
-FULL_PREPARATION_PLAN = "95c8f006d0da77ab8b94c5ff6e75a5d179fbc8a9b07e7ecc8538faf8bb44ffde"
+FULL_PREPARATION_PLAN = "b2c7ffce07f5c6589fe5329ce1e06f1ada7cab816cf1db11c597ed3f858b268a"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
-    "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
+    "manifest.json", "source.json", "pre.cbd", "post.cbd", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
       ("version", "libdir", "source-extract", "source-build", "unit", "imports", "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")],
@@ -38,6 +38,7 @@ TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
     *[f"{stage}-{suffix}" for stage in ("pre", "post") for suffix in ("core/TextCbitsAudit.json", "audit.json")],
 ))
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
+    "build/backend-annotations",
     "build/process-lifecycle/core",
     "build/text-cbits", "build/vector-api", "build/truffle-strings",
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
@@ -48,6 +49,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields", "build/selector-proof",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/backend-annotations/pre/BackendAnnotations.cbd", "build/backend-annotations/post/BackendAnnotations.cbd", "build/backend-annotations/interface.cbd",
     "build/thc-fixtures.path",
     *(PROCESS_CORE_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else ()),
     *TEXT_CBITS_OUTPUTS,
@@ -64,13 +66,14 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/truffle-strings/oracle.json",
     "build/truffle-strings/manifest.json", "build/truffle-strings/native/oracle",
     "build/selector-proof/manifest.json", "build/selector-proof/api/predicate",
-    *[f"build/selector-proof/{stage}/core/SelectorProofAudit.json" for stage in ("pre", "post")],
+    *[f"build/selector-proof/{stage}/{name}.cbd" for stage in ("pre", "post")
+      for name in ("core/SelectorProofAudit", "SelectorProofAudit.roundtrip")],
     *[f"build/selector-proof/commands/{command}.{suffix}"
       for command in ("pre-export", "post-export", "predicate-build", "libdir", "predicate-run")
       for suffix in ("stdout", "stderr", "command.json")],
     "build/sum-join/manifest.json", "build/sum-join/oracle.tsv", "build/sum-join/native/oracle",
     *[f"build/sum-join/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/SumJoinAudit.json", "audit.json")],
+      for suffix in ("core/SumJoinAudit.cbd", "audit.json")],
     *[f"build/sum-join/commands/{command}.{suffix}"
       for command in ("ghc-version", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")],

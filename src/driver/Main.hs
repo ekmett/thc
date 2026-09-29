@@ -52,7 +52,9 @@ main = topHandler $ do
         (updates, _, []) | any isNothing updates -> putStr commandUsage
         (updates, targets, []) | length targets <= 1 -> do
           let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False guestArgs) (catMaybes updates)
-          let selected = opts {runTarget = case targets of [] -> ""; [target] -> target; _ -> error "checked above"}
+          thcRoot <- resolveThcRoot (runThcRoot opts)
+          let selected = opts {runTarget = case targets of [] -> ""; [target] -> target; _ -> error "checked above",
+                               runThcRoot = thcRoot}
           current <- getCurrentDirectory
           if acquire then acquireProject selected current else runProject selected current
         (_, _, errors) -> die (concat errors ++ commandUsage)
@@ -78,13 +80,13 @@ options =
     parseFlag name = (mkFlagName name, True)
 
 usage :: String
-usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc run [TARGET] --thc-root DIR [FLAGS] [-- ARG...]\n                thc acquire [TARGET] --thc-root DIR [FLAGS]\n" options
+usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc run [TARGET] [FLAGS] [-- ARG...]\n                thc acquire [TARGET] [FLAGS]\n" options
 
 runOptions :: [OptDescr (RunOptions -> RunOptions)]
 runOptions =
   [ Option [] ["project-dir"] (ReqArg (\path r -> r {runProjectDirectory = Just path}) "DIR") "Cabal project directory"
   , Option [] ["project-file"] (ReqArg (\path r -> r {runProjectFile = Just path}) "FILE") "Cabal project file"
-  , Option [] ["thc-root"] (ReqArg (\path r -> r {runThcRoot = path}) "DIR") "THC source/build root"
+  , Option [] ["thc-root"] (ReqArg (\path r -> r {runThcRoot = path}) "DIR") "THC source/build root (default: locate from the executable)"
   , Option [] ["runtime"] (ReqArg (\path r -> r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
   , Option [] ["verify-artifacts"] (NoArg (\r -> r {runVerifyArtifacts = True}))
       "Audit reachable Core before launch and verify runtime artifacts (default: off)"
