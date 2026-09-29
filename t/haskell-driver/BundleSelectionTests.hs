@@ -15,6 +15,7 @@
 module BundleSelectionTests (tests) where
 
 import qualified Crypto.Hash.SHA256 as SHA
+import Control.Monad (forM)
 import Data.Aeson (Value(..), encode, object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
@@ -28,6 +29,7 @@ import System.Directory (getModificationTime, removeFile, setModificationTime)
 import System.FilePath ((</>))
 import System.IO.Error (tryIOError)
 import Test.HUnit (Test(..), assertBool, assertEqual)
+import THC.Compact.Module (encodeModuleValue, readModuleMetadata)
 import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.Project (Bundle(..), BundleReceipt(..), readGlobalBundle, readBundle,
   exceptionBridgeModules, projectWindowsWiredBundle, readCapturedStoreBundles,
@@ -180,7 +182,9 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
       bundle <- archive path "test-unit" values Nothing []
       let record = unitRecord "test-unit" bundle
       first <- exceptionBridgeModules False [record]
-      assertEqual "only the two actual bridge modules are selected" (map snd (take 2 values)) first
+      expected <- mapM (\(_, value) -> encodeModuleValue value >>= either fail (pure . snd) . readModuleMetadata)
+        (take 2 values)
+      assertEqual "only the two actual bridge modules are selected" expected first
       corruptUnobserved path
       assertEqual "unchanged bridge selection preserves original metadata" first =<< exceptionBridgeModules False [record]
       assertBool "explicit bridge verification reads original bundle" . isLeft
@@ -197,8 +201,12 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
           excluded = [object ["module" .= name]]
           specification = object ["archiveOnlyModules" .= excluded]
           registration = case core "ghc-internal" name of
-            Object fields -> Object (KM.insert "foreign" (object ["stubs" .=
-              object ["initializers" .= (["control-only-initializer"] :: [String])]]) fields)
+            Object fields -> Object (KM.insert "foreign" (object ["schema" .= (1 :: Int),
+              "execution" .= ("not-linked" :: String), "files" .= ([] :: [Value]), "stubs" .=
+              object ["header" .= ("" :: String), "source" .= ("" :: String),
+                "initializers" .= [object ["isInitializer" .= True, "unit" .= ("ghc-internal" :: String),
+                  "module" .= name, "name" .= ("control-only-initializer" :: String)]],
+                "finalizers" .= ([] :: [String])]]) fields)
             _ -> error "object expected"
           inputs = object ["compiler" .= object [], "component" .= object ["generatedSources" .= ([] :: [String])],
             "generatedSources" .= ([] :: [Value])]
@@ -222,7 +230,8 @@ core :: String -> String -> Value
 core unit name = object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
   "unit" .= unit, "module" .= name, "boundary" .= boundary,
   "bindings" .= [object ["id" .= (unit ++ ":" ++ name ++ ".value"),
-    "expr" .= (["lit", "int", "7"] :: [String])]], "constructors" .= ([] :: [Value])]
+    "arity" .= (0 :: Int), "expr" .= [String "lit", String "int", String "7", object []]]],
+  "constructors" .= ([] :: [Value])]
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -245,9 +254,10 @@ layout = object $ ["schema" .= (1::Int), "profiled" .= False, "tablesNextToCode"
 
 archive :: FilePath -> String -> [(String, Value)] -> Maybe Value -> [(String, Value)] -> IO Bundle
 archive path owner values inputs extra = do
-  let bodies = [(name, "core/" ++ show index ++ ".json", encoded value)
-        | (index, (name, value)) <- zip [0 :: Int ..] values]
-      refs = [object ["name" .= name, "path" .= member, "sha256" .= digest body, "boundary" .= boundary]
+  bodies <- forM (zip [0 :: Int ..] values) $ \(index, (name, value)) -> do
+    bytes <- encodeModuleValue value
+    pure (name, "core/" ++ show index ++ ".cbd", bytes)
+  let refs = [object ["name" .= name, "path" .= member, "sha256" .= digest body, "boundary" .= boundary]
         | (name, member, body) <- bodies]
       base = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
         "unit" .= owner, "buildKey" .= ("build" :: String), "exportKey" .= ("export" :: String), "modules" .= refs]

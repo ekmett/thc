@@ -29,6 +29,7 @@ import Data.List (isPrefixOf, nub, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Data.Text.Encoding.Error (lenientDecode)
 import Distribution.Compiler (CompilerFlavor(GHC))
 import Distribution.InstalledPackageInfo (parseInstalledPackageInfo, showInstalledPackageInfo)
 import qualified Distribution.Types.InstalledPackageInfo as Package
@@ -52,6 +53,7 @@ import qualified System.Info as Host
 import THC.Driver.Lock (withLock)
 import System.Process (proc, CreateProcess(..), readCreateProcessWithExitCode)
 import THC.Driver.Installed
+import THC.Compact.Module (readModuleMetadata)
 
 -- | The published plugin library and the actual Cabal registration are both
 -- checked: -plugin-package-id loads the latter, not an arbitrary copied .so.
@@ -420,11 +422,11 @@ validateView context original needed = do
 
 readCore :: InstalledContext -> InstalledUnit -> String -> FilePath -> IO Value
 readCore context unit name path = do
-  bytes <- command (installedHelper context) (helperCommand context unit (name, path)) Nothing
-  response <- either fail pure (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack bytes)))
-  check (member "status" response == Just (String "loaded"))
-    "--ghc-source requires complete installed interfaces before regeneration"
-  field response "core"
+  (status, bytes, diagnostic) <- boundedInterfaceProcess (installedHelper context) (helperCommand context unit (name, path))
+  check (status == ExitSuccess)
+    ("--ghc-source requires complete installed interfaces before regeneration: " ++
+      take 4096 (Text.unpack (Text.decodeUtf8With lenientDecode (bytes <> diagnostic))))
+  either fail (pure . snd) (readModuleMetadata bytes)
 
 modulePath :: String -> FilePath
 modulePath = map (\c -> if c == '.' then pathSeparator else c)
