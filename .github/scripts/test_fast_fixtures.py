@@ -1886,6 +1886,11 @@ class FixturePreparationTest(unittest.TestCase):
             with self.assertRaises((RuntimeError, FileNotFoundError)):
                 fast_fixtures._output_hashes(self.root, group)
 
+    def test_compiler_preparation_builds_required_inspector(self):
+        project = Path(__file__).resolve().parents[2]
+        self.assertIn('set -- build lib:thc exe:thc-compact --offline',
+                      (project / 'bin/build-compiler.sh').read_text())
+
     def test_interface_core_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
