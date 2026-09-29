@@ -288,8 +288,17 @@ readNativeProduct unit dependencies registration pieces = do
     if null libraries then pure Nothing else do
       kind <- get unit "type" :: IO String
       style <- get unit "style" :: IO String
-      source <- get unit "pkg-src-sha256" :: IO String
-      check (kind == "configured" && style `elem` ["global","inplace"] && validHash source)
+      -- Cabal's local source rows have a path, not a repository tarball hash.
+      -- Actual compiled inputs and registered archive membership below still
+      -- identify the selected code; retain the declared source without inventing
+      -- a Hackage identity for it.
+      let source = case member unit "pkg-src-sha256" of
+            Just (String hash) -> validHash (Data.Text.unpack hash)
+            Nothing | style `elem` ["local","inplace"], Just location <- member unit "pkg-src",
+                member location "type" == Just "local", Just (String path) <- member location "path" ->
+                  not (Data.Text.null path)
+            _ -> False
+      check (kind == "configured" && style `elem` ["global","inplace","local"] && source)
         "native dependency lacks a resolved source identity"
       paths <- filter ((== "piece.json") . takeFileName) <$> files pieces
       candidates <- mapM readJson paths
@@ -338,7 +347,7 @@ readNativeProduct unit dependencies registration pieces = do
       let identity = object ("depends" .= dependencies :
             [Key.fromString key .= maybe Null id (member unit key) |
             key <- ["id","type","style","pkg-name","pkg-version","flags",
-                    "component-name","pkg-src-sha256","pkg-cabal-sha256"]])
+                    "component-name","pkg-src","pkg-src-sha256","pkg-cabal-sha256"]])
           proof = object ["profile" .= ("resolved-native-archive-products-v1" :: String),
             "unit" .= identifier,"sourceIdentity" .= identity,
             "registration" .= T.decodeUtf8 bytes,"registrationSha256" .= digest bytes,
