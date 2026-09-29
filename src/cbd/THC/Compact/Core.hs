@@ -138,6 +138,7 @@ data Literal = LitInt !Int64 | LitWord !Word64
   | LitBigNat !Integer | LitChar !Word32 | LitBytes !BS.ByteString
   | LitFloatBits !Word32 | LitDoubleBits !Word64 | LitNullAddr | LitRubbish !PrimRep
   | LitFunctionAddr !BS.ByteString | LitDataAddr !BS.ByteString
+  | LitUnsupported !BS.ByteString
   deriving (Eq, Show)
 
 data ConstructorKind = BoxedConstructor | TupleConstructor | SumConstructor | NewtypeConstructor

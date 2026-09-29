@@ -399,6 +399,7 @@ literals =
   , LitFloatBits 0x80000000, LitFloatBits 0x7fc00017
   , LitDoubleBits 0x8000000000000000, LitDoubleBits 0x7ff8000000000017
   , LitNullAddr, LitRubbish BoxedUnlifted, LitFunctionAddr "foreign_fn", LitDataAddr "foreign_data"
+  , LitUnsupported "RUBBISH(LiftedRep)"
   ]
 
 scalar :: Kind -> [PrimRep] -> Shape
