@@ -82,7 +82,8 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     public static BytecodeProgram forNativeStartup(Language language, Map<String,Object> module, boolean async) {
         return new BytecodeProgram(language, module, null, async,
-            module.get("packageScalarLinks") instanceof List<?> links && !links.isEmpty());
+            module.get("packageScalarLinks") instanceof List<?> links && !links.isEmpty() ||
+            module.get("foreignLinks") instanceof List<?> foreign && !foreign.isEmpty());
     }
 
     public BytecodeProgram(Language language, Map<String, Object> moduleData) {

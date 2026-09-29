@@ -75,9 +75,10 @@ public final class Program implements ExecutableProgram {
     private final Consumer<List<Map<String, Object>>> validateInputs;
     private List<String> pendingInitializers = List.of();
 
-    /** Publish all ordinary global cells before package constructors can call back. */
+    /** Publish all ordinary global cells before native constructors can call back. */
     public static Program forNativeStartup(TruffleLanguage<?> language, Map<String,Object> module, boolean async) {
-        return new Program(language, module, async, false, false, false, null, !absentOrEmpty(module.get("packageScalarLinks")));
+        return new Program(language, module, async, false, false, false, null,
+            !absentOrEmpty(module.get("packageScalarLinks")) || !absentOrEmpty(module.get("foreignLinks")));
     }
 
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData) { this(language, moduleData, false, false); }

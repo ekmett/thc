@@ -124,6 +124,14 @@ native labels. If initialization fails, later lookup or invocation of its
 finalizers reports that failure; initialization is not retried. Arbitrary native
 side effects are not rolled back.
 
+Retained original CAPI bitcode uses the same callback-before-constructor stage,
+including prepared AST loads. Library identity and symbol ownership are reserved
+before native effects. Failed initialization is remembered for later linking and
+calls; a conflicting library cannot run its constructor. Recursive demand for
+the same CAPI library while its constructor is still running fails instead of
+waiting on itself. This does not broaden the admitted CAPI ABI or registration
+metadata.
+
 Native component links can retain package-declared C providers separately from
 their Haskell-call ABI. Consumers share one initialized provider per context;
 the provider's public C definitions do not require invented Haskell imports.

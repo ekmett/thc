@@ -34,6 +34,7 @@ public final class SulongCbits {
         public long getErrno() { return errno; }
     }
     private record Key(String unit, String name) {}
+    private record ForeignLoad(ForeignBitcode declaration, FutureTask<Void> task) {}
     private final TruffleLanguage.Env env;
     private final InteropLibrary interop = InteropLibrary.getUncached();
     private final boolean windows = System.getProperty("os.name").startsWith("Windows");
@@ -53,7 +54,9 @@ public final class SulongCbits {
     private final WeakHashMap<Object, WeakReference<CbitsBuffer>> buffers = new WeakHashMap<>();
     private final ConcurrentHashMap<Key, Object> foreign = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Key, Object> foreignErrno = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Key, ForeignBitcode> linkedForeign = new ConcurrentHashMap<>();
+    private final HashMap<Key, ForeignLoad> linkedForeign = new HashMap<>();
+    private final HashMap<Key, ForeignLoad> foreignOwners = new HashMap<>();
+    private final ThreadLocal<Set<Key>> initializingForeign = ThreadLocal.withInitial(java.util.HashSet::new);
 
     public SulongCbits(TruffleLanguage.Env env) {
         this.env = env;
@@ -206,14 +209,43 @@ public final class SulongCbits {
             && first.getTarget().equals(second.getTarget()) && first.getSymbols().equals(second.getSymbols())
             && first.getAbi().equals(second.getAbi()) && Arrays.equals(first.getBytes(), second.getBytes());
     }
-    public void link(ForeignBitcode record) {
+    private Language.State currentForeignOwner() {
+        var owner = Language.currentState(null);
+        if (owner.getEnv() != env) throw fault("CAPI library belongs to another THC context");
+        if (!env.isNativeAccessAllowed()) throw fault("CAPI library requires native access");
+        return owner;
+    }
+    /** Reserve the exact library and all symbol owners before native effects. */
+    public void declare(ForeignBitcode record) { declaration(record); }
+    private synchronized ForeignLoad declaration(ForeignBitcode record) {
+        currentForeignOwner();
         var key = new Key(record.getUnit(), record.getModule());
         var previous = linkedForeign.get(key);
         if (previous != null) {
-            if (!sameLink(previous, record)) throw new IllegalArgumentException("Conflicting CAPI library identity");
-            return;
+            if (!sameLink(previous.declaration(), record)) throw new IllegalArgumentException("Conflicting CAPI library identity");
+            return previous;
         }
+        for (String symbol : record.getSymbols())
+            if (foreignOwners.containsKey(new Key(record.getUnit(), symbol))) throw new IllegalArgumentException("Conflicting CAPI symbol owner");
+        var selected = new ForeignLoad(record, new FutureTask<>(() -> { initializeForeign(record); return null; }));
+        linkedForeign.put(key, selected);
+        for (String symbol : record.getSymbols()) foreignOwners.put(new Key(record.getUnit(), symbol), selected);
+        return selected;
+    }
+    public void link(ForeignBitcode record) { awaitForeign(declaration(record)); }
+    private void awaitForeign(ForeignLoad selected) {
+        var record = selected.declaration();
+        if (initializingForeign.get().contains(new Key(record.getUnit(), record.getModule())))
+            throw fault("Recursive original CAPI initialization: " + record.getUnit() + ":" + record.getModule());
+        await(selected.task());
+    }
+    private void initializeForeign(ForeignBitcode record) {
+        var owner = currentForeignOwner();
+        var previous = owner.getThreads().enterForeign(ForeignSafety.SAFE);
+        var key = new Key(record.getUnit(), record.getModule());
+        initializingForeign.get().add(key);
         try {
+            owner.getPackageCbits().registerCallbacks(owner);
             Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(record.getBytes()),
                 record.getUnit() + "-" + record.getModule() + ".bc").build()).call();
             var resolved = new HashMap<String, Object>();
@@ -223,23 +255,22 @@ public final class SulongCbits {
             }
             if (!interop.isMemberReadable(library, "thc_capi_errno")) throw new IllegalArgumentException("CAPI library lacks errno bridge");
             Object errno = interop.readMember(library, "thc_capi_errno");
-            synchronized (this) {
-                previous = linkedForeign.get(key);
-                if (previous != null) {
-                    if (!sameLink(previous, record)) throw new IllegalArgumentException("Conflicting CAPI library identity");
-                    return;
-                }
-                for (String symbol : resolved.keySet())
-                    if (foreign.containsKey(new Key(record.getUnit(), symbol))) throw new IllegalArgumentException("Conflicting CAPI symbol owner");
-                for (var entry : resolved.entrySet()) {
-                    var symbolKey = new Key(record.getUnit(), entry.getKey());
-                    foreign.put(symbolKey, entry.getValue()); foreignErrno.put(symbolKey, errno);
-                }
-                linkedForeign.put(key, record);
+            for (var entry : resolved.entrySet()) {
+                var symbolKey = new Key(record.getUnit(), entry.getKey());
+                foreign.put(symbolKey, entry.getValue()); foreignErrno.put(symbolKey, errno);
             }
         } catch (Exception failure) { throw rethrow(failure); }
+        finally { initializingForeign.get().remove(key); owner.getThreads().leaveForeign(previous); }
+    }
+    private void requireForeign(String unit, String symbol) {
+        currentForeignOwner();
+        ForeignLoad selected;
+        synchronized (this) { selected = foreignOwners.get(new Key(unit, symbol)); }
+        if (selected == null) throw fault("Unlinked original CAPI target: " + unit + ":" + symbol);
+        awaitForeign(selected);
     }
     private Object foreignFunction(String unit, String symbol) {
+        requireForeign(unit, symbol);
         Object function = foreign.get(new Key(unit, symbol));
         if (function == null) throw fault("Unlinked original CAPI target: " + unit + ":" + symbol);
         return function;
@@ -302,6 +333,7 @@ public final class SulongCbits {
         });
     }
     public long capiErrno(String unit, String symbol) {
+        requireForeign(unit, symbol);
         Object function = foreignErrno.get(new Key(unit, symbol));
         if (function == null) throw fault("No linked CAPI errno domain");
         try {

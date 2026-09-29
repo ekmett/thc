@@ -418,7 +418,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             @TruffleBoundary private EntryValue instantiate() {
                 // Parsed roots may be Engine-shared; programs, CAFs and registrations are context-owned.
                 var owner = currentState(this);
-                for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
+                for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().declare(link);
                 for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.declare(link);
                 ExecutableProgram program = backend.equals("ast") ? Program.forNativeStartup(Language.this, linked, async)
                     : BytecodeProgram.forNativeStartup(Language.this, linked, async);
@@ -426,7 +426,10 @@ public final class Language extends TruffleLanguage<Language.State> {
                     var exports = new ArrayList<ManagedExportSignature>();
                     for (var registration : registrations) exports.addAll(registration.getExports());
                     owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, ignored -> bindings),
-                        () -> { for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link); });
+                        () -> {
+                            for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
+                            for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link);
+                        });
                     int argumentCount = ((Number) selected.get("arity")).intValue();
                     var value = new EntryValue(program, entry, argumentCount, resultFault,
                         ioResult, Language.this, shutdownEntry, shutdownProof,
@@ -465,12 +468,15 @@ public final class Language extends TruffleLanguage<Language.State> {
             // The saved factory owns declarations, never the preparation Context's
             // native functions, CAFs, bridge projectors or registration lifetimes.
             var owner = currentState(this);
-            for (var link : code.getForeignLinks()) owner.cbits().link(link);
+            for (var link : code.getForeignLinks()) owner.cbits().declare(link);
             for (var link : code.getPackageScalarLinks()) owner.packageCbits.declare(link);
             var program = code.newInstanceForNativeStartup(language);
             try {
                 owner.foreignRoots.register(program, language, code.getManagedRegistrations(), code.getManagedExports(),
-                    () -> { for (var link : code.getPackageScalarLinks()) owner.packageCbits.link(link); });
+                    () -> {
+                        for (var link : code.getForeignLinks()) owner.cbits().link(link);
+                        for (var link : code.getPackageScalarLinks()) owner.packageCbits.link(link);
+                    });
                 return new EntryValue(program, entry, arity, null, ioResult, language,
                     shutdownEntry, shutdownResult, processSignals, inputs, result, code);
             } catch (Throwable failure) { owner.foreignRoots.release(program); throw failure; }
