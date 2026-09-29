@@ -762,6 +762,7 @@ library interop
   exposed-modules:
     THC.Prim
     THC.Interop
+    THC.Interop.Java
     THC.Polyglot
     THC.Interop.Buffer
     THC.Interop.Array
