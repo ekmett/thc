@@ -77,7 +77,7 @@ public final class NativeCache {
         if (modules.isEmpty() || modules.stream().anyMatch(String::isBlank) || entry.isBlank())
             throw new IllegalArgumentException("Core modules and selected entry are required");
         var request = new LinkedHashMap<>((Map<String, Object>) Json.parse(CoreModules.request(
-            modules, entry, true, false, "ast", true, ioMain, shutdownEntry, false, false, verifyArtifacts)));
+            modules, entry, true, false, "ast", true, ioMain, shutdownEntry, false, verifyArtifacts)));
         request.put("prepareCode", true);
         return CoreModules.detachedRequest(request, entry);
     }

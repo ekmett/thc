@@ -71,7 +71,7 @@ class CoreUnitColdControlTest {
         var units = list(unit("A", body, false), unit("B", promptBody(), true));
         return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", units)));
     }
-    private String request(String source, String entry, String backend, boolean async) { return CoreFormatTestSupport.request(List.of(source), entry, backend, false, async, false, false); }
+    private String request(String source, String entry, String backend, boolean async) { return CoreFormatTestSupport.request(List.of(source), entry, backend, false, async, false); }
     private long count(Value entry, String name) { return ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get(name)).longValue(); }
     @Test void exhaustiveLoaderModelPreservesTheExistingPromptPolicy() throws Exception {
         fixture(false);

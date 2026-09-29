@@ -24,8 +24,6 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final Map<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission> admissions = new HashMap<>();
     private final Map<String,List<PackageScalarAdmission>> packageProvenance = new HashMap<>();
     private final Map<String,PackageScalarLink> startupLinks = new LinkedHashMap<>();
-    private final List<CoreJsonIndex> consumerSources = new ArrayList<>();
-    private final CoreJsonLoadingStatistics consumerStatistics = new CoreJsonLoadingStatistics();
     private final List<Map<String,Object>> consumers = new ArrayList<>();
     private final Map<String,Map<String,Object>> consumerBindings = new HashMap<>(), consumerOwners = new HashMap<>();
     private final IdentityHashMap<Map<String,Object>,CoreModuleAdmission> consumerAdmissions = new IdentityHashMap<>();
@@ -41,9 +39,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         for (var module : directory.getModules()) availableModules.add(module.unit() + ":" + module.name());
         var modules = new HashSet<String>();
         try {
-            CoreModules.visitUnitConsumers(input, (source, adapter) -> {
-                consumerSources.add(source); consumerStatistics.include(source, adapter);
-            }, rawModule -> {
+            CoreModules.visitUnitConsumers(input, rawModule -> {
                 var module = (Map<String,Object>) rawModule;
                 String unit = requiredText(module.get("unit"), "Missing loose consumer unit"), name = requiredText(module.get("module"), "Missing loose consumer module");
                 boolean fragment = unit.equals("dependency-closure") && name.equals("THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings");
@@ -65,7 +61,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
                     require(valid, "Invalid or missing provided-module interface closure");
                 }
             }
-        } catch (Throwable failure) { consumerSources.forEach(CoreJsonIndex::close); sources.close(); throw failure; }
+        } catch (Throwable failure) { sources.close(); throw failure; }
         demand = new CoreDemandBindings(this::contains, this::binding, this::constructor, this::prepare, !Objects.equals(input.get("instrument"), false), id -> consumerBindings.containsKey(id) || sources.containsSymbol(id));
         // Cold summaries select a calling convention, not an admission verdict.
         boolean delimited = false;
@@ -389,7 +385,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         long coreCompactMappingCacheHits = 0;
         for (var item : compact) coreCompactMappingCacheHits += item.cacheHits();
         result.put("coreCompactMappingCacheHits", coreCompactMappingCacheHits);
-        result.put("looseConsumerBindingHeaders", consumerBindings.size()); result.putAll(consumerStatistics.get()); return result;
+        result.put("looseConsumerBindingHeaders", consumerBindings.size()); return result;
     }
-    @Override public void close() { try { sources.close(); } finally { consumerSources.forEach(CoreJsonIndex::close); } }
+    @Override public void close() { sources.close(); }
 }

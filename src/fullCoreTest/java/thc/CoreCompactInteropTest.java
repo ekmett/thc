@@ -54,7 +54,7 @@ public class CoreCompactInteropTest {
         for (boolean verify : new boolean[] {false, true}) for (var group : oracle.entrySet()) try (Context context = compiledContext()) {
             String name = group.getKey(); var values = group.getValue();
             String id = "main:SourceNotes." + name;
-            var entry = context.eval("thc", CoreModules.request(List.of("@" + selectedManifest), id, true, false, backend, sourceNotes, false, null, false, false, verify));
+            var entry = context.eval("thc", CoreModules.request(List.of("@" + selectedManifest), id, true, false, backend, sourceNotes, false, null, false, verify));
             var program = program(context);
             assertEquals(1L, count(program, "coreCompactModuleOpens"));
             assertEquals(verify ? 8L : 1L, count(program, "coreCompactDecodedBindings"));
@@ -98,7 +98,7 @@ public class CoreCompactInteropTest {
             for (String backend : List.of("ast", "bytecode")) for (boolean verify : new boolean[] {false, true})
                 for (var group : oracle.entrySet()) try (Context context = Context.newBuilder("thc").allowExperimentalOptions(true)
                         .option("engine.Compilation", "false").build()) {
-                    var entry = context.eval("thc", CoreModules.request(List.of("@" + path), "main:SourceNotes." + group.getKey(), true, false, backend, false, false, null, false, false, verify));
+                    var entry = context.eval("thc", CoreModules.request(List.of("@" + path), "main:SourceNotes." + group.getKey(), true, false, backend, false, false, null, false, verify));
                     for (Row row : group.getValue()) assertEquals(row.expected(), entry.execute(row.input()).asLong(), backend + "/" + verify + "/" + path + "/" + row);
                     var diagnostics = (Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString());
                     assertEquals(0L, ((Number) diagnostics.get("unsupportedTraps")).longValue());

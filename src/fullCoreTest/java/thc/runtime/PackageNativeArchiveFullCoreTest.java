@@ -103,7 +103,7 @@ public class PackageNativeArchiveFullCoreTest {
             "native-archive-poisoned-0.1.0.0-inplace:Poisoned.poisoned");
         String nativeMath = "native-archive-provider-0.1.0.0-inplace:Provider.nativeMath";
         for (String backend : List.of("ast", "bytecode")) try (Context context = withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build()) {
-            context.eval("thc", CoreModules.request(sources, mixed + "allowed", true, false, backend, false, false, null, false, false, true)); context.enter();
+            context.eval("thc", CoreModules.request(sources, mixed + "allowed", true, false, backend, false, false, null, false, true)); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState();
                 for (var link : links) state.getPackageCbits().link(link);

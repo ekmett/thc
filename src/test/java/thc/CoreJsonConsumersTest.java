@@ -11,7 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreFormatTestSupport.*;
 
-/** Plain JSON consumers retain lazy binding and exact interface ownership. */
+/** Plain JSON consumers preserve interface ownership and declaration order. */
 @SuppressWarnings("unchecked")
 class CoreJsonConsumersTest {
     @TempDir Path directory;
@@ -30,11 +30,10 @@ class CoreJsonConsumersTest {
         return path;
     }
     private List<String> consumers() throws Exception {
-        return List.of(file("indexed-consumer.json").toString(), file("indexed-interface-closure.json").toString());
+        return List.of(file("package-consumer.json").toString(), file("interface-closure.json").toString());
     }
-    private String request(List<String> paths) { return request(paths, false); }
-    private String request(List<String> paths, boolean verify) {
-        return CoreFormatTestSupport.request(paths, "main:Main.entry", Main.defaultBackend(), false, null, true, verify);
+    private String request(List<String> paths) {
+        return CoreFormatTestSupport.request(paths, "main:Main.entry", Main.defaultBackend(), false, null, false);
     }
     private List<Map<String, Object>> modules(String request) {
         var result = new ArrayList<Map<String, Object>>(); visit(document(request), result::add); return result;
@@ -42,16 +41,16 @@ class CoreJsonConsumersTest {
     private long count(Value value, String key) { return ((Number) document(value.getMember("diagnostics").asString()).get(key)).longValue(); }
     @Test void plainConsumersKeepInterfaceOwnershipAndOrder() throws Exception {
         var consumers = consumers();
-        assertEquals("d2a141b1f35127040ee3358a3332444c4f92b866de3a03854e085b6b979e4b7a", digest(resource("indexed-consumer.json")));
-        assertEquals("c7fb8e4a188e3c62d505225f4769a96d7dac4375882d0d23c9e26ee6cc8dec78", digest(resource("indexed-interface-closure.json")));
+        assertEquals("d2a141b1f35127040ee3358a3332444c4f92b866de3a03854e085b6b979e4b7a", digest(resource("package-consumer.json")));
+        assertEquals("c7fb8e4a188e3c62d505225f4769a96d7dac4375882d0d23c9e26ee6cc8dec78", digest(resource("interface-closure.json")));
         {
             var manifest = support(); var keys = new ArrayList<>(consumers);
             for (var order : List.of(keys, keys.reversed())) {
                 var paths = List.of(order.get(0), "@" + manifest, order.get(1));
                 String serialized = request(paths); var input = document(serialized);
-                assertFalse(input.containsKey("consumerModules")); assertFalse(input.containsKey("modules"));
+                assertTrue(input.containsKey("modules"));
                 var selected = modules(serialized); var expected = new ArrayList<>(List.of("synthetic"));
-                for (String path : order) expected.add(path.endsWith("indexed-consumer.json") ? "main" : "dependency-closure");
+                for (String path : order) expected.add(path.endsWith("package-consumer.json") ? "main" : "dependency-closure");
                 assertEquals(expected, selected.stream().map(it -> it.get("unit")).toList());
                 var closures = selected.stream().filter(it -> "dependency-closure".equals(it.get("unit"))).toList();
                 assertEquals(1, closures.size()); var closure = closures.getFirst();
@@ -60,44 +59,14 @@ class CoreJsonConsumersTest {
                 assertEquals(1, bindings.size()); assertEquals("dependency:Hidden.cold", bindings.getFirst().get("id"));
                 assertEquals(List.of("synthetic:LazyJson"), closure.get("providedModules"));
                 CoreModules.merge(selected); // exact provided owner and original binding IDs remain admissible
-                var legacy = modules(CoreFormatTestSupport.request(paths, "main:Main.entry", Main.defaultBackend(), false, null, false, false));
-                assertEquals(expected, legacy.stream().map(it -> it.get("unit")).toList(), "legacy relative consumer order");
                 for (String backend : List.of("ast", "bytecode")) for (boolean async : new boolean[]{false, true})
                     try (var context = Main.executionContext(false)) {
-                        var value = Main.loadEntry(context, paths, "main:Main.entry", true, backend, false, null, async, true, false);
-                        assertEquals(1L, count(value, "jsonBodyMaterializations")); assertEquals(1L, count(value, "loweredRootCount"));
+                        var value = Main.loadEntry(context, paths, "main:Main.entry", true, backend, false, null, async, false);
+                        assertEquals(2L, count(value, "initializedBindingCount")); // Both reachable ordinary JSON bindings.
                         assertEquals(10L, value.execute(7L).asLong(), order + "/" + "/" + backend + "/" + async);
-                        assertEquals(2L, count(value, "jsonBodyMaterializations")); assertEquals(2L, count(value, "loweredRootCount"));
+                        assertEquals(2L, count(value, "initializedBindingCount"));
                     }
             }
-        }
-    }
-    @Test void requestRejectsDuplicatePathsAndMixedProtocols() throws Exception {
-        var consumers = consumers(); var manifest = support(); var paths = new ArrayList<>(consumers); paths.add("@" + manifest);
-        var duplicateManifest = new ArrayList<>(paths); duplicateManifest.add("@" + manifest);
-        assertThrows(IllegalArgumentException.class, () -> request(duplicateManifest));
-        var duplicatePath = new ArrayList<>(paths); duplicatePath.add(paths.getFirst());
-        assertThrows(IllegalArgumentException.class, () -> request(duplicatePath));
-        String alias = directory.resolve(".").resolve("indexed-consumer.json").toString();
-        var aliasedPaths = new ArrayList<>(paths); aliasedPaths.add(alias);
-        assertThrows(IllegalArgumentException.class, () -> request(aliasedPaths));
-        var input = document(request(paths));
-        for (String field : List.of("modules", "consumerModules", "targetLayout"))
-            assertThrows(IllegalArgumentException.class, () -> visit(with(input, field, List.of()), ignored -> {}));
-        var files = new ArrayList<Object>((List<?>) input.get("indexedModuleFiles")); files.add(files.getFirst());
-        assertThrows(IllegalArgumentException.class, () -> visit(with(input, "indexedModuleFiles", files), ignored -> {}));
-    }
-    @Test void mixedReplayChecksCapabilitiesManifestAndSourceIdentityAndPinsAdmittedBytes() throws Exception {
-        var consumers = consumers(); var manifest = support(); var paths = new ArrayList<>(consumers); paths.add("@" + manifest);
-        String serialized = request(paths, true); var input = document(serialized);
-        for (var changed : List.of(with(input, "packageCapability", "forged"), with(input, "foreignExceptionBridgeUnit", "forged")))
-            assertThrows(IllegalArgumentException.class, () -> visit(changed, ignored -> {}));
-        try (var context = Main.executionContext(false)) {
-            var value = context.eval("thc", serialized); var closure = Path.of(consumers.getLast()); Files.writeString(closure, "{}");
-            assertEquals(10L, value.execute(7L).asLong(), "cold helper uses the admitted source snapshot");
-            assertThrows(IllegalArgumentException.class, () -> modules(serialized));
-            consumers(); Files.writeString(manifest, Files.readString(manifest) + " ");
-            assertThrows(IllegalArgumentException.class, () -> modules(serialized));
         }
     }
     @Test void consumersRemainSubjectToDuplicateDefinitionAndExactProvidedOwnerChecks() throws Exception {

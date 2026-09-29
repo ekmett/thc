@@ -52,7 +52,7 @@ class ReusableLoaderTest {
         Path manifest = directory.resolve("packages.json");
         Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", units)));
         return (Map<String,Object>) Json.parse(CoreModules.request(List.of("@" + manifest), "app:Main.entry",
-            true, false, "ast", false, shutdown != null, shutdown, false, false, true));
+            true, false, "ast", false, shutdown != null, shutdown, false, true));
     }
     private Map<String,Object> detached(Map<String,Object> input) {
         return (Map<String,Object>) Json.parse(CoreModules.detachedRequest(input, "app:Main.entry"));
@@ -98,20 +98,18 @@ class ReusableLoaderTest {
         var request = input(List.of(app), null);
         assertTrue(assertThrows(IllegalArgumentException.class, () -> detached(request)).getMessage().contains("missing:Other.value"));
     }
-    @Test void detachedPackageIncludesPlainAndIndexedConsumerDependencies() throws Exception {
+    @Test void detachedPackageIncludesConsumerDependencies() throws Exception {
         var dependency = unit("dependency", "Library", List.of(binding("dependency:Library.value", literal(17))));
         input(List.of(dependency), null);
         Path consumer = directory.resolve("Main.json");
         Files.writeString(consumer, Json.stringify(map("schema", 1, "ghc", "9.14.1", "unit", "app", "module", "Main",
             "boundary", "optimized-Core-after-Tidy-before-CorePrep", "constructors", list(),
             "bindings", list(binding("app:Main.entry", list("var", "dependency:Library.value"))))));
-        for (boolean indexed : new boolean[]{false, true}) {
-            var request = (Map<String,Object>) Json.parse(CoreModules.request(List.of(consumer.toString(), "@" + directory.resolve("packages.json")),
-                "app:Main.entry", true, false, "ast", false, false, null, false, indexed, true));
-            var result = detached(request);
-            assertEquals(Set.of("app:Main.entry", "dependency:Library.value"), ids(result));
-            assertFalse(result.containsKey("consumerModules")); assertFalse(result.containsKey("indexedModuleFiles"));
-        }
+        var request = (Map<String,Object>) Json.parse(CoreModules.request(List.of(consumer.toString(), "@" + directory.resolve("packages.json")),
+            "app:Main.entry", true, false, "ast", false, false, null, false, true));
+        var result = detached(request);
+        assertEquals(Set.of("app:Main.entry", "dependency:Library.value"), ids(result));
+        assertFalse(result.containsKey("consumerModules"));
     }
     private Map<String,Object> ioModule() {
         var state = map("kind", "void", "primReps", list(), "evaluated", true);

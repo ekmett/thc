@@ -152,8 +152,7 @@ public final class CorePackageManifest {
             return new OrderedVisit(layout);
         } catch (IOException failure) { throw new IllegalArgumentException("Invalid ZIP bundle for " + id, failure); }
     }
-    public static VisitResult indexedRequestIdentity(String manifestPath) { return indexedRequestIdentity(manifestPath, false, false); }
-    public static VisitResult indexedRequestIdentity(String manifestPath, boolean forceDescriptor, boolean verifyArtifacts) {
+    public static VisitResult indexedRequestIdentity(String manifestPath, boolean verifyArtifacts) {
         try {
             var path = Path.of(manifestPath).toRealPath();
             byte[] bytes = Files.readAllBytes(path);
@@ -167,7 +166,7 @@ public final class CorePackageManifest {
                 if (unit.get("modules") instanceof List<?> modules) for (Object item : modules)
                     if (item instanceof Map<?,?> module && module.containsKey("compact")) { indexed = true; break unitScan; }
             }
-            if (!indexed && !forceDescriptor) return null;
+            if (!indexed) return null;
             Object bridge = document.get("foreignExceptionBridgeUnit");
             require(bridge == null || bridge instanceof String text && !blank(text), "Invalid foreign exception bridge unit");
             return new VisitResult(null, verifyArtifacts ? digest(bytes) : "", path.toString(), (String) bridge);
@@ -176,15 +175,6 @@ public final class CorePackageManifest {
     public static VisitResult visitModules(String manifestPath, BiConsumer<Map<String,Object>,String> accept) { return visitModules(manifestPath, null, true, accept); }
     public static VisitResult visitModules(String manifestPath, String expectedSha256, BiConsumer<Map<String,Object>,String> accept) { return visitModules(manifestPath, expectedSha256, true, accept); }
     public static VisitResult visitModules(String manifestPath, String expectedSha256, boolean verifyArtifacts, BiConsumer<Map<String,Object>,String> accept) {
-        return visitModules(manifestPath, expectedSha256, true, true, verifyArtifacts, (source, adapter) -> {}, accept);
-    }
-    public static VisitResult visitRuntimeModules(String manifestPath, String expectedSha256, boolean sourceNotesEnabled, boolean verifyArtifacts,
-            BiConsumer<CoreJsonIndex,CoreJsonBindings> indexed, Consumer<Map<String,Object>> accept) {
-        return visitModules(manifestPath, expectedSha256, sourceNotesEnabled, false, verifyArtifacts, indexed, (module, text) -> accept.accept(module));
-    }
-    private static VisitResult visitModules(String manifestPath, String expectedSha256, boolean sourceNotesEnabled,
-            boolean materializeText, boolean verifyArtifacts, BiConsumer<CoreJsonIndex,CoreJsonBindings> indexed,
-            BiConsumer<Map<String,Object>,String> accept) {
         try {
             var manifest = Path.of(manifestPath).toRealPath();
             var root = manifest.getParent();
@@ -203,88 +193,80 @@ public final class CorePackageManifest {
             var seenModules = new HashSet<ModuleIdentity>();
             int[] count = {0};
             TargetLayout targetLayout = null;
-            var adapter = new CoreJsonBindings(sourceNotesEnabled);
-            var opened = new ArrayList<CoreJsonIndex>();
-            try {
-                for (Object record : units) {
-                    var unit = record(record, "Invalid package unit: " + manifest);
-                    String id = text(unit.get("id"), "Missing GHC unit ID: " + manifest);
-                    require(!id.isEmpty() && seenUnits.add(id), "Invalid or duplicate GHC unit ID: " + id);
-                    var depends = list(unit.get("depends"), "Missing dependencies for GHC unit " + id);
-                    boolean validDepends = true;
-                    for (Object item : depends) if (!(item instanceof String dependency) || dependency.isEmpty()) { validDepends = false; break; }
-                    require(validDepends && new HashSet<>(depends).size() == depends.size(),
-                            "Invalid dependencies for GHC unit " + id);
-                    var modules = list(unit.get("modules"), "Missing module list for GHC unit " + id);
-                    for (Object item : modules) require(!record(item, "Invalid module record in GHC unit " + id).containsKey("index"),
-                            "JSON .idx sidecars are no longer supported; regenerate unit " + id);
-                    List<String> paths = unit.containsKey("bundle") ? inventory(id, modules) : List.of();
-                    require(new HashSet<>(paths).size() == paths.size(), "Duplicate module path in " + id);
-                    class Consumer {
-                        @SuppressWarnings("unchecked") void consume(Object item, byte[] bytes, boolean bundled) {
-                            var module = record(item, "Invalid module record in GHC unit " + id);
-                            String name = text(module.get("name"), "Missing module name in GHC unit " + id);
-                            require(!name.isEmpty() && seenModules.add(new ModuleIdentity(id, name)), "Duplicate GHC module: " + id + ":" + name);
-                            require(Objects.equals(module.get("boundary"), BOUNDARY), "Package module must be post-Tidy: " + id + ":" + name);
-                            String relative = text(module.get("path"), "Missing path for " + id + ":" + name);
-                            if (bundled) require(safeRelative(relative), "Invalid ZIP module path: " + relative);
-                            String expected = text(module.get("sha256"), "Missing SHA-256 for " + id + ":" + name);
-                            require(hash(expected), "Invalid SHA-256 for " + id + ":" + name);
-                            if (verifyArtifacts) require(digest(bytes).equals(expected), "Core package artifact hash mismatch: " + id + ":" + name + " at " + relative);
-                            CoreJsonIndex sourceIndex = materializeText ? null : CoreJsonIndex.fromBytes(bytes);
-                            if (sourceIndex != null) opened.add(sourceIndex);
-                            String text = sourceIndex == null || materializeText ? new String(bytes, StandardCharsets.UTF_8) : "";
-                            Map<String,Object> source = sourceIndex != null && !materializeText ? adapter.module(sourceIndex.getRoot()) :
-                                    (Map<String,Object>) record(Json.parse(text), "Invalid Core package artifact: " + relative);
-                            CoreForeignArtifacts.INSTANCE.validateArchive(source, true);
-                            require(Objects.equals(source.get("ghc"), "9.14.1") && Objects.equals(source.get("unit"), id) &&
-                                    Objects.equals(source.get("module"), name) && Objects.equals(source.get("boundary"), BOUNDARY),
-                                    "Core package unit/module/boundary mismatch: " + id + ":" + name + " at " + relative);
-                            String prefix = id + ":" + name + ".", alias = CoreUnitDirectory.MAIN_ALIAS;
-                            var bindings = list(source.get("bindings"), "Missing bindings in " + id + ":" + name);
-                            for (Object binding : bindings) {
-                                Object key = binding instanceof Map<?,?> fields ? fields.get("id") : null;
-                                require(key instanceof String identifier && (identifier.startsWith(prefix) || identifier.equals(alias)),
-                                        "Foreign binding owner in " + id + ":" + name + " at " + relative + ": " + key);
-                            }
-                            count[0]++; accept.accept(source, text);
-                            if (sourceIndex != null) indexed.accept(sourceIndex, adapter);
+            for (Object record : units) {
+                var unit = record(record, "Invalid package unit: " + manifest);
+                String id = text(unit.get("id"), "Missing GHC unit ID: " + manifest);
+                require(!id.isEmpty() && seenUnits.add(id), "Invalid or duplicate GHC unit ID: " + id);
+                var depends = list(unit.get("depends"), "Missing dependencies for GHC unit " + id);
+                boolean validDepends = true;
+                for (Object item : depends) if (!(item instanceof String dependency) || dependency.isEmpty()) { validDepends = false; break; }
+                require(validDepends && new HashSet<>(depends).size() == depends.size(),
+                        "Invalid dependencies for GHC unit " + id);
+                var modules = list(unit.get("modules"), "Missing module list for GHC unit " + id);
+                for (Object item : modules) require(!record(item, "Invalid module record in GHC unit " + id).containsKey("index"),
+                        "JSON .idx sidecars are no longer supported; regenerate unit " + id);
+                List<String> paths = unit.containsKey("bundle") ? inventory(id, modules) : List.of();
+                require(new HashSet<>(paths).size() == paths.size(), "Duplicate module path in " + id);
+                class Consumer {
+                    @SuppressWarnings("unchecked") void consume(Object item, byte[] bytes, boolean bundled) {
+                        var module = record(item, "Invalid module record in GHC unit " + id);
+                        String name = text(module.get("name"), "Missing module name in GHC unit " + id);
+                        require(!name.isEmpty() && seenModules.add(new ModuleIdentity(id, name)), "Duplicate GHC module: " + id + ":" + name);
+                        require(Objects.equals(module.get("boundary"), BOUNDARY), "Package module must be post-Tidy: " + id + ":" + name);
+                        String relative = text(module.get("path"), "Missing path for " + id + ":" + name);
+                        if (bundled) require(safeRelative(relative), "Invalid ZIP module path: " + relative);
+                        String expected = text(module.get("sha256"), "Missing SHA-256 for " + id + ":" + name);
+                        require(hash(expected), "Invalid SHA-256 for " + id + ":" + name);
+                        if (verifyArtifacts) require(digest(bytes).equals(expected), "Core package artifact hash mismatch: " + id + ":" + name + " at " + relative);
+                        String text = new String(bytes, StandardCharsets.UTF_8);
+                        Map<String,Object> source = (Map<String,Object>) record(Json.parse(text), "Invalid Core package artifact: " + relative);
+                        CoreForeignArtifacts.INSTANCE.validateArchive(source, true);
+                        require(Objects.equals(source.get("ghc"), "9.14.1") && Objects.equals(source.get("unit"), id) &&
+                                Objects.equals(source.get("module"), name) && Objects.equals(source.get("boundary"), BOUNDARY),
+                                "Core package unit/module/boundary mismatch: " + id + ":" + name + " at " + relative);
+                        String prefix = id + ":" + name + ".", alias = CoreUnitDirectory.MAIN_ALIAS;
+                        var bindings = list(source.get("bindings"), "Missing bindings in " + id + ":" + name);
+                        for (Object binding : bindings) {
+                            Object key = binding instanceof Map<?,?> fields ? fields.get("id") : null;
+                            require(key instanceof String identifier && (identifier.startsWith(prefix) || identifier.equals(alias)),
+                                    "Foreign binding owner in " + id + ":" + name + " at " + relative + ": " + key);
                         }
+                        count[0]++; accept.accept(source, text);
                     }
-                    var consumer = new Consumer();
-                    TargetLayout unitLayout;
-                    if (unit.containsKey("bundle")) {
-                        var bundleRecord = record(unit.get("bundle"), "Invalid ZIP bundle for " + id);
-                        var verified = verifiedBundle(id, bundleRecord, verifyArtifacts);
-                        var ordered = orderedBundle(id, verified, modules, verifyArtifacts, (item, bytes) -> consumer.consume(item, bytes, true));
-                        if (ordered != null) unitLayout = ordered.targetLayout;
-                        else {
-                            var fallback = bundle(id, verified, modules, verifyArtifacts);
-                            for (Object item : modules) {
-                                var module = item instanceof Map<?,?> fields ? fields : null;
-                                String relative = text(module == null ? null : module.get("path"), "Missing module path in " + id);
-                                byte[] bytes = fallback.entries.get(relative);
-                                if (bytes == null) throw error("Missing ZIP module in " + id + ": " + relative);
-                                consumer.consume(item, bytes, true);
-                            }
-                            unitLayout = fallback.targetLayout;
-                        }
-                    } else {
+                }
+                var consumer = new Consumer();
+                TargetLayout unitLayout;
+                if (unit.containsKey("bundle")) {
+                    var bundleRecord = record(unit.get("bundle"), "Invalid ZIP bundle for " + id);
+                    var verified = verifiedBundle(id, bundleRecord, verifyArtifacts);
+                    var ordered = orderedBundle(id, verified, modules, verifyArtifacts, (item, bytes) -> consumer.consume(item, bytes, true));
+                    if (ordered != null) unitLayout = ordered.targetLayout;
+                    else {
+                        var fallback = bundle(id, verified, modules, verifyArtifacts);
                         for (Object item : modules) {
                             var module = item instanceof Map<?,?> fields ? fields : null;
                             String relative = text(module == null ? null : module.get("path"), "Missing module path in " + id);
-                            consumer.consume(item, artifact(root, relative), false);
+                            byte[] bytes = fallback.entries.get(relative);
+                            if (bytes == null) throw error("Missing ZIP module in " + id + ": " + relative);
+                            consumer.consume(item, bytes, true);
                         }
-                        unitLayout = null;
+                        unitLayout = fallback.targetLayout;
                     }
-                    if (unitLayout != null) {
-                        require(targetLayout == null || targetLayout.equals(unitLayout), "Conflicting GHC target layouts across package bundles");
-                        targetLayout = unitLayout;
+                } else {
+                    for (Object item : modules) {
+                        var module = item instanceof Map<?,?> fields ? fields : null;
+                        String relative = text(module == null ? null : module.get("path"), "Missing module path in " + id);
+                        consumer.consume(item, artifact(root, relative), false);
                     }
+                    unitLayout = null;
                 }
-                require(count[0] != 0, "Core package manifest has no executable modules: " + manifest);
-                return new VisitResult(targetLayout, manifestSha256, manifest.toString(), (String) bridgeUnit);
-            } catch (Throwable failure) { opened.forEach(CoreJsonIndex::close); return rethrow(failure); }
+                if (unitLayout != null) {
+                    require(targetLayout == null || targetLayout.equals(unitLayout), "Conflicting GHC target layouts across package bundles");
+                    targetLayout = unitLayout;
+                }
+            }
+            require(count[0] != 0, "Core package manifest has no executable modules: " + manifest);
+            return new VisitResult(targetLayout, manifestSha256, manifest.toString(), (String) bridgeUnit);
         } catch (IOException failure) { return rethrow(failure); }
     }
     public static TargetLayout appendModules(StringBuilder destination, String manifestPath) {

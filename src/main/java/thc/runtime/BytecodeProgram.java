@@ -58,7 +58,6 @@ public final class BytecodeProgram implements ExecutableProgram {
     private final boolean callDemandsEnabled = Boolean.getBoolean("thc.callDemands");
     private final CoreSources sources;
     private final Metrics metrics;
-    private final Supplier<Map<String, Object>> loadingStatistics;
     private final boolean diagnosticUnsupported;
     private final Set<String> deferredUnsupported = new LinkedHashSet<>();
     private final List<Map<String, Object>> bindings;
@@ -133,8 +132,6 @@ public final class BytecodeProgram implements ExecutableProgram {
         stackTargetLayout = moduleData.get("targetLayout");
         sources = new CoreSources(moduleData);
         metrics = demand == null ? new Metrics(!Boolean.FALSE.equals(moduleData.get("instrument"))) : demand.getMetrics();
-        loadingStatistics = moduleData.get("coreLoadingStatistics") instanceof Supplier<?> supplier
-            ? (Supplier<Map<String, Object>>) supplier : null;
         diagnosticUnsupported = Boolean.TRUE.equals(moduleData.get("diagnosticUnsupported"));
         if (!(moduleData.get("bindings") instanceof List<?> values)) throw new RuntimeFault("Missing bindings");
         bindings = (List<Map<String, Object>>) (List<?>) values;
@@ -706,7 +703,6 @@ public final class BytecodeProgram implements ExecutableProgram {
             "tail-safe; non-tail calls and nested thunk forcing use host stack");
         result.put("threadPolicy", enableAsync ? "context-owned Java threads; resumable asynchronous delivery" :
             "context-owned Java threads; external asynchronous delivery disabled");
-        if (loadingStatistics != null) result.putAll(loadingStatistics.get());
         return result;
     }
 

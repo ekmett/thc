@@ -46,15 +46,7 @@ class RawInteropBoundaryTest {
                     replacements.put((String) binding.get("id"), binding);
             }
         } else {
-            try (var input = CoreJsonIndex.fromBytes(Files.readAllBytes(DIRECTORY.resolve("InteropPrimitives.json")))) {
-                var projected = new CoreJsonBindings(false).module(input.getRoot());
-                for (var binding : objects(projected.get("bindings"))) {
-                    // Retain owned decoded records after this test's index closes.
-                    var originalBinding = originalBindings.stream().filter(b -> b.get("id").equals(binding.get("id"))).findFirst().orElseThrow();
-                    assertEquals(originalBinding.get("hostSignature"), binding.get("hostSignature"));
-                    replacements.put((String) binding.get("id"), object(Json.parse(Json.stringify(binding))));
-                }
-            }
+            for (var binding : originalBindings) replacements.put((String) binding.get("id"), binding);
         }
         var bindings = new ArrayList<Map<String, Object>>();
         for (var binding : objects(source.get("bindings"))) bindings.add(replacements.getOrDefault(binding.get("id"), binding));

@@ -2735,9 +2735,7 @@
         "thc.CoreCompactGoldenTest",
         "thc.CoreCompactLoadTest",
         "thc.CoreCompactRecordsTest",
-        "thc.CoreJsonBindingsTest",
         "thc.CoreJsonConsumersTest",
-        "thc.CoreJsonLoadTest",
         "thc.CoreJsonMd5SymbolsTest",
         "thc.CoreJsonPackageTest",
         "thc.CoreJsonSymbolsTest",
@@ -2746,7 +2744,6 @@
         "thc.CoreCbdArchiveTest",
         "thc.CoreCbdSlabsTest",
         "thc.CoreForeignArtifactsTest",
-        "thc.CoreJsonIndexTest",
         "thc.CoreLinkerTest",
         "thc.CoreLoweringRootsTest",
         "thc.CoreUnitAsyncPolicyTest",
@@ -2758,6 +2755,7 @@
         "thc.CoreZipBundleTest",
         "thc.ManagedImportTypeTest",
         "thc.PackageScalarLinksTest",
+        "thc.NarrowPublicEntryTest",
         "thc.StaticExportStartupTest"
       ],
       "python": []

@@ -63,7 +63,7 @@ class CoreUnitAsyncPolicyTest {
             "fieldReps", list(list("IntRep")), "strictFields", list(false), "fieldLifted", list(false))));
         return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, b))));
     }
-    private String request(Path path, String backend, boolean async) { return CoreFormatTestSupport.request(List.of("@" + path), "uA:A.entry", backend, false, async, false, false); }
+    private String request(Path path, String backend, boolean async) { return CoreFormatTestSupport.request(List.of("@" + path), "uA:A.entry", backend, false, async, false); }
     private long count(ExecutableProgram program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
     private AsyncRequest externalSend(GuestThreads threads, long id) throws Exception {
         var pending = CompletableFuture.supplyAsync(() -> threads.send(id, "pending demand")).get(5, TimeUnit.SECONDS);

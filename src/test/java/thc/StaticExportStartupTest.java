@@ -114,20 +114,14 @@ class StaticExportStartupTest {
         return result;
     }
     private Path paired(Map<String,Object> module) throws Exception {
-        var original = Json.stringify(module).getBytes(UTF_8); var metadata = Json.stringify(without(module, "bindings")).getBytes(UTF_8);
+        var fixture = symbolFixture(module); var original = fixture.bytes(); var metadata = Json.stringify(without(module, "bindings")).getBytes(UTF_8);
         var out = new ByteArrayOutputStream(); out.writeBytes(original); out.write(10); out.writeBytes(metadata); var bytes = out.toByteArray();
         var json = directory.resolve("module.jsons"); var symbols = directory.resolve("module.symbols"); Files.write(json, bytes);
         Map<String,Object> record;
-        try (var index = CoreJsonIndex.fromBytes(original)) {
-            var bindings = Objects.requireNonNull(index.getRoot().member("bindings"));
-            var rows = new StringBuilder();
-            for (int i = 0; i < bindings.elements().size(); ++i)
-                rows.append(((Map<?,?>) ((List<?>) module.get("bindings")).get(i)).get("id")).append(' ').append(bindings.elements().get(i).getStart()).append('\n');
-            Files.writeString(symbols, rows);
-            record = map("name", name, "path", "Exports.json", "sha256", hash(original), "boundary", module.get("boundary"), "start", 0L, "end", original.length,
-                "bindingsStart", bindings.getStart(), "bindingsEnd", bindings.getEndExclusive(), "metadataStart", original.length + 1, "metadataEnd", bytes.length,
-                "containsDelimitedControl", false, "registrationObligations", true, "mainAlias", false, "packageScalarDeclarations", true);
-        }
+        Files.writeString(symbols, fixture.symbols());
+        record = map("name", name, "path", "Exports.json", "sha256", hash(original), "boundary", module.get("boundary"), "start", 0L, "end", original.length,
+            "bindingsStart", fixture.bindingsStart(), "bindingsEnd", fixture.bindingsEnd(), "metadataStart", original.length + 1, "metadataEnd", bytes.length,
+            "containsDelimitedControl", false, "registrationObligations", true, "mainAlias", false, "packageScalarDeclarations", true);
         return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1L, "ghc", "9.14.1", "units", list(
             map("id", unit, "depends", List.of(), "json", map("path", json.toString(), "sha256", hash(bytes)),
                 "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record))))));

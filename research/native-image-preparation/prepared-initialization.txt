@@ -169,7 +169,6 @@ thc.runtime.WeakOp
 
 # Exact javac ordinal-table holders. Only enum values/ordinals and private int
 # arrays are used; preparing these does not initialize the enclosing runtime.
-thc.CoreJsonBindings$2
 thc.runtime.BytecodeJavaScriptArguments$1
 thc.runtime.BytecodeProgram$3
 thc.runtime.BytecodeRoot$1
