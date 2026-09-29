@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import java.util.ArrayList;
@@ -17,6 +18,9 @@ class Case extends Expr {
     @Children protected Alternative[] alternatives;
     @Child private LocalBinding scrutinee;
     private final boolean delimited;
+    @CompilationFinal private boolean unusedBinder;
+    /** Assigned during lowering, before adoption; matching still needs the slot. */
+    final Case discardUnusedBinder() { unusedBinder = true; return this; }
     Case(Expr scrutinee, int binderSlot, Alternative[] alternatives, Metrics metrics) {
         this(scrutinee, binderSlot, alternatives, metrics, null, false);
     }
@@ -66,7 +70,7 @@ class Case extends Expr {
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame frame, Object input) {
-                    Expr branch = select(frame).getBody();
+                    Expr branch = select(frame);
                     return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
                 }
             });
@@ -77,20 +81,20 @@ class Case extends Expr {
                                                MaskingState ambient, DelimitedStep outerMask) {
                     // LocalBinding's saved write already installed the scrutinee.
                     input.get();
-                    Expr branch = select(frame).getBody();
+                    Expr branch = select(frame);
                     return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
                 }
             });
         }
     }
-    private Alternative select(VirtualFrame frame) {
+    private Expr select(VirtualFrame frame) {
         Alternative fallback = null;
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
-            if (matches(frame, alt)) { restoreFields(frame, alt); return alt; }
+            if (matches(frame, alt)) return selected(frame, alt);
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback;
+        return selected(frame, fallback);
     }
     protected boolean matches(VirtualFrame frame, Alternative alternative) { return alternative.matches(frame, binderSlot); }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
@@ -99,12 +103,11 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().execute(frame);
+                return selected(frame, alt).execute(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().execute(frame);
+        return selected(frame, fallback).execute(frame);
     }
     @ExplodeLoop @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
         prepare(frame);
@@ -112,12 +115,11 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().executeInt(frame);
+                return selected(frame, alt).executeInt(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().executeInt(frame);
+        return selected(frame, fallback).executeInt(frame);
     }
     @ExplodeLoop @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
         prepare(frame);
@@ -125,12 +127,11 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().executeLong(frame);
+                return selected(frame, alt).executeLong(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().executeLong(frame);
+        return selected(frame, fallback).executeLong(frame);
     }
     @ExplodeLoop @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
         prepare(frame);
@@ -138,12 +139,11 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().executeFloat(frame);
+                return selected(frame, alt).executeFloat(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().executeFloat(frame);
+        return selected(frame, fallback).executeFloat(frame);
     }
     @ExplodeLoop @Override public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
         prepare(frame);
@@ -151,12 +151,11 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().executeDouble(frame);
+                return selected(frame, alt).executeDouble(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().executeDouble(frame);
+        return selected(frame, fallback).executeDouble(frame);
     }
     @ExplodeLoop @Override public Closure executeClosure(VirtualFrame frame) throws UnexpectedResultException {
         prepare(frame);
@@ -164,12 +163,11 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().executeClosure(frame);
+                return selected(frame, alt).executeClosure(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().executeClosure(frame);
+        return selected(frame, fallback).executeClosure(frame);
     }
     @ExplodeLoop @Override public DataValue executeDataValue(VirtualFrame frame) throws UnexpectedResultException {
         prepare(frame);
@@ -177,12 +175,11 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().executeDataValue(frame);
+                return selected(frame, alt).executeDataValue(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().executeDataValue(frame);
+        return selected(frame, fallback).executeDataValue(frame);
     }
     @ExplodeLoop @Override public ManagedAddress executeAddress(VirtualFrame frame) throws UnexpectedResultException {
         prepare(frame);
@@ -190,12 +187,11 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().executeAddress(frame);
+                return selected(frame, alt).executeAddress(frame);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().executeAddress(frame);
+        return selected(frame, fallback).executeAddress(frame);
     }
     @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         prepare(frame, slots, offset);
@@ -203,14 +199,13 @@ class Case extends Expr {
         for (Alternative alt : alternatives) {
             if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
             if (matches(frame, alt)) {
-                restoreFields(frame, alt);
-                return alt.getBody().executeTuple(frame, slots, offset);
+                return selected(frame, alt).executeTuple(frame, slots, offset);
             }
         }
         if (fallback == null) throw fault("Non-exhaustive Core case");
-        return fallback.getBody().executeTuple(frame, slots, offset);
+        return selected(frame, fallback).executeTuple(frame, slots, offset);
     }
-    @ExplodeLoop private void restoreFields(VirtualFrame frame, Alternative alt) {
+    @ExplodeLoop protected final Expr selected(VirtualFrame frame, Alternative alt) {
         if (alt.getKind() == DATA_ALTERNATIVE) {
             Object scrutinee = frame.getObject(binderSlot);
             if (!(scrutinee instanceof DataValue data)) throw fault("Invalid constructor case");
@@ -220,5 +215,9 @@ class Case extends Expr {
                 else alt.restoreVector(data, i, frame, lanes);
             }
         }
+        // Selection and field restoration have consumed the scrutinee. Keep a
+        // live/captured binder, but do not carry a dead value into the next loop.
+        if (unusedBinder) frame.clear(binderSlot);
+        return alt.getBody();
     }
 }
