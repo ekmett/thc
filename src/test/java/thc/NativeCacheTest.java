@@ -115,17 +115,17 @@ class NativeCacheTest {
 
     @Test void publicCachedSourceIdentityAndDynamicArgumentsUseFreshPrograms() throws Exception {
         String module = """
-            {"schema":1,"ghc":"9.14.1","module":"CacheTest","constructors":[],"bindings":[
+            {"schema":1,"ghc":"9.14.1","unit":"fixture","module":"CacheTest","boundary":"optimized-Core-after-Tidy-before-CorePrep","constructors":[],"bindings":[
               {"id":"plus","name":"plus","arity":2,"lifted":true,
                "rep":{"kind":"closure","evaluated":true,"primReps":["BoxedRep (Just Lifted)"]},
                "expr":["lam",[
                  {"id":"x","name":"x","type":"Int#","lifted":false,"coercion":false,"rep":{"kind":"long","evaluated":true,"primReps":["IntRep"]}},
                  {"id":"y","name":"y","type":"Int#","lifted":false,"coercion":false,"rep":{"kind":"long","evaluated":true,"primReps":["IntRep"]}}],
-                 ["app",["prim","+#"],[["var","x"],["var","y"]],[false,false]],
+                 ["app",["prim","+#",{}],[["var","x",{}],["var","y",{}]],[false,false],false,false,{}],
                  {"rep":{"kind":"closure","evaluated":true,"primReps":["BoxedRep (Just Lifted)"]},
                   "resultRep":{"kind":"long","evaluated":true,"primReps":["IntRep"]}}]}]}
             """;
-        Path file = directory.resolve("module.json"); Files.writeString(file, module);
+        Path file = CoreCbdFixtures.write(directory.resolve("module.cbd"), (Map<String,Object>) Json.parse(module));
         String request = NativeCache.request(List.of(file.toString()), "plus");
         Map<?, ?> document = (Map<?, ?>) Json.parse(request);
         assertEquals(true, document.get("prepareCode"));
@@ -136,6 +136,9 @@ class NativeCacheTest {
             assertThrows(IllegalStateException.class, () -> NativeCache.selectedSource(engine));
             try (Context preparation = Context.newBuilder("thc").engine(engine).build()) { preparation.parse(source); }
             assertEquals(source, NativeCache.selectedSource(engine));
+            var artifact = Files.readAllBytes(file);
+            CoreFileMappings.shared.evictIdleBelow(directory);
+            Files.delete(file);
             for (int i = 0; i < 2; i++) {
                 try (Context context = Context.newBuilder("thc").engine(engine).build()) {
                     var first = context.parse(NativeCache.selectedSource(engine)).execute();
@@ -147,6 +150,7 @@ class NativeCacheTest {
                 }
             }
             // A second selected entry/source must not silently select an arbitrary cache member.
+            Files.write(file, artifact);
             String secondRequest = request + " ";
             try (Context context = Context.newBuilder("thc").engine(engine).build()) {
                 context.parse(Source.newBuilder("thc", secondRequest, NativeCache.sourceName(secondRequest)).cached(true).buildLiteral());
@@ -184,7 +188,7 @@ class NativeCacheTest {
             assertThrows(NumberFormatException.class, () -> NativeCache.argument(value));
     }
 
-    @Test void detachedCompactFloatingLiteralsKeepRawBitsInBothReaders() {
+    @Test void compactFloatingLiteralsKeepRawBitsInBothReaders() throws Exception {
         var values = List.of(new thc.runtime.CoreFloatingLiteral.Single(0x80000000),
             new thc.runtime.CoreFloatingLiteral.Single(0x7fc01234), new thc.runtime.CoreFloatingLiteral.Single(1),
             new thc.runtime.CoreFloatingLiteral.Double(0x8000000000000000L),
@@ -195,12 +199,16 @@ class NativeCacheTest {
                 boolean single = value instanceof thc.runtime.CoreFloatingLiteral.Single;
                 var proof = map("kind", single ? "float" : "double", "evaluated", true,
                     "primReps", list(single ? "FloatRep" : "DoubleRep"));
+                String bits = value instanceof thc.runtime.CoreFloatingLiteral.Single v ? Integer.toUnsignedString(v.bits())
+                    : Long.toUnsignedString(((thc.runtime.CoreFloatingLiteral.Double) value).bits());
                 var binding = map("id", "value", "name", "value", "arity", 0, "lifted", false, "rep", proof,
-                    "expr", list("lit", single ? "float" : "double", value, map("rep", proof)));
-                var request = map("modules", list(map("schema", 1, "ghc", "9.14.1", "module", "DetachedFloating",
-                    "bindings", list(binding), "constructors", list())),
-                    "entry", "value", "backend", backend, "asyncExceptions", false, "prepareCode", backend.equals("ast"));
-                var entry = context.eval("thc", CoreModules.detachedRequest(request, "value"));
+                    "expr", list("lit", single ? "float-bits" : "double-bits", bits, map("rep", proof)));
+                var model = map("schema", 1, "ghc", "9.14.1", "unit", "fixture", "module", "Floating",
+                    "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", list(binding), "constructors", list());
+                Path file = CoreCbdFixtures.write(Files.createTempFile(directory, "floating-", ".cbd"), model);
+                String request = backend.equals("ast") ? NativeCache.request(List.of(file.toString()), "value") :
+                    CoreModules.request(List.of(file.toString()), "value", true, false, backend, false, false, null, false, false);
+                var entry = context.eval("thc", request);
                 if (value instanceof thc.runtime.CoreFloatingLiteral.Single expected)
                     assertEquals(expected.bits(), Float.floatToRawIntBits(entry.execute().asFloat()));
                 else assertEquals(((thc.runtime.CoreFloatingLiteral.Double)value).bits(),

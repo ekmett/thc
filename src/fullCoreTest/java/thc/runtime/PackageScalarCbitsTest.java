@@ -48,11 +48,20 @@ public class PackageScalarCbitsTest {
             programUnits.put((String) record.get("unit"), relocated);
             // Select unchanged hashed acquisition products, never synthetic providers or payloads.
             var selected = temporary.resolve(record.get("name") + "-packages.json"); var selection = with(packages, "units", List.of(relocated)); Files.writeString(selected, Json.stringify(selection)); var directory = CoreUnitDirectory.read(selection);
-            if (directory == null) CorePackageManifest.visitModules(selected.toString(), (module, origin) -> modules.add(module));
-            else {
-                assertEquals(1, directory.getUnits().size()); var originalUnit = directory.getUnits().getFirst(); var source = Objects.requireNonNull(originalUnit.getJson()); var symbols = Objects.requireNonNull(originalUnit.getSymbols());
-                try (var reader = new CoreJsonSymbols(source.getPath(), symbols.getPath(), true, source.getSha256(), symbols.getSha256())) { for (var module : originalUnit.getModules()) reader.verifyModule(module.getSpan(), module.getSha256(), original -> { assertEquals("9.14.1", original.get("ghc")); assertEquals(originalUnit.getId(), original.get("unit")); assertEquals(module.getName(), original.get("module")); assertEquals("optimized-Core-after-Tidy-before-CorePrep", original.get("boundary")); CoreForeignArtifacts.validateArchive(original); for (var binding : (List<Map<String, Object>>) original.get("bindings")) { String id = (String) binding.get("id"); assertTrue(id.startsWith(module.getPrefix()) || id.equals("main::" + module.getName() + ".main"), "original binding remains owned by selected unit/module"); } modules.add(original); }); }
+            assertEquals(1, directory.getUnits().size());
+            for (var module : directory.getModules()) {
+                var original = CoreCbdFixtures.read(module.artifact().path());
+                assertEquals("9.14.1", original.get("ghc")); assertEquals(module.unit(), original.get("unit"));
+                assertEquals(module.name(), original.get("module"));
+                assertEquals("optimized-Core-after-Tidy-before-CorePrep", original.get("boundary"));
+                CoreForeignArtifacts.validateArchive(original);
+                for (var binding : (List<Map<String,Object>>) original.get("bindings")) {
+                    String id = (String) binding.get("id");
+                    assertTrue(id.startsWith(module.getPrefix()) || id.equals("main::Main.main"));
+                }
+                modules.add(original);
             }
+
             var rows = (List<Map<String, Object>>) record.get("observations"); assertEquals(30, rows.size()); var observedNames = new HashSet<Object>(); var observedModules = new HashSet<Object>(); Map<String, Object> zero = null;
             for (var row : rows) { observedNames.add(row.get("entry")); observedModules.add(row.get("module")); if (Objects.equals(row.get("entry"), "scalarInt32")) { var args = (List<?>) row.get("arguments"); assertEquals(1, args.size()); if (Objects.equals(((Map<?, ?>) args.getFirst()).get("value"), "0")) { assertNull(zero); zero = row; } } }
             assertEquals(names, observedNames); assertEquals(Set.of("Scalar", "ScalarAgain"), observedModules); assertEquals(Objects.equals(record.get("name"), "first") ? "1" : "2", ((Map<?, ?>) Objects.requireNonNull(zero).get("result")).get("value"), "native copies must exercise different implementations of the same C symbol");

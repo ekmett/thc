@@ -11,19 +11,21 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreFormatTestSupport.*;
 
-/** Plain JSON consumers preserve interface ownership and declaration order. */
+/** Explicit CBD consumers preserve interface ownership and declaration order. */
 @SuppressWarnings("unchecked")
-class CoreJsonConsumersTest {
+class CoreCbdConsumersTest {
     @TempDir Path directory;
     private byte[] resource(String name) throws Exception {
         try (var input = Objects.requireNonNull(getClass().getResourceAsStream("/core/" + name))) { return input.readAllBytes(); }
     }
     private String digest(byte[] bytes) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
-    private Path file(String name) throws Exception { var path = directory.resolve(name); Files.write(path, resource(name)); return path; }
+    private Path file(String name) throws Exception {
+        return CoreCbdFixtures.write(directory.resolve(name.replace(".json", ".cbd")),
+            document(new String(resource(name), java.nio.charset.StandardCharsets.UTF_8)));
+    }
     private Path support() throws Exception {
-        var json = file("lazy-json-package.json");
-        var module = map("name", "LazyJson", "path", json.getFileName().toString(), "boundary", "optimized-Core-after-Tidy-before-CorePrep",
-            "sha256", digest(Files.readAllBytes(json)));
+        var module = CoreCbdFixtures.module(directory.resolve("package.cbd"),
+            document(new String(resource("lazy-json-package.json"), java.nio.charset.StandardCharsets.UTF_8)));
         var path = directory.resolve("packages.json");
         Files.writeString(path, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1",
             "units", List.of(map("id", "synthetic", "depends", List.of(), "modules", List.of(module))))));
@@ -41,16 +43,16 @@ class CoreJsonConsumersTest {
     private long count(Value value, String key) { return ((Number) document(value.getMember("diagnostics").asString()).get(key)).longValue(); }
     @Test void plainConsumersKeepInterfaceOwnershipAndOrder() throws Exception {
         var consumers = consumers();
-        assertEquals("d2a141b1f35127040ee3358a3332444c4f92b866de3a03854e085b6b979e4b7a", digest(resource("package-consumer.json")));
-        assertEquals("c7fb8e4a188e3c62d505225f4769a96d7dac4375882d0d23c9e26ee6cc8dec78", digest(resource("interface-closure.json")));
+        assertEquals("52b23334d8e304332840f20bccf03ba11d1509f1168a2e0b71b1d91cd9b07706", digest(resource("package-consumer.json")));
+        assertEquals("1d1fdc9ff95b601846ac0154800adeba1e9594cdd1b94a11c258f82d2e5defcf", digest(resource("interface-closure.json")));
         {
             var manifest = support(); var keys = new ArrayList<>(consumers);
             for (var order : List.of(keys, keys.reversed())) {
                 var paths = List.of(order.get(0), "@" + manifest, order.get(1));
                 String serialized = request(paths); var input = document(serialized);
-                assertTrue(input.containsKey("modules"));
+                assertFalse(input.containsKey("modules")); assertTrue(input.containsKey("moduleFiles"));
                 var selected = modules(serialized); var expected = new ArrayList<>(List.of("synthetic"));
-                for (String path : order) expected.add(path.endsWith("package-consumer.json") ? "main" : "dependency-closure");
+                for (String path : order) expected.add(path.endsWith("package-consumer.cbd") ? "main" : "dependency-closure");
                 assertEquals(expected, selected.stream().map(it -> it.get("unit")).toList());
                 var closures = selected.stream().filter(it -> "dependency-closure".equals(it.get("unit"))).toList();
                 assertEquals(1, closures.size()); var closure = closures.getFirst();
@@ -62,7 +64,7 @@ class CoreJsonConsumersTest {
                 for (String backend : List.of("ast", "bytecode")) for (boolean async : new boolean[]{false, true})
                     try (var context = Main.executionContext(false)) {
                         var value = Main.loadEntry(context, paths, "main:Main.entry", true, backend, false, null, async, false);
-                        assertEquals(2L, count(value, "initializedBindingCount")); // Both reachable ordinary JSON bindings.
+                        assertEquals(1L, count(value, "initializedBindingCount")); // The explicit entry is admitted first.
                         assertEquals(10L, value.execute(7L).asLong(), order + "/" + "/" + backend + "/" + async);
                         assertEquals(2L, count(value, "initializedBindingCount"));
                     }

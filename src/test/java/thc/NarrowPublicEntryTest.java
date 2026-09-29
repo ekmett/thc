@@ -23,7 +23,7 @@ class NarrowPublicEntryTest {
     private Map<String, Object> integer(String rep) { return map("kind", "long", "primReps", list(rep), "evaluated", true); }
     private List<Object> variable(String id, Map<String, Object> rep) { return list("var", id, map("rep", rep)); }
     private List<Object> literal(String tag, String value, Map<String, Object> rep) { return list("lit", tag, value, map("rep", rep)); }
-    private List<Object> primitive(String name, List<List<Object>> inputs, Map<String, Object> rep) { return list("app", list("prim", name), inputs, Collections.nCopies(inputs.size(), false), false, false, map("rep", rep)); }
+    private List<Object> primitive(String name, List<List<Object>> inputs, Map<String, Object> rep) { return list("app", list("prim", name, map()), inputs, Collections.nCopies(inputs.size(), false), false, false, map("rep", rep)); }
     private Map<String, Object> binding(String id, int arity, List<Object> body) { return binding(id, arity, body, closure); }
     private Map<String, Object> binding(String id, int arity, List<Object> body, Map<String, Object> rep) { return map("id", "uN:N." + id, "name", id, "arity", arity, "lifted", rep.equals(closure), "rep", rep, "expr", body); }
     private record Input(String id, Map<String, Object> rep) {}
@@ -35,18 +35,10 @@ class NarrowPublicEntryTest {
     private String request(List<Map<String, Object>> bindings, String backend, boolean indexed) throws Exception {
         var metadata = map("schema", 1, "ghc", "9.14.1", "unit", "uN", "module", "N", "boundary", "optimized-Core-after-Tidy-before-CorePrep", "constructors", list());
         var module = with(metadata, "bindings", bindings);
-        if (!indexed) return Json.stringify(map("backend", backend, "entry", "uN:N.entry", "asyncExceptions", false, "modules", list(module)));
-        var fixture = CoreFormatTestSupport.symbolFixture(module); var original = fixture.bytes(); var admitted = Json.stringify(metadata).getBytes(StandardCharsets.UTF_8);
-        var bytes = Arrays.copyOf(original, original.length + 1 + admitted.length); bytes[original.length] = 10;
-        System.arraycopy(admitted, 0, bytes, original.length + 1, admitted.length);
-        var json = directory.resolve("N.jsons"); var symbols = directory.resolve("N.symbols"); Files.write(json, bytes);
-        Map<String, Object> record;
-        Files.writeString(symbols, fixture.symbols());
-        record = map("name", "N", "path", "N.json", "sha256", hash(original), "boundary", metadata.get("boundary"), "start", 0, "end", original.length,
-            "bindingsStart", fixture.bindingsStart(), "bindingsEnd", fixture.bindingsEnd(), "metadataStart", original.length + 1, "metadataEnd", bytes.length,
-            "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", false);
-        var unit = map("id", "uN", "depends", list(), "json", map("path", json.toString(), "sha256", hash(bytes)),
-            "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record));
+        var path = directory.resolve("N.cbd");
+        var record = CoreCbdFixtures.module(path, module);
+        if (!indexed) return CoreModules.request(list(path.toString()), "uN:N.entry", true, false, backend, false, false, null, false, true);
+        var unit = map("id", "uN", "depends", list(), "modules", list(record));
         var manifest = directory.resolve("packages.json");
         Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(unit))));
         return CoreModules.request(list("@" + manifest), "uN:N.entry", true, false, backend, false, false, null, false, true);

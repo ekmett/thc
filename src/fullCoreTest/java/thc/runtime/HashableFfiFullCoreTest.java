@@ -48,7 +48,7 @@ public class HashableFfiFullCoreTest {
             String[] cells = line.split("\t", -1); assertEquals(4, cells.length); nativeRows.add(new Row(cells[0], Long.parseLong(cells[1]), Long.parseLong(cells[2]), Long.parseLong(cells[3])));
         }
         assertEquals(nativeRows, rows, "expected results must be actual matching native executable output");
-        var packages = new File(root, (String) manifest.get("packages")); var modules = new ArrayList<Map<String, Object>>(); CorePackageManifest.visitModules(packages.getPath(), (module, path) -> modules.add(module));
+        var packages = new File(root, (String) manifest.get("packages")); var modules = new ArrayList<Map<String, Object>>(); CoreCbdFixtures.visitModules(packages.getPath(), (module, path) -> modules.add(module));
         String hashable = (String) manifest.get("hashableUnit"); var original = new ArrayList<Map<String, Object>>(); for (var module : modules) if (hashable.equals(module.get("unit"))) original.add(module);
         assertFalse(original.isEmpty(), "original dependency Core must remain in the package manifest"); var declarations = new ArrayList<Map<String, Object>>();
         for (var module : original) if (module.get("staticForeignImports") instanceof Map<?, ?> proof) {

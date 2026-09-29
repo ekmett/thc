@@ -13,7 +13,7 @@ public final class StackInfoTestLayout {
     private static final String platform = (Set.of("arm64", "aarch64").contains(System.getProperty("os.arch").toLowerCase(Locale.ROOT)) ? "aarch64" : "x86_64") +
         (System.getProperty("os.name").startsWith("Mac") ? "-osx" : "-linux");
     public static final String endian = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? "little" : "big";
-    // Same complete synthetic typed-layout construction used by CoreZipBundleTest.
+    // Complete synthetic typed-layout construction for stack-layout controls.
     public static Map<String, Object> fields() {
         var fields = new LinkedHashMap<String, Object>();
         fields.put("schema", 1); fields.put("profiled", false); fields.put("wordBytes", 8); fields.put("targetPlatform", platform);
