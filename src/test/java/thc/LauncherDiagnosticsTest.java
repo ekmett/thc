@@ -21,6 +21,21 @@ import static thc.Main.launcherArtifactVerification;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 public class LauncherDiagnosticsTest {
     @TempDir public Path directory;
+    @Test public void nativeExecutableBindsMainAndShutdownWithoutParsingGuestOptions() {
+        var binding = List.of("--run-executable", "@packages.json,main.cbd", "u:Main.main",
+            "base:Top.flush", "--", "ghc", "-B/lib with spaces");
+        var guest = new String[] {"--verify-artifacts", "--run-io", "", "--", "a b.hs"};
+        var actual = NativeExecutable.launcherArguments(Json.stringify(binding), guest);
+        assertArrayEquals(new String[] {"--run-executable", "@packages.json,main.cbd", "u:Main.main",
+            "base:Top.flush", "--", "ghc", "-B/lib with spaces", "--verify-artifacts",
+            "--run-io", "", "--", "a b.hs"}, actual);
+        assertFalse(Main.launcherArtifactVerification(actual).verifyArtifacts());
+        assertEquals("ghc", Main.launcherArguments(actual, 4).programName());
+        assertArrayEquals(new String[] {"--verify-artifacts", "--run-io", "", "--", "a b.hs"}, guest);
+        for (String invalid : List.of("{}", "[]", "[1]", "[null,1,2,3,4,5]", "[\"--run-io\",\"modules\",\"entry\"]",
+                Json.stringify(List.of("--run-executable", "modules", "entry", "", "--", "ghc"))))
+            assertThrows(IllegalArgumentException.class, () -> NativeExecutable.launcherArguments(invalid, guest));
+    }
     @Test
     @org.junit.jupiter.api.condition.EnabledOnOs({org.junit.jupiter.api.condition.OS.LINUX, org.junit.jupiter.api.condition.OS.MAC})
     public void shellWrapperPreservesExplicitModulesAndEveryArgument() throws Exception {

@@ -91,6 +91,25 @@ itself a compiled-code cache.
 
 ## Rebuild, compatibility and errors
 
+### Application-bound runtime image (not a compiled guest cache)
+
+The same experimental image recipe also accepts `executable`. Set
+`THC_NATIVE_IMAGE_EXECUTABLE_CONFIG` to a JSON array containing the ordinary
+`Main` prefix `["--run-executable", "MODULES", "ENTRY", "SHUTDOWN_ENTRY", "--",
+"PROGRAM_NAME"]`, optionally followed by default guest arguments. Set
+`THC_NATIVE_IMAGE_EXECUTABLE_NAME` to the desired ELF basename. The binding is
+embedded in the image; incoming arguments are appended as opaque guest argv.
+The original loader owns argument initialization, IO, shutdown and exit status.
+
+This produces an application-bound JVM-free runtime, but **lowers guest Core at
+runtime**. It does not imply that the guest was AOT-compiled or persisted in a
+code cache. Referenced Core/package files and native dependencies remain required
+external resources. Use the existing compact encoder for retained loose Core
+captures rather than relying on the retired JSON-sidecar scanner. Native Image
+provider/resource-profile requirements still apply.
+
+### Compiled-cache compatibility
+
 `bin/native-cache build` uses the existing `installDist` output, so rerun
 `installDist` after source changes. The build uses an 8 GiB heap and two compiler
 threads. Its output is `build/native-image/thc-native-cache`; set

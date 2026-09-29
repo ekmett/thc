@@ -5,13 +5,13 @@
 # Retain normal compiler checks; separate from the pure-interpreter recipe.
 set -euo pipefail
 if (( $# < 1 || $# > 2 )); then
-    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only]' >&2
+    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only]' >&2
     exit 2
 fi
 recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$1" && pwd)
 mode=${2:-build}
-case "$mode" in prepare-only|build|cache|cache-prepare-only) ;; *) exit 2 ;; esac
+case "$mode" in prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only) ;; *) exit 2 ;; esac
 vector_options=()
 vector_profile=${THC_NATIVE_IMAGE_VECTOR_PROFILE:-intrinsics}
 case "$vector_profile" in
@@ -31,7 +31,7 @@ classpath=
 for jar in build/install/thc/lib/*.jar; do
     # Cached package FFI uses the distribution's existing Sulong/NFI providers
     # at load time; preparation itself does not open or execute a guest library.
-    if [[ "$mode" != cache* ]]; then
+    if [[ "$mode" != cache* && "$mode" != executable* ]]; then
         case "${jar##*/}" in llvm-*|thc-llvm-language-*|antlr4-*|truffle-nfi-*) continue ;; esac
     fi
     classpath="${classpath:+$classpath:}$repo_dir/$jar"
@@ -65,7 +65,7 @@ done < "$recipe_dir/prepared-initialization.txt"
 cache_options=()
 main_class=thc.Main
 image_path="$repo_dir/build/native-image/thc-reproduced-prepared"
-if [[ "$mode" == cache* ]]; then
+if [[ "$mode" == cache* || "$mode" == executable* ]]; then
     # This configuration is qualified only for the pinned Linux AMD64 provider.
     [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
         echo 'Experimental cached code currently requires Linux AMD64' >&2; exit 2;
@@ -82,6 +82,23 @@ if [[ "$mode" == cache* ]]; then
     image_path="$repo_dir/build/native-image/thc-native-cache"
 fi
 [[ "$vector_profile" != resource-copy ]] || image_path+=-resource-copy
+executable_options=()
+if [[ "$mode" == executable* ]]; then
+    # Bind the ordinary loader, argv and shutdown to one application. External
+    # Core resources remain external; this does NOT prepare a guest code cache.
+    : "${THC_NATIVE_IMAGE_EXECUTABLE_CONFIG:?Supply a fixed Main executable argument JSON array}"
+    : "${THC_NATIVE_IMAGE_EXECUTABLE_NAME:?Supply the ELF output basename}"
+    [[ "$THC_NATIVE_IMAGE_EXECUTABLE_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 2
+    test -f "$THC_NATIVE_IMAGE_EXECUTABLE_CONFIG"
+    binding_dir=$(mktemp -d "$repo_dir/build/native-image/executable.XXXXXX")
+    cp -- "$THC_NATIVE_IMAGE_EXECUTABLE_CONFIG" "$binding_dir/thc-native-executable.json"
+    "$JAVA_HOME/bin/jar" --create --file "$binding_dir/binding.jar" -C "$binding_dir" thc-native-executable.json
+    classpath="$classpath:$binding_dir/binding.jar"
+    executable_options=(-H:IncludeResources=thc-native-executable.json)
+    cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT)
+    main_class=thc.NativeExecutable
+    image_path="$repo_dir/build/native-image/$THC_NATIVE_IMAGE_EXECUTABLE_NAME"
+fi
 # Switch tables depend only on enums ALREADY selected above. This final category
 # proves the complete synthetic initializer; it never adds an enum dependency.
 "$JAVA_HOME/bin/java" -Xmx512m -XX:-UseJVMCICompiler -cp "$probe_dir:$classpath" \
@@ -144,7 +161,7 @@ exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --p
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
     "@$initialization_args" "@$foreign_args" \
-    -H:+UnlockExperimentalVMOptions "@$vector_args" "${cache_options[@]}" -H:+PrintCanonicalGraphStrings \
+    -H:+UnlockExperimentalVMOptions "@$vector_args" "${cache_options[@]}" "${executable_options[@]}" -H:+PrintCanonicalGraphStrings \
     -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \
     -cp "$classpath" "$main_class" "$image_path"
