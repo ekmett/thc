@@ -6,6 +6,7 @@
     "thc.runtime.ExplicitInteropLibraryTest",
     "thc.runtime.JavaArrayTest",
     "thc.runtime.SemanticForeignOverrideTest",
+    "thc.runtime.PackageNativeArchiveTest",
     "thc.runtime.PackageNativeForeignTest",
     "thc.runtime.PackageScalarForeignTest",
     "thc.runtime.StockGraphRecoveryTest",
