@@ -93,8 +93,8 @@ prepareFusedFloating root = do
       ((name,x,y,z,r),(want,a,b,c,width)) <- zip rows expected]) (die "Incomplete fused native domain")
   writeFile (output </> "oracle.tsv") actual
   forM_ ["pre","post"] $ \stage -> do
-    _ <- run root [] "python3" (["bin/audit-core.py",directory </> stage ++ "-core/FloatingAudit.json",
-      "--output",directory </> stage ++ "-audit.json"] ++ concatMap (\name -> ["--entry",name]) (entries 32 ++ entries 64)) ""
+    _ <- run root [] "python3" (["bin/audit-core.py",directory </> stage ++ "-core/FloatingAudit.cbd",
+      "--output",directory </> stage ++ "-audit.json"] ++ concatMap (\name -> ["--entry","main:FloatingAudit." ++ name]) (entries 32 ++ entries 64)) ""
     pure ()
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
@@ -105,7 +105,7 @@ prepareFusedFloating root = do
         ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.tsv"] ++ [directory </> stage ++ suffix | stage <- ["pre","post"],
-        suffix <- ["-core/FloatingAudit.json","-audit.json"]]
+        suffix <- ["-core/FloatingAudit.cbd","-audit.json"]]
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),"ghcInfo" .= infoText,
