@@ -1743,7 +1743,9 @@ class Audit:
         def exact(rep, register):
             if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
                 return False
-            kinds = {'AddrRep': 'address', 'IntRep': 'long', 'Int8Rep': 'long', 'Int64Rep': 'long',
+            kinds = {'AddrRep': 'address', 'IntRep': 'long', 'WordRep': 'long',
+                     'Int8Rep': 'long', 'Int16Rep': 'long', 'Int32Rep': 'long', 'Int64Rep': 'long',
+                     'FloatRep': 'float', 'DoubleRep': 'double',
                      'BoxedRep (Just Lifted)': 'object', 'BoxedRep (Just Unlifted)': 'object', 'State# RealWorld': 'void'}
             return (rep.get('kind') == kinds[register] and
                     rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
@@ -1772,7 +1774,8 @@ class Audit:
         if not compatible:
             return reject('GHC declared scalar or State# tuple result differs from polyglot ABI')
         self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
-        self.require_exception_bridge(owner, path)
+        if spec.get('exceptionBridge', True):
+            self.require_exception_bridge(owner, path)
         return True
 
     def free_variables(self, expr):

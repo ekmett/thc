@@ -16,7 +16,8 @@ ABI = json.loads((ROOT / 'src/test/resources/thc/polyglot-abi.json').read_text()
 
 
 def rep(register):
-    return dict(kind={'AddrRep': 'address', 'IntRep': 'long', 'Int8Rep': 'long', 'Int64Rep': 'long', 'DoubleRep': 'double',
+    return dict(kind={'AddrRep': 'address', 'IntRep': 'long', 'WordRep': 'long', 'Int8Rep': 'long',
+                      'Int16Rep': 'long', 'Int32Rep': 'long', 'Int64Rep': 'long', 'FloatRep': 'float', 'DoubleRep': 'double',
                       'BoxedRep (Just Lifted)': 'object', 'BoxedRep (Just Unlifted)': 'object', 'State# RealWorld': 'void'}[register],
                 primReps=[] if register == 'State# RealWorld' else [register], evaluated=True)
 
@@ -73,7 +74,8 @@ class PolyglotAuditTest(unittest.TestCase):
             with self.subTest(symbol=symbol):
                 expression, bound = call(symbol)
                 auditor = self.audit(expression, bound)
-                self.assertEqual(['foreign-exception-bridge'], [issue['code'] for issue in auditor.issues])
+                expected = ['foreign-exception-bridge'] if ABI['operations'][symbol].get('exceptionBridge', True) else []
+                self.assertEqual(expected, [issue['code'] for issue in auditor.issues])
                 self.assertEqual({}, auditor.missing)
                 self.assertEqual([symbol], [entry['symbol'] for entry in auditor.foreign_calls])
 

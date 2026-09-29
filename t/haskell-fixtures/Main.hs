@@ -44,6 +44,7 @@ import Int32ByteOffsetFixtures (prepareInt32ByteOffset)
 import Explicit64ArrayFixtures (prepareExplicit64Array)
 import FusedFloatingFixtures (prepareFusedFloating)
 import SimdCallFixtures (prepareSimdCalls)
+import VectorApiFixtures (prepareVectorApi)
 import SimdFloatFmaFixtures (prepareSimdFloatFma)
 import SimdWideFloatFmaFixtures (prepareSimdWideFloatFma)
 import SqrtFixtures (prepareSqrt)
@@ -1003,6 +1004,7 @@ main = do
     ["explicit64-arrays"] -> prepareExplicit64Array root
     ["fused-floating"] -> prepareFusedFloating root
     ["simd-calls"] -> prepareSimdCalls root
+    ["vector-api"] -> prepareVectorApi root
     ["simd-floatx4-fma"] -> prepareSimdFloatFma root
     ["simd-wide-floating-fma"] -> prepareSimdWideFloatFma root
     ["sqrt"] -> prepareSqrt root

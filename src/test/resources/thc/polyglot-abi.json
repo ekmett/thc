@@ -129,6 +129,660 @@
     "thc_polyglot_v1_execute_int": {
       "arguments": ["BoxedRep (Just Lifted)", "IntRep", "State# RealWorld"],
       "result": ["State# RealWorld", "IntRep"]
+    },
+    "thc_vector_v1_int8_species": {
+      "arguments": ["IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_broadcast_int8": {
+      "arguments": ["BoxedRep (Just Unlifted)","Int8Rep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int8_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["Int8Rep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int8_with_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","Int8Rep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int8_reduce_add": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["Int8Rep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_index_int8_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": [null,"ByteArray#",null,null]
+    },
+    "thc_vector_v1_read_int8_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"],
+      "exceptionBridge": false,
+      "argumentTypes": [null,"MutableByteArray#",null,null,null]
+    },
+    "thc_vector_v1_write_int8_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": ["MutableByteArray#",null,null,null,null]
+    },
+    "thc_vector_v1_int16_species": {
+      "arguments": ["IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_broadcast_int16": {
+      "arguments": ["BoxedRep (Just Unlifted)","Int16Rep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int16_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["Int16Rep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int16_with_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","Int16Rep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int16_reduce_add": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["Int16Rep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_index_int16_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": [null,"ByteArray#",null,null]
+    },
+    "thc_vector_v1_read_int16_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"],
+      "exceptionBridge": false,
+      "argumentTypes": [null,"MutableByteArray#",null,null,null]
+    },
+    "thc_vector_v1_write_int16_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": ["MutableByteArray#",null,null,null,null]
+    },
+    "thc_vector_v1_int32_species": {
+      "arguments": ["IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_broadcast_int32": {
+      "arguments": ["BoxedRep (Just Unlifted)","Int32Rep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int32_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["Int32Rep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int32_with_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","Int32Rep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int32_reduce_add": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["Int32Rep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_index_int32_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": [null,"ByteArray#",null,null]
+    },
+    "thc_vector_v1_read_int32_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"],
+      "exceptionBridge": false,
+      "argumentTypes": [null,"MutableByteArray#",null,null,null]
+    },
+    "thc_vector_v1_write_int32_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": ["MutableByteArray#",null,null,null,null]
+    },
+    "thc_vector_v1_int64_species": {
+      "arguments": ["IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_broadcast_int64": {
+      "arguments": ["BoxedRep (Just Unlifted)","Int64Rep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int64_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["Int64Rep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int64_with_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","Int64Rep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_int64_reduce_add": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["Int64Rep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_index_int64_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": [null,"ByteArray#",null,null]
+    },
+    "thc_vector_v1_read_int64_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"],
+      "exceptionBridge": false,
+      "argumentTypes": [null,"MutableByteArray#",null,null,null]
+    },
+    "thc_vector_v1_write_int64_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": ["MutableByteArray#",null,null,null,null]
+    },
+    "thc_vector_v1_float_species": {
+      "arguments": ["IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_broadcast_float": {
+      "arguments": ["BoxedRep (Just Unlifted)","FloatRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_float_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["FloatRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_float_with_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","FloatRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_float_reduce_add": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["FloatRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_index_float_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": [null,"ByteArray#",null,null]
+    },
+    "thc_vector_v1_read_float_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"],
+      "exceptionBridge": false,
+      "argumentTypes": [null,"MutableByteArray#",null,null,null]
+    },
+    "thc_vector_v1_write_float_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": ["MutableByteArray#",null,null,null,null]
+    },
+    "thc_vector_v1_double_species": {
+      "arguments": ["IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_broadcast_double": {
+      "arguments": ["BoxedRep (Just Unlifted)","DoubleRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_double_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["DoubleRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_double_with_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","DoubleRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_double_reduce_add": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["DoubleRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_index_double_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": [null,"ByteArray#",null,null]
+    },
+    "thc_vector_v1_read_double_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"],
+      "exceptionBridge": false,
+      "argumentTypes": [null,"MutableByteArray#",null,null,null]
+    },
+    "thc_vector_v1_write_double_vector": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld"],
+      "scalar": true,
+      "exceptionBridge": false,
+      "argumentTypes": ["MutableByteArray#",null,null,null,null]
+    },
+    "thc_vector_v1_species_with_shape": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_length": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_element_bits": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_vector_bits": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_vector_bytes": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_loop_bound": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_part_limit": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_index_in_range": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_mask_all": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_species_zero": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_species": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_species": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_shuffle_species": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_from_bits": {
+      "arguments": ["BoxedRep (Just Unlifted)","WordRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_to_bits": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["WordRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_true_count": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_first_true": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_last_true": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_any_true": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_all_true": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_and": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_or": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_xor": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_and_not": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_not": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_mask_cast": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_shuffle_iota": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep","IntRep","IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_shuffle_lane": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["IntRep"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_shuffle_valid": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_shuffle_wrap": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_shuffle_cast": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_to_shuffle": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_add": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_sub": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_mul": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_div": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_min": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_max": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_add_masked": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_sub_masked": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_mul_masked": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_div_masked": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_abs": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_neg": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_eq": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_ne": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_lt": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_le": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_gt": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_ge": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_unsigned_lt": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_blend": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_rearrange": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_rearrange_masked": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_compress": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_expand": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_convert": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
+    },
+    "thc_vector_v1_vec_reinterpret": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep"],
+      "result": ["BoxedRep (Just Unlifted)"],
+      "scalar": true,
+      "exceptionBridge": false
     }
   }
 }

@@ -294,6 +294,29 @@ public final class ManagedAllocation {
         else if (intersectsPointer(start, vectorBytes)) throw fault("Vector read overlaps a managed pointer cell");
         return segment;
     }
+    /** The caller holds this owner through the masked access. Inactive lanes neither
+     * check bounds nor invalidate pointer cells; a tail may end inside the vector. */
+    MemorySegment maskedVectorSegment(long offset, int laneBytes, jdk.incubator.vector.VectorMask<?> mask, boolean write) {
+        if (write) mutable();
+        if (mask.allTrue()) return vectorSegment(offset, true, 1, write, laneBytes * mask.length());
+        // Adjacent active lanes may cover one complete pointer cell. Validate
+        // every run before invalidating any cells, including a later bad run.
+        for (int pass = 0; pass < (write && pointerCapable ? 2 : 1); pass++)
+            for (int lane = 0; lane < mask.length();) {
+                if (!mask.laneIsSet(lane)) { lane++; continue; }
+                int first = lane++;
+                while (lane < mask.length() && mask.laneIsSet(lane)) lane++;
+                int count = (lane - first) * laneBytes;
+                int start = range(Math.addExact(offset, (long) first * laneBytes), count);
+                if (write) {
+                    if (pointerCapable) {
+                        if (pass == 0) requireWholePointerOverlaps(start, count);
+                        else invalidate(start, count);
+                    }
+                } else if (intersectsPointer(start, count)) throw fault("Vector read overlaps a managed pointer cell");
+            }
+        return segment;
+    }
     /** Synchronous atomic preflight; the caller keeps the owner lock through the operation. */
     @TruffleBoundary public MemorySegment atomicSegment(long offset, int width, boolean writable) {
         if (!Thread.holdsLock(this)) throw new IllegalMonitorStateException("Managed atomic access requires its owner lock");

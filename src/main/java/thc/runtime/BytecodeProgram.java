@@ -5932,6 +5932,28 @@ public final class BytecodeProgram implements ExecutableProgram {
         var nativeAllocation = override == CoreForeignOverride.ALLOCATION ? CoreNativeAllocationForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         boolean memmove = override == CoreForeignOverride.MEMMOVE && CoreMemoryCopyForeign.MEMMOVE.validate(metadata, representations, flags, resultRepresentation);
         boolean memcpy = override == CoreForeignOverride.MEMCPY && CoreMemoryCopyForeign.MEMCPY.validate(metadata, representations, flags, resultRepresentation);
+        var vectorApi = VectorApiOp.validate(expr, defined);
+        if (vectorApi != null) {
+            var operands = new ArrayList<Expression>();
+            for (var arg : args) operands.add(compile(arg, scope, false));
+            java.util.function.Consumer<Emission> operation = e -> {
+                e.builder.beginVectorApi(vectorApi);
+                for (var operand : operands) operand.emit(e);
+                e.builder.endVectorApi();
+            };
+            if (vectorApi.tuple) return tupleExpression(tupleProof, (e, destination) ->
+                storeTupleResult(e, destination.getFirst(), () -> operation.accept(e)));
+            return new ProvenExpression(e -> {
+                var b = e.builder;
+                switch (vectorApi.result) {
+                    case "Int8Rep", "Int16Rep", "Int32Rep" -> { b.beginToInt(); operation.accept(e); b.endToInt(); }
+                    case "IntRep", "Int64Rep", "WordRep" -> { b.beginToLong(); operation.accept(e); b.endToLong(); }
+                    case "FloatRep" -> { b.beginToFloat(); operation.accept(e); b.endToFloat(); }
+                    case "DoubleRep" -> { b.beginToDouble(); operation.accept(e); b.endToDouble(); }
+                    default -> operation.accept(e);
+                }
+            }, evaluatedProof(tupleProof, true));
+        }
         PolyglotOp polyglot;
         try {
             polyglot = override == null && cpuAffinity == null && runtimeService == null &&

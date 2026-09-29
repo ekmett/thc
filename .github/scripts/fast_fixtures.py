@@ -24,8 +24,8 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-# Includes relocated core fixtures and the selector-proof exports and GHC checks.
-FULL_PREPARATION_PLAN = "8f4f47dc238381a6204451e9443b81d0a74a00420f5b0b9c76dcc13bc95d9129"
+# Includes vector-api Core exports and the native scalar oracle.
+FULL_PREPARATION_PLAN = "5e87d48a781f49af2d24d7b555582b6bee4fb050d85ab58dbe2dece11ebb0ffa"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -39,7 +39,7 @@ TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
 ))
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/process-lifecycle/core",
-    "build/text-cbits",
+    "build/text-cbits", "build/vector-api",
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
@@ -54,6 +54,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *fast_inputs.MEMSET_OUTPUTS,
     *fast_inputs.MEMORY_SEARCH_OUTPUTS,
     *fast_inputs.RUBBISH_OUTPUTS,
+    "build/vector-api/core/THC.Prim.json", "build/vector-api/core/VectorLoops.json",
+    "build/vector-api/oracle.tsv",
     "build/selector-proof/manifest.json", "build/selector-proof/api/predicate",
     *[f"build/selector-proof/{stage}/core/SelectorProofAudit.json" for stage in ("pre", "post")],
     *[f"build/selector-proof/commands/{command}.{suffix}"

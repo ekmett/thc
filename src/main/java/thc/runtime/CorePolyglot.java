@@ -14,7 +14,9 @@ public final class CorePolyglot {
         return !proof.isAggregate() && !proof.isVector() && proof.getPresent() &&
             (rep.equals(STATE) ? List.of() : List.of(rep)).equals(proof.getPrimReps()) &&
             proof.getKind() == switch (rep) { case STATE -> CoreKind.VOID; case "AddrRep" -> CoreKind.ADDRESS;
-                case "IntRep", "Int8Rep", "Int64Rep" -> CoreKind.LONG; default -> CoreKind.OBJECT; };
+                case "IntRep", "WordRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep" -> CoreKind.LONG;
+                case "FloatRep" -> CoreKind.FLOAT; case "DoubleRep" -> CoreKind.DOUBLE;
+                default -> CoreKind.OBJECT; };
     }
     private static boolean result(CoreRepresentation proof, String rep) {
         var components = proof.getComponents();
@@ -32,31 +34,38 @@ public final class CorePolyglot {
         PolyglotOp op = null;
         for (var candidate : PolyglotOp.values()) if (candidate.getSymbol().equals(symbol)) { op = candidate; break; }
         if (op == null) throw new UnsupportedCore("Unsupported foreign call: " + symbol);
+        validateAbi(expr, defined, op.getArguments(), op.getResult(), op.scalarResult(), op.getArgumentTypes());
+        return op;
+    }
+    /** Shared saturated import-prim boundary; hot operations trust the admitted Core types. */
+    @SuppressWarnings("unchecked") static void validateAbi(List<?> expr, boolean defined,
+            List<String> expectedArguments, String expectedResult, boolean scalarResult, List<String> types) {
+        var metadata = CoreRepresentations.metadata((List<Object>) expr);
+        var descriptor = (Map<?, ?>) metadata.get("foreignCall");
+        var target = (Map<?, ?>) descriptor.get("target");
         if (!(expr.size() > 1 && expr.get(1) instanceof List<?> function)) throw new RuntimeFault("Missing foreign function");
         if (!(expr.size() > 2 && expr.get(2) instanceof List<?> arguments)) throw new RuntimeFault("Missing foreign arguments");
         if (!(expr.size() > 3 && expr.get(3) instanceof List<?> flags)) throw new RuntimeFault("Missing foreign representation flags");
         requireProof(!expr.isEmpty() && "app".equals(expr.getFirst()) && !function.isEmpty() && "var".equals(function.getFirst()) &&
             function.size() > 1 && function.get(1) instanceof String && !defined, "expected an unresolved foreign identifier");
-        var types = op.getArgumentTypes();
         requireProof(exact(descriptor.get("schema"), types == null ? 1 : 2) &&
             (types == null ? !descriptor.containsKey("argumentTypes") : types.equals(descriptor.get("argumentTypes"))) &&
             "static".equals(target.get("kind")) && Boolean.TRUE.equals(target.get("isFunction")),
             "expected an exact static declaration, including nominal array types");
         requireProof("prim".equals(descriptor.get("convention")) && "safe".equals(descriptor.get("safety")), "calling convention");
-        requireProof(exact(descriptor.get("arity"), op.getArguments().size()) && exact(descriptor.get("suppliedArity"), op.getArguments().size()) &&
-            arguments.size() == op.getArguments().size() && flags.size() == arguments.size(), "saturated arity");
+        requireProof(exact(descriptor.get("arity"), expectedArguments.size()) && exact(descriptor.get("suppliedArity"), expectedArguments.size()) &&
+            arguments.size() == expectedArguments.size() && flags.size() == arguments.size(), "saturated arity");
         if (!(descriptor.get("argumentReps") instanceof List<?> declared)) throw new RuntimeFault("Missing foreign argument declarations");
-        boolean compatible = declared.size() == op.getArguments().size();
-        if (compatible) for (int i = 0; i < op.getArguments().size(); i++) {
-            if (!(matches(CoreRepresentations.parse(declared.get(i)), op.getArguments().get(i)) &&
-                matches(CoreRepresentations.expression((List<Object>) arguments.get(i)), op.getArguments().get(i)) &&
-                Boolean.valueOf(BOXED.equals(op.getArguments().get(i))).equals(flags.get(i)))) { compatible = false; break; }
+        boolean compatible = declared.size() == expectedArguments.size();
+        if (compatible) for (int i = 0; i < expectedArguments.size(); i++) {
+            if (!(matches(CoreRepresentations.parse(declared.get(i)), expectedArguments.get(i)) &&
+                matches(CoreRepresentations.expression((List<Object>) arguments.get(i)), expectedArguments.get(i)) &&
+                Boolean.valueOf(BOXED.equals(expectedArguments.get(i))).equals(flags.get(i)))) { compatible = false; break; }
         }
         requireProof(compatible, "argument representations");
         var declaredResult = CoreRepresentations.parse(descriptor.get("resultRep"));
         var actualResult = CoreRepresentations.expression((List<Object>) expr);
-        requireProof(op.scalarResult() ? matches(declaredResult, op.getResult()) && matches(actualResult, op.getResult()) :
-            result(declaredResult, op.getResult()) && result(actualResult, op.getResult()), "exact scalar or state/result tuple");
-        return op;
+        requireProof(scalarResult ? matches(declaredResult, expectedResult) && matches(actualResult, expectedResult) :
+            result(declaredResult, expectedResult) && result(actualResult, expectedResult), "exact scalar or state/result tuple");
     }
 }
