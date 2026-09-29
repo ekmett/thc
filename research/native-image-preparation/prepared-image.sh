@@ -100,7 +100,7 @@ if [[ "$mode" == executable* ]]; then
     executable_options=(-H:IncludeResources=thc-native-executable.json -H:-ParseRuntimeOptions
         -H:MaxHeapSize=17179869184 -H:ActiveProcessorCount=2)
     # The full ordinary-loader image needs room for frame metadata after codegen.
-    builder_heap=12g
+    builder_heap=16g
     cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT)
     main_class=thc.NativeExecutable
     image_path="$repo_dir/build/native-image/$THC_NATIVE_IMAGE_EXECUTABLE_NAME"

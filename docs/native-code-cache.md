@@ -105,7 +105,7 @@ string-valued JVM system properties can also bind the THC execution profile.
 Native Image runtime-option parsing is disabled in this mode: guest `-D` and
 `-X` options are not VM arguments. This experimental recipe fixes a 16 GiB
 runtime heap ceiling and two available processors at image build time.
-Its builder uses 12 GiB and two compiler threads; compiled-cache mode retains
+Its builder uses 16 GiB and two compiler threads; compiled-cache mode retains
 its separate 8 GiB builder limit.
 
 This produces an application-bound JVM-free runtime, but **lowers guest Core at
