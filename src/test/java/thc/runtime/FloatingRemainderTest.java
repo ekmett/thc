@@ -40,6 +40,8 @@ class FloatingRemainderTest {
     private static void require(boolean condition) { if (!condition) throw new IllegalArgumentException(); }
     private String read(String path) throws Exception { return Files.readString(new File(root, path).toPath()); }
     private Map<String, Object> json(String path) throws Exception { return object(Json.parse(read(path))); }
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private String entryId(String name) { return "main:" + (name.equals("asinhExample") ? "InverseHyperbolic" : "FloatingRemainderAudit") + "." + name; }
     private List<Row> rows(String text) throws Exception {
         var result = new ArrayList<Row>();
         for (var line : text.lines().toList()) if (!line.isEmpty()) {
@@ -67,7 +69,7 @@ class FloatingRemainderTest {
         var outputs = new HashSet<>(list(DIR + "/inputs.tsv", DIR + "/oracle.tsv", DIR + "/native/oracle"));
         for (var stage : list("pre", "post")) {
             commands.add(stage + "-export"); for (var name : NAMES) commands.add(stage + "-" + name + "-audit");
-            outputs.add(DIR + "/" + stage + "-core/FloatingRemainderAudit.json"); outputs.add(DIR + "/" + stage + "-core/InverseHyperbolic.json");
+            outputs.add(DIR + "/" + stage + "-core/FloatingRemainderAudit.cbd"); outputs.add(DIR + "/" + stage + "-core/InverseHyperbolic.cbd");
             for (var name : NAMES) outputs.add(DIR + "/" + stage + "-" + name + "-audit.json");
         }
         for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) outputs.add(DIR + "/commands/" + command + "." + suffix);
@@ -179,7 +181,8 @@ class FloatingRemainderTest {
     @Test void fourFieldDecodeRejectsMalformedPhysicalContracts(@TempDir Path temporary) throws Exception {
         evidence(); var name = "decodeWordsDirect";
         for (var mutation : list("valid", "argument", "result-carrier", "result-arity", "partial", "over", "lifted", "bare")) {
-            var linked = CoreModules.reachable(json(DIR + "/pre-core/FloatingRemainderAudit.json"), name);
+            var source = cbd(DIR + "/pre-core/FloatingRemainderAudit.cbd");
+            var linked = CoreModules.reachable(source, entryId(name));
             var matches = applications(linked).stream().filter(app -> app.get(1) instanceof List<?> head && head.size() >= 2 && head.subList(0, 2).equals(list("prim", "decodeDouble_2Int#"))).toList();
             assertEquals(1, matches.size()); var app = matches.getFirst(); var metadata = object(app.get(6)); var proof = object(metadata.get("rep")); var args = expression(app.get(2));
             switch (mutation) {
@@ -192,8 +195,9 @@ class FloatingRemainderTest {
                 case "bare" -> { var head = new ArrayList<>(expression(app.get(1))); app.clear(); app.addAll(head); }
                 default -> { }
             }
-            var input = temporary.resolve(mutation + ".json"); Files.writeString(input, Json.stringify(linked)); var report = temporary.resolve(mutation + "-report.json");
-            var process = new ProcessBuilder("python3", "bin/audit-core.py", input.toString(), "--entry", name, "--output", report.toString()).directory(root)
+            var input = thc.CoreCbdFixtures.write(temporary.resolve(mutation + ".cbd"), with(source, "bindings", linked.get("bindings")));
+            var report = temporary.resolve(mutation + "-report.json");
+            var process = new ProcessBuilder("python3", "bin/audit-core.py", input.toString(), "--entry", entryId(name), "--output", report.toString()).directory(root)
                 .redirectOutput(temporary.resolve(mutation + ".stdout").toFile()).redirectError(temporary.resolve(mutation + ".stderr").toFile()).start();
             if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared auditor timeout: " + mutation); }
             assertEquals(mutation.equals("valid") ? 0 : 1, process.exitValue(), mutation);
@@ -223,12 +227,12 @@ class FloatingRemainderTest {
     private void nativeResults(boolean inlining) throws Exception {
         var corpus = new LinkedHashMap<String, List<Row>>(); for (var row : evidence()) corpus.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row);
         for (var stage : list("pre", "post")) {
-            var module = CoreModules.merge(list(json(DIR + "/" + stage + "-core/FloatingRemainderAudit.json"), json(DIR + "/" + stage + "-core/InverseHyperbolic.json")));
+            var module = CoreModules.merge(list(cbd(DIR + "/" + stage + "-core/FloatingRemainderAudit.cbd"), cbd(DIR + "/" + stage + "-core/InverseHyperbolic.cbd")));
             for (var backend : list("ast", "bytecode")) for (var name : NAMES) try (var context = context(inlining)) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var p = program(language, with(CoreModules.reachable(module, name), "instrument", true), backend); var entry = p.entryTarget(name);
+                    var p = program(language, with(CoreModules.reachable(module, entryId(name)), "instrument", true), backend); var entry = p.entryTarget(entryId(name));
                     CheckedBiConsumer<Row, Boolean> check = (row, installed) -> {
                         var expected = decode(name) && (row.a & Long.MAX_VALUE) == 0L ? words(row.a) : row.values;
                         for (int field = 0; field < (decode(name) ? 4 : 1); field++) {
