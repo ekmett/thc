@@ -121,7 +121,75 @@ public enum VectorApiOp {
     VEC_COMPRESS("thc_vector_v1_vec_compress", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)"), "BoxedRep (Just Unlifted)", false),
     VEC_EXPAND("thc_vector_v1_vec_expand", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)"), "BoxedRep (Just Unlifted)", false),
     VEC_CONVERT("thc_vector_v1_vec_convert", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep"), "BoxedRep (Just Unlifted)", false),
-    VEC_REINTERPRET("thc_vector_v1_vec_reinterpret", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep"), "BoxedRep (Just Unlifted)", false);
+    VEC_REINTERPRET("thc_vector_v1_vec_reinterpret", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep"), "BoxedRep (Just Unlifted)", false),
+    READ_JAVA_BOOLEAN_VECTOR("thc_vector_v1_read_java_boolean_vector", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_BOOLEAN_VECTOR("thc_vector_v1_write_java_boolean_vector", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_BOOLEAN_VECTOR_MASKED("thc_vector_v1_read_java_boolean_vector_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_BOOLEAN_VECTOR_MASKED("thc_vector_v1_write_java_boolean_vector_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_BOOLEAN_VECTOR_INDEXED("thc_vector_v1_read_java_boolean_vector_indexed", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_BOOLEAN_VECTOR_INDEXED("thc_vector_v1_write_java_boolean_vector_indexed", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_BOOLEAN_VECTOR_INDEXED_MASKED("thc_vector_v1_read_java_boolean_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_BOOLEAN_VECTOR_INDEXED_MASKED("thc_vector_v1_write_java_boolean_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_BYTE_VECTOR("thc_vector_v1_read_java_byte_vector", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_BYTE_VECTOR("thc_vector_v1_write_java_byte_vector", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_BYTE_VECTOR_MASKED("thc_vector_v1_read_java_byte_vector_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_BYTE_VECTOR_MASKED("thc_vector_v1_write_java_byte_vector_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_BYTE_VECTOR_INDEXED("thc_vector_v1_read_java_byte_vector_indexed", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_BYTE_VECTOR_INDEXED("thc_vector_v1_write_java_byte_vector_indexed", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_BYTE_VECTOR_INDEXED_MASKED("thc_vector_v1_read_java_byte_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_BYTE_VECTOR_INDEXED_MASKED("thc_vector_v1_write_java_byte_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_SHORT_VECTOR("thc_vector_v1_read_java_short_vector", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_SHORT_VECTOR("thc_vector_v1_write_java_short_vector", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_SHORT_VECTOR_MASKED("thc_vector_v1_read_java_short_vector_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_SHORT_VECTOR_MASKED("thc_vector_v1_write_java_short_vector_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_SHORT_VECTOR_INDEXED("thc_vector_v1_read_java_short_vector_indexed", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_SHORT_VECTOR_INDEXED("thc_vector_v1_write_java_short_vector_indexed", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_SHORT_VECTOR_INDEXED_MASKED("thc_vector_v1_read_java_short_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_SHORT_VECTOR_INDEXED_MASKED("thc_vector_v1_write_java_short_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_CHAR_VECTOR("thc_vector_v1_read_java_char_vector", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_CHAR_VECTOR("thc_vector_v1_write_java_char_vector", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_CHAR_VECTOR_MASKED("thc_vector_v1_read_java_char_vector_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_CHAR_VECTOR_MASKED("thc_vector_v1_write_java_char_vector_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_CHAR_VECTOR_INDEXED("thc_vector_v1_read_java_char_vector_indexed", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_CHAR_VECTOR_INDEXED("thc_vector_v1_write_java_char_vector_indexed", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_CHAR_VECTOR_INDEXED_MASKED("thc_vector_v1_read_java_char_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_CHAR_VECTOR_INDEXED_MASKED("thc_vector_v1_write_java_char_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_INT_VECTOR("thc_vector_v1_read_java_int_vector", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_INT_VECTOR("thc_vector_v1_write_java_int_vector", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_INT_VECTOR_MASKED("thc_vector_v1_read_java_int_vector_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_INT_VECTOR_MASKED("thc_vector_v1_write_java_int_vector_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_INT_VECTOR_INDEXED("thc_vector_v1_read_java_int_vector_indexed", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_INT_VECTOR_INDEXED("thc_vector_v1_write_java_int_vector_indexed", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_INT_VECTOR_INDEXED_MASKED("thc_vector_v1_read_java_int_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_INT_VECTOR_INDEXED_MASKED("thc_vector_v1_write_java_int_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_LONG_VECTOR("thc_vector_v1_read_java_long_vector", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_LONG_VECTOR("thc_vector_v1_write_java_long_vector", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_LONG_VECTOR_MASKED("thc_vector_v1_read_java_long_vector_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_LONG_VECTOR_MASKED("thc_vector_v1_write_java_long_vector_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_LONG_VECTOR_INDEXED("thc_vector_v1_read_java_long_vector_indexed", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_LONG_VECTOR_INDEXED("thc_vector_v1_write_java_long_vector_indexed", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_LONG_VECTOR_INDEXED_MASKED("thc_vector_v1_read_java_long_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_LONG_VECTOR_INDEXED_MASKED("thc_vector_v1_write_java_long_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_FLOAT_VECTOR("thc_vector_v1_read_java_float_vector", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_FLOAT_VECTOR("thc_vector_v1_write_java_float_vector", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_FLOAT_VECTOR_MASKED("thc_vector_v1_read_java_float_vector_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_FLOAT_VECTOR_MASKED("thc_vector_v1_write_java_float_vector_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_FLOAT_VECTOR_INDEXED("thc_vector_v1_read_java_float_vector_indexed", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_FLOAT_VECTOR_INDEXED("thc_vector_v1_write_java_float_vector_indexed", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_FLOAT_VECTOR_INDEXED_MASKED("thc_vector_v1_read_java_float_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_FLOAT_VECTOR_INDEXED_MASKED("thc_vector_v1_write_java_float_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_DOUBLE_VECTOR("thc_vector_v1_read_java_double_vector", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_DOUBLE_VECTOR("thc_vector_v1_write_java_double_vector", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_DOUBLE_VECTOR_MASKED("thc_vector_v1_read_java_double_vector_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_DOUBLE_VECTOR_MASKED("thc_vector_v1_write_java_double_vector_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_DOUBLE_VECTOR_INDEXED("thc_vector_v1_read_java_double_vector_indexed", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_DOUBLE_VECTOR_INDEXED("thc_vector_v1_write_java_double_vector_indexed", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_DOUBLE_VECTOR_INDEXED_MASKED("thc_vector_v1_read_java_double_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_DOUBLE_VECTOR_INDEXED_MASKED("thc_vector_v1_write_java_double_vector_indexed_masked", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_MASK("thc_vector_v1_read_java_mask", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_MASK("thc_vector_v1_write_java_mask", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false),
+    READ_JAVA_SHUFFLE("thc_vector_v1_read_java_shuffle", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)", true),
+    WRITE_JAVA_SHUFFLE("thc_vector_v1_write_java_shuffle", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "State# RealWorld", false);
 
     final String symbol;
     final List<String> arguments;
@@ -133,6 +201,7 @@ public enum VectorApiOp {
     /** Profiles belong to the primitive site, never to a wrapper around a value. */
     static final class Site extends Node {
         private final VectorApiOp operation;
+        @Child private ForeignExceptionAccess exceptions;
         @CompilationFinal(dimensions = 1) private final ValueProfile[] identities;
         @CompilationFinal(dimensions = 1) private final ValueProfile[] classes;
         private final ValueProfile resultSpecies = ValueProfile.createIdentityProfile();
@@ -141,6 +210,7 @@ public enum VectorApiOp {
 
         Site(VectorApiOp operation) {
             this.operation = operation;
+            if (operation.javaArray()) exceptions = new ForeignExceptionAccess();
             identities = new ValueProfile[operation.arguments.size()];
             classes = new ValueProfile[identities.length];
             for (int i = 0; i < identities.length; i++) {
@@ -154,10 +224,14 @@ public enum VectorApiOp {
             return value instanceof VectorSpecies<?> ? identities[index].profile(value) : classes[index].profile(value);
         }
         Object execute(Object[] values) {
-            Object result = operation.execute(profile(0, values), profile(1, values), profile(2, values), profile(3, values), profile(4, values), fullMask);
+            Object result;
+            try { result = operation.execute(profile(0, values), profile(1, values), profile(2, values), profile(3, values), profile(4, values), profile(5, values), profile(6, values), fullMask); }
+            catch (RuntimeException failure) { if (exceptions != null) throw exceptions.raiseHost(failure); throw failure; }
             return result instanceof VectorSpecies<?> ? resultSpecies.profile(result) : result;
         }
     }
+
+    boolean javaArray() { return ordinal() >= READ_JAVA_BOOLEAN_VECTOR.ordinal(); }
 
     VectorApiOp(String symbol, List<String> arguments, String result, boolean tuple) {
         this(symbol, arguments, result, tuple, -1, null);
@@ -202,11 +276,79 @@ public enum VectorApiOp {
     /** The operation is constant at a lowered call site. */
     public Object execute(Object[] a) {
         return execute(a.length > 0 ? a[0] : null, a.length > 1 ? a[1] : null,
-            a.length > 2 ? a[2] : null, a.length > 3 ? a[3] : null, a.length > 4 ? a[4] : null, null);
+            a.length > 2 ? a[2] : null, a.length > 3 ? a[3] : null, a.length > 4 ? a[4] : null, a.length > 5 ? a[5] : null, a.length > 6 ? a[6] : null, null);
     }
 
-    private Object execute(Object a0, Object a1, Object a2, Object a3, Object a4, ConditionProfile maskProfile) {
+    private Object execute(Object a0, Object a1, Object a2, Object a3, Object a4, Object a5, Object a6, ConditionProfile maskProfile) {
         return switch (this) {
+            case READ_JAVA_BOOLEAN_VECTOR -> { TupleResults.requireVoidCarrier(a3); yield ByteVector.fromBooleanArray((VectorSpecies) a0, (boolean[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_BOOLEAN_VECTOR -> { TupleResults.requireVoidCarrier(a3); ((ByteVector) a2).intoBooleanArray((boolean[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_BOOLEAN_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_BOOLEAN_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_BOOLEAN_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); yield ByteVector.fromBooleanArray((VectorSpecies) a0, (boolean[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_BOOLEAN_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); ((ByteVector) a2).intoBooleanArray((boolean[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_BOOLEAN_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_BOOLEAN_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_BYTE_VECTOR -> { TupleResults.requireVoidCarrier(a3); yield ByteVector.fromArray((VectorSpecies) a0, (byte[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_BYTE_VECTOR -> { TupleResults.requireVoidCarrier(a3); ((ByteVector) a2).intoArray((byte[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_BYTE_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_BYTE_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_BYTE_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); yield ByteVector.fromArray((VectorSpecies) a0, (byte[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_BYTE_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); ((ByteVector) a2).intoArray((byte[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_BYTE_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_BYTE_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_SHORT_VECTOR -> { TupleResults.requireVoidCarrier(a3); yield ShortVector.fromArray((VectorSpecies) a0, (short[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_SHORT_VECTOR -> { TupleResults.requireVoidCarrier(a3); ((ShortVector) a2).intoArray((short[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_SHORT_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_SHORT_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_SHORT_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); yield ShortVector.fromArray((VectorSpecies) a0, (short[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_SHORT_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); ((ShortVector) a2).intoArray((short[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_SHORT_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_SHORT_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_CHAR_VECTOR -> { TupleResults.requireVoidCarrier(a3); yield ShortVector.fromCharArray((VectorSpecies) a0, (char[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_CHAR_VECTOR -> { TupleResults.requireVoidCarrier(a3); ((ShortVector) a2).intoCharArray((char[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_CHAR_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_CHAR_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_CHAR_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); yield ShortVector.fromCharArray((VectorSpecies) a0, (char[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_CHAR_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); ((ShortVector) a2).intoCharArray((char[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_CHAR_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_CHAR_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_INT_VECTOR -> { TupleResults.requireVoidCarrier(a3); yield IntVector.fromArray((VectorSpecies) a0, (int[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_INT_VECTOR -> { TupleResults.requireVoidCarrier(a3); ((IntVector) a2).intoArray((int[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_INT_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_INT_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_INT_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); yield IntVector.fromArray((VectorSpecies) a0, (int[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_INT_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); ((IntVector) a2).intoArray((int[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_INT_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_INT_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_LONG_VECTOR -> { TupleResults.requireVoidCarrier(a3); yield LongVector.fromArray((VectorSpecies) a0, (long[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_LONG_VECTOR -> { TupleResults.requireVoidCarrier(a3); ((LongVector) a2).intoArray((long[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_LONG_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_LONG_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_LONG_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); yield LongVector.fromArray((VectorSpecies) a0, (long[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_LONG_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); ((LongVector) a2).intoArray((long[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_LONG_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_LONG_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_FLOAT_VECTOR -> { TupleResults.requireVoidCarrier(a3); yield FloatVector.fromArray((VectorSpecies) a0, (float[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_FLOAT_VECTOR -> { TupleResults.requireVoidCarrier(a3); ((FloatVector) a2).intoArray((float[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_FLOAT_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_FLOAT_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_FLOAT_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); yield FloatVector.fromArray((VectorSpecies) a0, (float[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_FLOAT_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); ((FloatVector) a2).intoArray((float[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_FLOAT_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_FLOAT_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_DOUBLE_VECTOR -> { TupleResults.requireVoidCarrier(a3); yield DoubleVector.fromArray((VectorSpecies) a0, (double[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_DOUBLE_VECTOR -> { TupleResults.requireVoidCarrier(a3); ((DoubleVector) a2).intoArray((double[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_DOUBLE_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_DOUBLE_VECTOR_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_DOUBLE_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); yield DoubleVector.fromArray((VectorSpecies) a0, (double[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_DOUBLE_VECTOR_INDEXED -> { TupleResults.requireVoidCarrier(a5); ((DoubleVector) a2).intoArray((double[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_DOUBLE_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case WRITE_JAVA_DOUBLE_VECTOR_INDEXED_MASKED -> javaArrayMemory(a0, a1, a2, a3, a4, a5, a6, maskProfile);
+            case READ_JAVA_MASK -> { TupleResults.requireVoidCarrier(a3); yield VectorMask.fromArray((VectorSpecies) a0, (boolean[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_MASK -> { TupleResults.requireVoidCarrier(a3); ((VectorMask) a0).intoArray((boolean[]) a1, Math.toIntExact((Long) a2)); yield Unit.INSTANCE; }
+            case READ_JAVA_SHUFFLE -> { TupleResults.requireVoidCarrier(a3); yield VectorShuffle.fromArray((VectorSpecies) a0, (int[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_SHUFFLE -> { TupleResults.requireVoidCarrier(a3); ((VectorShuffle) a0).intoArray((int[]) a1, Math.toIntExact((Long) a2)); yield Unit.INSTANCE; }
             case INT8_SPECIES -> species(ByteVector.SPECIES_PREFERRED, ByteVector.SPECIES_MAX, ((Long) a0));
             case BROADCAST_INT8 -> ByteVector.broadcast(((VectorSpecies) a0), (byte) (int) (Integer) a1);
             case VEC_INT8_LANE -> (int) ((ByteVector) a0).lane(Math.toIntExact(((Long) a1)));
@@ -303,6 +445,89 @@ public enum VectorApiOp {
                  INDEX_FLOAT_VECTOR, READ_FLOAT_VECTOR, WRITE_FLOAT_VECTOR,
                  INDEX_DOUBLE_VECTOR, READ_DOUBLE_VECTOR, WRITE_DOUBLE_VECTOR ->
                 memory(a0, a1, a2, a3, a4, maskProfile);
+        };
+    }
+
+
+    private Object javaArrayMemory(Object a0, Object a1, Object a2, Object a3, Object a4, Object a5, Object a6, ConditionProfile profile) {
+        VectorMask mask = (VectorMask) (arguments.size() == 7 ? a5 : a3);
+        VectorSpecies species = result.equals("State# RealWorld") ? ((Vector) a2).species() : (VectorSpecies) a0;
+        mask.check(species);
+        boolean full = mask.allTrue();
+        if (profile != null) full = profile.profile(full);
+        if (!full) return maskedJavaArray(a0, a1, a2, a3, a4, a5, a6);
+        return switch (this) {
+            case READ_JAVA_BOOLEAN_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield ByteVector.fromBooleanArray((VectorSpecies) a0, (boolean[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_BOOLEAN_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((ByteVector) a2).intoBooleanArray((boolean[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_BOOLEAN_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield ByteVector.fromBooleanArray((VectorSpecies) a0, (boolean[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_BOOLEAN_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((ByteVector) a2).intoBooleanArray((boolean[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_BYTE_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield ByteVector.fromArray((VectorSpecies) a0, (byte[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_BYTE_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((ByteVector) a2).intoArray((byte[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_BYTE_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield ByteVector.fromArray((VectorSpecies) a0, (byte[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_BYTE_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((ByteVector) a2).intoArray((byte[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_SHORT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield ShortVector.fromArray((VectorSpecies) a0, (short[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_SHORT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((ShortVector) a2).intoArray((short[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_SHORT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield ShortVector.fromArray((VectorSpecies) a0, (short[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_SHORT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((ShortVector) a2).intoArray((short[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_CHAR_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield ShortVector.fromCharArray((VectorSpecies) a0, (char[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_CHAR_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((ShortVector) a2).intoCharArray((char[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_CHAR_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield ShortVector.fromCharArray((VectorSpecies) a0, (char[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_CHAR_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((ShortVector) a2).intoCharArray((char[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_INT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield IntVector.fromArray((VectorSpecies) a0, (int[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_INT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((IntVector) a2).intoArray((int[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_INT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield IntVector.fromArray((VectorSpecies) a0, (int[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_INT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((IntVector) a2).intoArray((int[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_LONG_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield LongVector.fromArray((VectorSpecies) a0, (long[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_LONG_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((LongVector) a2).intoArray((long[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_LONG_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield LongVector.fromArray((VectorSpecies) a0, (long[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_LONG_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((LongVector) a2).intoArray((long[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_FLOAT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield FloatVector.fromArray((VectorSpecies) a0, (float[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_FLOAT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((FloatVector) a2).intoArray((float[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_FLOAT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield FloatVector.fromArray((VectorSpecies) a0, (float[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_FLOAT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((FloatVector) a2).intoArray((float[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            case READ_JAVA_DOUBLE_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield DoubleVector.fromArray((VectorSpecies) a0, (double[]) a1, Math.toIntExact((Long) a2)); }
+            case WRITE_JAVA_DOUBLE_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((DoubleVector) a2).intoArray((double[]) a0, Math.toIntExact((Long) a1)); yield Unit.INSTANCE; }
+            case READ_JAVA_DOUBLE_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield DoubleVector.fromArray((VectorSpecies) a0, (double[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4)); }
+            case WRITE_JAVA_DOUBLE_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((DoubleVector) a2).intoArray((double[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4)); yield Unit.INSTANCE; }
+            default -> throw new AssertionError(this);
+        };
+    }
+    // Keep the JDK masked bounds-error formatting off the compiled hot path.
+    @TruffleBoundary private Object maskedJavaArray(Object a0, Object a1, Object a2, Object a3, Object a4, Object a5, Object a6) {
+        return switch (this) {
+            case READ_JAVA_BOOLEAN_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield ByteVector.fromBooleanArray((VectorSpecies) a0, (boolean[]) a1, Math.toIntExact((Long) a2), (VectorMask) a3); }
+            case WRITE_JAVA_BOOLEAN_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((ByteVector) a2).intoBooleanArray((boolean[]) a0, Math.toIntExact((Long) a1), (VectorMask) a3); yield Unit.INSTANCE; }
+            case READ_JAVA_BOOLEAN_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield ByteVector.fromBooleanArray((VectorSpecies) a0, (boolean[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); }
+            case WRITE_JAVA_BOOLEAN_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((ByteVector) a2).intoBooleanArray((boolean[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); yield Unit.INSTANCE; }
+            case READ_JAVA_BYTE_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield ByteVector.fromArray((VectorSpecies) a0, (byte[]) a1, Math.toIntExact((Long) a2), (VectorMask) a3); }
+            case WRITE_JAVA_BYTE_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((ByteVector) a2).intoArray((byte[]) a0, Math.toIntExact((Long) a1), (VectorMask) a3); yield Unit.INSTANCE; }
+            case READ_JAVA_BYTE_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield ByteVector.fromArray((VectorSpecies) a0, (byte[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); }
+            case WRITE_JAVA_BYTE_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((ByteVector) a2).intoArray((byte[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); yield Unit.INSTANCE; }
+            case READ_JAVA_SHORT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield ShortVector.fromArray((VectorSpecies) a0, (short[]) a1, Math.toIntExact((Long) a2), (VectorMask) a3); }
+            case WRITE_JAVA_SHORT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((ShortVector) a2).intoArray((short[]) a0, Math.toIntExact((Long) a1), (VectorMask) a3); yield Unit.INSTANCE; }
+            case READ_JAVA_SHORT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield ShortVector.fromArray((VectorSpecies) a0, (short[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); }
+            case WRITE_JAVA_SHORT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((ShortVector) a2).intoArray((short[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); yield Unit.INSTANCE; }
+            case READ_JAVA_CHAR_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield ShortVector.fromCharArray((VectorSpecies) a0, (char[]) a1, Math.toIntExact((Long) a2), (VectorMask) a3); }
+            case WRITE_JAVA_CHAR_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((ShortVector) a2).intoCharArray((char[]) a0, Math.toIntExact((Long) a1), (VectorMask) a3); yield Unit.INSTANCE; }
+            case READ_JAVA_CHAR_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield ShortVector.fromCharArray((VectorSpecies) a0, (char[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); }
+            case WRITE_JAVA_CHAR_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((ShortVector) a2).intoCharArray((char[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); yield Unit.INSTANCE; }
+            case READ_JAVA_INT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield IntVector.fromArray((VectorSpecies) a0, (int[]) a1, Math.toIntExact((Long) a2), (VectorMask) a3); }
+            case WRITE_JAVA_INT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((IntVector) a2).intoArray((int[]) a0, Math.toIntExact((Long) a1), (VectorMask) a3); yield Unit.INSTANCE; }
+            case READ_JAVA_INT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield IntVector.fromArray((VectorSpecies) a0, (int[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); }
+            case WRITE_JAVA_INT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((IntVector) a2).intoArray((int[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); yield Unit.INSTANCE; }
+            case READ_JAVA_LONG_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield LongVector.fromArray((VectorSpecies) a0, (long[]) a1, Math.toIntExact((Long) a2), (VectorMask) a3); }
+            case WRITE_JAVA_LONG_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((LongVector) a2).intoArray((long[]) a0, Math.toIntExact((Long) a1), (VectorMask) a3); yield Unit.INSTANCE; }
+            case READ_JAVA_LONG_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield LongVector.fromArray((VectorSpecies) a0, (long[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); }
+            case WRITE_JAVA_LONG_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((LongVector) a2).intoArray((long[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); yield Unit.INSTANCE; }
+            case READ_JAVA_FLOAT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield FloatVector.fromArray((VectorSpecies) a0, (float[]) a1, Math.toIntExact((Long) a2), (VectorMask) a3); }
+            case WRITE_JAVA_FLOAT_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((FloatVector) a2).intoArray((float[]) a0, Math.toIntExact((Long) a1), (VectorMask) a3); yield Unit.INSTANCE; }
+            case READ_JAVA_FLOAT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield FloatVector.fromArray((VectorSpecies) a0, (float[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); }
+            case WRITE_JAVA_FLOAT_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((FloatVector) a2).intoArray((float[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); yield Unit.INSTANCE; }
+            case READ_JAVA_DOUBLE_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); yield DoubleVector.fromArray((VectorSpecies) a0, (double[]) a1, Math.toIntExact((Long) a2), (VectorMask) a3); }
+            case WRITE_JAVA_DOUBLE_VECTOR_MASKED -> { TupleResults.requireVoidCarrier(a4); ((DoubleVector) a2).intoArray((double[]) a0, Math.toIntExact((Long) a1), (VectorMask) a3); yield Unit.INSTANCE; }
+            case READ_JAVA_DOUBLE_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); yield DoubleVector.fromArray((VectorSpecies) a0, (double[]) a1, Math.toIntExact((Long) a2), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); }
+            case WRITE_JAVA_DOUBLE_VECTOR_INDEXED_MASKED -> { TupleResults.requireVoidCarrier(a6); ((DoubleVector) a2).intoArray((double[]) a0, Math.toIntExact((Long) a1), (int[]) a3, Math.toIntExact((Long) a4), (VectorMask) a5); yield Unit.INSTANCE; }
+            default -> throw new AssertionError(this);
         };
     }
 

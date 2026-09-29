@@ -728,7 +728,7 @@ polyglotForeign :: Id -> Bool
 polyglotForeign v = case isFCallId_maybe v of
   Just (Foreign.CCall (Foreign.CCallSpec
     (Foreign.StaticTarget _ symbol _ True) Foreign.PrimCallConv Foreign.PlaySafe)) ->
-      "thc_vector_v1_" `isPrefixOf` unpackFS symbol || unpackFS symbol `elem`
+      ("thc_vector_v1_" `isPrefixOf` unpackFS symbol || "thc_interop_v1_" `isPrefixOf` unpackFS symbol) || unpackFS symbol `elem`
         ["thc_polyglot_v1_eval", "thc_polyglot_v1_read_member", "thc_polyglot_v1_execute_int"
         , "thc_polyglot_v1_execute_value"
         , "thc_polyglot_v1_buffer_view"

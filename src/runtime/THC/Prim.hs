@@ -26,6 +26,166 @@ module THC.Prim
   , readBufferByte#, writeBufferByte#
   , hasArrayElements#, getArraySize#, readArrayElement#, writeArrayElement#
   , asLong#
+    -- * Java host access and raw primitive arrays
+  , lookupHostSymbol#
+  , asGuestValue#
+  , javaNull#
+  , javaStringUtf8#
+  , asHostObject#
+  , execute#
+  , instantiate#
+  , readMember#
+  , writeMember#
+  , invokeMember#
+  , boxJavaBoolean#
+  , unboxJavaBoolean#
+  , newJavaBooleanArray#
+  , javaBooleanArrayLength#
+  , readJavaBooleanArray#
+  , writeJavaBooleanArray#
+  , copyJavaBooleanArray#
+  , objectAsJavaBooleanArray#
+  , boxJavaByte#
+  , unboxJavaByte#
+  , newJavaByteArray#
+  , javaByteArrayLength#
+  , readJavaByteArray#
+  , writeJavaByteArray#
+  , copyJavaByteArray#
+  , objectAsJavaByteArray#
+  , boxJavaShort#
+  , unboxJavaShort#
+  , newJavaShortArray#
+  , javaShortArrayLength#
+  , readJavaShortArray#
+  , writeJavaShortArray#
+  , copyJavaShortArray#
+  , objectAsJavaShortArray#
+  , boxJavaChar#
+  , unboxJavaChar#
+  , newJavaCharArray#
+  , javaCharArrayLength#
+  , readJavaCharArray#
+  , writeJavaCharArray#
+  , copyJavaCharArray#
+  , objectAsJavaCharArray#
+  , boxJavaInt#
+  , unboxJavaInt#
+  , newJavaIntArray#
+  , javaIntArrayLength#
+  , readJavaIntArray#
+  , writeJavaIntArray#
+  , copyJavaIntArray#
+  , objectAsJavaIntArray#
+  , boxJavaLong#
+  , unboxJavaLong#
+  , newJavaLongArray#
+  , javaLongArrayLength#
+  , readJavaLongArray#
+  , writeJavaLongArray#
+  , copyJavaLongArray#
+  , objectAsJavaLongArray#
+  , boxJavaFloat#
+  , unboxJavaFloat#
+  , newJavaFloatArray#
+  , javaFloatArrayLength#
+  , readJavaFloatArray#
+  , writeJavaFloatArray#
+  , copyJavaFloatArray#
+  , objectAsJavaFloatArray#
+  , boxJavaDouble#
+  , unboxJavaDouble#
+  , newJavaDoubleArray#
+  , javaDoubleArrayLength#
+  , readJavaDoubleArray#
+  , writeJavaDoubleArray#
+  , copyJavaDoubleArray#
+  , objectAsJavaDoubleArray#
+  , JavaBooleanArray#
+  , javaBooleanArrayAsObject#
+  , JavaByteArray#
+  , javaByteArrayAsObject#
+  , JavaShortArray#
+  , javaShortArrayAsObject#
+  , JavaCharArray#
+  , javaCharArrayAsObject#
+  , JavaIntArray#
+  , javaIntArrayAsObject#
+  , JavaLongArray#
+  , javaLongArrayAsObject#
+  , JavaFloatArray#
+  , javaFloatArrayAsObject#
+  , JavaDoubleArray#
+  , javaDoubleArrayAsObject#
+    -- * Java array Vector API access
+  , readJavaBooleanVector#
+  , writeJavaBooleanVector#
+  , readJavaBooleanVectorMasked#
+  , writeJavaBooleanVectorMasked#
+  , readJavaBooleanVectorIndexed#
+  , writeJavaBooleanVectorIndexed#
+  , readJavaBooleanVectorIndexedMasked#
+  , writeJavaBooleanVectorIndexedMasked#
+  , readJavaByteVector#
+  , writeJavaByteVector#
+  , readJavaByteVectorMasked#
+  , writeJavaByteVectorMasked#
+  , readJavaByteVectorIndexed#
+  , writeJavaByteVectorIndexed#
+  , readJavaByteVectorIndexedMasked#
+  , writeJavaByteVectorIndexedMasked#
+  , readJavaShortVector#
+  , writeJavaShortVector#
+  , readJavaShortVectorMasked#
+  , writeJavaShortVectorMasked#
+  , readJavaShortVectorIndexed#
+  , writeJavaShortVectorIndexed#
+  , readJavaShortVectorIndexedMasked#
+  , writeJavaShortVectorIndexedMasked#
+  , readJavaCharVector#
+  , writeJavaCharVector#
+  , readJavaCharVectorMasked#
+  , writeJavaCharVectorMasked#
+  , readJavaCharVectorIndexed#
+  , writeJavaCharVectorIndexed#
+  , readJavaCharVectorIndexedMasked#
+  , writeJavaCharVectorIndexedMasked#
+  , readJavaIntVector#
+  , writeJavaIntVector#
+  , readJavaIntVectorMasked#
+  , writeJavaIntVectorMasked#
+  , readJavaIntVectorIndexed#
+  , writeJavaIntVectorIndexed#
+  , readJavaIntVectorIndexedMasked#
+  , writeJavaIntVectorIndexedMasked#
+  , readJavaLongVector#
+  , writeJavaLongVector#
+  , readJavaLongVectorMasked#
+  , writeJavaLongVectorMasked#
+  , readJavaLongVectorIndexed#
+  , writeJavaLongVectorIndexed#
+  , readJavaLongVectorIndexedMasked#
+  , writeJavaLongVectorIndexedMasked#
+  , readJavaFloatVector#
+  , writeJavaFloatVector#
+  , readJavaFloatVectorMasked#
+  , writeJavaFloatVectorMasked#
+  , readJavaFloatVectorIndexed#
+  , writeJavaFloatVectorIndexed#
+  , readJavaFloatVectorIndexedMasked#
+  , writeJavaFloatVectorIndexedMasked#
+  , readJavaDoubleVector#
+  , writeJavaDoubleVector#
+  , readJavaDoubleVectorMasked#
+  , writeJavaDoubleVectorMasked#
+  , readJavaDoubleVectorIndexed#
+  , writeJavaDoubleVectorIndexed#
+  , readJavaDoubleVectorIndexedMasked#
+  , writeJavaDoubleVectorIndexedMasked#
+  , readJavaMask#
+  , writeJavaMask#
+  , readJavaShuffle#
+  , writeJavaShuffle#
     -- * Runtime-shaped Vector API
   , Vec#, VecMask#, VecShuffle#, VecSpecies#
   , int8Species#
@@ -541,3 +701,582 @@ foreign import prim "thc_interop_v1_write_array_element"
   writeArrayElement# :: Object# s -> InteropLibrary# s -> Int# -> Object# s -> State# s -> State# s
 foreign import prim "thc_interop_v1_as_long"
   asLong# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Int64# #)
+
+-- Java primitive arrays are the actual JVM arrays, with no THC wrapper.
+-- Their state parameter is nominal; externally shared arrays belong to RealWorld.
+
+-- | Raw Java @boolean[]@ storage.
+type JavaBooleanArray# :: Type -> TYPE UnliftedRep
+type role JavaBooleanArray# nominal
+newtype JavaBooleanArray# s = JavaBooleanArray# (Any :: TYPE UnliftedRep)
+
+-- | Forget the array type without allocating or copying.
+javaBooleanArrayAsObject# :: JavaBooleanArray# s -> Object# s
+javaBooleanArrayAsObject# (JavaBooleanArray# value) = Object# value
+
+-- | Raw Java @byte[]@ storage.
+type JavaByteArray# :: Type -> TYPE UnliftedRep
+type role JavaByteArray# nominal
+newtype JavaByteArray# s = JavaByteArray# (Any :: TYPE UnliftedRep)
+
+-- | Forget the array type without allocating or copying.
+javaByteArrayAsObject# :: JavaByteArray# s -> Object# s
+javaByteArrayAsObject# (JavaByteArray# value) = Object# value
+
+-- | Raw Java @short[]@ storage.
+type JavaShortArray# :: Type -> TYPE UnliftedRep
+type role JavaShortArray# nominal
+newtype JavaShortArray# s = JavaShortArray# (Any :: TYPE UnliftedRep)
+
+-- | Forget the array type without allocating or copying.
+javaShortArrayAsObject# :: JavaShortArray# s -> Object# s
+javaShortArrayAsObject# (JavaShortArray# value) = Object# value
+
+-- | Raw Java @char[]@ storage.
+type JavaCharArray# :: Type -> TYPE UnliftedRep
+type role JavaCharArray# nominal
+newtype JavaCharArray# s = JavaCharArray# (Any :: TYPE UnliftedRep)
+
+-- | Forget the array type without allocating or copying.
+javaCharArrayAsObject# :: JavaCharArray# s -> Object# s
+javaCharArrayAsObject# (JavaCharArray# value) = Object# value
+
+-- | Raw Java @int[]@ storage.
+type JavaIntArray# :: Type -> TYPE UnliftedRep
+type role JavaIntArray# nominal
+newtype JavaIntArray# s = JavaIntArray# (Any :: TYPE UnliftedRep)
+
+-- | Forget the array type without allocating or copying.
+javaIntArrayAsObject# :: JavaIntArray# s -> Object# s
+javaIntArrayAsObject# (JavaIntArray# value) = Object# value
+
+-- | Raw Java @long[]@ storage.
+type JavaLongArray# :: Type -> TYPE UnliftedRep
+type role JavaLongArray# nominal
+newtype JavaLongArray# s = JavaLongArray# (Any :: TYPE UnliftedRep)
+
+-- | Forget the array type without allocating or copying.
+javaLongArrayAsObject# :: JavaLongArray# s -> Object# s
+javaLongArrayAsObject# (JavaLongArray# value) = Object# value
+
+-- | Raw Java @float[]@ storage.
+type JavaFloatArray# :: Type -> TYPE UnliftedRep
+type role JavaFloatArray# nominal
+newtype JavaFloatArray# s = JavaFloatArray# (Any :: TYPE UnliftedRep)
+
+-- | Forget the array type without allocating or copying.
+javaFloatArrayAsObject# :: JavaFloatArray# s -> Object# s
+javaFloatArrayAsObject# (JavaFloatArray# value) = Object# value
+
+-- | Raw Java @double[]@ storage.
+type JavaDoubleArray# :: Type -> TYPE UnliftedRep
+type role JavaDoubleArray# nominal
+newtype JavaDoubleArray# s = JavaDoubleArray# (Any :: TYPE UnliftedRep)
+
+-- | Forget the array type without allocating or copying.
+javaDoubleArrayAsObject# :: JavaDoubleArray# s -> Object# s
+javaDoubleArrayAsObject# (JavaDoubleArray# value) = Object# value
+
+-- | Look up a Java class through the context host-class lookup policy.
+foreign import prim "thc_interop_v1_lookup_host_symbol"
+  lookupHostSymbol# :: Object# RealWorld -> State# RealWorld -> (# State# RealWorld, Object# RealWorld #)
+
+-- | Adapt an existing raw Java object for interop without copying it. HostAccess controls exposed members.
+foreign import prim "thc_interop_v1_as_guest_value"
+  asGuestValue# :: Object# s -> State# s -> (# State# s, Object# s #)
+
+-- | The interop null value, usable as a Java argument.
+foreign import prim "thc_interop_v1_java_null"
+  javaNull# :: State# s -> (# State# s, Object# s #)
+
+-- | Copy a NUL-terminated UTF-8 string into a Java string.
+foreign import prim "thc_interop_v1_java_string_utf8"
+  javaStringUtf8# :: Addr# -> State# s -> (# State# s, Object# s #)
+
+-- | Obtain the raw Java reference behind a host interop object.
+foreign import prim "thc_interop_v1_as_host_object"
+  asHostObject# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Object# s #)
+
+-- | Pass an immutable argument array of interop values directly; arbitrary arity and scalar kinds are supported.
+foreign import prim "thc_interop_v1_execute"
+  execute# :: Object# s -> InteropLibrary# s -> Array# (Object# s) -> State# s -> (# State# s, Object# s #)
+
+-- | Pass an immutable argument array of interop values directly; arbitrary arity and scalar kinds are supported.
+foreign import prim "thc_interop_v1_instantiate"
+  instantiate# :: Object# s -> InteropLibrary# s -> Array# (Object# s) -> State# s -> (# State# s, Object# s #)
+
+-- | Read a named field or member. The name must support the interop string protocol.
+foreign import prim "thc_interop_v1_interop_read_member"
+  readMember# :: Object# s -> InteropLibrary# s -> Object# s -> State# s -> (# State# s, Object# s #)
+
+-- | Write a named field or member through normal HostAccess policy.
+foreign import prim "thc_interop_v1_interop_write_member"
+  writeMember# :: Object# s -> InteropLibrary# s -> Object# s -> Object# s -> State# s -> State# s
+
+-- | Invoke a named static or instance method with an immutable array of interop arguments.
+foreign import prim "thc_interop_v1_invoke_member"
+  invokeMember# :: Object# s -> InteropLibrary# s -> Object# s -> Array# (Object# s) -> State# s -> (# State# s, Object# s #)
+
+-- | Box a Java boolean scalar for interop. Zero is false; nonzero is true.
+foreign import prim "thc_interop_v1_box_java_boolean"
+  boxJavaBoolean# :: Int# -> State# s -> (# State# s, Object# s #)
+
+-- | Convert exactly to a Java boolean, raising a foreign exception on an incompatible value.
+foreign import prim "thc_interop_v1_unbox_java_boolean"
+  unboxJavaBoolean# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Int# #)
+
+-- | Allocate a zero-initialized raw Java boolean array.
+foreign import prim "thc_interop_v1_new_java_boolean_array"
+  newJavaBooleanArray# :: Int# -> State# s -> (# State# s, JavaBooleanArray# s #)
+
+-- | Array length in elements.
+foreign import prim "thc_interop_v1_java_boolean_array_length"
+  javaBooleanArrayLength# :: JavaBooleanArray# s -> State# s -> (# State# s, Int# #)
+
+-- | Read one element at a zero-based index.
+foreign import prim "thc_interop_v1_read_java_boolean_array"
+  readJavaBooleanArray# :: JavaBooleanArray# s -> Int# -> State# s -> (# State# s, Int# #)
+
+-- | Write one element at a zero-based index.
+foreign import prim "thc_interop_v1_write_java_boolean_array"
+  writeJavaBooleanArray# :: JavaBooleanArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Copy elements with System.arraycopy overlap semantics.
+foreign import prim "thc_interop_v1_copy_java_boolean_array"
+  copyJavaBooleanArray# :: JavaBooleanArray# s -> Int# -> JavaBooleanArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Check that a raw Object# is a Java boolean array. Use asHostObject# first for an interop host wrapper.
+foreign import prim "thc_interop_v1_object_as_java_boolean_array"
+  objectAsJavaBooleanArray# :: Object# s -> State# s -> (# State# s, JavaBooleanArray# s #)
+
+-- | Box a Java byte scalar for interop.
+foreign import prim "thc_interop_v1_box_java_byte"
+  boxJavaByte# :: Int8# -> State# s -> (# State# s, Object# s #)
+
+-- | Convert exactly to a Java byte, raising a foreign exception on an incompatible value.
+foreign import prim "thc_interop_v1_unbox_java_byte"
+  unboxJavaByte# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Int8# #)
+
+-- | Allocate a zero-initialized raw Java byte array.
+foreign import prim "thc_interop_v1_new_java_byte_array"
+  newJavaByteArray# :: Int# -> State# s -> (# State# s, JavaByteArray# s #)
+
+-- | Array length in elements.
+foreign import prim "thc_interop_v1_java_byte_array_length"
+  javaByteArrayLength# :: JavaByteArray# s -> State# s -> (# State# s, Int# #)
+
+-- | Read one element at a zero-based index.
+foreign import prim "thc_interop_v1_read_java_byte_array"
+  readJavaByteArray# :: JavaByteArray# s -> Int# -> State# s -> (# State# s, Int8# #)
+
+-- | Write one element at a zero-based index.
+foreign import prim "thc_interop_v1_write_java_byte_array"
+  writeJavaByteArray# :: JavaByteArray# s -> Int# -> Int8# -> State# s -> State# s
+
+-- | Copy elements with System.arraycopy overlap semantics.
+foreign import prim "thc_interop_v1_copy_java_byte_array"
+  copyJavaByteArray# :: JavaByteArray# s -> Int# -> JavaByteArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Check that a raw Object# is a Java byte array. Use asHostObject# first for an interop host wrapper.
+foreign import prim "thc_interop_v1_object_as_java_byte_array"
+  objectAsJavaByteArray# :: Object# s -> State# s -> (# State# s, JavaByteArray# s #)
+
+-- | Box a Java short scalar for interop.
+foreign import prim "thc_interop_v1_box_java_short"
+  boxJavaShort# :: Int16# -> State# s -> (# State# s, Object# s #)
+
+-- | Convert exactly to a Java short, raising a foreign exception on an incompatible value.
+foreign import prim "thc_interop_v1_unbox_java_short"
+  unboxJavaShort# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Int16# #)
+
+-- | Allocate a zero-initialized raw Java short array.
+foreign import prim "thc_interop_v1_new_java_short_array"
+  newJavaShortArray# :: Int# -> State# s -> (# State# s, JavaShortArray# s #)
+
+-- | Array length in elements.
+foreign import prim "thc_interop_v1_java_short_array_length"
+  javaShortArrayLength# :: JavaShortArray# s -> State# s -> (# State# s, Int# #)
+
+-- | Read one element at a zero-based index.
+foreign import prim "thc_interop_v1_read_java_short_array"
+  readJavaShortArray# :: JavaShortArray# s -> Int# -> State# s -> (# State# s, Int16# #)
+
+-- | Write one element at a zero-based index.
+foreign import prim "thc_interop_v1_write_java_short_array"
+  writeJavaShortArray# :: JavaShortArray# s -> Int# -> Int16# -> State# s -> State# s
+
+-- | Copy elements with System.arraycopy overlap semantics.
+foreign import prim "thc_interop_v1_copy_java_short_array"
+  copyJavaShortArray# :: JavaShortArray# s -> Int# -> JavaShortArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Check that a raw Object# is a Java short array. Use asHostObject# first for an interop host wrapper.
+foreign import prim "thc_interop_v1_object_as_java_short_array"
+  objectAsJavaShortArray# :: Object# s -> State# s -> (# State# s, JavaShortArray# s #)
+
+-- | Box a Java char scalar for interop. The value is one unsigned UTF-16 code unit.
+foreign import prim "thc_interop_v1_box_java_char"
+  boxJavaChar# :: Word16# -> State# s -> (# State# s, Object# s #)
+
+-- | Convert exactly to a Java char, raising a foreign exception on an incompatible value.
+foreign import prim "thc_interop_v1_unbox_java_char"
+  unboxJavaChar# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Word16# #)
+
+-- | Allocate a zero-initialized raw Java char array.
+foreign import prim "thc_interop_v1_new_java_char_array"
+  newJavaCharArray# :: Int# -> State# s -> (# State# s, JavaCharArray# s #)
+
+-- | Array length in elements.
+foreign import prim "thc_interop_v1_java_char_array_length"
+  javaCharArrayLength# :: JavaCharArray# s -> State# s -> (# State# s, Int# #)
+
+-- | Read one element at a zero-based index.
+foreign import prim "thc_interop_v1_read_java_char_array"
+  readJavaCharArray# :: JavaCharArray# s -> Int# -> State# s -> (# State# s, Word16# #)
+
+-- | Write one element at a zero-based index.
+foreign import prim "thc_interop_v1_write_java_char_array"
+  writeJavaCharArray# :: JavaCharArray# s -> Int# -> Word16# -> State# s -> State# s
+
+-- | Copy elements with System.arraycopy overlap semantics.
+foreign import prim "thc_interop_v1_copy_java_char_array"
+  copyJavaCharArray# :: JavaCharArray# s -> Int# -> JavaCharArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Check that a raw Object# is a Java char array. Use asHostObject# first for an interop host wrapper.
+foreign import prim "thc_interop_v1_object_as_java_char_array"
+  objectAsJavaCharArray# :: Object# s -> State# s -> (# State# s, JavaCharArray# s #)
+
+-- | Box a Java int scalar for interop.
+foreign import prim "thc_interop_v1_box_java_int"
+  boxJavaInt# :: Int32# -> State# s -> (# State# s, Object# s #)
+
+-- | Convert exactly to a Java int, raising a foreign exception on an incompatible value.
+foreign import prim "thc_interop_v1_unbox_java_int"
+  unboxJavaInt# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Int32# #)
+
+-- | Allocate a zero-initialized raw Java int array.
+foreign import prim "thc_interop_v1_new_java_int_array"
+  newJavaIntArray# :: Int# -> State# s -> (# State# s, JavaIntArray# s #)
+
+-- | Array length in elements.
+foreign import prim "thc_interop_v1_java_int_array_length"
+  javaIntArrayLength# :: JavaIntArray# s -> State# s -> (# State# s, Int# #)
+
+-- | Read one element at a zero-based index.
+foreign import prim "thc_interop_v1_read_java_int_array"
+  readJavaIntArray# :: JavaIntArray# s -> Int# -> State# s -> (# State# s, Int32# #)
+
+-- | Write one element at a zero-based index.
+foreign import prim "thc_interop_v1_write_java_int_array"
+  writeJavaIntArray# :: JavaIntArray# s -> Int# -> Int32# -> State# s -> State# s
+
+-- | Copy elements with System.arraycopy overlap semantics.
+foreign import prim "thc_interop_v1_copy_java_int_array"
+  copyJavaIntArray# :: JavaIntArray# s -> Int# -> JavaIntArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Check that a raw Object# is a Java int array. Use asHostObject# first for an interop host wrapper.
+foreign import prim "thc_interop_v1_object_as_java_int_array"
+  objectAsJavaIntArray# :: Object# s -> State# s -> (# State# s, JavaIntArray# s #)
+
+-- | Box a Java long scalar for interop.
+foreign import prim "thc_interop_v1_box_java_long"
+  boxJavaLong# :: Int64# -> State# s -> (# State# s, Object# s #)
+
+-- | Convert exactly to a Java long, raising a foreign exception on an incompatible value.
+foreign import prim "thc_interop_v1_unbox_java_long"
+  unboxJavaLong# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Int64# #)
+
+-- | Allocate a zero-initialized raw Java long array.
+foreign import prim "thc_interop_v1_new_java_long_array"
+  newJavaLongArray# :: Int# -> State# s -> (# State# s, JavaLongArray# s #)
+
+-- | Array length in elements.
+foreign import prim "thc_interop_v1_java_long_array_length"
+  javaLongArrayLength# :: JavaLongArray# s -> State# s -> (# State# s, Int# #)
+
+-- | Read one element at a zero-based index.
+foreign import prim "thc_interop_v1_read_java_long_array"
+  readJavaLongArray# :: JavaLongArray# s -> Int# -> State# s -> (# State# s, Int64# #)
+
+-- | Write one element at a zero-based index.
+foreign import prim "thc_interop_v1_write_java_long_array"
+  writeJavaLongArray# :: JavaLongArray# s -> Int# -> Int64# -> State# s -> State# s
+
+-- | Copy elements with System.arraycopy overlap semantics.
+foreign import prim "thc_interop_v1_copy_java_long_array"
+  copyJavaLongArray# :: JavaLongArray# s -> Int# -> JavaLongArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Check that a raw Object# is a Java long array. Use asHostObject# first for an interop host wrapper.
+foreign import prim "thc_interop_v1_object_as_java_long_array"
+  objectAsJavaLongArray# :: Object# s -> State# s -> (# State# s, JavaLongArray# s #)
+
+-- | Box a Java float scalar for interop.
+foreign import prim "thc_interop_v1_box_java_float"
+  boxJavaFloat# :: Float# -> State# s -> (# State# s, Object# s #)
+
+-- | Convert exactly to a Java float, raising a foreign exception on an incompatible value.
+foreign import prim "thc_interop_v1_unbox_java_float"
+  unboxJavaFloat# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Float# #)
+
+-- | Allocate a zero-initialized raw Java float array.
+foreign import prim "thc_interop_v1_new_java_float_array"
+  newJavaFloatArray# :: Int# -> State# s -> (# State# s, JavaFloatArray# s #)
+
+-- | Array length in elements.
+foreign import prim "thc_interop_v1_java_float_array_length"
+  javaFloatArrayLength# :: JavaFloatArray# s -> State# s -> (# State# s, Int# #)
+
+-- | Read one element at a zero-based index.
+foreign import prim "thc_interop_v1_read_java_float_array"
+  readJavaFloatArray# :: JavaFloatArray# s -> Int# -> State# s -> (# State# s, Float# #)
+
+-- | Write one element at a zero-based index.
+foreign import prim "thc_interop_v1_write_java_float_array"
+  writeJavaFloatArray# :: JavaFloatArray# s -> Int# -> Float# -> State# s -> State# s
+
+-- | Copy elements with System.arraycopy overlap semantics.
+foreign import prim "thc_interop_v1_copy_java_float_array"
+  copyJavaFloatArray# :: JavaFloatArray# s -> Int# -> JavaFloatArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Check that a raw Object# is a Java float array. Use asHostObject# first for an interop host wrapper.
+foreign import prim "thc_interop_v1_object_as_java_float_array"
+  objectAsJavaFloatArray# :: Object# s -> State# s -> (# State# s, JavaFloatArray# s #)
+
+-- | Box a Java double scalar for interop.
+foreign import prim "thc_interop_v1_box_java_double"
+  boxJavaDouble# :: Double# -> State# s -> (# State# s, Object# s #)
+
+-- | Convert exactly to a Java double, raising a foreign exception on an incompatible value.
+foreign import prim "thc_interop_v1_unbox_java_double"
+  unboxJavaDouble# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Double# #)
+
+-- | Allocate a zero-initialized raw Java double array.
+foreign import prim "thc_interop_v1_new_java_double_array"
+  newJavaDoubleArray# :: Int# -> State# s -> (# State# s, JavaDoubleArray# s #)
+
+-- | Array length in elements.
+foreign import prim "thc_interop_v1_java_double_array_length"
+  javaDoubleArrayLength# :: JavaDoubleArray# s -> State# s -> (# State# s, Int# #)
+
+-- | Read one element at a zero-based index.
+foreign import prim "thc_interop_v1_read_java_double_array"
+  readJavaDoubleArray# :: JavaDoubleArray# s -> Int# -> State# s -> (# State# s, Double# #)
+
+-- | Write one element at a zero-based index.
+foreign import prim "thc_interop_v1_write_java_double_array"
+  writeJavaDoubleArray# :: JavaDoubleArray# s -> Int# -> Double# -> State# s -> State# s
+
+-- | Copy elements with System.arraycopy overlap semantics.
+foreign import prim "thc_interop_v1_copy_java_double_array"
+  copyJavaDoubleArray# :: JavaDoubleArray# s -> Int# -> JavaDoubleArray# s -> Int# -> Int# -> State# s -> State# s
+
+-- | Check that a raw Object# is a Java double array. Use asHostObject# first for an interop host wrapper.
+foreign import prim "thc_interop_v1_object_as_java_double_array"
+  objectAsJavaDoubleArray# :: Object# s -> State# s -> (# State# s, JavaDoubleArray# s #)
+
+-- | Vector array offsets and gather/scatter index maps count elements, not bytes.
+-- Masked-off lanes follow the JDK API: zero on load and untouched on store.
+-- Boolean arrays use ByteVector and char arrays use ShortVector bit patterns.
+
+foreign import prim "thc_vector_v1_read_java_boolean_vector"
+  readJavaBooleanVector# :: VecSpecies# Int8# -> JavaBooleanArray# s -> Int# -> State# s -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_java_boolean_vector"
+  writeJavaBooleanVector# :: JavaBooleanArray# s -> Int# -> Vec# Int8# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_boolean_vector_masked"
+  readJavaBooleanVectorMasked# :: VecSpecies# Int8# -> JavaBooleanArray# s -> Int# -> VecMask# Int8# -> State# s -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_java_boolean_vector_masked"
+  writeJavaBooleanVectorMasked# :: JavaBooleanArray# s -> Int# -> Vec# Int8# -> VecMask# Int8# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_boolean_vector_indexed"
+  readJavaBooleanVectorIndexed# :: VecSpecies# Int8# -> JavaBooleanArray# s -> Int# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_java_boolean_vector_indexed"
+  writeJavaBooleanVectorIndexed# :: JavaBooleanArray# s -> Int# -> Vec# Int8# -> JavaIntArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_boolean_vector_indexed_masked"
+  readJavaBooleanVectorIndexedMasked# :: VecSpecies# Int8# -> JavaBooleanArray# s -> Int# -> JavaIntArray# s -> Int# -> VecMask# Int8# -> State# s -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_java_boolean_vector_indexed_masked"
+  writeJavaBooleanVectorIndexedMasked# :: JavaBooleanArray# s -> Int# -> Vec# Int8# -> JavaIntArray# s -> Int# -> VecMask# Int8# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_byte_vector"
+  readJavaByteVector# :: VecSpecies# Int8# -> JavaByteArray# s -> Int# -> State# s -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_java_byte_vector"
+  writeJavaByteVector# :: JavaByteArray# s -> Int# -> Vec# Int8# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_byte_vector_masked"
+  readJavaByteVectorMasked# :: VecSpecies# Int8# -> JavaByteArray# s -> Int# -> VecMask# Int8# -> State# s -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_java_byte_vector_masked"
+  writeJavaByteVectorMasked# :: JavaByteArray# s -> Int# -> Vec# Int8# -> VecMask# Int8# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_byte_vector_indexed"
+  readJavaByteVectorIndexed# :: VecSpecies# Int8# -> JavaByteArray# s -> Int# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_java_byte_vector_indexed"
+  writeJavaByteVectorIndexed# :: JavaByteArray# s -> Int# -> Vec# Int8# -> JavaIntArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_byte_vector_indexed_masked"
+  readJavaByteVectorIndexedMasked# :: VecSpecies# Int8# -> JavaByteArray# s -> Int# -> JavaIntArray# s -> Int# -> VecMask# Int8# -> State# s -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_java_byte_vector_indexed_masked"
+  writeJavaByteVectorIndexedMasked# :: JavaByteArray# s -> Int# -> Vec# Int8# -> JavaIntArray# s -> Int# -> VecMask# Int8# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_short_vector"
+  readJavaShortVector# :: VecSpecies# Int16# -> JavaShortArray# s -> Int# -> State# s -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_java_short_vector"
+  writeJavaShortVector# :: JavaShortArray# s -> Int# -> Vec# Int16# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_short_vector_masked"
+  readJavaShortVectorMasked# :: VecSpecies# Int16# -> JavaShortArray# s -> Int# -> VecMask# Int16# -> State# s -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_java_short_vector_masked"
+  writeJavaShortVectorMasked# :: JavaShortArray# s -> Int# -> Vec# Int16# -> VecMask# Int16# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_short_vector_indexed"
+  readJavaShortVectorIndexed# :: VecSpecies# Int16# -> JavaShortArray# s -> Int# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_java_short_vector_indexed"
+  writeJavaShortVectorIndexed# :: JavaShortArray# s -> Int# -> Vec# Int16# -> JavaIntArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_short_vector_indexed_masked"
+  readJavaShortVectorIndexedMasked# :: VecSpecies# Int16# -> JavaShortArray# s -> Int# -> JavaIntArray# s -> Int# -> VecMask# Int16# -> State# s -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_java_short_vector_indexed_masked"
+  writeJavaShortVectorIndexedMasked# :: JavaShortArray# s -> Int# -> Vec# Int16# -> JavaIntArray# s -> Int# -> VecMask# Int16# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_char_vector"
+  readJavaCharVector# :: VecSpecies# Int16# -> JavaCharArray# s -> Int# -> State# s -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_java_char_vector"
+  writeJavaCharVector# :: JavaCharArray# s -> Int# -> Vec# Int16# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_char_vector_masked"
+  readJavaCharVectorMasked# :: VecSpecies# Int16# -> JavaCharArray# s -> Int# -> VecMask# Int16# -> State# s -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_java_char_vector_masked"
+  writeJavaCharVectorMasked# :: JavaCharArray# s -> Int# -> Vec# Int16# -> VecMask# Int16# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_char_vector_indexed"
+  readJavaCharVectorIndexed# :: VecSpecies# Int16# -> JavaCharArray# s -> Int# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_java_char_vector_indexed"
+  writeJavaCharVectorIndexed# :: JavaCharArray# s -> Int# -> Vec# Int16# -> JavaIntArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_char_vector_indexed_masked"
+  readJavaCharVectorIndexedMasked# :: VecSpecies# Int16# -> JavaCharArray# s -> Int# -> JavaIntArray# s -> Int# -> VecMask# Int16# -> State# s -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_java_char_vector_indexed_masked"
+  writeJavaCharVectorIndexedMasked# :: JavaCharArray# s -> Int# -> Vec# Int16# -> JavaIntArray# s -> Int# -> VecMask# Int16# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_int_vector"
+  readJavaIntVector# :: VecSpecies# Int32# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Int32# #)
+
+foreign import prim "thc_vector_v1_write_java_int_vector"
+  writeJavaIntVector# :: JavaIntArray# s -> Int# -> Vec# Int32# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_int_vector_masked"
+  readJavaIntVectorMasked# :: VecSpecies# Int32# -> JavaIntArray# s -> Int# -> VecMask# Int32# -> State# s -> (# State# s, Vec# Int32# #)
+
+foreign import prim "thc_vector_v1_write_java_int_vector_masked"
+  writeJavaIntVectorMasked# :: JavaIntArray# s -> Int# -> Vec# Int32# -> VecMask# Int32# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_int_vector_indexed"
+  readJavaIntVectorIndexed# :: VecSpecies# Int32# -> JavaIntArray# s -> Int# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Int32# #)
+
+foreign import prim "thc_vector_v1_write_java_int_vector_indexed"
+  writeJavaIntVectorIndexed# :: JavaIntArray# s -> Int# -> Vec# Int32# -> JavaIntArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_int_vector_indexed_masked"
+  readJavaIntVectorIndexedMasked# :: VecSpecies# Int32# -> JavaIntArray# s -> Int# -> JavaIntArray# s -> Int# -> VecMask# Int32# -> State# s -> (# State# s, Vec# Int32# #)
+
+foreign import prim "thc_vector_v1_write_java_int_vector_indexed_masked"
+  writeJavaIntVectorIndexedMasked# :: JavaIntArray# s -> Int# -> Vec# Int32# -> JavaIntArray# s -> Int# -> VecMask# Int32# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_long_vector"
+  readJavaLongVector# :: VecSpecies# Int64# -> JavaLongArray# s -> Int# -> State# s -> (# State# s, Vec# Int64# #)
+
+foreign import prim "thc_vector_v1_write_java_long_vector"
+  writeJavaLongVector# :: JavaLongArray# s -> Int# -> Vec# Int64# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_long_vector_masked"
+  readJavaLongVectorMasked# :: VecSpecies# Int64# -> JavaLongArray# s -> Int# -> VecMask# Int64# -> State# s -> (# State# s, Vec# Int64# #)
+
+foreign import prim "thc_vector_v1_write_java_long_vector_masked"
+  writeJavaLongVectorMasked# :: JavaLongArray# s -> Int# -> Vec# Int64# -> VecMask# Int64# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_long_vector_indexed"
+  readJavaLongVectorIndexed# :: VecSpecies# Int64# -> JavaLongArray# s -> Int# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Int64# #)
+
+foreign import prim "thc_vector_v1_write_java_long_vector_indexed"
+  writeJavaLongVectorIndexed# :: JavaLongArray# s -> Int# -> Vec# Int64# -> JavaIntArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_long_vector_indexed_masked"
+  readJavaLongVectorIndexedMasked# :: VecSpecies# Int64# -> JavaLongArray# s -> Int# -> JavaIntArray# s -> Int# -> VecMask# Int64# -> State# s -> (# State# s, Vec# Int64# #)
+
+foreign import prim "thc_vector_v1_write_java_long_vector_indexed_masked"
+  writeJavaLongVectorIndexedMasked# :: JavaLongArray# s -> Int# -> Vec# Int64# -> JavaIntArray# s -> Int# -> VecMask# Int64# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_float_vector"
+  readJavaFloatVector# :: VecSpecies# Float# -> JavaFloatArray# s -> Int# -> State# s -> (# State# s, Vec# Float# #)
+
+foreign import prim "thc_vector_v1_write_java_float_vector"
+  writeJavaFloatVector# :: JavaFloatArray# s -> Int# -> Vec# Float# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_float_vector_masked"
+  readJavaFloatVectorMasked# :: VecSpecies# Float# -> JavaFloatArray# s -> Int# -> VecMask# Float# -> State# s -> (# State# s, Vec# Float# #)
+
+foreign import prim "thc_vector_v1_write_java_float_vector_masked"
+  writeJavaFloatVectorMasked# :: JavaFloatArray# s -> Int# -> Vec# Float# -> VecMask# Float# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_float_vector_indexed"
+  readJavaFloatVectorIndexed# :: VecSpecies# Float# -> JavaFloatArray# s -> Int# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Float# #)
+
+foreign import prim "thc_vector_v1_write_java_float_vector_indexed"
+  writeJavaFloatVectorIndexed# :: JavaFloatArray# s -> Int# -> Vec# Float# -> JavaIntArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_float_vector_indexed_masked"
+  readJavaFloatVectorIndexedMasked# :: VecSpecies# Float# -> JavaFloatArray# s -> Int# -> JavaIntArray# s -> Int# -> VecMask# Float# -> State# s -> (# State# s, Vec# Float# #)
+
+foreign import prim "thc_vector_v1_write_java_float_vector_indexed_masked"
+  writeJavaFloatVectorIndexedMasked# :: JavaFloatArray# s -> Int# -> Vec# Float# -> JavaIntArray# s -> Int# -> VecMask# Float# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_double_vector"
+  readJavaDoubleVector# :: VecSpecies# Double# -> JavaDoubleArray# s -> Int# -> State# s -> (# State# s, Vec# Double# #)
+
+foreign import prim "thc_vector_v1_write_java_double_vector"
+  writeJavaDoubleVector# :: JavaDoubleArray# s -> Int# -> Vec# Double# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_double_vector_masked"
+  readJavaDoubleVectorMasked# :: VecSpecies# Double# -> JavaDoubleArray# s -> Int# -> VecMask# Double# -> State# s -> (# State# s, Vec# Double# #)
+
+foreign import prim "thc_vector_v1_write_java_double_vector_masked"
+  writeJavaDoubleVectorMasked# :: JavaDoubleArray# s -> Int# -> Vec# Double# -> VecMask# Double# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_double_vector_indexed"
+  readJavaDoubleVectorIndexed# :: VecSpecies# Double# -> JavaDoubleArray# s -> Int# -> JavaIntArray# s -> Int# -> State# s -> (# State# s, Vec# Double# #)
+
+foreign import prim "thc_vector_v1_write_java_double_vector_indexed"
+  writeJavaDoubleVectorIndexed# :: JavaDoubleArray# s -> Int# -> Vec# Double# -> JavaIntArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_double_vector_indexed_masked"
+  readJavaDoubleVectorIndexedMasked# :: VecSpecies# Double# -> JavaDoubleArray# s -> Int# -> JavaIntArray# s -> Int# -> VecMask# Double# -> State# s -> (# State# s, Vec# Double# #)
+
+foreign import prim "thc_vector_v1_write_java_double_vector_indexed_masked"
+  writeJavaDoubleVectorIndexedMasked# :: JavaDoubleArray# s -> Int# -> Vec# Double# -> JavaIntArray# s -> Int# -> VecMask# Double# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_mask"
+  readJavaMask# :: forall r (e :: TYPE r) s. VecSpecies# e -> JavaBooleanArray# s -> Int# -> State# s -> (# State# s, VecMask# e #)
+
+foreign import prim "thc_vector_v1_write_java_mask"
+  writeJavaMask# :: forall r (e :: TYPE r) s. VecMask# e -> JavaBooleanArray# s -> Int# -> State# s -> State# s
+
+foreign import prim "thc_vector_v1_read_java_shuffle"
+  readJavaShuffle# :: forall r (e :: TYPE r) s. VecSpecies# e -> JavaIntArray# s -> Int# -> State# s -> (# State# s, VecShuffle# e #)
+
+foreign import prim "thc_vector_v1_write_java_shuffle"
+  writeJavaShuffle# :: forall r (e :: TYPE r) s. VecShuffle# e -> JavaIntArray# s -> Int# -> State# s -> State# s

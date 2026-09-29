@@ -214,7 +214,7 @@ tasks.withType(Test).configureEach {
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
         include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
-            "vector-api/core/**/*.json", "vector-api/*.tsv",
+            "vector-api/core/**/*.json", "vector-api/*.tsv", "java-arrays/core/**/*.json", "java-arrays/packages.json",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "word-floating/**/*.json", "word-floating/oracle.tsv",
             "fused-floating/**/*.json", "fused-floating/oracle.tsv",
@@ -1145,6 +1145,24 @@ def foreignExceptionTests = [["foreignExceptionTest", false],[ "foreignException
     }
 }
 foreignExceptionTests[1].configure { mustRunAfter(foreignExceptionTests[0]) }
+[["javaArrayFullCoreTest", false], ["javaArrayFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests Haskell Java-array operations through the lazy GHC loader."
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        useJUnitPlatform { includeTags("foreign-exceptions-full-core") }
+        filter { includeTestsMatching("thc.runtime.JavaArrayTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        doFirst {
+            checkBuild(file("build/java-arrays/packages.json").isFile()) {
+                "Set THC_FOREIGN_EXCEPTION_INSTALLED and run cabal run exe:thc-fixtures -- java-arrays"
+            }
+        }
+    }
+}
 tasks.register("jitStabilityTest", Test) {
     group = "verification"
     description = "Runs advisory JIT code-retention checks; failures remain visible to local callers."

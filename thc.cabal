@@ -1278,6 +1278,7 @@ executable thc-fixtures
     FusedFloatingFixtures
     SimdCallFixtures
     VectorApiFixtures
+    JavaArrayFixtures
     Simd128AddressFixtures
     Simd128ArrayFixtures
     SimdWideArrayFixtures
