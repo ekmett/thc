@@ -60,11 +60,18 @@ Relative and empty PATH components work without changing the JVM environment.
 A missing parent PATH uses libc's `_CS_PATH` default.
 
 Inherited descriptors come from authenticated `NativeFileResource` duplicates.
-Every pipe and pidfd is staged into owned native leases before publication.
-Returned pipe leases can transfer once to the existing managed descriptor
-registry; until transfer, the process service closes them on context disposal.
-No unregistered JVM descriptors pass through to children, including when the
-original `close_fds` option is false.
+With `close_fds = False`, open guest descriptors numbered 3 or above whose
+`FD_CLOEXEC` flag is clear retain those same descriptor numbers in the child.
+Their numbers in argv need no rewriting. Setting `FD_CLOEXEC` on a guest
+descriptor, or setting `close_fds = True`, excludes it from this inheritance.
+Explicit stdin, stdout and stderr selections still follow their requested
+mapping. No unregistered JVM descriptors pass through to children.
+
+Native staging preserves the mapping when a source descriptor is also another
+mapping's destination. Every temporary descriptor, pipe and pidfd remains owned
+until publication or rollback. Returned pipe leases can transfer once to the
+existing managed descriptor registry; until transfer, the process service closes
+them on context disposal.
 
 `ManagedFiles.launchProcess` reserves guest descriptors before launch, pins
 authenticated inherited resources, and adopts returned pipe leases through its
@@ -124,9 +131,11 @@ atomic creation transport; this implementation does not claim that support.
 The focused JVM tests compare raw result/status/errno tuples with a Haskell
 executable linked against the genuine native process package. The fixture keeps
 the original unsafe/interruptible declarations. Other controls exercise pipe
-transport, environment and renamed-CWD isolation, denied permissions, foreign
-handles, creation failures, cancellation, and context cleanup. Standalone C
-subprocess controls establish real kernel auto-reaping under `SIG_IGN` and both
+transport, guest descriptor numbers, close-on-exec and close-fds exclusion,
+environment and renamed-CWD isolation, denied permissions, foreign handles,
+creation failures, cancellation, and context cleanup. Failed launches preserve
+existing guest descriptors and release all temporary inherited duplicates.
+Standalone C subprocess controls establish real kernel auto-reaping under `SIG_IGN` and both
 default/handler `SA_NOCLDWAIT` dispositions, then verify transport rejection before
 any libc launch. A forwarding linker wrapper counts real `posix_spawn` calls;
 it does not replace their behavior. The default-policy positive control launches

@@ -1,4 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE InterruptibleFFI #-}
 
 -- |
@@ -32,6 +33,14 @@ foreign import ccall unsafe "terminateProcess"
 foreign import ccall unsafe "runInteractiveProcess"
   createRawProcess :: Ptr CString -> CString -> Ptr CString -> CInt -> CInt -> CInt ->
     Ptr CInt -> Ptr CInt -> Ptr CInt -> Ptr () -> Ptr () -> CInt -> Ptr CString -> IO CPid
+
+-- Child observations use libc at the exact descriptor number supplied in argv.
+foreign import ccall unsafe "read"
+  descriptorRead :: CInt -> Ptr Word8 -> CSize -> IO CLong
+foreign import ccall unsafe "fcntl"
+  descriptorFlags :: CInt -> CInt -> IO CInt
+foreign import capi unsafe "fcntl.h value F_GETFD"
+  getDescriptorFlags :: CInt
 
 creationOracle :: IO ()
 creationOracle = do
@@ -121,6 +130,11 @@ oracle = do
       ExitSuccess -> resetErrno >> row "parent-path" 0 0
       _ -> fail "native parent PATH lookup failed"
 
+readDescriptor :: String -> IO Word8
+readDescriptor number = alloca $ \value -> do
+  size <- descriptorRead (read number) value 1
+  if size == 1 then peek value else exitFailure
+
 main :: IO ()
 main = getArgs >>= \args -> case args of
   ["oracle"] -> oracle
@@ -130,9 +144,16 @@ main = getArgs >>= \args -> case args of
     hPutChar stdout 'R' >> hFlush stdout
     _ <- hGetChar stdin
     exitWith (ExitFailure 23)
+  ["descriptor", number] -> readDescriptor number >>= print
+  ["descriptors", first, second] -> mapM readDescriptor [first, second] >>= print
+  ["closed-descriptor", number] -> do
+    resetErrno
+    flags <- descriptorFlags (read number) getDescriptorFlags
+    err <- getErrno
+    if flags == -1 && err == eBADF then putStrLn "closed" else exitFailure
   ["environment"] -> getEnv "THC_CHILD_VALUE" >>= putStrLn
   ["pipes"] -> do
     text <- hGetLine stdin
     hPutStrLn stdout ("out:" ++ text)
     hPutStrLn stderr ("err:" ++ text)
-  _ -> fail "process fixture: expected oracle, exit, hold, environment, or pipes"
+  _ -> fail "process fixture: expected oracle, exit, hold, descriptor, descriptors, closed-descriptor, environment, or pipes"

@@ -12,8 +12,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-int thc_process_spawn(char *const[], char *const[], int, const char *, const int[3], int,
-                      const char *, int[6]);
+int thc_process_spawn(char *const[], char *const[], int, const char *, const int[3], const int[],
+                      const int[], int, int, const char *, int[6]);
 int thc_process_poll(int, int[2]);
 int thc_process_dispose(int);
 
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     require(directory >= 0, "open directory");
     int streams[3] = {-2, -2, -2}, result[6];
     int before = spawns;
-    int error = thc_process_spawn(command, environment, directory, NULL, streams, 0, NULL, result);
+    int error = thc_process_spawn(command, environment, directory, NULL, streams, NULL, NULL, 0, 0, NULL, result);
     close(directory);
     if (!supported) {
         if (!error) { thc_process_dispose(result[1]); close(result[1]); }

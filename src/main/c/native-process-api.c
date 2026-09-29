@@ -3,18 +3,21 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <linux/wait.h>
 #include <unistd.h>
 
 /* Linux/glibc transport only. No JVM fork child executes user code. All fd
- * arguments are owned duplicates supplied by the context, never guest ints.
+ * sources are owned duplicates supplied by the context. Guest descriptor
+ * numbers name child destinations only, never host capabilities.
  * Result: pid, pidfd, parent stdin, parent stdout, parent stderr, failure stage. */
 _Static_assert(sizeof(pid_t) == sizeof(int32_t), "process pid ABI");
 _Static_assert(sizeof(int) == sizeof(int32_t), "process status ABI");
@@ -83,7 +86,8 @@ static int spawn_path(pid_t *pid, char *const argv[], char *const env[], const c
 }
 
 int thc_process_spawn(char *const argv[], char *const env[], int directory,
-                      const char *cwd, const int streams[3], int flags,
+                      const char *cwd, const int streams[3], const int inherited_targets[],
+                      const int inherited_sources[], int inherited_count, int flags,
                       const char *search_path, int result[6]) {
     for (int i = 0; i < 5; ++i) result[i] = -1;
     result[5] = STAGE_ARGUMENTS;
@@ -91,6 +95,20 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
     /* process-1.6 flags: close_fds, create_group, new_session, reset INT/QUIT.
      * Windows console flags and credential changes are not silently ignored. */
     if (flags & ~(0x1 | 0x2 | 0x8 | 0x20)) return ENOTSUP;
+    if (inherited_count < 0) return EINVAL;
+    if (flags & 1) inherited_count = 0;
+    int largest_target = 2;
+    if (inherited_count) {
+        if (!inherited_targets || !inherited_sources) return EINVAL;
+        struct rlimit limit;
+        if (getrlimit(RLIMIT_NOFILE, &limit)) return errno;
+        for (int i = 0; i < inherited_count; ++i) {
+            int target = inherited_targets[i];
+            if (target <= largest_target || target == INT_MAX ||
+                (rlim_t)target >= limit.rlim_cur || inherited_sources[i] < 0) return EBADF;
+            largest_target = target;
+        }
+    }
     /* posix_spawn -> pidfd_open requires an unreaped child to reserve its PID.
      * Reject automatic reaping before creating pipes or a child. This observes
      * host policy; it cannot synchronize with an external reaper or concurrent
@@ -110,6 +128,7 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
     if (probe_error != ECHILD) return probe_error ? probe_error : EIO;
     int parent[3] = {-1, -1, -1}, child[3] = {-1, -1, -1};
     int error = 0;
+    int *inherited = NULL;
     posix_spawn_file_actions_t actions;
     posix_spawnattr_t attrs;
     result[5] = STAGE_ACTION_INIT;
@@ -121,6 +140,18 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
 #define ACTION(stage, call) do { result[5] = (stage); error = (call); if (error) goto done; } while (0)
     ACTION(STAGE_FCHDIR, posix_spawn_file_actions_addfchdir_np(&actions, directory));
     if (cwd) ACTION(STAGE_CHDIR, posix_spawn_file_actions_addchdir_np(&actions, cwd));
+    /* Validate native limits before allocating actions for gaps. Stage every
+     * source above all destinations before any child dup2, including cycles. */
+    if (inherited_count) {
+        result[5] = STAGE_DUP_FD;
+        inherited = malloc((size_t)inherited_count * sizeof(*inherited));
+        if (!inherited) { error = ENOMEM; goto done; }
+        for (int i = 0; i < inherited_count; ++i) inherited[i] = -1;
+        for (int i = 0; i < inherited_count; ++i) {
+            inherited[i] = fcntl(inherited_sources[i], F_DUPFD_CLOEXEC, largest_target + 1);
+            if (inherited[i] < 0) { error = errno; goto done; }
+        }
+    }
     for (int i = 0; i < 3; ++i) {
         if (streams[i] == -1) {
             int pipefd[2];
@@ -144,9 +175,17 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
             ACTION(STAGE_DUP2, posix_spawn_file_actions_adddup2(&actions, child[i], i));
         } else { result[5] = STAGE_ARGUMENTS; error = EBADF; goto done; }
     }
-    /* Unregistered JVM descriptors are never inherited, even with close_fds
-     * unset. Supplied authenticated endpoints have already been duplicated. */
-    ACTION(STAGE_CLOSE_FROM, posix_spawn_file_actions_addclosefrom_np(&actions, 3));
+    for (int i = 0; i < inherited_count; ++i)
+        ACTION(STAGE_DUP2, posix_spawn_file_actions_adddup2(&actions, inherited[i], inherited_targets[i]));
+    /* Keep only authenticated destinations. Closing gaps also excludes JVM
+     * descriptors acquired concurrently while the spawn actions were built. */
+    int next = 3;
+    for (int i = 0; i < inherited_count; ++i) {
+        while (next < inherited_targets[i])
+            ACTION(STAGE_CLOSE, posix_spawn_file_actions_addclose(&actions, next++));
+        next = inherited_targets[i] + 1;
+    }
+    ACTION(STAGE_CLOSE_FROM, posix_spawn_file_actions_addclosefrom_np(&actions, next));
     short spawn_flags = POSIX_SPAWN_SETSIGMASK;
     sigset_t empty;
     sigemptyset(&empty);
@@ -180,6 +219,10 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
     for (int i = 0; i < 3; ++i) { result[i + 2] = parent[i]; parent[i] = -1; }
     result[5] = STAGE_NONE;
 done:
+    if (inherited) {
+        for (int i = 0; i < inherited_count; ++i) if (inherited[i] >= 0) close(inherited[i]);
+        free(inherited);
+    }
     for (int i = 0; i < 3; ++i) {
         if (parent[i] >= 0) close(parent[i]);
         if (child[i] >= 0) close(child[i]);

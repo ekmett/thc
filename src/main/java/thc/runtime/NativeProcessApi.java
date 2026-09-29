@@ -20,7 +20,8 @@ public final class NativeProcessApi {
     private static final SymbolLookup LIBRARY = load();
     private static final Linker LINKER = Linker.nativeLinker();
     private static final MethodHandle SPAWN = function("spawn", ValueLayout.ADDRESS, ValueLayout.ADDRESS,
-        ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
+        ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+        ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
     private static final MethodHandle POLL = function("poll", ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
     private static final MethodHandle TERMINATE = function("terminate", ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
     private static final MethodHandle DISPOSE = function("dispose", ValueLayout.JAVA_INT);
@@ -60,7 +61,14 @@ public final class NativeProcessApi {
     /** The caller receives every returned native owner in preallocated slots. */
     public static int spawn(List<byte[]> arguments, List<byte[]> environment, int directory, byte[] cwd,
                             int[] descriptors, int flags, byte[] searchPath, MemorySegment result) {
+        return spawn(arguments, environment, directory, cwd, descriptors, new int[0], new int[0], flags, searchPath, result);
+    }
+
+    public static int spawn(List<byte[]> arguments, List<byte[]> environment, int directory, byte[] cwd,
+                            int[] descriptors, int[] inheritedTargets, int[] inheritedSources,
+                            int flags, byte[] searchPath, MemorySegment result) {
         try (var arena = Arena.ofConfined()) {
+            if (inheritedTargets.length != inheritedSources.length) throw new IllegalArgumentException("Failed requirement.");
             if (descriptors.length != 3) throw new IllegalArgumentException("Failed requirement.");
             var argv = vector(arena, arguments);
             var env = vector(arena, environment);
@@ -68,7 +76,9 @@ public final class NativeProcessApi {
             var search = searchPath == null ? MemorySegment.NULL : string(arena, searchPath);
             var streams = arena.allocate(12, 4);
             for (int index = 0; index < descriptors.length; index++) streams.setAtIndex(ValueLayout.JAVA_INT, index, descriptors[index]);
-            return (int) SPAWN.invokeExact(argv, env, directory, path, streams, flags, search, result);
+            var targets = inheritedTargets.length == 0 ? MemorySegment.NULL : arena.allocateFrom(ValueLayout.JAVA_INT, inheritedTargets);
+            var sources = inheritedSources.length == 0 ? MemorySegment.NULL : arena.allocateFrom(ValueLayout.JAVA_INT, inheritedSources);
+            return (int) SPAWN.invokeExact(argv, env, directory, path, streams, targets, sources, inheritedTargets.length, flags, search, result);
         } catch (Throwable failure) { throw propagate(failure); }
     }
 

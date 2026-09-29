@@ -173,6 +173,16 @@ int64_t thc_file_open(int *lease, const int *directory, const char *path, int mo
   return S_ISREG(value.st_mode) ? 0 : -2;
 }
 
+// The caller holds the resource lease across both observation and acquisition.
+int64_t thc_file_duplicate_inheritable(const int *lease, int64_t *error) {
+  int flags = fcntl(*lease, F_GETFD);
+  if (flags < 0) { *error = errno; return -1; }
+  if (flags & FD_CLOEXEC) { *error = 0; return -1; }
+  int fd = fcntl(*lease, F_DUPFD_CLOEXEC, 0);
+  *error = fd < 0 ? errno : 0;
+  return fd;
+}
+
 int64_t thc_file_standard(int *lease, int endpoint, int64_t *error) {
   if (endpoint < 0 || endpoint > 2) { *error = EINVAL; return -1; }
   int fd = fcntl(endpoint, F_DUPFD_CLOEXEC, 3);

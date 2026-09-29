@@ -35,6 +35,7 @@ public final class OpenedNativeFile implements NativeFileResource {
     @Override public NativeFileResource fcntlDuplicate(int command, long minimum) { return metadata.fcntlDuplicate(command, minimum); }
     @Override public long writeEvent(long value) { return metadata.writeEvent(value); }
     @Override public int duplicateDescriptor() { return metadata.duplicateDescriptor(); }
+    @Override public int duplicateInheritableDescriptor() { return metadata.duplicateInheritableDescriptor(); }
     @Override public void requireLive() { metadata.requireLive(); }
     @Override public NativeFdWait readinessWait() { return metadata.readinessWait(); }
     @Override public void close() throws IOException {
