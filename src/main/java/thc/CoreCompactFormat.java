@@ -24,8 +24,8 @@ public final class CoreCompactFormat {
         public String getMember() { return member; }
     }
     public record Span(long offset, long length) {}
-    public record Header(Span facts, List<Span> segments, long bindingCount, int summaries, int debug) {
-        public Header { Objects.requireNonNull(facts); Objects.requireNonNull(segments); }
+    public record Header(Span facts, Span metadataStrings, List<Span> segments, long bindingCount, int summaries, int debug) {
+        public Header { Objects.requireNonNull(facts); Objects.requireNonNull(metadataStrings); Objects.requireNonNull(segments); }
         public Span get(Segment segment) { return segments.get(segment.ordinal()); }
         public boolean getContainsDelimitedControl() { return (summaries & 1) != 0; }
         public boolean getRegistrationObligations() { return (summaries & 2) != 0; }
@@ -36,18 +36,22 @@ public final class CoreCompactFormat {
     public static Header read(MemorySegment bytes, List<Long> lengths) {
         Objects.requireNonNull(bytes);
         Objects.requireNonNull(lengths);
-        if (bytes.byteSize() < HEADER_BYTES) throw new IllegalArgumentException("Truncated CBD header");
+        if (bytes.byteSize() < HEADER_BYTES + Long.BYTES) throw new IllegalArgumentException("Truncated CBD header");
         if (lengths.size() != Segment.values().length || lengths.stream().anyMatch(value -> value < 0)) {
             throw new IllegalArgumentException("Invalid CBD member lengths");
         }
-        CoreCompactCursor cursor = new CoreCompactCursor(bytes, 0, HEADER_BYTES);
+        CoreCompactCursor cursor = new CoreCompactCursor(bytes, 0, HEADER_BYTES + Long.BYTES);
         if (!Arrays.equals(cursor.bytes(8), MAGIC)) throw new IllegalArgumentException("Invalid CBD header magic");
-        if (cursor.u16() != 1 || cursor.u16() != 0) throw new IllegalArgumentException("Unsupported CBD version");
+        if (cursor.u16() != 1 || cursor.u16() != 1) throw new IllegalArgumentException("Unsupported CBD version");
         long summaries = cursor.u32(), count = cursor.offset(), debug = cursor.u32();
         if ((summaries & ~31L) != 0 || (debug & ~7L) != 0 || cursor.u32() != 0) {
             throw new IllegalArgumentException("Reserved CBD header flags");
         }
+        long metadataLength = cursor.offset();
         cursor.expectEnd();
+        long metadataStart = HEADER_BYTES + Long.BYTES;
+        CoreCompactCursor.slice(bytes, metadataStart, metadataLength);
+        long factsStart = metadataStart + metadataLength;
         long symbols = lengths.get(Segment.SYMBOLS.ordinal());
         if (symbols % SYMBOL_BYTES != 0 || count != symbols / SYMBOL_BYTES) {
             throw new IllegalArgumentException("Invalid CBD symbol count");
@@ -61,6 +65,7 @@ public final class CoreCompactFormat {
         }
         var spans = new ArrayList<Span>(lengths.size());
         for (long length : lengths) spans.add(new Span(0, length));
-        return new Header(new Span(HEADER_BYTES, bytes.byteSize() - HEADER_BYTES), spans, count, (int) summaries, (int) debug);
+        return new Header(new Span(factsStart, bytes.byteSize() - factsStart), new Span(metadataStart, metadataLength),
+                spans, count, (int) summaries, (int) debug);
     }
 }

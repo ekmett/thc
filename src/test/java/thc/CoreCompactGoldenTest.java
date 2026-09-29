@@ -33,8 +33,9 @@ class CoreCompactGoldenTest {
     @Test void sharedCbdHeaderDescribesMemberRelativePayloadWithoutScanningIt() throws Exception {
         byte[] header = hex(Files.readString(directory.resolve("cbd-header-v1.hex")));
         assertEquals(32, header.length);
-        var format = CoreCompactFormat.read(MemorySegment.ofArray(header), List.of(2L, 3L, 0L, 0L, 0L, 24L));
-        assertEquals(new CoreCompactFormat.Span(32, 0), format.facts());
+        // The shared vector is the fixed prefix; append the empty private-pool length.
+        var format = CoreCompactFormat.read(MemorySegment.ofArray(Arrays.copyOf(header, 40)), List.of(2L, 3L, 0L, 0L, 0L, 24L));
+        assertEquals(new CoreCompactFormat.Span(40, 0), format.facts());
         assertEquals(new CoreCompactFormat.Span(0, 2), format.get(CoreCompactFormat.Segment.DATA));
         assertEquals(new CoreCompactFormat.Span(0, 3), format.get(CoreCompactFormat.Segment.STRINGS));
         assertEquals(new CoreCompactFormat.Span(0, 24), format.get(CoreCompactFormat.Segment.SYMBOLS));

@@ -146,7 +146,7 @@ public final class CoreCompactFile implements AutoCloseable {
                 lengths.add(archive.member(segment.getMember()).length());
             }
             CoreCompactFormat.Header header = CoreCompactFormat.read(head.getBytes(), lengths);
-            counters.headerBytesRead += CoreCompactFormat.HEADER_BYTES;
+            counters.headerBytesRead += CoreCompactFormat.HEADER_BYTES + Long.BYTES;
             Mapped result = new Mapped(archive, header, handles);
             if (verifyArtifacts) for (String name : CoreCbdArchive.NAMES) {
                 MemorySegment payload = member(result, name);
@@ -269,6 +269,17 @@ public final class CoreCompactFile implements AutoCloseable {
             // Count only a valid selected range, including a failing UTF8 decode.
             CoreCompactCursor.slice(strings, offset, length);
             counters.stringBytesRead += length;
+            return CoreCompactCursor.utf8(strings, offset, length);
+        }
+    }
+    /** Facts use their own final-header pool, never the executable string member. */
+    String metadataString(long offset, long length) throws Exception {
+        synchronized (counters) {
+            Mapped current = mapping();
+            var span = current.header.metadataStrings();
+            var strings = CoreCompactCursor.slice(member(current, "header"), span.offset(), span.length());
+            CoreCompactCursor.slice(strings, offset, length);
+            counters.headerBytesRead += length;
             return CoreCompactCursor.utf8(strings, offset, length);
         }
     }
