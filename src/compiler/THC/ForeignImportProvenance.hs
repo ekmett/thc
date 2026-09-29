@@ -106,7 +106,11 @@ scalar ty
       Just [] -> Right "void"
       Just [primitive] | primitive `elem` [IntRep,WordRep,Int8Rep,Word8Rep,Int16Rep,Word16Rep,
           Int32Rep,Word32Rep,Int64Rep,Word64Rep,AddrRep,FloatRep,DoubleRep] -> Right (show primitive)
-      _ -> Left "static-import producer requires concrete scalar or byte-array foreign carriers"
+      -- This records a stock emitted call, not a native adapter capability.
+      -- The exact declared/normalized nominal types remain in Import; raw GC
+      -- carriers are archive-only downstream, never rewritten to addresses.
+      Just [primitive@(BoxedRep (Just _))] -> Right (show primitive)
+      _ -> Left "static-import producer requires concrete foreign carriers"
 
 importTypeIdentity :: Type -> Either String ImportType
 importTypeIdentity = go []

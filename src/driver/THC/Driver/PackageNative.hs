@@ -371,12 +371,12 @@ nativeSignature unit entry = do
     "package native declaration differs from emitted ABI"
   require (identifier symbol && member emitted "unit" == Just (toJSON unit) &&
     convention `elem` ["ccall", "capi"] && safety `elem` ["unsafe","safe","interruptible"] &&
-    not (null arguments) && last arguments == "void" && all inputCarrier (init arguments))
+    not (null arguments) && last arguments == "void" && all (\rep -> inputCarrier rep || gcCarrier rep) (init arguments))
     "package native call has malformed static C/CAPI metadata"
   result <- case results of
     ["void"] -> Right "void"
-    ["void", result] | scalarCarrier result -> Right result
-    _ -> Left "package native call requires State with zero or one scalar result"
+    ["void", result] | scalarCarrier result || gcCarrier result -> Right result
+    _ -> Left "package native call requires State with zero or one concrete result"
   pure (symbol,convention,safety,init arguments,result)
 
 requireKeys :: Value -> [String] -> Either String ()
@@ -417,7 +417,10 @@ nativeType depth value = case member value "kind" of
 supportedSignature :: Signature -> Bool
 -- Preserve declared safety for runtime foreign-call entry and readmission.
 -- Interruptible native transport requires separate support.
-supportedSignature (_,_,safety,_,_) = safety `elem` ["unsafe","safe"]
+-- Exact GC-carrier provenance is archival, not permission to pass a managed
+-- object to C. Keep native ABI eligibility separate from proof validation.
+supportedSignature (_,_,safety,arguments,result) = safety `elem` ["unsafe","safe"] &&
+  all inputCarrier arguments && (result == "void" || scalarCarrier result)
 
 setMember :: String -> Value -> Value -> Value
 setMember name value (Object fields) = Object (KM.insert (Key.fromString name) value fields)
@@ -438,6 +441,9 @@ scalarCarrier value = value `elem`
    "Int64Rep","Word64Rep","FloatRep","DoubleRep","AddrRep"]
 inputCarrier :: String -> Bool
 inputCarrier value = scalarCarrier value || value `elem` ["ByteArray#","MutableByteArray#"]
+
+gcCarrier :: String -> Bool
+gcCarrier value = value `elem` ["BoxedRep (Just Lifted)","BoxedRep (Just Unlifted)"]
 
 validHeader :: String -> Bool
 validHeader header = not (null header) && all (`notElem` ['\0','\n','\r','"','\\']) header
