@@ -204,9 +204,10 @@ class ReusableProgramTest {
             getMask, map("rep", closure, "resultRep", io));
         var masked = list("app", list("prim", "maskAsyncExceptions#"), list(action, token), list(true, false), false, false, map("rep", io));
         var caught = list("app", list("prim", "catch#"), list(raising, handler, token), list(true, true, false), false, false, map("rep", io));
+        var alive = list("app", list("prim", "keepAlive#"), list(payload, token, action), list(true, false, true), false, false, map("rep", io));
         var bindings = new ArrayList<Map<String,Object>>();
-        for (var name : List.of("mask", "catch")) {
-            var body = list("case", name.equals("mask") ? masked : caught, "pair", list(list("data", "Pair", list("s", "mask"),
+        for (var name : List.of("mask", "catch", "alive")) {
+            var body = list("case", name.equals("mask") ? masked : name.equals("catch") ? caught : alive, "pair", list(list("data", "Pair", list("s", "mask"),
                 list("var", "mask", map("rep", word)), map("binders", list(stateBinder, wordParameter("mask"))))),
                 map("binder", map("id", "pair", "name", "pair", "lifted", false, "rep", io), "rep", word));
             var binding = binding(name, list("lam", list(wordParameter("unused")), body, map("rep", closure, "resultRep", word)), true);
@@ -221,7 +222,7 @@ class ReusableProgramTest {
             Program.PreparedCode code;
             try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
                 preparation.initialize("thc"); preparation.enter();
-                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("mask", "catch")); }
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("mask", "catch", "alive")); }
                 finally { preparation.leave(); }
             }
             var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
@@ -236,9 +237,9 @@ class ReusableProgramTest {
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         var program = code.newInstance(language); var sibling = code.newInstance(language);
-                        for (var name : List.of("mask", "catch")) {
+                        for (var name : List.of("mask", "catch", "alive")) {
                             var function = (Closure)program.entryValue(name);
-                            assertEquals(2L, Calls.target(function.target, new Object[]{0L, function.environment, 0L}), "GHC masked-interruptible tag");
+                            assertEquals(name.equals("alive") ? 0L : 2L, Calls.target(function.target, new Object[]{0L, function.environment, 0L}), "GHC masking tag");
                             assertEquals(MaskingState.UNMASKED, Language.currentState().getMaskingState().get());
                         }
                         assertTrue(count(program, "compiledEntries") >= 5); assertEquals(0, count(sibling, "compiledEntries"));

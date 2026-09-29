@@ -362,10 +362,12 @@ public final class Program implements ExecutableProgram {
                 if ("prim".equals(function.getFirst())) {
                     String name = (String) function.get(1);
                     if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null && MutVarOp.named(name) == null &&
+                            StablePointerOp.named(name) == null && WeakOp.named(name) == null && ArrayOp.named(name) == null &&
+                            PinnedMemoryOp.named(name) == null && TupleArithmeticOp.named(name) == null &&
                             CoreArithmeticExceptions.payload(name) == null &&
                             !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "indexCharOffAddr#", "tagToEnum#",
                             "raise#", "raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#",
-                            "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#",
+                            "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#", "keepAlive#", "getCurrentCCS#",
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
                             "+##", "-##", "*##", "/##", "negateDouble#",
                             "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
@@ -2305,8 +2307,8 @@ public final class Program implements ExecutableProgram {
             if (tupleProof.isTypedTransport()) {
                 var shape = new TupleShape(tupleProof, (thc.Language) language);
                 int[] slots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<keepAlive vector result ") : null;
-                action = new TupleApplication((thc.Language) language, shape, function, stateArgument, false, metrics, slots);
-            } else action = new Application(function, stateArgument, false, metrics);
+                action = new TupleApplication((thc.Language) language, shape, function, stateArgument, false, codeMetrics(), slots);
+            } else action = new Application(function, stateArgument, false, codeMetrics());
             return new KeepAliveExpression(kept, state, action, tupleProof);
         }
         if (primitive && AtomicAddressOp.named((String) fn.get(1)) != null) {
