@@ -22,7 +22,8 @@ class WordFloatingTest {
     private BigInteger unsigned(long value) { return new BigInteger(Long.toUnsignedString(value)); }
     private final List<String> names = list("wordFloat", "wordDouble");
     private Map<String, Object> json(String path) throws Exception { return object(Json.parse(Files.readString(directory.resolve(path)))); }
-    private Map<String, Object> module(String stage) throws Exception { return json(stage + "-core/WordFloatingAudit.json"); }
+    private Map<String, Object> module(String stage) throws Exception { return CoreCbdFixtures.read(directory.resolve(stage + "-core/WordFloatingAudit.cbd")); }
+    private String entryId(String name) { return "main:WordFloatingAudit." + name; }
     private record Row(long input, int floatBits, long doubleBits) {}
     private Map<String, Integer> operationIds(String source) {
         var result = new LinkedHashMap<String, Integer>();
@@ -102,7 +103,7 @@ class WordFloatingTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var name : names) {
-                    var linked = CoreModules.reachable(module(stage), name); var program = program(language, linked, backend); var host = program.hostEntryTarget(1); var entry = program.entryValue(name);
+                    var linked = CoreModules.reachable(module(stage), entryId(name)); var program = program(language, linked, backend); var host = program.hostEntryTarget(1); var entry = program.entryValue(entryId(name));
                     var targets = objects(linked.get("bindings")).stream().map(binding -> program.entryTarget((String) binding.get("id"))).toList();
                     CheckedConsumer<Row> check = row -> {
                         var result = Calls.target(host, new Object[]{entry, new Object[]{row.input()}}); var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining + "/" + unsigned(row.input());
@@ -125,7 +126,7 @@ class WordFloatingTest {
         }
     }
     private Map<String, Object> binding(Map<String, Object> module, String name) {
-        var bindings = objects(module.get("bindings")).stream().filter(item -> name.equals(item.get("name"))).toList(); assertEquals(1, bindings.size()); return bindings.getFirst();
+        var bindings = objects(module.get("bindings")).stream().filter(item -> entryId(name).equals(item.get("id"))).toList(); assertEquals(1, bindings.size()); return bindings.getFirst();
     }
     @Test void provenanceAndAuthenticUnfoldedPrimopsRemainExact() throws Exception {
         var manifest = json("manifest.json"); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(64L, manifest.get("wordBits")); assertEquals(false, manifest.get("installedArtifactsHashed"));
@@ -137,7 +138,7 @@ class WordFloatingTest {
         try (var files = Files.list(root.resolve("src/compiler/THC"))) { files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> required.add(root.relativize(path).toString())); }
         try (var files = Files.list(root.resolve("bin"))) { files.filter(path -> path.getFileName().toString().startsWith("core_") && path.getFileName().toString().endsWith(".py")).forEach(path -> required.add(root.relativize(path).toString())); }
         assertEquals(required, sources.keySet()); var artifacts = object(manifest.get("artifactHashes")); var expectedArtifacts = new HashSet<>(list("build/word-floating/oracle.tsv"));
-        for (var stage : list("pre", "post")) expectedArtifacts.addAll(list("build/word-floating/" + stage + "-core/WordFloatingAudit.json", "build/word-floating/" + stage + "-audit.json"));
+        for (var stage : list("pre", "post")) expectedArtifacts.addAll(list("build/word-floating/" + stage + "-core/WordFloatingAudit.cbd", "build/word-floating/" + stage + "-audit.json"));
         assertEquals(expectedArtifacts, artifacts.keySet()); var hashes = new LinkedHashMap<>(sources); hashes.putAll(artifacts);
         for (var hash : hashes.entrySet()) assertEquals(hash.getValue(), HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(hash.getKey())))), "Stale fixture " + hash.getKey());
         for (var stage : list("pre", "post")) {
@@ -169,7 +170,7 @@ class WordFloatingTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var name : names) for (var variant : list("result", "arity")) {
-                    var linked = CoreModules.reachable(module(stage), name); var lambda = expression(binding(linked, name).get("expr")); var calls = primitiveCalls(lambda);
+                    var linked = CoreModules.reachable(module(stage), entryId(name)); var lambda = expression(binding(linked, name).get("expr")); var calls = primitiveCalls(lambda);
                     assertEquals(1, calls.size()); var app = calls.getFirst();
                     if (variant.equals("result")) {
                         var other = name.equals("wordFloat") ? "double" : "float";

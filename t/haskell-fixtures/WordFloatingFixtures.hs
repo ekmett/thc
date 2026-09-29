@@ -76,8 +76,8 @@ prepareWordFloating root = do
   unless (traverse parse (lines actual) == Just inputs) (die "Malformed native word-floating rows")
   writeFile (output </> "oracle.tsv") actual
   forM_ ["pre","post"] $ \stage -> do
-    _ <- run root [] "python3" ["bin/audit-core.py","--entry","wordFloat","--entry","wordDouble",
-      "--output",directory </> stage ++ "-audit.json",directory </> stage ++ "-core/WordFloatingAudit.json"] ""
+    _ <- run root [] "python3" ["bin/audit-core.py","--entry","main:WordFloatingAudit.wordFloat","--entry","main:WordFloatingAudit.wordDouble",
+      "--output",directory </> stage ++ "-audit.json",directory </> stage ++ "-core/WordFloatingAudit.cbd"] ""
     pure ()
   pluginFiles <- listDirectory (root </> "src/compiler/THC")
   coreScripts <- listDirectory (root </> "bin")
@@ -88,7 +88,7 @@ prepareWordFloating root = do
         ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = (directory </> "oracle.tsv") : [directory </> stage ++ suffix | stage <- ["pre","post"],
-        suffix <- ["-core/WordFloatingAudit.json","-audit.json"]]
+        suffix <- ["-core/WordFloatingAudit.cbd","-audit.json"]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),
