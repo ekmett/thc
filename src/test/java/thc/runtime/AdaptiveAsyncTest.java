@@ -273,7 +273,7 @@ class AdaptiveAsyncTest {
             } finally { second.countDown(); }
         }
     }
-    @Test void preparedCodeRejectsTransitionBeforeInvalidationAndInvalidForkDoesNotTransition() {
+    @Test void invalidForkDoesNotTransition() {
         try (var context = context("platform")) {
             context.initialize("thc"); context.enter();
             try {
@@ -281,9 +281,7 @@ class AdaptiveAsyncTest {
                 var root = scalarRoot(language(), new Expr() { @Override public Object execute(VirtualFrame frame) { return 0L; } });
                 assertThrows(RuntimeFault.class, () -> GuestThreadOps.fork(root, 3L, true));
                 assertTrue(state.getSingleGuestOriginAssumption().isValid());
-                state.admitPreparedGuestCode();
-                assertThrows(UnsupportedCore.class, state::admitGuestConcurrency);
-                assertTrue(state.getSingleGuestOriginAssumption().isValid());
+                assertFalse(state.isGuestConcurrencyAdmitted());
             } finally { context.leave(); }
         }
     }
@@ -331,7 +329,7 @@ class AdaptiveAsyncTest {
         }
     }
     @ParameterizedTest @ValueSource(strings = {"platform", "loom"})
-    void preparedPublicEntryRejectsAnotherOriginBeforeGuestEffects(String hosting) throws Exception {
+    void preparedPublicEntryAdmitsAnotherOriginBeforeGuestEffects(String hosting) throws Exception {
         var module = map("bindings", list(map("id", "identity", "name", "identity", "arity", 1, "lifted", true,
             "expr", list("lam", list(binder("x", LONG)), variable("x", LONG), map("resultRep", LONG)))));
         try (var context = context(hosting)) {
@@ -343,10 +341,9 @@ class AdaptiveAsyncTest {
                 entry = context.asValue(new EntryValue(code.newInstance(language()), "identity", 1));
             } finally { context.leave(); }
             assertEquals(7L, entry.execute(7L).asLong());
-            var rejected = CompletableFuture.supplyAsync(() -> assertThrows(org.graalvm.polyglot.PolyglotException.class,
-                () -> entry.execute(9L)));
-            assertTrue(rejected.get(10, TimeUnit.SECONDS).getMessage().contains("Prepared synchronous code"));
-            assertTrue(state.getSingleGuestOriginAssumption().isValid());
+            assertEquals(9L, CompletableFuture.supplyAsync(() -> entry.execute(9L).asLong()).get(10, TimeUnit.SECONDS));
+            assertFalse(state.getSingleGuestOriginAssumption().isValid());
+            assertTrue(state.isGuestConcurrencyAdmitted());
             assertEquals(11L, entry.execute(11L).asLong());
         }
     }

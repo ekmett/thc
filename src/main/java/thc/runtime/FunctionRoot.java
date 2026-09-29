@@ -230,7 +230,7 @@ public final class FunctionRoot extends GuestRoot {
         if (programSlot < 0) return null;
         // An outlined reusable arm also returns an internal TailCall for its
         // owning caller to rethrow. This physical root result is not the guest ABI.
-        Class<?> resultClass = role == FunctionRootRole.PASS_THROUGH ? null : numericClass(getScalarResultProof());
+        Class<?> resultClass = capturesContinuations || role == FunctionRootRole.PASS_THROUGH ? null : numericClass(getScalarResultProof());
         if (getTypedInput() != null) {
             // Narrow scalars already use the typed packet calling convention.
             // Its generated storage class varies; retain exact layout/owner checks.
@@ -268,6 +268,8 @@ public final class FunctionRoot extends GuestRoot {
     @Override public boolean getAsynchronousExceptions() { return enableAsync; }
     public boolean getEnableDelimited() { return enableDelimited; }
     public boolean getCapturesContinuations() { return capturesContinuations; }
+    /** Shared AOT code must observe admission without retiring its installed target. */
+    public boolean usesRuntimeAsyncAdmission() { return programSlot >= 0; }
     public boolean getStackCapture() { return stackCapture; }
     public FunctionRootRole getRole() { return role; }
     public HandoffEntry getHandoff$org_intelligence_thc() { return handoff; }
