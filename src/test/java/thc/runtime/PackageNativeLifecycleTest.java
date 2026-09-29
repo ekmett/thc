@@ -35,8 +35,10 @@ public class PackageNativeLifecycleTest {
     private static final class Entry extends RootNode {
         @Child private PackageScalarAccess access;
         private final boolean narrow;
+        long compiledEntries;
         Entry(Language language, PackageScalarCall operation) { super(language); access = new PackageScalarAccess(operation); narrow = operation.getResult().equals("Int32Rep"); }
         @Override public Object execute(VirtualFrame frame) {
+            if (com.oracle.truffle.api.CompilerDirectives.inCompiledCode()) compiledEntries++;
             return narrow
                 ? (long) access.executeInt(new Object[0], thc.runtime.Unit.INSTANCE)
                 : access.executeLong(new Object[0], thc.runtime.Unit.INSTANCE);
@@ -59,6 +61,46 @@ public class PackageNativeLifecycleTest {
         var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
         return new PackageScalarLink("native-companion", "x86_64-unknown-linux-gnu", hash, hash,
             bytes, List.of(signature), "llvm-bitcode", Set.of(), nativeBytes);
+    }
+    @ParameterizedTest @ValueSource(strings = {"platform", "loom"})
+    public void originalCQueriesOnlyItsContextsBoundThreadSupport(String hosting) throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var link = companion(new byte[0], "extern long rtsSupportsBoundThreads(void); long entry(void) { return rtsSupportsBoundThreads(); }");
+        var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+        Object escaped;
+        try (var first = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
+                .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build();
+             var second = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            first.initialize("thc"); second.initialize("thc"); first.enter();
+            try {
+                var owner = Language.currentState(); owner.getPackageCbits().link(link);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var entry = new Entry(language, new PackageScalarCall(link, link.getAbi().getFirst()));
+                var target = entry.getCallTarget();
+                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                assertEquals(0L, target.call(), "THC cannot promise GHC bound-thread semantics");
+                // Ordinary static calls fill their existing function/result caches
+                // on first use. Prove cold compiled ENTRY, not retained compilation.
+                assertEquals(1L, entry.compiledEntries);
+                assertSame(target, entry.getCallTarget());
+                // Exercise the service guard itself; a raw Sulong function is
+                // not an API for entering a different context's sharing layer.
+                escaped = new NativeCallbacks.BoundThreadQuery(owner.getNativeCallbacks());
+                assertEquals(0L, interop.execute(escaped));
+                assertThrows(com.oracle.truffle.api.interop.ArityException.class, () -> interop.execute(escaped, 1L));
+            } finally { first.leave(); }
+            second.enter();
+            try { assertThrows(RuntimeFault.class, () -> interop.execute(escaped), "service cannot use another context"); }
+            finally { second.leave(); }
+            first.enter();
+            try {
+                Language.currentState().getNativeCallbacks().close();
+                assertThrows(RuntimeFault.class, () -> interop.execute(escaped), "service cannot outlive its registry");
+            } finally { first.leave(); }
+        }
     }
     @Test public void originalCReleasesOnlyItsContextsLiveStablePointer() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));

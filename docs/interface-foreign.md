@@ -127,6 +127,10 @@ its own initialized native symbols, but cannot enter a pending ancestor whose
 dependencies are still loading: that lookup fails rather than waiting on
 itself. General cross-component initialization cycles are not supported.
 
+Package C's `rtsSupportsBoundThreads` query uses the current THC context, not a
+native GHC RTS. It returns false, matching the guest scheduler's existing
+bound-thread capability; its C `HsBool` result has the machine-word ABI.
+
 For Java callers, the same declarations expose scalar and IO functions through
 `thc.Main.loadManagedExports`. Follow the
 [embedding example](site/embedding.md#call-a-declared-haskell-export) for supported
