@@ -2523,6 +2523,15 @@
       ],
       "python": []
     },
+    "t/fixtures/core/NativeTiming.hs": {
+      "junit": [
+        "thc.FastSmokeTest",
+        "thc.RuntimeTest",
+        "thc.BytecodeBackendTest",
+        "thc.SelfTailProfileTest"
+      ],
+      "python": []
+    },
     "t/fixtures/core/NativeOracle.hs": {
       "junit": [
         "thc.FastSmokeTest",
