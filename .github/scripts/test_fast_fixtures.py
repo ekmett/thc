@@ -294,12 +294,14 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'rubbish-literals']}], group['commands'])
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         required = fast_fixtures.fast_inputs.RUBBISH_OUTPUTS
-        self.assertEqual(37, len(required))
-        for name in ('pre.cbd', 'post.cbd', 'frontiers.cbd', 'Data.Sequence.Internal.cbd',
-                     *(f'logs/{command}.{suffix}' for command in ('imports-containers', 'containers-unit')
+        self.assertEqual(38, len(required))
+        for name in ('pre.cbd', 'post.cbd', 'Data.Sequence.Internal.cbd',
+                     'native.s', 'native.o', 'native-codegen.json',
+                     *(f'logs/{command}.{suffix}' for command in ('imports-containers', 'containers-unit', 'native-assemble')
                        for suffix in ('stdout', 'stderr', 'command.json'))):
             self.assertIn('build/rubbish-literals/' + name, required)
-        for name in ('pre.json', 'post.json', 'frontiers.json'):
+        for name in ('pre.json', 'post.json', 'frontiers.json', 'frontiers.cbd', 'frontiers.audit.json',
+                     *(f'logs/frontiers-audit.{suffix}' for suffix in ('stdout', 'stderr', 'command.json'))):
             path = 'build/rubbish-literals/' + name
             self.assertNotIn(path, required)
             self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(path))

@@ -23,6 +23,9 @@
     "src/main/java/thc/runtime/NativeEventWait.java": {
       "junit": ["thc.runtime.NativeEventWaitTest"], "python": []
     },
+    "src/main/java/thc/runtime/Rubbish.java": {
+      "junit": ["thc.runtime.RubbishLiteralTest"], "python": ["bin/test-audit-core.py"]
+    },
     "src/main/java/thc/runtime/RubbishLiterals.java": {
       "junit": ["thc.runtime.RubbishLiteralTest"], "python": ["bin/test-audit-core.py"]
     },

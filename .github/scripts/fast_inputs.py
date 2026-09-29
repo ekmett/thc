@@ -169,9 +169,9 @@ PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
       ("ghc-version", "predicate-build", "predicate-run", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
       for suffix in ("stdout", "stderr", "command.json"))))
 RUBBISH_OUTPUTS = frozenset("build/rubbish-literals/" + name for name in (
-    "manifest.json", "pre.cbd", "post.cbd", "Data.Sequence.Internal.cbd", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "frontiers.cbd", "frontiers.audit.json",
+    "manifest.json", "pre.cbd", "post.cbd", "Data.Sequence.Internal.cbd", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "native.s", "native.o", "native-codegen.json",
     *(f"logs/{command}.{suffix}" for command in
-      ("version", "info", "libdir", "imports-ghc-internal", "imports-containers", "containers-unit", "pre-audit", "post-audit", "frontiers-audit")
+      ("version", "info", "libdir", "imports-ghc-internal", "imports-containers", "containers-unit", "native-assemble", "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json"))))
 BCO_ENTRIES = ("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing")
 BCO_COMMANDS = ("ghc-version", "native-build", "native-run",
