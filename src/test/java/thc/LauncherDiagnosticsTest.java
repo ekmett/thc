@@ -21,6 +21,32 @@ import static thc.Main.launcherArtifactVerification;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 public class LauncherDiagnosticsTest {
     @TempDir public Path directory;
+    @Test public void nativeImageIncludesDynamicallySelectedOriginalCResources() throws Exception {
+        Map<?, ?> configuration, manifest;
+        try (var input = getClass().getResourceAsStream("/META-INF/native-image/thc/runtime/resource-config.json")) {
+            configuration = (Map<?, ?>) Json.parse(new String(Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8));
+        }
+        try (var input = getClass().getResourceAsStream("/thc/cbits/manifest.json")) {
+            manifest = (Map<?, ?>) Json.parse(new String(Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8));
+        }
+        var patterns = ((List<?>) ((Map<?, ?>) configuration.get("resources")).get("includes")).stream()
+            .map(raw -> java.util.regex.Pattern.compile((String) ((Map<?, ?>) raw).get("pattern"))).toList();
+        var resources = new ArrayList<String>();
+        for (var raw : (List<?>) manifest.get("artifacts")) {
+            var name = Path.of((String) ((Map<?, ?>) raw).get("path")).getFileName().toString();
+            if (name.endsWith(".bc")) resources.add("thc/cbits/" + name);
+        }
+        assertTrue(resources.contains("thc/cbits/package-pointer.bc"));
+        if (manifest.get("system").equals("Linux"))
+            assertTrue(resources.contains("thc/cbits/iconv.bc")); // Actual ELF stdout initialization failure.
+        if (resources.contains("thc/cbits/text.bc")) resources.addAll(List.of("thc/cbits/text-LICENSE", "thc/cbits/text-memchr-LICENSE"));
+        if (resources.contains("thc/cbits/bytestring-utf8.bc")) resources.add("thc/cbits/bytestring-utf8-LICENSE");
+        for (var resource : resources) {
+            assertNotNull(getClass().getResource("/" + resource), resource);
+            assertTrue(patterns.stream().anyMatch(pattern -> pattern.matcher(resource).matches()), resource);
+        }
+        assertFalse(patterns.stream().anyMatch(pattern -> pattern.matcher("unrelated/example.bc").matches()));
+    }
     @Test public void nativeImageIoMetadataCoversDeclaredUnixAbisAndCaptureOptions() throws Exception {
         var path = Path.of(System.getProperty("thc.projectRoot"),
             "research/native-image-preparation/native-io/reachability-metadata.json");

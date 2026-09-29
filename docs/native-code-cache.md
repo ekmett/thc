@@ -112,8 +112,9 @@ This produces an application-bound JVM-free runtime, but **lowers guest Core at
 runtime**. It does not imply that the guest was AOT-compiled or persisted in a
 code cache. Referenced Core/package files and native dependencies remain required
 external resources. Use the existing compact encoder for retained loose Core
-captures. Native Image
-provider/resource-profile requirements still apply.
+captures and register the resulting containers in a compact package manifest;
+the module argument selects that manifest with `@packages.json`, not loose CBD
+paths. Native Image provider/resource-profile requirements still apply.
 
 ### Compiled-cache compatibility
 
