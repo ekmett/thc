@@ -6,6 +6,8 @@ import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
 import com.sun.management.HotSpotDiagnosticMXBean;
+import org.graalvm.nativeimage.ImageInfo;
+import org.graalvm.nativeimage.RuntimeOptions;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,7 +67,7 @@ public final class ManagedSignals {
         if ((signal != 1 && signal != 2 && signal != 3 && signal != 10 && signal != 12 && signal != 15 && signal != 24 && signal != 25) ||
             (action != -1 && action != -2 && action != -4 && action != -5) || mask != ManagedAddress.nullAddress())
             throw fault("stg_sig_install supports only HUP/INT/QUIT/USR1/USR2/TERM/XCPU/XFSZ, DFL/IGN/HAN/RST and a null mask");
-        if (signal != 2 && !reducedVmSignals) throw fault("GHC process signal handlers require the standalone JVM launcher with -Xrs");
+        if (signal != 2 && !reducedVmSignals) throw fault("GHC process signal handlers require JVM -Xrs or Native Image -R:-EnableSignalHandling");
         if (signal == 12 && !userSignalAvailable.getAsBoolean()) throw fault("SIGUSR2 requires the standalone JVM launcher with _JAVA_SR_SIGNUM=64 and verified native dispositions");
         if (closed || stopping) throw fault("Process signal service is closed");
         var root = binding;
@@ -192,8 +194,10 @@ public final class ManagedSignals {
                 (TruffleSafepoint.InterruptibleFunction<Thread, Object>) thread -> { thread.join(); return thc.runtime.Unit.INSTANCE; }, child);
         }
     }
-    /** Check the effective VM setting, including a later override of launcher -Xrs. */
+    /** Check the effective host setting, never a user-supplied marker property. */
     public static boolean hasReducedVmSignals() {
+        if (ImageInfo.inImageRuntimeCode())
+            return Boolean.FALSE.equals(RuntimeOptions.get("EnableSignalHandling"));
         try {
             var bean = ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class);
             return bean != null && "true".equals(bean.getVMOption("ReduceSignalUsage").getValue());

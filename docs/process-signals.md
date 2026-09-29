@@ -64,6 +64,14 @@ handler and normal THC context shutdown determine cleanup. Normal `System.exit`
 still runs JVM shutdown hooks. This is a standalone launcher policy, not a
 recommendation that libraries change the signal policy of an embedding JVM.
 
+The experimental application-bound Native Image recipe instead sets
+`-R:-EnableSignalHandling`. The bridge checks that the actual runtime option is
+explicitly false; an absent/default value does not grant ownership. NativeIO
+launcher authority, async delivery, action/mask validation and context lifetime
+checks still apply. This also disables Substrate's diagnostic signal handlers,
+including its segfault report. The separate HotSpot-specific SIGUSR2 relocation
+check is unchanged: this image profile does not admit SIGUSR2.
+
 ## Delivery and restoration
 
 The machine-code handler only queues a complete `siginfo_t` through a

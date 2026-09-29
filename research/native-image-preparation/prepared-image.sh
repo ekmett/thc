@@ -97,7 +97,9 @@ if [[ "$mode" == executable* ]]; then
     classpath="$classpath:$binding_dir/binding.jar"
     # Dedicated guest executables must not consume GHC's -D/-X options as VM
     # arguments. Keep VM bounds in the image, separate from opaque guest argv.
-    executable_options=(-H:IncludeResources=thc-native-executable.json -H:-ParseRuntimeOptions
+    # Original GHC owns HUP/INT/QUIT/TERM in this standalone process. The runtime
+    # checks the effective option; do not substitute a trusted-looking property.
+    executable_options=(-H:IncludeResources=thc-native-executable.json -H:-ParseRuntimeOptions -R:-EnableSignalHandling
         -H:MaxHeapSize=17179869184 -H:ActiveProcessorCount=2)
     # The full ordinary-loader image needs room for frame metadata after codegen.
     builder_heap=16g
