@@ -711,13 +711,16 @@ class Audit:
                 self.package_scalar_proofs.setdefault(link['unit'], set()).update(proved)
             proof = module.get('staticForeignImports', {})
             if native_archive and proof.get('status') == 'verified':
-                for declaration in proof['imports']:
-                    emitted = declaration['emitted']
-                    for call in proof['expectedCalls']:
-                        if (core_original_foreign.boxed_owned_call(call) and call['target']['unit'] == emitted['unit'] and
-                                call['target']['symbol'] == emitted['symbol']):
-                            key = (emitted['unit'], emitted['symbol'])
-                            self.boxed_foreign_calls[key] = self.boxed_foreign_calls.get(key, []) + [call]
+                imported = {(entry['emitted']['unit'], entry['emitted']['symbol']) for entry in proof['imports']}
+                admitted = {}
+                for call in proof['expectedCalls']:
+                    if not core_original_foreign.boxed_owned_call(call): continue
+                    key = (call['target']['unit'], call['target']['symbol'])
+                    if key in imported:
+                        if key not in admitted: admitted[key] = self.boxed_foreign_calls.get(key, [])
+                        records = admitted[key]
+                        if call not in records: records.append(call)
+                for key, records in admitted.items(): self.boxed_foreign_calls[key] = records
         except (ValueError, KeyError, TypeError) as error:
             self.issue('module-format', None, source, str(error))
         foreign = module.get('foreign')

@@ -4311,9 +4311,11 @@ class OriginalMainThreadRegistrationTest(unittest.TestCase):
             wordBits=64, expectedForeign=dict(schema=1, execution='not-linked', files=[],
                 stubs=dict(header='', source='test-only retained C product', initializers=[], finalizers=[])),
             imports=[declaration], expectedCalls=[call])
+        alias = copy.deepcopy(declaration); alias['binder']['occurrence'] = 'setterAlias'
+        module['staticForeignImports']['imports'].append(alias)
         module['foreign'] = copy.deepcopy(module['staticForeignImports']['expectedForeign'])
         module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1', execution='not-linked',
-            unit='ghc-internal', module='Captured', unsupportedImports=[emitted], unclassifiedReason=None,
+            unit='ghc-internal', module='Captured', unsupportedImports=[emitted, emitted], unclassifiedReason=None,
             unresolvedSymbols=[], artifact=None)
         for indexed in (False, True):
             for mutation in (None, 'weak-payload', 'missing-call', 'missing-proof'):
@@ -4327,10 +4329,14 @@ class OriginalMainThreadRegistrationTest(unittest.TestCase):
                 with self.subTest(indexed=indexed, mutation=mutation), TemporaryDirectory() as temporary:
                     if indexed:
                         with audit_core.AuditStore(Path(temporary) / 'audit.sqlite', {}) as store:
-                            report = audit_core.Audit([('captured.cbd', value)], CAP, store=store).run(['root'])
+                            instance = audit_core.Audit([('captured.cbd', value)], CAP, store=store)
+                            if mutation is None: self.assertEqual(1, len(instance.boxed_foreign_calls[('ghc-internal', 'rts_setMainThread')]))
+                            report = instance.run(['root'])
                             self.assertEqual(mutation is None, report['accepted'], list(report['issues']))
                     else:
-                        report = self.audit(value)
+                        instance = audit_core.Audit([('captured.cbd', value)], CAP)
+                        if mutation is None: self.assertEqual(1, len(instance.boxed_foreign_calls[('ghc-internal', 'rts_setMainThread')]))
+                        report = instance.run(['root'])
                         self.assertEqual(mutation is None, report['accepted'], report)
 
     def test_exact_weak_key_call_and_capability_boundary(self):
