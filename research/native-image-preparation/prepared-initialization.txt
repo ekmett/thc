@@ -55,6 +55,9 @@ thc.runtime.CoreRepresentation
 # state is javac's own-class desiredAssertionStatus() boolean; no proof registry,
 # guest context, receiver, frame or native resource is initialized.
 thc.runtime.RuntimeTypes
+# LanguageReference.create(Language.class) metadata only. Ordinary GlobalRead
+# shares Program.instance with reusable nodes; no guest Program is initialized.
+thc.runtime.Program
 # Only a build-frozen image-profile boolean; no receiver, arena or guest state.
 thc.runtime.VectorMemory
 # Only primitive tag constants.

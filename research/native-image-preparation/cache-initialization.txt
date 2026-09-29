@@ -1,7 +1,5 @@
 # Exact additional holders needed to persist prepared THC code. No State,
 # context-thread-local values, guest instances or native handles are initialized.
-# LanguageReference.create(Language.class) metadata only.
-thc.runtime.Program
 # Literal platform OptionKey and ContextReference language/index metadata only.
 thc.Language
 # Immutable descriptor sets and ASCII name Pattern; native access remains lazy.
