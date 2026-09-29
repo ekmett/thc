@@ -56,15 +56,21 @@ Use `make test` for the test suite and `make clean` to remove build products.
 `make run ARGS='--help'` builds and runs the driver; the equivalent Cabal command
 is `cabal run thc -- --help`.
 
-Then run the included Cabal executable through THC:
+Run the included smoke test through THC:
 
 ```sh
 cabal run thc -- run completed --project-dir t/fixtures/run-pure \
   --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ```
 
-This example checks a mutable reference and returns `()` without printing.
+This fixture checks a mutable reference and returns `()` without printing.
 Inside your package, use `thc run [TARGET]`, following `cabal run` target syntax.
+For an installed driver in your own project:
+
+```sh
+thc run my-package:exe:my-program --thc-root /path/to/thc
+```
+
 Omitting the target selects the current package's sole buildable executable,
 otherwise its sole buildable runnable component. Explicit `PACKAGE:exe:NAME`,
 `PACKAGE:test:NAME` and `PACKAGE:bench:NAME` targets work; tests must use the
@@ -76,9 +82,9 @@ has the options and integration check. `thc acquire [TARGET] [FLAGS]` uses the
 same acquisition path but stops before auditing or executing the guest; a
 produced manifest is not a claim that the program is runnable.
 
-A directory containing `cabal.project` also works for a bounded multi-package
-build. For example, the included project has a data library, a native Template
-Haskell helper, an internal library and an executable:
+A directory containing `cabal.project` also works for a multi-package build.
+The integration fixture includes a data library, a native Template Haskell
+helper, an internal library and an executable:
 
 ```sh
 cabal run thc -- run app-run:exe:completed \
@@ -126,7 +132,7 @@ requires complete dependencies, including cold error paths. Use
 Diagnostic mode leaves explicit traps at unsupported sites; completing one path
 in that mode does not establish support for its whole closure.
 
-## Development examples
+## Runtime checks
 
 The test script prepares native GHC fixtures and builds the runtime. The scalar
 runner then calls one exported entry; `--compile` requests guest compilation and
@@ -149,7 +155,7 @@ this alongside `installDist`. Direct Java launches add that JAR to the runtime
 classpath. The production distribution and JVM API reference exclude these tools
 and the embedding/polyglot examples in `src/examples/`.
 
-For the native-checked library suite and the diagnostic Map example:
+For the native-checked library suite and diagnostic Map workload:
 
 ```sh
 bin/try-libraries.sh
@@ -199,11 +205,11 @@ describe implemented protocols and opt-in experiments.
 * [The documentation site](https://ekmett.github.io/thc/) combines selected
   guides, the Java reference and the Haskell library API.
   [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).
-* [Development](docs/contributing.md) covers local checks, build batching and manual
-  integration of reviewed PRs. Update the [primop checklist](docs/primops.md#updating-the-list) when
-  adding a primitive.
+* [Development](docs/contributing.md) covers building, testing and contributing.
+  [Generated references](docs/contributing.md#generated-references) explain how to
+  update the primitive inventory.
 * [Cabal integration](docs/cabal.md) describes the working `thc acquire` and
-  limited `thc run` paths, and the planned `thc build` and `thc repl` commands.
+  `thc run` paths and their current limits.
 
 The older runtime experiments live on the
 [legacy branch](https://github.com/ekmett/thc/tree/legacy).

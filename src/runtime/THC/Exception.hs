@@ -11,7 +11,7 @@
 -- Portability : GHC FFI; THC runtime services or native fallback implementation
 --
 -- Handle admitted foreign-language application failures with ordinary Haskell
--- 'Control.Exception.catch', 'Control.Exception.try' and cleanup combinators.
+-- @Control.Exception.catch@, @Control.Exception.try@ and cleanup combinators.
 -- Internal runtime faults, cancellation and fatal host errors remain uncatchable
 -- through this bridge. Inspection is in IO; pure display is inert.
 module THC.Exception
