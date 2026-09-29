@@ -601,6 +601,29 @@ class ReusableProgramTest {
         }
     }
 
+    @Test void preparationRetainsDeclarationsWithoutOpeningLibraries() {
+        // Deliberately unusable code: unused immutable declarations must not
+        // parse a native library or require native access during preparation.
+        var declaration = new PackageScalarLink("unused-component", "unused-target", "", "", new byte[0], List.of());
+        var data = module(list(binding("read", lambda(variable("x")), true)));
+        data.put("packageScalarLinks", List.of(declaration));
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var code = Program.prepareCode(language, data, List.of("read"));
+                assertEquals(List.of(declaration), code.getPackageScalarLinks());
+                assertTrue(code.getForeignLinks().isEmpty());
+                assertTrue(code.getManagedRegistrations().isEmpty());
+                var first = code.newInstance(language);
+                var second = code.newInstance(language);
+                assertEquals(47L, call(first, first.entryValue("read"), 47L));
+                assertEquals(-25L, call(second, second.entryValue("read"), -25L));
+                assertEquals(0L, count(first, "loweredRootCount"));
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void admissionRejectsForeignOwnershipAndUnknownInputs() {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
