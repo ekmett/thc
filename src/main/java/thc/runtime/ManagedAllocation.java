@@ -29,11 +29,11 @@ public final class ManagedAllocation {
     private static final VarHandle BYTE_ACCESS = ValueLayout.JAVA_BYTE.varHandle();
     static { MemorySegment.ofArray(new byte[0]); }
 
-    private ManagedAllocation(byte[] bytes, MemorySegment segment, boolean writable, int pointerBytes, boolean staticImage, boolean pinned) {
+    private ManagedAllocation(byte[] bytes, MemorySegment segment, int size, boolean writable, int pointerBytes, boolean staticImage, boolean pinned) {
         if (pointerBytes != 4 && pointerBytes != 8) throw fault("Unsupported target pointer width");
         this.bytes = bytes; this.segment = segment; this.writable = writable;
         this.pointerBytes = pointerBytes; this.staticImage = staticImage; this.pinned = pinned;
-        logicalSize = (int) segment.byteSize();
+        logicalSize = size;
     }
     /** GHC's strong pinned contract excludes compact copying, unlike stable physical backing. */
     public boolean isPinned() { return pinned; }
@@ -530,22 +530,22 @@ public final class ManagedAllocation {
         if (nativeBacking) {
             if (alignment <= 0 || (alignment & (alignment - 1)) != 0) throw fault("Pinned ByteArray# alignment must be a positive power of two");
             var storage = allocateNativeStorage(size, alignment);
-            return new ManagedAllocation(null, storage, true, pointerBytes, false, pinned);
+            return new ManagedAllocation(null, storage, (int) size, true, pointerBytes, false, pinned);
         }
         var bytes = new byte[(int) size];
-        return new ManagedAllocation(bytes, MemorySegment.ofArray(bytes), true, pointerBytes, false, false);
+        return new ManagedAllocation(bytes, MemorySegment.ofArray(bytes), bytes.length, true, pointerBytes, false, false);
     }
     public static ManagedAllocation immutable(byte[] bytes, int pointerBytes) { return immutable(bytes, pointerBytes, false); }
     public static ManagedAllocation immutable(byte[] bytes, int pointerBytes, boolean staticImage) {
         var copy = bytes.clone();
-        return new ManagedAllocation(copy, MemorySegment.ofArray(copy), false, pointerBytes, staticImage, false);
+        return new ManagedAllocation(copy, MemorySegment.ofArray(copy), copy.length, false, pointerBytes, staticImage, false);
     }
     /** A real guest copy, not promotion of an existing alias at a foreign boundary. */
     public static ManagedAllocation immutableGuest(byte[] bytes, int pointerBytes) {
         if (!thc.Language.currentState().getNativeByteArrays()) return immutable(bytes, pointerBytes);
         var storage = allocateNativeStorage(bytes.length, 8);
         MemorySegment.copy(MemorySegment.ofArray(bytes), 0, storage, 0, bytes.length);
-        return new ManagedAllocation(null, storage, false, pointerBytes, false, false);
+        return new ManagedAllocation(null, storage, bytes.length, false, pointerBytes, false, false);
     }
     // Native allocation may reserve memory and interact with JDK thread state.
     // Keep that machinery outside guest graphs without hiding heap allocation.
