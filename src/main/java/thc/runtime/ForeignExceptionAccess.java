@@ -103,20 +103,15 @@ public final class ForeignExceptionAccess extends Node {
             boolean active = flag.get();
             flag.set(true);
             try {
-                // Nominally equal types still have separate authenticated storage
-                // domains in separate programs. Normalize only the proven exception,
-                // then route to its exact domain before asking the genuine dictionary.
+                // Loads may share SomeException storage while their runtime units
+                // have distinct ForeignException types. Ask each compatible genuine
+                // dictionary; constructor-layout equality alone cannot select one.
                 var payload = force.execute(frame, failure.getPayload());
-                ForeignExceptionRegistry.Projector project = null;
-                for (var candidate : projectors) {
-                    if (candidate.getExceptionLayout().matches(payload)) {
-                        if (project != null) { project = null; break; }
-                        project = candidate;
+                for (var project : projectors) {
+                    if (project.getExceptionLayout().matches(payload)) {
+                        var origin = invoke(frame, project.getClosure(), payload);
+                        if (origin instanceof ForeignFailure foreign && foreign.getOwner() == owner) throw foreign.getOriginal();
                     }
-                }
-                if (project != null) {
-                    var origin = invoke(frame, project.getClosure(), payload);
-                    if (origin instanceof ForeignFailure foreign && foreign.getOwner() == owner) throw foreign.getOriginal();
                 }
             } finally {
                 flag.set(active);
