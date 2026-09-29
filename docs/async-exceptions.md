@@ -39,8 +39,9 @@ frames. Each resumption keeps its own one-shot request; the reusable frame image
 does not clone or acknowledge it. The reached handler acknowledges the original
 request without forcing its payload. With async enabled, external delivery from
 an interrupted action likewise unwinds to its live or saved catch, preserving
-the original request and the child's separate one-shot ownership. Non-delivery
-scheduling cuts through the image still reject; see
+the original request and the child's separate one-shot ownership. Each invocation
+drains scheduling cuts and AST stack spills through its own one-shot owner. New
+delimited capture across a parked caller chain still rejects; see
 [delimited continuations](delimited-continuations.md).
 
 In either hosting mode, managed foreign reverse entries create fresh bound guest
