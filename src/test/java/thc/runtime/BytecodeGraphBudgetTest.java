@@ -636,6 +636,222 @@ class BytecodeGraphBudgetTest {
         return body;
     }
 
+    private static List<Object> joinBodySum() {
+        List<Object> value = variable("argument", LONG);
+        for (int i = 0; i < 32; i++)
+            value = node("app", node("prim", "+#"), List.of(value, variable("bias", LONG)),
+                    List.of(false, false), false, false, Map.of("rep", LONG));
+        return value;
+    }
+
+    private static Map<String, Object> closedNonrecursiveBody(boolean outerExit) {
+        var result = outerExit ? LONG : tuple(STATE, REFERENCE, LONG);
+        var answer = outerExit ? joinedCall("finish", List.of(joinBodySum()), LONG)
+                : node("app", node("con", "RegionResult", 3),
+                    List.of(node("void", Map.of("rep", STATE)), variable("payload", REFERENCE), joinBodySum()),
+                    List.of(false, true, false), false, false, Map.of("rep", result));
+        var worker = localJoin("worker", List.of(binder("argument", LONG, false)), answer, result);
+        List<Object> body = node("let", false, List.of(worker),
+                joinedCall("worker", List.of(variable("seed", LONG)), result), Map.of("rep", result));
+        if (outerExit) body = node("let", false,
+                List.of(localJoin("finish", List.of(binder("value", LONG, false)), variable("value", LONG), LONG)),
+                body, Map.of("rep", LONG));
+        return Map.of("constructors", List.of(tupleConstructor("RegionResult", 3)), "bindings", List.of(
+                Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                    "expr", node("lam", List.of(binder("seed", LONG, false), binder("bias", LONG, false),
+                            binder("payload", REFERENCE, true)), body,
+                        Map.of("rep", CLOSURE, "resultRep", result, "entryStrict", List.of(false, false, false))))));
+    }
+
+    private static List<RootCallTarget> regionSides(BytecodeRoot root) throws Exception {
+        var field = BytecodeRoot.class.getDeclaredField("caseRegions"); field.setAccessible(true);
+        var sidesField = BytecodeCaseRegion.class.getDeclaredField("sides"); sidesField.setAccessible(true);
+        var result = new ArrayList<RootCallTarget>();
+        for (var region : (BytecodeCaseRegion[]) field.get(root)) for (var side : (Object[]) sidesField.get(region)) {
+            var target = side.getClass().getDeclaredField("target"); target.setAccessible(true);
+            result.add((RootCallTarget) target.get(side));
+        }
+        return result;
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void closedNonrecursiveBodyPreservesColdTypedCapturesAndSourceReplay(boolean recovered) throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, closedNonrecursiveBody(false), true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                var sides = regionSides(root); assertEquals(1, sides.size(), "a closed NonRec body has one finite side");
+                var original = instructions(root);
+                if (recovered) assertEquals(1, root.prepareGraphBudgetRetry(0), "explicit transport control, not a bailout");
+                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                assertTrue(compile(sides.getFirst())); assertTrue(valid(sides.getFirst())); bypass(sides.getFirst());
+                assertEquals(com.oracle.truffle.api.bytecode.BytecodeTier.CACHED, root.getBytecodeNode().getTier());
+                assertEquals(com.oracle.truffle.api.bytecode.BytecodeTier.CACHED,
+                        ((BytecodeRoot) sides.getFirst().getRootNode()).getBytecodeNode().getTier());
+                assertEquals(0, entries(program));
+                var payload = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Lazy capture was forced"); }
+                }.getCallTarget(), null);
+                var value = TupleResults.ownedTupleResult(Calls.target(target, new Object[]{0L, 5L, 3L, payload}), root.getTupleResult());
+                assertSame(payload, root.getTupleResult().getLayout().getObject(value, 0));
+                assertEquals(101L, root.getTupleResult().getLayout().getLong(value, 1));
+                assertEquals(0, payload.getState()); assertEquals(recovered ? 2 : 1, entries(program));
+                assertSame(target, program.entryTarget("entry")); assertEquals(original.keySet(), instructions(root).keySet());
+                var executed = instructions(root); root.getRootNodes().ensureSourceInformation();
+                assertEquals(executed, instructions(root));
+                var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                assertEquals(original.keySet(), instructions(clone).keySet());
+                assertEquals(recovered ? 1 : 0, clone.getGraphBudgetGeneration());
+                assertEquals(recovered ? 1 : 0, root.prepareGraphBudgetRetry(1), "a mismatched generation cannot select a side");
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
+    @Test void nonrecursiveBodyWithAnAmbientJoinExitStaysInItsActivation() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, closedNonrecursiveBody(true));
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                assertTrue(regionSides(root).isEmpty()); assertEquals(0, root.prepareGraphBudgetRetry(0));
+                assertEquals(101L, Calls.target(target, new Object[]{0L, 5L, 3L, new Object()}));
+                assertEquals(2L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void closedNonrecursiveBodySpillKeepsStrictArgumentsAndTheOriginalFrame() throws Exception {
+        var result = tuple(STATE, REFERENCE, LONG);
+        var answer = node("app", node("con", "RegionResult", 3),
+                List.of(node("void", Map.of("rep", STATE)), variable("value", REFERENCE), joinBodySum()),
+                List.of(false, true, false), false, false, Map.of("rep", result));
+        var inner = localJoin("inner", List.of(), answer, result);
+        var body = node("let", false, List.of(inner), joinedCall("inner", List.of(), result), Map.of("rep", result));
+        var worker = localJoin("worker", List.of(binder("argument", LONG, false), binder("value", REFERENCE, true)), body, result);
+        worker.put("expr", node("lam", List.of(binder("argument", LONG, false), binder("value", REFERENCE, true)), body,
+                Map.of("resultRep", result, "entryStrict", List.of(false, true))));
+        var entry = node("let", false, List.of(worker),
+                joinedCall("worker", List.of(variable("seed", LONG), variable("payload", REFERENCE)), result), Map.of("rep", result));
+        var input = Map.<String, Object>of("constructors", List.of(tupleConstructor("RegionResult", 3), tupleConstructor("Pair", 2)),
+                "bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                    "expr", node("lam", List.of(binder("seed", LONG, false), binder("bias", LONG, false),
+                            binder("payload", REFERENCE, true), binder("prefix", MUTABLE, false)),
+                        afterTake("prefix", "consumed", entry, result),
+                        Map.of("resultRep", result, "entryStrict", List.of(false, false, false, false))))));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var owner = Language.currentState(); owner.getThreads().enterCurrent(null, false, true, null);
+            var transaction = owner.stm.begin(); var ambient = new ManagedSTM.Transaction();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                var sides = regionSides(root); assertEquals(1, sides.size());
+                assertTrue(regionSides((BytecodeRoot) sides.getFirst().getRootNode()).isEmpty(), "no nested extraction");
+                assertEquals(1, root.prepareGraphBudgetRetry(0)); // Transport control, not a compiler bailout.
+                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                assertEquals(0, entries(program));
+                var forces = new java.util.concurrent.atomic.AtomicInteger(); var marker = new Object();
+                var payload = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertSame(transaction, owner.stm.currentTransaction());
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this));
+                        forces.incrementAndGet(); return marker;
+                    }
+                }.getCallTarget(), null);
+                var prefix = new ManagedMVar(); assertTrue(prefix.tryPut(new Object()));
+                owner.getMaskingState().set(MaskingState.MASKED_INTERRUPTIBLE);
+                var stack = owner.getThreadPollState().get().getAstStack();
+                stack.setDepth(AstStackScope.MAX_DEPTH - 2); stack.setDriving(true);
+                SavedGuestContinuation saved;
+                try { saved = SavedGuestContinuations.savedGuestContinuation(
+                        Calls.target(target, new Object[]{0L, 5L, 3L, payload, prefix})); }
+                finally { stack.setDepth(0); stack.setDriving(false); }
+                assertNotNull(saved); assertTrue(saved.stackSpill()); assertNull(saved.asyncRequest());
+                assertSame(root, saved.getSourceRoot()); assertTrue(prefix.isEmpty()); assertEquals(1, forces.get());
+                assertEquals(1, entries(program));
+                var identity = saved.getIdentity();
+                var continuation = assertInstanceOf(com.oracle.truffle.api.bytecode.ContinuationResult.class, identity);
+                var savedFrame = continuation.getFrame(); var location = continuation.getContinuationRootNode().getLocation();
+                var parked = instructions(root); root.getRootNodes().ensureSourceInformation();
+                assertEquals(parked, instructions(root)); assertSame(savedFrame, continuation.getFrame());
+                // Source replay may replace the metadata node, not the owner, frame or saved PC.
+                assertSame(root, continuation.getContinuationRootNode().getSourceRootNode());
+                assertEquals(location.getBytecodeIndex(), continuation.getContinuationRootNode().getLocation().getBytecodeIndex());
+                owner.stm.restore(ambient);
+                var resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) {
+                        return force.drainStack((SavedGuestContinuation) frame.getArguments()[0], root.getTupleResult());
+                    }
+                }.getCallTarget();
+                var value = TupleResults.ownedTupleResult(Calls.target(resume, new Object[]{saved}), root.getTupleResult());
+                assertSame(marker, root.getTupleResult().getLayout().getObject(value, 0));
+                assertEquals(101L, root.getTupleResult().getLayout().getLong(value, 1));
+                assertTrue(prefix.isEmpty()); assertEquals(1, forces.get()); assertSame(identity, saved.getIdentity());
+                assertSame(ambient, owner.stm.currentTransaction()); assertTrue(transaction.active());
+                assertEquals(MaskingState.MASKED_INTERRUPTIBLE, owner.getMaskingState().get());
+                assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                assertSame(target, program.entryTarget("entry")); assertEquals(parked.keySet(), instructions(root).keySet());
+                var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
+                assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+                assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+            } finally {
+                owner.stm.retire(transaction); owner.stm.retire(ambient); owner.stm.restore(null);
+                owner.getThreads().leaveCurrent(); context.leave();
+            }
+        }
+    }
+
+    @Test void closedNonrecursiveBodyKeepsTypedJoinFormals() throws Exception {
+        var narrow = Map.<String, Object>of("kind", "long", "primReps", List.of("Int8Rep"), "evaluated", true);
+        var floating = Map.<String, Object>of("kind", "float", "primReps", List.of("FloatRep"), "evaluated", true);
+        var doubleRep = Map.<String, Object>of("kind", "double", "primReps", List.of("DoubleRep"), "evaluated", true);
+        var proof = tuple(STATE, narrow, LONG, floating, doubleRep, REFERENCE);
+        var body = node("case", joinBodySum(), "calculated", List.of(node("default", null, List.of(), variable("packet", proof))),
+                Map.of("rep", proof, "binder", binder("calculated", LONG, false)));
+        var worker = localJoin("worker", List.of(binder("packet", proof, false)), body, proof);
+        var input = Map.<String, Object>of("constructors", List.of(), "bindings", List.of(
+                Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                    "expr", node("lam", List.of(binder("input", proof, false), binder("argument", LONG, false), binder("bias", LONG, false)),
+                        node("let", false, List.of(worker), joinedCall("worker", List.of(variable("input", proof)), proof), Map.of("rep", proof)),
+                        Map.of("resultRep", proof, "entryStrict", List.of(false, false, false))))));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                assertEquals(1, regionSides(root).size()); assertEquals(1, root.prepareGraphBudgetRetry(0));
+                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                var poison = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Typed capture forced"); }
+                }.getCallTarget(), null);
+                var entry = root.getTypedInput(); var packet = entry.getPacket();
+                var storage = entry.state().getArguments().acquire(packet); storage.setInputMode(1);
+                Object answer;
+                try {
+                    packet.setLong(storage, 0, 0L); packet.setInt(storage, 1, -127); packet.setLong(storage, 2, 0x7123456789abcdefL);
+                    packet.setFloat(storage, 3, -0.0f); packet.setDouble(storage, 4, Double.longBitsToDouble(0x7ff8000000000017L));
+                    packet.setObject(storage, 5, poison); packet.setLong(storage, 6, 5L); packet.setLong(storage, 7, 3L);
+                    answer = TypedInputs.invokeTypedInput(entry, storage, args -> Calls.target(target, args));
+                } finally { entry.releaseChecked(storage); }
+                var value = TupleResults.ownedTupleResult(answer, root.getTupleResult()); var layout = root.getTupleResult().getLayout();
+                assertEquals(-127, layout.getInt(value, 0)); assertEquals(0x7123456789abcdefL, layout.getLong(value, 1));
+                assertEquals(0x80000000, Float.floatToRawIntBits(layout.getFloat(value, 2)));
+                assertEquals(0x7ff8000000000017L, Double.doubleToRawLongBits(layout.getDouble(value, 3)));
+                assertSame(poison, layout.getObject(value, 4)); assertEquals(0, poison.getState()); assertEquals(1, entries(program));
+                var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
+                assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+            } finally { context.leave(); }
+        }
+    }
+
     private static List<Object> regionEffect(int stage, List<Object> body, Map<String, Object> result) {
         return node("case", joinedCall("step", List.of(number(stage)), LONG), "effect" + stage,
                 List.of(node("default", null, List.of(), body)),

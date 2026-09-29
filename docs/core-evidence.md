@@ -179,7 +179,17 @@ runtime lowering and join validation reduce exactly that form to a state case,
 preserving the original binder, source metadata and tail context. It introduces
 no closure boundary and does not inline arbitrary lambdas or discard a
 state-producing argument. Ordinary captured joins and non-tail transfers remain
-rejected. Validated joins stay inside the current guest root. Nonrecursive groups use acyclic dispatch: the AST catches one lexical transfer and bytecode emits forward branches without a selector or loop. Recursive groups retain a local loop and backedges. Both evaluate operands into temporaries before replacing parameters, preserving swaps and mutually recursive transfers. A join region may itself appear within a larger non-tail expression: leaving that region resumes the outer continuation. Join transfers do not allocate closures or ordinary application packets.
+rejected. Ordinary validated joins stay inside the current guest root. Nonrecursive groups use acyclic dispatch: the AST catches one lexical transfer and bytecode emits forward branches without a selector or loop. Recursive groups retain a local loop and backedges. Both evaluate operands into temporaries before replacing parameters, preserving swaps and mutually recursive transfers. A join region may itself appear within a larger non-tail expression: leaving that region resumes the outer continuation. Join transfers do not allocate closures or ordinary application packets.
+
+Bytecode budget recovery can prepare a separate target for a substantial closed
+nonrecursive join body, using the existing finite expression-region protocol.
+The original transfer binds and demands its arguments before that target captures
+the selected locals. Bodies referencing an ambient join stay in their activation;
+prepared sides do not recursively outline themselves. Selection retains the
+original result destination, masks and captured values. Fresh-entry recovery does
+not move, restart or migrate saved activations; their frame and bytecode PC remain
+the resume point. This eligibility rule does not guarantee that either resulting
+compiler graph fits the budget.
 
 Exact unboxed tuple and sum join results use typed locals in the same activation. The AST writes flattened result leaves or sum tag/payload slots into region slots and copies them to the enclosing destination; bytecode writes each returning branch directly into that destination. Nested logical tuples, singleton tuples and empty tuples retain their exact shape. No aggregate carrier, pool loan, or Truffle call boundary is introduced by the join. Lifted payloads remain lazy; copying reference slots does not force them. Scalar void components keep logical positions without payload slots, and their expressions still execute. Exact tuple and sum join inputs use parallel typed frame moves, including their tag/payload fields. Zero-width operands still execute before transfer. Local joins read enclosing tuple and sum captures through their existing typed slots. Logical alternatives and tuple nesting remain distinct from physical width; unresolved layouts remain rejected. Exact vector join arguments/results and captures follow the separate [vector transport contract](simd-families.md). See [tuple joins](tuple-joins.md), [empty tuple joins](empty-tuple-joins.md), [sum inputs](sum-inputs.md) and [sum results](sum-results.md) for their capabilities and evidence. The logical shape must agree across the join annotation, its retained RHS lambda result, body, applications and enclosing region.
 

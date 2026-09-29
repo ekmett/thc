@@ -3985,7 +3985,38 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }
             region.compilingIndex = i;
-            var body = compile(definition.getBody(), bodyScope.withSource(sources.binding(definition.getBinding(), scope.source)), tail);
+            bodyScope = bodyScope.withSource(sources.binding(definition.getBinding(), scope.source));
+            var context = scope.function;
+            boolean outlined = !recursive && !context.preparingCaseRegion
+                    && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
+                    && joinRegionWork(definition.getBody(), 64) >= 64
+                    && CoreFreeVariables.coreFreeVariables(definition.getBody()).stream().noneMatch(bodyScope.joins::containsKey);
+            Expression body;
+            if (outlined) context.preparingCaseRegion = true;
+            try {
+                body = compile(definition.getBody(), bodyScope, tail);
+                if (outlined) {
+                    // The existing join transfer has already bound and demanded
+                    // its arguments. Capture those exact locals, not a new call
+                    // to the join or a restart of an already-saved activation.
+                    int rootMark = roots.size(), joinMark = localJoinCount;
+                    try {
+                        var side = function("join body " + definition.getId(), List.of(), definition.getBody(), bodyScope,
+                                body.proof(), new boolean[0], tail, true, false);
+                        if (context.caseEmission == null) context.caseEmission = new CaseRegionEmission();
+                        int index = context.caseRegions.size();
+                        context.caseRegions.add(new BytecodeCaseRegion(side.target, side.captureLayout, tail));
+                        body = preparedRegion(body, List.of(side), bodyScope, tail, index,
+                                new ProvenExpression(e -> e.builder.emitLoadConstant(thc.runtime.Unit.INSTANCE), UNKNOWN));
+                    } catch (BytecodeEncodingException failure) {
+                        if (!localIndexOverflow(failure)) throw failure;
+                        roots.subList(rootMark, roots.size()).clear();
+                        localJoinCount = joinMark;
+                    }
+                }
+            } finally {
+                if (outlined) context.preparingCaseRegion = false;
+            }
             var proven = new ProvenExpression(body, body.proof().refine(evaluatedProof(definition.getResult(), false)));
             bodies.add(proven); region.owner.bodies.set(targets.get(i).selectorIndex, proven);
         }
