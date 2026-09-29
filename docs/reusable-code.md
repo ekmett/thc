@@ -21,6 +21,9 @@ Each closure or thunk carries its program instance in the existing
 environment. Entry checks the capture layout, prepared-code identity and current
 context owner; global reads then use fixed binding indices in that instance.
 Captured typed values and durable PAP prefixes keep these ownership checks.
+Saved prepared continuations check that captured program identity and context
+before claiming the activation, so a rejected foreign-context resume cannot
+consume the owner's continuation.
 Constructor storage descriptors may be shared, but each load owns its allocation
 keys, nullary values and optional boxed-value caches. Constructor matches
 authenticate that load's layout.

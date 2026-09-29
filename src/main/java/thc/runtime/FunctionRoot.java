@@ -222,6 +222,12 @@ public final class FunctionRoot extends GuestRoot {
     Metrics invocationMetrics(VirtualFrame frame) {
         return metrics != null ? metrics : Program.instance(frame, programSlot).instanceMetrics();
     }
+    void requireContinuationOwner(VirtualFrame frame) {
+        if (programSlot < 0) return;
+        Program program = Program.instance(frame, programSlot);
+        if (!program.usesCode(programCodeIdentity) || !program.belongsToCurrentContext(this))
+            throw fault("Prepared continuation belongs to another program context");
+    }
     boolean isPreparedForAOT() { return preparedForAOT; }
     @Override protected ExecutionSignature prepareForAOT() {
         // Only the admitted owner-free real-lowerer family is prepared here.

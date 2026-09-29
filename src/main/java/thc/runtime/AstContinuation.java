@@ -45,6 +45,7 @@ public final class AstContinuation implements SavedGuestContinuation {
     }
     @Override @TruffleBoundary public Object continueWith(Object input) {
         if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
+        if (sourceRoot instanceof FunctionRoot root) root.requireContinuationOwner(frame);
         if (!claimed.compareAndSet(false, true)) throw fault("AST continuation was already resumed");
         MaskingState ambient = SynchronousMasking.current(sourceRoot);
         StackAnnotationState ambientAnnotations = StackAnnotations.current(sourceRoot);
