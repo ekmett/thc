@@ -240,8 +240,6 @@ readZipHeaderFile path = withBinaryFile path ReadMode $ \handle -> do
 
 fileHeader :: Handle -> IO ([(Entry,BS.ByteString)],BS.ByteString)
 fileHeader handle = do
-  -- Reading a small local header must not refill a buffered handle from DATA.
-  hSetBuffering handle NoBuffering
   extent <- hFileSize handle
   unless (extent <= fromIntegral (maxBound :: Word64)) (fail "CBD ZIP exceeds uint64")
   let size = fromIntegral extent
@@ -256,10 +254,16 @@ fileHeader handle = do
   let (headerEntry@(Entry _ flags method checksum headerSize compressedSize _),_) = last entries
   unless (flags == 0) (fail "Final CBD header has unsupported ZIP flags")
   oldHeader <- either fail pure =<< runExceptT (do
-    -- Validate local/directory framing without fetching any of the payloads.
-    finalOffset <- foldM (\expected (entry@(Entry _ entryFlags _ _ _ count offset),_) -> do
+    -- Owned staging files have our canonical local framing. Check its extents
+    -- from the directory, without visiting payload headers: even an unbuffered
+    -- GHC Handle may read ahead from a small header into the following payload.
+    finalOffset <- foldM (\expected (Entry name entryFlags entryMethod crc size' count offset,_) -> do
       unless (entryFlags == 0 && offset == expected) (throwE "CBD staging records are not contiguous")
-      start <- entryStart fetch directoryOffset entry
+      let framing = fromIntegral (BL.length (runPut (zipLocalHeader name entryMethod crc size' count)))
+      unless (offset <= directoryOffset && framing <= directoryOffset-offset)
+        (throwE "CBD staging local header overlaps directory")
+      let start = offset+framing
+      unless (count <= directoryOffset-start) (throwE "CBD staging member overlaps directory")
       pure (start+count)) 0 (take 6 entries)
     let Entry _ _ _ _ _ _ headerOffset = headerEntry
     unless (finalOffset == headerOffset) (throwE "CBD header does not follow payload records")
