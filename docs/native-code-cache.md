@@ -33,6 +33,18 @@ cache provider**, and the ordinary pinned GHC/exporter toolchain. The image uses
 the repository's experimental Truffle and Native Image preparation overlays;
 this is not a claim about stock Truffle. Start with the README's submodule setup.
 
+The default `intrinsics` image profile retains the vector-intrinsic configuration.
+The pinned toolchain cannot combine those intrinsics with deterministic shared
+arenas. `THC_NATIVE_IMAGE_VECTOR_PROFILE=resource-copy` selects an experimental
+separate `thc-native-cache-resource-copy` image: shared arenas remain enabled,
+vector memory and bit reinterpretation use typed primitive-array bulk copies,
+and arithmetic uses the JDK Vector API's non-intrinsic fallback. Use the same
+environment setting for `build`, `store` and `run`. This has additional copies and
+allocations and does not promise SIMD performance. It does not change ordinary
+JVM execution or replace shared arenas with automatic/confined lifetimes.
+Full provider/cache qualification of this profile is still in progress; it is
+not a claim that arbitrary newer raw-vector operations or IO programs are ready.
+
 For example, save this pure numeric entry as `Affine.hs`:
 
 ```haskell

@@ -522,7 +522,7 @@ public final class ManagedAddress {
         long start = offset + displacement;
         if (owner != null) synchronized (owner) {
             var segment = owner.vectorSegment(start, true, 1, false, vectorBytes);
-            return ByteVector.fromMemorySegment(species, segment, start, ByteOrder.nativeOrder());
+            return (ByteVector) VectorMemory.read(species, segment, start, ByteOrder.nativeOrder());
         }
         byte[] bytes = literalBytes != null ? literalBytes : mutableBytes;
         if (bytes == null) throw fault("Null Addr# has no backing storage");
@@ -541,7 +541,7 @@ public final class ManagedAddress {
         if (owner != null) {
             synchronized (owner) {
                 var segment = owner.vectorSegment(start, true, 1, true, vectorBytes);
-                vector.intoMemorySegment(segment, start, ByteOrder.nativeOrder());
+                VectorMemory.write(vector, segment, start, ByteOrder.nativeOrder());
             }
             return;
         }
@@ -551,13 +551,13 @@ public final class ManagedAddress {
     @TruffleBoundary private ByteVector readOwnedNativeVector(long displacement, int vectorBytes, VectorSpecies<Byte> species) {
         try (var loan = nativeOwner.borrow()) {
             requireRange(displacement, vectorBytes);
-            return ByteVector.fromMemorySegment(species, loan.segment(), offset + displacement, ByteOrder.nativeOrder());
+            return (ByteVector) VectorMemory.read(species, loan.segment(), offset + displacement, ByteOrder.nativeOrder());
         }
     }
     @TruffleBoundary private void writeOwnedNativeVector(long displacement, int vectorBytes, ByteVector vector) {
         try (var loan = nativeOwner.borrow()) {
             requireRange(displacement, vectorBytes, true);
-            vector.intoMemorySegment(loan.segment(), offset + displacement, ByteOrder.nativeOrder());
+            VectorMemory.write(vector, loan.segment(), offset + displacement, ByteOrder.nativeOrder());
         }
     }
     private long vectorDisplacement(long elementOffset, int stride) {

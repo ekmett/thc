@@ -12,6 +12,17 @@ recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$1" && pwd)
 mode=${2:-build}
 case "$mode" in prepare-only|build|cache|cache-prepare-only) ;; *) exit 2 ;; esac
+vector_options=()
+vector_profile=${THC_NATIVE_IMAGE_VECTOR_PROFILE:-intrinsics}
+case "$vector_profile" in
+    intrinsics) ;;
+    resource-copy)
+        # This pinned JDK cannot combine Vector API intrinsics with shared
+        # arenas. Keep Vector API semantics using its array fallback and THC's
+        # scalar bulk-copy memory boundary, without changing resource lifetime.
+        vector_options=(-H:-VectorAPISupport -H:+SharedArenaSupport -Dthc.nativeImage.resourceCopies=true) ;;
+    *) echo 'THC_NATIVE_IMAGE_VECTOR_PROFILE must be intrinsics or resource-copy' >&2; exit 2 ;;
+esac
 : "${JAVA_HOME:?Select GraalVM 25.3.4.1}"
 unset JAVA_TOOL_OPTIONS THC_BACKEND JAVA_OPTS THC_OPTS JDK_JAVA_OPTIONS GHC_PACKAGE_PATH GHC_ENVIRONMENT
 [[ "$("$JAVA_HOME/bin/native-image" --version)" == *25.3.4.1* ]] || exit 2
@@ -70,6 +81,7 @@ if [[ "$mode" == cache* ]]; then
     main_class=thc.NativeCache
     image_path="$repo_dir/build/native-image/thc-native-cache"
 fi
+[[ "$vector_profile" != resource-copy ]] || image_path+=-resource-copy
 # Switch tables depend only on enums ALREADY selected above. This final category
 # proves the complete synthetic initializer; it never adds an enum dependency.
 "$JAVA_HOME/bin/java" -Xmx512m -XX:-UseJVMCICompiler -cp "$probe_dir:$classpath" \
@@ -85,6 +97,9 @@ generated=$(<"$inventory_dir/switches.txt")
 }
 initialization_args="$inventory_dir/prepared-initialization.args"
 printf '%s\n' "--initialize-at-build-time=$initialization" > "$initialization_args"
+vector_args="$inventory_dir/vector-profile.args"
+: > "$vector_args"
+if (( ${#vector_options[@]} )); then printf '%s\n' "${vector_options[@]}" > "$vector_args"; fi
 foreign_args="$inventory_dir/foreign.args"
 : > "$foreign_args"
 if [[ -n "${THC_NATIVE_IMAGE_PROCESS_IDENTITY:-}" ]]; then
@@ -129,7 +144,7 @@ exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --p
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
     "@$initialization_args" "@$foreign_args" \
-    -H:+UnlockExperimentalVMOptions "${cache_options[@]}" -H:+PrintCanonicalGraphStrings \
+    -H:+UnlockExperimentalVMOptions "@$vector_args" "${cache_options[@]}" -H:+PrintCanonicalGraphStrings \
     -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \
     -cp "$classpath" "$main_class" "$image_path"
