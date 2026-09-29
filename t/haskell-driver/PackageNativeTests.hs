@@ -31,7 +31,15 @@ import THC.Driver.NativeDependencies (selectNativePieces, nativeSymbolArchives)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestCase $ do
+  [ TestCase $ forM_ ["aarch64-apple-darwin", "arm64-apple-macosx13.3.0"] $ \target -> do
+      assertEqual "Darwin defined export name" "thc_symbol_probe" (nativeIrSymbol target "_thc_symbol_probe")
+      assertEqual "Darwin libc linker prefix" "access" (nativeIrSymbol target "_access")
+      assertEqual "Darwin preserves genuine GMP underscores" "__gmpn_add" (nativeIrSymbol target "___gmpn_add")
+      assertEqual "Darwin managed symbol remains recognizable" "hs_free_stable_ptr" (nativeIrSymbol target "_hs_free_stable_ptr")
+  , TestCase $ do
+      assertEqual "ELF symbol remains unchanged" "__gmpn_add" (nativeIrSymbol "aarch64-linux-gnu" "__gmpn_add")
+      assertEqual "ELF ordinary symbol remains unchanged" "access" (nativeIrSymbol "x86_64-linux-gnu" "access")
+  , TestCase $ do
       compiler <- findExecutable "ghc" >>= maybe (fail "GHC missing") pure
       libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
         [directory] -> pure directory
