@@ -20,7 +20,7 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bits ((.|.), shiftL)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
-import Data.List (isPrefixOf, sort)
+import Data.List (isInfixOf, isPrefixOf, sort)
 import qualified Data.Set as Set
 import FixtureSupport (CommandResult(..), hashes, readInteger, run, runLogged, runLoggedWithInput, splitTab, writeJson)
 import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
@@ -96,22 +96,23 @@ prepareFloatDecode root = do
   -- Retain the complete unchanged original module; never synthesize its body.
   -- The private interface overlay is build scratch, not a fixture-cache input.
   let boot = "build/float-decode-originals"
-      original = directory </> "original/GHC.Internal.Bignum.Integer.json"
+      original = directory </> "original/GHC.Internal.Bignum.Integer.cbd"
       provenance = directory </> "original/boot-provenance.json"
   bootExport <- runLogged 300 root logs "boot-export" [] "python3"
     ["bin/export-boot.py","--frontier","bignum","--build-dir",boot]
   createDirectoryIfMissing True (output </> "original")
-  copyFile (root </> boot </> "core/GHC.Internal.Bignum.Integer.json") (root </> original)
+  copyFile (root </> boot </> "core/GHC.Internal.Bignum.Integer.cbd") (root </> original)
   copyFile (root </> boot </> "boot-provenance.json") (root </> provenance)
   stages <- forM ["pre","post"] $ \stage -> do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
-    let corePaths = [directory </> stage ++ "-core" </> name ++ ".json" | name <- ["FloatDecodeAudit","FloatDecode"]]
+    let corePaths = [directory </> stage ++ "-core" </> name ++ ".cbd" | name <- ["FloatDecodeAudit","FloatDecode"]]
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        (["bin/audit-core.py"] ++ corePaths ++ [original,"--entry",name,"--output",reportPath])
+        (["bin/audit-core.py"] ++ corePaths ++ [original,"--entry",
+          "main:" ++ (if "Example" `isInfixOf` name then "FloatDecode" else "FloatDecodeAudit") ++ "." ++ name,"--output",reportPath])
       report <- BS.readFile (root </> reportPath) >>= either die pure . eitherDecodeStrict'
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),

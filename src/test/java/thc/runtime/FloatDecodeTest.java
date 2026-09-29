@@ -37,9 +37,11 @@ class FloatDecodeTest {
     private static ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
     private String read(String path) throws Exception { return Files.readString(new File(root, path).toPath()); }
     private Map<String, Object> json(String path) throws Exception { return object(Json.parse(read(path))); }
-    private Map<String, Object> originalModule() throws Exception { return json(DIRECTORY + "/original/GHC.Internal.Bignum.Integer.json"); }
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private String entryId(String name) { return "main:" + (name.contains("Example") ? "FloatDecode" : "FloatDecodeAudit") + "." + name; }
+    private Map<String, Object> originalModule() throws Exception { return cbd(DIRECTORY + "/original/GHC.Internal.Bignum.Integer.cbd"); }
     private Map<String, Object> module(String stage) throws Exception {
-        return CoreModules.merge(list(json(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json"), originalModule(), json(DIRECTORY + "/" + stage + "-core/FloatDecode.json")));
+        return CoreModules.merge(list(cbd(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.cbd"), originalModule(), cbd(DIRECTORY + "/" + stage + "-core/FloatDecode.cbd")));
     }
     private static Set<String> reachableIds(String name) {
         var ids = new HashSet<>(list("main:" + (name.contains("Example") ? "FloatDecode" : "FloatDecodeAudit") + "." + name));
@@ -110,9 +112,9 @@ class FloatDecodeTest {
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sources.add(root.toPath().relativize(file.toPath()).toString());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add(root.toPath().relativize(file.toPath()).toString());
         var commands = new ArrayList<>(list("native-build", "native-oracle", "boot-export"));
-        var artifacts = new HashSet<>(list(DIRECTORY + "/inputs.tsv", DIRECTORY + "/oracle.tsv", DIRECTORY + "/native/oracle", DIRECTORY + "/original/GHC.Internal.Bignum.Integer.json", DIRECTORY + "/original/boot-provenance.json"));
+        var artifacts = new HashSet<>(list(DIRECTORY + "/inputs.tsv", DIRECTORY + "/oracle.tsv", DIRECTORY + "/native/oracle", DIRECTORY + "/original/GHC.Internal.Bignum.Integer.cbd", DIRECTORY + "/original/boot-provenance.json"));
         for (var stage : list("pre", "post")) {
-            commands.add(stage + "-export"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecode.json");
+            commands.add(stage + "-export"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.cbd"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecode.cbd");
             for (var name : NAMES) { commands.add(stage + "-" + name + "-audit"); artifacts.add(DIRECTORY + "/" + stage + "-" + name + "-audit.json"); }
         }
         for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) artifacts.add(DIRECTORY + "/commands/" + command + "." + suffix);
@@ -130,7 +132,7 @@ class FloatDecodeTest {
         assertEquals(139, objects(originalModule().get("bindings")).size(), "Complete pinned original Integer module, not a fabricated worker");
         var provenance = json(DIRECTORY + "/original/boot-provenance.json"); assertEquals("ghc-9.14.1-release", provenance.get("ghcTag")); assertEquals(list(), provenance.get("sourcePatches"));
         var provenanceSources = objects(provenance.get("sources"));
-        assertEquals(sources.stream().filter(path -> path.startsWith("vendor/")).collect(Collectors.toSet()), provenanceSources.stream().map(source -> source.get("path")).collect(Collectors.toSet()));
+        assertEquals(sources.stream().filter(path -> path.startsWith("nih/pinned/")).collect(Collectors.toSet()), provenanceSources.stream().map(source -> source.get("path")).collect(Collectors.toSet()));
         for (var source : provenanceSources) assertEquals(object(manifest.get("inputHashes")).get(source.get("path")), source.get("sha256"));
     }
     @Test void nativeIeeeCorpusHasExactIndependentFieldsAndProvenance() throws Exception {
@@ -155,7 +157,7 @@ class FloatDecodeTest {
     @Test void publicDoubleExponentRequiresOriginalIntegerCore(@TempDir Path temporary) throws Exception {
         for (var stage : list("pre", "post")) {
             var report = temporary.resolve(stage + ".json");
-            var process = new ProcessBuilder("python3", "bin/audit-core.py", DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json", "--entry", "doubleExponent", "--output", report.toString())
+            var process = new ProcessBuilder("python3", "bin/audit-core.py", DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.cbd", "--entry", entryId("doubleExponent"), "--output", report.toString())
                 .directory(root).redirectOutput(temporary.resolve(stage + ".stdout").toFile()).redirectError(temporary.resolve(stage + ".stderr").toFile()).start();
             if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Missing-original audit timed out"); }
             assertEquals(1, process.exitValue()); var audit = object(Json.parse(Files.readString(report)));
@@ -170,8 +172,8 @@ class FloatDecodeTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var p = program(language, with(CoreModules.reachable(module(stage), name), "instrument", true), backend); var entry = p.entryTarget(name);
-                boolean example = name.contains("Example"); var host = p.hostEntryTarget(example ? 1 : 2); var value = p.entryValue(name);
+                var p = program(language, with(CoreModules.reachable(module(stage), entryId(name)), "instrument", true), backend); var entry = p.entryTarget(entryId(name));
+                boolean example = name.contains("Example"); var host = p.hostEntryTarget(example ? 1 : 2); var value = p.entryValue(entryId(name));
                 CheckedBiConsumer<Row, Boolean> check = (row, installed) -> {
                     for (int field = 0; field < row.fields.size(); field++) {
                         long before = count(p); var label = stage + "/" + backend + "/" + name + "/" + row.bits + "/" + field + "/inlining=" + inlining;
@@ -198,7 +200,8 @@ class FloatDecodeTest {
     }
     @Test void scalarCarriersTupleShapeArityAndSharedAuditorStayChecked(@TempDir Path temporary) throws Exception {
         for (var name : list("floatDirect", "doubleDirect")) for (var mutation : list("valid", "argument", "result-carrier", "result-arity", "partial", "over", "lifted", "bare")) {
-            var linked = CoreModules.reachable(module("pre"), name); var primitive = name.startsWith("float") ? "decodeFloat_Int#" : "decodeDouble_Int64#";
+            var source = cbd(DIRECTORY + "/pre-core/FloatDecodeAudit.cbd");
+            var linked = CoreModules.reachable(source, entryId(name)); var primitive = name.startsWith("float") ? "decodeFloat_Int#" : "decodeDouble_Int64#";
             var matches = applications(linked).stream().filter(app -> app.get(1) instanceof List<?> head && head.size() >= 2 && head.subList(0, 2).equals(list("prim", primitive))).toList();
             assertEquals(1, matches.size()); var app = matches.getFirst(); var metadata = object(app.get(6)); var proof = object(metadata.get("rep")); var args = expression(app.get(2));
             switch (mutation) {
@@ -211,8 +214,10 @@ class FloatDecodeTest {
                 case "bare" -> { var head = new ArrayList<>(expression(app.get(1))); app.clear(); app.addAll(head); }
                 default -> { }
             }
-            var label = name + "-" + mutation; var input = temporary.resolve(label + ".json"); Files.writeString(input, Json.stringify(linked)); var report = temporary.resolve(label + "-report.json");
-            var process = new ProcessBuilder("python3", "bin/audit-core.py", input.toString(), "--entry", name, "--output", report.toString()).directory(root)
+            var label = name + "-" + mutation;
+            var input = thc.CoreCbdFixtures.write(temporary.resolve(label + ".cbd"), with(source, "bindings", linked.get("bindings")));
+            var report = temporary.resolve(label + "-report.json");
+            var process = new ProcessBuilder("python3", "bin/audit-core.py", input.toString(), "--entry", entryId(name), "--output", report.toString()).directory(root)
                 .redirectOutput(temporary.resolve(label + ".stdout").toFile()).redirectError(temporary.resolve(label + ".stderr").toFile()).start();
             if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared auditor timeout: " + label); }
             assertEquals(mutation.equals("valid") ? 0 : 1, process.exitValue(), label); assertEquals(mutation.equals("valid"), object(Json.parse(Files.readString(report))).get("accepted"), label);
@@ -225,7 +230,7 @@ class FloatDecodeTest {
                         if (mutation.equals("bare") && diagnostic) {
                             // Diagnostic mode defers UnsupportedCore; demanding the unavailable tuple still traps.
                             var p = program(language, with(linked, "diagnosticUnsupported", true), backend);
-                            var failure = assertThrows(RuntimeFault.class, () -> Calls.target(p.hostEntryTarget(2), new Object[]{p.entryValue(name), new Object[]{0L, 0L}}));
+                            var failure = assertThrows(RuntimeFault.class, () -> Calls.target(p.hostEntryTarget(2), new Object[]{p.entryValue(entryId(name)), new Object[]{0L, 0L}}));
                             assertTrue(failure.getMessage().contains("Unsaturated primitive " + primitive)); assertEquals(1L, ((Number) p.diagnostics().get("unsupportedTraps")).longValue()); released(language);
                         } else assertThrows(RuntimeException.class, () -> program(language, with(linked, "diagnosticUnsupported", diagnostic), backend), backend + "/" + label + "/diagnostic=" + diagnostic);
                     }
