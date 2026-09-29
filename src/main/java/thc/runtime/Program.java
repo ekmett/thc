@@ -286,10 +286,7 @@ public final class Program implements ExecutableProgram {
         if (inline != null) { requireReusableBody(inline); return; }
         switch ((String) expression.getFirst()) {
             case "var", "void" -> { }
-            case "con" -> {
-                if (((Number) expression.get(2)).intValue() != 0)
-                    throw new UnsupportedCore("Reusable constructor functions must be saturated");
-            }
+            case "con" -> { }
             case "lit" -> {
                 if (!reusableLiteral((String) expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not a numeric scalar");
             }
@@ -312,9 +309,6 @@ public final class Program implements ExecutableProgram {
                             "==##", "/=##", "<##", "<=##", ">##", ">=##",
                             "int2Float#", "int2Double#", "float2Int#", "double2Int#", "float2Double#", "double2Float#").contains(name))
                         throw new UnsupportedCore("Reusable AST primitive is outside the admitted arithmetic family");
-                } else if ("con".equals(function.getFirst())) {
-                    if (((Number) function.get(2)).intValue() != ((List<?>) expression.get(2)).size())
-                        throw new UnsupportedCore("Reusable constructor functions must be saturated");
                 } else requireReusableBody(function);
                 for (List<Object> argument : (List<List<Object>>) expression.get(2)) requireReusableBody(argument);
             }
@@ -1316,9 +1310,11 @@ public final class Program implements ExecutableProgram {
         int[][] result = new int[layout.getLogicalArity()][];
         for (int i = 0; i < result.length; i++) {
             CoreRepresentation proof = layout.logicalProof(i);
-            if (proof != null && proof.isAggregate() || layout.isVector(layout.fieldOffset(i))) {
+            if (proof != null && proof.isTypedTransport()) {
+                List<CoreRepresentation> leaves = ArgumentLayout.leaves(proof);
                 result[i] = new int[layout.logicalWidth(i)];
-                for (int j = 0; j < result[i].length; j++) result[i][j] = frame.bind("<constructor " + layout.getId() + " field " + i + " lane " + j + ">");
+                for (int j = 0; j < result[i].length; j++) result[i][j] = frame.bind("<constructor " + layout.getId() + " field " + i + " lane " + j + ">",
+                    FrameLayout.carrierKind(leaves.get(j)));
             }
         }
         return result;
@@ -1328,7 +1324,7 @@ public final class Program implements ExecutableProgram {
         Expr[] fields = new Expr[args.length];
         for (int i = 0; i < fields.length; i++) fields[i] = strict[i] ? new Evaluate(args[i], codeMetrics()) : args[i];
         DataLayout layout = dataLayout(id);
-        return reusableCode ? new Construct(layout.reusableStorage(), programSlot, required(constructorIndices, id), fields) :
+        return reusableCode ? new Construct(layout.reusableStorage(), programSlot, required(constructorIndices, id), fields, constructorVectorSlots(layout, frame)) :
             new Construct(layout, fields, constructorVectorSlots(layout, frame));
     }
 
@@ -1493,8 +1489,10 @@ public final class Program implements ExecutableProgram {
                         throw new RuntimeFault("Aggregate constructor binder requires an unlifted shape");
                     TupleShape.requireCompatible(aggregate, raw, true);
                     CoreRepresentation proof = aggregate.refine(raw);
+                    List<CoreRepresentation> leaves = ArgumentLayout.leaves(proof);
                     int[] lanes = new int[layout.logicalWidth(index)];
-                    for (int i = 0; i < lanes.length; i++) lanes[i] = child.layout.bind(id + " constructor aggregate " + i);
+                    for (int i = 0; i < lanes.length; i++) lanes[i] = child.layout.bind(id + " constructor aggregate " + i,
+                        FrameLayout.carrierKind(leaves.get(i)));
                     child.bindTuple(id, proof, lanes);
                     for (int i = 0; i < lanes.length; i++) {
                         if (layout.isVector(physical + i)) vectorFields[physical + i] = new int[]{lanes[i]};
@@ -1511,7 +1509,7 @@ public final class Program implements ExecutableProgram {
                     }
                     if (vector != null) {
                         if (meta == null || !Boolean.FALSE.equals(meta.get("lifted"))) throw new UnsupportedCore("Vector constructor binder must be unlifted");
-                        int[] lanes = {child.layout.bind(id + " constructor vector")};
+                        int[] lanes = {child.layout.bind(id + " constructor vector", FrameSlotKind.Object)};
                         vectorFields[physical] = lanes;
                         slots.add(child.bindTuple(id, proof, lanes).slot);
                     } else slots.add(child.bind(id, layout != null && layout.isLong(physical), proof,
@@ -1557,43 +1555,27 @@ public final class Program implements ExecutableProgram {
             return new TupleConstruct(new TupleShape(proof, (thc.Language) language), new Expr[0]);
         }
         if (arity == 0) return construct(id, new Expr[0], scope.layout, scope.programSlot);
-        if (reusableCode) throw new UnsupportedCore("Reusable constructor functions must be saturated");
-        FrameLayout layout = new FrameLayout();
         DataLayout constructor = dataLayout(id);
-        if (constructor.getHasAggregateFields()) throw new UnsupportedCore("Unsaturated aggregate-field constructor requires aggregate inputs");
         Object fieldData = required(constructors, id).get("fieldTypes");
         List<?> fieldTypes = fieldData instanceof List<?> found ? found : null;
-        List<CoreRepresentation> proofs = new ArrayList<>();
-        for (int i = 0; i < arity; i++) proofs.add(fieldTypes != null && fieldTypes.get(i) != null ?
-            CoreRepresentations.parse(fieldTypes.get(i)) : CoreRepresentation.UNKNOWN);
-        ArgumentLayout inputLayout = ArgumentLayout.fromProofs(proofs);
-        List<Integer> slots = new ArrayList<>(), indices = new ArrayList<>();
-        List<CoreRepresentation> argumentProofs = new ArrayList<>();
-        Expr[] fields = new Expr[arity];
-        for (int index = 0; index < arity; index++) {
-            CoreRepresentation vector = constructor.vectorProof(index);
-            if (vector == null) {
-                int slot = layout.bind("field" + index);
-                slots.add(slot); indices.add(ArgumentLayout.offset(inputLayout, index)); argumentProofs.add(proofs.get(index));
-                fields[index] = new LocalRead(slot, false).proven(proofs.get(index));
-            } else {
-                int[] lanes = {layout.bind("field" + index + " vector")};
-                List<CoreRepresentation> leaves = TupleShape.flatten(vector);
-                for (int lane = 0; lane < leaves.size(); lane++) {
-                    slots.add(lanes[lane]); indices.add(ArgumentLayout.offset(inputLayout, index) + lane); argumentProofs.add(leaves.get(lane));
-                }
-                fields[index] = new VectorLocalRead(new TupleShape(vector, (thc.Language) language), lanes);
-            }
+        List<?> lifted = (List<?>) required(info, "fieldLifted");
+        List<Map<String,Object>> parameters = new ArrayList<>();
+        List<List<Object>> arguments = new ArrayList<>();
+        for (int i = 0; i < arity; i++) {
+            String name = "<constructor field " + i + ">";
+            Map<String,Object> parameter = new LinkedHashMap<>();
+            parameter.put("id", name); parameter.put("name", name); parameter.put("lifted", lifted.get(i));
+            if (fieldTypes != null) parameter.put("rep", fieldTypes.get(i));
+            parameters.add(parameter);
+            arguments.add(List.of("var", name));
         }
-        Expr body = construct(id, fields, layout, -1);
-        FunctionRoot root = new FunctionRoot(language, layout.build(), "constructor " + id, null, new int[0],
-            ints(slots), ints(indices), body, metrics, argumentProofs.toArray(CoreRepresentation[]::new), body.getRepresentation(), rootSource(body),
-            strictConstructorFields(id, arity), null, null, new int[0], inputLayout, false, new int[0][], false,
-            FunctionRootRole.FUNCTION, outlineCaseArms);
-        constructedRootCount++;
-        root.configureForeignExceptionBridge(foreignExceptionBridge);
-        if (language instanceof thc.Language guest) root.configureTypedInput(TypedInputLayout.create(guest, inputLayout, false));
-        return new MakeClosure(root.getCallTarget(), arity, null, new int[0]);
+        // Constructor functions are ordinary functions: typed packets, PAP
+        // prefixes and reusable program captures all use the same lowering.
+        List<Object> body = Arrays.asList("app", expr, arguments, lifted, false, true);
+        CoreRepresentation result = new CoreRepresentation(CoreKind.DATA, true, false, null, null, null, null, null, null);
+        FunctionSpec function = function("constructor " + id, parameters, body, scope, result,
+            strictConstructorFields(id, arity), FunctionRootRole.FUNCTION, false);
+        return new MakeClosure(function.target, arity, function.captureLayout, function.captures, scope.programSlot);
     }
 
 
@@ -2362,7 +2344,7 @@ public final class Program implements ExecutableProgram {
                 TupleShape.requireCompatible(field, nodes[i].getRepresentation(), true);
             } else nodes[i] = argument(args.get(i), scope, lifted && !callStrict[i] &&
                 !(constructorStrict != null && constructorStrict[i]) && !(entryStrict != null && i < entryStrict.length && entryStrict[i]),
-                "argument thunk", !"prim".equals(fn.get(0)) && !"con".equals(fn.get(0)), lifted);
+                "argument thunk", !"prim".equals(fn.get(0)), lifted);
         }
         if ("prim".equals(fn.get(0))) {
             for (Expr node : nodes) CoreRepresentations.requireScalar(node.getRepresentation(), "argument");
@@ -2370,7 +2352,7 @@ public final class Program implements ExecutableProgram {
         }
         if (constructorStrict != null) {
             DataLayout target = dataLayout((String) fn.get(1));
-            return reusableCode ? new Construct(target.reusableStorage(), scope.programSlot, required(constructorIndices, target.getId()), nodes) :
+            return reusableCode ? new Construct(target.reusableStorage(), scope.programSlot, required(constructorIndices, target.getId()), nodes, constructorVectorSlots(target, scope.layout)) :
                 new Construct(target, nodes, constructorVectorSlots(target, scope.layout));
         }
         Expr function = compile(fn, scope, false);

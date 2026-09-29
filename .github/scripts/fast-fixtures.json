@@ -12,6 +12,7 @@
     "thc.runtime.LocalJoinGraphBudgetTest",
     "thc.ReusableProgramTest",
     "thc.ReusableHigherOrderTest",
+    "thc.ReusableHeapTest",
     "thc.runtime.CapturedProgramInstanceTest",
     "thc.PackageFinalizersTest",
     "thc.runtime.PackageFinalizerTest",

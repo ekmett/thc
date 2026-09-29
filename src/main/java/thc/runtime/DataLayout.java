@@ -60,10 +60,11 @@ public final class DataLayout {
         final StaticShape<DataValueFactory> shape;
         Reusable(TruffleLanguage<?> language, String id, String name, CoreFields logicalFields) {
             this.id = id; this.name = name; this.logicalFields = logicalFields;
-            for (CoreRepresentation proof : logicalFields.getLogicalProofs())
-                if (!proof.getPresent() || !(proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble() ||
-                        proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE) || proof.isTypedTransport())
-                    throw new UnsupportedCore("Reusable constructor fields require numeric scalar, data or closure proofs");
+            for (CoreRepresentation proof : logicalFields.getLogicalProofs()) {
+                if (!proof.getPresent() || proof.getKind() == CoreKind.UNKNOWN && !proof.isTypedTransport())
+                    throw new UnsupportedCore("Reusable constructor fields require exact representation proofs");
+                CoreRepresentations.requireInput(proof);
+            }
             fields = newFields(logicalFields.getStorage(), logicalFields.getReferenceTypes(), logicalFields.getVectorProofs());
             // A shared carrier must carry its exact per-load owner, not use the
             // ordinary one-layout-per-class shortcut.
@@ -84,6 +85,9 @@ public final class DataLayout {
         boolean isInt(int index) { return fields[index].isInt(); }
         boolean isFloat(int index) { return fields[index].isFloat(); }
         boolean isDouble(int index) { return fields[index].isDouble(); }
+        boolean isVector(int index) { return fields[index].vector != null; }
+        int fieldOffset(int index) { return logicalFields.getOffsets()[index]; }
+        CoreRepresentation logicalProof(int index) { return logicalFields.getLogicalProofs()[index]; }
         DataValue createLong(DataLayout owner, long value) {
             checkOwner(owner);
             DataValue[] cached = owner.boxedValues;
@@ -108,6 +112,12 @@ public final class DataLayout {
         }
         void restore(DataLayout owner, DataValue value, int index, Frame frame, int slot) {
             checkOwner(owner); owner.checkField(value, index); fields[index].restore(value, frame, slot);
+        }
+        void initializeVector(DataLayout owner, DataValue value, int index, Frame frame, int[] slots, int offset) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].vector.initialize(value, frame, slots, offset);
+        }
+        void restoreVector(DataLayout owner, DataValue value, int index, Frame frame, int[] slots, int offset) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].vector.restore(value, frame, slots, offset);
         }
     }
     Reusable reusableStorage() { return reusable; }

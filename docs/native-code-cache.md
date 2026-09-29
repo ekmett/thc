@@ -12,15 +12,16 @@ unlifted aggregate lets and local joins use the existing runtime transport.
 Numeric carriers include machine words, signed/unsigned 8/16/32-bit integers,
 `Float#` and `Double#`; admitted scalar and vector operations use their existing
 validated lowering. Floating cases use defaults, not floating literal alternatives
-(which GHC Core disallows). Saturated boxed constructors support numeric, boxed
-data and guest-closure fields with exact descriptors, including strict function
-fields, lazy function thunks and lazy data tails. Reusable aggregate/vector heap
-fields remain excluded.
+(which GHC Core disallows). Boxed constructors support exact numeric, reference,
+tuple, sum, vector and zero-width field descriptors, including strict function
+fields, lazy function thunks and lazy recursive data tails. Vector fields own
+primitive lanes; tuple and sum fields use their existing physical offsets.
 Recursive local joins use the existing local-loop lowering;
 ordinary self recursion uses the existing function loop, prepared before publication.
 Ordinary higher-order calls preserve each closure's captured program owner,
-including partial applications and lazy function values. Constructor functions
-must still be saturated; field values retain their own captured program owners.
+including partial applications and lazy function values. Constructor values and
+partial applications use that same function/typed-input machinery; field values
+retain their own captured program owners.
 Reachable CAF code is prepared without evaluating the CAF;
 each load creates a fresh Program, CAF cells and metrics. Unselected definitions
 stay unprepared. Unused GHC module/constructor descriptors do not prevent scalar
@@ -197,6 +198,28 @@ bin/native-cache run build/reference-joins.cache 3 -10 -10
 
 Join results use the existing reference slots: returning a lazy value does not
 force it, and returning a closure does not change its captured program owner.
+
+`src/examples/THC/CachedHeap.hs` puts a tuple of narrow/floating/empty values and
+a sum of two vector species or an empty tuple into a recursive boxed structure.
+A constructor function is partially applied before receiving its lazy tails;
+a shared cyclic CAF and an unused divergent neighbour exercise heap laziness.
+
+```sh
+THC_CORE_OUT="$PWD/build/cached-heap-core" \
+  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy \
+  -fplugin-opt=THC.Plugin:unit-qualified src/examples/THC/CachedHeap.hs
+bin/native-cache store build/heap.cache \
+  build/cached-heap-core/units/u-main/THC.CachedHeap.json \
+  main:THC.CachedHeap.calculate
+bin/native-cache run build/heap.cache 5 32768 0
+# 121
+bin/native-cache run build/heap.cache 6 -7 1
+# 123
+```
+
+The count must be nonnegative. Constructor fields, partial-application prefixes
+and recursive cells belong to each load, not to the persisted code. This example
+uses only numeric public arguments; it does not add a typed-host cache codec.
 
 `src/examples/THC/CachedTyped.hs` provides a numeric `calculate count seed selector`
 entry that composes ordinary tuple/sum/vector/unit calls, a typed local join,

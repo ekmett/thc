@@ -47,6 +47,10 @@ final class Alternative extends Node {
         if (value instanceof DataLayout.Reusable storage) storage.restore(layout(frame), data, index, frame, slot);
         else layout(frame).restore(data, index, frame, slot);
     }
+    void restoreVector(DataValue data, int index, VirtualFrame frame, int[] slots) {
+        if (value instanceof DataLayout.Reusable storage) storage.restoreVector(layout(frame), data, index, frame, slots, 0);
+        else layout(frame).restoreVector(data, index, frame, slots, 0);
+    }
     boolean matchesData(VirtualFrame frame, DataValue value) {
         boolean matches = layout(frame).matches(value);
         return matchProfile == null ? matches : matchProfile.profile(matches);

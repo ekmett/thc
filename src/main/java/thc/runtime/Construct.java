@@ -18,12 +18,18 @@ final class Construct extends Expr {
     Construct(DataLayout layout, Expr[] fields, int[][] vectorSlots) {
         this.layout = layout; this.fields = fields; this.vectorSlots = vectorSlots;
         reusable = null; programSlot = constructorIndex = -1;
+        prepareFields();
         setRepresentation(new CoreRepresentation(CoreKind.DATA, true, false, null, null, null, null, null, null));
     }
-    Construct(DataLayout.Reusable reusable, int programSlot, int constructorIndex, Expr[] fields) {
+    Construct(DataLayout.Reusable reusable, int programSlot, int constructorIndex, Expr[] fields, int[][] vectorSlots) {
         this.reusable = reusable; this.programSlot = programSlot; this.constructorIndex = constructorIndex;
-        layout = null; this.fields = fields; vectorSlots = new int[0][];
+        layout = null; this.fields = fields; this.vectorSlots = vectorSlots;
+        prepareFields();
         setRepresentation(new CoreRepresentation(CoreKind.DATA, true, false, null, null, null, null, null, null));
+    }
+    private void prepareFields() {
+        for (int i = 0; i < vectorSlots.length; i++)
+            if (vectorSlots[i] != null) fields[i].prepareTuple(vectorSlots[i], 0);
     }
     @ExplodeLoop @Override public DataValue execute(VirtualFrame frame) {
         if (reusable != null) return executeReusable(frame);
@@ -62,15 +68,31 @@ final class Construct extends Expr {
     }
     @ExplodeLoop private DataValue executeReusable(VirtualFrame frame) {
         DataLayout owner = Program.instance(frame, programSlot).constructorLayout(constructorIndex);
-        if (fields.length == 1 && reusable.isLong(0) && owner.getHasBoxedValueCache())
+        if (fields.length == 1 && owner.getHasBoxedValueCache() && reusable.isLong(0))
             return reusable.createLong(owner, fields[0].executeRequiredLong(frame));
         DataValue value = reusable.allocate(owner);
         for (int i = 0; i < fields.length; i++) {
-            if (reusable.isInt(i)) reusable.initializeInt(owner, value, i, fields[i].executeRequiredInt(frame));
-            else if (reusable.isLong(i)) reusable.initializeLong(owner, value, i, fields[i].executeRequiredLong(frame));
-            else if (reusable.isFloat(i)) reusable.initializeFloat(owner, value, i, fields[i].executeRequiredFloat(frame));
-            else if (reusable.isDouble(i)) reusable.initializeDouble(owner, value, i, fields[i].executeRequiredDouble(frame));
-            else reusable.initialize(owner, value, i, fields[i].execute(frame));
+            int physical = reusable.fieldOffset(i);
+            CoreRepresentation proof = reusable.logicalProof(i);
+            if (proof.isTypedTransport()) {
+                int[] slots = vectorSlots[i];
+                if (slots == null) throw fault("Missing typed constructor slots");
+                fields[i].executeTuple(frame, slots, 0);
+                for (int leaf = 0; leaf < slots.length; leaf++) {
+                    int index = physical + leaf;
+                    if (reusable.isVector(index)) reusable.initializeVector(owner, value, index, frame, slots, leaf);
+                    else if (reusable.isInt(index)) reusable.initializeInt(owner, value, index, frame.getInt(slots[leaf]));
+                    else if (reusable.isLong(index)) reusable.initializeLong(owner, value, index, frame.getLong(slots[leaf]));
+                    else if (reusable.isFloat(index)) reusable.initializeFloat(owner, value, index, frame.getFloat(slots[leaf]));
+                    else if (reusable.isDouble(index)) reusable.initializeDouble(owner, value, index, frame.getDouble(slots[leaf]));
+                    else reusable.initialize(owner, value, index, frame.getObject(slots[leaf]));
+                }
+                for (int slot : slots) frame.clear(slot);
+            } else if (reusable.isInt(physical)) reusable.initializeInt(owner, value, physical, fields[i].executeRequiredInt(frame));
+            else if (reusable.isLong(physical)) reusable.initializeLong(owner, value, physical, fields[i].executeRequiredLong(frame));
+            else if (reusable.isFloat(physical)) reusable.initializeFloat(owner, value, physical, fields[i].executeRequiredFloat(frame));
+            else if (reusable.isDouble(physical)) reusable.initializeDouble(owner, value, physical, fields[i].executeRequiredDouble(frame));
+            else reusable.initialize(owner, value, physical, fields[i].execute(frame));
         }
         return value;
     }
