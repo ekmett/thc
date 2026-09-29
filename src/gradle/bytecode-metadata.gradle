@@ -33,7 +33,7 @@ def checks = [
     },
     testBytecodeHandlerPreparation: { task ->
         BytecodeNormalizerChecks.handlers(task.temporaryDir.toPath())
-        logger.lifecycle('Nonadaptive capture handlers: range/order/profile semantics, version/shape/CRLF/idempotence passed.')
+        logger.lifecycle('Ordinary handler profiles: range/order/first-observation semantics, version/shape/CRLF/idempotence passed.')
     },
     testBytecodeColdApplyPreparation: { task ->
         BytecodeColdApplyPreparation.check()

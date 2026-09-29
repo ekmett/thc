@@ -96,8 +96,8 @@ class BytecodeMetadataLookupTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                for (boolean capture : new boolean[]{false, true}) {
-                    var root = root(language, new Metrics(true)); root.configureAsync(capture);
+                for (boolean capture : new boolean[]{false, true}) for (boolean delimited : new boolean[]{false, true}) {
+                    var root = root(language, new Metrics(true)); root.configureAsync(capture); root.configureDelimited(delimited);
                     assertTrue(root.prepareForCompilation(true, 2, true));
                     var bytecode = root.getBytecodeNode();
                     int[] handlers = (int[]) field(bytecode, "handlers").get(bytecode);
@@ -111,11 +111,14 @@ class BytecodeMetadataLookupTest {
                             int expected = -1;
                             for (int i = first; i < handlers.length; i += 6)
                                 if (handlers[i] <= pc && pc < handlers[i + 1]) { expected = i; break; }
-                            assertEquals(expected, resolve.invoke(bytecode, pc, first, handlers));
-                            assertEquals(expected, resolve.invoke(bytecode, pc, first, handlers.clone()), "noncanonical table fallback");
+                            for (var table : new int[][]{handlers, handlers.clone()}) {
+                                java.util.Arrays.fill(profiles, false);
+                                assertEquals(expected, resolve.invoke(bytecode, pc, first, table), "ordered sparse/fallback lookup");
+                                for (int i = 0; i < profiles.length; i++)
+                                    assertEquals(expected == i * 6, profiles[i], "only the selected handler is observed");
+                            }
                         }
                     }
-                    for (boolean observed : profiles) assertEquals(!capture, observed);
                 }
             } finally { context.leave(); }
         }
@@ -185,6 +188,44 @@ class BytecodeMetadataLookupTest {
                 assertEquals(1, metrics.getCompiledEntries());
                 assertEquals(1, metrics.getThunkEvaluations());
                 assertEquals(3, thunk.getState());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void alreadyObservedHandlerRetainsCompiledPathAndExactChoice() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var metrics = new Metrics(true);
+                var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                    b.beginRoot(); b.emitEnterRoot(metrics);
+                    var retained = b.createLocal("retained", FrameSlotKind.Long);
+                    b.beginStaticStoreLong(retained); b.emitLoadConstant(42L); b.endStaticStoreLong();
+                    b.beginTryCatch();
+                    b.beginTryCatch();
+                    b.beginReturn(); b.beginRaise(false); b.emitLoadConstant(Unit.INSTANCE); b.endRaise(); b.endReturn();
+                    b.beginReturn(); b.emitStaticLoadLong(retained); b.endReturn();
+                    b.endTryCatch();
+                    b.beginReturn(); b.emitLoadConstant(9L); b.endReturn();
+                    b.endTryCatch(); b.endRoot();
+                }).getNode(0);
+                root.configureAsync(true);
+                var target = (OptimizedCallTarget) root.getCallTarget();
+                // Intentionally observe the real handler and guest raise before
+                // compilation. This is a hot-handler control, not first-cut retention.
+                for (int i = 0; i < 5; i++) assertEquals(42L, Calls.target(target, new Object[]{0L}));
+                var bytecode = root.getBytecodeNode();
+                var profiles = ((boolean[]) field(bytecode, "exceptionProfiles_").get(bytecode)).clone();
+                int observed = 0; for (boolean profile : profiles) if (profile) observed++;
+                assertEquals(1, observed, "only the inner handler was used");
+                assertTrue(target.compile(true)); assertTrue(target.isValidLastTier());
+                long before = metrics.getCompiledEntries();
+                ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(target);
+                assertEquals(42L, Calls.target(target, new Object[]{0L}));
+                assertEquals(before + 1, metrics.getCompiledEntries());
+                assertTrue(target.isValidLastTier()); assertSame(target, root.getCallTarget());
+                assertArrayEquals(profiles, (boolean[]) field(bytecode, "exceptionProfiles_").get(bytecode));
             } finally { context.leave(); }
         }
     }
