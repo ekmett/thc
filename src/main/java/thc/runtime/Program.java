@@ -288,6 +288,16 @@ public final class Program implements ExecutableProgram {
                 values.put(id, new CodeValue(null, null, 0, BigNatLiterals.decode((String) expression.get(2)), -1));
                 continue;
             }
+            if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("rubbish")) {
+                builder.validateBindings(List.of(binding));
+                var proof = RubbishLiterals.proof(expression);
+                CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
+                CoreRepresentations.requireNoSum(proof, "global binding");
+                builder.checkArgument(proof, false, builder.representation(binding));
+                // A proof is inert; each load creates its own reference filler.
+                values.put(id, new CodeValue(null, null, 0, proof, -1));
+                continue;
+            }
             if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("function-addr")) {
                 // Never resolve a native label while preparing the source. The
                 // descriptor has no provider or context; each load resolves its own.
@@ -384,6 +394,7 @@ public final class Program implements ExecutableProgram {
             if (target == null) {
                 if (literal instanceof CFinalizerLabels label) return label.resolve();
                 if (literal instanceof byte[] bytes) return BigNatLiterals.instantiate(bytes);
+                if (literal instanceof CoreRepresentation proof) return instance.rubbishValue(proof);
                 return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
             }
             CapturedFrame environment = captures.captureValues(new Object[0], instance);
@@ -397,7 +408,8 @@ public final class Program implements ExecutableProgram {
             case "var", "void" -> { }
             case "con" -> { }
             case "lit" -> {
-                if (!reusableLiteral((String) expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not admitted");
+                if (expression.get(1).equals("rubbish")) RubbishLiterals.proof(expression);
+                else if (!reusableLiteral((String) expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not admitted");
             }
             case "lam" -> {
                 for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
@@ -489,6 +501,7 @@ public final class Program implements ExecutableProgram {
         return contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
     }
     Object readGlobal(int index) { return indexedGlobals[index].read(); }
+    Object rubbishValue(CoreRepresentation proof) { return rubbishLiterals.decode(proof); }
     ForeignExceptionBridge foreignExceptionBridge() { return foreignExceptionBridge; }
     DataLayout constructorLayout(int index) { return indexedLayouts[index]; }
     boolean usesCode(Object identity) { return codeIdentity == identity; }
@@ -1526,7 +1539,7 @@ public final class Program implements ExecutableProgram {
             }
             materializer = new SumConstruct(new TupleShape(proof, (thc.Language) language), 1, rubbish(selected, scope), intSlots);
         }
-        return new Rubbish(proof, rubbishLiterals, materializer);
+        return new Rubbish(proof, reusableCode ? null : rubbishLiterals, materializer, reusableCode ? scope.programSlot : -1);
     }
 
     private Expr compileSupported(List<Object> expr, Scope scope, boolean tail) {

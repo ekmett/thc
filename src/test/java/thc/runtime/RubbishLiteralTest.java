@@ -4,6 +4,8 @@ package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import thc.*;
@@ -284,10 +286,179 @@ changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); re
         var proof = RubbishLiterals.proof(literal);
         assertTrue(proof.hasUnknownBoxedLevity());
         try (var context = context()) { entered(context, language -> {
-            var value = new Rubbish(proof, new RubbishLiterals(language), null).execute(null);
+            var value = new Rubbish(proof, new RubbishLiterals(language), null, -1).execute(null);
             assertInstanceOf(DataValue.class, value); assertFalse(value instanceof Thunk);
         }); }
     }
+    private Engine reusableEngine() {
+        return Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+            .option("engine.MultiTier", "false").option("compiler.Inlining", "false")
+            .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000").build();
+    }
+    private List<Object> fixtureLiteral(Map<String,Object> module, String name) {
+        var values = literals(CoreModules.reachable(module, entry(module, name)));
+        assertEquals(1, values.size(), name); return values.getFirst();
+    }
+    private Map<String,Object> literalFunction(String id, List<Object> body, Map<String,Object> result) {
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        return map("id", id, "name", id, "arity", 1, "lifted", true, "rep", closure,
+            "expr", list("lam", list(map("id", "unused", "name", "unused", "lifted", false, "rep", word)),
+                body, map("rep", closure, "resultRep", result)));
+    }
+    @SuppressWarnings("unchecked") private void compileUntouchedRubbish(Program.PreparedCode code, boolean dedicatedNodes) throws Exception {
+        var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+        var targets = (List<OptimizedCallTarget>) field.get(code);
+        assertFalse(targets.isEmpty());
+        if (dedicatedNodes) assertTrue(targets.stream().anyMatch(target -> !com.oracle.truffle.api.nodes.NodeUtil
+            .findAllNodeInstances(target.getRootNode(), Rubbish.class).isEmpty()), "Retain typed don't-care nodes in shared code");
+        for (var target : targets) {
+            assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true);
+            assertFalse(target.wasExecuted(), "AOT preparation must not train the guest root");
+        }
+        code.requireInstalledCode();
+    }
+    private long compiledEntries(Program program) { return ((Number) program.diagnostics().get("compiledEntries")).longValue(); }
+    private Object firstCompiledCall(Program program, Closure function, long expectedEntries) {
+        long before = compiledEntries(program);
+        var result = Calls.target(function.target, new Object[]{0L, function.environment, 42L});
+        assertEquals(expectedEntries, compiledEntries(program) - before);
+        return result;
+    }
+    private void freshOwner(Map<String,List<Object>> owners, String name, Object value) {
+        assertFalse(value instanceof Thunk);
+        var previous = owners.computeIfAbsent(name, ignored -> new ArrayList<>());
+        for (var old : previous) assertNotSame(old, value, name + " must belong to the invoking Program instance");
+        previous.add(value);
+    }
+    @Test void reusableInlineRubbishKeepsFirstCompiledShapesAndInstanceOwnership() throws Exception {
+        var module = cbd("pre.cbd");
+        var bindings = new ArrayList<>(objects(module.get("bindings")));
+        var observers = list("scalarLifted", "scalarUnlifted", "boxedData", "boxedClosure");
+        var entries = new ArrayList<>(names.stream().map(name -> entry(module, name)).toList());
+        for (var name : shapes) { entries.add(entry(module, name + "Producer")); entries.add(entry(module, name + "Return")); }
+        for (var name : observers) {
+            var literal = fixtureLiteral(module, name);
+            String id = entry(module, "observe" + name);
+            bindings.add(literalFunction(id, literal, object(object(literal.get(3)).get("rep")))); entries.add(id);
+        }
+        var preparedModule = with(module, "bindings", bindings, "instrument", true);
+        try (var engine = reusableEngine()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), preparedModule, entries); }
+                finally { preparation.leave(); }
+            }
+            compileUntouchedRubbish(code, true);
+            String previous = System.getProperty("thc.requireCompiledCode");
+            System.setProperty("thc.requireCompiledCode", "true");
+            var owners = new LinkedHashMap<String,List<Object>>();
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    entered(context, language -> {
+                        var first = code.newInstance(language); var second = code.newInstance(language);
+                        for (var program : list(first, second)) {
+                            for (var name : names) {
+                                var function = (Closure) program.entryValue(entry(module, name));
+                                assertEquals(59L, firstCompiledCall(program, function, 1), name); code.requireInstalledCode();
+                            }
+                            for (var name : shapes) {
+                                var producer = (Closure) program.entryValue(entry(module, name + "Producer"));
+                                var shape = ((GuestRoot) producer.target.getRootNode()).getTupleResult(); assertNotNull(shape, name);
+                                checkCarrier(TupleResults.ownedTupleResult(firstCompiledCall(program, producer, 1), shape), shape);
+                                var continuation = (Closure) program.entryValue(entry(module, name + "Return"));
+                                assertEquals(59L, firstCompiledCall(program, continuation, 2), name); code.requireInstalledCode();
+                            }
+                            for (var name : observers) {
+                                var function = (Closure) program.entryValue(entry(module, "observe" + name));
+                                Object value = firstCompiledCall(program, function, 1);
+                                if (name.equals("boxedClosure")) assertInstanceOf(Closure.class, value); else assertInstanceOf(DataValue.class, value);
+                                freshOwner(owners, name, value);
+                                assertSame(value, firstCompiledCall(program, function, 1)); code.requireInstalledCode();
+                            }
+                            assertEquals(0, program.diagnostics().get("loweredRootCount"));
+                            assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                            assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                            if (program == first) assertEquals(0L, compiledEntries(second));
+                        }
+                    });
+                }
+            } finally { if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous); }
+        }
+    }
+    @Test void reusableTopLevelRubbishRecipesBelongToEachLoad() throws Exception {
+        var source = cbd("pre.cbd");
+        var kinds = list("scalarIntRep", "scalarInt8Rep", "scalarFloatRep", "scalarDoubleRep", "scalarAddrRep",
+            "scalarLifted", "scalarUnlifted", "boxedData", "boxedClosure", "shapeVector");
+        var bindings = new ArrayList<Map<String,Object>>();
+        var proofs = new LinkedHashMap<String,CoreRepresentation>();
+        var entries = new ArrayList<String>();
+        for (var name : kinds) {
+            var literal = fixtureLiteral(source, name); var proof = RubbishLiterals.proof(literal); proofs.put(name, proof);
+            var rawProof = object(object(literal.get(3)).get("rep"));
+            bindings.add(map("id", name, "name", name, "arity", 0, "lifted", proof.hasBoxedPointer() && !name.equals("scalarUnlifted"),
+                "rep", rawProof, "expr", literal));
+            bindings.add(literalFunction("read" + name, list("var", name, map("rep", rawProof)), rawProof));
+            entries.add(name); entries.add("read" + name);
+        }
+        var module = map("schema", 1, "ghc", "9.14.1", "module", "Synthetic.ReusableRubbish", "instrument", true,
+            "constructors", list(), "bindings", bindings);
+        var owners = new LinkedHashMap<String,List<Object>>();
+        try (var engine = reusableEngine()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    for (var name : shapes) if (!name.equals("shapeVector")) {
+                        var literal = fixtureLiteral(source, name); var proof = object(object(literal.get(3)).get("rep"));
+                        var global = map("id", "aggregate", "name", "aggregate", "lifted", false, "rep", proof, "expr", literal);
+                        assertThrows(RuntimeFault.class, () -> Program.prepareCode(language, with(module, "bindings", list(global)), list("aggregate")));
+                    }
+                    code = Program.prepareCode(language, module, entries);
+                    var preparationInstance = code.newInstance(language);
+                    for (var name : kinds) if (proofs.get(name).hasBoxedPointer()) freshOwner(owners, name, preparationInstance.entryValue(name));
+                    assertEquals(0L, compiledEntries(preparationInstance));
+                } finally { preparation.leave(); }
+            }
+            compileUntouchedRubbish(code, false);
+            String previous = System.getProperty("thc.requireCompiledCode");
+            System.setProperty("thc.requireCompiledCode", "true");
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    entered(context, language -> {
+                        var first = code.newInstance(language); var second = code.newInstance(language);
+                        for (var program : list(first, second)) {
+                            for (var name : kinds) {
+                                var proof = proofs.get(name); Object value = program.entryValue(name);
+                                var function = (Closure) program.entryValue("read" + name);
+                                Object returned = firstCompiledCall(program, function, 1);
+                                if (proof.isVector()) {
+                                    new VectorLayout(proof).require(value);
+                                    var shape = ((GuestRoot) function.target.getRootNode()).getTupleResult(); assertNotNull(shape);
+                                    var carrier = TupleResults.ownedTupleResult(returned, shape); checkCarrier(carrier, shape);
+                                    assertSame(value, shape.getLayout().getObject(carrier, 0));
+                                } else if (proof.hasBoxedPointer()) {
+                                    if (proof.getKind() == CoreKind.CLOSURE) assertInstanceOf(Closure.class, value); else assertInstanceOf(DataValue.class, value);
+                                    assertSame(value, returned); freshOwner(owners, name, value);
+                                } else {
+                                    assertEquals(value.getClass(), returned.getClass()); assertEquals(value, returned);
+                                    if (proof.getKind() == CoreKind.ADDRESS) assertInstanceOf(ManagedAddress.class, value);
+                                }
+                                assertSame(value, program.entryValue(name)); code.requireInstalledCode();
+                            }
+                            assertEquals(0, program.diagnostics().get("loweredRootCount"));
+                            assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                            assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                            if (program == first) assertEquals(0L, compiledEntries(second));
+                        }
+                    });
+                }
+            } finally { if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous); }
+        }
+    }
+
     private Object changeAlternative(Object value) {
         if (value instanceof Map<?, ?> map) {
             var result = new LinkedHashMap<Object, Object>(); map.forEach((key, item) -> result.put(key, changeAlternative(item))); return result;
