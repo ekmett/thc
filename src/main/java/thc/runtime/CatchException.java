@@ -98,6 +98,7 @@ public final class CatchException extends Expr {
         private final CatchException node;
         private final Object handler;
         private final List<AstResumeStep> steps;
+        @CompilerDirectives.TruffleBoundary CatchScope(CatchException node, Object handler) { this(node, handler, List.of()); }
         CatchScope(CatchException node, Object handler, List<AstResumeStep> steps) { this.node = node; this.handler = handler; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }
@@ -106,7 +107,7 @@ public final class CatchException extends Expr {
                 delivered.getRequest().acknowledge();
                 return node.runHandler(frame, handler, delivered.getRequest().getPayload());
             } catch (AstCapture cut) { return node.capture(frame, handler, cut); }
-            catch (DelimitedCut cut) { throw cut.append(frame, new CatchScope(node, handler, List.of())); }
+            catch (DelimitedCut cut) { throw cut.append(frame, new CatchScope(node, handler)); }
         }
         @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
             try { return input.get(); }
