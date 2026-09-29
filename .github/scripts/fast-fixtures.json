@@ -28,7 +28,6 @@
     "thc.runtime.SimdWideArrayProofTest",
     "thc.runtime.Simd128AddressTest",
     "thc.runtime.Simd128ArrayProofTest",
-    "thc.LauncherDiagnosticsTest",
     "thc.runtime.EnabledCapabilitiesTest",
     "thc.runtime.SavedTermiosTest",
     "thc.runtime.TermiosAbiTest",
@@ -88,7 +87,7 @@
   ],
   "groups": {
     "compact-model": {
-      "junit": ["thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest", "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest"],
+      "junit": ["thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest", "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest", "thc.LauncherDiagnosticsTest", "thc.CoreRequestTest", "thc.CoreUnitManagedExportTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactRecordsTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; cabal build exe:thc-fixtures --offline; mkdir -p build; cabal list-bin exe:thc-fixtures --offline > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]

@@ -2754,6 +2754,9 @@
     },
     "src/test/java/thc/CoreCbdTestSupport.java": {
       "junit": [
+        "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreUnitLoadTest",
+        "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest",
+        "thc.LauncherDiagnosticsTest", "thc.CoreRequestTest", "thc.CoreUnitManagedExportTest",
         "thc.CoreCbdArchiveTest",
         "thc.CoreCbdSlabsTest",
         "thc.CoreCompactDebugTest",
@@ -2822,6 +2825,12 @@
     },
     "t/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest",
+        "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest",
+        "thc.NarrowPublicEntryTest", "thc.LauncherDiagnosticsTest", "thc.CoreRequestTest",
+        "thc.CoreUnitManagedExportTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdSlabsTest",
+        "thc.CoreCompactDebugTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest",
+        "thc.CoreCompactRecordsTest",
         "thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest",
         "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest",
         "thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest",

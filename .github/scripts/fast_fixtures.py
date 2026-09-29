@@ -25,7 +25,7 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
 # Includes raw vector/string Core exports and their native scalar oracles.
-FULL_PREPARATION_PLAN = "e9967118ef32294ad2859704cb4f31214347db07dbfc1a3d676bb805ddbb8363"
+FULL_PREPARATION_PLAN = "95c8f006d0da77ab8b94c5ff6e75a5d179fbc8a9b07e7ecc8538faf8bb44ffde"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -48,6 +48,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields", "build/selector-proof",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/thc-fixtures.path",
     *(PROCESS_CORE_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else ()),
     *TEXT_CBITS_OUTPUTS,
     *fast_inputs.BYTESTRING_UTF8_OUTPUTS,
@@ -302,6 +303,7 @@ COMMON_SOURCES = (
     "Setup.hs",
     "Makefile",
     "src/compiler/THC/**/*.hs",
+    "src/cbd/**/*.hs",
     "src/core-symbols/**/*.hs",
     "bin/build-compiler.sh",
     "bin/export-core.sh",
@@ -594,7 +596,15 @@ def _output_hashes(root, group):
             raise RuntimeError(f"Unexpected fixture output: {path}")
     if not files:
         raise FileNotFoundError("Fixture outputs contain no files")
+    if Path("build/thc-fixtures.path") in files:
+        _require_prepared_encoder(root)
     return {str(path): _digest(root / path) for path in sorted(files)}
+
+
+def _require_prepared_encoder(root):
+    executable = (root / "build/thc-fixtures.path").read_text().strip()
+    if not executable or not (root / executable).is_file():
+        raise FileNotFoundError(f"Missing prepared fixture executable: {executable}")
 
 
 def _formatter_output_hashes(root):
@@ -708,6 +718,8 @@ def _full_output_hashes(root):
         path = fast_inputs.file_path(root, name)
         if not path.is_file():
             raise FileNotFoundError(f"Missing full fixture output: {name}")
+        if name == "build/thc-fixtures.path":
+            _require_prepared_encoder(root)
         details = path.stat()
         if details.st_size > fast_inputs.MAX_FILE_BYTES:
             raise RuntimeError(f"Oversized full fixture output: {name}")

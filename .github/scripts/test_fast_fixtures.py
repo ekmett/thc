@@ -294,7 +294,15 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'rubbish-literals']}], group['commands'])
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         required = fast_fixtures.fast_inputs.RUBBISH_OUTPUTS
-        self.assertEqual(30, len(required))
+        self.assertEqual(37, len(required))
+        for name in ('pre.cbd', 'post.cbd', 'frontiers.cbd', 'Data.Sequence.Internal.cbd',
+                     *(f'logs/{command}.{suffix}' for command in ('imports-containers', 'containers-unit')
+                       for suffix in ('stdout', 'stderr', 'command.json'))):
+            self.assertIn('build/rubbish-literals/' + name, required)
+        for name in ('pre.json', 'post.json', 'frontiers.json'):
+            path = 'build/rubbish-literals/' + name
+            self.assertNotIn(path, required)
+            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(path))
         self.assertTrue(required <= fast_fixtures.FULL_REQUIRED)
         self.assertTrue(required <= set(fast_fixtures.fast_inputs.REQUIRED))
         self.assertIn('build/rubbish-literals', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -2192,6 +2200,38 @@ class FixturePreparationTest(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("changed shared symbols dependency")
                 self.assertEqual(self.prepare("thc.AlphaTest")["rebuilt"], ["alpha"])
+
+    def test_missing_prepared_encoder_rebuilds_narrow_and_full_receipts(self):
+        pointer = "build/thc-fixtures.path"
+        executable = self.root / "dist-newstyle/thc-fixtures"
+        self.manifest["groups"]["alpha"]["outputs"] = [pointer]
+        self.manifest["groups"]["alpha"]["commands"] = [{"argv": ["make-encoder"]}]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+
+        def run(name, argv, stdout=None):
+            if argv not in (["make-encoder"], ["bin/prepare-tests.sh"]):
+                return
+            executable.parent.mkdir(parents=True, exist_ok=True)
+            executable.write_text("#!/bin/sh\nexit 0\n")
+            executable.chmod(0o755)
+            path = self.root / pointer
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(str(executable) + "\n")
+
+        with mock.patch.object(fast_fixtures, "FULL_OUTPUT_ROOTS", frozenset()), \
+             mock.patch.object(fast_fixtures, "FULL_REQUIRED", frozenset({pointer})), \
+             mock.patch.object(fast_fixtures, "_full_key", return_value="encoder-fixture"):
+            for mode, group in (("narrow", "alpha"), ("full", "full")):
+                with self.subTest(mode=mode):
+                    def prepare():
+                        return fast_fixtures.prepare(self.root, self.selection("thc.AlphaTest", mode=mode),
+                                                     run, self.toolchain)
+                    self.assertEqual([group], prepare()["rebuilt"])
+                    self.assertEqual([group], prepare()["reused"])
+                    executable.unlink()
+                    self.assertEqual(str(executable), (self.root / pointer).read_text().strip())
+                    self.assertEqual([group], prepare()["rebuilt"])
+                    self.assertEqual([group], prepare()["reused"])
 
     def test_preparatory_source_change_rechecks_previous_hits(self):
         self.prepare("thc.AlphaTest")
