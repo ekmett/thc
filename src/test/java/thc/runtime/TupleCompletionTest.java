@@ -40,6 +40,9 @@ class TupleCompletionTest {
     private static TupleShape shape(Language language) {
         var leaves = List.of(new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null),
             new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null));
+        return shape(language, leaves);
+    }
+    private static TupleShape shape(Language language, List<CoreRepresentation> leaves) {
         var reps = new ArrayList<String>();
         for (var leaf : leaves) reps.addAll(leaf.getPrimReps());
         return new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, true, true, reps, leaves, null, null, null, null), language);
@@ -126,6 +129,57 @@ class TupleCompletionTest {
     private static void released(Language language) {
         assertEquals(0, language.getHandoffState().get().getResults().getDepth());
         assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
+    }
+    @Test void ownedResultsKeepDynamicWidthsAndExactFieldsInCompiledCode() throws Exception {
+        withLanguage(language -> {
+            var leaves = new ArrayList<CoreRepresentation>();
+            var kinds = List.of(CoreKind.LONG, CoreKind.LONG, CoreKind.FLOAT, CoreKind.DOUBLE, CoreKind.ADDRESS, CoreKind.OBJECT);
+            var reps = List.of("Word8Rep", "IntRep", "FloatRep", "DoubleRep", "AddrRep", "BoxedRep (Just Lifted)");
+            for (int i = 0; i < reps.size(); i++)
+                leaves.add(new CoreRepresentation(kinds.get(i), true, true, List.of(reps.get(i)), null, null, null, null, null));
+            var mixed = shape(language, leaves);
+            var shapes = List.of(shape(language, List.of()), mixed, shape(language));
+            var address = ManagedAddress.fromByteArray(new byte[]{11}); var reference = new Object();
+            Object[] values = {255, Long.MIN_VALUE, Float.intBitsToFloat(0x7fc01234), Double.longBitsToDouble(0x7ff8000000001234L), address, reference};
+            var sources = new ArrayList<HandoffStorage>();
+            for (var current : shapes) {
+                var layout = current.getLayout(); var source = layout.create();
+                if (current == mixed) layout.copyIn(source, values);
+                else if (current.getWidth() != 0) layout.copyIn(source, new Object[]{17L, reference});
+                sources.add(source);
+            }
+            var copier = new RootNode(language) {
+                int dynamicEntries;
+                int compiledCopies;
+                @Override public Object execute(VirtualFrame frame) {
+                    var current = (TupleShape) frame.getArguments()[0];
+                    if (CompilerDirectives.inCompiledCode() && !CompilerDirectives.isPartialEvaluationConstant(current.getWidth())) dynamicEntries++;
+                    // The existing pooled-release loop requires a fixed layout;
+                    // this control isolates the genuinely dynamic fresh carrier.
+                    var owned = TupleResults.ownedTupleResult((HandoffStorage) frame.getArguments()[1], current);
+                    if (CompilerDirectives.inCompiledCode()) compiledCopies++;
+                    return owned;
+                }
+            };
+            var target = copier.getCallTarget();
+            target.getClass().getMethod("ensureInitialized").invoke(target);
+            ThreadInventoryCoreEvidence.install(List.of(target));
+            for (int n = 0; n < shapes.size(); n++) {
+                var current = shapes.get(n); var layout = current.getLayout(); var source = sources.get(n);
+                int entries = copier.dynamicEntries, copies = copier.compiledCopies;
+                var owned = (HandoffStorage) target.call(current, source);
+                assertEquals(entries + 1, copier.dynamicEntries, "The compiled copy must accept a genuinely dynamic width");
+                assertEquals(copies + 1, copier.compiledCopies); assertNotSame(source, owned); assertSame(layout, owned.getLayout());
+                for (int i = 0; i < current.getWidth(); i++) {
+                    if (layout.isInt(i)) assertEquals(layout.getInt(source, i), layout.getInt(owned, i));
+                    else if (layout.isLong(i)) assertEquals(layout.getLong(source, i), layout.getLong(owned, i));
+                    else if (layout.isFloat(i)) assertEquals(Float.floatToRawIntBits(layout.getFloat(source, i)), Float.floatToRawIntBits(layout.getFloat(owned, i)));
+                    else if (layout.isDouble(i)) assertEquals(Double.doubleToRawLongBits(layout.getDouble(source, i)), Double.doubleToRawLongBits(layout.getDouble(owned, i)));
+                    else assertSame(layout.getObject(source, i), layout.getObject(owned, i));
+                }
+                released(language);
+            }
+        });
     }
     @Test void invalidBytecodeConsumerRootFailsBeforeResultConsumptionOrLocalWrites() throws Exception {
         withLanguage(language -> {
