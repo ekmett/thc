@@ -130,6 +130,14 @@ The explicit additional inventory contains individually reviewed metadata;
 it does not authorize initialization of whole packages, native resources or
 context-owned state.
 
+`PreparedInitializationFeature` applies that unchanged finite inventory through
+Native Image's `RuntimeClassInitialization` API during setup, after Truffle's
+resource-provider registration. Applying the inventory eagerly on the command
+line can populate a language cache before optional resources are registered;
+the preinitialized engine then retains the incomplete cache. The feature resolves
+each actual class without initializing it first, so package names cannot expand
+the policy. It does not clear or modify Truffle caches or construct guest contexts.
+
 The `HostArrayGen` and `HostReferenceGen` export families are explicit generated
 host-ABI metadata. Their declaring initializers resolve the existing dynamic
 dispatch library and register literal receiver/library class descriptors.

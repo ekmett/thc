@@ -27,6 +27,24 @@ thc.runtime.NativeCallbackPointerGen
 thc.runtime.NativeCallbackPointerGen$InteropLibraryExports
 thc.runtime.NativeCallbackPointerGen$InteropLibraryExports$Cached
 thc.runtime.NativeCallbackPointerGen$InteropLibraryExports$Uncached
+# Static package callback metadata has the same descriptor-only shape. These
+# initializers allocate no NativeCallbacks receiver, context, closure or handle.
+thc.runtime.StaticExportGen
+thc.runtime.StaticExportGen$InteropLibraryExports
+thc.runtime.StaticExportGen$InteropLibraryExports$Cached
+thc.runtime.StaticExportGen$InteropLibraryExports$Uncached
+thc.runtime.NamespaceGen
+thc.runtime.NamespaceGen$InteropLibraryExports
+thc.runtime.NamespaceGen$InteropLibraryExports$Cached
+thc.runtime.NamespaceGen$InteropLibraryExports$Uncached
+thc.runtime.BoundThreadQueryGen
+thc.runtime.BoundThreadQueryGen$InteropLibraryExports
+thc.runtime.BoundThreadQueryGen$InteropLibraryExports$Cached
+thc.runtime.BoundThreadQueryGen$InteropLibraryExports$Uncached
+thc.runtime.StableReleaseGen
+thc.runtime.StableReleaseGen$InteropLibraryExports
+thc.runtime.StableReleaseGen$InteropLibraryExports$Cached
+thc.runtime.StableReleaseGen$InteropLibraryExports$Uncached
 # Generated checked-interop failure/metaobject descriptors only: framework
 # factories, class literals, assertion flags and fieldless/unadoptable libraries.
 # No exception receiver, original protocol exception, context or handle is created.

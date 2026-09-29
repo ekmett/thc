@@ -147,7 +147,7 @@ public final class AstTypedApplication extends Expr {
             throw cut.enclose(steps -> new Cleanup(this, steps));
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally { if (!suspended) operands.getSource().clear(frame); }
     }
     private Object dispatchAsync(VirtualFrame frame, Closure closure, int[] slots, int offset) {
@@ -158,6 +158,7 @@ public final class AstTypedApplication extends Expr {
     private static final class Cleanup implements AstResumeStep, DelimitedStep {
         private final AstTypedApplication owner;
         private final List<AstResumeStep> steps;
+        @CompilerDirectives.TruffleBoundary Cleanup(AstTypedApplication owner) { this(owner, List.of()); }
         Cleanup(AstTypedApplication owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             boolean suspended = false;
@@ -165,7 +166,7 @@ public final class AstTypedApplication extends Expr {
             catch (AstCapture cut) {
                 suspended = true; throw cut.enclose(remaining -> new Cleanup(owner, remaining));
             } catch (DelimitedCut cut) {
-                suspended = true; throw cut.append(frame, new Cleanup(owner, List.of()));
+                suspended = true; throw cut.append(frame, new Cleanup(owner));
             } finally { if (!suspended) owner.operands.getSource().clear(frame); }
         }
         @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {

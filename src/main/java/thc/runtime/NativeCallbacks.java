@@ -89,7 +89,7 @@ public final class NativeCallbacks {
             result = ManagedExportScalar.nativeRepresentation(declaration.result(), ManagedExportScalar.Role.RESULT, declaration.wordBits());
         }
         void check() { registry.checkEntry(); if (!open.isValid()) throw fault("Native static export has been unregistered"); }
-        synchronized Object pointer() {
+        @TruffleBoundary synchronized Object pointer() {
             registry.checkOwner();
             if (!open.isValid()) throw fault("Native static export has been unregistered");
             if (closure == null) {
@@ -165,10 +165,10 @@ public final class NativeCallbacks {
                 return new MemberNames(names.toArray(String[]::new));
             }
         }
-        @ExportMessage boolean isMemberReadable(String name) {
+        @ExportMessage @TruffleBoundary boolean isMemberReadable(String name) {
             registry.checkOwner(); synchronized (registry) { return name.equals("hs_free_stable_ptr") || name.equals("rtsSupportsBoundThreads") || registry.exports.containsKey(name); }
         }
-        @ExportMessage Object readMember(String name) throws UnknownIdentifierException {
+        @ExportMessage @TruffleBoundary Object readMember(String name) throws UnknownIdentifierException {
             registry.checkOwner();
             if (name.equals("hs_free_stable_ptr")) return registry.stableRelease();
             if (name.equals("rtsSupportsBoundThreads")) return registry.boundThreadSupport();

@@ -50,6 +50,7 @@ public final class AstOperands extends Expr {
     private static final class Cleanup implements AstResumeStep, DelimitedStep {
         private final AstOperands owner;
         private final List<AstResumeStep> steps;
+        @TruffleBoundary Cleanup(AstOperands owner) { this(owner, List.of()); }
         Cleanup(AstOperands owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             boolean suspended = false;
@@ -59,7 +60,7 @@ public final class AstOperands extends Expr {
                 throw cut.enclose(saved -> new Cleanup(owner, saved));
             } catch (DelimitedCut cut) {
                 suspended = true;
-                throw cut.append(frame, new Cleanup(owner, List.of()));
+                throw cut.append(frame, new Cleanup(owner));
             } finally { if (!suspended) owner.clear(frame); }
         }
         @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
@@ -77,7 +78,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -93,7 +94,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -109,7 +110,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -125,7 +126,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -141,7 +142,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -157,7 +158,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -173,7 +174,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -189,7 +190,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -205,7 +206,7 @@ public final class AstOperands extends Expr {
             throw encloseCleanup(cut);
         } catch (DelimitedCut cut) {
             suspended = true;
-            throw cut.append(frame, new Cleanup(this, List.of()));
+            throw cut.append(frame, new Cleanup(this));
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
