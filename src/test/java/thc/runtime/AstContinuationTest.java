@@ -195,6 +195,80 @@ class AstContinuationTest {
             } finally { if (thread.isAlive()) context.close(true); thread.join(5000); }
         }
     }
+    @Test void resumedJoinDropsDeadBodyLocalsButRetainsOuterCapturesAndTupleResult() throws Exception {
+        var module = directMVarModule(false, false, false, false, false, false, false);
+        var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var state = list("void", map("rep", stateRep));
+        var remaining = list("var", "remaining", map("rep", longRep));
+        var one = list("lit", "int", "1", map("rep", longRep));
+        var next = list("app", list("prim", "-#"), list(remaining, one), list(false, false), false, false, map("rep", longRep));
+        var recur = list("app", list("var", "loop", map("rep", closure)), list(next), list(false), false, false, map("rep", nestedTupleRep));
+        var pair = list("app", list("con", "Pair", 2), list(state, list("var", "payload", map("rep", dataRep))), list(false, true), false, false, map("rep", tupleRep));
+        var done = list("app", list("con", "Outer", 2), list(pair, list("var", "count", map("rep", longRep))), list(false, false), false, false, map("rep", nestedTupleRep));
+        var body = list("case", remaining, "remainingCase", list(list("lit", list("int", "1"), List.of(), done), list("default", null, List.of(), recur)),
+                map("rep", nestedTupleRep, "binder", map("id", "remainingCase", "rep", longRep)));
+        var read = list("app", list("prim", "takeMVar#"), list(list("var", "cell", map("rep", mvarRep)), state), list(false, false), false, false, map("rep", tupleRep));
+        var step = list("case", read, "returned", list(list("data", "Pair", list("stateOut", "payload"), body,
+                map("binders", list(map("id", "stateOut", "rep", stateRep), map("id", "payload", "rep", dataRep))))),
+                map("rep", nestedTupleRep, "binder", map("id", "returned", "rep", tupleRep)));
+        var loop = map("id", "loop", "name", "loop", "lifted", true, "rep", closure, "joinValueArity", 1, "joinResultRep", nestedTupleRep,
+                "expr", list("lam", list(map("id", "remaining", "lifted", false, "rep", longRep)), step, map("rep", closure, "resultRep", nestedTupleRep)));
+        var entry = list("app", list("var", "loop", map("rep", closure)), list(list("var", "count", map("rep", longRep))), list(false), false, false, map("rep", nestedTupleRep));
+        module.put("bindings", list(map("id", "direct", "name", "direct", "lifted", true,
+                "expr", list("lam", list(map("id", "cell", "lifted", false, "rep", mvarRep), map("id", "count", "lifted", false, "rep", longRep)),
+                        list("let", true, list(loop), entry, map("rep", nestedTupleRep)), map("resultRep", nestedTupleRep)))));
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            final Program program; final RootCallTarget target; final Language.State owner; final TupleShape shape;
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
+                program = new Program(language, module, true); target = program.entryTarget("direct"); shape = new TupleShape(CoreRepresentations.parse(nestedTupleRep), language);
+                for (int i = 0; i < 5; i++) {
+                    var ready = new ManagedMVar(); var payload = new Object(); assertTrue(ready.tryPut(payload));
+                    var value = TupleResults.ownedTupleResult(Calls.target(target, new Object[]{0L, ready, 1L}), shape);
+                    assertSame(payload, shape.getLayout().getObject(value, 0)); assertEquals(1L, shape.getLayout().getLong(value, 1));
+                }
+                assertEquals(true, target.getClass().getMethod("compile", boolean.class).invoke(target, true));
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+            } finally { context.leave(); }
+            var cell = new ManagedMVar(); var first = new Object(); var last = new Object(); assertTrue(cell.tryPut(first));
+            var answer = new CompletableFuture<AstContinuation>();
+            var worker = new Thread(() -> {
+                context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+                try {
+                    var saved = (AstContinuation) Calls.target(target, new Object[]{0L, cell, 2L});
+                    Objects.requireNonNull(saved.asyncRequest()).acknowledge(); answer.complete(saved);
+                } catch (Throwable failure) { answer.completeExceptionally(failure); }
+                finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+            });
+            worker.start();
+            try {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (cell.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
+                if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
+                assertEquals(1, cell.pendingCounts().getTakers());
+                var request = owner.getThreads().send(Objects.requireNonNull(owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "join reentry");
+                var saved = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive()); assertSame(request, saved.asyncRequest());
+                // A suspended second iteration must not retain the first iteration's dead payload.
+                var field = AstContinuation.class.getDeclaredField("frame"); field.setAccessible(true);
+                var frame = (com.oracle.truffle.api.frame.MaterializedFrame) field.get(saved);
+                for (int i = 0; i < frame.getFrameDescriptor().getNumberOfSlots(); i++)
+                    if (frame.isObject(i)) assertNotSame(first, frame.getObject(i), "Completed join must release its dead payload");
+                context.enter();
+                try {
+                    assertTrue(cell.tryPut(last));
+                    var value = TupleResults.ownedTupleResult(saved.continueWith(thc.runtime.Unit.INSTANCE), shape);
+                    assertSame(last, shape.getLayout().getObject(value, 0)); assertEquals(2L, shape.getLayout().getLong(value, 1));
+                    assertTrue(cell.isEmpty()); assertThrows(RuntimeFault.class, () -> saved.continueWith(thc.runtime.Unit.INSTANCE));
+                    var handoff = shape.getLanguage().getHandoffState().get(); assertNull(handoff.getPending());
+                    assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+                    assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+                } finally { context.leave(); }
+            } finally { if (worker.isAlive()) context.close(true); worker.join(5000); }
+        }
+    }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void synchronousMVarTakePreservesItsPayloadThroughTheFirstCompiledCall(String backend) throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
