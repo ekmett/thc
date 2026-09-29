@@ -362,7 +362,8 @@ public final class Program implements ExecutableProgram {
                 if ("prim".equals(function.getFirst())) {
                     String name = (String) function.get(1);
                     if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null && MutVarOp.named(name) == null &&
-                            !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "indexCharOffAddr#",
+                            CoreArithmeticExceptions.payload(name) == null &&
+                            !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "indexCharOffAddr#", "tagToEnum#",
                             "raise#", "raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#",
                             "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#",
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
@@ -1997,6 +1998,14 @@ public final class Program implements ExecutableProgram {
             if (args.size() != 1) throw new RuntimeFault("tagToEnum#: Exactly one operand required");
             Expr operand = compile(args.get(0), scope, false);
             var ids = CoreEnums.validate(expr, operand.getRepresentation(), constructors);
+            if (reusableCode) {
+                int[] indices = new int[ids.size()];
+                for (int i = 0; i < indices.length; i++) {
+                    dataLayout(ids.get(i));
+                    indices[i] = required(constructorIndices, ids.get(i));
+                }
+                return new TagToEnum(scope.programSlot, indices, operand);
+            }
             DataValue[] values = new DataValue[ids.size()];
             for (int i = 0; i < values.length; i++) values[i] = dataLayout(ids.get(i)).allocate();
             return new TagToEnum(new EnumFamily(values), operand);
@@ -2059,7 +2068,9 @@ public final class Program implements ExecutableProgram {
             String id = Objects.requireNonNull(CoreArithmeticExceptions.payload(name));
             GlobalBinding payload = globals.get(id);
             if (payload == null) throw new UnsupportedCore("Unresolved implicit exception binding " + id);
-            return new RaiseArithmeticException(operand, new RaiseException(new GlobalRead(payload), true));
+            if (reusableCode) codeDependencies.add(id);
+            Expr value = reusableCode ? new GlobalRead(required(indices, id), scope.programSlot) : new GlobalRead(payload);
+            return new RaiseArithmeticException(operand, new RaiseException(value, true));
         }
         if (primitive && Set.of("raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#").contains(fn.get(1))) {
             String name = (String) fn.get(1);

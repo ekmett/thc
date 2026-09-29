@@ -12,10 +12,13 @@ public final class EnumFamily {
     public EnumFamily(DataValue[] values) { this.values = values; }
 
     public DataValue select(long tag) {
-        if (tag < 0 || tag >= values.length) {
+        return values[index(tag, values.length)];
+    }
+    static int index(long tag, int size) {
+        if (tag < 0 || tag >= size) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw new RuntimeFault("tagToEnum#: tag out of range: " + tag + " (family size " + values.length + ")");
+            throw new RuntimeFault("tagToEnum#: tag out of range: " + tag + " (family size " + size + ")");
         }
-        return values[(int) tag];
+        return (int) tag;
     }
 }

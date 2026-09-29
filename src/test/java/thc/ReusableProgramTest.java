@@ -16,6 +16,81 @@ import static thc.CoreExecutionTestSupport.*;
 /** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
     @Test @SuppressWarnings("unchecked")
+    void preparedEnumsAndArithmeticPayloadsUseTheInvokingInstance() throws Exception {
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var empty = map("kind", "unknown", "evaluated", true, "primReps", list(),
+            "aggregate", "unboxed-tuple", "components", list());
+        var family = map("typeConstructor", "Choice", "constructors", list("Zero", "One"));
+        var constructors = new ArrayList<Map<String,Object>>();
+        for (int i = 0; i < 2; i++) {
+            String name = i == 0 ? "Zero" : "One";
+            constructors.add(map("id", name, "name", name, "kind", "boxed", "arity", 0, "tag", i + 1,
+                "enumFamily", family, "fieldReps", list(), "fieldTypes", list(), "fieldLifted", list(), "strictFields", list()));
+        }
+        constructors.add(map("id", "Tuple0", "name", "Tuple0", "kind", "unboxed-tuple", "arity", 0));
+        String payload = "ghc-internal:GHC.Internal.Exception.Type.divZeroException";
+        var selected = list("app", list("prim", "tagToEnum#"), list(variable("x")), list(false), false, false,
+            map("rep", data, "enumFamily", family));
+        var raised = list("app", list("prim", "raiseDivZero#"),
+            list(list("con", "Tuple0", 0, map("rep", empty))), list(false), false, false, map("rep", data));
+        var bindings = new ArrayList<Map<String,Object>>();
+        bindings.add(binding(payload, list("con", "Zero", 0, map("rep", data)), true));
+        for (var name : List.of("select", "raise")) {
+            var entry = binding(name, list("lam", list(wordParameter("x")), name.equals("select") ? selected : raised,
+                map("rep", closure, "resultRep", data)), true);
+            entry.put("rep", closure); entry.put("arity", 1); bindings.add(entry);
+        }
+        var module = module(bindings); module.put("constructors", constructors);
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("select", "raise")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode");
+            var owners = new ArrayList<Object>();
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var first = code.newInstance(language); var second = code.newInstance(language);
+                        for (var program : List.of(first, second)) {
+                            System.setProperty("thc.requireCompiledCode", "true");
+                            var select = (Closure)program.entryValue("select");
+                            Object zero = Calls.target(select.target, new Object[]{0L, select.environment, 0L});
+                            assertSame(zero, Calls.target(select.target, new Object[]{0L, select.environment, 0L}));
+                            assertNotSame(zero, Calls.target(select.target, new Object[]{0L, select.environment, 1L}));
+                            for (var owner : owners) assertNotSame(owner, zero);
+                            owners.add(zero); assertSame(program.entryValue(payload), zero);
+                            assertTrue(count(program, "compiledEntries") >= 3);
+                            assertEquals(0, count(program, "loweredRootCount"));
+                            // Stock exception deoptimization is allowed. Ownership
+                            // must still hold for every later invocation.
+                            System.setProperty("thc.requireCompiledCode", "false");
+                            var raise = (Closure)program.entryValue("raise");
+                            var failure = assertThrows(GuestException.class,
+                                () -> Calls.target(raise.target, new Object[]{0L, raise.environment, 0L}));
+                            assertSame(zero, failure.getPayload()); assertTrue(failure.getSomeException());
+                            if (program == first) assertEquals(0, count(second, "compiledEntries"));
+                        }
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
     void preparedAtomicModifierKeepsLazyCapturesAndMetricsPerInstance() throws Exception {
         var state = map("kind", "void", "evaluated", true, "primReps", list());
         var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
