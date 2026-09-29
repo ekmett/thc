@@ -16,6 +16,101 @@ import static thc.CoreExecutionTestSupport.*;
 /** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
     @Test @SuppressWarnings("unchecked")
+    void preparedAtomicModifierKeepsLazyCapturesAndMetricsPerInstance() throws Exception {
+        var state = map("kind", "void", "evaluated", true, "primReps", list());
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var data = map("kind", "data", "evaluated", false, "primReps", list("BoxedRep (Just Lifted)"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var mutvar = map("kind", "object", "evaluated", true, "primReps", list("BoxedRep (Just Unlifted)"));
+        var stateBinder = map("id", "s", "name", "s", "lifted", false, "rep", state);
+        var oldBinder = map("id", "old", "name", "old", "lifted", true, "rep", data);
+        var cellBinder = map("id", "cell", "name", "cell", "lifted", false, "rep", mutvar);
+        var old = list("var", "old", map("rep", data));
+        var cell = list("var", "cell", map("rep", mutvar));
+        var token = list("void", map("rep", state));
+        var shared = binding("shared", list("app", list("con", "Box", 1), list(literal(42)), list(false),
+            false, false, map("rep", data)), true);
+        shared.put("rep", data);
+        var modifier = binding("modifier", list("lam", list(oldBinder),
+            list("app", list("con", "Pair", 2), list(list("var", "shared", map("rep", data)), old),
+                list(true, true), false, false, map("rep", data)), map("rep", closure, "resultRep", data)), true);
+        modifier.put("rep", closure); modifier.put("arity", 1);
+        var modified = map("kind", "unknown", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)", "BoxedRep (Just Lifted)"),
+            "aggregate", "unboxed-tuple", "components", list(state, data, data));
+        var read = map("kind", "unknown", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"),
+            "aggregate", "unboxed-tuple", "components", list(state, data));
+        var modification = list("app", list("prim", "atomicModifyMutVar2#"),
+            list(cell, list("var", "modifier", map("rep", closure)), token), list(false, true, false), false, false, map("rep", modified));
+        var modificationBody = list("case", modification, "triple", list(list("data", "Triple", list("s", "old", "result"), old,
+            map("binders", list(stateBinder, oldBinder, map("id", "result", "name", "result", "lifted", true, "rep", data))))),
+            map("binder", map("id", "triple", "name", "triple", "lifted", false, "rep", modified), "rep", data));
+        var readBody = list("case", list("app", list("prim", "readMutVar#"), list(cell, token), list(false, false), false, false, map("rep", read)),
+            "readPair", list(list("data", "ReadPair", list("s", "old"),
+                list("case", old, "boxed", list(list("data", "Box", list("value"), variable("value"),
+                    map("binders", list(wordParameter("value"))))),
+                    map("binder", map("id", "boxed", "name", "boxed", "lifted", true, "rep", data), "rep", word)),
+                map("binders", list(stateBinder, oldBinder)))),
+            map("binder", map("id", "readPair", "name", "readPair", "lifted", false, "rep", read), "rep", word));
+        var bindings = list(shared, modifier);
+        var all = new ArrayList<Map<String,Object>>(bindings);
+        for (String name : List.of("modify", "read")) {
+            var result = name.equals("modify") ? data : word;
+            var entry = binding(name, list("lam", list(cellBinder), name.equals("modify") ? modificationBody : readBody,
+                map("rep", closure, "resultRep", result)), true);
+            entry.put("rep", closure); entry.put("arity", 1); all.add(entry);
+        }
+        var module = module(all);
+        module.put("constructors", list(
+            map("id", "Box", "name", "Box", "arity", 1, "kind", "boxed", "tag", 1,
+                "strictFields", list(true), "fieldLifted", list(false), "fieldReps", list(list("IntRep")), "fieldTypes", list(word)),
+            map("id", "Pair", "name", "Pair", "arity", 2, "kind", "boxed", "tag", 1,
+                "strictFields", list(false, false), "fieldLifted", list(true, true),
+                "fieldReps", list(list("BoxedRep (Just Lifted)"), list("BoxedRep (Just Lifted)")), "fieldTypes", list(data, data)),
+            map("id", "Triple", "name", "Triple", "arity", 3, "kind", "unboxed-tuple"),
+            map("id", "ReadPair", "name", "ReadPair", "arity", 2, "kind", "unboxed-tuple")));
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("modify", "read")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var first = code.newInstance(language); var second = code.newInstance(language);
+                        for (var program : List.of(first, second)) {
+                            Object original = new DataLayout(language, "old", "old", new String[0]).allocate();
+                            var storage = new ManagedMutVar(original);
+                            var modifyEntry = (Closure)program.entryValue("modify");
+                            assertSame(original, Calls.target(modifyEntry.target, new Object[]{0L, modifyEntry.environment, storage}));
+                            assertInstanceOf(Thunk.class, storage.getValue()); assertEquals(0, count(program, "thunkEvaluations"));
+                            var readEntry = (Closure)program.entryValue("read");
+                            assertEquals(42L, Calls.target(readEntry.target, new Object[]{0L, readEntry.environment, storage}));
+                            long evaluated = count(program, "thunkEvaluations"); assertEquals(3, evaluated);
+                            assertEquals(42L, Calls.target(readEntry.target, new Object[]{0L, readEntry.environment, storage}));
+                            assertEquals(evaluated, count(program, "thunkEvaluations"));
+                            assertEquals(0, count(program, "loweredRootCount")); code.requireInstalledCode();
+                            if (program == first) assertEquals(0, count(second, "compiledEntries"));
+                        }
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
     void preparedSynchronousHandlersAndMaskingNeedNoTraining() throws Exception {
         var state = map("kind", "void", "evaluated", true, "primReps", list());
         var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));

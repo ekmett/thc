@@ -361,7 +361,7 @@ public final class Program implements ExecutableProgram {
                 List<Object> function = (List<Object>) expression.get(1);
                 if ("prim".equals(function.getFirst())) {
                     String name = (String) function.get(1);
-                    if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null &&
+                    if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null && MutVarOp.named(name) == null &&
                             !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "indexCharOffAddr#",
                             "raise#", "raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#",
                             "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#",
@@ -2208,6 +2208,11 @@ public final class Program implements ExecutableProgram {
         if (primitive && MutVarOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(MutVarOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
+            if (reusableCode) {
+                MutVarModifySite site = operation == MutVarOp.MODIFY || operation == MutVarOp.MODIFY2
+                    ? new MutVarModifySite((thc.Language) language, codeIdentity, codeTargets, operation == MutVarOp.MODIFY2) : null;
+                return MutVarOp.expression(operation, tupleProof, argumentOperands(args, scope, flags), site, scope.programSlot);
+            }
             return MutVarOp.expression(operation, tupleProof, argumentOperands(args, scope, flags), language, metrics, enableAsync);
         }
         if (primitive && WeakOp.named((String) fn.get(1)) != null) {

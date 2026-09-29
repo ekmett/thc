@@ -33,11 +33,12 @@ public final class ManagedMutVar {
         }
         return witness;
     }
-    @TruffleBoundary public ModifiedMutVar modify(Object function, MutVarModifySite site) {
+    public ModifiedMutVar modify(Object function, MutVarModifySite site) { return modify(function, site, null); }
+    @TruffleBoundary ModifiedMutVar modify(Object function, MutVarModifySite site, Program program) {
         while (true) {
             Object old = value;
-            var result = site.application(function, old);
-            var selected = site.stored(result);
+            var result = site.application(function, old, program);
+            var selected = site.stored(result, program);
             if (VALUE_HANDLE.compareAndSet(this, old, selected)) return new ModifiedMutVar(old, result);
         }
     }
