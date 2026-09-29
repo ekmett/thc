@@ -6,7 +6,7 @@
 module DynamicCallbackFixtures (prepareDynamicCallbacks) where
 
 import Control.Monad (forM_, unless)
-import Data.Aeson (Value, object, (.=))
+import Data.Aeson (object, (.=))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import FixtureSupport
@@ -34,10 +34,9 @@ prepareDynamicCallbacks root = do
   copyFile support (output </> "runtime-support.json")
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
-  built <- execute "helper-build" [] cabal ["build","--offline","-j2","lib:thc","exe:thc-interface","exe:thc-compact"]
+  built <- execute "helper-build" [] cabal ["build","--offline","-j2","lib:thc","exe:thc-interface"]
   located <- execute "helper-location" [] cabal ["list-bin","--offline","exe:thc-interface"]
   let helper = line (commandStdout located)
-  compactLocation <- execute "compact-location" [] cabal ["list-bin","--offline","exe:thc-compact"]
   pluginRecord <- execute "plugin-registry" [] "python3" ["bin/plugin.py","--root",root,"--registry-only"]
   BS.writeFile (output </> "plugin.json") (commandStdout pluginRecord)
   plugin <- readJson (output </> "plugin.json")
@@ -54,17 +53,16 @@ prepareDynamicCallbacks root = do
   hydrated <- execute "original-interface" [] helper ["--libdir",libdir,"--unit","callback-fixture",
     "--module","DynamicCallback","--interface",objects </> "DynamicCallback.hi","--way","dynamic",
     "--home-interfaces",objects]
-  BS.writeFile (output </> "interface-response.json") (commandStdout hydrated)
-  response <- readJson (output </> "interface-response.json")
-  original <- field response "core" :: IO Value
-  writeJson (output </> "core/DynamicCallback.json") original
+  BS.writeFile (output </> "interface-response.cbd") (commandStdout hydrated)
+  let captured = output </> "core/units/u-callback-fixture/DynamicCallback.cbd"
+  BS.writeFile captured (commandStdout hydrated)
   let cArguments = ["-c","-O2",cSource,"-o",objects </> "callback.o"]
   cCompiled <- execute "native-component" [] ghc cArguments
   captureNativeObject pieces ghc cArguments
   capturePackageNative root helper libdir ghc ["-dynamic","-odir",objects] "callback-fixture" output
-  retained <- BS.readFile (output </> "core/DynamicCallback.json")
-  linked <- finishPackageNative pieces output "callback-fixture" (Just [objects </> "callback.o"]) [("DynamicCallback.json",retained)]
-  forM_ linked $ \(name,bytes) -> BS.writeFile (output </> name) bytes
+  let staged = output </> "DynamicCallback.cbd"
+  copyFile captured staged
+  _ <- finishPackageNative pieces output "callback-fixture" (Just [objects </> "callback.o"]) [("DynamicCallback.cbd",staged)]
   oracleBuilt <- execute "native-build" [] ghc
     ["--make","-O2","-fforce-recomp","-dcore-lint","-i","-it/fixtures/compiler",
      "-odir",native,"-hidir",native,"-stubdir",native,nativeSource,cSource,"-o",native </> "oracle"]
@@ -75,9 +73,7 @@ prepareDynamicCallbacks root = do
   audited <- execute "strict-audit" [] "python3"
     (["bin/audit-core.py","--package-manifest",output </> "runtime-support.json",
       "--output",output </> "audit.json"] ++ concatMap (\name -> ["--entry","callback-fixture:DynamicCallback." ++ name])
-      ["run","makePointer","callPointer","unsafePointer","releasePointer","echoPointer"] ++ [output </> "DynamicCallback.json"])
-  encoded <- execute "compact-encode" [] (line (commandStdout compactLocation))
-    ["encode",output </> "DynamicCallback.json",output </> "DynamicCallback.cbd"]
+      ["run","makePointer","callPointer","unsafePointer","releasePointer","echoPointer"] ++ [output </> "DynamicCallback.cbd"])
   staticCommands <- prepareStaticExport root output ghc helper libdir pluginDb pluginUnit
   inputHashes <- hashes root (sources ++ ["t/fixtures/run-static-exports/NativeExport.hs", "t/fixtures/run-static-exports/Main.hs",
     "t/fixtures/run-static-exports/cbits/callbacks.c", "t/fixtures/run-static-exports/cbits/callbacks.h",
@@ -85,11 +81,11 @@ prepareDynamicCallbacks root = do
     "src/compiler/THC/ForeignImportProvenance.hs","src/compiler/THC/Plugin.hs",
     "src/driver/THC/Driver/PackageNative.hs","bin/audit-core.py","bin/core_package_manifest.py"])
   artifactHashes <- hashes root [relative </> name | name <-
-    ["DynamicCallback.json","DynamicCallback.cbd","runtime-support.json","interface-response.json","oracle.txt","audit.json",
-      "NativeExport.json", "static-oracle.txt", "static-audit.json"]]
+    ["DynamicCallback.cbd","runtime-support.json","interface-response.cbd","oracle.txt","audit.json",
+      "NativeExport.cbd", "static-oracle.txt", "static-audit.json"]]
   writeJson (output </> "manifest.json") $ object ["schema" .= (1 :: Int),"inputHashes" .= inputHashes,
     "artifactHashes" .= artifactHashes,"commands" .= map commandRecord
-      ([built,located,compactLocation,pluginRecord,compiled,libdirResult,hydrated,cCompiled,oracleBuilt,oracle,audited,encoded] ++ staticCommands)]
+      ([built,located,pluginRecord,compiled,libdirResult,hydrated,cCompiled,oracleBuilt,oracle,audited] ++ staticCommands)]
   putStrLn "dynamic-callback: original scalar/address callbacks, retained native pointer and native GHC oracle"
   where
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "Expected one selected tool path"
@@ -116,9 +112,9 @@ prepareStaticExport root output ghc helper libdir pluginDb pluginUnit = do
   cCompiled <- execute "static-native-component" [] ghc cArguments
   captureNativeObject (capture </> "pieces") ghc cArguments
   capturePackageNative root helper libdir ghc ["-dynamic", "-I" ++ root </> source </> "cbits", "-odir", objects] unit capture
-  retained <- BS.readFile (capture </> "core/units/u-static-export-fixture/NativeExport.json")
-  linked <- finishPackageNative (capture </> "pieces") capture unit (Just [objects </> "callbacks.o"]) [("NativeExport.json", retained)]
-  forM_ linked $ \(name, bytes) -> BS.writeFile (output </> name) bytes
+  let staged = output </> "NativeExport.cbd"
+  copyFile (capture </> "core/units/u-static-export-fixture/NativeExport.cbd") staged
+  _ <- finishPackageNative (capture </> "pieces") capture unit (Just [objects </> "callbacks.o"]) [("NativeExport.cbd",staged)]
   oracleBuilt <- execute "static-native-build" [] ghc
     ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-i", "-i" ++ source, "-I" ++ root </> source </> "cbits",
      "-odir", native, "-hidir", native, "-stubdir", native, source </> "Main.hs", source </> "cbits/callbacks.c", "-o", native </> "main"]
@@ -127,5 +123,5 @@ prepareStaticExport root output ghc helper libdir pluginDb pluginUnit = do
   BS.writeFile (output </> "static-oracle.txt") (commandStdout oracle)
   audited <- execute "static-strict-audit" [] "python3"
     ["bin/audit-core.py", "--package-manifest", output </> "runtime-support.json", "--entry", unit ++ ":NativeExport.probe",
-     "--output", output </> "static-audit.json", output </> "NativeExport.json"]
+     "--output", output </> "static-audit.json", output </> "NativeExport.cbd"]
   pure [compiled, cCompiled, oracleBuilt, oracle, audited]

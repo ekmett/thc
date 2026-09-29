@@ -16,7 +16,6 @@ module PackageNativeArchiveFixtures (preparePackageNativeArchives) where
 import Control.Monad (forM, unless)
 import Data.Aeson (eitherDecodeStrict', Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (sort)
 import FixtureSupport
@@ -117,14 +116,14 @@ preparePackageNativeArchives root = do
   unless (all (\(_,_,typed,wide,_,staticPointer) -> typed == wide && typed == staticPointer) observations)
     (fail "native typed and machine-register argument calls differ")
   linked <- concat <$> forM units (\unit -> do
-    paths <- sort . filter ((== ".json") . takeExtension) <$> files (capture </> unit </> "core")
-    modules <- mapM (\path -> (,) (takeFileName path) <$> BS.readFile path) paths
+    paths <- sort . filter ((== ".cbd") . takeExtension) <$> files (capture </> unit </> "core")
+    modules <- forM paths $ \path -> do
+      let destination = output </> "linked" </> unit </> takeFileName path
+      createDirectoryIfMissing True (takeDirectory destination)
+      copyFile path destination
+      pure (takeFileName path,destination)
     products <- finishPackageNative pieces (capture </> unit) unit Nothing modules
-    forM products $ \(name,bytes) -> do
-      let path = relative </> "linked" </> unit </> name
-      createDirectoryIfMissing True (takeDirectory (root </> path))
-      BS.writeFile (root </> path) bytes
-      pure path)
+    pure [makeRelative root path | (_,path) <- products])
   let mixed = mixedUnit ++ ":Mixed."
       acceptedEntries = [mixed ++ "allowed", mixedUnit ++ ":Narrow.allowed",
         mixedUnit ++ ":CapiMix.mixedProbe#", mixedUnit ++ ":Lifecycle.lifecycleProbe#",

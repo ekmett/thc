@@ -39,14 +39,14 @@ import GHC.Runtime.Interpreter (wormhole)
 import GHC.Types.Avail (availName)
 import qualified GHC.Types.ForeignCall as F
 import GHC.Unit.Module.WholeCoreBindings (emptyIfaceForeign)
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (copyFile, createDirectoryIfMissing)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
 import Text.Read (readMaybe)
 import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
-import THC.Interface (loadInterfaceCore, interfaceBindings, interfaceCoreJSONBytes)
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Interface (loadInterfaceCore, interfaceBindings, interfaceCoreCBD)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 
 variables :: CoreExpr -> [Id]
@@ -107,18 +107,22 @@ prepareOriginalTimeClock root = do
       raw <- readBinIface (targetProfile flags) (hsc_NC env) CheckHiWay QuietBinIFace interface
       unless (unitString (moduleUnit (mi_module raw)) == unit) (die "Wrong original time interface owner")
       actual <- loadInterfaceCore env (mi_module raw) interface >>= maybe (die "Original time clocks require complete installed Core") pure
-      bytes <- interfaceCoreJSONBytes ["unit-qualified"] actual
-      BS.writeFile (root </> directory </> "original.json") bytes
-      linked <- linkClockGetTime libdir includes (root </> directory </> "ghc") platform unit
-        "Data.Time.Clock.Internal.CTimespec" bytes
-      BS.writeFile (root </> directory </> "linked.json") linked
+      bytes <- interfaceCoreCBD ["unit-qualified"] actual
+      let originalPath = root </> directory </> "original.cbd"
+          linkedPath = root </> directory </> "linked.cbd"
+      BS.writeFile originalPath bytes
+      copyFile originalPath linkedPath
+      _ <- linkClockGetTime libdir includes (root </> directory </> "ghc") platform unit
+        "Data.Time.Clock.Internal.CTimespec" linkedPath
       baseRaw <- readBinIface (targetProfile flags) (hsc_NC env) CheckHiWay QuietBinIFace baseInterface
       baseActual <- loadInterfaceCore env (mi_module baseRaw) baseInterface >>= maybe (die "Base coexistence requires complete Core") pure
-      baseBytes <- interfaceCoreJSONBytes ["unit-qualified"] baseActual
-      BS.writeFile (root </> directory </> "base-original.json") baseBytes
-      baseLinked <- linkClockGetTime libdir [] (root </> directory </> "ghc") platform
-        (unitString (moduleUnit (mi_module baseRaw))) "System.CPUTime.Posix.ClockGetTime" baseBytes
-      BS.writeFile (root </> directory </> "base-linked.json") baseLinked
+      baseBytes <- interfaceCoreCBD ["unit-qualified"] baseActual
+      let baseOriginalPath = root </> directory </> "base-original.cbd"
+          baseLinkedPath = root </> directory </> "base-linked.cbd"
+      BS.writeFile baseOriginalPath baseBytes
+      copyFile baseOriginalPath baseLinkedPath
+      _ <- linkClockGetTime libdir [] (root </> directory </> "ghc") platform
+        (unitString (moduleUnit (mi_module baseRaw))) "System.CPUTime.Posix.ClockGetTime" baseLinkedPath
       constant <- case [v | (v,_) <- flattenBinds (interfaceBindings actual), getOccString v == "clock_REALTIME"] of
         [v] -> pure v
         _ -> die "Missing unique original clock_REALTIME value binding"
@@ -170,12 +174,12 @@ prepareOriginalTimeClock root = do
           omitted = [getOccString variable | (_,body) <- flattenBinds (mg_binds adapted),
             variable <- variables body, variable `elem` map fst bindings, variable `notElem` retained]
       unless (null omitted) (die ("Clock consumer specialization omitted local dependencies: " ++ show omitted))
-      serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> "specialized-closed.json")
+      serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "specialized-closed.cbd")
       simplified <- hscSimplify current [] adapted
-      serializeOptimizedCore flags ["unit-qualified"] simplified >>= writeFile (root </> directory </> "pre.json")
+      serializeOptimizedCoreCBD flags ["unit-qualified"] simplified >>= BS.writeFile (root </> directory </> "pre.cbd")
       (tidied,_) <- hscTidy current simplified
-      serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-        (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
+      serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+        (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
       identifier <- compile ("Constant", "clock_REALTIME")
       realtime <- (unsafeCoerce identifier :: Int -> IO Int) 0
       observations <- fmap concat $ forM [call | call@(name,_) <- calls, name `elem` ["Resolution","Time"]] $ \call@(name,_) -> do
@@ -203,10 +207,10 @@ prepareOriginalTimeClock root = do
   writeJson (root </> directory </> "oracle.json") $ object ["realtime" .= clock,"rows" .= (rows :: [Value])]
   audits <- forM [(stage,entry) | stage <- ["pre","post"], entry <- ["originalId","originalConstant","originalResolution","originalTime"]] $ \(stage,entry) ->
     runLoggedExpect (if entry == "originalId" then 1 else 0) 180 root (directory </> "logs") (stage ++ "-" ++ entry) [] "python3" ["bin/audit-core.py","--entry",entry,
-      "--output",directory </> stage ++ "-" ++ entry ++ ".audit.json",directory </> "linked.json",directory </> stage ++ ".json"]
+      "--output",directory </> stage ++ "-" ++ entry ++ ".audit.json",directory </> "linked.cbd",directory </> stage ++ ".cbd"]
   inputHashes <- hashes root [source,"t/haskell-fixtures/OriginalTimeClockFixtures.hs","src/driver/THC/Driver/ForeignBitcode.hs",
     "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/core_package_manifest.py","bin/audit-core.py"]
-  artifactHashes <- hashes root ([directory </> name | name <- ["oracle.json","original.json","linked.json","base-original.json","base-linked.json","specialized-closed.json","pre.json","post.json"]] ++
+  artifactHashes <- hashes root ([directory </> name | name <- ["oracle.json","original.cbd","linked.cbd","base-original.cbd","base-linked.cbd","specialized-closed.cbd","pre.cbd","post.cbd"]] ++
     [directory </> stage ++ "-" ++ entry ++ ".audit.json" | stage <- ["pre","post"], entry <- ["originalId","originalConstant","originalResolution","originalTime"]] ++
     concatMap commandArtifacts ([version,library,info,imports,include,identity,baseImports] ++ audits))
   interfaceHashes <- hashes root [interface,baseInterface]

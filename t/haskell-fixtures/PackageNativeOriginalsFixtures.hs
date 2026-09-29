@@ -117,28 +117,19 @@ preparePackageNativeOriginals root = do
   planned <- field plan "install-plan" :: IO [Value]
   names <- mapM (\value -> field value "id") planned
   unless (all (`elem` (names :: [String])) [unit,erfUnit,primitiveUnit]) (fail "original package Cabal unit differs")
-  modulePaths <- filter ((== ".json") . takeExtension) <$> files (capture </> unit </> "core")
-  modules <- forM modulePaths $ \path -> (,) (takeFileName path) <$> BS.readFile path
-  unless (sort (map fst modules) == ["Data.Digest.Adler32.json","Data.Digest.CRC32.json","Data.Digest.CRC32C.json"])
+  let linkedDirectory = output </> "linked" </> unit
+      erfLinkedDirectory = output </> "linked" </> erfUnit
+      primitiveLinkedDirectory = output </> "linked" </> primitiveUnit
+  modules <- stage (capture </> unit </> "core") linkedDirectory
+  unless (sort (map fst modules) == ["Data.Digest.Adler32.cbd","Data.Digest.CRC32.cbd","Data.Digest.CRC32C.cbd"])
     (fail "original digest retained module inventory differs")
   linked <- finishPackageNative pieces (capture </> unit) unit Nothing modules
-  let linkedDirectory = output </> "linked" </> unit
-  createDirectoryIfMissing True linkedDirectory
-  forM_ linked $ \(name,bytes) -> BS.writeFile (linkedDirectory </> name) bytes
-  erfModulePaths <- filter ((== ".json") . takeExtension) <$> files (capture </> erfUnit </> "core")
-  erfModules <- forM erfModulePaths $ \path -> (,) (takeFileName path) <$> BS.readFile path
-  unless (map fst erfModules == ["Data.Number.Erf.json"]) (fail "original erf retained module inventory differs")
+  erfModules <- stage (capture </> erfUnit </> "core") erfLinkedDirectory
+  unless (map fst erfModules == ["Data.Number.Erf.cbd"]) (fail "original erf retained module inventory differs")
   erfLinked <- finishPackageNative pieces (capture </> erfUnit) erfUnit Nothing erfModules
-  let erfLinkedDirectory = output </> "linked" </> erfUnit
-  createDirectoryIfMissing True erfLinkedDirectory
-  forM_ erfLinked $ \(name,bytes) -> BS.writeFile (erfLinkedDirectory </> name) bytes
-  primitiveModulePaths <- filter ((== ".json") . takeExtension) <$> files (capture </> primitiveUnit </> "core")
-  primitiveModules <- forM primitiveModulePaths $ \path -> (,) (takeFileName path) <$> BS.readFile path
+  primitiveModules <- stage (capture </> primitiveUnit </> "core") primitiveLinkedDirectory
   unless (length primitiveModules == 14) (fail "original primitive retained module inventory differs")
   primitiveLinked <- finishPackageNative pieces (capture </> primitiveUnit) primitiveUnit Nothing primitiveModules
-  let primitiveLinkedDirectory = output </> "linked" </> primitiveUnit
-  createDirectoryIfMissing True primitiveLinkedDirectory
-  forM_ primitiveLinked $ \(name,bytes) -> BS.writeFile (primitiveLinkedDirectory </> name) bytes
   compiled <- execute "digest-native-build" [] ghc
     ["-O1","-package-db",native </> "packagedb/ghc-9.14.1","-package-id",unit,
      "t/fixtures/compiler/OriginalDigestNative.hs","-outputdir",output </> "oracle-objects",
@@ -174,7 +165,7 @@ preparePackageNativeOriginals root = do
     (["bin/audit-core.py","--output",output </> "primitive-audit.json"] ++
      concatMap (\name -> ["--entry","original-primitive-entry:OriginalPrimitiveEntry." ++ name])
        ["signed16","unsigned16","signed64"] ++
-     [primitiveEntryOutput </> "units/u-original-primitive-entry/OriginalPrimitiveEntry.json"] ++
+     [primitiveEntryOutput </> "units/u-original-primitive-entry/OriginalPrimitiveEntry.cbd"] ++
      [primitiveLinkedDirectory </> name | (name,_) <- primitiveLinked])
   let entryOutput = output </> "erf-entry"
   createDirectoryIfMissing True entryOutput
@@ -190,7 +181,7 @@ preparePackageNativeOriginals root = do
     (["bin/audit-core.py","--output",output </> "erf-audit.json"] ++
      concatMap (\name -> ["--entry","original-erf-entry:OriginalErfEntry." ++ name])
        ["erfDouble","erfcDouble","erfFloat","erfcFloat"] ++
-     [erfLinkedDirectory </> "Data.Number.Erf.json",entryOutput </> "units/u-original-erf-entry/OriginalErfEntry.json"])
+     [erfLinkedDirectory </> "Data.Number.Erf.cbd",entryOutput </> "units/u-original-erf-entry/OriginalErfEntry.cbd"])
   inputs <- hashes root ["t/fixtures/compiler/OriginalDigestNative.hs","t/fixtures/compiler/OriginalPrimitiveNative.hs",
     "t/fixtures/compiler/OriginalPrimitiveEntry.hs",
     "t/fixtures/compiler/OriginalErfNative.hs","t/fixtures/compiler/OriginalErfEntry.hs",
@@ -199,8 +190,8 @@ preparePackageNativeOriginals root = do
     "src/driver/THC/Driver/NativeLibrarySources.hs","src/driver/THC/Driver/GhcProxy.hs",
     "bin/audit-core.py","bin/core_package_manifest.py","bin/core-capabilities.json"]
   artifacts <- hashes root ([relative </> "digest-native.tsv",relative </> "erf-native.tsv",relative </> "primitive-native.tsv",
-    relative </> "erf-entry/units/u-original-erf-entry/OriginalErfEntry.json",relative </> "erf-audit.json",
-    relative </> "primitive-entry/units/u-original-primitive-entry/OriginalPrimitiveEntry.json",relative </> "primitive-audit.json"] ++
+    relative </> "erf-entry/units/u-original-erf-entry/OriginalErfEntry.cbd",relative </> "erf-audit.json",
+    relative </> "primitive-entry/units/u-original-primitive-entry/OriginalPrimitiveEntry.cbd",relative </> "primitive-audit.json"] ++
     [relative </> "linked" </> unit </> name | (name,_) <- linked] ++
     [relative </> "linked" </> erfUnit </> name | (name,_) <- erfLinked] ++
     [relative </> "linked" </> primitiveUnit </> name | (name,_) <- primitiveLinked])
@@ -242,6 +233,14 @@ preparePackageNativeOriginals root = do
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "expected exactly one tool result"
     locate execute cabal target = line . commandStdout <$> execute
       ("locate-" ++ drop 4 target) [] cabal ["list-bin","--offline",target]
+    stage captured destination = do
+      createDirectoryIfMissing True destination
+      paths <- filter ((== ".cbd") . takeExtension) <$> files captured
+      forM paths $ \path -> do
+        let name = takeFileName path
+            staged = destination </> name
+        copyFile path staged
+        pure (name,staged)
     files directory = do
       names <- sort <$> listDirectory directory
       concat <$> forM names (\name -> do
