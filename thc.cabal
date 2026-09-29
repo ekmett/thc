@@ -1278,6 +1278,7 @@ executable thc-fixtures
     FusedFloatingFixtures
     SimdCallFixtures
     VectorApiFixtures
+    TruffleStringFixtures
     Simd128AddressFixtures
     Simd128ArrayFixtures
     SimdWideArrayFixtures

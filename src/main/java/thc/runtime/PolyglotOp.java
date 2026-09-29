@@ -33,7 +33,9 @@ public enum PolyglotOp {
     GET_ARRAY_SIZE("thc_interop_v1_get_array_size", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "IntRep"),
     READ_ARRAY_ELEMENT("thc_interop_v1_read_array_element", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "BoxedRep (Just Unlifted)"),
     WRITE_ARRAY_ELEMENT("thc_interop_v1_write_array_element", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"), "State# RealWorld"),
-    AS_LONG("thc_interop_v1_as_long", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "Int64Rep");
+    AS_LONG("thc_interop_v1_as_long", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "Int64Rep"),
+    IS_STRING("thc_interop_v1_is_string", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "IntRep"),
+    AS_TRUFFLE_STRING("thc_interop_v1_as_truffle_string", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)");
     private final String symbol;
     private final List<String> arguments;
     private final String result;

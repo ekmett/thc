@@ -40,6 +40,8 @@ public final class InteropAccess extends Node {
                         case READ_ARRAY_ELEMENT -> library.readArrayElement(receiver, (Long) arguments[2]);
                         case WRITE_ARRAY_ELEMENT -> { library.writeArrayElement(receiver, (Long) arguments[2], arguments[3]); yield Unit.INSTANCE; }
                         case AS_LONG -> library.asLong(receiver);
+                        case IS_STRING -> library.isString(receiver) ? 1L : 0L;
+                        case AS_TRUFFLE_STRING -> library.asTruffleString(receiver);
                         default -> throw new AssertionError(operation);
                     };
                 } catch (InteropException failure) { throw InteropFailure.create(failure); }
