@@ -94,13 +94,10 @@ public final class BytecodeNormalizerChecks {
         Transform patch = BytecodeNormalizers::handlers;
         String before = """
                 public class HandlerPreparationFixture {
-                    private final boolean capture;
                     private final boolean[] exceptionProfiles_ = new boolean[2];
                     private static final int EXCEPTION_HANDLER_LENGTH = 3;
-                    public HandlerPreparationFixture(boolean capture) { this.capture = capture; }
-                    HandlerPreparationFixture getRoot() { return this; }
-                    boolean requiresUnprofiledExceptionHandlers() { return capture; }
                     public boolean observed(int i) { return exceptionProfiles_[i]; }
+                    public int transfers() { return CompilerDirectives.transfers; }
                     public int probe(long bci, int first) { return resolveHandler(bci, first, new int[]{0, 5, 10, 3, 8, 20}); }
                     private int resolveHandler(long bci, int handler, int[] localHandlers) {
                         for (int i = handler; i < localHandlers.length; i += EXCEPTION_HANDLER_LENGTH) {
@@ -111,28 +108,36 @@ public final class BytecodeNormalizerChecks {
                         }
                         return -1;
                     }
-                    static class CompilerDirectives { static void transferToInterpreterAndInvalidate() {} }
+                    static class CompilerDirectives { static int transfers; static void transferToInterpreterAndInvalidate() { transfers++; } }
                 }
                 """;
         String after = stable(patch, before);
+        check(before.equals(after));
         reject(patch, before, "changed-version");
         reject(patch, before + before);
         reject(patch, before.replace("long bci", "int bci"));
         reject(patch, before.replace("[handlerEntryIndex] = true", "[handlerEntryIndex] = false"));
-        reject(patch, after.replace("requiresUnprofiledExceptionHandlers() &&", "requiresUnprofiledExceptionHandlers() ||"));
+        reject(patch, before.replace("if (!this.exceptionProfiles_", "if (false && !this.exceptionProfiles_"));
         reject(patch, before.replaceFirst("\n", "\r\n"));
         try (var loader = compile(directory.resolve("handlerPolicy"), "HandlerPreparationFixture", after)) {
             var type = loader.loadClass("HandlerPreparationFixture");
-            for (boolean capture : new boolean[]{false, true}) {
-                var value = type.getConstructor(boolean.class).newInstance(capture);
+            {
+                var value = type.getConstructor().newInstance();
                 var probe = type.getMethod("probe", long.class, int.class);
                 var observed = type.getMethod("observed", int.class);
                 check(probe.invoke(value, -1L, 0).equals(-1));
+                check(observed.invoke(value, 0).equals(false));
+                check(observed.invoke(value, 1).equals(false));
                 check(probe.invoke(value, 0L, 0).equals(0));
+                check(observed.invoke(value, 0).equals(true));
+                check(observed.invoke(value, 1).equals(false));
+                check(probe.invoke(value, 4L, 0).equals(0));
+                check(type.getMethod("transfers").invoke(value).equals(1));
                 check(probe.invoke(value, 4L, 3).equals(3));
                 check(probe.invoke(value, 5L, 0).equals(3));
                 check(probe.invoke(value, 8L, 0).equals(-1));
-                for (int index = 0; index <= 1; index++) check(observed.invoke(value, index).equals(!capture));
+                for (int index = 0; index <= 1; index++) check(observed.invoke(value, index).equals(true));
+                check(type.getMethod("transfers").invoke(value).equals(2));
             }
         }
     }

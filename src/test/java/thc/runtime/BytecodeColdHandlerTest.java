@@ -14,9 +14,9 @@ import org.junit.jupiter.api.Test;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** First blocking cut after ordinary nonblocking calls must not retire installed code or replay the first take. */
+/** First blocking cut may deoptimize, but must retain values and never replay the first take. */
 class BytecodeColdHandlerTest {
-    @Test void handlerPolicyComesFromImmutableCaptureAuthorityAndSurvivesCloning() throws ReflectiveOperationException {
+    @Test void captureAuthoritySurvivesCloning() throws ReflectiveOperationException {
         try (var context = Context.newBuilder("thc").build()) {
             context.initialize("thc"); context.enter();
             try {
@@ -29,7 +29,7 @@ class BytecodeColdHandlerTest {
                     root.configureAsync(async); root.configureDelimited(delimited); root.getCallTarget();
                     var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true); var clone = (BytecodeRoot) cloneMethod.invoke(root);
                     for (var prepared : List.of(root, clone)) {
-                        prepared.getCallTarget(); assertEquals(async || delimited, prepared.requiresUnprofiledExceptionHandlers()); assertEquals(async, prepared.isAsyncEnabled()); assertEquals(delimited, prepared.isDelimitedEnabled());
+                        prepared.getCallTarget(); assertEquals(async, prepared.isAsyncEnabled()); assertEquals(delimited, prepared.isDelimitedEnabled());
                     }
                     assertEquals(0L, metrics.getCompiledEntries());
                 }
@@ -64,7 +64,7 @@ class BytecodeColdHandlerTest {
         return map("instrument", true, "bindings", list(map("id", "entry", "name", "entry", "lifted", true, "expr", list("lam", parameters, take.apply("prefix", take.apply("blocked", tuple)), map("resultRep", resultRep)))),
             "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2), map("id", "Result", "name", "Result", "kind", "unboxed-tuple", "arity", 7)));
     }
-    @Test void firstCompiledBlockingCutRetainsTargetValuesAndCompletedEffects() throws Exception {
+    @Test void firstCompiledBlockingCutProfilesHandlerAndPreservesValuesAndCompletedEffects() throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             context.initialize("thc"); context.enter();
             class Fixture {
@@ -81,7 +81,7 @@ class BytecodeColdHandlerTest {
             var f = new Fixture();
             try {
                 f.language = TruffleLanguage.LanguageReference.create(Language.class).get(null); f.owner = Language.currentState(); f.program = new BytecodeProgram(f.language, module(), true); f.target = f.program.entryTarget("entry");
-                assertTrue(((BytecodeRoot) f.target.getRootNode()).requiresUnprofiledExceptionHandlers()); f.shape = Objects.requireNonNull(((GuestRoot) f.target.getRootNode()).getTupleResult());
+                f.shape = Objects.requireNonNull(((GuestRoot) f.target.getRootNode()).getTupleResult());
                 for (int i = 0; i < 5; i++) {
                     var prefix = new ManagedMVar(); assertTrue(prefix.tryPut("prefix")); var blocked = new ManagedMVar(); assertTrue(blocked.tryPut("suffix"));
                     f.checkResult(Calls.target(f.target, f.arguments(prefix, blocked))); assertTrue(prefix.isEmpty()); assertTrue(blocked.isEmpty());
@@ -104,7 +104,7 @@ class BytecodeColdHandlerTest {
                 assertEquals(1, blocked.pendingCounts().getTakers()); assertTrue(prefix.isEmpty(), "The first effect completed before the blocked cut");
                 f.owner.getThreads().send(Objects.requireNonNull(f.owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "wide cut");
                 var captured = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive()); assertEquals(before + 1, ((Number) f.program.diagnostics().get("compiledEntries")).longValue());
-                var retainedAfterCapture = f.target.getClass().getMethod("isValidLastTier").invoke(f.target); var completed = new CompletableFuture<thc.runtime.Unit>();
+                var completed = new CompletableFuture<thc.runtime.Unit>();
                 var resumer = new Thread(() -> {
                     context.enter();
                     try {
@@ -112,7 +112,7 @@ class BytecodeColdHandlerTest {
                         var handoff = f.language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getResults().retainedReferences()); assertNull(handoff.getPending());
                         var bytecode = ((BytecodeRoot) f.target.getRootNode()).getBytecodeNode(); var field = bytecode.getClass().getDeclaredField("exceptionProfiles_"); field.setAccessible(true); var profiles = (boolean[]) field.get(bytecode);
                         boolean none = true; for (boolean profile : profiles) if (profile) { none = false; break; }
-                        assertTrue(none, "Capture must not manufacture observed exception profiles"); assertEquals(true, retainedAfterCapture, "The first blocking cut retains installed code"); f.valid(); completed.complete(thc.runtime.Unit.INSTANCE);
+                        assertFalse(none, "The first actual capture must observe its exception handler"); completed.complete(thc.runtime.Unit.INSTANCE);
                     } catch (Throwable failure) { completed.completeExceptionally(failure); } finally { context.leave(); }
                 });
                 resumer.start();

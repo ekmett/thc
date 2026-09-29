@@ -265,24 +265,19 @@ public final class BytecodeNormalizers {
         return newline(source, result);
     }
 
-    static final String HANDLER_MARKER = "THC nonadaptive capture handlers v1";
     static final String OLD_HANDLER = "                if (!this.exceptionProfiles_[handlerEntryIndex]) {\n" +
             "                    CompilerDirectives.transferToInterpreterAndInvalidate();\n" +
             "                    this.exceptionProfiles_[handlerEntryIndex] = true;\n" +
             "                }\n";
-    static final String NEW_HANDLER = "                // " + HANDLER_MARKER + "\n" + OLD_HANDLER.replace(
-            "if (!this.exceptionProfiles_", "if (!getRoot().requiresUnprofiledExceptionHandlers() && !this.exceptionProfiles_");
-
+    /** Validate the ordinary pinned profile before metadata preparation copies it. */
     public static String handlers(String source, String version) {
         require(VERSION.equals(version), "Review handler preparation before changing Truffle " + VERSION + ".");
         String message = "Unexpected Truffle handler preparation shape.";
         String result = unix(source, message);
-        if (result.contains(HANDLER_MARKER)) result = replaceOnce(result, NEW_HANDLER, OLD_HANDLER, message);
-        require(!result.contains(HANDLER_MARKER), message);
         String signature = "private int resolveHandler(long bci, int handler, int[] localHandlers)";
         int at = result.indexOf(signature);
         require(at >= 0 && result.indexOf(signature, at + signature.length()) < 0, message);
-        return newline(source, replaceOnce(result, OLD_HANDLER, NEW_HANDLER, message));
+        return newline(source, replaceOnce(result, OLD_HANDLER, OLD_HANDLER, message));
     }
 
 }
