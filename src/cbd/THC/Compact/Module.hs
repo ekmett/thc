@@ -105,7 +105,10 @@ finalizeModuleMetadata path value = do
     -- Native linkage does not alter the original interface frontier or binder
     -- origins. Header-only callers never need synthetic executable bindings
     -- merely to carry that immutable provenance ledger through finalization.
-    let facts = updated {factsClosureProvenance = factsClosureProvenance oldFacts}
+    let facts = updated {factsClosureProvenance = factsClosureProvenance oldFacts,
+          factsBackendPolicy = case factsBackendPolicy updated of
+            Nothing -> factsBackendPolicy oldFacts
+            policy -> policy}
     if oldFacts == facts then pure Nothing else do
       metadata <- encodeMetadata (\streams -> newEncoder streams >>= \encoder -> encodeFacts encoder facts)
       let finalHeader = header {headerSummaries =

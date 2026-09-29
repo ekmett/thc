@@ -80,7 +80,7 @@ moduleFacts fields = do
   checked fields (["schema","ghc","unit","module","boundary","providedModules","targetLayout",
     "constructors","bindings","foreign","foreignExceptionBridge","foreignExceptionBridgeUnit",
     "sourceCore","rules","groups","lowering","sourceFiles","sourceSpans",
-    "roots","sourceModules","missingDefinitions"] ++ map bytesKey pendingProvenanceNames)
+    "roots","sourceModules","missingDefinitions","backendPolicy"] ++ map bytesKey pendingProvenanceNames)
   Facts <$> fields .: "schema" <*> bytesAt fields "ghc" <*> bytesAt fields "unit"
     <*> bytesAt fields "module" <*> bytesAt fields "boundary" <*> optional fields "providedModules" (array bytes)
     <*> optional fields "targetLayout" targetLayout <*> (fields .: "constructors" >>= array constructor)
@@ -88,6 +88,19 @@ moduleFacts fields = do
     <*> optional fields "foreignExceptionBridgeUnit" bytes
     <*> mapM (\(slot,key) -> optional fields (bytesKey key) (provenance slot)) (zip [0..] pendingProvenanceNames)
     <*> closureProvenance fields
+    <*> case KM.lookup "backendPolicy" fields of
+      Nothing -> pure Nothing
+      Just value -> do
+        policy <- object value
+        checked policy ["default","bindings"]
+        def <- traverse backend (KM.lookup "default" policy)
+        entries <- policy .: "bindings" >>= object
+        bindings <- mapM (\(key,item) -> (,) (Text.encodeUtf8 (Key.toText key)) <$> backend item)
+          (KM.toList entries)
+        let ordered = Map.toAscList (Map.fromList bindings)
+        pure (if def == Nothing && null ordered then Nothing else Just (BackendPolicy def ordered))
+  where
+    backend = choice [("ast",AstBackend),("bytecode",BytecodeBackend)]
 
 closureProvenance :: Object -> Parser (Maybe ClosureProvenance)
 closureProvenance fields = do

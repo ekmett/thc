@@ -341,7 +341,14 @@ public final class Language extends TruffleLanguage<Language.State> {
         require(!Boolean.TRUE.equals(input.get("ioMain")) || !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
             "IO main requires strict unsupported-Core rejection");
         var selectedModules = CoreModules.selectedModules(input, entry);
-        var layout = CoreModules.visitDecodedModules(selectedModules, merger::addDetached);
+        var layout = CoreModules.visitDecodedModules(selectedModules, module -> {
+            for (var binding : (List<Map<String,Object>>) module.get("bindings")) {
+                String id = (String) binding.get("id");
+                require(CoreModules.backend(module, id, "ast").equals("ast"),
+                    "Reusable AST code cannot honor bytecode backend policy for " + id);
+            }
+            merger.addDetached(module);
+        });
         var linked = new LinkedHashMap<String, Object>(CoreModules.reachable(merger.finish(),
             shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry), Boolean.TRUE.equals(input.get("strictLink"))));
         linked.put("instrument", !Boolean.FALSE.equals(input.get("instrument")));

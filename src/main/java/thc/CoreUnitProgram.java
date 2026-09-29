@@ -75,7 +75,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private static String requiredText(Object value, String message) { if (value instanceof String text) return text; throw new IllegalStateException(message); }
     @Override public boolean getAsynchronousExceptions() { return async; }
     public TargetLayout getTargetLayout() { return sources.getTargetLayout(); }
-    @Override public boolean getHasBytecode() { return backend.equals("bytecode"); }
+    @Override public boolean getHasBytecode() { return demand.preparedPrograms().stream().anyMatch(ExecutableProgram::getHasBytecode); }
     @Override public String bytecodeDump() {
         var dumps = new ArrayList<String>();
         for (var program : demand.preparedPrograms()) dumps.add(program.bytecodeDump());
@@ -226,7 +226,8 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) {
             owner.getPackageCbits().link(link);
         }
-        return backend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);
+        String selectedBackend = CoreModules.backend(admitted.getModule(), id, backend);
+        return selectedBackend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);
     }
     public List<ManagedExportAdmission> registerStartup() {
         var registrations = new ArrayList<ManagedExportAdmission>(); var pending = new ArrayList<CoreModuleAdmission>();
@@ -282,7 +283,13 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     }
     @Override public Map<String,Object> diagnostics() {
         // All demanded programs share Metrics; copy its label snapshot once.
-        var result = new LinkedHashMap<>(demand.preparedPrograms().getFirst().diagnostics());
+        var prepared = demand.preparedPrograms();
+        var result = new LinkedHashMap<>(prepared.getFirst().diagnostics());
+        boolean ast = false, bytecode = false;
+        for (var program : prepared) {
+            if (program.getHasBytecode()) bytecode = true; else ast = true;
+        }
+        result.put("backend", ast && bytecode ? "mixed" : bytecode ? "bytecode" : "ast");
         result.putAll(rootCounts());
         result.put("unsupportedPolicy", "reject-at-binding-admission");
         var compact = new ArrayList<CoreCompactFile.Statistics>();

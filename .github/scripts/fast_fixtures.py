@@ -25,7 +25,7 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
 # Includes raw vector/string Core exports and their native scalar oracles.
-FULL_PREPARATION_PLAN = "6baa45ff9483d8e6ae540978f68e4d0f1c4777f5bd5436bd732f44f1d89c100f"
+FULL_PREPARATION_PLAN = "b2c7ffce07f5c6589fe5329ce1e06f1ada7cab816cf1db11c597ed3f858b268a"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -38,6 +38,7 @@ TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
     *[f"{stage}-{suffix}" for stage in ("pre", "post") for suffix in ("core/TextCbitsAudit.json", "audit.json")],
 ))
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
+    "build/backend-annotations",
     "build/process-lifecycle/core",
     "build/text-cbits", "build/vector-api", "build/truffle-strings",
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
@@ -48,6 +49,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields", "build/selector-proof",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/backend-annotations/pre/BackendAnnotations.cbd", "build/backend-annotations/post/BackendAnnotations.cbd", "build/backend-annotations/interface.cbd",
     "build/thc-fixtures.path",
     *(PROCESS_CORE_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else ()),
     *TEXT_CBITS_OUTPUTS,

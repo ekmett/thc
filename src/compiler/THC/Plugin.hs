@@ -46,6 +46,7 @@ import GHC.Builtin.Types.Prim (byteArrayPrimTyCon, mutableByteArrayPrimTyCon)
 import GHC.Tc.Types (TcGblEnv(..))
 import qualified THC.Sources as Sources
 import qualified THC.CBV as CBV
+import qualified THC.BackendAnnotations as Backend
 import qualified THC.Demands as Demands
 import qualified THC.ForeignExports as Exports
 import qualified THC.ForeignExportProvenance as ExportProvenance
@@ -98,7 +99,10 @@ import System.FilePath ((</>), takeDirectory, replaceExtension)
 -- @
 plugin :: Plugin
 plugin = defaultPlugin
-  { parsedResultAction = rewriteJavaScriptImports
+  { driverPlugin = Backend.installBackendHook (\options owner ->
+      coreOutputPath options (case options of [] -> "build/core"; directory:_ -> directory)
+        (unitString (moduleUnit owner)) (moduleNameString (moduleName owner)))
+  , parsedResultAction = rewriteJavaScriptImports
   , typeCheckResultAction = \options summary environment ->
       validateJavaScriptTypes options summary environment >>= Exports.recordStaticExports options
         >>= ExportProvenance.recordProvenance options >>= ImportProvenance.recordImports options
@@ -994,6 +998,8 @@ foreignExceptionBridgeFields d unit modName binds
 optimizedModule :: DynFlags -> [CommandLineOption] -> ModGuts -> IO (Ctx,J)
 optimizedModule flags opts guts = do
   sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
+  policies <- either fail pure (Backend.backendFields (mg_module guts)
+    [(fmap nameOccName target,payload) | Annotation target payload <- mg_anns guts])
   exports <- staticExportFields (mg_module guts) (mg_anns guts) (mg_binds guts)
   let unit = unitString (moduleUnit (mg_module guts))
       d = Ctx flags (unit ++ ":" ++ moduleNameString (moduleName (mg_module guts))) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True True ("pretty-diagnostics" `elem` opts) sources []
@@ -1009,7 +1015,7 @@ optimizedModule flags opts guts = do
         , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
         ] ++ (if prettyDiagnostics d then
           [("sourceCore",S (pretty d (mg_binds guts))), ("rules",S (pretty d (mg_rules guts)))] else []) ++
-        sourceTableFields d ++ exports ++ foreignExceptionBridgeFields d unit modName binds
+        sourceTableFields d ++ policies ++ exports ++ foreignExceptionBridgeFields d unit modName binds
   pure (d,result)
 
 -- Package rebuilding needs identities that agree with the newly emitted
@@ -1078,6 +1084,8 @@ diagnosticCore = (`BS.snoc` 10) . BL.toStrict . Aeson.encode . moduleValue
 
 postTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO J
 postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
+  policies <- either fail pure (Backend.backendFields m
+    [(fmap nameOccName target,payload) | Annotation target payload <- annotations])
   associations <- either (ioError . userError . ("THC: " ++)) pure
     (Exports.readStaticExports m annotations program)
   -- A boxed identity need not inspect or construct its argument in Core. Host
@@ -1091,7 +1099,7 @@ postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotat
   exports <- staticExportFields m annotations program
   provenance <- exportProvenanceFields m annotations program foreignArtifacts
   imports <- importProvenanceFields m annotations foreignArtifacts result
-  let annotated = case result of O fields -> O (fields ++ exports ++ provenance ++ imports); _ -> result
+  let annotated = case result of O fields -> O (fields ++ policies ++ exports ++ provenance ++ imports); _ -> result
   pure (withForeignArtifacts foreignArtifacts annotated)
   where
     exportKey (Exports.ExportName unit modName occurrence _) = unit ++ ":" ++ modName ++ "." ++ occurrence
@@ -1401,6 +1409,7 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         | otherwise = walk seen' todo found ((originCtx v,v):missing)
         where seen' = extendVarSet seen v
   (imports,missing) <- walk emptyVarSet roots [] []
+  policies <- Backend.closureFields hsc [(varName v,varKey d v) | (d,v,_,_) <- imports]
   let
       -- Interfaces do not retain complete source recursive-group boundaries.
       -- Conservatively forbid speculation of every imported definition while
@@ -1420,7 +1429,7 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         , ("groups",A [O [("recursive",B True),("ids",A [S (varKey d v) | (d,v,_,_) <- imports])]])
         , ("missingDefinitions",A [O [("id",S (varKey d v)),("type",S (pretty d (varType v))), ("reason",S "No executable interface unfolding; source export required")] | (d,v) <- missing])
         ] ++ [("sourceCore",S (pretty rootCtx [(v,e) | (_,v,e,_) <- imports])) | prettyDiagnostics rootCtx] ++
-        [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx
+        [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx ++ policies
   let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
   createDirectoryIfMissing True (takeDirectory path)
   writeCoreOutput opts path result

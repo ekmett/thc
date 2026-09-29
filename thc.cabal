@@ -810,6 +810,7 @@ library
   hs-source-dirs: src/compiler
   exposed-modules: THC.Plugin, THC.Interface
   other-modules:
+    THC.BackendAnnotations
     THC.CBV
     THC.Demands
     THC.ForeignExports
@@ -1284,6 +1285,7 @@ executable thc-fixtures
     AddressArrayCopyFixtures
     BigNatLiteralFixtures
     RubbishLiteralFixtures
+    BackendAnnotationFixtures
     PinnedAddressFixtures
     FloatingAddressFixtures
     AtomicAddressFixtures

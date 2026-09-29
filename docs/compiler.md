@@ -17,6 +17,31 @@ and general representation-polymorphic lowering remain outside the contract.
 Dependency acquisition and linking have their own implemented
 [package-manifest contract](core-package-manifest.md).
 
+## Choosing an execution backend
+
+Use GHC string annotations to choose AST or bytecode execution for a module or a
+top-level function/value:
+
+```haskell
+{-# ANN module ("thc:backend=ast" :: String) #-}
+{-# ANN calculate ("thc:backend=bytecode" :: String) #-}
+```
+
+A declaration's choice takes precedence over its module's choice. Unannotated
+modules use the runtime's requested backend, which defaults to bytecode. The
+choice is made when a binding is first lowered; calls across backends share the
+same closures and evaluated CAFs.
+
+Annotations choose execution roots, not GHC optimization behavior. An annotation
+on a declaration does not follow an inlined copy or a generated worker; a module
+annotation covers the remaining roots in that module. Backend annotations on
+types and conflicting choices are rejected. The AST-only native code cache
+rejects reachable bytecode selections.
+
+Automatic vectorization remains a global compiler option. It cannot be selected
+with a declaration or module annotation. The launcher defaults it off; set
+`JAVA_OPTS=-Djdk.graal.Vectorization=true` to enable it for the JVM.
+
 ## Executable schema
 
 Both export boundaries precede CorePrep's mandatory primitive saturation.

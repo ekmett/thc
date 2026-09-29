@@ -224,6 +224,7 @@ tasks.withType(Test).configureEach {
     // Exported Core and native expectations are test inputs even when JVM sources
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
+        include("backend-annotations/**/*.cbd")
         include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "vector-api/core/**/*.json", "vector-api/*.tsv", "java-arrays/core/**/*.json", "java-arrays/packages.json",
             "truffle-strings/core/**/*.json", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",

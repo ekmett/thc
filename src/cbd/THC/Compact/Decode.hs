@@ -65,23 +65,42 @@ decodeMetadata bytes = do
   decodeFacts (BS.drop (fromIntegral size) rest) (BS.take (fromIntegral size) rest)
 
 facts :: Decoder -> Get Facts
-facts decoder = Facts <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
-  <*> present (list decoder (string decoder)) <*> present (targetLayout decoder)
-  <*> list decoder (constructor decoder) <*> present (foreignArtifacts decoder)
-  <*> present (exceptionBridge decoder) <*> present (string decoder)
-  <*> mapM (present . provenance decoder) [0..length pendingProvenanceNames-1]
-  <*> closureProvenance decoder
+facts decoder = do
+  base <- Facts <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
+    <*> present (list decoder (string decoder)) <*> present (targetLayout decoder)
+    <*> list decoder (constructor decoder) <*> present (foreignArtifacts decoder)
+    <*> present (exceptionBridge decoder) <*> present (string decoder)
+    <*> mapM (present . provenance decoder) [0..length pendingProvenanceNames-1]
+    <*> pure Nothing <*> pure Nothing
+  extensions base
+  where
+    extensions value = do
+      done <- isEmpty
+      if done then pure value else getWord8 >>= \kind -> case kind of
+        1 | Nothing <- factsClosureProvenance value -> do
+          proof <- closureProvenance decoder
+          extensions value {factsClosureProvenance = Just proof}
+        2 | Nothing <- factsBackendPolicy value -> do
+          def <- getWord8 >>= \tag -> case tag of
+            0 -> pure Nothing
+            1 -> pure (Just AstBackend)
+            2 -> pure (Just BytecodeBackend)
+            _ -> fail "Invalid compact default backend"
+          bindings <- list decoder ((,) <$> string decoder <*> backend)
+          unless (and (zipWith (<) (map fst bindings) (drop 1 (map fst bindings))))
+            (fail "Compact backend policy bindings must be strictly sorted")
+          extensions value {factsBackendPolicy = Just (BackendPolicy def bindings)}
+        _ -> fail "Unknown or duplicate compact header extension"
+    backend = getWord8 >>= \tag -> case tag of
+      1 -> pure AstBackend
+      2 -> pure BytecodeBackend
+      _ -> fail "Invalid compact binding backend"
 
-closureProvenance :: Decoder -> Get (Maybe ClosureProvenance)
-closureProvenance decoder = do
-  empty <- isEmpty
-  if empty then pure Nothing else do
-    kind <- getWord8
-    unless (kind == 1) (fail "Unknown compact header provenance extension")
-    Just <$> (ClosureProvenance <$> present (list decoder (string decoder))
-      <*> present (list decoder (string decoder))
-      <*> present (list decoder (MissingDefinition <$> string decoder <*> string decoder <*> string decoder))
-      <*> list decoder (BindingOrigin <$> string decoder <*> present (string decoder) <*> present (string decoder)))
+closureProvenance :: Decoder -> Get ClosureProvenance
+closureProvenance decoder = ClosureProvenance <$> present (list decoder (string decoder))
+  <*> present (list decoder (string decoder))
+  <*> present (list decoder (MissingDefinition <$> string decoder <*> string decoder <*> string decoder))
+  <*> list decoder (BindingOrigin <$> string decoder <*> present (string decoder) <*> present (string decoder))
 
 targetLayout :: Decoder -> Get TargetLayout
 targetLayout decoder = TargetLayout <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder

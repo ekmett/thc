@@ -28,6 +28,7 @@ python3 bin/prepare-empty-join-input.py
 cabal build exe:thc-fixtures --offline
 fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
+"$fixture_bin" backend-annotations
 "$fixture_bin" sum-join
 "$fixture_bin" unsafe-equality
 "$fixture_bin" proxy-void

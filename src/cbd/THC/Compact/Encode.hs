@@ -87,7 +87,17 @@ encodeFacts (Encoder streams strings shapes _ found observer) facts = do
       string encoder key
       present encoder (string encoder) origin
       present encoder (string encoder) owner) origins
+  forM_ (factsBackendPolicy facts) $ \(BackendPolicy def bindings) -> do
+    tag encoder 2
+    tag encoder (maybe 0 backendTag def)
+    unless (and (zipWith (<) (map fst bindings) (drop 1 (map fst bindings))))
+      (fail "Compact backend policy bindings must be strictly sorted")
+    list encoder (\(key,backend) -> string encoder key >> tag encoder (backendTag backend)) bindings
   BL.toStrict . Builder.toLazyByteString <$> readIORef output
+  where
+    backendTag AstBackend = 1
+    backendTag BytecodeBackend = 2
+
 
 targetLayout :: Encoder -> TargetLayout -> IO ()
 targetLayout encoder value = do
