@@ -21,6 +21,12 @@ public final class ManagedByteArray {
     private static final VarHandle INT32S = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.nativeOrder());
     private static final VarHandle FLOATS = MethodHandles.byteArrayViewVarHandle(float[].class, ByteOrder.nativeOrder());
     private static final VarHandle DOUBLES = MethodHandles.byteArrayViewVarHandle(double[].class, ByteOrder.nativeOrder());
+    // Bind immutable access metadata before guest compilation, not on its first memory access.
+    private static final VarHandle SEGMENT_INTS = ValueLayout.JAVA_LONG_UNALIGNED.varHandle();
+    private static final VarHandle SEGMENT_INT16S = ValueLayout.JAVA_SHORT_UNALIGNED.varHandle();
+    private static final VarHandle SEGMENT_INT32S = ValueLayout.JAVA_INT_UNALIGNED.varHandle();
+    private static final VarHandle SEGMENT_FLOATS = ValueLayout.JAVA_FLOAT_UNALIGNED.varHandle();
+    private static final VarHandle SEGMENT_DOUBLES = ValueLayout.JAVA_DOUBLE_UNALIGNED.varHandle();
     private static int elementOffset(byte[] bytes, long index, int width, String representation) {
         if (index < 0 || index >= bytes.length / width) {
             transferToInterpreter();
@@ -132,240 +138,240 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 8, false);
-                return segment.get(ValueLayout.JAVA_LONG_UNALIGNED, index * 8);
+                return (long) SEGMENT_INTS.get(segment, index * 8);
             }
         }
         byte[] bytes = require(value);
         elementOffset(bytes, index, 8, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return segment.get(ValueLayout.JAVA_LONG_UNALIGNED, index * 8);
+        return (long) SEGMENT_INTS.get(segment, index * 8);
     }
     private static void writeIntElementGuest(Object value, long index, long number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 8, true);
-                segment.set(ValueLayout.JAVA_LONG_UNALIGNED, index * 8, number);
+                SEGMENT_INTS.set(segment, index * 8, number);
             }
         } else {
             byte[] bytes = require(value);
             elementOffset(bytes, index, 8, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_LONG_UNALIGNED, index * 8, number);
+            SEGMENT_INTS.set(MemorySegment.ofArray(bytes), index * 8, number);
         }
     }
     private static long readIntByteOffsetGuest(Object value, long index) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 8, false);
-                return segment.get(ValueLayout.JAVA_LONG_UNALIGNED, index);
+                return (long) SEGMENT_INTS.get(segment, index);
             }
         }
         byte[] bytes = require(value);
         byteOffset(bytes, index, 8, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return segment.get(ValueLayout.JAVA_LONG_UNALIGNED, index);
+        return (long) SEGMENT_INTS.get(segment, index);
     }
     private static void writeIntByteOffsetGuest(Object value, long index, long number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 8, true);
-                segment.set(ValueLayout.JAVA_LONG_UNALIGNED, index, number);
+                SEGMENT_INTS.set(segment, index, number);
             }
         } else {
             byte[] bytes = require(value);
             byteOffset(bytes, index, 8, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_LONG_UNALIGNED, index, number);
+            SEGMENT_INTS.set(MemorySegment.ofArray(bytes), index, number);
         }
     }
     public static double readDoubleGuest(Object value, long index) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 8, false);
-                return segment.get(ValueLayout.JAVA_DOUBLE_UNALIGNED, index * 8);
+                return (double) SEGMENT_DOUBLES.get(segment, index * 8);
             }
         }
         byte[] bytes = require(value);
         elementOffset(bytes, index, 8, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return segment.get(ValueLayout.JAVA_DOUBLE_UNALIGNED, index * 8);
+        return (double) SEGMENT_DOUBLES.get(segment, index * 8);
     }
     public static void writeDoubleGuest(Object value, long index, double number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 8, true);
-                segment.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, index * 8, number);
+                SEGMENT_DOUBLES.set(segment, index * 8, number);
             }
         } else {
             byte[] bytes = require(value);
             elementOffset(bytes, index, 8, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_DOUBLE_UNALIGNED, index * 8, number);
+            SEGMENT_DOUBLES.set(MemorySegment.ofArray(bytes), index * 8, number);
         }
     }
     public static double readDoubleByteOffsetGuest(Object value, long index) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 8, false);
-                return segment.get(ValueLayout.JAVA_DOUBLE_UNALIGNED, index);
+                return (double) SEGMENT_DOUBLES.get(segment, index);
             }
         }
         byte[] bytes = require(value);
         byteOffset(bytes, index, 8, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return segment.get(ValueLayout.JAVA_DOUBLE_UNALIGNED, index);
+        return (double) SEGMENT_DOUBLES.get(segment, index);
     }
     public static void writeDoubleByteOffsetGuest(Object value, long index, double number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 8, true);
-                segment.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, index, number);
+                SEGMENT_DOUBLES.set(segment, index, number);
             }
         } else {
             byte[] bytes = require(value);
             byteOffset(bytes, index, 8, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_DOUBLE_UNALIGNED, index, number);
+            SEGMENT_DOUBLES.set(MemorySegment.ofArray(bytes), index, number);
         }
     }
     public static float readFloatGuest(Object value, long index) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 4, false);
-                return segment.get(ValueLayout.JAVA_FLOAT_UNALIGNED, index * 4);
+                return (float) SEGMENT_FLOATS.get(segment, index * 4);
             }
         }
         byte[] bytes = require(value);
         elementOffset(bytes, index, 4, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return segment.get(ValueLayout.JAVA_FLOAT_UNALIGNED, index * 4);
+        return (float) SEGMENT_FLOATS.get(segment, index * 4);
     }
     public static void writeFloatGuest(Object value, long index, float number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 4, true);
-                segment.set(ValueLayout.JAVA_FLOAT_UNALIGNED, index * 4, number);
+                SEGMENT_FLOATS.set(segment, index * 4, number);
             }
         } else {
             byte[] bytes = require(value);
             elementOffset(bytes, index, 4, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_FLOAT_UNALIGNED, index * 4, number);
+            SEGMENT_FLOATS.set(MemorySegment.ofArray(bytes), index * 4, number);
         }
     }
     public static float readFloatByteOffsetGuest(Object value, long index) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 4, false);
-                return segment.get(ValueLayout.JAVA_FLOAT_UNALIGNED, index);
+                return (float) SEGMENT_FLOATS.get(segment, index);
             }
         }
         byte[] bytes = require(value);
         byteOffset(bytes, index, 4, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return segment.get(ValueLayout.JAVA_FLOAT_UNALIGNED, index);
+        return (float) SEGMENT_FLOATS.get(segment, index);
     }
     public static void writeFloatByteOffsetGuest(Object value, long index, float number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 4, true);
-                segment.set(ValueLayout.JAVA_FLOAT_UNALIGNED, index, number);
+                SEGMENT_FLOATS.set(segment, index, number);
             }
         } else {
             byte[] bytes = require(value);
             byteOffset(bytes, index, 4, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_FLOAT_UNALIGNED, index, number);
+            SEGMENT_FLOATS.set(MemorySegment.ofArray(bytes), index, number);
         }
     }
     public static int readInt16Guest(Object value, long index, boolean unsigned) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 2, false);
-                return unsigned ? Short.toUnsignedInt(segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2)) : segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2);
+                return unsigned ? Short.toUnsignedInt((short) SEGMENT_INT16S.get(segment, index * 2)) : (short) SEGMENT_INT16S.get(segment, index * 2);
             }
         }
         byte[] bytes = require(value);
         elementOffset(bytes, index, 2, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return unsigned ? Short.toUnsignedInt(segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2)) : segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2);
+        return unsigned ? Short.toUnsignedInt((short) SEGMENT_INT16S.get(segment, index * 2)) : (short) SEGMENT_INT16S.get(segment, index * 2);
     }
     public static void writeInt16Guest(Object value, long index, int number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 2, true);
-                segment.set(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2, (short) number);
+                SEGMENT_INT16S.set(segment, index * 2, (short) number);
             }
         } else {
             byte[] bytes = require(value);
             elementOffset(bytes, index, 2, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2, (short) number);
+            SEGMENT_INT16S.set(MemorySegment.ofArray(bytes), index * 2, (short) number);
         }
     }
     public static int readInt16ByteOffsetGuest(Object value, long index, boolean unsigned) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 2, false);
-                return unsigned ? Short.toUnsignedInt(segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, index)) : segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, index);
+                return unsigned ? Short.toUnsignedInt((short) SEGMENT_INT16S.get(segment, index)) : (short) SEGMENT_INT16S.get(segment, index);
             }
         }
         byte[] bytes = require(value);
         byteOffset(bytes, index, 2, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return unsigned ? Short.toUnsignedInt(segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, index)) : segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, index);
+        return unsigned ? Short.toUnsignedInt((short) SEGMENT_INT16S.get(segment, index)) : (short) SEGMENT_INT16S.get(segment, index);
     }
     public static void writeInt16ByteOffsetGuest(Object value, long index, int number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 2, true);
-                segment.set(ValueLayout.JAVA_SHORT_UNALIGNED, index, (short) number);
+                SEGMENT_INT16S.set(segment, index, (short) number);
             }
         } else {
             byte[] bytes = require(value);
             byteOffset(bytes, index, 2, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_SHORT_UNALIGNED, index, (short) number);
+            SEGMENT_INT16S.set(MemorySegment.ofArray(bytes), index, (short) number);
         }
     }
     public static int readInt32Guest(Object value, long index, boolean unsigned) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 4, false);
-                return segment.get(ValueLayout.JAVA_INT_UNALIGNED, index * 4);
+                return (int) SEGMENT_INT32S.get(segment, index * 4);
             }
         }
         byte[] bytes = require(value);
         elementOffset(bytes, index, 4, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return segment.get(ValueLayout.JAVA_INT_UNALIGNED, index * 4);
+        return (int) SEGMENT_INT32S.get(segment, index * 4);
     }
     public static void writeInt32Guest(Object value, long index, int number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.elementSegment(index, 4, true);
-                segment.set(ValueLayout.JAVA_INT_UNALIGNED, index * 4, number);
+                SEGMENT_INT32S.set(segment, index * 4, number);
             }
         } else {
             byte[] bytes = require(value);
             elementOffset(bytes, index, 4, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_INT_UNALIGNED, index * 4, number);
+            SEGMENT_INT32S.set(MemorySegment.ofArray(bytes), index * 4, number);
         }
     }
     public static int readInt32ByteOffsetGuest(Object value, long index, boolean unsigned) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 4, false);
-                return segment.get(ValueLayout.JAVA_INT_UNALIGNED, index);
+                return (int) SEGMENT_INT32S.get(segment, index);
             }
         }
         byte[] bytes = require(value);
         byteOffset(bytes, index, 4, "scalar");
         MemorySegment segment = MemorySegment.ofArray(bytes);
-        return segment.get(ValueLayout.JAVA_INT_UNALIGNED, index);
+        return (int) SEGMENT_INT32S.get(segment, index);
     }
     public static void writeInt32ByteOffsetGuest(Object value, long index, int number) {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.byteRangeSegment(index, 4, true);
-                segment.set(ValueLayout.JAVA_INT_UNALIGNED, index, number);
+                SEGMENT_INT32S.set(segment, index, number);
             }
         } else {
             byte[] bytes = require(value);
             byteOffset(bytes, index, 4, "scalar");
-            MemorySegment.ofArray(bytes).set(ValueLayout.JAVA_INT_UNALIGNED, index, number);
+            SEGMENT_INT32S.set(MemorySegment.ofArray(bytes), index, number);
         }
     }
     public static long readIntGuest(Object value, long index) { return readIntGuest(value, index, false); }
