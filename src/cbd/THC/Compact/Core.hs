@@ -136,7 +136,7 @@ data Literal = LitInt !Int64 | LitWord !Word64
   | LitInt8 !Int64 | LitInt16 !Int64 | LitInt32 !Int64 | LitInt64 !Int64
   | LitWord8 !Word64 | LitWord16 !Word64 | LitWord32 !Word64 | LitWord64 !Word64
   | LitBigNat !Integer | LitChar !Word32 | LitBytes !BS.ByteString
-  | LitFloatBits !Word32 | LitDoubleBits !Word64 | LitNullAddr | LitRubbish !PrimRep
+  | LitFloatBits !Word32 | LitDoubleBits !Word64 | LitNullAddr | LitRubbish
   | LitFunctionAddr !BS.ByteString | LitDataAddr !BS.ByteString
   | LitUnsupported !BS.ByteString
   deriving (Eq, Show)

@@ -1085,10 +1085,6 @@ public final class Program implements ExecutableProgram {
         if (encoded instanceof CoreFloatingLiteral floating) return floating.decode(kind);
         if (!(encoded instanceof String value)) throw new UnsupportedCore("Malformed Core literal payload");
         return switch (kind) {
-            case "rubbish" -> {
-                if (proof == null) throw new IllegalArgumentException("Required value was null.");
-                yield rubbishLiterals.decode(proof);
-            }
             case "int8" -> ScalarLiterals.int8Literal(value);
             case "int16" -> ScalarLiterals.int16Literal(value);
             case "int32" -> ScalarLiterals.int32Literal(value);
@@ -1513,6 +1509,26 @@ public final class Program implements ExecutableProgram {
             new Construct(layout, fields, constructorVectorSlots(layout, frame));
     }
 
+    private Expr rubbish(CoreRepresentation proof, Scope scope) {
+        Expr materializer = null;
+        if (proof.isTuple()) {
+            var fields = new Expr[proof.getComponents().size()];
+            for (int i = 0; i < fields.length; i++) fields[i] = rubbish(proof.getComponents().get(i), scope);
+            materializer = new TupleConstruct(new TupleShape(proof, (thc.Language) language), fields);
+        } else if (proof.isSum()) {
+            var selected = proof.getAlternatives().getFirst();
+            int[] intSlots = new int[0];
+            if (selected.isTypedTransport()) {
+                var fields = TupleShape.flatten(selected);
+                intSlots = new int[fields.size()];
+                for (int i = 0; i < intSlots.length; i++) intSlots[i] = fields.get(i).isInt()
+                    ? scope.layout.bind("<narrow rubbish sum payload " + i + ">", FrameSlotKind.Int) : -1;
+            }
+            materializer = new SumConstruct(new TupleShape(proof, (thc.Language) language), 1, rubbish(selected, scope), intSlots);
+        }
+        return new Rubbish(proof, rubbishLiterals, materializer);
+    }
+
     private Expr compileSupported(List<Object> expr, Scope scope, boolean tail) {
         return switch ((String) expr.get(0)) {
             case "var" -> {
@@ -1543,11 +1559,11 @@ public final class Program implements ExecutableProgram {
                 String tag = (String) expr.get(1);
                 if (reusableCode && tag.equals("function-addr"))
                     yield new CFinalizerLabels((String) expr.get(2), CoreRepresentations.expression(expr));
+                if (tag.equals("rubbish")) yield rubbish(RubbishLiterals.proof(expr), scope);
                 Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.expression(expr)), reusableCode && tag.equals("bignat"));
                 if (Arrays.asList("int8", "word8", "int16", "word16", "int32", "word32").contains(tag))
                     yield value.proven(CoreRepresentations.narrowLiteralProof(expr));
                 if (tag.equals("bignat")) yield value.proven(BigNatLiterals.proof(expr));
-                if (tag.equals("rubbish")) yield value.proven(RubbishLiterals.proof(expr));
                 yield value;
             }
             case "void" -> new Literal(thc.runtime.Unit.INSTANCE);

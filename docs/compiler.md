@@ -113,11 +113,10 @@ Data-constructor **workers** become constructor expressions. Constructor wrapper
 
 Type arguments and type lambdas erase. A type-only application becomes its function. Coercion arguments and coercion lambda binders retain a zero-width `void` slot so Core's value arity conventions remain explicit. Casts and ticks erase from the executable subset and remain visible in the optional `sourceCore` diagnostic. The source-note metadata below retains source attribution without executable tick wrappers or instrumentation events. Primitive literals retain kind, with integral/character codepoint values in decimal, byte strings in hexadecimal, floating values in decimal. `LitLabel` preserves its exact symbol as `function-addr` or `data-addr`, according to GHC's `FunctionOrData`; it does not certify a function ABI or identify a providing library. Unsupported literal kinds stay explicit, and exporting a label does not admit it for execution.
 
-Scalar `LitRubbish` exports as `["lit","rubbish","IntRep",metadata]` (or the
-other exact closed scalar `PrimRep`). Its type applications erase without
-losing the applied carrier proof. It denotes a non-bottom absent filler, not
-an exception; aggregate/vector rubbish and literal patterns remain unsupported.
-See [the runtime and native evidence](rubbish-literals.md).
+`LitRubbish` exports as `["lit","rubbish",null,metadata]`. The applied type's
+representation metadata carries its scalar, vector, tuple or sum shape. It is
+an evaluated absent filler with unspecified payload. See
+[the runtime contract](rubbish-literals.md).
 
 ## Optional source attribution
 

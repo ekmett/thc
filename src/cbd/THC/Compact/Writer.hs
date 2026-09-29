@@ -99,7 +99,7 @@ writeContainerStreamedWith policy destination prepare produce = bracketOnError
               (if files == 0 then 0 else 2) .|.
               (if positions == 0 then 0 else 4)
             _ -> 0
-          header = Header 1 1 summaries count debug
+          header = Header 1 2 summaries count debug
           result = Container header lengths
           headerBytes = BL.toStrict (runPut (putHeader header)) <> facts
           members = [DataMember,StringsMember,NamesMember,FilenamesMember,LineColumnsMember,SymbolsMember]

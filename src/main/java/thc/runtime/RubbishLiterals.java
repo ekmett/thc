@@ -29,30 +29,33 @@ public final class RubbishLiterals {
             case FLOAT -> 0.0f;
             case DOUBLE -> 0.0;
             case ADDRESS -> ManagedAddress.nullAddress();
+            case VOID -> Unit.INSTANCE;
+            case VECTOR -> new VectorLayout(proof).getSpecies().zero();
             case CLOSURE -> closure();
             case DATA, OBJECT -> boxed();
             default -> throw new UnsupportedCore("Unsupported rubbish representation");
         };
     }
     public static CoreRepresentation proof(List<Object> expression) {
-        Object rep = expression.size() > 2 ? expression.get(2) : null;
-        CoreKind expected = rep instanceof String name ? switch (name) {
-            case "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep",
-                 "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep" -> CoreKind.LONG;
-            case "FloatRep" -> CoreKind.FLOAT;
-            case "DoubleRep" -> CoreKind.DOUBLE;
-            case "AddrRep" -> CoreKind.ADDRESS;
-            case "BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)" -> CoreKind.OBJECT;
-            default -> null;
-        } : null;
-        if (expected == null) throw new UnsupportedCore("Unsupported rubbish representation: " + rep);
+        if (expression.size() < 3 || expression.get(2) != null)
+            throw new RuntimeFault("Rubbish literal has no payload; its representation belongs in metadata");
         var metadata = CoreRepresentations.metadata(expression);
         var actual = CoreRepresentations.parse(metadata == null ? null : metadata.get("rep"));
-        boolean matchingKind = actual.getKind() == expected || expected == CoreKind.OBJECT &&
-            (actual.getKind() == CoreKind.DATA || actual.getKind() == CoreKind.CLOSURE);
-        if (!actual.getPresent() || !actual.getEvaluated() || !matchingKind || actual.isAggregate() || actual.isVector() ||
-            !List.of(rep).equals(actual.getPrimReps()))
-            throw new RuntimeFault("Rubbish literal requires explicit exact evaluated scalar representation");
+        if (!actual.getPresent() || !actual.getEvaluated())
+            throw new RuntimeFault("Rubbish literal requires explicit evaluated representation");
+        validate(actual);
         return actual;
     }
+    private static void validate(CoreRepresentation proof) {
+        if (proof.isTuple()) {
+            TupleShape.validate(proof);
+            for (var component : proof.getComponents()) validate(component);
+        } else if (proof.isSum()) {
+            SumShape.validate(proof);
+            for (var alternative : proof.getAlternatives()) validate(alternative);
+        } else if (proof.isVector()) VectorLayout.validate(proof);
+        else if (!proof.getPresent() || proof.getKind() == CoreKind.UNKNOWN)
+            throw new UnsupportedCore("Rubbish requires a complete logical representation");
+    }
+
 }

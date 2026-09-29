@@ -51,8 +51,10 @@ class CoreCompactFormatTest {
             byte[] bytes = header(); ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putLong(32, length);
             assertThrows(IllegalArgumentException.class, () -> read(bytes));
         }
-        byte[] previous = header(); ByteBuffer.wrap(previous).order(ByteOrder.LITTLE_ENDIAN).putShort(10, (short) 0);
-        assertThrows(IllegalArgumentException.class, () -> read(previous));
+        for (short minor : new short[]{0, 1}) {
+            byte[] previous = header(); ByteBuffer.wrap(previous).order(ByteOrder.LITTLE_ENDIAN).putShort(10, minor);
+            assertThrows(IllegalArgumentException.class, () -> read(previous));
+        }
     }
     @Test void countOverflowUnknownLengthsAndSymbolWidthMismatchReject() {
         for (long count : new long[]{-1, Long.MAX_VALUE, 2}) {

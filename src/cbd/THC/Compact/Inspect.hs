@@ -250,7 +250,7 @@ literal value = case value of
   LitFloatBits bits -> numeric "float-bits" bits
   LitDoubleBits bits -> numeric "double-bits" bits
   LitNullAddr -> numeric "null-addr" (0::Int)
-  LitRubbish proof -> (String "rubbish",primRep proof)
+  LitRubbish -> (String "rubbish",Null)
   LitFunctionAddr symbol -> (String "function-addr",str symbol)
   LitDataAddr symbol -> (String "data-addr",str symbol)
   LitUnsupported diagnostic -> (String "unsupported",str diagnostic)

@@ -321,7 +321,7 @@ public final class CoreCompactRecords {
             case 12 -> blob(cursor);
             case 13 -> new CoreFloatingLiteral.Single((int) cursor.u32());
             case 14 -> new CoreFloatingLiteral.Double(cursor.fixedBits());
-            case 15 -> "0"; case 16 -> primitive(cursor); case 17, 18, 19 -> text(cursor);
+            case 15 -> "0"; case 16 -> null; case 17, 18, 19 -> text(cursor);
             default -> throw error("Unreachable compact literal tag");
         };
         return values(kind, value);

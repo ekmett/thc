@@ -712,6 +712,7 @@ registration = withObject "original export registration" $ \fields -> do
     <*> bytesAt fields "profile" <*> pure details
 
 literal :: Value -> Value -> Parser Literal
+literal (String "rubbish") Null = pure LitRubbish
 literal (String kind) (String payload) = case kind of
   "int" -> LitInt <$> boundedNumber; "word" -> LitWord <$> boundedNumber
   "int8" -> LitInt8 <$> boundedNumber; "int16" -> LitInt16 <$> boundedNumber; "int32" -> LitInt32 <$> boundedNumber; "int64" -> LitInt64 <$> boundedNumber
@@ -724,7 +725,6 @@ literal (String kind) (String payload) = case kind of
   "float-bits" -> LitFloatBits <$> boundedNumber
   "double-bits" -> LitDoubleBits <$> boundedNumber
   "null-addr" | payload == "0" -> pure LitNullAddr
-  "rubbish" -> LitRubbish <$> primRep (String payload)
   "unsupported" -> pure (LitUnsupported (Text.encodeUtf8 payload))
   "function-addr" -> pure (LitFunctionAddr (Text.encodeUtf8 payload))
   "data-addr" -> pure (LitDataAddr (Text.encodeUtf8 payload))
