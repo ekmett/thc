@@ -108,8 +108,8 @@ class Explicit64ArrayTest {
                 assertEquals("main:Explicit64ArrayAudit.explicit64ArrayBits", single(uses).get("owner"));
                 assertEquals(primitive.getValue(), single(uses).get("arity"));
             }
-            var module = json(directory.resolve("core/Explicit64ArrayAudit.json"));
-            var evidence = new ArrayCoreEvidence(module, "explicit64ArrayBits");
+            var module = thc.CoreCbdFixtures.read(directory.resolve("core/Explicit64ArrayAudit.cbd"));
+            var evidence = new ArrayCoreEvidence(module, "main:Explicit64ArrayAudit." + "explicit64ArrayBits");
             var outer = (List<Object>) evidence.getRoot().get("expr");
             assertEquals(1, evidence.getBindings().size());
             assertTrue(evidence.globalReferences(outer).isEmpty());
@@ -128,11 +128,11 @@ class Explicit64ArrayTest {
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         String entry = "explicit64ArrayBits";
-                        var source = new LinkedHashMap<>(CoreModules.reachable(module, entry));
+                        var source = new LinkedHashMap<>(CoreModules.reachable(module, "main:Explicit64ArrayAudit." + entry));
                         source.put("instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, source)
                                                                           : new BytecodeProgram(language, source);
-                        var function = context.asValue(new EntryValue(program, entry, 2));
+                        var function = context.asValue(new EntryValue(program, "main:Explicit64ArrayAudit." + entry, 2));
                         for (var row : rows) {
                             for (int selector = 0; selector <= 3; selector++)
                                 assertEquals(row.results.get(selector), function.execute(row.bits, selector).asLong(),
@@ -141,7 +141,7 @@ class Explicit64ArrayTest {
                         }
                         assertTrue(function.invokeMember("compile").asBoolean(), stage + "/" + backend);
                         var host = program.hostEntryTarget(2);
-                        var original = program.entryTarget(entry);
+                        var original = program.entryTarget("main:Explicit64ArrayAudit." + entry);
                         var guestCall = single(NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class)
                                 .stream()
                                 .filter(call -> call.getCallTarget() == original)

@@ -824,6 +824,15 @@ class IoMainAuditTest(unittest.TestCase):
 
 
 class AuditTest(unittest.TestCase):
+    def test_bignat_diagnostic_spellings_remain_strict_before_cbd_numeric_encoding(self):
+        # Numeric CBD records cannot retain malformed source spelling: the
+        # real encoder rejects it or canonicalizes an accepted integer model.
+        # Keep these exact API negatives independently of the CBD CLI controls.
+        for value in ('', '-1', '+1', '00', '01', ' 1', '1 ', '1.0', '0x10', '١'):
+            report = run(['lit', 'bignat', value])
+            self.assertFalse(report['accepted'], value)
+            self.assertIn('invalid-literal-value', {issue['code'] for issue in report['issues']}, value)
+
     def test_bignat_intrinsic_representation_api_retains_exact_evaluated_proof(self):
         # This is an assertion on the retained Python auditor's own API. The
         # Haskell/Java BigNat fixture owns corpus and CLI admission controls.

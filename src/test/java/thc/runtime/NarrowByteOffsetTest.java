@@ -193,20 +193,19 @@ class NarrowByteOffsetTest {
                 assertEquals(
                     Set.of("main:NarrowByteOffsetAudit.narrowByteOffsetValues"), owners, stage + "/" + primitive);
             }
-            var module = (Map<String, Object>) Json.parse(
-                Files.readString(new File(directory, "core/NarrowByteOffsetAudit.json").toPath()));
+            var module = thc.CoreCbdFixtures.read(new File(directory, "core/NarrowByteOffsetAudit.cbd").toPath());
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         var entry = "narrowByteOffsetValues";
-                        var source = new LinkedHashMap<>(CoreModules.reachable(module, entry));
+                        var source = new LinkedHashMap<>(CoreModules.reachable(module, "main:NarrowByteOffsetAudit." + entry));
                         source.put("instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, source)
                                                                           : new BytecodeProgram(language, source);
-                        var function = context.asValue(new EntryValue(program, entry, 3));
-                        var guest = program.entryTarget(entry);
+                        var function = context.asValue(new EntryValue(program, "main:NarrowByteOffsetAudit." + entry, 3));
+                        var guest = program.entryTarget("main:NarrowByteOffsetAudit." + entry);
                         var host = program.hostEntryTarget(3);
                         var stageBackend = stage + "/" + backend;
                         for (var row : rows) check(row, false, function, program, stageBackend);
@@ -230,7 +229,7 @@ class NarrowByteOffsetTest {
                                     function.execute(row.signed(), row.unsigned(), selector).asLong(), label);
                                 long after = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                                 assertEquals(before + guestCount, after, label + " exact compiled guest entries");
-                                assertSame(guest, program.entryTarget(entry), label + " guest identity");
+                                assertSame(guest, program.entryTarget("main:NarrowByteOffsetAudit." + entry), label + " guest identity");
                                 assertSame(host, program.hostEntryTarget(3), label + " host identity");
                                 var active = activeTargets(host);
                                 assertEquals(targets.size(), active.size(), label + " active root count");

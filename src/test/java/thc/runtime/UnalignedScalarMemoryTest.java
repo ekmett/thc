@@ -178,11 +178,11 @@ public class UnalignedScalarMemoryTest {
                 assertEquals(Set.of("main:UnalignedScalarMemoryAudit.unaligned" + type),
                     uses.stream().map(it -> it.get("owner")).collect(Collectors.toSet()), stage + "/" + name);
             }
-            var module = json(directory.resolve(stage + "/core/UnalignedScalarMemoryAudit.json"));
+            var module = thc.CoreCbdFixtures.read(directory.resolve(stage + "/core/UnalignedScalarMemoryAudit.cbd"));
             var expectedLabels = new LinkedHashMap<String, Set<String>>();
             for (String type : types) {
                 String entry = "unaligned" + type;
-                var evidence = new ArrayCoreEvidence(module, entry);
+                var evidence = new ArrayCoreEvidence(module, "main:UnalignedScalarMemoryAudit." + entry);
                 assertEquals(1, evidence.getBindings().size(), stage + "/" + entry + " original Core closure");
                 assertTrue(evidence.globalReferences(evidence.getRoot().get("expr")).isEmpty());
                 var outer = (List<?>) evidence.getRoot().get("expr");
@@ -231,7 +231,7 @@ public class UnalignedScalarMemoryTest {
                         try {
                             for (String type : types) {
                                 String entry = "unaligned" + type;
-                                var target = program.entryTarget(entry);
+                                var target = program.entryTarget("main:UnalignedScalarMemoryAudit." + entry);
                                 var inputs = rows.stream().filter(row -> row.type.equals(type)).toList();
                                 String entryLabel = stage + "/" + backend + "/" + entry;
                                 class CallsForType {
@@ -300,7 +300,7 @@ public class UnalignedScalarMemoryTest {
                                             label + " pooled arguments reused");
                                         assertEquals(resultAllocations, handoff.getResults().getAllocations(),
                                             label + " pooled results reused");
-                                        assertSame(target, program.entryTarget(entry), label);
+                                        assertSame(target, program.entryTarget("main:UnalignedScalarMemoryAudit." + entry), label);
                                         var after = activeTargets(target);
                                         assertEquals(1, after.size(), label);
                                         boolean identical = true;
@@ -533,10 +533,10 @@ public class UnalignedScalarMemoryTest {
     public void loweringChecksCarriersArityStateAndTupleOrderWithoutIntegralIdentityChecks() throws Exception {
         for (String stage : List.of("pre", "post")) {
             var module =
-                json(root.resolve("build/unaligned-scalar-memory/" + stage + "/core/UnalignedScalarMemoryAudit.json"));
+                thc.CoreCbdFixtures.read(root.resolve("build/unaligned-scalar-memory/" + stage + "/core/UnalignedScalarMemoryAudit.cbd"));
             var calls = new ArrayList<List<Object>>();
             for (String type : types) {
-                var evidence = new ArrayCoreEvidence(module, "unaligned" + type);
+                var evidence = new ArrayCoreEvidence(module, "main:UnalignedScalarMemoryAudit." + "unaligned" + type);
                 for (var app : evidence.nodes(evidence.getRoot().get("expr")))
                     if (!app.isEmpty() && "app".equals(app.get(0)) && app.size() > 1
                         && app.get(1) instanceof List<?> function && !function.isEmpty()

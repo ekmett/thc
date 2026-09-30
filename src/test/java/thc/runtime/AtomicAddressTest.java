@@ -56,7 +56,7 @@ public class AtomicAddressTest {
     }
     /** Derive executed roots from the original Core and its checked State# redex. */
     private long originalGuestEntries(Map<String, Object> module, String name) {
-        var evidence = new ArrayCoreEvidence(module, name);
+        var evidence = new ArrayCoreEvidence(module, "main:AtomicAddressAudit." + name);
         assertEquals(1, evidence.getBindings().size(), name + " closed original binding");
         assertEquals(List.of(), evidence.globalReferences(evidence.getRoot().get("expr")));
         var outer = (List<Object>) evidence.getRoot().get("expr");
@@ -252,7 +252,7 @@ public class AtomicAddressTest {
                 assertEquals(
                     Set.of("main:AtomicAddressAudit." + name, "main:AtomicAddressAudit." + name + "At"), owners);
             }
-            var module = json(directory.resolve(stage + "/core/AtomicAddressAudit.json"));
+            var module = thc.CoreCbdFixtures.read(directory.resolve(stage + "/core/AtomicAddressAudit.cbd"));
             var expectedEntries = new LinkedHashMap<String, Long>();
             for (String name : List.of("atomicAddressNumeric", "atomicAddressPointer"))
                 expectedEntries.put(name, originalGuestEntries(module, name));
@@ -263,13 +263,13 @@ public class AtomicAddressTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var linked = new LinkedHashMap<>(
-                                CoreModules.reachable(module, List.of("atomicAddressNumeric", "atomicAddressPointer")));
+                                CoreModules.reachable(module, List.of("atomicAddressNumeric", "atomicAddressPointer").stream().map(name -> "main:AtomicAddressAudit." + name).toList()));
                             linked.put("instrument", true);
                             ExecutableProgram program = backend.equals("ast") ? new Program(language, linked)
                                                                               : new BytecodeProgram(language, linked);
                             var targets = new LinkedHashMap<String, RootCallTarget>();
                             for (String name : List.of("atomicAddressNumeric", "atomicAddressPointer"))
-                                targets.put(name, program.entryTarget(name));
+                                targets.put(name, program.entryTarget("main:AtomicAddressAudit." + name));
                             var handoff = language.getHandoffState().get();
                             class Check {
                                 boolean compiled = false;
@@ -393,16 +393,16 @@ public class AtomicAddressTest {
                     context.enter();
                     try {
                         var module =
-                            json(root.resolve("build/atomic-address/" + stage + "/core/AtomicAddressAudit.json"));
+                            thc.CoreCbdFixtures.read(root.resolve("build/atomic-address/" + stage + "/core/AtomicAddressAudit.cbd"));
                         var linked = new LinkedHashMap<>(
-                            CoreModules.reachable(module, List.of("atomicAddressNumericAt", "atomicAddressPointerAt")));
+                            CoreModules.reachable(module, List.of("atomicAddressNumericAt", "atomicAddressPointerAt").stream().map(name -> "main:AtomicAddressAudit." + name).toList()));
                         linked.put("instrument", true);
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked)
                                                                           : new BytecodeProgram(language, linked);
                         var targets = new LinkedHashMap<String, RootCallTarget>();
                         for (String name : List.of("atomicAddressNumericAt", "atomicAddressPointerAt"))
-                            targets.put(name, program.entryTarget(name));
+                            targets.put(name, program.entryTarget("main:AtomicAddressAudit." + name));
                         var registry = ManagedNativeAllocations.current(null);
                         var nativeAddress = registry.malloc(24);
                         var managed = ManagedAddress.fromAllocation(PinnedMemory.allocate(24, 8));
