@@ -7,6 +7,9 @@ set -eu
 cd "$(dirname "$0")/.."
 root=$(pwd)
 . "$root/bin/toolchain.sh"
+"${CABAL:-cabal}" build exe:thc-fixtures --offline --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG"
+THC_FIXTURES=$("${CABAL:-cabal}" list-bin exe:thc-fixtures --offline --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG")
+export THC_FIXTURES
 THC_CORE_OUT="$root/build/aggregate-core" THC_GHC_OUT="$root/build/aggregate-ghc" \
   bin/export-core.sh -fplugin-opt=THC.Plugin:pretty-diagnostics t/fixtures/compiler/AggregateFrontier.hs
 THC_CORE_OUT="$root/build/aggregate-post-core" THC_GHC_OUT="$root/build/aggregate-post-ghc" \

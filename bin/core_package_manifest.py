@@ -707,6 +707,52 @@ def native_archive_blocks(module, binding, archive):
         for call in native_archive_calls(binding))
 
 
+@lru_cache(maxsize=1)
+def _core_native_overrides():
+    profile = strict_json((Path(__file__).resolve().parents[1] /
+        'src/main/resources/thc/core-native-overrides.json').read_text(encoding='utf-8'))
+    if (set(profile) != {'schema', 'profile', 'ghc', 'calls'} or
+            type(profile['schema']) is not int or profile['schema'] != 1 or profile['ghc'] != '9.14.1' or
+            profile['profile'] != 'ghc-9.14.1-thc-core-native-overrides-v1' or
+            not isinstance(profile['calls'], list) or not profile['calls']):
+        raise ValueError('Invalid Core native override capability profile')
+    identities = [(call['target']['unit'], call['target']['symbol']) for call in profile['calls']]
+    if len(set(identities)) != len(identities):
+        raise ValueError('Ambiguous Core native override capability profile')
+    return profile['calls']
+
+
+def _core_native_import(entry, calls):
+    """Mirror the exporter/runtime's exact THC-owned ABI, never raw C authority."""
+    emitted = entry['emitted']
+    identity = (emitted['unit'], emitted['symbol'])
+    for expected in _core_native_overrides():
+        target = expected['target']
+        if identity != (target['unit'], target['symbol']):
+            continue
+        def carrier(rep):
+            values = rep['primReps']
+            if len(values) > 1:
+                raise ValueError('Non-scalar Core native override capability')
+            return values[0] if values else 'void'
+        header = entry['header']
+        wanted = dict(unit=target['unit'], symbol=target['symbol'], convention=expected['convention'],
+            safety=expected['safety'], arguments=list(map(carrier, expected['argumentReps'])),
+            result=list(map(carrier, expected['resultRep']['components'])))
+        if (entry['isFunction'] is not True or entry['symbol'] != target['symbol'] or
+                entry['convention'] != expected['convention'] or entry['safety'] != expected['safety'] or
+                not (header is None or isinstance(header, str) and header and
+                     not any(char in header for char in '\0\n\r"\\')) or
+                not _same_json_value(emitted, wanted)):
+            raise ValueError('Core native override import has the wrong exact emitted ABI: ' + str(identity))
+        for call in calls:
+            owner = call.get('target', {}) if isinstance(call, dict) else {}
+            if (owner.get('unit'), owner.get('symbol')) == identity and not _same_json_value(call, expected):
+                raise ValueError('Core native override has the wrong exact foreign-call ABI: ' + str(identity))
+        return True
+    return False
+
+
 def package_scalar_link(module, validate_archive=True):
     """Verify the original scalar profile or package-owned typed C/capi calls."""
     if validate_archive: package_native_archive(module)
@@ -954,6 +1000,8 @@ def package_scalar_link(module, validate_archive=True):
         typ(item['declaredType']); typ(item['normalizedType'])
         text(item['symbol'])
         emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
+        if native and _core_native_import(item, proof['expectedCalls']):
+            continue
         if native and text(emitted['symbol']) in javascript:
             arguments, result = emitted['arguments'], emitted['result']
             require(item['symbol'] == emitted['symbol'] and emitted['unit'] == unit and

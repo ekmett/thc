@@ -782,6 +782,49 @@ class PackageNativeVariantsTest(unittest.TestCase):
         self.assertEqual(['safe', 'unsafe'], [entry['safety'] for entry in link['abi']])
         self.assertEqual(2, len(proved))
 
+    def test_owned_native_imports_share_exact_runtime_profile_without_c_adapters(self):
+        import copy
+        profile = json.loads((Path(__file__).resolve().parents[1] /
+            'src/main/resources/thc/core-native-overrides.json').read_text())
+        for call in profile['calls']:
+            module = self.module(['WordRep'])
+            module['unit'] = 'ghc-internal'
+            module['packageNativeLink']['unit'] = module['unit']
+            proof = module['staticForeignImports']
+            proof['unit'] = module['unit']
+            original = proof['imports'][0]
+            original['binder']['unit'] = original['unit'] = original['emitted']['unit'] = module['unit']
+            imported = copy.deepcopy(original)
+            imported['binder']['occurrence'] = imported['symbol'] = call['target']['symbol']
+            imported.update(header='Rts.h', safety=call['safety'], convention=call['convention'])
+            carrier = lambda rep: rep['primReps'][0] if rep['primReps'] else 'void'
+            imported['emitted'] = dict(unit=module['unit'], symbol=imported['symbol'],
+                safety=call['safety'], convention=call['convention'],
+                arguments=list(map(carrier, call['argumentReps'])),
+                result=list(map(carrier, call['resultRep']['components'])))
+            proof['imports'].append(imported)
+            proof['expectedCalls'] = [copy.deepcopy(call)]
+            module['bindings'] = [dict(foreignCall=copy.deepcopy(call))]
+            with self.subTest(symbol=imported['symbol']):
+                link, proved = core_package_manifest.package_scalar_link(module)
+                self.assertEqual({link['abi'][0]['entry']}, proved)
+            for mutation in ('emitted', 'call', 'owner', 'header', 'type', 'inventory'):
+                bad = copy.deepcopy(module)
+                entry = bad['staticForeignImports']['imports'][-1]
+                if mutation == 'emitted': entry['emitted']['arguments'] = ['void']
+                elif mutation == 'call':
+                    bad['bindings'][0]['foreignCall']['arity'] += 1
+                    bad['staticForeignImports']['expectedCalls'] = [bad['bindings'][0]['foreignCall']]
+                elif mutation == 'owner': entry['emitted']['unit'] = 'other'
+                elif mutation == 'header': entry['header'] = 'bad\\header'
+                elif mutation == 'type': entry['normalizedType'] = {}
+                else: bad['staticForeignImports']['expectedCalls'] = []
+                # A zero-argument declaration already has a sole void carrier.
+                if mutation == 'emitted' and imported['emitted']['arguments'] == ['void']:
+                    entry['emitted']['arguments'] = ['AddrRep', 'void']
+                with self.subTest(symbol=imported['symbol'], mutation=mutation), self.assertRaises(ValueError):
+                    core_package_manifest.package_scalar_link(bad)
+
     def test_ccall_header_is_retained_without_changing_emitted_symbol(self):
         module = self.module(['AddrRep', 'ByteArray#'])
         for imported in module['staticForeignImports']['imports']:
