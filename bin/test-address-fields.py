@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 """Exact AddrRep proofs for heap fields and aggregate payloads."""
+import core_package_manifest
 import copy
 import importlib.util
 import json
@@ -72,9 +73,9 @@ class AddressFields(unittest.TestCase):
         if not manifest_path.exists():self.skipTest('Run prepare-address-fields.py for genuine Core')
         manifest=json.loads(manifest_path.read_text())
         for stage,path in manifest['stages'].items():
-            module=json.loads((ROOT/path).read_text())
+            module=core_package_manifest.inspect_cbd((ROOT/path).read_bytes())
             for name in manifest['entries']:
-                r=audit.Audit([(path,module)],CAP).run([name]);self.assertTrue(r['accepted'],(stage,name,r['issues']))
+                r=audit.Audit([(path,module)],CAP).run([module['unit'] + ':' + module['module'] + '.' + name]);self.assertTrue(r['accepted'],(stage,name,r['issues']))
                 self.assertFalse(r['missingGlobals'],(stage,name,r['missingGlobals']))
 
 if __name__=='__main__': unittest.main()

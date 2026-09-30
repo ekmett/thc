@@ -56,9 +56,9 @@ class AddressFieldTest {
         for (var stage : object(manifest.get("stages")).entrySet()) for (var entry : rows.entrySet()) for (var backend : list("ast", "bytecode")) try (var context = context(inline)) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = object(Json.parse(Files.readString(root.resolve((String) stage.getValue()))));
-                var name = entry.getKey(); var inputs = entry.getValue(); var program = program(language, with(CoreModules.reachable(source, name, false), "instrument", true), backend);
-                var value = context.asValue(new EntryValue(program, name, 1)); var host = program.hostEntryTarget(1); var original = program.entryTarget(name);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = CoreCbdFixtures.read(root.resolve((String) stage.getValue()));
+                var name = entry.getKey(); var entryId = source.get("unit") + ":" + source.get("module") + "." + name; var inputs = entry.getValue(); var program = program(language, with(CoreModules.reachable(source, entryId, false), "instrument", true), backend);
+                var value = context.asValue(new EntryValue(program, entryId, 1)); var host = program.hostEntryTarget(1); var original = program.entryTarget(entryId);
                 var label = stage.getKey() + "/" + backend + "/" + name + "/inline=" + inline;
                 for (var row : inputs) check(value, row, label);
                 var active = active(host, original); assertTrue(!active.isEmpty(), label + " observed host-to-entry call"); assertTrue(value.invokeMember("compile").asBoolean(), label + " installed");
@@ -114,7 +114,16 @@ class AddressFieldTest {
         withLanguage(language -> {
             for (boolean typed : new boolean[]{true, false}) for (var backend : list("ast", "bytecode")) {
                 var program = program(language, module(typed, true), backend); var address = ManagedAddress.fromHex("41"); var pap = (Closure) call(program, address);
-                assertSame(address, pap.supplied[0]); assertEquals(17L, pap.supplied[1]); var bottom = (Thunk) program.entryValue("bottom"); assertEquals(0, bottom.getState());
+                assertEquals(2, pap.suppliedCount); assertEquals(1, pap.arity);
+                if (typed) {
+                    var prefix = Objects.requireNonNull(pap.typedSupplied); var shape = prefix.getLayout();
+                    assertEquals(0, pap.supplied.length); assertFalse(prefix.getLive()); assertEquals(0, prefix.getInputMode());
+                    assertSame(address, shape.getObject(prefix, 0)); assertEquals(17L, shape.getLong(prefix, 1));
+                } else {
+                    assertNull(pap.typedSupplied); assertEquals(2, pap.supplied.length);
+                    assertSame(address, pap.supplied[0]); assertEquals(17L, pap.supplied[1]);
+                }
+                var bottom = (Thunk) program.entryValue("bottom"); assertEquals(0, bottom.getState());
                 var result = (DataValue) Calls.target(program.hostEntryTarget(1), new Object[]{pap, new Object[]{bottom}});
                 assertSame(address, result.getLayout().read(result, 0)); assertSame(bottom, result.getLayout().read(result, 2)); assertEquals(0, bottom.getState()); released(language);
             }
@@ -131,7 +140,10 @@ class AddressFieldTest {
             for (var backend : list("ast", "bytecode")) {
                 var program = program(language, with(source, "bindings", bindings), backend);
                 for (long offset : new long[]{-1L, 3L, Long.MIN_VALUE, Long.MAX_VALUE}) assertThrows(RuntimeFault.class, () -> call(program, offset));
-                var pap = (Closure) call(program, 1L); assertEquals(0L, ((ManagedAddress) pap.supplied[0]).indexChar(0)); var bottom = (Thunk) program.entryValue("bottom");
+                var pap = (Closure) call(program, 1L); var prefix = Objects.requireNonNull(pap.typedSupplied); var shape = prefix.getLayout();
+                assertEquals(2, pap.suppliedCount); assertEquals(1, pap.arity); assertEquals(0, pap.supplied.length);
+                assertFalse(prefix.getLive()); assertEquals(0, prefix.getInputMode());
+                assertEquals(0L, ((ManagedAddress) shape.getObject(prefix, 0)).indexChar(0)); assertEquals(17L, shape.getLong(prefix, 1)); var bottom = (Thunk) program.entryValue("bottom");
                 var result = (DataValue) Calls.target(program.hostEntryTarget(1), new Object[]{pap, new Object[]{bottom}});
                 assertEquals(0L, ((ManagedAddress) result.getLayout().read(result, 0)).indexChar(0)); assertEquals(0, bottom.getState()); released(language);
             }

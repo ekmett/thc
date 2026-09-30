@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 """Native GHC managed literal addresses in constructors and unboxed tuples."""
+import core_package_manifest
 import hashlib
 import importlib.util
 import json
@@ -50,47 +51,48 @@ def main():
         directory = BUILD/stage; core = directory/'core'
         run([ROOT/'bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []), SOURCE],
             env=dict(THC_CORE_OUT=str(core), THC_GHC_OUT=str(directory/'ghc')))
-        path = core/'AddressFieldAudit.json'; module = json.loads(path.read_text()); artifacts.append(path)
+        path = core/'AddressFieldAudit.cbd'; module = core_package_manifest.inspect_cbd(path.read_bytes()); artifacts.append(path)
         stages[stage] = str(path.relative_to(ROOT))
         assert module['boundary'] == ('optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep')
-        constructors = {c['name']: c for c in module['constructors']}
+        prefix = module['unit'] + ':' + module['module'] + '.'
+        constructors = {c['id']: c for c in module['constructors']}
         for name, reps in [('Packet', [['AddrRep'], ['IntRep'], ['BoxedRep (Just Lifted)']]),
                            ('Twin', [['AddrRep'], ['AddrRep'], ['BoxedRep (Just Lifted)']])]:
-            con = constructors[name]
+            con = constructors[prefix + name]
             assert con['fieldReps'] == reps and con['fieldLifted'] == [False, False, True]
             for i, rep in enumerate(reps):
                 if rep == ['AddrRep']:
                     assert con['fieldTypes'][i] == dict(kind='address', primReps=['AddrRep'], evaluated=True)
             assert con['fieldTypes'][-1]['evaluated'] is False
-        bindings = {b['name']: b for b in module['bindings']}
-        assert bindings['bottom']['expr'][:2] == ['var', bindings['bottom']['id']]
+        bindings = {b['id']: b for b in module['bindings']}
+        assert bindings[prefix + 'bottom']['expr'][:2] == ['var', bindings[prefix + 'bottom']['id']]
         # OPAQUE controls must retain actual constructor production, consumption,
         # and the captured/PAP routes; natural is intentionally free to optimize.
-        assert any(n[:2] == ['con', constructors['Packet']['id']] for n in walk(bindings['makePacket']['expr']))
-        assert any(n[:2] == ['data', constructors['Packet']['id']] for n in walk(bindings['readPacket']['expr']))
-        assert sum(n[:1] == ['lam'] for n in walk(bindings['captured']['expr'])) >= 2
-        assert sum(n[:1] == ['lam'] for n in walk(bindings['partial']['expr'])) >= 2
-        captured_case = bindings['captured']['expr'][2]
+        assert any(n[:2] == ['con', constructors[prefix + 'Packet']['id']] for n in walk(bindings[prefix + 'makePacket']['expr']))
+        assert any(n[:2] == ['data', constructors[prefix + 'Packet']['id']] for n in walk(bindings[prefix + 'readPacket']['expr']))
+        assert sum(n[:1] == ['lam'] for n in walk(bindings[prefix + 'captured']['expr'])) >= 2
+        assert sum(n[:1] == ['lam'] for n in walk(bindings[prefix + 'partial']['expr'])) >= 2
+        captured_case = bindings[prefix + 'captured']['expr'][2]
         assert captured_case[0] == 'case'
         captured_lambda = next(n for n in walk(captured_case) if n[:1] == ['lam'])
         assert any(n[:2] == ['var', captured_case[2]] and n[2]['rep']['kind'] == 'data' and
                    n[2]['rep']['evaluated'] is True for n in walk(captured_lambda)), 'Evaluated constructor capture vanished'
-        partial_lambda = list(n for n in walk(bindings['partial']['expr']) if n[:1] == ['lam'])[1]
+        partial_lambda = list(n for n in walk(bindings[prefix + 'partial']['expr']) if n[:1] == ['lam'])[1]
         assert any(n[:1] == ['var'] and len(n) > 2 and n[2]['rep']['kind'] == 'address'
                    for n in walk(partial_lambda)), 'Address capture in eta-expanded constructor vanished'
         for name in ENTRIES:
-            report = audit.Audit([(str(path.relative_to(ROOT)), module)], cap).run([name])
+            report = audit.Audit([(str(path.relative_to(ROOT)), module)], cap).run([module['unit'] + ':' + module['module'] + '.' + name])
             dest = directory/(name+'.audit.json'); dest.write_text(json.dumps(report, indent=2)+'\n'); artifacts.append(dest)
             assert not report['missingGlobals'], (stage, name, report['missingGlobals'])
             if name in ENTRIES:
                 assert report['accepted'], (stage, name, report['issues'])
                 if name not in ('natural', 'tupleFrontier'):
-                    assert bindings['bottom']['id'] in {b['id'] for b in report['reachableBindings']}
+                    assert bindings[prefix + 'bottom']['id'] in {b['id'] for b in report['reachableBindings']}
             summaries[stage+'/'+name] = report['summary']
         assert any(n[:2] == ['con', next(c['id'] for c in module['constructors'] if c['kind'] == 'unboxed-tuple')]
-                   for n in walk(bindings['addressTuple']['expr'])), 'AddrRep tuple producer vanished'
+                   for n in walk(bindings[prefix + 'addressTuple']['expr'])), 'AddrRep tuple producer vanished'
         assert any(n[:1] == ['data'] and n[1] in {c['id'] for c in module['constructors'] if c['kind'] == 'unboxed-tuple'}
-                   for n in walk(bindings['tupleFrontier']['expr'])), 'AddrRep tuple consumer vanished'
+                   for n in walk(bindings[prefix + 'tupleFrontier']['expr'])), 'AddrRep tuple consumer vanished'
     driver = ['{-# LANGUAGE MagicHash #-}', 'module Main where', 'import GHC.Exts (Int(I#))',
         'import qualified AddressFieldAudit as P', 'call name (I# x) = case name of']
     driver += ['  "'+name+'" -> I# (P.'+name+' x)' for name in ENTRIES]

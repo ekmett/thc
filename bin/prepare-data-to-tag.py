@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 """Pinned GHC family proofs and saturated constructor-to-tag native/model checks."""
+import core_package_manifest
 import hashlib
 import importlib.util
 import json
@@ -50,8 +51,8 @@ def main():
         out=BUILD/stage
         run([ROOT/'bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []), SOURCE],
             env=dict(THC_CORE_OUT=str(out/'core'), THC_GHC_OUT=str(out/'ghc')))
-        paths=sorted((out/'core').glob('*.json'))
-        modules=[(str(p.relative_to(ROOT)),json.loads(p.read_text())) for p in paths]
+        paths=sorted((out/'core').glob('*.cbd'))
+        modules=[(str(p.relative_to(ROOT)),core_package_manifest.inspect_cbd(p.read_bytes())) for p in paths]
         artifacts+=paths;stages[stage]=[p for p,_ in modules]
         module=next(m for _,m in modules if m['module']=='DataToTagAudit')
         assert module['boundary']==('optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep')
@@ -65,7 +66,7 @@ def main():
         assert all(e[-1]['dataToTagFamily']['smallFamilyLimit']==7 for e in described)
         inventories[stage]=dict(primitiveApplications=len(uses), concreteFamilies=shapes, missingFamilies=3)
         for name in ENTRIES+FRONTIERS:
-            report=audit.Audit(modules,cap).run([name])
+            report=audit.Audit(modules,cap).run([module['unit'] + ':' + module['module'] + '.' + name])
             path=out/(name+'.audit.json');path.write_text(json.dumps(report,indent=2)+'\n');artifacts.append(path)
             assert not report['missingGlobals'], (stage,name,report['missingGlobals'])
             assert report['accepted']==(name in ENTRIES), (stage,name,report['issues'])

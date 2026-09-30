@@ -1847,6 +1847,14 @@ class FastInputTests(unittest.TestCase):
                 self.assertFalse(cache.allowed_payload(f"build/{family}/{stage}-core/Other.cbd"))
             self.assertFalse(cache.allowed_payload(f"build/{family}/unreviewed-core/{module}.cbd"))
 
+    def test_address_and_tag_cbd_payloads_admit_only_exact_modules_and_stages(self):
+        for family, module in (("address-fields", "AddressFieldAudit"), ("data-to-tag", "DataToTagAudit")):
+            for stage in ("pre", "post"):
+                for exported in (module, "THC.InterfaceClosure"):
+                    self.assertTrue(cache.allowed_payload(f"build/{family}/{stage}/core/{exported}.cbd"))
+                self.assertFalse(cache.allowed_payload(f"build/{family}/{stage}/core/Other.cbd"))
+            self.assertFalse(cache.allowed_payload(f"build/{family}/unreviewed/core/{module}.cbd"))
+
     def test_original_stdio_inventory_is_exact_and_manifest_is_required(self):
         # setUp replaces REQUIRED for the small archive tests.
         self.assertIn("build/original-stdio/manifest.json", DECLARED_REQUIRED)

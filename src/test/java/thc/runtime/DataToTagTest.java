@@ -25,7 +25,7 @@ class DataToTagTest {
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", Boolean.toString(inlining)).build();
     }
-    private Map<String, Object> module(String stage) throws Exception { return object(Json.parse(Files.readString(root.resolve("build/data-to-tag/" + stage + "/core/DataToTagAudit.json")))); }
+    private Map<String, Object> module(String stage) throws Exception { return CoreCbdFixtures.read(root.resolve("build/data-to-tag/" + stage + "/core/DataToTagAudit.cbd")); }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
@@ -60,9 +60,10 @@ class DataToTagTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var name = entry.getKey(); var selected = entry.getValue();
-                    var program = program(language, with(CoreModules.reachable(module(stage), name), "instrument", true), backend);
-                    var original = program.entryTarget(name); var host = program.hostEntryTarget(1); var function = context.asValue(new EntryValue(program, name, 1));
+                    var name = entry.getKey(); var selected = entry.getValue(); var source = module(stage);
+                    var entryId = source.get("unit") + ":" + source.get("module") + "." + name;
+                    var program = program(language, with(CoreModules.reachable(source, entryId), "instrument", true), backend);
+                    var original = program.entryTarget(entryId); var host = program.hostEntryTarget(1); var function = context.asValue(new EntryValue(program, entryId, 1));
                     var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                     for (var row : selected) check(function, row, label);
                     var targets = activeTargets(host); assertTrue(targets.size() > 1, label + " observed guest target");
@@ -190,8 +191,12 @@ class DataToTagTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                for (var name : expression(manifest.get("frontiers")))
-                    assertThrows(RuntimeException.class, () -> program(language, CoreModules.reachable(module(stage), (String) name), backend), stage + "/" + backend + "/" + name);
+                var source = module(stage);
+                for (var name : expression(manifest.get("frontiers"))) {
+                    var entryId = source.get("unit") + ":" + source.get("module") + "." + name;
+                    assertTrue(objects(source.get("bindings")).stream().anyMatch(binding -> entryId.equals(binding.get("id"))), entryId);
+                    assertThrows(RuntimeException.class, () -> program(language, CoreModules.reachable(source, entryId), backend), stage + "/" + backend + "/" + name);
+                }
             } finally { context.leave(); }
         }
     }

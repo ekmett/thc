@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+import core_package_manifest
 import copy
 import importlib.util
 import json
@@ -84,8 +85,9 @@ class DataTagTests(unittest.TestCase):
         if not path.exists():self.skipTest('Run prepare-data-to-tag.py')
         manifest=json.loads(path.read_text())
         for stage, paths in manifest['stages'].items():
-            modules=[(p,json.loads((ROOT.parent/p).read_text())) for p in paths]
+            modules=[(p,core_package_manifest.inspect_cbd((ROOT.parent/p).read_bytes())) for p in paths]
+            module=next(m for _,m in modules if m['module']=='DataToTagAudit')
             for entry in manifest['entries']+manifest['frontiers']:
-                self.assertEqual(entry in manifest['entries'],audit.Audit(modules,CAP).run([entry])['accepted'],(stage,entry))
+                self.assertEqual(entry in manifest['entries'],audit.Audit(modules,CAP).run([module['unit'] + ':' + module['module'] + '.' + entry])['accepted'],(stage,entry))
 
 if __name__=='__main__':unittest.main()

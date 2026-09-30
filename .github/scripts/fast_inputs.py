@@ -1941,6 +1941,10 @@ def allowed_payload(name):
                                        ("fused-floating", "FloatingAudit"), ("sqrt", "SqrtAudit"))
                 for stage in ("pre", "post")}:
         return True
+    if name in {f"build/{family}/{stage}/core/{module}.cbd"
+                for family, fixture in (("address-fields", "AddressFieldAudit"), ("data-to-tag", "DataToTagAudit"))
+                for stage in ("pre", "post") for module in (fixture, "THC.InterfaceClosure")}:
+        return True
     if parts[1] == "simd-capability-smoke":
         return name in SIMD_SMOKE_OUTPUTS
     if parts[1] == "simd-floatx4-fma":
