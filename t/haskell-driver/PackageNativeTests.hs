@@ -22,9 +22,9 @@ import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
 import System.Directory (findExecutable, getCurrentDirectory, createDirectory, removeFile,
   makeAbsolute, withCurrentDirectory, createFileLink)
-import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.Environment (getEnv, lookupEnv, setEnv, unsetEnv)
 import System.IO.Error (tryIOError)
-import System.FilePath ((</>))
+import System.FilePath ((</>), searchPathSeparator)
 import System.Process (readProcess)
 import qualified System.Info as Host
 import Test.HUnit
@@ -34,6 +34,7 @@ import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (selectNativePieces, nativeSymbolArchives)
 import THC.Driver.Installed (installedContext, InstalledContext(..))
+import THC.Driver.Project (selectedPackageTool)
 import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
@@ -83,6 +84,31 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         assertBool "mismatched selected pair is rejected" (isLeft rejected)
         assertBool "mismatch rejects the database identity, not executable lookup"
           (case rejected of Left failure -> "global databases differ" `isInfixOf` show failure; Right _ -> False)
+        inheritedPath <- getEnv "PATH"
+        withEnvironment [("PATH",root </> "packages" ++ [searchPathSeparator] ++ inheritedPath)] $
+          bracket (lookupEnv "GHC_PKG")
+            (maybe (unsetEnv "GHC_PKG") (setEnv "GHC_PKG")) $ \_ -> do
+              unsetEnv "GHC_PKG"
+              assertEqual "empty compiler sibling directory selects versioned PATH package tool"
+                packageTool =<< selectedPackageTool selected Nothing
+              rejectedExplicit <- tryIOError (selectedPackageTool selected (Just (root </> "missing-pkg")))
+              assertBool "bad explicit package selection cannot fall back to compatible PATH"
+                (isLeft rejectedExplicit)
+              withEnvironment [("GHC_PKG",wrong)] $ do
+                rejectedEnvironment <- tryIOError (selectedPackageTool selected Nothing)
+                assertBool "bad environment pair cannot fall back to compatible PATH"
+                  (case rejectedEnvironment of Left failure -> "global databases differ" `isInfixOf` show failure; Right _ -> False)
+              let unversioned = root </> "packages/ghc-pkg"
+              writeExecutable unversioned ("#!/bin/sh\nexec " ++ show pkg ++ " \"$@\"\n")
+              removeFile packageTool
+              withEnvironment [("PATH",root </> "packages")] $
+                assertEqual "PATH may provide only the unversioned selected package tool"
+                  unversioned =<< selectedPackageTool selected Nothing
+              writeExecutable packageTool ("#!/bin/sh\nif [ \"$1\" = --version ]; then exec " ++ show pkg ++
+                " \"$@\"; fi\nprintf '/different/global/database\\n'\n")
+              rejectedDefault <- tryIOError (selectedPackageTool selected Nothing)
+              assertBool "versioned PATH candidate must still match compiler database"
+                (case rejectedDefault of Left failure -> "global databases differ" `isInfixOf` show failure; Right _ -> False)
         forM_ ["absent-tool", root </> "absent-tool"] $ \missing -> do
           badCompiler <- tryIOError (installedContext missing packageTool "unused" [] Null)
           badPackage <- tryIOError (installedContext selected missing "unused" [] Null)
