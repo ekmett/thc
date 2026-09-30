@@ -9,13 +9,15 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
+import thc.CoreUnitDirectory;
 import thc.Language;
-import thc.Json;
 import thc.Main;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -116,59 +118,65 @@ class CoreSourceTest {
             }
         });
     }
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> exported(Path project, String name) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(project.resolve("build/source-core/" + name + ".json")));
+    private static Map<String, Object> exported(CoreUnitDirectory.Sources artifacts, Path project, String name) throws Exception {
+        var path = project.resolve("build/source-core/" + name + ".cbd");
+        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
+        return artifacts.consumer(path, hash);
     }
     private static long invoke(Program program, String name, long n) {
         return (Long) Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(name), new Object[]{n}});
     }
     private record Row(String name, long increment) {}
     @Test void realGhcSourceNotesReachTypedRootsAndLocalJoinNodes() throws Exception {
-        entered(language -> {
-            var project = Path.of(System.getProperty("thc.projectRoot"));
-            var sourceModule = exported(project, "SourceNotes");
-            var compiler = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
-            for (var row : List.of(new Row("unicode", 1L), new Row("tabbed", 2L), new Row("missing", 3L))) {
-                var name = row.name(); long increment = row.increment();
-                var sources = new Program(language, CoreModules.reachable(sourceModule, name));
-                var target = sources.entryTarget(name);
-                var root = (FunctionRoot) target.getRootNode();
-                var section = root.getSourceSection();
-                if (section == null) throw new IllegalArgumentException(name + " must retain real GHC source notes");
-                assertTrue(!root.getCoreSourceNotes().isEmpty());
-                boolean located = true;
-                for (var node : NodeUtil.findAllNodeInstances(root, Expr.class)) if (node.getSourceSection() == null) { located = false; break; }
-                assertTrue(located);
-                if (name.equals("missing")) {
-                    assertTrue(section.getSource().getName().endsWith("missing-original-source.hs"));
-                    assertFalse(section.getSource().hasCharacters());
-                    assertTrue(section.getStartLine() >= 200);
-                } else {
-                    assertTrue(section.getSource().hasCharacters());
-                    assertTrue(section.getSource().getCharacters().toString().contains("😀"));
+        // Source notes are lazy CBD metadata: retain the verified readers until all debugger and compiled checks finish.
+        try (var artifacts = CoreModules.unitDirectory(Map.of("moduleFiles", List.of())).open(true)) {
+            entered(language -> {
+                var project = Path.of(System.getProperty("thc.projectRoot"));
+                var sourceModule = exported(artifacts, project, "SourceNotes");
+                var compiler = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+                for (var row : List.of(new Row("unicode", 1L), new Row("tabbed", 2L), new Row("missing", 3L))) {
+                    var name = row.name(); long increment = row.increment();
+                    var entry = "main:SourceNotes." + name;
+                    var sources = new Program(language, CoreModules.reachable(sourceModule, entry));
+                    var target = sources.entryTarget(entry);
+                    var root = (FunctionRoot) target.getRootNode();
+                    var section = root.getSourceSection();
+                    if (section == null) throw new IllegalArgumentException(name + " must retain real GHC source notes");
+                    assertTrue(!root.getCoreSourceNotes().isEmpty());
+                    boolean located = true;
+                    for (var node : NodeUtil.findAllNodeInstances(root, Expr.class)) if (node.getSourceSection() == null) { located = false; break; }
+                    assertTrue(located);
+                    if (name.equals("missing")) {
+                        assertTrue(section.getSource().getName().endsWith("missing-original-source.hs"));
+                        assertFalse(section.getSource().hasCharacters());
+                        assertTrue(section.getStartLine() >= 200);
+                    } else {
+                        assertTrue(section.getSource().hasCharacters());
+                        assertTrue(section.getSource().getCharacters().toString().contains("😀"));
+                    }
+                    for (int i = 0; i < 20; i++) assertEquals((long) i + increment, invoke(sources, entry, i));
+                    compiler.getMethod("compile", boolean.class).invoke(target, true);
+                    compiler.getMethod("waitForCompilation").invoke(target);
+                    assertEquals(true, compiler.getMethod("isValidLastTier").invoke(target));
+                    assertEquals(Long.MAX_VALUE + increment, invoke(sources, entry, Long.MAX_VALUE));
                 }
-                for (int i = 0; i < 20; i++) assertEquals((long) i + increment, invoke(sources, name, i));
-                compiler.getMethod("compile", boolean.class).invoke(target, true);
-                compiler.getMethod("waitForCompilation").invoke(target);
-                assertEquals(true, compiler.getMethod("isValidLastTier").invoke(target));
-                assertEquals(Long.MAX_VALUE + increment, invoke(sources, name, Long.MAX_VALUE));
-            }
-            var joins = new Program(language, CoreModules.reachable(exported(project, "RepresentationAudit"), "joinLoop"));
-            var root = joins.entryTarget("joinLoop").getRootNode();
-            var regions = NodeUtil.findAllNodeInstances(root, LocalJoinRegion.class);
-            assertTrue(!regions.isEmpty(), "The fixture must contain an actual GHC join");
-            boolean located = true;
-            for (var region : regions) if (region.getSourceSection() == null) { located = false; break; }
-            assertTrue(located, "Local control-flow nodes inherit GHC source locations");
-            assertEquals(2_001_000L, invoke(joins, "joinLoop", 2_000));
-            var offModule = new LinkedHashMap<>(CoreModules.reachable(sourceModule, "unicode"));
-            offModule.put("sourceNotesEnabled", false);
-            var off = new Program(language, offModule);
-            assertNull(off.entryTarget("unicode").getRootNode().getSourceSection());
-            assertEquals(0, off.diagnostics().get("sourceSpanCount"));
-            assertEquals(0, off.diagnostics().get("sourceRootCount"));
-        });
+                var joinEntry = "main:RepresentationAudit.joinLoop";
+                var joins = new Program(language, CoreModules.reachable(exported(artifacts, project, "RepresentationAudit"), joinEntry));
+                var root = joins.entryTarget(joinEntry).getRootNode();
+                var regions = NodeUtil.findAllNodeInstances(root, LocalJoinRegion.class);
+                assertTrue(!regions.isEmpty(), "The fixture must contain an actual GHC join");
+                boolean located = true;
+                for (var region : regions) if (region.getSourceSection() == null) { located = false; break; }
+                assertTrue(located, "Local control-flow nodes inherit GHC source locations");
+                assertEquals(2_001_000L, invoke(joins, joinEntry, 2_000));
+                var offModule = new LinkedHashMap<>(CoreModules.reachable(sourceModule, "main:SourceNotes.unicode"));
+                offModule.put("sourceNotesEnabled", false);
+                var off = new Program(language, offModule);
+                assertNull(off.entryTarget("main:SourceNotes.unicode").getRootNode().getSourceSection());
+                assertEquals(0, off.diagnostics().get("sourceSpanCount"));
+                assertEquals(0, off.diagnostics().get("sourceRootCount"));
+            });
+        }
     }
     private static Map<String, Object> map(Object... entries) {
         var result = new LinkedHashMap<String, Object>();
