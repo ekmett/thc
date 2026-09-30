@@ -29,16 +29,19 @@ public final class NativeExecutable {
     static String[] launcherArguments(String configuration, String[] guest) {
         var value = Json.parse(configuration);
         if (value instanceof Map<?, ?> binding) value = binding.get("arguments");
-        if (!(value instanceof List<?> fixed) || fixed.size() < 6 ||
-                !"--run-executable".equals(fixed.get(0)) || !"--".equals(fixed.get(4)))
+        if (!(value instanceof List<?> fixed))
             throw new IllegalArgumentException("Expected a bound --run-executable prefix");
         var result = new String[fixed.size() + guest.length];
         for (int i = 0; i < fixed.size(); i++) {
-            if (!(fixed.get(i) instanceof String argument) || argument.indexOf('\0') >= 0 ||
-                    i < 6 && argument.isBlank())
+            if (!(fixed.get(i) instanceof String argument) || argument.indexOf('\0') >= 0)
                 throw new IllegalArgumentException("Invalid native executable argument " + i);
             result[i] = argument;
         }
+        var prefix = Main.launcherArtifactVerification(java.util.Arrays.copyOf(result, fixed.size())).arguments();
+        if (prefix.length < 6 || !"--run-executable".equals(prefix[0]) || !"--".equals(prefix[4]))
+            throw new IllegalArgumentException("Expected a bound --run-executable prefix");
+        for (int i = 0; i < 6; i++) if (prefix[i].isBlank())
+            throw new IllegalArgumentException("Invalid native executable argument " + i);
         System.arraycopy(guest, 0, result, fixed.size(), guest.length);
         return result;
     }
