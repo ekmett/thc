@@ -14,12 +14,15 @@
 module PackageNativeTests (tests) where
 
 import Control.Monad (forM_)
+import Control.Exception (bracket)
 import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
-import System.Directory (findExecutable, getCurrentDirectory)
+import System.Directory (findExecutable, getCurrentDirectory, createDirectory, removeFile)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.IO.Error (tryIOError)
 import System.FilePath ((</>), takeDirectory)
 import System.Process (readProcess)
 import Test.HUnit
@@ -28,10 +31,36 @@ import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (selectNativePieces, nativeSymbolArchives)
+import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestCase $ do
+  [ TestCase $ withScratch $ \root -> do
+      let adjacent = root </> "clang/llvm-objcopy"
+          onPath = root </> "path/llvm-objcopy"
+      createDirectory (root </> "clang")
+      createDirectory (root </> "path")
+      writeExecutable onPath "PATH objcopy"
+      withEnvironment [("PATH",root </> "path")] $
+        bracket (lookupEnv "THC_LLVM_OBJCOPY")
+          (maybe (unsetEnv "THC_LLVM_OBJCOPY") (setEnv "THC_LLVM_OBJCOPY")) $ \_ -> do
+            unsetEnv "THC_LLVM_OBJCOPY"
+            assertEqual "wrapped clang can use PATH objcopy" onPath =<< tool "THC_LLVM_OBJCOPY" adjacent
+            writeExecutable adjacent "adjacent objcopy"
+            assertEqual "adjacent objcopy wins over PATH" adjacent =<< tool "THC_LLVM_OBJCOPY" adjacent
+            withEnvironment [("THC_LLVM_OBJCOPY",onPath)] $
+              assertEqual "explicit override wins over adjacent" onPath =<< tool "THC_LLVM_OBJCOPY" adjacent
+            withEnvironment [("THC_LLVM_OBJCOPY","llvm-objcopy")] $
+              assertEqual "named explicit override resolves through PATH" onPath =<< tool "THC_LLVM_OBJCOPY" adjacent
+            forM_ [root </> "missing", "missing-objcopy"] $ \missing ->
+              withEnvironment [("THC_LLVM_OBJCOPY",missing)] $ do
+                result <- tryIOError (tool "THC_LLVM_OBJCOPY" adjacent)
+                assertBool "bad explicit override must fail, never fall back" (isLeft result)
+            removeFile onPath
+            removeFile adjacent
+            result <- tryIOError (tool "THC_LLVM_OBJCOPY" adjacent)
+            assertBool "missing implicit objcopy fails when acquisition needs it" (isLeft result)
+  , TestCase $ do
       compiler <- findExecutable "ghc" >>= maybe (fail "GHC missing") pure
       libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
         [directory] -> pure directory

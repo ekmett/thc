@@ -71,6 +71,7 @@ runTests arguments = do
     ["--inplace-store-only"] -> pure [StoreProjectTests.inplaceTests env]
     ["--concurrent-store-only"] -> pure [StoreProjectTests.concurrentTests env]
     ["--package-native-only"] -> pure [PackageNativeTests.tests]
+    ["--native-cache-only"] -> pure [NativeCacheTests.tests]
     ["--native-recipe-only"] -> pure [NativeRecipeTests.tests, NativeRecipeTests.interfaceTests]
     [] -> pure
       [ CoreIndexTests.tests
@@ -94,6 +95,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only|--native-recipe-only]"
+    _ -> die "Usage: driver-tests [--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only|--native-cache-only|--native-recipe-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

@@ -17,7 +17,7 @@ module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
   , linkInstalledNative, installedNativeSignatures, nativeCapiSource
-  , nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned
+  , nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, tool
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -42,6 +42,7 @@ import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
 import THC.Driver.Installed (boundedInterfaceProcess)
+import THC.Driver.NativeCache (nativeObjcopySelection)
 import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
@@ -1268,7 +1269,12 @@ command directory program arguments = do
     (proc program arguments) {cwd=Just directory,env=Just environment} ""
   check (status == ExitSuccess) ("package native command failed: " ++ program ++ " " ++ show arguments ++ "\n" ++ take 8192 (output ++ diagnostic))
   pure output
+-- | Resolve an acquisition tool. Objcopy shares its adjacent-clang/PATH
+-- selection with cache identity; explicit overrides never silently fall back.
 tool :: String -> String -> IO FilePath
+tool "THC_LLVM_OBJCOPY" fallback = do
+  (selected, found) <- nativeObjcopySelection fallback
+  maybe (fail ("missing native tool " ++ selected)) pure found
 tool variable fallback = do
   selected <- maybe fallback id <$> lookupEnv variable
   found <- if isAbsolute selected then pure selected else findExecutable selected >>= maybe (fail ("missing native tool " ++ selected)) pure
