@@ -57,6 +57,13 @@ class PackageScalarLinksTest {
         assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(mixed)).getProved());
         assertEquals(1, Objects.requireNonNull(PackageScalarLinks.read(mixed)).getLink().getAbi().size(),
             "the real ordinary native entry stays; the Core operation is not advertised as native");
+        for (var header : List.of("Rts.h", "native.h")) {
+            var retainedHeader = with(mixed, "staticForeignImports",
+                with(proof, "imports", list(original, with(owned, "header", header)), "expectedCalls", list(call)));
+            assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(retainedHeader)).getProved());
+            assertEquals(1, Objects.requireNonNull(PackageScalarLinks.read(retainedHeader)).getLink().getAbi().size(),
+                "source headers do not manufacture native providers for exact Core capabilities");
+        }
         for (var bad : list(with(emitted, "unit", "ordinary-unit"), with(emitted, "safety", "safe"),
                 with(emitted, "arguments", list("IntRep", "AddrRep", "void"))))
             assertThrows(RuntimeException.class, () -> PackageScalarLinks.read(with(mixed, "staticForeignImports",

@@ -72,4 +72,22 @@ class CoreNativeOverrideProfileTest {
         assertThrows(RuntimeFault.class, () -> CorePackageScalarForeign.validate(metadata, arguments,
             List.of(true, false), result, List.of()), "the actual operand/flag validator still runs");
     }
+    @Test void originalCcallHeaderDoesNotChangeItsExactOwnedAbi() {
+        var emitted = Map.of("symbol", "shutdownHaskellAndExit", "unit", "ghc-internal",
+            "convention", "ccall", "safety", "safe", "arguments", List.of("Int32Rep", "Int32Rep", "void"),
+            "result", List.of("void"));
+        var imported = Map.of("symbol", "shutdownHaskellAndExit", "isFunction", true,
+            "header", "Rts.h", "convention", "ccall", "safety", "safe", "emitted", emitted);
+        assertTrue(CoreForeignOverride.nativeImport(imported, List.of()),
+            "GHC.Internal.TopHandler retains this actual configured header");
+        for (var header : List.of("", "bad\u0000.h", "bad\n.h", "bad\r.h", "bad\".h", "bad\\.h", 1L))
+            assertThrows(RuntimeFault.class, () -> CoreForeignOverride.nativeImport(with(imported, "header", header), List.of()),
+                "retained source headers still require well-formed provenance");
+        for (var wrong : List.of(with(imported, "isFunction", false), with(imported, "convention", "capi"),
+                with(imported, "safety", "unsafe"), with(imported, "emitted", with(emitted, "safety", "unsafe")),
+                with(imported, "emitted", with(emitted, "arguments", List.of("IntRep", "Int32Rep", "void"))),
+                with(imported, "emitted", with(emitted, "result", List.of("void", "Int32Rep")))))
+            assertThrows(RuntimeFault.class, () -> CoreForeignOverride.nativeImport(wrong, List.of()));
+        assertFalse(CoreForeignOverride.nativeImport(with(imported, "emitted", with(emitted, "unit", "ordinary-unit")), List.of()));
+    }
 }

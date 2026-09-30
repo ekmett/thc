@@ -73,6 +73,12 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (installedNativeSignatures "ghc-internal" typedModule)
       assertEqual "source typed imports omit the same exact Core wrapper" (Right [])
         (nativeSignatures "ghc-internal" [typedModule])
+      forM_ ["Rts.h", "native.h"] $ \header -> do
+        let retainedHeader = changeProof "imports" (toJSON [set "header" header imported]) typedModule
+        assertEqual "installed typed ccall headers preserve the full Core ownership proof" (Right [])
+          (installedNativeSignatures "ghc-internal" retainedHeader)
+        assertEqual "source typed ccall headers preserve the full Core ownership proof" (Right [])
+          (nativeSignatures "ghc-internal" [retainedHeader])
       assertBool "omission cannot bypass the complete expectedCalls inventory"
         (isLeft (nativeSignatures "ghc-internal" [changeProof "expectedCalls" (toJSON ([]::[Value])) typedModule]))
       assertBool "typed ABI drift cannot be admitted as a Core capability"
