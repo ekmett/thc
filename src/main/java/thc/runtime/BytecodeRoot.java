@@ -113,7 +113,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 }
                 return recoveredEntry;
             });
-        } finally { graphFailure.compareAndSet(claim, null); }
+        } finally { service.complete(this, claim, recoveredEntry != null); }
     }
 
     final void configureCaseRegions(boolean passThrough, boolean inline, BytecodeCaseRegion[] regions) {
