@@ -56,11 +56,8 @@ Windows `ghc-internal` is the bootstrap exception: its complete source graph
 compiles with `-fwrite-if-simplified-core` without loading a plugin that imports
 the unfinished home unit. The existing installed-interface helper then exports
 the genuine rebuilt Core and foreign metadata.
-Pinned Windows packages use Cabal's complete `--make -no-link` invocation after
+Other pinned Windows packages use Cabal's complete `--make -no-link` invocation after
 checking the full source graph, avoiding a new static-plugin link per module.
-Run `thc-fixtures windows-timeout` for the native fixture deadline regression;
-Windows logged fixture commands poll process exit and own descendant cleanup
-through a native process job.
 
 Installed-package discovery and helper probes select real `.hi` interfaces on
 Windows and `.dyn_hi` interfaces on Unix. Acquisition views on Windows copy the

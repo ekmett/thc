@@ -451,7 +451,7 @@ preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary origi
               dynamic = installedInterfaceWay context == DynamicInterfaces
               suffixes = if dynamic then ["hi", "dyn_hi"] else ["hi"]
               key = digest (BL.toStrict (encode
-                ("pinned-library-core-v7" :: String, pinnedReleaseIdentity, driverHash, pluginDb, pluginUnit, pluginHash, helperHash,
+                ("pinned-library-core-v8" :: String, pinnedReleaseIdentity, driverHash, pluginDb, pluginUnit, pluginHash, helperHash,
                  installedCompiler original, settings, selectedFlags, cppFlags, installedViewIdentity context, registration unit)))
               destination = cache </> "pinned-libraries/v1" </> key
               receipt = destination </> "complete"
@@ -602,9 +602,11 @@ preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary origi
                 let coreFlags = ["-O2", "-fwrite-if-simplified-core", "-dcore-lint", "-fforce-recomp"] ++
                       [option | name == "ghc-internal", option <- ["-package-id", registeredId unit]]
                     compileFlags = filter (`notElem` ("--make" : "-no-link" : map prettyShow selected)) rendered ++ ["-c"] ++ coreFlags
-                if Host.os == "mingw32"
+                if Host.os == "mingw32" && name /= "ghc-internal"
                   -- Cabal's non-boot module roots retain the complete validated
                   -- graph while GHC loads the static plugin once per package.
+                  -- The wired ghc-internal home-unit bootstrap needs the
+                  -- explicit graph order: GHC 9.14.1 --make panics with <<loop>>.
                   then checkedIn package (installedGhc original) (rendered ++ coreFlags ++ exportFlags)
                   else forM_ nodes $ \(_, path, boot) ->
                     checkedIn package (installedGhc original) (compileFlags ++ (if boot then [] else exportFlags) ++ [path])
