@@ -416,11 +416,11 @@ def simd_bytearray_outputs(family, attempt, native):
                 *(("native-build", "native-oracle") if native else ()), *(("snan-oracle",) if native and floating else ()))
     return frozenset((
         f"{root}/expected.tsv", f"{root}/requests.tsv",
-        *(f"{root}/{stage}-core/{module}.json" for stage in stages),
+        *(f"{root}/{stage}-core/{module}.cbd" for stage in stages),
         *(f"{root}/{stage}-audit.json" for stage in stages),
         *(f"{attempt}/audits/{label}.json" for label in audits),
-        *(f"{attempt}/mutations/{label}.json" for label in mutations),
-        *(f"{attempt}/retained/{stage}.json" for stage in ("pre", "post")),
+        *(f"{attempt}/mutations/{label}.cbd" for label in mutations),
+        *(f"{attempt}/retained/{stage}.{suffix}" for stage in ("pre", "post") for suffix in ("json", "cbd")),
         *((f"{attempt}/retained-original-source.hs",) if not floating else ()),
         *(f"{attempt}/commands/{label}.{suffix}" for label in commands for suffix in ("stdout", "stderr", "command.json")),
         *((f"{root}/oracle.tsv", f"{root}/native/{family.removeprefix('simd-')}-oracle") if native else ()),

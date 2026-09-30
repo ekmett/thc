@@ -22,7 +22,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.Char (toLower)
 import Data.Foldable (toList)
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort, stripPrefix)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Word (Word32, Word8)
@@ -31,12 +31,14 @@ import FixtureSupport (CommandResult(..), hashFile, runLogged, runLoggedExpect, 
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek, poke)
+import GHC.Float (castFloatToWord32, castDoubleToWord64)
 import SimdByteArrayModel
 import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), makeRelative, takeExtension, takeDirectory, splitDirectories)
 import Text.Read (readMaybe)
+import THC.Compact.Module (readModuleValue, writeModuleValue)
 
 get :: String -> Value -> Value
 get key (Object fields) = maybe Null id (KM.lookup (Key.fromString key) fields)
@@ -61,6 +63,9 @@ field key value = case fromJSON (get key value) of Success answer -> pure answer
 
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either (die . ((path ++ ": ") ++)) pure . eitherDecodeStrict'
+
+readCore :: FilePath -> IO Value
+readCore path = BS.readFile path >>= either die pure . readModuleValue
 
 check :: Bool -> String -> IO ()
 check condition message = unless condition (die message)
@@ -103,6 +108,13 @@ boundary :: String -> String
 boundary "pre" = "optimized-Core-before-Tidy"
 boundary _ = "optimized-Core-after-Tidy-before-CorePrep"
 
+identity :: Family -> String -> String
+identity family name = "main:" ++ moduleName family ++ "." ++ name
+
+bindingName :: Family -> Value -> String
+bindingName family binding = maybe identifier id (stripPrefix (identity family "") identifier)
+  where identifier = string (get "id" binding)
+
 -- Independent source evidence for the exact CorePrep/runRW beta-redex.
 -- A merely zero-width value or an arbitrary immediate lambda is insufficient.
 validateStateCall :: String -> Value -> IO ()
@@ -121,7 +133,7 @@ validateStateCall name call = do
 
 validateWorker :: Family -> Value -> IO ()
 validateWorker family binding = do
-  let name = string (get "name" binding)
+  let name = bindingName family binding
       expr = get "expr" binding
       formals = items (at 1 expr)
       lambdas = expressions "lam" expr
@@ -170,7 +182,7 @@ guestStructure family entry report core = do
       rootId = at 0 (get "roots" report)
       reachable = [bindings Map.! get "id" item | item <- items (get "reachableBindings" report)]
       expectedNames = Set.fromList (name : maybe [] pure (helper family name))
-  check (Set.fromList (map (string . get "name") reachable) == expectedNames) (name ++ ": global closure")
+  check (Set.fromList (map (string . get "id") reachable) == Set.map (identity family) expectedNames) (name ++ ": global closure")
   facts <- forM reachable $ \binding -> do
     let expr = get "expr" binding
         lambdas = expressions "lam" expr
@@ -188,12 +200,12 @@ guestStructure family entry report core = do
       check (length (items (at 1 local)) == 1 && state (get "rep" (at 0 (at 1 local))) && scalar (get "resultRep" (at 3 local)) &&
         length localCalls == 1 && at 1 (firstValue localCalls) == local && length (items (at 2 (firstValue localCalls))) == 1) (name ++ ": one runRW call")
     else validateWorker family binding
-    forM_ stateCalls (validateStateCall (string (get "name" binding)))
+    forM_ stateCalls (validateStateCall (bindingName family binding))
     check (length references == (if needsCall then 1 else 0) && length calls == length references) (name ++ ": residual helper count")
     forM_ calls $ \call -> do
       let callee = bindings Map.! at 1 (at 1 call)
       arity <- field "arity" callee :: IO Int
-      check (Just (string (get "name" callee)) == helper family name && length (items (at 2 call)) == arity &&
+      check (Just (bindingName family callee) == helper family name && length (items (at 2 call)) == arity &&
         take 3 (drop 3 (items call)) == [toJSON (replicate arity False),Bool False,Bool False]) (name ++ ": saturated unlifted helper")
     check (all ((== 1) . length . items . at 3) (expressions "case" expr)) (name ++ ": conditional guest call path")
     let lowered = length lambdas - length stateCalls
@@ -211,7 +223,7 @@ inventory family stage core = do
       vectors = filter ((== String "vector") . get "kind") (walk bindings)
       vector = object ["lanes" .= lanes family,"element" .= element family]
       rep = toJSON ["VecRep " ++ show (lanes family) ++ " " ++ element family]
-      selected = [binding | binding <- items bindings, string (get "name" binding) `elem`
+      selected = [binding | binding <- items bindings, bindingName family binding `elem`
         (map entryName (entries family) ++ [name | entry <- entries family, Just name <- [helper family (entryName entry)]])]
       -- The unchanged shared auditor proves each recognized immediate read case.
       -- Counting its syntax here does not replace the exact read_case contract.
@@ -226,7 +238,7 @@ inventory family stage core = do
   check (not (null numbers) && if family == Int32Lanes then all (\x -> -2^(31 :: Int) <= x && x < 2^(31 :: Int)) numbers
          else all (\x -> 0 <= x && x < 2^(32 :: Int)) numbers && any (>= 2^(31 :: Int)) numbers) "Missing/noncanonical narrow lane literals"
   forM_ selected $ \binding -> do
-    let name = string (get "name" binding)
+    let name = bindingName family binding
         helperNames = [h | entry <- entries family, Just h <- [helper family (entryName entry)]]
         primitiveNames = map (string . at 1) (expressions "prim" (get "expr" binding))
         floatingOps = if family == FloatLanes then ["int2Float#","float2Int#","plusFloat#","timesFloat#"] else ["int2Double#","double2Int#","+##","*##"]
@@ -238,8 +250,12 @@ inventory family stage core = do
     let kind = if family == FloatLanes then "float" else "double"
         literalValues = map (string . at 2) (filter ((== toJSON kind) . at 1) (expressions "lit" bindings))
         wanted = if family == FloatLanes then ["3.0","5.0","7.0","11.0"] else ["3.0","5.0"]
-    check (counts literalValues == Map.fromList [(x,3) | x <- wanted]) "Finite checksum literal sites changed"
-    pure [Key.fromString (kind ++ "LiteralSites") .= length literalValues]
+        bitValues = map (string . at 2) (filter ((== toJSON (kind ++ "-bits")) . at 1) (expressions "lit" bindings))
+        wantedBits = if family == FloatLanes then map (show . castFloatToWord32) [3,5,7,11]
+                     else map (show . castDoubleToWord64) [3,5]
+    check ((null bitValues && counts literalValues == Map.fromList [(x,3) | x <- wanted]) ||
+      (null literalValues && counts bitValues == Map.fromList [(x,3) | x <- wantedBits])) "Finite checksum literal sites changed"
+    pure [Key.fromString (kind ++ "LiteralSites") .= (length literalValues + length bitValues)]
     else pure []
   pure (object (["localReadSites" .= length readSites,Key.fromString (literalKind ++ "LiteralSites") .= length literals,
     "vectorProofs" .= length vectors,"memoryPrimitiveCounts" .= Map.restrictKeys ps (Set.fromList (operations family))] ++ floatingFacts))
@@ -276,7 +292,7 @@ mutate :: Family -> String -> String -> String -> Value -> Value
 mutate family offsetFamily operation wrong = changeField "bindings" (mapArray binding)
   where
     mapArray action = toJSON . map action . items
-    binding value | get "name" value == toJSON (offsetFamily ++ operation ++ "Worker") = changeField "expr" visit value
+    binding value | get "id" value == toJSON (identity family (offsetFamily ++ operation ++ "Worker")) = changeField "expr" visit value
                   | otherwise = value
     visit value
       | at 0 value == String "app" && primitive value `elem` operations family = case operation of
@@ -307,14 +323,14 @@ mutationControls family root attempt audit stage core = do
   controls <- forM (wrongElements family) $ \wrong -> do
     cases <- forM [(f,o) | f <- ["vector","scalar"],o <- ["Index","Read","Write"]] $ \(offsetFamily,operation) -> do
       let label = stage ++ "-wrong-" ++ wrong ++ "-" ++ offsetFamily ++ operation
-          path = attempt </> "mutations" </> label ++ ".json"
+          path = attempt </> "mutations" </> label ++ ".cbd"
           changed = mutate family offsetFamily operation wrong core
           detail = case operation of "Index" -> "result representation"; "Read" -> "read result components"; _ -> "argument representation"
           wanted = counts ([("malformed-expression","Invalid local vector memory intrinsic: " ++ detail)] ++
             [(code,message) | operation == "Index",(code,message) <- [("vector-shape","Exact vector primitive argument representation required"),("aggregate-shape","Conflicting or missing logical aggregate representation proofs")]])
       check (changed /= core) "Missing SIMD proof mutation target"
       createDirectoryIfMissing True (root </> attempt </> "mutations")
-      writeJson (root </> path) changed
+      _ <- writeModuleValue (root </> path) changed
       (report,result,reportPath) <- audit label (offsetFamily ++ operation ++ "Case") path True
       negative wanted report
       pure (offsetFamily ++ operation,object ["origin" .= ("Mutated proof metadata only; never native input" :: String),"report" .= report],result,[path,reportPath])
@@ -376,12 +392,14 @@ retainedControls family root attempt audit = do
     check (Map.lookup originalPath hashes == Just digest) "Retained genuine Core artifact hash changed"
     core <- readJson (root </> path)
     _ <- inventory family stage core
+    let compact = attempt </> "retained" </> stage ++ ".cbd"
+    _ <- writeModuleValue (root </> compact) core
     positives <- forM [f ++ o ++ "Case" | f <- ["vector","scalar"],o <- ["Index","Read","Write"]] $ \entry -> do
-      triple@(report,_,_) <- audit ("retained-" ++ stage ++ "-" ++ entry) entry path False
+      triple@(report,_,_) <- audit ("retained-" ++ stage ++ "-" ++ entry) entry compact False
       check (get "accepted" report == Bool True && items (get "issues" report) == [] && items (get "missingGlobals" report) == []) "Retained positive rejected"
       pure triple
     (controls,commands,paths) <- mutationControls family root attempt audit ("retained-" ++ stage) core
-    pure (stage,controls,result:[r | (_,r,_) <- positives] ++ commands,path:[p | (_,_,p) <- positives] ++ paths,compressed)
+    pure (stage,controls,result:[r | (_,r,_) <- positives] ++ commands,path:compact:[p | (_,_,p) <- positives] ++ paths,compressed)
   pure (toJSON (Map.fromList [(stage,controls) | (stage,controls,_,_,_) <- stages]),provenanceCommand:concat [commands | (_,_,commands,_,_) <- stages],
     concat [paths | (_,_,_,paths,_) <- stages] ++ [attempt </> "retained-original-source.hs" | family `elem` [Int32Lanes,Word32Lanes]],
     provenance:[path | (_,_,_,_,path) <- stages])
@@ -419,7 +437,7 @@ prepareSimdByteArray root name args = do
         let reportPath = attempt </> "audits" </> label ++ ".json"
         createDirectoryIfMissing True (root </> attempt </> "audits")
         result <- runLoggedExpect (if rejected then 1 else 0) 120 root logs label [] "python3"
-          ["bin/audit-core.py","--entry",entry,"--output",reportPath,path]
+          ["bin/audit-core.py","--entry",identity family entry,"--output",reportPath,path]
         report <- readJson (root </> reportPath)
         pure (report,result,reportPath)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
@@ -440,12 +458,12 @@ prepareSimdByteArray root name args = do
   writeFile (root </> directory </> "requests.tsv") (encodeRequests wanted)
   capabilities <- readJson (root </> "bin/core-capabilities.json")
   prepared <- forM stages $ \stage -> do
-    let corePath = directory </> stage ++ "-core" </> moduleName family ++ ".json"
+    let corePath = directory </> stage ++ "-core" </> moduleName family ++ ".cbd"
     exists <- doesFileExist (root </> corePath)
     when exists (removeFile (root </> corePath))
     exported <- run (stage ++ "-export") [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
       "bin/export-core.sh" (ghcOptions ++ [x | exportOnly,x <- ["-fno-code","-fwrite-if-simplified-core"]] ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [fixture])
-    core <- readJson (root </> corePath)
+    core <- readCore (root </> corePath)
     facts <- inventory family stage core
     reports <- forM (map entryName (entries family) ++ graphNames family ++ hostEntries ++ frontiers) $ \entry -> do
       triple@(report,_,_) <- audit (stage ++ "-" ++ entry) entry corePath (entry `elem` frontiers)
@@ -455,7 +473,7 @@ prepareSimdByteArray root name args = do
     let reportMap = Map.fromList [(entry,report) | (entry,(report,_,_)) <- reports]
     structures <- forM (entries family) $ \entry -> (,) (entryName entry) <$> guestStructure family entry (reportMap Map.! entryName entry) core
     forM_ (graphNames family) $ \entry -> do
-      let bindings = filter ((== toJSON entry) . get "name") (items (get "bindings" core))
+      let bindings = filter ((== toJSON (identity family entry)) . get "id") (items (get "bindings" core))
       check (length bindings == 1 && length (items (get "reachableBindings" (reportMap Map.! entry))) == 1) (entry ++ ": graph closure")
       let binding = firstValue bindings
       check (get "arity" binding == toJSON (if "Index" `isPrefixOf` drop 6 entry then 2 else lanes family+3) && length (expressions "lam" (get "expr" binding)) == 1) (entry ++ ": graph arity/lambda")

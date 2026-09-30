@@ -145,12 +145,12 @@ class SimdDoubleByteArrayTest {
     @Test void genuineVectorCallBindingsLoadBeforePublicHostAdmission() throws Exception {
         var provenance = provenance();
         for (var stage : (List<String>) provenance.get("stages")) for (var backend : List.of("ast", "bytecode")) withLanguage(true, language -> {
-            var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdDoubleX2ByteArray.json").toPath()));
+            var module = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdDoubleX2ByteArray.cbd").toPath());
             for (var name : List.of("vectorArgument", "readVectorEscape")) {
-                var linked = CoreModules.reachable(module, name);
+                var linked = CoreModules.reachable(module, "main:SimdDoubleX2ByteArray." + name);
                 assertNotNull(backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked), stage + "/" + backend + "/" + name);
             }
-            var directRead = CoreModules.reachable(module, "readTupleEscape");
+            var directRead = CoreModules.reachable(module, "main:SimdDoubleX2ByteArray.readTupleEscape");
             var error = assertThrows(UnsupportedCore.class, () -> {
                 if (backend.equals("ast")) new Program(language, directRead); else new BytecodeProgram(language, directRead);
             });
@@ -161,18 +161,17 @@ class SimdDoubleByteArrayTest {
     @Test void publicHostTupleResultsRetainStateAndRejectInvalidCarriers() throws Exception {
         var provenance = provenance();
         for (var stage : (List<String>) provenance.get("stages")) for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
-            var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdDoubleX2ByteArray.json").toPath()));
+            var module = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdDoubleX2ByteArray.cbd").toPath());
             for (var family : List.of("vector", "scalar")) for (var operation : List.of(new Operation("Read", 4), new Operation("Write", 5))) {
                 var name = family + operation.name + "Worker";
                 for (boolean diagnostic : List.of(false, true)) {
                     var label = stage + "/" + backend + "/" + name + "/diagnostic=" + diagnostic;
-                    var request = Json.stringify(Map.of("entry", name, "backend", backend, "diagnosticUnsupported", diagnostic, "modules", List.of(module)));
+                    var request = CoreModules.request(List.of(new File(directory, stage + "-core/SimdDoubleX2ByteArray.cbd").getPath()), "main:SimdDoubleX2ByteArray." + name, false, diagnostic, backend);
                     var entry = context.eval("thc", request);
                     assertTrue(entry.canExecute(), label);
                     var bytes = HostByteArrayTestValues.allocate(context, backend);
                     // Initialize through the genuine guest writer, never assume fresh native memory is zero.
-                    var writer = context.eval("thc", Json.stringify(Map.of("entry", family + "WriteWorker",
-                        "backend", backend, "diagnosticUnsupported", diagnostic, "modules", List.of(module))));
+                    var writer = context.eval("thc", CoreModules.request(List.of(new File(directory, stage + "-core/SimdDoubleX2ByteArray.cbd").getPath()), "main:SimdDoubleX2ByteArray." + family + "WriteWorker", false, diagnostic, backend));
                     var initial = new Object[5]; Arrays.fill(initial, 0L);
                     initial[0] = bytes; initial[initial.length - 1] = null;
                     var written = writer.execute(initial);
@@ -339,7 +338,7 @@ class SimdDoubleByteArrayTest {
         assertEquals(new LinkedHashSet<>(declared), expected.keySet());
         var counts = (Map<String, Object>) provenance.get("expectedGuestCallsByEntry");
         for (var stage : stages) for (var backend : List.of("ast", "bytecode")) withLanguage(inlining, language -> {
-            var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdDoubleX2ByteArray.json").toPath()));
+            var module = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdDoubleX2ByteArray.cbd").toPath());
             for (var entry : entries) {
                 var name = (String) entry.get("name");
                 long rawArity = integer(entry.get("arity"), name + " arity");
@@ -360,9 +359,9 @@ class SimdDoubleByteArrayTest {
                 assertEquals(wanted, new LinkedHashSet<>(cases), name + " exact portable domain (sNaNs excluded)");
                 var actualOffsets = new LinkedHashSet<Long>(); for (var row : cases) actualOffsets.add(row.getFirst());
                 assertEquals(offsets, actualOffsets, name + " safe offsets");
-                var linked = new LinkedHashMap<>(CoreModules.reachable(module, name)); linked.put("instrument", true);
+                var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:SimdDoubleX2ByteArray." + name)); linked.put("instrument", true);
                 ExecutableProgram p = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                var host = p.hostEntryTarget(arity); var closure = p.entryValue(name); var target = p.entryTarget(name);
+                var host = p.hostEntryTarget(arity); var closure = p.entryValue("main:SimdDoubleX2ByteArray." + name); var target = p.entryTarget("main:SimdDoubleX2ByteArray." + name);
                 long callCount = integer(counts.get(name), name + " guest count");
                 // Counts are structural Core evidence, not guessed from global bindings:
                 // exact runRW applications in both roots execute in-frame.
