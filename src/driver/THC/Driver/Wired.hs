@@ -54,7 +54,7 @@ import Distribution.Pretty (prettyShow)
 import Distribution.Simple.Configure (getPersistBuildConfig)
 import Distribution.Simple.LocalBuildInfo (localPkgDescr, compiler, hostPlatform,
   allComponentsInBuildOrder, componentUnitId, componentPackageDeps, componentBuildDir, allLibModules)
-import Distribution.Simple.Build (initialBuildSteps)
+import Distribution.Simple.Build (writeBuiltinAutogenFiles)
 import Distribution.Simple.PreProcess (preprocessComponent, knownSuffixHandlers)
 import Distribution.Simple.GHC (componentGhcOptions)
 import Distribution.Simple.Program.GHC (renderGhcOptions, GhcOptions(..), GhcMode(..), GhcDynLinkMode(..))
@@ -250,8 +250,8 @@ exportPinnedWindowsCore upstream sourceFiles ghc ghcPkg helper expected layoutRe
     copyFile (upstream </> path) target
   createDirectoryIfMissing True overlay
   createDirectoryIfMissing True core
-  registration <- package "ghc-internal"
-  installed <- case Package.importDirs registration of
+  internalRegistration <- package "ghc-internal"
+  installed <- case Package.importDirs internalRegistration of
     [path] -> pure path
     _ -> fail "Windows ghc-internal requires one registered interface directory"
   backend <- readProcess ghc ["--show-iface", installed </> "GHC/Internal/Bignum/Backend/Selected.hi"] ""
@@ -259,7 +259,7 @@ exportPinnedWindowsCore upstream sourceFiles ghc ghcPkg helper expected layoutRe
     (fail "Selected Windows GHC does not use the pinned GMP backend")
   linkInterfaces True installed overlay installed
   rts <- package "rts"
-  let includes = Package.includeDirs rts ++ Package.includeDirs registration ++ [upstream </> "include"]
+  let includes = Package.includeDirs rts ++ Package.includeDirs internalRegistration ++ [upstream </> "include"]
   let hsc2hs = takeDirectory ghc </> "hsc2hs.exe"
       definitions = ["BIGNUM_GMP", "_WIN32_WINNT=0x06010000", "mingw32_HOST_OS", "x86_64_HOST_ARCH",
                      "__GLASGOW_HASKELL__=914", "__IO_MANAGER_WINIO__=1", "__IO_MANAGER_MIO__=1"]
@@ -382,12 +382,12 @@ exportPinnedUsing packageRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe s
 probeTargetLayout :: [FilePath] -> FilePath -> FilePath -> IO FilePath
 probeTargetLayout includeDirs recipe staging = do
   selected <- if Host.os == "mingw32" then lookupEnv "THC_CLANG" else pure Nothing
-  compiler <- maybe (findExecutable (if Host.os == "mingw32" then "clang" else "cc") >>=
+  layoutCompiler <- maybe (findExecutable (if Host.os == "mingw32" then "clang" else "cc") >>=
     maybe (fail "C compiler is unavailable") pure) pure selected
   createDirectoryIfMissing True staging
   let binary = staging </> if Host.os == "mingw32" then "target-layout.exe" else "target-layout"
       receipt = staging </> "target-layout.json"
-  status <- rawSystem compiler
+  status <- rawSystem layoutCompiler
     (["-Wall", "-Werror"] ++ map ("-I" ++) includeDirs ++ [recipe, "-o", binary])
   when (status /= ExitSuccess) (fail "GHC target layout receipt compilation failed")
   writeFile receipt =<< readProcess binary [] ""
@@ -546,7 +546,8 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                   createDirectoryIfMissing True (takeDirectory target)
                   copyFile (replaceExtension primitive suffix) target
               withCurrentDirectory package $ do
-                initialBuildSteps dist configuredPackage configured silent
+                createDirectoryIfMissing True (getSymbolicPath output)
+                writeBuiltinAutogenFiles silent configuredPackage configured component
                 preprocessComponent configuredPackage (CLib executableLibrary) configured component False silent knownSuffixHandlers
                 let base = componentGhcOptions normal configured info component output
                     options' = base <> mempty
@@ -569,11 +570,11 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                 nodes <- forM graph $ \node -> case node of
                   Object fields -> do
                     let get :: Aeson.FromJSON a => String -> IO a
-                        get key = case KeyMap.lookup (Key.fromString key) fields of
+                        get fieldName = case KeyMap.lookup (Key.fromString fieldName) fields of
                           Just value -> case Aeson.fromJSON value of
                             Aeson.Success parsed -> pure parsed
                             Aeson.Error message -> fail message
-                          Nothing -> fail ("source graph lacks " ++ key)
+                          Nothing -> fail ("source graph lacks " ++ fieldName)
                     (,,) <$> get "module" <*> get "source" <*> get "boot"
                   _ -> fail "invalid source graph node"
                 unless (sort [moduleName | (moduleName, _, False) <- nodes] == sort expected)
