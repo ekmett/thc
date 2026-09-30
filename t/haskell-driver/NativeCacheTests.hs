@@ -11,7 +11,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for native cache.
-module NativeCacheTests (tests) where
+module NativeCacheTests (tests, withScratch, withEnvironment, writeExecutable) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM_, void)
@@ -25,7 +25,9 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
-  getTemporaryDirectory, removeDirectoryRecursive, removeFile)
+  getTemporaryDirectory, removeDirectoryRecursive, removeFile, getPermissions,
+  setPermissions)
+import qualified System.Directory as Directory
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), takeDirectory)
 import System.IO (hClose, openTempFile)
@@ -59,6 +61,47 @@ tests = TestLabel "native cache identity" $ TestList
         first <- withEnvironment [(variable, "first")] nativeToolIdentity
         second <- withEnvironment [(variable, "second")] nativeToolIdentity
         assertBool (variable ++ " participates in the native build identity") (first /= second)
+  , TestCase $ withScratch $ \root -> do
+      let adjacent = root </> "clang/llvm-objcopy"
+          onPath = root </> "path/llvm-objcopy"
+          clang = root </> "clang/clang"
+          observed value = member "executable" (member "THC_LLVM_OBJCOPY" (member "tools" value))
+          expected path bytes = object ["path" .= path,"sha256" .= digest bytes]
+      createDirectory (root </> "clang")
+      createDirectory (root </> "path")
+      writeExecutable clang "clang wrapper"
+      writeExecutable onPath "PATH objcopy"
+      withEnvironment [("THC_CLANG",clang),("PATH",root </> "path")] $
+        withoutObjcopyOverride $ do
+          first <- nativeToolIdentity
+          assertEqual "wrapped clang falls back to PATH objcopy with exact bytes"
+            (expected onPath "PATH objcopy") (observed first)
+          writeExecutable adjacent "adjacent objcopy"
+          second <- nativeToolIdentity
+          assertEqual "adjacent objcopy takes precedence over PATH"
+            (expected adjacent "adjacent objcopy") (observed second)
+          writeExecutable adjacent "changed adjacent bytes"
+          third <- nativeToolIdentity
+          assertBool "objcopy byte changes invalidate identity" (second /= third)
+          writeExecutable onPath "changed adjacent bytes"
+          withEnvironment [("THC_LLVM_OBJCOPY",onPath)] $ do
+            explicit <- nativeToolIdentity
+            assertEqual "explicit objcopy overrides adjacent with exact path/hash"
+              (expected onPath "changed adjacent bytes") (observed explicit)
+            assertBool "objcopy path matters even for equal bytes" (third /= explicit)
+          withEnvironment [("THC_LLVM_OBJCOPY","llvm-objcopy")] $ do
+            named <- nativeToolIdentity
+            assertEqual "named explicit override resolves through PATH, not adjacent"
+              (expected onPath "changed adjacent bytes") (observed named)
+          withEnvironment [("THC_LLVM_OBJCOPY",root </> "missing")] $ do
+            missing <- nativeToolIdentity
+            assertEqual "missing explicit objcopy is observed, not silently replaced"
+              Null (observed missing)
+          removeFile adjacent
+          removeFile onPath
+          missing <- nativeToolIdentity
+          assertEqual "missing implicit objcopy does not require LLVM for pure Haskell"
+            Null (observed missing)
   , TestCase $ withScratch $ \root -> do
       let pieces = root </> "pieces"
       first <- makePiece pieces root "a"
@@ -116,7 +159,7 @@ tests = TestLabel "native cache identity" $ TestList
   ]
 
 toolVariables :: [String]
-toolVariables = ["THC_CLANG", "THC_LLVM_LINK", "THC_LLVM_OPT", "THC_LLVM_NM"]
+toolVariables = ["THC_CLANG", "THC_LLVM_LINK", "THC_LLVM_OPT", "THC_LLVM_NM", "THC_LLVM_OBJCOPY"]
 
 withTools :: FilePath -> IO a -> IO a
 withTools path = withEnvironment [(variable,path) | variable <- toolVariables]
@@ -126,6 +169,17 @@ withEnvironment values action = bracket
   (mapM (\(name,_) -> (,) name <$> lookupEnv name) values)
   (mapM_ (\(name,old) -> maybe (unsetEnv name) (setEnv name) old))
   (\_ -> mapM_ (uncurry setEnv) values >> action)
+
+withoutObjcopyOverride :: IO a -> IO a
+withoutObjcopyOverride action = bracket (lookupEnv "THC_LLVM_OBJCOPY")
+  (maybe (unsetEnv "THC_LLVM_OBJCOPY") (setEnv "THC_LLVM_OBJCOPY"))
+  (\_ -> unsetEnv "THC_LLVM_OBJCOPY" >> action)
+
+writeExecutable :: FilePath -> String -> IO ()
+writeExecutable path bytes = do
+  writeFile path bytes
+  permissions <- getPermissions path
+  setPermissions path permissions { Directory.executable = True }
 
 makePiece :: FilePath -> FilePath -> String -> IO FilePath
 makePiece pieces root name = do

@@ -44,7 +44,7 @@ class EntrySelfCallTest {
     private static Object call(ExecutableProgram p, String name, Object... args) { return Calls.target(p.hostEntryTarget(args.length), new Object[]{p.entryValue(name), args.clone()}); }
     private static void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
-        type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+        type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     private Map<String, Object> module(List<Map<String, Object>> bindings) {
         return Map.of("bindings", bindings, "instrument", true, "constructors", List.of(Map.of("id", "Box", "name", "Box", "arity", 1, "kind", "boxed",

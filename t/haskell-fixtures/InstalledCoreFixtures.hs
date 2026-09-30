@@ -25,6 +25,7 @@ import THC.Driver.CoreSymbols (publishCoreUnit)
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.InstalledForeign as Foreign
 import qualified THC.Driver.Project as Project
+import qualified THC.Driver.Wired as Wired
 import System.Directory (copyFile, createDirectoryIfMissing)
 import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (die)
@@ -47,7 +48,8 @@ data InstalledFixture = InstalledFixture
 
 -- Fixture orchestration only. Production Installed and Project own discovery,
 -- complete-Core validation, native companion linkage, TargetLayout and ZIP/cache
--- provenance. A stock thin-interface compiler is an explicit missing prerequisite.
+-- provenance. Stock thin interfaces enter the same pinned provider as ordinary
+-- project acquisition; explicit complete-Core/foreign profiles remain strict.
 prepareInstalledCore :: FilePath -> FilePath -> IO InstalledFixture
 prepareInstalledCore root directory = prepareInstalledCoreUnits root directory []
 
@@ -119,13 +121,29 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
     registered <- run (library ++ "-unit") providerPkg
       ["--global", "--no-user-package-db", "field", library, "id", "--simple-output"]
     case BS.words (commandStdout registered) of
-      [identifier] -> pure (BS.unpack identifier)
+      [identifier] -> pure (BS.unpack identifier, registered)
       _ -> die ("Expected one selected registration: " ++ library)
-  originalUnits <- discover [] (internal : additional)
+  originalUnits <- discover [] (internal : map fst additional)
   cache <- Cache.coreCacheDirectory
   driverHash <- hashFile =<< getExecutablePath
   selected <- case foreignSource of
-    Nothing -> pure initialContext
+    Nothing -> case coreGhc of
+      Just _ -> pure initialContext
+      Nothing -> do
+        -- Missing Core, not arbitrary probe/link/identity failures, selects the
+        -- shared production provider. Successful ordinary acquisitions remain
+        -- available in the authentic installed-bundle cache for the loop below.
+        let missing [] = pure False
+            missing (unit:rest) = do
+              result <- Project.prepareInstalledBundle cache (root </> directory </> "installed/staging")
+                (root </> "src/driver/cbits/target-layout.c") driverHash initialContext unit
+              case result of Left _ -> pure True; Right _ -> missing rest
+        needed <- missing originalUnits
+        if not needed then pure initialContext else do
+          plugin <- readJson (root </> "build/compiler/plugin.json")
+          pluginUnit <- field plugin "unitId"
+          pluginLibrary <- field plugin "sharedLibrary"
+          Wired.preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary initialContext originalUnits
     Just source -> do
       plugin <- readJson (root </> "build/compiler/plugin.json")
       pluginDb <- field plugin "packageDb"
@@ -149,7 +167,7 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
       Right value -> pure value
       Left missing -> die ("Fixture requires complete-interface-core from the selected GHC: " ++
         Installed.missingUnit missing ++ ":" ++ Installed.missingModule missing ++
-        " (" ++ Installed.missingInterface missing ++ "). No incomplete pinned-source fallback is used.")
+        " (" ++ Installed.missingInterface missing ++ "). No incomplete interface substitute is used.")
     let bundle = Project.installedBundle original
         destination = directory </> "installed/bundles" </> Installed.registeredId unit ++ ".zip"
     copyFile (Project.bundlePath bundle) (root </> destination)
@@ -162,4 +180,4 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int),
      "ghc" .= ("9.14.1" :: String), "units" .= concatMap fst bundles]
   pure (InstalledFixture ghc packagePath (packagePath : map snd bundles)
-    ([version, built, located] ++ providerCommands ++ [registration]) selected internalRegistration)
+    ([version, built, located] ++ providerCommands ++ [registration] ++ map snd additional) selected internalRegistration)

@@ -218,27 +218,40 @@ class RuntimeTest {
             } finally { context.leave(); }
         }
     }
-    private List<Object> variable(String id) { return list("var", id); }
-    private List<Object> integer(long number) { return list("lit", "int", Long.toString(number)); }
-    private List<Object> primitive(String name, List<Object> first, List<Object> second) { return list("app", list("prim", name), list(first, second), list(false, false)); }
+    private final Map<String, Object> integerRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+    private final Map<String, Object> dataRep = map("kind", "data", "evaluated", false, "primReps", list("BoxedRep (Just Lifted)"));
+    private final Map<String, Object> choiceRep = with(dataRep, "evaluated", true);
+    private final Map<String, Object> closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+    private List<Object> variable(String id, Map<String, Object> rep) { return list("var", id, map("rep", rep)); }
+    private List<Object> integer(long number) { return list("lit", "int", Long.toString(number), map("rep", integerRep)); }
+    private List<Object> primitive(String name, List<Object> first, List<Object> second) {
+        return list("app", list("prim", name, map()), list(first, second), list(false, false), false, false, map("rep", integerRep));
+    }
     private Map<String, Object> constructor(String id) {
         return map("id", id, "name", id.substring(id.lastIndexOf('.') + 1), "arity", 1, "tag", id.endsWith("LeftChoice") ? 1 : 2,
-            "kind", "boxed", "strictFields", list(false), "fieldLifted", list(false), "fieldReps", list(list("IntRep")));
+            "kind", "boxed", "strictFields", list(false), "fieldLifted", list(false), "fieldReps", list(list("IntRep")), "fieldTypes", list(integerRep));
     }
-    private Map<String, Object> binder(String id) { return map("id", id, "name", id, "type", "Int#", "lifted", false); }
-    private List<Object> constructed(String id) { return list("app", list("con", id, 1), list(variable("n")), list(false), true); }
+    private Map<String, Object> binder(String id) { return map("id", id, "name", id, "type", "Int#", "lifted", false, "coercion", false, "rep", integerRep); }
+    private List<Object> constructed(String id) {
+        return list("app", list("con", id, 1, map("rep", closureRep)), list(variable("n", integerRep)), list(false), true, true, map("rep", choiceRep));
+    }
     private void checkChoices(Value function, long[] inputs) {
         for (long input : inputs) assertEquals(input <= 0 ? input + 101 : input - 202, function.execute(input).asLong());
     }
     @Test void constructorCasesDistinguishEqualArityAlternativesBeforeAndAfterCompilation() throws Exception {
         String left = "Synthetic.LeftChoice", right = "Synthetic.RightChoice";
-        var chooseBody = list("case", primitive("<=#", variable("n"), integer(0)), "test", list(
-            list("default", null, list(), constructed(right)), list("lit", list("int", "1"), list(), constructed(left))));
-        var choose = map("id", "choose", "name", "choose", "arity", 1, "lifted", true, "expr", list("lam", list(binder("n")), chooseBody));
-        var entryBody = list("case", list("app", variable("choose"), list(variable("input")), list(false)), "chosen", list(
-            list("data", left, list("leftField"), primitive("+#", variable("leftField"), integer(101))),
-            list("data", right, list("rightField"), primitive("-#", variable("rightField"), integer(202)))));
-        var entry = map("id", "entry", "name", "entry", "arity", 1, "lifted", true, "expr", list("lam", list(binder("input")), entryBody));
+        var chooseBody = list("case", primitive("<=#", variable("n", integerRep), integer(0)), "test", list(
+            list("default", null, list(), constructed(right), map("binders", list())),
+            list("lit", list("int", "1"), list(), constructed(left), map("binders", list()))),
+            map("rep", choiceRep, "binder", binder("test")));
+        var choose = map("id", "choose", "name", "choose", "arity", 1, "lifted", true, "rep", closureRep,
+            "expr", list("lam", list(binder("n")), chooseBody, map("rep", closureRep, "resultRep", choiceRep)));
+        var entryBody = list("case", list("app", variable("choose", closureRep), list(variable("input", integerRep)), list(false), false, false, map("rep", choiceRep)), "chosen", list(
+            list("data", left, list("leftField"), primitive("+#", variable("leftField", integerRep), integer(101)), map("binders", list(binder("leftField")))),
+            list("data", right, list("rightField"), primitive("-#", variable("rightField", integerRep), integer(202)), map("binders", list(binder("rightField"))))),
+            map("rep", integerRep, "binder", map("id", "chosen", "name", "chosen", "type", "Choice", "lifted", true, "coercion", false, "rep", choiceRep)));
+        var entry = map("id", "entry", "name", "entry", "arity", 1, "lifted", true, "rep", closureRep,
+            "expr", list("lam", list(binder("input")), entryBody, map("rep", closureRep, "resultRep", integerRep)));
         String request = request(map("schema", 1, "ghc", "9.14.1", "unit", "main", "boundary", "pre-core", "module", "Synthetic",
             "constructors", list(constructor(left), constructor(right)), "bindings", list(choose, entry)));
         try (var context = Main.executionContext(false)) {
@@ -257,18 +270,18 @@ class RuntimeTest {
     }
     private String request(Map<String, Object> module) throws Exception {
         var output = CoreCbdFixtures.write(temporary.resolve(UUID.randomUUID() + ".cbd"), module);
-        return CoreModules.request(list(output.toString()), "entry", false, false, null);
+        return CoreModules.request(list(output.toString()), "entry", true, false, null);
     }
-    private String aliasRequest(Map<String, Object> binder, List<Object> body) throws Exception {
+    private String aliasRequest(Map<String, Object> binder, List<Object> body, Map<String, Object> resultRep) throws Exception {
         return request(map("schema", 1, "ghc", "9.14.1", "unit", "main", "boundary", "pre-core", "module", "Synthetic",
-            "constructors", list(), "bindings", list(map("id", "entry", "name", "entry", "arity", 0, "lifted", true,
-                "expr", list("let", true, list(binder), body)))));
+            "constructors", list(), "bindings", list(map("id", "entry", "name", "entry", "arity", 0, "lifted", true, "rep", resultRep,
+                "expr", list("let", true, list(binder), body, map("rep", resultRep))))));
     }
     @Test void recursiveAliasStaysLazyUntilDemanded() throws Exception {
-        var binder = map("id", "x", "name", "x", "lifted", true, "arity", 0, "expr", list("var", "x"));
+        var binder = map("id", "x", "name", "x", "type", "Int", "lifted", true, "arity", 0, "rep", dataRep, "expr", variable("x", dataRep));
         try (var context = Main.executionContext(false)) {
-            var unused = context.eval("thc", aliasRequest(binder, list("lit", "int", "42"))); assertEquals(42L, unused.execute().asLong());
-            var used = context.eval("thc", aliasRequest(binder, list("var", "x"))); var error = assertThrows(PolyglotException.class, () -> used.execute());
+            var unused = context.eval("thc", aliasRequest(binder, integer(42), integerRep)); assertEquals(42L, unused.execute().asLong());
+            var used = context.eval("thc", aliasRequest(binder, variable("x", dataRep), dataRep)); var error = assertThrows(PolyglotException.class, () -> used.execute());
             assertTrue(Objects.toString(error.getMessage(), "").contains("Blackhole"), error.getMessage());
         }
     }

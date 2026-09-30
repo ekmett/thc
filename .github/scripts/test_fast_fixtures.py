@@ -2314,6 +2314,7 @@ class FixturePreparationTest(unittest.TestCase):
         build = (project / "build.gradle").read_text()
         self.assertIn('includeTestsMatching("thc.runtime.JavaArrayTest")', build)
         self.assertIn('checkBuild(file("build/java-arrays/packages.json").isFile())', build)
+        self.assertIn('"java-arrays/core/**/*.cbd"', build)
         self.assertNotIn('"$fixture_bin" java-arrays', (project / 'bin/prepare-tests.sh').read_text())
 
     def test_unrelated_source_does_not_invalidate_group(self):

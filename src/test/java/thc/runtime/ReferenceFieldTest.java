@@ -39,7 +39,7 @@ class ReferenceFieldTest {
     private DataValue run(ExecutableProgram program, long n) { return (DataValue) Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("entry"), new Object[]{n}}); }
     private void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
-        type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+        type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     private void check(ExecutableProgram program, boolean typed, String backend, long n) {
         var result = run(program, n); var first = (DataValue) result.getLayout().read(result, 0);

@@ -39,7 +39,7 @@ class EntryContractTest {
     private Object call(ExecutableProgram p, Object function, Object... args) { return Calls.target(p.hostEntryTarget(args.length), new Object[]{function, args.clone()}); }
     private Object run(ExecutableProgram p, String name, Object... args) { return call(p, p.entryValue(name), args); }
     private void compile(RootCallTarget target) throws ReflectiveOperationException {
-        var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+        var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     @FunctionalInterface private interface Action { void run(String backend, ExecutableProgram program) throws ReflectiveOperationException; }
     private void eachBackend(List<Map<String, Object>> bindings, Action action) throws ReflectiveOperationException {

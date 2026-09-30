@@ -226,7 +226,7 @@ tasks.withType(Test).configureEach {
     inputs.files(fileTree(layout.buildDirectory) {
         include("backend-annotations/**/*.cbd")
         include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
-            "vector-api/core/**/*.json", "vector-api/*.tsv", "java-arrays/core/**/*.json", "java-arrays/packages.json",
+            "vector-api/core/**/*.json", "vector-api/*.tsv", "java-arrays/core/**/*.cbd", "java-arrays/core/**/*.json", "java-arrays/packages.json",
             "truffle-strings/core/**/*.json", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "word-floating/**/*.json", "word-floating/oracle.tsv",

@@ -16,8 +16,14 @@ import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, readM
 import Control.Exception (bracket, finally, throwIO)
 import Control.Monad (forM_, unless)
 import Data.Char (isHexDigit)
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf, sort, stripPrefix)
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import qualified Distribution.InstalledPackageInfo as Package
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
 import qualified System.Directory as Directory
@@ -426,7 +432,8 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
       permissions <- getPermissions path
       setPermissions path permissions { Directory.executable = True }
     original <- getEnvironment
-    let environment = settings ++ filter ((`notElem` map fst settings) . fst) original
+    let coreVariables = ["THC_PROXY_CORE_LIBDIR", "THC_PROXY_CORE_INTERFACES", "THC_PROXY_GHC_PKG"]
+        environment = settings ++ filter ((`notElem` (coreVariables ++ map fst settings)) . fst) original
         ordinary = [ (True, ["--make", "-this-unit-id", "sample", "+RTS", "-A8m", "-RTS"])
                 , (False, ["--numeric-version", "+RTS", "-A8m", "-RTS", "--",
                            "space and café", "", "line\nbreak", "\"quoted\"", "$literal"])
@@ -490,6 +497,56 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
         assertEqual "caller plugin options and response-file options survive in order" wanted (drop 7 pluginOptions)
         assertBool "ordinary plugin loading does not eagerly link guest dependencies" ("-fplugin=THC.Plugin" `notElem` replay)
       else pure ()
+    -- Real package databases exercise registration precedence and preserve
+    -- native fields, while the recorder makes native/replay routing visible.
+    ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+    pkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+    let invoke options input = do
+          (status, output, diagnostic) <- Process.readProcessWithExitCode pkg options input
+          assertEqual diagnostic ExitSuccess status
+          pure output
+        database = project </> "native.db"
+        warm = project </> "warm interfaces"
+        fresh = project </> "capture/fresh/objects"
+        unready = project </> "capture/unready/objects"
+        parseInfo text = either (fail . show) (pure . snd)
+          (Package.parseInstalledPackageInfo text)
+    (_, libdirText, _) <- Process.readProcessWithExitCode ghc ["--print-libdir"] ""
+    libdir <- case lines libdirText of [path] -> pure path; _ -> fail "missing GHC libdir"
+    _ <- invoke ["init", database] ""
+    forM_ [warm, fresh, unready] (Directory.createDirectoryIfMissing True)
+    forM_ ["warm", "fresh", "unready"] $ \owner -> do
+      _ <- invoke ["--package-db=" ++ database, "register", "--force", "-"] $ unlines
+        ["name: " ++ owner, "version: 0.1", "id: " ++ owner, "key: " ++ owner,
+         "exposed: True", "import-dirs: " ++ show warm, "extra-libraries: original_native"]
+      pure ()
+    writeText (project </> "capture/fresh/interfaces-ready") ""
+    writeText arguments ""
+    let supplied = ["--make", "-this-unit-id", "sample", "-clear-package-db",
+                    "-global-package-db", "-no-user-package-db", "-package-db", database]
+        replaySettings = [("THC_PROXY_CORE_LIBDIR", libdir), ("THC_PROXY_GHC_PKG", pkg),
+          ("THC_PROXY_GLOBAL_UNITS", "sample\nfresh\nunready\n"),
+          ("THC_PROXY_CORE_INTERFACES", Text.unpack (Text.decodeUtf8 (BL.toStrict (Aeson.encode
+            (Map.fromList [("warm" :: String, warm), ("fresh", warm), ("unready", warm)])))))]
+        command = (Process.proc wrapper supplied) { Process.cwd = Just project,
+          Process.env = Just (replaySettings ++ filter ((`notElem` map fst replaySettings) . fst) environment) }
+    (status, _, diagnostic) <- Process.readCreateProcessWithExitCode command ""
+    assertEqual diagnostic ExitSuccess status
+    calls <- splitArguments <$> readText arguments
+    let (native, replay) = break (== "BEGIN") (drop 1 calls)
+    assertEqual "Core interface view never changes native compiler arguments" supplied native
+    assertBool "only Core replay selects the pinned boot view" (("-B" ++ libdir) `elem` replay)
+    let overlays = [path | ("-package-db", path) <- zip replay (drop 1 replay),
+                          path /= database, path /= project </> "plugin-db"]
+    overlay <- case overlays of [path] -> pure path; _ -> fail "expected one private Core interface database"
+    forM_ [("warm", warm), ("fresh", fresh), ("unready", warm)] $ \(owner, directory) -> do
+      originalInfo <- parseInfo . Text.encodeUtf8 . Text.pack =<<
+        invoke ["--package-db=" ++ database, "--expand-pkgroot", "--ipid", "describe", owner] ""
+      selectedInfo <- parseInfo . Text.encodeUtf8 . Text.pack =<<
+        invoke ["--package-db=" ++ overlay, "--expand-pkgroot", "--ipid", "describe", owner] ""
+      assertEqual "ready replay overrides only importDirs; incomplete output uses warm interfaces"
+        (originalInfo { Package.importDirs = [directory] }) selectedInfo
+    requireFile (project </> "capture/sample/interfaces-ready")
   where
     splitArguments "" = []
     splitArguments input = let (value, rest) = break (== '\0') input

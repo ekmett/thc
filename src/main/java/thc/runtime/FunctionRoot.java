@@ -89,7 +89,7 @@ public final class FunctionRoot extends GuestRoot {
                 }
                 return recoveredEntry;
             });
-        } finally { graphFailure.compareAndSet(claim, null); }
+        } finally { service.complete(this, claim, recoveredEntry != null); }
     }
 
     final FunctionRoot copyForRecovery() {

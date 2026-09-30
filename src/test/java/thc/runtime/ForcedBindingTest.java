@@ -30,7 +30,7 @@ class ForcedBindingTest {
             finally { bindingAfter = FrameAccess.read(frame, 0); aliasAfter = FrameAccess.read(frame, 1); }
         }
     }
-    private void compile(RootCallTarget target) throws Exception { Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("compile", boolean.class).invoke(target, true); assertTrue(valid(target)); }
+    private void compile(RootCallTarget target) throws Exception { Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("compile", boolean.class).invoke(target, true); Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("waitForCompilation").invoke(target); assertTrue(valid(target)); }
     private boolean valid(RootCallTarget target) throws Exception { return Boolean.TRUE.equals(Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target)); }
     private void entered(CheckedConsumer<Language> action) throws Exception {
         try (var context = Main.executionContext(false)) {

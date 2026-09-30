@@ -50,7 +50,7 @@ public class CaseArmOutliningTest {
     }
     private long count(Program program, String key) { return ((Number) program.diagnostics().get(key)).longValue(); }
     private void compile(RootCallTarget target) throws Exception {
-        target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+        target.getClass().getMethod("compile", boolean.class).invoke(target, true); target.getClass().getMethod("waitForCompilation").invoke(target); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
         var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
     }
     private void released(Language language) {

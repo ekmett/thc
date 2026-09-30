@@ -128,6 +128,7 @@ class CoreMainThreadForeignTest {
                     for (int i = 0; i < 3; i++) caller.call(first);
                     var warmed = threads.mainThreadRegistration(); assertNotNull(warmed);
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    target.getClass().getMethod("waitForCompilation").invoke(target);
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), backend);
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                     caller.call(second);

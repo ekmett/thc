@@ -13,7 +13,7 @@
 -- Cache inputs for package C acquisition, independent of native object
 -- equivalence. A selected tool or freshly captured translation unit must not
 -- disappear behind an older Core bundle with the same Cabal object identity.
-module THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity) where
+module THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity, nativeObjcopySelection) where
 
 import Control.Exception (evaluate)
 import Control.Monad (forM, unless)
@@ -29,7 +29,7 @@ import qualified Data.Text.Encoding as T
 import Numeric (showHex)
 import System.Directory (canonicalizePath, doesFileExist, findExecutable)
 import System.Environment (lookupEnv)
-import System.FilePath ((</>), isAbsolute, takeExtension)
+import System.FilePath ((</>), isAbsolute, takeDirectory, takeExtension)
 import System.IO (IOMode(ReadMode), withBinaryFile)
 
 -- | Missing LLVM tools remain explicit inputs, not an error for pure-Haskell
@@ -37,18 +37,23 @@ import System.IO (IOMode(ReadMode), withBinaryFile)
 -- Hash the selected executable rather than trusting a mutable version label.
 nativeToolIdentity :: IO Value
 nativeToolIdentity = do
-  tools <- forM [("THC_CLANG", "clang"), ("THC_LLVM_LINK", "llvm-link"),
+  selections <- forM [("THC_CLANG", "clang"), ("THC_LLVM_LINK", "llvm-link"),
                 ("THC_LLVM_OPT", "opt"), ("THC_LLVM_NM", "llvm-nm")] $ \(variable, fallback) -> do
     selected <- maybe fallback id <$> lookupEnv variable
     found <- if isAbsolute selected
       then do exists <- doesFileExist selected; pure (if exists then Just selected else Nothing)
       else findExecutable selected
+    canonical <- traverse canonicalizePath found
+    pure (variable, selected, canonical)
+  let clang = case selections of (_,_,found):_ -> found; _ -> Nothing
+  (objcopy, objcopyPath) <- nativeObjcopySelection
+    (maybe "llvm-objcopy" (\path -> takeDirectory path </> "llvm-objcopy") clang)
+  tools <- forM (selections ++ [("THC_LLVM_OBJCOPY", objcopy, objcopyPath)]) $ \(variable, selected, found) -> do
     observed <- case found of
       Nothing -> pure Null
       Just path -> do
-        canonical <- canonicalizePath path
-        digest <- fileHash canonical
-        pure (object ["path" .= canonical, "sha256" .= digest])
+        digest <- fileHash path
+        pure (object ["path" .= path, "sha256" .= digest])
     pure (Key.fromString variable .= object ["selected" .= selected, "executable" .= observed])
   environment <- forM ["PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH",
     "OBJC_INCLUDE_PATH", "SDKROOT", "MACOSX_DEPLOYMENT_TARGET", "SOURCE_DATE_EPOCH",
@@ -56,6 +61,23 @@ nativeToolIdentity = do
       value <- lookupEnv name
       pure (Key.fromString name .= value)
   pure (object ["schema" .= (1 :: Int), "tools" .= object tools, "environment" .= object environment])
+
+-- | Resolve objcopy identically for acquisition and cache identity. An explicit
+-- override is authoritative, even if missing. Otherwise prefer the executable
+-- beside resolved clang, then PATH. Missing tools remain observable for pure
+-- Haskell; acquisition diagnoses them when it needs a native container.
+nativeObjcopySelection :: FilePath -> IO (FilePath, Maybe FilePath)
+nativeObjcopySelection adjacent = do
+  override <- lookupEnv "THC_LLVM_OBJCOPY"
+  (selected, found) <- case override of
+    Just path -> (,) path <$> findExecutable path
+    Nothing -> do
+      beside <- findExecutable adjacent
+      case beside of
+        Just path -> pure (adjacent, Just path)
+        Nothing -> (,) "llvm-objcopy" <$> findExecutable "llvm-objcopy"
+  canonical <- traverse canonicalizePath found
+  pure (selected, canonical)
 
 -- | The caller supplies the exact currently owned object list; never discover
 -- component membership by scanning the persistent piece cache. Dynamic twins

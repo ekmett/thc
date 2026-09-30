@@ -975,6 +975,8 @@ executable thc
     THC.Driver.Run
     THC.Driver.Zip
     THC.Driver.Wired
+    THC.Driver.PinnedFlags
+    THC.Driver.PinnedSetup
   build-depends:
     thc:compact-core,
     base >= 4.22 && < 4.23,
@@ -1010,6 +1012,8 @@ test-suite driver-tests
     THC.Driver.Project
     THC.Driver.Cache
     THC.Driver.Wired
+    THC.Driver.PinnedFlags
+    THC.Driver.PinnedSetup
     THC.Driver.ForeignBitcode
     THC.Driver.Zip
     TestSupport
@@ -1017,6 +1021,7 @@ test-suite driver-tests
     PlanTests
     RunTests
     RunOptionsTests
+    PinnedFlagsTests
     BenchmarkTests
     BackpackTests
     ProjectTests
@@ -1398,6 +1403,8 @@ executable thc-fixtures
     StackDecoderFixtures
     InstalledCoreFixtures
     THC.Driver.Wired
+    THC.Driver.PinnedFlags
+    THC.Driver.PinnedSetup
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
