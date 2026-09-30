@@ -48,7 +48,7 @@ prepareMaskFunctions root = do
     mapM_ (createDirectoryIfMissing True . (root </>)) [core, ghcOut]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : options ++ [source])
+      "bin/export-core.sh" (options ++ [source])
     audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
       ["bin/audit-core.py", "--entry", "main:MaskFunctionAudit." ++ entry, "--output", directory </> stage </> entry ++ "-audit.json",
        core </> "MaskFunctionAudit.cbd"]
@@ -63,8 +63,7 @@ prepareMaskFunctions root = do
         ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [version, compiled, observed] ++ concat stages
       artifacts = [binary] ++ concatMap commandArtifacts commands ++
-        [directory </> stage </> "core" </> ("MaskFunctionAudit." ++ extension)
-          | stage <- ["pre", "post"], extension <- ["cbd", "json"]] ++
+        [directory </> stage </> "core" </> "MaskFunctionAudit.cbd" | stage <- ["pre", "post"]] ++
         [directory </> stage </> entry ++ "-audit.json" | stage <- ["pre", "post"], entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

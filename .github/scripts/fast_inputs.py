@@ -164,7 +164,7 @@ ORIGINAL_DIRECTORY_STREAMS_OUTPUTS = frozenset("build/original-directory-streams
 PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "api/predicate",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/ProxyVoidAudit.cbd", "core/THC.InterfaceClosure.cbd", "core/ProxyVoidAudit.json", "core/THC.InterfaceClosure.json", "audit.json")),
+      for suffix in ("core/ProxyVoidAudit.cbd", "core/THC.InterfaceClosure.cbd", "audit.json")),
     *(f"commands/{command}.{suffix}" for command in
       ("ghc-version", "predicate-build", "predicate-run", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
       for suffix in ("stdout", "stderr", "command.json"))))
@@ -173,10 +173,14 @@ IO_MAIN_PAP_OUTPUTS = frozenset("build/io-main-pap/" + name for name in (
     *(f"{stage}/core/{module}.{extension}" for stage in ("pre", "post")
       for module in ("IoMainPapAudit", "THC.InterfaceClosure") for extension in ("cbd", "json")),
     *(f"{stage}/{entry}-audit.json" for stage in ("pre", "post") for entry in ("goodMain", "badMain"))))
+WEAK_OUTPUTS = frozenset("build/weak-explicit/" + name for name in (
+    "manifest.json", "oracle.tsv", "NativeWeak.hs",
+    *(f"{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/WeakAudit.cbd", "core/THC.InterfaceClosure.cbd", "audit.json"))))
 MASK_FUNCTION_ENTRIES = ("maskedFunction", "unmaskedFunction", "uninterruptibleFunction", "lazyFunctions", "bareMasks")
 MASK_FUNCTION_OUTPUTS = frozenset("build/mask-functions/" + name for name in (
     "manifest.json", "native/oracle",
-    *(f"{stage}/core/MaskFunctionAudit.{extension}" for stage in ("pre", "post") for extension in ("cbd", "json")),
+    *(f"{stage}/core/MaskFunctionAudit.cbd" for stage in ("pre", "post")),
     *(f"{stage}/{entry}-audit.json" for stage in ("pre", "post") for entry in MASK_FUNCTION_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("ghc-version", "native-compile", "native-oracle",
       *(f"{stage}-export" for stage in ("pre", "post")),
@@ -569,6 +573,7 @@ REQUIRED = tuple(sorted({
     *CORE_CONTRACT_CBD_REQUIRED,
     *RUBBISH_OUTPUTS,
     *PROXY_VOID_OUTPUTS,
+    *WEAK_OUTPUTS,
     *UNIX_LIBC_OUTPUTS,
     *UNIX_WAIT_OUTPUTS,
     *(ORIGINAL_PATH_STAT_OUTPUTS if platform.system() == "Linux" else []),
@@ -1962,6 +1967,8 @@ def allowed_payload(name):
         return name in ORIGINAL_DIRECTORY_STREAMS_OUTPUTS
     if parts[1] == "io-main-pap":
         return name in IO_MAIN_PAP_OUTPUTS
+    if parts[1] == "weak-explicit":
+        return name in WEAK_OUTPUTS
     if parts[1] == "mask-functions":
         return name in MASK_FUNCTION_OUTPUTS
     if parts[1] == "proxy-void":
