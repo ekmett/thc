@@ -43,6 +43,7 @@ class CoreContinuationNativeTest {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
         assertTrue(type.isInstance(target));
         type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
         // Restore the shared entry stub without a guest settling call before
         // arming the first-effect checkpoint, as EntryValue.compile does.

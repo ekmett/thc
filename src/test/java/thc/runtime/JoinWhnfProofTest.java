@@ -56,7 +56,7 @@ class JoinWhnfProofTest {
     private static long count(ExecutableProgram p, String name) { return ((Number) p.diagnostics().get(name)).longValue(); }
     private static void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
-        type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+        type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     private static <T> T single(List<T> values) {
         if (values.isEmpty()) throw new NoSuchElementException("List is empty.");

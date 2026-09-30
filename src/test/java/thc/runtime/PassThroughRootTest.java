@@ -27,7 +27,7 @@ class PassThroughRootTest {
         }
     }
     private void compile(RootCallTarget target) throws ReflectiveOperationException {
-        target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+        target.getClass().getMethod("compile", boolean.class).invoke(target, true); target.getClass().getMethod("waitForCompilation").invoke(target); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
         var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
     }
     private static final class Value extends Expr {

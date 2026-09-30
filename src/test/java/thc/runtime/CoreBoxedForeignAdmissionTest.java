@@ -101,7 +101,7 @@ class CoreBoxedForeignAdmissionTest {
                         long expected = symbol.equals("rts_getThreadId") ? self.getLogicalId() : symbol.equals("eq_thread") ? 1L : 0L;
                         assertEquals(expected, ((Number) Calls.target(target, arguments)).longValue());
                         assertEquals(0L, program.diagnostics().get("coreCompactDecodedBindings"), "original declaration lookup must not decode an original binding");
-                        target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                        target.getClass().getMethod("compile", boolean.class).invoke(target, true); target.getClass().getMethod("waitForCompilation").invoke(target); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                         assertEquals(expected, ((Number) Calls.target(target, arguments)).longValue()); assertEquals(before + 1, program.diagnostics().get("compiledEntries"));
                         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
@@ -138,7 +138,7 @@ class CoreBoxedForeignAdmissionTest {
                     var first = state.getWeaks().make(key, new Object(), null); var second = state.getWeaks().make(key, new Object(), null);
                     assertEquals(0L, Calls.target(target, new Object[]{0L, first, Unit.INSTANCE}));
                     assertEquals(key.getJavaId(), threads.mainThreadRegistration().liveJavaId());
-                    target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true); target.getClass().getMethod("waitForCompilation").invoke(target); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                     assertEquals(0L, Calls.target(target, new Object[]{0L, second, Unit.INSTANCE})); assertEquals(before + 1, program.diagnostics().get("compiledEntries"));
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));

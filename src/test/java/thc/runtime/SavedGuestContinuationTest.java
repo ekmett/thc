@@ -49,7 +49,7 @@ class SavedGuestContinuationTest {
                     var saved = assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
                     assertSame(marker, saved.getResult());
                     var target = (OptimizedCallTarget) saved.getContinuationRootNode().getCallTarget();
-                    assertTrue(target.compile(true)); assertTrue(target.isValidLastTier());
+                    target.compile(true); target.waitForCompilation(); assertTrue(target.isValidLastTier());
                     ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(target);
                     var ambient = stm.begin();
                     try {
@@ -119,6 +119,7 @@ class SavedGuestContinuationTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var probe = new CompletionProbe(); var root = root(language, probe, true); var target = root.getCallTarget();
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                target.getClass().getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 var marker = new Object();
                 assertSame(marker, Calls.target(target, new Object[]{0L, marker}));

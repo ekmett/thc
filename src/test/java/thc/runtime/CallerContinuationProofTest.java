@@ -36,7 +36,7 @@ class CallerContinuationProofTest {
     private record Callers(Thunk child, List<Thunk> callers, Driver driver) {}
     @FunctionalInterface private interface Action<T> { T run() throws Exception; }
     private <T> T entered(Context context, Action<T> action) throws Exception { context.enter(); try { return action.run(); } finally { context.leave(); } }
-    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); assertTrue(type.isInstance(target)); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); assertTrue(type.isInstance(target)); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     @Test void callerOperandBelowTrySurvivesTwoChildSuspensions() throws Exception {
         try (var context = executionContext()) { context.initialize("thc"); var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null)); var childEffects = new AtomicInteger(); var callerEffects = new AtomicInteger(); var compiledCallerEffects = new AtomicInteger();
             var setup = entered(context, () -> {

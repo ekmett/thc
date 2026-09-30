@@ -43,6 +43,7 @@ class TypedExecutionTest {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
         assertTrue(type.isInstance(target));
         type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         assertTrue(validLastTier(target), "Requested guest code must be installed");
     }
     private static boolean validLastTier(RootCallTarget target) throws Exception {

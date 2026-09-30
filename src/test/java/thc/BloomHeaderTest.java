@@ -45,6 +45,7 @@ class BloomHeaderTest {
                 for (int i = 0; i < 40; i++) { long incoming = ancestry[i % ancestry.length]; assertEquals(source.mask | incoming, run(source, incoming)); }
                 var optimized = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
                 optimized.getMethod("compile", boolean.class).invoke(source.getCallTarget(), true);
+                optimized.getMethod("waitForCompilation").invoke(source.getCallTarget());
                 assertEquals(true, optimized.getMethod("isValidLastTier").invoke(source.getCallTarget()));
                 long before = metrics.getCompiledEntries();
                 for (int i = ancestry.length - 1; i >= 0; i--) assertEquals(source.mask | ancestry[i], run(source, ancestry[i]));

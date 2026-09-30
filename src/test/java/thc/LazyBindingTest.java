@@ -67,6 +67,7 @@ class LazyBindingTest {
                 // Exact scalar signature; no execution or fabricated specialization history.
                 assertEquals(true, type.getMethod("prepareForAOT").invoke(target));
                 type.getMethod("compile", boolean.class).invoke(target, true);
+                type.getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
                 var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, target);
                 assertEquals(0, preparations[0]); assertEquals(17L, Calls.target(target, new Object[0])); assertEquals(1, preparations[0]);
@@ -90,6 +91,7 @@ class LazyBindingTest {
                 var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
                 assertEquals(true, type.getMethod("prepareForAOT").invoke(target));
                 type.getMethod("compile", boolean.class).invoke(target, true);
+                type.getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
                 assertEquals(17L, Calls.target(target, new Object[0]));
                 assertArrayEquals(new long[]{1, 1, 1}, compiled,

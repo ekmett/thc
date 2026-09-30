@@ -241,6 +241,7 @@ public final class EntryValue implements TruffleObject {
             for (var target : targets) {
                 if (!cls.isInstance(target)) throw new IllegalArgumentException("Graal optimizing Truffle runtime required");
                 cls.getMethod("compile", boolean.class).invoke(target, true);
+                cls.getMethod("waitForCompilation").invoke(target);
                 if (!Boolean.TRUE.equals(cls.getMethod("isValidLastTier").invoke(target))) throw new IllegalStateException("Guest code was not installed");
             }
             // Restore a retired call-boundary stub without executing guest code or settling a call.

@@ -56,7 +56,7 @@ class CallDemandTest {
     private long count(ExecutableProgram p, String name) { return ((Number) p.diagnostics().get(name)).longValue(); }
     private Object call(ExecutableProgram p, Object fn, Object... args) { return Calls.target(p.hostEntryTarget(args.length), new Object[]{fn, args.clone()}); }
     private Object run(ExecutableProgram p, String name, Object... args) { return call(p, p.entryValue(name), args); }
-    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     private final List<Long> coldInputs = List.of(0L, 3_000_000_017L, -7_000_000_003L, Long.MIN_VALUE, Long.MAX_VALUE);
     @FunctionalInterface private interface Action { void run(String backend, ExecutableProgram program) throws ReflectiveOperationException; }
     private void eachBackend(List<Map<String, Object>> bindings, Action action) throws ReflectiveOperationException { eachBackend(bindings, true, action); }

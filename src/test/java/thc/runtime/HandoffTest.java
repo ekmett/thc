@@ -62,7 +62,7 @@ class HandoffTest {
     private Map<String, Object> binding(String id, List<Object> body) { return map("id", id, "name", id, "lifted", true, "expr", list("lam", list(map("id", "n", "name", "n", "lifted", false, "coercion", false, "rep", longRep)), body, map("rep", closureRep, "resultRep", longRep, "entryStrict", list(false)))); }
     private Map<String, Object> module(List<Map<String, Object>> bindings) { return map("bindings", bindings, "constructors", List.of(), "instrument", true); }
     private Object invoke(ExecutableProgram program, long value) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("entry"), new Object[]{value}}); }
-    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     @FunctionalInterface private interface Action { void run(Language language) throws Exception; }
     private void withLanguage(Action action) throws Exception { withLanguage(true, action); }
     private void withLanguage(boolean inlining, Action action) throws Exception {
