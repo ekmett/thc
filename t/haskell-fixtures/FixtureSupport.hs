@@ -164,7 +164,7 @@ runLoggedExpectInput input expected seconds root logs label overrides program ar
   writeJson (root </> recordPath) record
   stdout <- BS.readFile (root </> output)
   stderr <- BS.readFile (root </> errors)
-  unless (exit == Just expected) $ die $ unlines
+  unless (exit == Just expected) $ die $ unlines $
     [ program ++ maybe (" timed out after " ++ show seconds ++ " seconds")
         (\code -> " exited " ++ show code ++ " (expected " ++ show expected ++ ")") exit
     , "argv: " ++ show (program:args)
@@ -172,6 +172,9 @@ runLoggedExpectInput input expected seconds root logs label overrides program ar
     , "stdout: " ++ root </> output
     , "stderr: " ++ root </> errors
     , "stderr (first 8192 bytes, escaped): " ++ show (BSC.unpack (BS.take 8192 stderr))
+    ] ++
+    [ "stderr (last 8192 bytes, escaped): " ++ show (BSC.unpack (BS.drop (BS.length stderr - 8192) stderr))
+    | BS.length stderr > 8192
     ]
   pure (CommandResult stdout stderr record [output,errors,recordPath])
 
