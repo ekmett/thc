@@ -137,11 +137,10 @@ class ManagedAddressReadTest {
             var paths = stageEntry.getValue();
             var modules = new ArrayList<Map<String, Object>>();
             for (var path : paths)
-                modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+                modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
             var source = CoreModules.merge(modules);
             Map<String, Object> fixture = null;
-            for (var path : paths) {
-                var candidate = (Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath()));
+            for (var candidate : modules) {
                 if ("ManagedAddressReadAudit".equals(candidate.get("module"))) {
                     if (fixture != null)
                         throw new IllegalArgumentException("Multiple matching fixtures");
@@ -173,10 +172,10 @@ class ManagedAddressReadTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var module = new LinkedHashMap<>(CoreModules.reachable(source, name));
+                            var module = new LinkedHashMap<>(CoreModules.reachable(source, "main:ManagedAddressReadAudit." + name));
                             module.put("instrument", true);
                             var runtime = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(runtime, name, 3));
+                            var function = context.asValue(new EntryValue(runtime, "main:ManagedAddressReadAudit." + name, 3));
                             var label = stage + "/" + backend;
                             for (var row : cases) checkNative(row, function, language, label);
                             assertTrue(function.invokeMember("compile").asBoolean());
@@ -186,7 +185,7 @@ class ManagedAddressReadTest {
                                 assertTrue(
                                     ((Number) runtime.diagnostics().get("compiledEntries")).longValue() > before);
                                 valid(runtime.hostEntryTarget(3));
-                                valid(runtime.entryTarget(name));
+                                valid(runtime.entryTarget("main:ManagedAddressReadAudit." + name));
                             }
                             assertEquals(0L, ((Number) runtime.diagnostics().get("unsupportedTraps")).longValue());
                             System.out.println(
@@ -347,8 +346,16 @@ class ManagedAddressReadTest {
                 List.of("lam", parameters, body, Map.of("rep", closure, "resultRep", payload)))));
     }
     private long call(PinnedMemoryOp operation, RootCallTarget target, Object value, Object offset, Object token) {
-        return observed(Objects.requireNonNull(operation.getAddressRead()),
-            Calls.target(target, new Object[] {0L, value, offset, token}));
+        var arguments = new Object[] {0L, value, offset, token};
+        var typed = ((GuestRoot) target.getRootNode()).getTypedInput();
+        if (typed == null)
+            return observed(Objects.requireNonNull(operation.getAddressRead()), Calls.target(target, arguments));
+        var input = typed.state().getArguments().acquire(typed.getPacket());
+        input.setInputMode(1);
+        try {
+            typed.getPacket().copyIn(input, arguments);
+            return observed(Objects.requireNonNull(operation.getAddressRead()), Calls.target(target, new Object[]{input}));
+        } finally { typed.releaseChecked(input); }
     }
     @Test
     void compiledReadsObserveMutationsAndRejectWrongCarriersInBothBackends() throws Exception {

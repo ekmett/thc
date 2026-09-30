@@ -88,7 +88,7 @@ class ShrinkByteArrayTest {
         for (var stageEntry : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {
             var stage = stageEntry.getKey();
             var modules = new ArrayList<Map<String, Object>>();
-            for (var path : stageEntry.getValue()) modules.add(json(new File(root, path)));
+            for (var path : stageEntry.getValue()) modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
             var merged = CoreModules.merge(modules);
             for (var name : names) {
                 var audit = json(new File(directory, stage + "/" + name + ".audit.json"));
@@ -104,12 +104,12 @@ class ShrinkByteArrayTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var linked = new LinkedHashMap<>(CoreModules.reachable(merged, name));
+                            var linked = new LinkedHashMap<>(CoreModules.reachable(merged, "main:ShrinkMutableByteArrayAudit." + name));
                             linked.put("instrument", true);
                             ExecutableProgram program = backend.equals("ast") ? new Program(language, linked)
                                                                               : new BytecodeProgram(language, linked);
                             var host = program.hostEntryTarget(2);
-                            var entry = context.asValue(new EntryValue(program, name, 2));
+                            var entry = context.asValue(new EntryValue(program, "main:ShrinkMutableByteArrayAudit." + name, 2));
                             var selected = new ArrayList<Row>();
                             for (var row : cases)
                                 if (row.name().equals(name))

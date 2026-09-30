@@ -484,8 +484,8 @@ public class BoxedArrayExtensionsTest {
         require(stages.keySet().equals(Set.of("pre", "post")) && audits.keySet().equals(stages.keySet()));
         for (var stage : stages.keySet()) {
             require(new HashSet<>(stages.get(stage))
-                    .equals(Set.of(attempt + "/" + stage + "-core/BoxedArrayExtensionsAudit.json",
-                        attempt + "/" + stage + "-core/THC.InterfaceClosure.json")));
+                    .equals(Set.of(attempt + "/" + stage + "-core/BoxedArrayExtensionsAudit.cbd",
+                        attempt + "/" + stage + "-core/THC.InterfaceClosure.cbd")));
             require(stages.get(stage).size() == 2);
             require(audits.get(stage).equals(
                 names.stream().map(n -> attempt + "/" + stage + "-" + n + ".audit.json").toList()));
@@ -570,7 +570,7 @@ public class BoxedArrayExtensionsTest {
                     for (var paths : ((Map<String, List<String>>) manifest.get("stages")).values())
                         for (var operation : operations) {
                             var modules = new ArrayList<Map<String, Object>>();
-                            for (var path : paths) modules.add(read(path));
+                            for (var path : paths) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
                             var module = CoreModules.merge(modules);
                             var calls = nodes(module).stream().filter(n -> application(n, operation)).toList();
                             assertTrue(!calls.isEmpty(), operation.getPrimitive());
@@ -671,7 +671,7 @@ public class BoxedArrayExtensionsTest {
         assertEquals(Set.of("pre", "post"), stages.keySet());
         for (var stage : stages.entrySet()) {
             var modules = new ArrayList<Map<String, Object>>();
-            for (var path : stage.getValue()) modules.add(read(path));
+            for (var path : stage.getValue()) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
             var merged = CoreModules.merge(modules);
             var boundary = stage.getKey().equals("pre") ? "optimized-Core-before-Tidy"
                                                         : "optimized-Core-after-Tidy-before-CorePrep";
@@ -679,7 +679,7 @@ public class BoxedArrayExtensionsTest {
                 single(modules.stream().filter(m -> "BoxedArrayExtensionsAudit".equals(m.get("module"))).toList())
                     .get("boundary"));
             var found = new HashSet<String>();
-            for (var name : names) found.addAll(new ArrayCoreEvidence(merged, name).getPrimitiveCounts().keySet());
+            for (var name : names) found.addAll(new ArrayCoreEvidence(merged, "main:BoxedArrayExtensionsAudit." + name).getPrimitiveCounts().keySet());
             assertTrue(operations.stream().allMatch(o -> found.contains(o.getPrimitive())),
                 stage.getKey() + " missing original primops");
             for (var path : ((Map<String, List<String>>) manifest.get("audits")).get(stage.getKey()))
@@ -691,8 +691,8 @@ public class BoxedArrayExtensionsTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var program = program(language,
-                                changed(CoreModules.reachable(merged, name, true), "instrument", true), backend);
-                            var entry = context.asValue(new EntryValue(program, name, 5));
+                                changed(CoreModules.reachable(merged, "main:BoxedArrayExtensionsAudit." + name, true), "instrument", true), backend);
+                            var entry = context.asValue(new EntryValue(program, "main:BoxedArrayExtensionsAudit." + name, 5));
                             var host = program.hostEntryTarget(5);
                             var cases = rows.stream().filter(r -> name.equals(r.get(0))).toList();
                             for (var row : cases) check(row, entry, language, stage.getKey(), backend, name);

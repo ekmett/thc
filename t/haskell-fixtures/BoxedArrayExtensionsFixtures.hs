@@ -56,12 +56,12 @@ prepareBoxedArrayExtensions root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> attempt </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         map ("-fplugin-opt=THC.Plugin:closure=" ++) entries ++ [source])
-    modules <- map (core </>) . filter ((== ".json") . takeExtension) . sort <$> listDirectory (root </> core)
-    unless (core </> "BoxedArrayExtensionsAudit.json" `elem` modules) (die "Missing boxed-array Core export")
+    modules <- map (core </>) . filter ((== ".cbd") . takeExtension) . sort <$> listDirectory (root </> core)
+    unless (core </> "BoxedArrayExtensionsAudit.cbd" `elem` modules) (die "Missing boxed-array Core export")
     audits <- forM entries $ \entry -> do
       let output = attempt </> stage ++ "-" ++ entry ++ ".audit.json"
       audited <- run (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py"] ++ modules ++ ["--entry",entry,"--output",output])
+        (["bin/audit-core.py"] ++ modules ++ ["--entry","main:BoxedArrayExtensionsAudit." ++ entry,"--output",output])
       pure (output,audited)
     pure (stage,modules,exported,audits)
   let native = attempt </> "native"

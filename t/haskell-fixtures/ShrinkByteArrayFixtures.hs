@@ -63,7 +63,7 @@ prepareShrinkByteArrays root = do
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        modules = [core </> "ShrinkMutableByteArrayAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "ShrinkMutableByteArrayAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
@@ -71,12 +71,12 @@ prepareShrinkByteArrays root = do
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine shrink Core export: " ++ path))) modules
-    exported <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
-    unless (exported == ["ShrinkMutableByteArrayAudit.json", "THC.InterfaceClosure.json"]) $
+    exported <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
+    unless (exported == ["ShrinkMutableByteArrayAudit.cbd", "THC.InterfaceClosure.cbd"]) $
       die ("Unexpected shrink Core module inventory: " ++ show exported)
     _ <- forM entries $ \name -> do
       let report = stageDir </> name ++ ".audit.json"
-      _ <- run root [] "python3" (["bin/audit-core.py", "--entry", name, "--output", report] ++ modules) ""
+      _ <- run root [] "python3" (["bin/audit-core.py", "--entry", "main:ShrinkMutableByteArrayAudit." ++ name, "--output", report] ++ modules) ""
       pure ()
     pure (stage, modules)
   let native = directory </> "native"

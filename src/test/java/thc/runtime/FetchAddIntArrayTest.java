@@ -69,7 +69,7 @@ class FetchAddIntArrayTest {
         for (var stagePaths : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {
             String stage = stagePaths.getKey();
             var modules = new ArrayList<Map<String, Object>>();
-            for (String path : stagePaths.getValue()) modules.add(json(root.resolve(path)));
+            for (String path : stagePaths.getValue()) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
             var merged = CoreModules.merge(modules);
             var audit = json(directory.resolve(stage + "/fetchComposite.audit.json"));
             assertEquals(true, audit.get("accepted"), stage);
@@ -85,12 +85,12 @@ class FetchAddIntArrayTest {
                     context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var linked = new LinkedHashMap<>(CoreModules.reachable(merged, "fetchComposite"));
+                        var linked = new LinkedHashMap<>(CoreModules.reachable(merged, "main:FetchAddIntArrayAudit.fetchComposite"));
                         linked.put("instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked)
                                                                           : new BytecodeProgram(language, linked);
                         var host = program.hostEntryTarget(3);
-                        var entry = context.asValue(new EntryValue(program, "fetchComposite", 3));
+                        var entry = context.asValue(new EntryValue(program, "main:FetchAddIntArrayAudit.fetchComposite", 3));
                         for (var row : cases)
                             assertEquals(row.result, entry.execute(row.initial, row.first, row.second).asLong(),
                                 stage + "/" + backend + "/" + row);

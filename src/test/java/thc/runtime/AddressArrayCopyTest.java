@@ -117,7 +117,7 @@ public class AddressArrayCopyTest {
         var artifacts =
             new HashSet<>(Set.of(directory + "/inputs.tsv", directory + "/oracle.tsv", directory + "/native/oracle"));
         for (String stage : List.of("pre", "post")) {
-            artifacts.add(directory + "/" + stage + "-core/AddressArrayCopyAudit.json");
+            artifacts.add(directory + "/" + stage + "-core/AddressArrayCopyAudit.cbd");
             for (String name : names) artifacts.add(directory + "/" + stage + "-" + name + "-audit.json");
         }
         for (String command : commands)
@@ -137,7 +137,7 @@ public class AddressArrayCopyTest {
                 String name = names.get(index);
                 var binding = single(((List<Map<String, Object>>) module(stage).get("bindings"))
                         .stream()
-                        .filter(it -> name.equals(it.get("name")))
+                        .filter(it -> ("main:AddressArrayCopyAudit." + name).equals(it.get("id")))
                         .toList());
                 assertEquals(5L, binding.get("arity"));
                 var expression = (List<?>) binding.get("expr");
@@ -187,13 +187,23 @@ public class AddressArrayCopyTest {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
     private Map<String, Object> module(String stage) throws Exception {
-        return json(directory + "/" + stage + "-core/AddressArrayCopyAudit.json");
+        return thc.CoreCbdFixtures.read(root.resolve(directory + "/" + stage + "-core/AddressArrayCopyAudit.cbd"));
     }
     private void valid(RootCallTarget target) throws Exception {
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
     }
     private long count(ExecutableProgram program) {
         return ((Number) program.diagnostics().get("compiledEntries")).longValue();
+    }
+    private Object call(RootCallTarget target, Object[] arguments) {
+        var typed = ((GuestRoot) target.getRootNode()).getTypedInput();
+        if (typed == null) return Calls.target(target, arguments);
+        var input = typed.state().getArguments().acquire(typed.getPacket());
+        input.setInputMode(1);
+        try {
+            typed.getPacket().copyIn(input, arguments);
+            return Calls.target(target, new Object[]{input});
+        } finally { typed.releaseChecked(input); }
     }
     private void compile(RootCallTarget target) throws Exception {
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
@@ -258,11 +268,11 @@ public class AddressArrayCopyTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var source = new LinkedHashMap<>(CoreModules.reachable(module(stage), name));
+                            var source = new LinkedHashMap<>(CoreModules.reachable(module(stage), "main:AddressArrayCopyAudit." + name));
                             source.put("instrument", true);
                             var p = program(language, source, backend);
-                            var function = context.asValue(new EntryValue(p, name, 5));
-                            var entry = p.entryTarget(name);
+                            var function = context.asValue(new EntryValue(p, "main:AddressArrayCopyAudit." + name, 5));
+                            var entry = p.entryTarget("main:AddressArrayCopyAudit." + name);
                             var host = p.hostEntryTarget(5);
                             class Check {
                                 List<RootCallTarget> active() {
@@ -608,7 +618,7 @@ public class AddressArrayCopyTest {
                                         return run(array, INSTANCE);
                                     }
                                     Object run(Object array, Object state) {
-                                        return Calls.target(target,
+                                        return call(target,
                                             operation.getToArray()
                                                 ? new Object[] {0L, base.plus(4), array, 2L, 8L, state}
                                                 : new Object[] {0L, array, 2L, base.plus(4), 8L, state});
@@ -760,7 +770,9 @@ public class AddressArrayCopyTest {
                 for (String mutation :
                     List.of("valid", "argument", "state", "result", "tuple", "partial", "over", "lifted", "bare")) {
                     String name = names.get(index), primitive = primitives.get(index);
-                    var linked = CoreModules.reachable(module(stage), name);
+                    var linked = CoreModules.reachable(module(stage), "main:AddressArrayCopyAudit." + name);
+                    // Reachability adds a runtime selection field, not a module wire field.
+                    assertNull(linked.remove("selectedForeignExceptionBridge"));
                     var app = single(applications(linked)
                             .stream()
                             .filter(it
@@ -798,11 +810,10 @@ public class AddressArrayCopyTest {
                         }
                     }
                     String label = stage + "-" + name + "-" + mutation;
-                    var input = temporary.resolve(label + ".json");
-                    Files.writeString(input, Json.stringify(linked));
+                    var input = thc.CoreCbdFixtures.write(temporary.resolve(label + ".cbd"), linked);
                     var report = temporary.resolve(label + "-report.json");
                     var process = new ProcessBuilder("python3", "bin/audit-core.py", input.toString(), "--entry",
-                        name, "--output", report.toString())
+                        "main:AddressArrayCopyAudit." + name, "--output", report.toString())
                                       .directory(root.toFile())
                                       .redirectOutput(temporary.resolve(label + ".stdout").toFile())
                                       .redirectError(temporary.resolve(label + ".stderr").toFile())
@@ -828,7 +839,7 @@ public class AddressArrayCopyTest {
                                             assertThrows(RuntimeException.class,
                                                 ()
                                                     -> Calls.target(loaded.hostEntryTarget(5),
-                                                        new Object[] {loaded.entryValue(name),
+                                                        new Object[] {loaded.entryValue("main:AddressArrayCopyAudit." + name),
                                                             new Object[] {0L, 0L, 0L, 1L, 8L}}),
                                                 backend + "/" + label + " deferred diagnostic trap");
                                         } else

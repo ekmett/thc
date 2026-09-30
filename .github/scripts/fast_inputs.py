@@ -231,7 +231,7 @@ INTEGER_COMPLETION_OUTPUTS = frozenset("build/integer-completion/" + name for na
 ADDRESS_ARRAY_COPY_ENTRIES = ("addrToArray", "arrayToAddr", "mutableArrayToAddr")
 ADDRESS_ARRAY_COPY_OUTPUTS = frozenset("build/address-array-copy/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
-    *(f"{stage}-core/AddressArrayCopyAudit.json" for stage in ("pre", "post")),
+    *(f"{stage}-core/AddressArrayCopyAudit.cbd" for stage in ("pre", "post")),
     *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in ADDRESS_ARRAY_COPY_ENTRIES),
     *(f"commands/{label}.{suffix}" for label in (
         "native-build", "native-oracle", *(f"{stage}-export" for stage in ("pre", "post")),
@@ -243,7 +243,7 @@ ATOMIC_INT_ARRAY_ENTRIES = (
     *(f"casInt{width}Result" for width in ("", "8", "16", "32", "64")), "atomicLoadStore")
 ATOMIC_INT_ARRAY_OUTPUTS = frozenset("build/atomic-int-arrays/" + name for name in (
     "manifest.json", "NativeAtomicIntArrays.hs", "requests.tsv", "oracle.tsv",
-    *(f"{stage}/core/{module}.json" for stage in ("pre", "post") for module in ("AtomicIntArrayAudit", "THC.InterfaceClosure")),
+    *(f"{stage}/core/{module}.cbd" for stage in ("pre", "post") for module in ("AtomicIntArrayAudit", "THC.InterfaceClosure")),
     *(f"{stage}/{entry}.audit.json" for stage in ("pre", "post") for entry in ATOMIC_INT_ARRAY_ENTRIES),
     *(f"commands/{label}.{suffix}" for label in (
         "native-build", "native-oracle", *(f"{stage}-export" for stage in ("pre", "post")),
@@ -993,7 +993,7 @@ class CacheMiss(RuntimeError):
 
 BOXED_ARRAY_EXTENSION_FILES = frozenset((
     "native/boxed-array-extensions-oracle",
-    *(f"{stage}-core/{module}.json" for stage in ("pre", "post")
+    *(f"{stage}-core/{module}.cbd" for stage in ("pre", "post")
       for module in ("BoxedArrayExtensionsAudit", "THC.InterfaceClosure")),
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post")
       for entry in ("boxedExtSizes", "boxedExtClone", "boxedExtCopy", "boxedExtMove", "boxedExtThaw", "boxedExtLazy")),
@@ -1901,6 +1901,12 @@ def allowed_payload(name):
         return name in FLOAT_DECODE_OUTPUTS
     if parts[1] == "floating-remainder":
         return name in FLOATING_REMAINDER_OUTPUTS
+    if name in {f"build/{family}/{folder.format(stage=stage)}/{module}.cbd"
+                for family, folder, fixture in (("fetch-add-int-array", "{stage}/core", "FetchAddIntArrayAudit"),
+                                                ("shrink-bytearrays", "{stage}/core", "ShrinkMutableByteArrayAudit"),
+                                                ("managed-address-reads", "{stage}-core", "ManagedAddressReadAudit"))
+                for stage in ("pre", "post") for module in (fixture, "THC.InterfaceClosure")}:
+        return True
     if name in {f"build/{family}/{stage}-core/{module}.cbd"
                 for family, module in (("word-floating", "WordFloatingAudit"),
                                        ("scalar-bitcasts", "ScalarBitCastAudit"),

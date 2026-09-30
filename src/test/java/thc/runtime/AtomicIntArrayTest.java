@@ -208,8 +208,8 @@ public class AtomicIntArrayTest {
         var artifactNames = new HashSet<>(List.of("NativeAtomicIntArrays.hs", "requests.tsv", "oracle.tsv"));
         var commands = new ArrayList<>(List.of("native-build", "native-oracle"));
         for (var stage : List.of("pre", "post")) {
-            artifactNames.add(stage + "/core/AtomicIntArrayAudit.json");
-            artifactNames.add(stage + "/core/THC.InterfaceClosure.json");
+            artifactNames.add(stage + "/core/AtomicIntArrayAudit.cbd");
+            artifactNames.add(stage + "/core/THC.InterfaceClosure.cbd");
             commands.add(stage + "-export");
             for (var name : named.keySet()) {
                 artifactNames.add(stage + "/" + name + ".audit.json");
@@ -238,7 +238,7 @@ public class AtomicIntArrayTest {
         assertEquals(Set.of("pre", "post"), stages.keySet());
         for (var stage : stages.entrySet()) {
             var modules = new ArrayList<Map<String, Object>>();
-            for (var path : stage.getValue()) modules.add(json(root.resolve(path)));
+            for (var path : stage.getValue()) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
             var merged = CoreModules.merge(modules);
             for (var mapping : named.entrySet()) {
                 var name = mapping.getKey();
@@ -252,7 +252,7 @@ public class AtomicIntArrayTest {
                 assertTrue(primops.contains(operation.getPrimitive()));
                 if (name.equals("atomicLoadStore"))
                     assertTrue(primops.contains("atomicReadIntArray#"));
-                var evidence = new ArrayCoreEvidence(merged, name);
+                var evidence = new ArrayCoreEvidence(merged, "main:AtomicIntArrayAudit." + name);
                 assertEquals(1, evidence.getBindings().size(), stage.getKey() + "/" + name + " closed original worker");
                 assertEquals(
                     2, evidence.guestLambdas(evidence.getRoot().get("expr")).size(), "Export retains the state lambda");
@@ -265,8 +265,8 @@ public class AtomicIntArrayTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var program = program(
-                                language, changed(CoreModules.reachable(merged, name), "instrument", true), backend);
-                            var entry = program.entryTarget(name);
+                                language, changed(CoreModules.reachable(merged, "main:AtomicIntArrayAudit." + name), "instrument", true), backend);
+                            var entry = program.entryTarget("main:AtomicIntArrayAudit." + name);
                             var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
                             for (var row : cases) call(row, entry, label, language);
                             var targets = activeTargets(entry);
@@ -360,7 +360,7 @@ public class AtomicIntArrayTest {
         var name = operation == AtomicIntArrayOp.READ
             ? "atomicLoadStore"
             : single(named.entrySet().stream().filter(e -> e.getValue() == operation).toList()).getKey();
-        var evidence = new ArrayCoreEvidence(json(directory.resolve("pre/core/AtomicIntArrayAudit.json")), name);
+        var evidence = new ArrayCoreEvidence(thc.CoreCbdFixtures.read(directory.resolve("pre/core/AtomicIntArrayAudit.cbd")), "main:AtomicIntArrayAudit." + name);
         var calls = evidence.nodes(evidence.getRoot().get("expr"))
                         .stream()
                         .filter(n
