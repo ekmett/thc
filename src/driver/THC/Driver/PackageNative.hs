@@ -1026,8 +1026,19 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
         "inputBitcodeSha256" .= inputHash,"definitions" .= [witnesses | (_,_,witnesses) <- bridges]]])
     -- Publish ordinary LLVM operations rather than intrinsics normally lowered
     -- by a machine backend (for example relative string-table loads).
-    let trim input = command directory opt ["-passes=pre-isel-intrinsic-lowering,internalize,globaldce",
-          "-internalize-public-api-list=" ++ join "," (entries ++ public),input,"-o",final]
+    passes <- words <$> command directory opt ["--print-passes"]
+    let modern = "pre-isel-intrinsic-lowering" `elem` passes
+        trim input = do
+          lowered <- if modern then pure input else do
+            -- LLVM 18 exposes this lowering only through the legacy pass manager.
+            -- Its target pass configuration requires the captured target triple.
+            let output = directory </> "native/pre-isel.bc"
+            _ <- command directory opt ["--mtriple=" ++ target,
+              "-pre-isel-intrinsic-lowering",input,"-o",output]
+            pure output
+          command directory opt ["-passes=" ++
+            (if modern then "pre-isel-intrinsic-lowering," else "") ++ "internalize,globaldce",
+            "-internalize-public-api-list=" ++ join "," (entries ++ public),lowered,"-o",final]
         unresolved = do
           output <- command directory nm ["--undefined-only","--format=posix",final]
           pure [nativeIrSymbol target name | line <- lines output, name:_ <- [words line]]
