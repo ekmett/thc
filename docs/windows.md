@@ -52,6 +52,10 @@ manifest or request an unavailable dynamic library way.
 Pinned dependency exports use that same registered plugin unit and private
 registry database. GHC's external plugin-library flag loads a DLL and cannot
 load the vanilla archive; Unix keeps its direct shared-library loading path.
+Windows `ghc-internal` is the bootstrap exception: its complete source graph
+compiles with `-fwrite-if-simplified-core` without loading a plugin that imports
+the unfinished home unit. The existing installed-interface helper then exports
+the genuine rebuilt Core and foreign metadata.
 
 Installed-package discovery and helper probes select real `.hi` interfaces on
 Windows and `.dyn_hi` interfaces on Unix. Acquisition views on Windows copy the

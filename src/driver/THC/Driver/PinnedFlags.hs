@@ -15,13 +15,17 @@ module THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions, pinne
 import THC.Driver.GhcProxy (directPlugin)
 
 -- | Load the real registered vanilla archive on Windows. External plugin
--- libraries use GHC's DLL loader and cannot load that archive. Unix retains
+-- libraries use GHC's DLL loader and cannot load that archive. The Windows
+-- ghc-internal bootstrap writes full Core interfaces without loading a plugin
+-- that imports its unfinished home unit; the installed helper exports them.
+-- Unix retains
 -- its direct shared-library boundary and exact plugin options.
-pinnedPluginOptions :: String -> FilePath -> String -> FilePath -> [String] -> [String]
-pinnedPluginOptions "mingw32" database unit _ options =
+pinnedPluginOptions :: String -> String -> FilePath -> String -> FilePath -> [String] -> [String]
+pinnedPluginOptions "mingw32" "ghc-internal" _ _ _ _ = []
+pinnedPluginOptions "mingw32" _ database unit _ options =
   ["-package-db", database, "-plugin-package-id", unit, "-fplugin=THC.Plugin"] ++
   map ("-fplugin-opt=THC.Plugin:" ++) options
-pinnedPluginOptions _ _ unit library options = [directPlugin library unit options []]
+pinnedPluginOptions _ _ _ unit library options = [directPlugin library unit options []]
 
 -- | Select the original configure script's Windows branches from the actual
 -- compiler host triplet. Cabal's native build otherwise omits @--host@, leaving

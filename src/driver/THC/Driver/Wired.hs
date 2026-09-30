@@ -451,7 +451,7 @@ preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary origi
               dynamic = installedInterfaceWay context == DynamicInterfaces
               suffixes = if dynamic then ["hi", "dyn_hi"] else ["hi"]
               key = digest (BL.toStrict (encode
-                ("pinned-library-core-v5" :: String, pinnedReleaseIdentity, driverHash, pluginDb, pluginUnit, pluginHash, helperHash,
+                ("pinned-library-core-v6" :: String, pinnedReleaseIdentity, driverHash, pluginDb, pluginUnit, pluginHash, helperHash,
                  installedCompiler original, settings, selectedFlags, cppFlags, installedViewIdentity context, registration unit)))
               destination = cache </> "pinned-libraries/v1" </> key
               receipt = destination </> "complete"
@@ -578,7 +578,7 @@ preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary origi
                     rendered = renderGhcOptions (compiler configured) (hostPlatform configured) options'
                     graphArguments = filter (`notElem` ["--make", "-no-link"]) rendered
                     request = destination </> "source-graph-request.json"
-                    exportFlags = ["-fplugin-trustworthy"] ++ pinnedPluginOptions Host.os pluginDb pluginUnit pluginLibrary
+                    exportFlags = ["-fplugin-trustworthy"] ++ pinnedPluginOptions Host.os name pluginDb pluginUnit pluginLibrary
                          [core,"post-tidy","unit-qualified","source-notes","foreign-import-provenance",
                           "foreign-export-associations","foreign-export-registration"]
                 createDirectoryIfMissing True core

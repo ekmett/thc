@@ -23,14 +23,16 @@ tests = TestLabel "pinned library configuration evidence" $ TestList $
   [ TestCase $ assertEqual "Windows loads the actual registered vanilla plugin"
       ["-package-db", "registry with spaces", "-plugin-package-id", "plugin-unit",
        "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:core with spaces", "-fplugin-opt=THC.Plugin:post-tidy"]
-      (pinnedPluginOptions "mingw32" "registry with spaces" "plugin-unit" "vanilla.a"
+      (pinnedPluginOptions "mingw32" "base" "registry with spaces" "plugin-unit" "vanilla.a"
         ["core with spaces", "post-tidy"])
   , TestCase $ assertEqual "Unix retains direct shared plugin options"
       ["-fplugin-library=shared.so;plugin-unit;THC.Plugin;[\"core\",\"post-tidy\"]"]
-      (pinnedPluginOptions "linux" "registry" "plugin-unit" "shared.so" ["core", "post-tidy"])
+      (pinnedPluginOptions "linux" "ghc-internal" "registry" "plugin-unit" "shared.so" ["core", "post-tidy"])
   , TestCase $ assertEqual "macOS retains direct shared plugin options"
       ["-fplugin-library=shared.dylib;plugin-unit;THC.Plugin;[\"core\",\"post-tidy\"]"]
-      (pinnedPluginOptions "darwin" "registry" "plugin-unit" "shared.dylib" ["core", "post-tidy"])
+      (pinnedPluginOptions "darwin" "ghc-internal" "registry" "plugin-unit" "shared.dylib" ["core", "post-tidy"])
+  , TestCase $ assertEqual "Windows bootstraps ghc-internal through genuine full-Core interfaces"
+      [] (pinnedPluginOptions "mingw32" "ghc-internal" "registry" "plugin-unit" "vanilla.a" ["core", "post-tidy"])
   , TestCase $ assertEqual "native Windows configure selects upstream Windows branches"
       (Right ["--configure-option=--host=x86_64-unknown-mingw32"])
       (pinnedConfigureOptions "mingw32" [("Host platform", "x86_64-unknown-mingw32")])
