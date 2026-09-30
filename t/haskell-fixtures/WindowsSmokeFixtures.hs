@@ -13,7 +13,7 @@
 -- Fixture acquisition support for windows smoke.
 module WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareWindowsBridge, checkWindowsTimeout) where
 
-import Control.Exception (bracket, try)
+import Control.Exception (bracket, bracket_, try)
 import Control.Monad (forM, unless)
 import Data.Aeson (Value(..), eitherDecodeStrict, object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -30,6 +30,8 @@ import System.Exit (ExitCode(..), die)
 import System.FilePath ((</>), takeDirectory, takeExtension)
 import qualified System.Info as Host
 import GHC.ResponseFile (escapeArgs)
+import GHC.IO.Handle (hDuplicate, hDuplicateTo)
+import System.IO (IOMode(WriteMode), hClose, hFlush, stderr, withBinaryFile)
 import THC.Compact.Module (readModuleValue)
 import THC.Driver.Project (prepareWindowsRuntime)
 
@@ -51,7 +53,26 @@ checkWindowsTimeout root = do
   record <- either die pure . eitherDecodeStrict =<< BS.readFile (root </> logs </> "sleep.command.json")
   unless (case record of Object fields -> KeyMap.lookup "timedOut" fields == Just (Bool True); _ -> False)
     (die "native fixture deadline lost its failed evidence")
-  putStrLn "windows-timeout: native child deadline and failed evidence preserved"
+  failed <- bracket (hDuplicate stderr) hClose $ \original ->
+    withBinaryFile (root </> logs </> "failure-diagnostic.stderr") WriteMode $ \capture ->
+      bracket_ (hDuplicateTo capture stderr) (hFlush stderr >> hDuplicateTo original stderr) $
+        try (runLogged 60 root logs "long-failure" [] "powershell.exe"
+          ["-NoProfile", "-NonInteractive", "-Command",
+           "[Console]::Error.Write('diagnostic-head'+('x'*20000)+'diagnostic-tail'); exit 23"])
+        :: IO (Either ExitCode CommandResult)
+  unless (either (== ExitFailure 1) (const False) failed)
+    (die "native fixture swallowed a nonzero command exit")
+  bytes <- BS.readFile (root </> logs </> "long-failure.stderr")
+  unless (bytes == "diagnostic-head" <> BSC.replicate 20000 'x' <> "diagnostic-tail")
+    (die "native fixture did not retain every stderr byte")
+  failureRecord <- either die pure . eitherDecodeStrict =<< BS.readFile (root </> logs </> "long-failure.command.json")
+  unless (case failureRecord of Object fields -> KeyMap.lookup "exit" fields == Just (Aeson.toJSON (23 :: Int)); _ -> False)
+    (die "native fixture lost the actual command exit")
+  diagnostic <- BS.readFile (root </> logs </> "failure-diagnostic.stderr")
+  unless ("stderr (first 8192 bytes, escaped): \"diagnostic-head" `BS.isInfixOf` diagnostic &&
+      "diagnostic-tail\"" `BS.isInfixOf` diagnostic)
+    (die "native fixture failure diagnostic hides the terminal stderr")
+  putStrLn "windows-timeout: native child deadline, exact nonzero exit and complete stderr retained; head/tail diagnostic visible"
 
 -- Execute the real opaque boxer/projector and its Exception dictionary. Native
 -- expected values and exported Core use the same actual Cabal runtime unit.
