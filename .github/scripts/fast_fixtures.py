@@ -97,7 +97,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
       for file in ("audit.json", "core/AlignedScalarMemoryAudit.cbd")],
     "build/hint-trace/oracle.tsv", "build/hint-trace/native/oracle", "build/hint-trace/native/oracle.eventlog",
     *[f"build/hint-trace/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
+      for suffix in ("core/HintTraceAudit.cbd", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json")],
     *fast_inputs.SCALAR_MEMORY_OUTPUTS,
     *fast_inputs.SIMD_ADDRESS_OUTPUTS,

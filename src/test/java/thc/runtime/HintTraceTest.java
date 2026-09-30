@@ -42,7 +42,7 @@ class HintTraceTest {
     }
     private Map<String, Object> module(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, "build/hint-trace/" + stage + "/core/HintTraceAudit.cbd").toPath()); }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
-    private Object call(ExecutableProgram program, String name, Object... args) { var input = new Object[args.length + 1]; input[0] = 0L; System.arraycopy(args, 0, input, 1, args.length); return Calls.target(program.entryTarget("main:HintTraceAudit." + name), input); }
+    private Object call(ExecutableProgram program, String name, Object... args) { var input = new Object[args.length + 1]; input[0] = 0L; System.arraycopy(args, 0, input, 1, args.length); return ScalarTestCalls.callScalarTestTarget(program.entryTarget("main:HintTraceAudit." + name), input); }
     private List<RootCallTarget> targets(RootCallTarget entry) {
         var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>()); var result = new ArrayList<RootCallTarget>();
         class Visit {
