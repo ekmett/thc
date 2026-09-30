@@ -18,8 +18,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class SimdVectorTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final long[] inputs = {Long.MIN_VALUE, -3000000001L, -1, 0, 1, 9000000003L, Long.MAX_VALUE};
+    private String id(String name) { return "main:SimdInt64X2." + name; }
     private Map<String, Object> module() throws Exception { return module("pre"); }
-    private Map<String, Object> module(String stage) throws Exception { return map(Json.parse(Files.readString(new File(root, "build/simd/" + stage + "-core/SimdInt64X2.json").toPath()))); }
+    private Map<String, Object> module(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, "build/simd/" + stage + "-core/SimdInt64X2.cbd").toPath()); }
     private Map<String, Object> map(Object value) { return (Map<String, Object>) value; }
     private List<Object> list(Object value) { return (List<Object>) value; }
     private Map<String, Object> m(Object... pairs) { var result = new LinkedHashMap<String, Object>(); for (int i = 0; i < pairs.length; i += 2) result.put((String) pairs[i], pairs[i + 1]); return result; }
@@ -28,7 +29,7 @@ class SimdVectorTest {
     private List<Object> l(Object... values) { return new ArrayList<>(Arrays.asList(values)); }
     private <T> T single(List<T> values) { assertEquals(1, values.size()); return values.getFirst(); }
     private Map<String, Object> binding(Map<String, Object> module, String name) {
-        var matches = new ArrayList<Map<String, Object>>(); for (var value : list(module.get("bindings"))) if (Objects.equals(map(value).get("name"), name)) matches.add(map(value));
+        var matches = new ArrayList<Map<String, Object>>(); for (var value : list(module.get("bindings"))) if (Objects.equals(map(value).get("id"), id(name))) matches.add(map(value));
         return single(matches);
     }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
@@ -39,7 +40,7 @@ class SimdVectorTest {
             try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); } finally { context.leave(); } }
     }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> module, String entry) {
-        var linked = CoreModules.reachable(module, entry); return backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+        var linked = CoreModules.reachable(module, id(entry)); return backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
     }
     private Map<String, Object> record(CoreRepresentation expected, Object count) {
         var vector = Objects.requireNonNull(expected.getVector());
@@ -122,7 +123,7 @@ class SimdVectorTest {
                 // case/lambda result record. Guest returns now preserve that shape.
                 expression.set(2, hiddenCase); m.put("bindings", List.of(with(binding, "expr", new ArrayList<>(expression))));
                 var inferred = program(language, backend, m, "vectorCase");
-                var tupleResult = ((GuestRoot) inferred.entryTarget("vectorCase").getRootNode()).getTupleResult();
+                var tupleResult = ((GuestRoot) inferred.entryTarget(id("vectorCase")).getRootNode()).getTupleResult();
                 var resultProof = tupleResult == null ? null : tupleResult.getProof(); assertNotNull(resultProof, backend);
                 assertTrue(TupleShape.compatible(CoreVectors.proof, resultProof), backend);
                 var bodies = List.of(argument, join); var messages = List.of("Unsupported Core vector boundary: argument", "Conflicting logical tuple representation proofs");
@@ -137,7 +138,7 @@ class SimdVectorTest {
     private void check(ExecutableProgram program) {
         for (long a : List.of(Long.MIN_VALUE, 123L, Long.MAX_VALUE)) {
             long b = -4097L; assertEquals(((a + a + 91) * 7) ^ ((b + a + 91) * 11),
-                Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("vectorCase"), new Object[]{a, b}}));
+                Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue(id("vectorCase")), new Object[]{a, b}}));
         }
     }
     @Test void exactVectorCaseStaysLocalAndExecutesCompiled() throws Exception {
@@ -148,7 +149,7 @@ class SimdVectorTest {
                 l(l("default", null, List.of(), vector)), m("rep", map(vector.get(6)).get("rep"))))); m.put("bindings", List.of(binding));
             for (var backend : List.of("ast", "bytecode")) {
                 var program = program(language, backend, m, "vectorCase"); check(program); check(program);
-                var target = program.entryTarget("vectorCase"); target.getClass().getMethod("compile", boolean.class).invoke(target, true); check(program);
+                var target = program.entryTarget(id("vectorCase")); target.getClass().getMethod("compile", boolean.class).invoke(target, true); check(program);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), backend);
             }
         });
@@ -159,7 +160,7 @@ class SimdVectorTest {
             long expected = entry.equals("vectorCase") ? ((a + a + 91) * 7) ^ ((b + a + 91) * 11) : ((a + b - 19) * 13) ^ ((b + b - 19) * 17);
             if (oracle != null) assertEquals(expected, oracle.get(new Key(entry, a, b)));
             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-            var result = Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue(entry), new Object[]{a, b}});
+            var result = Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue(id(entry)), new Object[]{a, b}});
             assertEquals(expected, result, stage + "/" + backend + "/" + entry + "/" + a + "/" + b);
             if (requireCompiledEntry) assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue(),
                 stage + "/" + backend + "/" + entry + "/" + a + "/" + b + " must enter compiled code exactly once");
@@ -179,7 +180,7 @@ class SimdVectorTest {
         for (var stage : stages) for (var backend : List.of("ast", "bytecode")) withLanguage(language -> {
             for (var entry : List.of("vectorCase", "subtractCase")) {
                 var program = program(language, backend, module(stage), entry); checkRows(program, stage, backend, entry, oracle, false); checkRows(program, stage, backend, entry, oracle, false);
-                var target = program.entryTarget(entry); target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                var target = program.entryTarget(id(entry)); target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                 checkRows(program, stage, backend, entry, oracle, true);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), stage + "/" + backend + "/" + entry + " after execution");
                 assertEquals(0, language.getHandoffState().get().getResults().getDepth());
