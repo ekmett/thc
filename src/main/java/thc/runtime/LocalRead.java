@@ -12,19 +12,19 @@ public final class LocalRead extends Expr {
     public LocalRead(int slot) { this(slot, true); }
     public LocalRead(int slot, boolean cell) { this.slot = slot; this.cell = cell; }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
-        return (!cell && getRepresentation().isInt()) || frame.isInt(slot)
+        return frame.isInt(slot)
             ? frame.getInt(slot) : super.executeInt(frame);
     }
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-        return (!cell && getRepresentation().isLong()) || frame.isLong(slot)
+        return frame.isLong(slot)
             ? frame.getLong(slot) : super.executeLong(frame);
     }
     @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
-        return (!cell && getRepresentation().isFloat()) || frame.isFloat(slot)
+        return frame.isFloat(slot)
             ? frame.getFloat(slot) : super.executeFloat(frame);
     }
     @Override public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-        return (!cell && getRepresentation().isDouble()) || frame.isDouble(slot)
+        return frame.isDouble(slot)
             ? frame.getDouble(slot) : super.executeDouble(frame);
     }
     @Override public Object execute(VirtualFrame frame) {

@@ -19,6 +19,40 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FrameAccessThreadTest {
+    @Test void provedScalarReadsFollowActivationTagsAcrossObjectWidening() {
+        for (Object value : List.of(Integer.MIN_VALUE, Long.MIN_VALUE, -0.0f, -0.0)) {
+            var proof = switch (value) {
+                case Integer ignored -> new CoreRepresentation(CoreKind.LONG, true, true, List.of("Int32Rep"));
+                case Long ignored -> new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"));
+                case Float ignored -> new CoreRepresentation(CoreKind.FLOAT, true, true, List.of("FloatRep"));
+                case Double ignored -> new CoreRepresentation(CoreKind.DOUBLE, true, true, List.of("DoubleRep"));
+                default -> throw new AssertionError(value);
+            };
+            var builder = FrameDescriptor.newBuilder();
+            int slot = builder.addSlot(FrameSlotKind.Illegal, "scalar", null);
+            var descriptor = builder.build();
+            var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
+            var read = new LocalRead(slot, false).proven(proof);
+            java.util.function.Supplier<Object> typedRead = () -> switch (value) {
+                case Integer ignored -> read.executeRequiredInt(frame);
+                case Long ignored -> read.executeRequiredLong(frame);
+                case Float ignored -> read.executeRequiredFloat(frame);
+                case Double ignored -> read.executeRequiredDouble(frame);
+                default -> throw new AssertionError(value);
+            };
+            FrameAccess.write(frame, slot, value);
+            assertEquals(value, typedRead.get());
+            var sibling = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
+            FrameAccess.writeObject(sibling, slot, value);
+            assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(slot));
+            assertEquals(value, typedRead.get(), "descriptor widening preserves older activation tags");
+            FrameAccess.write(frame, slot, value);
+            assertTrue(frame.isObject(slot));
+            assertEquals(value, typedRead.get(), "a proved scalar may have boxed frame storage");
+            FrameAccess.writeObject(frame, slot, new Object());
+            assertThrows(RuntimeFault.class, typedRead::get, "the fallback retains exact carrier checks");
+        }
+    }
     @Test void explicitScratchCarriersStartTypedAndRetainOrdinaryWidening() {
         var kinds = List.of(FrameSlotKind.Int, FrameSlotKind.Long, FrameSlotKind.Float, FrameSlotKind.Double, FrameSlotKind.Object);
         var values = List.of(-128, 255L, -0.0f, -0.0, new Object());
