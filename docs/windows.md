@@ -62,6 +62,8 @@ dependency graph and module inventory. The selected compiler libdir and ordered
 private package databases travel together through probes, compiler replay and
 native linking. Cache identities include that view; a different private database
 does not reuse a bundle from the original global database.
+Windows configure receives the selected GHC's recorded host triplet so the
+original upstream scripts select their Windows branches and type fallbacks.
 
 After building `driver-tests`, use `--installed-hydration-only` for helper
 protocol/ownership controls and `--installed-view-only` for package-view and

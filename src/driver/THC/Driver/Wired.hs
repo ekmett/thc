@@ -46,7 +46,7 @@ import THC.Driver.Installed (InstalledContext(..), InstalledUnit(..), InterfaceW
 import THC.Compact.Module (readModuleMetadata)
 import THC.Driver.InstalledForeign (createView, viewContext)
 import THC.Driver.GhcProxy (directPlugin)
-import THC.Driver.PinnedFlags (pinnedLibraryFlags)
+import THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions)
 import THC.Driver.PinnedSetup (configurePinnedCustom)
 import THC.Driver.Lock (withLock)
 import Distribution.Package (pkgName, pkgVersion)
@@ -511,6 +511,9 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                 (_, dependency) <- either (fail . show) pure
                   (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack text)))
                 pure ("--dependency=" ++ prettyShow (pkgName (Package.sourcePackageId dependency)) ++ "=" ++ identifier)
+              configureOptions <- if PD.buildType description == PD.Configure
+                then either fail pure (pinnedConfigureOptions Host.os settings)
+                else pure []
               let includes = nub (package : Package.includeDirs registered)
                   options = ["configure",
                     "--builddir=" ++ dist, "--with-compiler=" ++ installedGhc original,
@@ -518,7 +521,7 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                     "--package-db=clear", "--package-db=" ++ installedGlobalDb context,
                     "--ipid=" ++ registeredId unit, if dynamic then "--enable-shared" else "--disable-shared",
                     "--disable-library-profiling", "--ghc-options=-O2 -fwrite-if-simplified-core"] ++
-                    map ("--package-db=" ++) (installedDatabases context) ++ dependencyOptions ++ selectedFlags ++
+                    map ("--package-db=" ++) (installedDatabases context) ++ dependencyOptions ++ selectedFlags ++ configureOptions ++
                     map ("--extra-include-dirs=" ++) includes ++
                     -- Cabal runs Configure from dist/build; the genuine source
                     -- headers live beside dist. Keep paths with spaces out of CPPFLAGS.
