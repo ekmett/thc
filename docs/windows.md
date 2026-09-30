@@ -181,8 +181,9 @@ See the [finalizer contract](c-finalizers.md) for ownership and lifetime rules.
 
 ## Package and path considerations
 
-Use relative GHC output paths inside a Unicode working directory if the native
-compiler cannot preserve those characters in absolute command-line paths.
+Select the pinned `ghc-9.14.1.exe` and `ghc-pkg-9.14.1.exe` binaries for Unicode
+paths. The bindist's unversioned launchers lose characters outside the host code
+page; the bootstrap and Windows build entry point select the versioned binaries.
 THC's helper protocol uses UTF-8 independently of the host code page.
 
 The bundled Sulong patches allow system-DLL lookup without granting guest

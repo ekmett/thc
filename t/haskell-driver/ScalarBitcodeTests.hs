@@ -12,9 +12,17 @@
 -- Tests for scalar bitcode.
 module ScalarBitcodeTests (tests) where
 
+import Control.Exception (bracket)
+import qualified Data.ByteString as BS
 import Data.Either (isLeft)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import GHC.IO.Encoding (getLocaleEncoding, setLocaleEncoding)
+import System.Directory (getTemporaryDirectory, removeFile)
+import System.IO (hClose, openBinaryTempFile, latin1)
+import System.IO.Error (tryIOError)
 import Test.HUnit
-import THC.Driver.ScalarBitcode (parseDependencies, scalarFunctions, sulongScalarTarget)
+import THC.Driver.ScalarBitcode (parseDependencies, readDependencies, scalarFunctions, sulongScalarTarget)
 
 tests :: Test
 tests = TestLabel "closed scalar C producer inputs" $ TestList
@@ -31,6 +39,20 @@ tests = TestLabel "closed scalar C producer inputs" $ TestList
   , TestCase $ assertEqual "raw Windows dependency continuations retain complete tokens"
       (Right ["C:/sdk/header.h", "d:/project/source.c"])
       (parseDependencies "thc_scalar_input: d:/project/source.c \\\r\n C:/sdk/header.h\r\n")
+  , TestCase $ do
+      temporary <- getTemporaryDirectory
+      let acquire = do
+            (dependencyFile,handle) <- openBinaryTempFile temporary "scalar-utf8.d"
+            hClose handle
+            pure dependencyFile
+      bracket acquire removeFile $ \dependencyFile ->
+        bracket getLocaleEncoding setLocaleEncoding $ \_ -> do
+          setLocaleEncoding latin1
+          BS.writeFile dependencyFile (Text.encodeUtf8 (Text.pack "thc_scalar_input: C:/component\\ café\\ λ/source.c\r\n"))
+          assertEqual "Clang Unicode paths do not use the host locale"
+            ["C:/component café λ/source.c"] =<< readDependencies dependencyFile
+          BS.writeFile dependencyFile (BS.pack [255])
+          assertBool "invalid UTF-8 dependency bytes are rejected" . isLeft =<< tryIOError (readDependencies dependencyFile)
   , TestCase $ assertEqual "exact scalar LLVM types, with internal helpers excluded from foreign ABI"
       (Right [("mixed",["Int32Rep","Int64Rep","FloatRep","DoubleRep"],"DoubleRep")])
       (scalarFunctions $ unlines

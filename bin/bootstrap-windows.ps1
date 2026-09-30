@@ -36,8 +36,10 @@ if (!(Test-Path -LiteralPath $ghcRoot)) { Invoke-ThcTool 'tar.exe' @('-xf', $ghc
 if (!(Test-Path -LiteralPath "$Prefix/cabal")) { Expand-Archive -LiteralPath $cabalArchive -DestinationPath "$Prefix/cabal" }
 if (!(Test-Path -LiteralPath $javaRoot)) { Expand-Archive -LiteralPath $javaArchive -DestinationPath $Prefix }
 $env:JAVA_HOME = $javaRoot
-$env:GHC = Join-Path $ghcRoot 'bin/ghc.exe'
-$env:GHC_PKG = Join-Path $ghcRoot 'bin/ghc-pkg.exe'
+# The unversioned bindist launchers narrow Unicode argv through the host code
+# page. Select the actual pinned binaries, which preserve Windows wide argv.
+$env:GHC = Join-Path $ghcRoot 'bin/ghc-9.14.1.exe'
+$env:GHC_PKG = Join-Path $ghcRoot 'bin/ghc-pkg-9.14.1.exe'
 $env:CABAL = Join-Path $Prefix 'cabal/cabal.exe'
 $env:THC_CLANG = Join-Path $ghcRoot 'mingw/bin/clang.exe'
 $env:CABAL_DIR = Join-Path $Prefix 'cabal-home'

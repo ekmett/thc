@@ -14,7 +14,7 @@
 -- LLVM; its native roundtrip must equal Cabal's actual object before admission.
 module THC.Driver.ScalarBitcode
   ( ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode
-  , parseDependencies, scalarFunctions, sulongScalarTarget ) where
+  , parseDependencies, readDependencies, scalarFunctions, sulongScalarTarget ) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM, forM_, unless)
@@ -120,8 +120,7 @@ withScalarBitcode nativeRoot dist roots ghc packageTool unit component action = 
       _ <- command root actualGhc (arguments ++ ["-o",bitcode,"-optc-emit-llvm",
         "-optc-MD","-optc-MF","-optc" ++ dependencies,"-optc-MT","-optcthc_scalar_input",
         "-optc-Werror=date-time"])
-      dependencyText <- readFile dependencies
-      paths <- either fail pure (parseDependencies dependencyText)
+      paths <- readDependencies dependencies
       inputs <- observe =<< mapM (canonicalizePath . (root </>)) paths
       check (sourcePath `elem` map fst inputs) "scalar cbits: dependency inventory omitted its source"
       -- Read the module's own target: Clang can override it with its host target
@@ -287,6 +286,10 @@ scalarFunctions ir = do
           (Left "scalar cbits LLVM parameter attributes are unsupported")
         rep value
       _ -> Left "LLVM parameter missing"
+
+-- Clang writes UTF-8 paths, independently of the Windows console code page.
+readDependencies :: FilePath -> IO [FilePath]
+readDependencies path = BS.readFile path >>= either (fail . show) (either fail pure . parseDependencies . T.unpack) . Text.decodeUtf8'
 
 parseDependencies :: String -> Either String [FilePath]
 parseDependencies text = case break (== ':') text of
