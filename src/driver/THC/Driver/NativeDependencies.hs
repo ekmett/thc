@@ -18,7 +18,7 @@ module THC.Driver.NativeDependencies
   ) where
 
 import Control.Exception (evaluate)
-import Control.Monad (filterM, forM, unless)
+import Control.Monad (filterM, forM, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (FromJSON, Value(..), eitherDecodeStrict', fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
@@ -35,11 +35,16 @@ import Distribution.Package (pkgName)
 import Distribution.PackageDescription (libBuildInfo, cSources, cxxSources)
 import qualified Distribution.PackageDescription as Cabal
 import Distribution.Simple.Configure (getPersistBuildConfig)
+import Distribution.Simple.GHC (componentCcGhcOptions)
+import Distribution.Simple.Program (lookupProgram, programPath, ghcProgram)
+import Distribution.Simple.Program.GHC (renderGhcOptions, GhcOptions(..), GhcDynLinkMode(..))
+import Distribution.Simple.Setup (toFlag)
 import qualified Distribution.Simple.Compiler as Compiler
 import qualified Distribution.Simple.LocalBuildInfo as Local
 import Distribution.Simple.LocalBuildInfo (localPkgDescr, buildDir, allComponentsInBuildOrder,
   componentPackageDeps, componentUnitId)
 import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
+import Distribution.Verbosity (normal)
 import Numeric (showHex)
 import System.Directory (doesFileExist, doesDirectoryExist, listDirectory, canonicalizePath,
   createDirectoryIfMissing, removeFile, renameFile)
@@ -50,7 +55,8 @@ import System.FilePath ((</>), takeFileName, takeDirectory, isAbsolute, takeExte
 import System.IO (hClose, openTempFile)
 import System.Process (CreateProcess(..), StdStream(..), proc, readProcessWithExitCode,
   waitForProcess, withCreateProcess)
-import THC.Driver.Installed (emptyRegistration)
+import THC.Driver.Installed (emptyRegistration, boundedInterfaceProcessIn)
+import THC.Driver.ScalarBitcode (parseDependencies)
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 
@@ -173,10 +179,10 @@ nativeSymbolArchives compiler libdir root owner arguments symbols
             pure ([(archive,defined) | not (null defined)] ++ following)
       select symbols archives
 
--- | Native objects from an explicitly selected, configured Hadrian tree. Cabal
--- supplies the active C/C++ source inventory; its dynamic-way products supply
--- PIC machine code. Never load the mixed Haskell shared library or include Cmm
--- and RTS objects merely because they share the installed archive.
+-- | Native objects from the selected configured Hadrian tree or pinned Core
+-- producer. Cabal supplies the active C/C++ source inventory. Hadrian retains
+-- its dynamic-way objects; pinned producers compile that inventory as PIC.
+-- Never load mixed Haskell shared libraries, Cmm or native RTS objects.
 --
 -- The caller passes the returned archive as an ordinary -optl input and records
 -- the returned files in its existing cache observations. GHC registrations and
@@ -186,11 +192,33 @@ configuredNativeArchive source destination compilerIdentity registration = do
   (_,info) <- either (fail . show) pure (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
   root <- canonicalizePath source
   let package = prettyShow (pkgName (Package.sourcePackageId info))
-      configured = root </> "_build/stage1/libraries" </> package
-      configuration = configured </> "setup-config"
-      built = configured </> "build"
-  exists <- doesFileExist configuration
-  if not exists || package == "rts" then pure Nothing else do
+      hadrian = root </> "_build/stage1/libraries" </> package
+  builtByHadrian <- doesFileExist (hadrian </> "setup-config")
+  pinned <- filterM (doesFileExist . (</> "setup-config"))
+    [takeDirectory (takeDirectory path) </> "dist" | path <- Package.importDirs info,
+      takeFileName path == "interfaces", takeFileName (takeDirectory path) == "view"]
+  selected <- case if builtByHadrian then [hadrian] else nub pinned of
+    [] -> pure Nothing
+    [path] -> pure (Just path)
+    _ -> fail "configured native provider has multiple source configurations"
+  -- This producing compiler's C inventory is native RTS state: cutils mutates
+  -- RtsFlags, genSym's unique cells live in the RTS, and keepCAFsForGHCi has a native
+  -- constructor. Apply the same context-ownership boundary as nativeSymbolArchives.
+  if package == "rts" || prettyShow (Package.installedUnitId info) == "ghc-9.14.1-inplace"
+    then pure Nothing else case selected of
+    Nothing -> pure Nothing
+    Just configured -> do
+      configuredArchive info configured builtByHadrian
+  where
+  configuredArchive info configured builtByHadrian = do
+    let configuration = configured </> "setup-config"
+        built = configured </> "build"
+    -- The pinned provider's private view identifies its genuine Cabal
+    -- configuration without changing any native registration fields.
+    when (not builtByHadrian) $ do
+      inputs <- readJson (takeDirectory configured </> "inputs.json")
+      check (member inputs "compiler" == Just compilerIdentity)
+        "pinned native provider differs from selected compiler identity"
     lbi <- getPersistBuildConfig Nothing (makeSymbolicPath configured)
     selectedCompiler <- get compilerIdentity "id"
     selectedPlatform <- get compilerIdentity "platform"
@@ -206,9 +234,10 @@ configuredNativeArchive source destination compilerIdentity registration = do
     actual <- canonicalizePath (getSymbolicPath (buildDir lbi))
     expected <- canonicalizePath built
     check (actual == expected) "configured native provider belongs to another build tree"
-    declarations <- maybe (pure []) (\lib -> pure (map getSymbolicPath
-      (cSources (libBuildInfo lib)) ++ map getSymbolicPath (cxxSources (libBuildInfo lib))))
+    bi <- maybe (fail "configured native provider is not a library") (pure . libBuildInfo)
       (Cabal.library (localPkgDescr lbi))
+    let declarations = [(path, False) | path <- cSources bi] ++
+          [(path, True) | path <- cxxSources bi]
     if null declarations then pure Nothing else do
       let packagePath path
             | Just suffix <- stripPrefix "${pkgroot}" path, Just pkgRoot <- Package.pkgRoot info = pkgRoot ++ suffix
@@ -224,22 +253,59 @@ configuredNativeArchive source destination compilerIdentity registration = do
         -- component identity selects the products, not byte equivalence of
         -- those containers. Observe the actual selected archive for caching.
         pure installed
-      objects <- forM declarations $ \path -> do
+      createDirectoryIfMissing True destination
+      directory <- canonicalizePath destination
+      let pic = directory </> "pic-objects"
+          packageDirectory = takeDirectory configured </> "source"
+      objects <- forM declarations $ \(sourcePath, cxx) -> do
+        let path = getSymbolicPath sourcePath
         check (not (isAbsolute path) && ".." `notElem` splitDirectories path)
           "configured native source is outside its package"
         -- Hadrian's Context.objectPath places nongenerated foreign objects
         -- under their source extension, independently of Haskell objects.
-        pure (built </> drop 1 (takeExtension path) </> replaceExtension path "dyn_o")
+        if builtByHadrian then pure (built </> drop 1 (takeExtension path) </> replaceExtension path "dyn_o")
+        else do
+          ghc <- maybe (fail "pinned native provider has no configured GHC") (pure . programPath)
+            (lookupProgram ghcProgram (Local.withPrograms lbi))
+          let buildInfo = if cxx then bi {Cabal.ccOptions = Cabal.cxxOptions bi} else bi
+              base = componentCcGhcOptions normal lbi buildInfo component (makeSymbolicPath built) sourcePath
+              dependency = pic </> replaceExtension path "d"
+              dependencyFlags = ["-MD", "-MF", dependency, "-MT", "thc_scalar_input"]
+              options = if cxx then base
+                {ghcOptCxxOptions = ghcOptCcOptions base ++ dependencyFlags, ghcOptCcOptions = []}
+                else base {ghcOptCcOptions = ghcOptCcOptions base ++ dependencyFlags}
+              arguments = renderGhcOptions (Local.compiler lbi) (Local.hostPlatform lbi)
+                (options {ghcOptFPic = toFlag True, ghcOptDynLinkMode = toFlag GhcDynamicOnly,
+                  ghcOptObjDir = toFlag (makeSymbolicPath pic), ghcOptObjSuffix = toFlag "dyn_o",
+                  ghcOptOutputFile = toFlag (makeSymbolicPath (pic </> replaceExtension path "dyn_o"))})
+          createDirectoryIfMissing True (pic </> takeDirectory path)
+          (status,_,diagnostic) <- boundedInterfaceProcessIn packageDirectory ghc arguments
+          check (status == ExitSuccess) ("Cannot compile pinned native PIC source: " ++
+            Data.Text.unpack (T.decodeUtf8 diagnostic))
+          pure (pic </> replaceExtension path "dyn_o")
       check (length (nub (map takeFileName objects)) == length objects)
         "configured native PIC archive has duplicate member names"
       present <- filterM doesFileExist objects
+      check (builtByHadrian || present == objects) "pinned native PIC compiler did not produce every declared object"
       if present /= objects then pure Nothing else do
-        let observe = forM (nub (configuration : objects ++ archives)) $ \path -> do
+        dependencies <- if builtByHadrian then pure [] else fmap concat $ forM objects $ \path -> do
+          dependencyPaths <- either fail pure . parseDependencies =<< readFile (replaceExtension path "d")
+          mapM (canonicalizePath . (packageDirectory </>)) dependencyPaths
+        let sources = [packageDirectory </> getSymbolicPath path | (path,_) <- declarations, not builtByHadrian]
+            products = zip sources objects
+            -- The pinned objects die with installed-native staging. Keep their
+            -- digests with durable source/header inputs, not deleted file paths
+            -- that would invalidate every subsequent installed-probe cache hit.
+            observe = forM (nub (configuration : dependencies ++ sources ++ archives ++
+              [path | path <- objects, builtByHadrian])) $ \path -> do
               hash <- digest <$> BS.readFile path
-              pure (object ["path" .= path,"sha256" .= hash])
+              productHash <- case lookup path products of
+                Nothing -> pure []
+                Just compiled -> do
+                  compiledHash <- digest <$> BS.readFile compiled
+                  pure ["objectSha256" .= compiledHash]
+              pure (object (["path" .= path,"sha256" .= hash] ++ productHash))
         before <- observe
-        createDirectoryIfMissing True destination
-        directory <- canonicalizePath destination
         let output = directory </> "libthc-configured-cbits.a"
         (temporary,handle) <- openTempFile directory "cbits-"
         hClose handle

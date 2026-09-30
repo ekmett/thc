@@ -428,7 +428,7 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
   source <- pinnedRelease cache
   pluginHash <- digest <$> BS.readFile pluginLibrary
   helperHash <- digest <$> BS.readFile (installedHelper original)
-  foldM (prepare source pluginHash helperHash settings) original ordered
+  foldM (prepare source pluginHash helperHash settings) original { installedSource = Just source } ordered
   where
     prepare source pluginHash helperHash settings context unit
       | null (installedInterfaces unit) = pure context
@@ -497,6 +497,10 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
               unless (prettyShow (PD.package description) == name ++ "-" ++ version)
                 (fail ("Pinned package version differs from selected registration: " ++ name))
               when (name == "ghc-internal") $ do
+                -- GHC's top-level configure copies these shared utility
+                -- sources into ghc-internal before its package configure.
+                copyFile (source </> "utils/fs/fs.c") (package </> "cbits/fs.c")
+                copyFile (source </> "utils/fs/fs.h") (package </> "include/fs.h")
                 generatePrimitiveWrappers source package destination (installedGhc original)
               dependencyOptions <- forM (installedDepends unit) $ \identifier -> do
                 text <- readProcess (installedPackageTool context)
