@@ -17,7 +17,7 @@ module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
   , linkInstalledNative, installedNativeSignatures, nativeCapiSource
-  , nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, tool
+  , nativeIrSymbol, nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, tool
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -246,7 +246,7 @@ nativeImports unit value = do
       if member proof "status" == Just "unclassified" then do
         requireKeys proof ["schema","scope","execution","profile","unit","module","status","reason"]
         require (member proof "reason" == Just "non-static-c-import-declaration")
-          "package native imports have an unrecognized unclassified producer"
+          ("package native imports have an unrecognized unclassified producer: " ++ unit ++ "/" ++ show (member value "module") ++ " " ++ show (member proof "reason"))
         pure []
       else do
         requireKeys proof (["schema","scope","execution","profile","unit","module","status","wordBits","expectedForeign","expectedCalls","imports"] ++
@@ -974,14 +974,15 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
     _ <- command directory link (wrapper ++ bitcodes ++ ["-o",linked])
     defined <- sort . nub . concat <$> forM bitcodes (\path -> do
       output <- command directory nm ["--defined-only","--extern-only","--format=posix",path]
-      pure [name | line <- lines output, name:_ <- [words line], not ("llvm." `isPrefixOf` name)])
+      pure [symbol | line <- lines output, name:_ <- [words line],
+        let symbol = nativeIrSymbol target name, not ("llvm." `isPrefixOf` symbol)])
     -- External linkage alone includes hidden helpers. LLVM's Darwin-style
     -- output exposes bitcode visibility on every target: hidden definitions
     -- are "private external", unlike default/protected exports. Inspect the
     -- linked component, since other translation units can narrow visibility.
     symbols <- command directory nm ["--defined-only","--extern-only","--format=darwin",linked]
-    let public = sort . nub $ [name | line <- lines symbols, name:attributes <- [reverse (words line)],
-          name `elem` defined, "external" `elem` attributes, "private" `notElem` attributes]
+    let public = sort . nub $ [symbol | line <- lines symbols, name:attributes <- [reverse (words line)],
+          let symbol = nativeIrSymbol target name, symbol `elem` defined, "external" `elem` attributes, "private" `notElem` attributes]
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     linkedSource <- readFile linkedIR
     -- A typed Haskell address is not a C definition proof. Require the actual
@@ -1029,7 +1030,7 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
           "-internalize-public-api-list=" ++ join "," (entries ++ public),input,"-o",final]
         unresolved = do
           output <- command directory nm ["--undefined-only","--format=posix",final]
-          pure [name | line <- lines output, name:_ <- [words line]]
+          pure [nativeIrSymbol target name | line <- lines output, name:_ <- [words line]]
     _ <- trim prepared
     initialExternals <- unresolved
     candidates' <- maybe (pure []) (either fail pure . parseValue) (member record "providers")
@@ -1102,9 +1103,19 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
         -- native dependencies separately, rooting archive extraction with the
         -- actual unresolved symbols. Never include the component here: its
         -- globals and constructors must exist only in the LLVM instance.
+        -- Darwin treats -u as a hard requirement even with dynamic_lookup.
+        -- Root actual archive definitions for extraction; unresolved installed
+        -- calls retain the same lazy policy as the component, without loading RTS.
+        rooted <- if darwin && member record "installed" == Just (Bool True)
+          then do
+            definitions <- concat <$> forM (nub (filter ((== ".a") . takeExtension) linkArguments)) (\archive -> do
+              output <- command directory nm ["--defined-only","--extern-only","--format=posix",archive]
+              pure [nativeIrSymbol target name | line <- lines output, name:_ <- [words line]])
+            pure (filter (`elem` definitions) nativeExternals)
+          else pure nativeExternals
         let dependency = directory </> if darwin then "native/dependencies.dylib" else "native/dependencies.so"
             nativeRoots = concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",if darwin then '_' : symbol else symbol])
-              nativeExternals
+              rooted
             dependencyArguments = ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
               resolution ++ exclusions ++ ["-o",dependency]
         _ <- command directory clang dependencyArguments
@@ -1291,3 +1302,11 @@ sha :: BS.ByteString -> String
 sha = hex . SHA.hash
 hex :: BS.ByteString -> String
 hex = concatMap (\byte -> let value = showHex byte "" in if length value == 1 then '0':value else value) . BS.unpack
+
+-- | LLVM nm reports target linker spellings even for bitcode. Keep IR names
+-- internally; Darwin adds exactly one underscore, including to C names that
+-- already start with underscores. Linker arguments add that prefix back.
+nativeIrSymbol :: String -> String -> String
+nativeIrSymbol target ('_':name)
+  | "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target = name
+nativeIrSymbol _ name = name

@@ -25,7 +25,7 @@ import qualified Data.Set as Set
 import GHC (getSessionDynFlags, getSession, parseDynamicFlags, setSessionDynFlags, runGhc, noLoc,
             guessTarget, setTargets, depanal)
 import GHC.Plugins (HscEnv, Module, Unit, hsc_logger, mkModule, mkModuleName, moduleUnit,
-                    unitString, stringToUnit, stringToUnitId, liftIO, moduleNameString)
+                    unitString, stringToUnit, stringToUnitId, liftIO, moduleNameString, unLoc)
 import GHC.Data.Graph.Directed (SCC(..))
 import GHC.Driver.Env (hsc_units)
 import GHC.Driver.Make (topSortModuleGraph)
@@ -34,8 +34,11 @@ import GHC.Types.SourceFile (HscSource(HsBootFile))
 import GHC.Types.Unique.Map (lookupUniqMap)
 import GHC.Unit.Info (mkUnit)
 import GHC.Unit.Module.Graph (ModuleGraphNode(..), ModuleNodeInfo(..))
-import GHC.Unit.Module.ModSummary (ms_mod_name, ms_hsc_src)
+import GHC.Unit.Module.ModSummary (ms_mod_name, ms_hsc_src, ms_location)
+import GHC.Unit.Module.Location (ml_hs_file)
 import GHC.Unit.State (wireMap, lookupUnitId, unwireUnit)
+import GHC.Utils.Outputable (ppr)
+import GHC.Driver.Ppr (showSDoc)
 import System.Environment (getArgs)
 import System.Exit (ExitCode(..), exitWith)
 import System.IO (hSetBinaryMode, stdout)
@@ -98,6 +101,11 @@ main = do
       graph <- windowsSourceGraph lib source objects includes
       BL.putStrLn (encode graph)
       exitWith ExitSuccess
+    ["--source-graph",lib,request] -> do
+      selected <- either fail pure . eitherDecode =<< BL.readFile request
+      graph <- sourceGraph lib selected
+      BL.putStrLn (encode graph)
+      exitWith ExitSuccess
     _ -> pure ()
   if arguments == ["--help"] then putStrLn usage else do
     options <- case parseOptions arguments of
@@ -144,6 +152,31 @@ homeInterfaceInventory lib owner selectedWay = do
 -- dependency analysis preserves SOURCE imports and hs-boot ordering. Prim is
 -- compiler-provided: its generated Haddock source has dummy bodies and must
 -- never enter the executable source graph.
+-- Cabal supplies the complete finalized target inventory and compiler options.
+-- GHC owns SOURCE-import ordering; intrinsic Prim never gets a source body.
+sourceGraph :: FilePath -> [String] -> IO [Value]
+sourceGraph lib arguments = runGhc (Just lib) $ do
+  initial <- getSessionDynFlags
+  environment <- getSession
+  (flags, targets, _) <- parseDynamicFlags (hsc_logger environment) initial (map noLoc arguments)
+  _ <- setSessionDynFlags flags
+  selected <- mapM (\target -> guessTarget (unLoc target) Nothing Nothing) targets
+  setTargets selected
+  graph <- depanal [mkModuleName "GHC.Internal.Prim"] False
+  fmap concat $ forM (topSortModuleGraph False graph Nothing) $ \component -> case component of
+    AcyclicSCC (ModuleNode _ (ModuleNodeCompile summary)) -> do
+      source <- maybe (liftIO (fail "source graph node has no source")) pure (ml_hs_file (ms_location summary))
+      pure [object ["module" .= moduleNameString (ms_mod_name summary),
+        "boot" .= (ms_hsc_src summary == HsBootFile), "source" .= source]]
+    -- This protocol orders library source compilation; a final native link
+    -- node has no source or interface to publish.
+    AcyclicSCC LinkNode{} -> pure []
+    -- Package dependencies refer to already installed interfaces. They order
+    -- the home modules but do not add source targets to this library.
+    AcyclicSCC UnitNode{} -> pure []
+    AcyclicSCC node -> liftIO (fail ("Unexpected source graph node: " ++ showSDoc flags (ppr node)))
+    CyclicSCC nodes -> liftIO (fail ("Unbroken source graph cycle: " ++ showSDoc flags (ppr nodes)))
+
 windowsSourceGraph :: FilePath -> FilePath -> FilePath -> [FilePath] -> IO Value
 windowsSourceGraph lib source objects includes = runGhc (Just lib) $ do
   initial <- getSessionDynFlags

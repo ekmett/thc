@@ -60,6 +60,14 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
             removeFile adjacent
             result <- tryIOError (tool "THC_LLVM_OBJCOPY" adjacent)
             assertBool "missing implicit objcopy fails when acquisition needs it" (isLeft result)
+  , TestCase $ forM_ ["aarch64-apple-darwin", "arm64-apple-macosx13.3.0"] $ \target -> do
+      assertEqual "Darwin defined export name" "thc_symbol_probe" (nativeIrSymbol target "_thc_symbol_probe")
+      assertEqual "Darwin libc linker prefix" "access" (nativeIrSymbol target "_access")
+      assertEqual "Darwin preserves genuine GMP underscores" "__gmpn_add" (nativeIrSymbol target "___gmpn_add")
+      assertEqual "Darwin managed symbol remains recognizable" "hs_free_stable_ptr" (nativeIrSymbol target "_hs_free_stable_ptr")
+  , TestCase $ do
+      assertEqual "ELF symbol remains unchanged" "__gmpn_add" (nativeIrSymbol "aarch64-linux-gnu" "__gmpn_add")
+      assertEqual "ELF ordinary symbol remains unchanged" "access" (nativeIrSymbol "x86_64-linux-gnu" "access")
   , TestCase $ do
       compiler <- findExecutable "ghc" >>= maybe (fail "GHC missing") pure
       libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of

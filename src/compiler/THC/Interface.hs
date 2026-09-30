@@ -29,6 +29,9 @@ import Data.List (sortOn)
 import qualified Data.ByteString as BS
 import qualified Data.Set as Set
 import GHC.Plugins
+import GHC.Builtin.Names (gHC_PRIM)
+import GHC.Builtin.Types.Prim (primTyCons)
+import GHC.Types.TyThing (TyThing(..))
 import GHC.Driver.Env (hscSetFlags)
 import GHC.Driver.Env.KnotVars (KnotVars(..), lookupKnotVars)
 import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
@@ -37,12 +40,12 @@ import GHC.Iface.Type (putIfaceType)
 import qualified GHC.Data.Strict as Strict
 import GHC.IfaceToCore (typecheckIface, typecheckWholeCoreBindings)
 import GHC.Tc.Utils.Monad (initIfaceCheck)
-import GHC.Types.TypeEnv (emptyTypeEnv, typeEnvIds, typeEnvTyCons)
+import GHC.Types.TypeEnv (emptyTypeEnv, mkTypeEnv, typeEnvIds, typeEnvTyCons)
 import GHC.Unit.Module.Location (pattern ModLocation)
-import GHC.Unit.Module.ModDetails (ModDetails(..))
+import GHC.Unit.Module.ModDetails (ModDetails(..), emptyModDetails)
 import GHC.Unit.Module.Deps
 import GHC.Unit.Module.ModIface
-import GHC.Unit.Module.WholeCoreBindings (WholeCoreBindings(..), IfaceForeign)
+import GHC.Unit.Module.WholeCoreBindings (WholeCoreBindings(..), IfaceForeign, emptyIfaceForeign)
 import GHC.Utils.Binary (openBinMem, putFullBinData, put_, putFS, setWriterUserData,
                         mkWriterUserData, mkSomeBinaryWriter, mkWriter, simpleBindingNameWriter)
 import GHC.Utils.Fingerprint (Fingerprint)
@@ -123,7 +126,7 @@ probeInterface environment units modules expected path = do
       putFullBinData buffer bytes
       fingerprintBinMem buffer
     FullIfaceBinHandle Strict.Nothing -> fail "Interface reader did not retain its complete bytes"
-  pure (digest, maybe False (const True) (mi_simplified_core iface))
+  pure (digest, expected == gHC_PRIM || maybe False (const True) (mi_simplified_core iface))
 
 -- Recompilation usages can omit wired-in or later-introduced Names. GHC's own
 -- Binary writer enumerates the retained Names without hydration or a THC
@@ -171,7 +174,12 @@ loadInterfaceCore environment expected path = do
   iface <- readBinIface (targetProfile flags) (hsc_NC environment) CheckHiWay QuietBinIFace path
   let m = mi_module iface
   unless (m == expected) (throwIO (InterfaceModuleMismatch expected m))
-  case mi_simplified_core iface of
+  -- GHC itself supplies this module's types and operations. Its generated
+  -- Haddock source contains dummy definitions and is never executable Core.
+  -- Retain the compiler's primitive declarations, with no invented bodies.
+  if m == gHC_PRIM then pure (Just (InterfaceCore m
+    emptyModDetails { md_types = mkTypeEnv (map ATyCon primTyCons) }
+    [] emptyIfaceForeign flags)) else case mi_simplified_core iface of
     Nothing -> pure Nothing
     Just simplified -> do
       types <- newIORef emptyTypeEnv

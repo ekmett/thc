@@ -41,7 +41,11 @@ class RubbishLiteralTest {
         assertEquals(shapes.stream().map(name -> name + "Producer").toList(), manifest.get("producers"));
         var inputs = object(manifest.get("inputHashes"));
         var expectedInputs = new HashSet<>(list("t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
-            "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
+            "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs",
+            "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/cbits/target-layout.c", "src/compiler/interface/Main.hs", "cabal.project", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
+        try (var files = Files.list(root.resolve("src/driver/THC/Driver"))) {
+            files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> expectedInputs.add(root.relativize(path).toString()));
+        }
         try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> expectedInputs.add(root.relativize(path).toString()));
         }
@@ -51,14 +55,88 @@ class RubbishLiteralTest {
         }
         assertEquals(expectedInputs, inputs.keySet());
         var artifacts = object(manifest.get("artifactHashes"));
+        String nativeInfo = Files.readString(root.resolve(prefix + "/logs/info.stdout"));
+        var target = java.util.regex.Pattern.compile("\\(\"Target platform\",\\s*\"([^\"]+)\"\\)").matcher(nativeInfo);
+        var host = java.util.regex.Pattern.compile("\\(\"Host platform\",\\s*\"([^\"]+)\"\\)").matcher(nativeInfo);
+        assertTrue(target.find()); assertTrue(host.find()); assertEquals(host.group(1), target.group(1));
+        boolean nativeLLVM = target.group(1).startsWith("aarch64-");
         var expectedArtifacts = new HashSet<String>();
         for (var file : list("pre.cbd", "post.cbd", "Data.Sequence.Internal.cbd", "oracle.json", "originals.json", "native.s", "native.o", "native-codegen.json", "pre.audit.json", "post.audit.json"))
             expectedArtifacts.add(prefix + "/" + file);
         for (var command : list("version", "info", "libdir", "imports-ghc-internal", "imports-containers", "containers-unit", "native-assemble", "pre-audit", "post-audit"))
             for (var suffix : list("stdout", "stderr", "command.json")) expectedArtifacts.add(prefix + "/logs/" + command + "." + suffix);
+        if (nativeLLVM) {
+            expectedArtifacts.add(prefix + "/native.ll");
+            for (var suffix : list("stdout", "stderr", "command.json"))
+                expectedArtifacts.add(prefix + "/logs/native-llvm." + suffix);
+        }
+        String providerPackages = prefix + "/provider/installed/packages.json";
+        assertEquals(providerPackages, manifest.get("providerPackages"));
+        var packages = object(Json.parse(Files.readString(root.resolve(providerPackages))));
+        assertEquals("thc-core-packages", packages.get("format"));
+        assertEquals(1L, packages.get("schema")); assertEquals("9.14.1", packages.get("ghc"));
+        var units = new LinkedHashMap<String, Map<String, Object>>();
+        for (var unit : objects(packages.get("units")))
+            assertNull(units.put((String) unit.get("id"), unit), "Duplicate provider owner");
+        var acquired = object(manifest.get("acquiredSequenceInterface"));
+        String sequenceUnit = (String) acquired.get("unit");
+        assertEquals(Files.readString(root.resolve(prefix + "/logs/containers-unit.stdout")).strip(), sequenceUnit);
+        String registration = Files.readString(root.resolve(prefix + "/provider/logs/ghc-internal-unit.stdout")).strip();
+        var closure = new HashSet<String>(); var pending = new ArrayDeque<>(List.of(registration, sequenceUnit));
+        while (!pending.isEmpty()) {
+            String id = pending.removeFirst();
+            if (!closure.add(id)) continue;
+            assertNotNull(units.get(id), "Missing selected provider dependency: " + id);
+            for (var dependency : expression(units.get(id).get("depends"))) pending.add((String) dependency);
+        }
+        if (!registration.equals("ghc-internal")) {
+            assertEquals(list(), units.get(registration).get("modules"));
+            assertFalse(objects(units.get("ghc-internal").get("modules")).isEmpty());
+            closure.add("ghc-internal");
+        }
+        assertEquals(closure, units.keySet(), "Provider inventory must be exactly the selected original closure");
+        expectedArtifacts.add(providerPackages);
+        for (String id : units.keySet())
+            if (!id.equals("ghc-internal") || registration.equals(id))
+                expectedArtifacts.add(prefix + "/provider/installed/bundles/" + id + ".zip");
+        var providerCommands = new ArrayList<>(list("ghc-version", "helper-build", "helper-location", "ghc-internal-unit", "containers-unit"));
+        assertTrue(manifest.get("customCoreProvider") instanceof Boolean);
+        if (Boolean.TRUE.equals(manifest.get("customCoreProvider"))) providerCommands.add("core-provider-version");
+        for (var command : providerCommands)
+            for (var suffix : list("stdout", "stderr", "command.json"))
+                expectedArtifacts.add(prefix + "/provider/logs/" + command + "." + suffix);
+        var sequenceModules = objects(units.get(sequenceUnit).get("modules")).stream()
+            .filter(module -> "Data.Sequence.Internal".equals(module.get("name"))).toList();
+        assertEquals(1, sequenceModules.size());
+        assertEquals(sequenceUnit, cbd("Data.Sequence.Internal.cbd").get("unit"));
+        var publishedSequence = object(sequenceModules.getFirst().get("compact"));
+        Path publishedPath = Path.of((String) publishedSequence.get("path"));
+        assertTrue(publishedPath.isAbsolute());
+        assertEquals(publishedSequence.get("sha256"), hash(publishedPath), "Changed published Sequence Core");
+        var publishedCore = CoreCbdFixtures.read(publishedPath);
+        assertEquals(sequenceUnit, publishedCore.get("unit"));
+        assertEquals("Data.Sequence.Internal", publishedCore.get("module"));
+        Path acquiredPath = Path.of((String) acquired.get("path"));
+        assertTrue(acquiredPath.isAbsolute()); assertEquals("Internal.hi", acquiredPath.getFileName().toString());
+        assertEquals(acquired.get("sha256"), hash(acquiredPath), "Changed acquired Sequence interface");
+        if (acquired.get("pinnedInputs") != null) {
+            var pins = object(acquired.get("pinnedInputs"));
+            Path pinPath = Path.of((String) pins.get("path"));
+            assertTrue(pinPath.isAbsolute()); assertEquals("inputs.json", pinPath.getFileName().toString());
+            assertEquals(pins.get("sha256"), hash(pinPath), "Changed pinned producer inputs");
+            var metadata = object(Json.parse(Files.readString(pinPath)));
+            assertEquals("9.14.1", object(metadata.get("source")).get("version"));
+            for (String key : list("driverHash", "pluginHash", "helperHash"))
+                assertTrue(((String) metadata.get(key)).matches("[0-9a-f]{64}"), "Missing pinned producer identity: " + key);
+        }
         assertEquals(expectedArtifacts, artifacts.keySet());
         var nativeCode = json("native-codegen.json");
-        assertEquals("native", nativeCode.get("backend"));
+        assertEquals(nativeLLVM ? "llvm" : "native", nativeCode.get("backend"));
+        if (nativeLLVM) {
+            var ir = object(nativeCode.get("llvmIR"));
+            assertEquals(prefix + "/native.ll", ir.get("path"));
+            assertEquals(artifacts.get(prefix + "/native.ll"), ir.get("sha256"));
+        } else assertFalse(nativeCode.containsKey("llvmIR"));
         assertEquals(prefix + "/native.s", nativeCode.get("assembly"));
         assertEquals(artifacts.get(prefix + "/native.s"), nativeCode.get("sha256"));
         var nativeNames = new ArrayList<>(names);
@@ -79,7 +157,17 @@ class RubbishLiteralTest {
         assertEquals(Set.of("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)", "IntRep", "Int32Rep"),
             new HashSet<>(occurrences.stream().map(value -> expression(value).get(1)).toList()));
         assertTrue(occurrences.stream().anyMatch(value -> "GHC.Internal.Event.Manager.$wstep".equals(expression(value).get(0))));
-        assertEquals(6, occurrences.size());
+        if (target.group(1).equals("aarch64-apple-darwin")) {
+            assertEquals(list(
+                list("GHC.Internal.Event.Manager.$wstep", "BoxedRep (Just Lifted)"),
+                list("GHC.Internal.Event.Manager.$wstep", "IntRep"),
+                list("GHC.Internal.Event.Manager.$wstep", "BoxedRep (Just Unlifted)"),
+                list("GHC.Internal.Event.Manager.$wstep", "Int32Rep"),
+                list("GHC.Internal.Event.Manager.$wstep", "Int32Rep"),
+                list("GHC.Internal.Event.Manager.$wstep", "BoxedRep (Just Unlifted)"),
+                list("GHC.Internal.Event.Manager.$wstep", "BoxedRep (Just Unlifted)")), occurrences);
+        } else assertEquals(6, occurrences.size());
+
         for (var stage : list("pre", "post")) {
             var audit = json(stage + ".audit.json"); assertEquals(true, audit.get("accepted"));
             assertEquals(list(), audit.get("issues")); assertEquals(list(), audit.get("missingGlobals"));
