@@ -14,12 +14,14 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.ScalarValueTestSupport.*;
 
 class FloatingTupleTest {
+    private static String id(String name) { return "main:FloatingTupleAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private String read(String path) throws Exception { return Files.readString(new File(root, path).toPath()); }
     @BeforeEach void verifyEvidence() throws Exception {
@@ -38,7 +40,7 @@ class FloatingTupleTest {
     }
     private Map<String, Object> module() throws Exception { return module("pre"); }
     private Map<String, Object> module(String stage) throws Exception {
-        return object(Json.parse(read("build/floating-tuple/" + stage + "-core/FloatingTupleAudit.json")));
+        return CoreCbdFixtures.read(new File(root, "build/floating-tuple/" + stage + "-core/FloatingTupleAudit.cbd").toPath());
     }
     private static Context context(boolean inlining) {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
@@ -68,7 +70,7 @@ class FloatingTupleTest {
         assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
     }
     private static Map<String, Object> binding(List<Map<String, Object>> bindings, String name) {
-        var matches = bindings.stream().filter(binding -> name.equals(binding.get("name"))).toList();
+        var matches = bindings.stream().filter(binding -> id(name).equals(binding.get("id"))).toList();
         assertEquals(1, matches.size()); return matches.getFirst();
     }
     private TupleShape shape(Language language, String name) throws Exception {
@@ -87,7 +89,7 @@ class FloatingTupleTest {
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) withLanguage(inlining, language -> {
             for (var entry : rows.entrySet()) {
                 var name = entry.getKey(); var inputs = entry.getValue();
-                var linked = CoreModules.reachable(module(stage), name);
+                var linked = CoreModules.reachable(module(stage), id(name));
                 var bindings = objects(linked.get("bindings"));
                 var program = program(language, backend, linked);
                 var target = program.entryTarget((String) binding(bindings, name).get("id"));
@@ -117,7 +119,7 @@ class FloatingTupleTest {
     @Test void compiledResidualProducerPreservesNativeIeeeBits() throws Exception {
         var rows = Files.readAllLines(new File(root, "build/floating-tuple/bits.tsv").toPath()).stream().map(line -> line.split("\t")).toList();
         for (var backend : list("ast", "bytecode")) withLanguage(false, language -> {
-            var linked = CoreModules.reachable(module(), "ieeePair");
+            var linked = CoreModules.reachable(module(), id("ieeePair"));
             var program = program(language, backend, linked);
             var target = program.entryTarget((String) binding(objects(linked.get("bindings")), "ieeePair").get("id"));
             var shape = shape(language, "ieeePair");
@@ -187,13 +189,13 @@ class FloatingTupleTest {
     @Test void floatingTupleInputsKeepTheirExactHostAggregateShape() throws Exception {
         withLanguage(true, language -> {
             for (var backend : list("ast", "bytecode")) {
-                var p = program(language, backend, CoreModules.reachable(module(), "floatingTupleArgument"));
-                var input = ((GuestRoot) p.entryTarget("floatingTupleArgument").getRootNode()).getInputLayout();
+                var p = program(language, backend, CoreModules.reachable(module(), id("floatingTupleArgument")));
+                var input = ((GuestRoot) p.entryTarget(id("floatingTupleArgument")).getRootNode()).getInputLayout();
                 assertNotNull(input); assertTrue(input.getRequiresTyped());
                 assertEquals(1, input.getLogicalArity()); assertEquals(2, input.getPhysicalArity());
                 assertEquals(list(CoreKind.FLOAT, CoreKind.DOUBLE), Arrays.stream(input.getPhysicalProofs()).map(CoreRepresentation::getKind).toList());
                 // Scalar host values cannot stand in for the exact logical guest tuple.
-                assertThrows(RuntimeFault.class, () -> Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue("floatingTupleArgument"), new Object[]{0L}}));
+                assertThrows(RuntimeFault.class, () -> Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue(id("floatingTupleArgument")), new Object[]{0L}}));
                 released(language);
             }
         });
@@ -202,12 +204,17 @@ class FloatingTupleTest {
         withLanguage(true, language -> {
             for (var backend : list("ast", "bytecode")) {
                 var module = module();
-                var worker = binding(objects(module.get("bindings")), "$wcomplexFloat");
+                var sourceCase = expression(expression(binding(objects(module.get("bindings")), "complexFloatCase").get("expr")).get(2));
+                assertEquals("case", sourceCase.getFirst());
+                var producerCall = expression(sourceCase.get(1)); assertEquals("app", producerCall.getFirst());
+                var producer = expression(producerCall.get(1)); assertEquals("var", producer.getFirst());
+                var workers = objects(module.get("bindings")).stream().filter(value -> producer.get(1).equals(value.get("id"))).toList();
+                assertEquals(1, workers.size()); var worker = workers.getFirst();
                 var proof = object(object(expression(worker.get("expr")).get(3)).get("resultRep"));
                 var components = expression(proof.get("components"));
                 components.set(0, map("kind", "unknown", "primReps", list("FloatRep"), "evaluated", true,
                     "aggregate", "unboxed-tuple", "components", list(components.get(0))));
-                assertThrows(RuntimeFault.class, () -> program(language, backend, CoreModules.reachable(module, "complexFloatCase")));
+                assertThrows(RuntimeFault.class, () -> program(language, backend, CoreModules.reachable(module, id("complexFloatCase"))));
             }
         });
     }
@@ -223,7 +230,7 @@ class FloatingTupleTest {
                 forward.set(2, list("case", forward.get(2), binder,
                     list(list("default", null, list(), list("var", binder, map("rep", proof)))),
                     map("rep", proof, "binder", map("id", binder, "rep", proof))));
-                var linked = CoreModules.reachable(module, "mixedCase");
+                var linked = CoreModules.reachable(module, id("mixedCase"));
                 var program = program(language, backend, linked);
                 var target = program.entryTarget((String) binding(bindings, "mixedCase").get("id"));
                 for (long input : new long[]{-7L, 0L, 7L}) assertEquals(20L * input - 23, Calls.target(target, new Object[]{0L, input}));

@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class EmptyJoinInputTest {
+    private static String id(String name) { return "main:EmptyJoinInputAudit." + name; }
     private static List<Object> list(Object... values) { return Arrays.asList(values); }
     private static Map<String, Object> map(Object... values) {
         var result = new LinkedHashMap<String, Object>(); for (int i = 0; i < values.length; i += 2) result.put((String) values[i], values[i + 1]); return result;
@@ -71,7 +72,7 @@ class EmptyJoinInputTest {
     private void released(Language language) {
         var state = language.getHandoffState().get(); assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getResults().retainedReferences());
     }
-    private Map<String, Object> module(String stage) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/empty-join-input/" + stage + "-core/EmptyJoinInputAudit.json").toPath())); }
+    private Map<String, Object> module(String stage) throws Exception { return CoreCbdFixtures.read(new File(root, "build/empty-join-input/" + stage + "-core/EmptyJoinInputAudit.cbd").toPath()); }
     @Test void genuineEmptyJoinInputsWithInlining() throws Exception { nativeEvidence(true); }
     @Test void genuineEmptyJoinInputsAcrossResidualCalls() throws Exception { nativeEvidence(false); }
     private void nativeEvidence(boolean inlining) throws Exception {
@@ -92,8 +93,8 @@ class EmptyJoinInputTest {
             context.initialize("thc"); context.enter();
             try {
                 String name = group.getKey(); var cases = group.getValue(); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = program(language, with(CoreModules.reachable(module(stage), name), "instrument", true), backend);
-                var function = context.asValue(new EntryValue(program, name, 1)); var original = program.entryTarget(name); var host = program.hostEntryTarget(1); String label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
+                var program = program(language, with(CoreModules.reachable(module(stage), id(name)), "instrument", true), backend);
+                var function = context.asValue(new EntryValue(program, id(name), 1)); var original = program.entryTarget(id(name)); var host = program.hostEntryTarget(1); String label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                 java.util.function.Consumer<List<String>> check = row -> { assertEquals(Long.parseLong(row.get(2)), function.execute(Long.parseLong(row.get(1))).asLong(), label + "/" + row.get(1)); released(language); };
                 for (var row : cases) check.accept(row);
                 var active = activeTargets(host); assertTrue(active.size() > 1, label + " observed guest targets"); for (var target : active) if (target != host) compile(target); assertTrue(function.invokeMember("compile").asBoolean());
@@ -189,8 +190,8 @@ class EmptyJoinInputTest {
         for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) try (var context = context(false)) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var p = program(language, with(CoreModules.reachable(module(stage), "throwCase"), "instrument", true), backend);
-                java.util.function.LongFunction<Object> call = x -> Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue("throwCase"), new Object[]{x}});
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var p = program(language, with(CoreModules.reachable(module(stage), id("throwCase")), "instrument", true), backend);
+                java.util.function.LongFunction<Object> call = x -> Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue(id("throwCase")), new Object[]{x}});
                 assertEquals(108L, call.apply(7)); assertEquals(1L, p.diagnostics().get("localJoinTransfers")); assertThrows(GuestException.class, () -> call.apply(-1)); released(language);
                 assertEquals(1L, p.diagnostics().get("localJoinTransfers"), "Throwing operand must not count a transfer"); assertEquals(108L, call.apply(7)); released(language); assertEquals(2L, p.diagnostics().get("localJoinTransfers"));
             } finally { context.leave(); }

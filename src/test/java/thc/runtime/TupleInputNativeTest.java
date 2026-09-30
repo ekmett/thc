@@ -12,6 +12,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.Json;
 import thc.Language;
 import java.nio.file.Files;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Genuine GHC boundaries, including actual PAP and overapplication in both exports. */
 @SuppressWarnings("unchecked")
 class TupleInputNativeTest {
+    private static String id(String name) { return "main:TupleInputAudit." + name; }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final Path folder = root.resolve("build/tuple-input");
     @BeforeEach void currentEvidence() throws Exception {
@@ -97,17 +99,17 @@ class TupleInputNativeTest {
         int total = 0; for (var cases : rows.values()) total += cases.size();
         assertEquals(arity == 1 ? 139 : 7, total); assertEquals(arity == 1 ? 14 : 1, rows.size());
         for (var stage : List.of("pre", "post")) {
-            var module = (Map<String, Object>) Json.parse(Files.readString(folder.resolve(stage + "-core/TupleInputAudit.json")));
+            var module = CoreCbdFixtures.read(folder.resolve(stage + "-core/TupleInputAudit.cbd"));
             for (var rowGroup : rows.entrySet()) for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
                 var name = rowGroup.getKey(); var cases = rowGroup.getValue();
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var linked = new LinkedHashMap<>(CoreModules.reachable(module, name)); linked.put("instrument", true);
-                    var retainedPath = name.equals("stateCase") ? new ArrayCoreEvidence(module, name).loweredStateFunctionPath("consumeState", name, List.of(2)) : null;
+                    var linked = new LinkedHashMap<>(CoreModules.reachable(module, id(name))); linked.put("instrument", true);
+                    var retainedPath = name.equals("stateCase") ? new ArrayCoreEvidence(module, id(name)).loweredStateFunctionPath(id("consumeState"), id(name), List.of(2)) : null;
                     long expectedEntries = retainedPath == null ? entries.get(name) : retainedPath.size();
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                    var host = program.hostEntryTarget(arity); var original = program.entryTarget(name); var closure = program.entryValue(name);
+                    var host = program.hostEntryTarget(arity); var original = program.entryTarget(id(name)); var closure = program.entryValue(id(name));
                     var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                     for (var row : cases) { assertEquals(Long.parseLong(row[row.length - 1]), invoke(row, arity, host, closure), label + "/interpreted/" + Arrays.asList(row)); released(language, label); }
                     var active = targets(host); assertTrue(active.size() > 1, label + " missing observed guest call target");
@@ -135,14 +137,14 @@ class TupleInputNativeTest {
             }
         }
     }
-    private static Object call(ExecutableProgram program, long x) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("effectCase"), new Object[]{x}}); }
+    private static Object call(ExecutableProgram program, long x) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(id("effectCase")), new Object[]{x}}); }
     @Test void nativeZeroWidthFailurePrecedesInputPublication() throws Exception {
         for (var stage : List.of("pre", "post")) for (var backend : List.of("ast", "bytecode")) try (var context = context(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var module = (Map<String, Object>) Json.parse(Files.readString(folder.resolve(stage + "-core/TupleInputAudit.json")));
-                var linked = CoreModules.reachable(module, "effectCase");
+                var module = CoreCbdFixtures.read(folder.resolve(stage + "-core/TupleInputAudit.cbd"));
+                var linked = CoreModules.reachable(module, id("effectCase"));
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                 assertEquals(26L, call(program, 7L)); assertThrows(GuestException.class, () -> call(program, -1L)); released(language, stage + "/" + backend + "/throw");
                 assertEquals(26L, call(program, 7L)); released(language, stage + "/" + backend + "/recovery");

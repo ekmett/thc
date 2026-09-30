@@ -11,6 +11,7 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.EntryValue;
 import thc.Json;
 import thc.Language;
@@ -29,10 +30,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class EmptyTupleInputNativeTest {
+    private static String id(String name) { return "main:EmptyTupleInputAudit." + name; }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final Path folder = root.resolve("build/empty-tuple-input");
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(folder.resolve(stage + "-core/EmptyTupleInputAudit.json")));
+        return CoreCbdFixtures.read(folder.resolve(stage + "-core/EmptyTupleInputAudit.cbd"));
     }
     @BeforeEach void currentEvidence() throws Exception {
         var evidence = (Map<String, Object>) Json.parse(Files.readString(folder.resolve("provenance.json")));
@@ -86,13 +88,13 @@ class EmptyTupleInputNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var linked = new LinkedHashMap<>(CoreModules.reachable(module(stage), name)); linked.put("instrument", true);
+                var linked = new LinkedHashMap<>(CoreModules.reachable(module(stage), id(name))); linked.put("instrument", true);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                var host = program.hostEntryTarget(arity); var function = context.asValue(new EntryValue(program, name, arity));
+                var host = program.hostEntryTarget(arity); var function = context.asValue(new EntryValue(program, id(name), arity));
                 var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                 for (var row : cases) check(row, arity, function, language, label);
                 assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
-                var original = program.entryTarget(name); var active = activeTargets(host, original);
+                var original = program.entryTarget(id(name)); var active = activeTargets(host, original);
                 for (var row : cases.reversed()) {
                     long before = (Long) program.diagnostics().get("compiledEntries");
                     check(row, arity, function, language, label);
@@ -105,13 +107,13 @@ class EmptyTupleInputNativeTest {
             } finally { context.leave(); }
         }
     }
-    private static Object call(ExecutableProgram program, String name, long x) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(name), new Object[]{x}}); }
+    private static Object call(ExecutableProgram program, String name, long x) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(id(name)), new Object[]{x}}); }
     @Test void nativeEmptyProducerFailurePrecedesDeadFormalOrPapAndLeavesNoLoans() throws Exception {
         for (var stage : List.of("pre", "post")) for (var name : List.of("effectCase", "effectPapCase")) for (var backend : List.of("ast", "bytecode")) try (var context = context(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var linked = CoreModules.reachable(module(stage), name);
+                var linked = CoreModules.reachable(module(stage), id(name));
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                 var good = call(program, name, 7L);
                 assertThrows(GuestException.class, () -> call(program, name, -1L)); released(language);
