@@ -43,8 +43,8 @@ class ScalarLexicalProofTest {
     @Test void tupleAndScalarArithmeticRespectIntegralCarrierWidths() throws Exception {
         visit((language, backend) -> {
             for (var rep : list("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")) {
-                var tupleModule = object(Json.parse(Files.readString(root.resolve("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json"))));
-                var reached = CoreModules.reachable(tupleModule, "quotRemInt", false);
+                var tupleModule = object(thc.CoreCbdFixtures.read(root.resolve("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd")));
+                var reached = CoreModules.reachable(tupleModule, "main:TupleArithmeticAudit.quotRemInt", false);
                 var bindings = objects(reached.get("bindings")); assertEquals(1, bindings.size());
                 var lambda = expression(bindings.getFirst().get("expr"));
                 objects(lambda.get(1)).getFirst().put("rep", proof(rep));
@@ -60,7 +60,7 @@ class ScalarLexicalProofTest {
                     long[] expected = {-2L, -3L};
                     for (int field = 0; field < expected.length; field++)
                         assertEquals(expected[field], Calls.target(tuple.hostEntryTarget(3),
-                            new Object[]{tuple.entryValue("quotRemInt"), new Object[]{-13L, 5L, (long) field}}), backend + "/" + rep + "/" + field);
+                            new Object[]{tuple.entryValue("main:TupleArithmeticAudit.quotRemInt"), new Object[]{-13L, 5L, (long) field}}), backend + "/" + rep + "/" + field);
                     assertThrows(RuntimeFault.class, () -> program(language, module(proof(rep), proof("Int8Rep")), backend),
                         backend + "/" + rep + " cannot replace an Int scalar input");
                 }

@@ -96,7 +96,7 @@ prepareIntegerCompletion root = do
     exported <- command (stage ++ "-export") [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> obj)]
       "bin/export-core.sh" (options ++ [source])
     audited <- command (stage ++ "-audit") [] "python3" (["bin/audit-core.py"] ++
-      concatMap (\n -> ["--entry",n]) names ++ ["--output",dir </> stage ++ "-audit.json",core </> "IntegerCompletionAudit.json"])
+      concatMap (\n -> ["--entry", "main:IntegerCompletionAudit." ++ n]) names ++ ["--output",dir </> stage ++ "-audit.json",core </> "IntegerCompletionAudit.cbd"])
     pure [exported,audited]
   let native = dir </> "native"; nativeSource = dir </> "NativeIntegerCompletion.hs"
       executable = native </> "integer-completion-oracle"; input = dir </> "requests.tsv"
@@ -126,7 +126,7 @@ prepareIntegerCompletion root = do
         ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       artifacts = [input,nativeSource,executable,dir </> "oracle.tsv"] ++
-        [dir </> stage ++ suffix | stage <- ["pre","post"], suffix <- ["-audit.json","-core/IntegerCompletionAudit.json"]] ++
+        [dir </> stage ++ suffix | stage <- ["pre","post"], suffix <- ["-audit.json","-core/IntegerCompletionAudit.cbd"]] ++
         concatMap commandArtifacts ([version,info,built,oracle] ++ concat stages)
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

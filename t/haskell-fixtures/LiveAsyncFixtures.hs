@@ -45,9 +45,9 @@ prepareLiveAsync root = do
       ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [source]) ""
     forM_ entries $ \entry -> do
-      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:LiveAsyncAudit." ++ entry,
         "--output", directory </> stage </> (entry ++ "-audit.json"),
-        core </> "LiveAsyncAudit.json"] ""
+        core </> "LiveAsyncAudit.cbd"] ""
       pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
@@ -74,7 +74,7 @@ prepareLiveAsync root = do
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt", directory </> "strict-oracle.txt"] ++ [directory </> stage </> suffix |
         stage <- stages,
-        suffix <- "core/LiveAsyncAudit.json" : [entry ++ "-audit.json" | entry <- entries]]
+        suffix <- "core/LiveAsyncAudit.cbd" : [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

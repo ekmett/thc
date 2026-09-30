@@ -26,9 +26,8 @@ class WideCharAddressTest {
     private record Row(long input, long result) {}
     private Map<String, Object> source(String stage) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var file : List.of("WideCharAddressAudit.json", "THC.InterfaceClosure.json"))
-            modules.add((Map<String, Object>) Json.parse(
-                Files.readString(new File(root, "build/wide-char-address/" + stage + "/core/" + file).toPath())));
+        for (var file : List.of("WideCharAddressAudit.cbd", "THC.InterfaceClosure.cbd"))
+            modules.add(thc.CoreCbdFixtures.read(new File(root, "build/wide-char-address/" + stage + "/core/" + file).toPath()));
         return CoreModules.merge(modules);
     }
     private List<List<Object>> calls(Object value) {
@@ -112,7 +111,7 @@ class WideCharAddressTest {
             var module = source(stage);
             var uses = new ArrayList<List<Object>>();
             var actualNames = new HashSet<Object>();
-            for (var app : calls(CoreModules.reachable(module, "wideCharRoundtrip"))) {
+            for (var app : calls(CoreModules.reachable(module, "main:WideCharAddressAudit.wideCharRoundtrip"))) {
                 var head = (List<?>) app.get(1);
                 if (head.size() > 1 && names.contains(head.get(1))) {
                     uses.add(app);
@@ -169,11 +168,11 @@ class WideCharAddressTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var module = new LinkedHashMap<>(CoreModules.reachable(source(stage), "wideCharRoundtrip"));
+                            var module = new LinkedHashMap<>(CoreModules.reachable(source(stage), "main:WideCharAddressAudit.wideCharRoundtrip"));
                             module.put("instrument", true);
                             ExecutableProgram program = backend.equals("ast") ? new Program(language, module)
                                                                               : new BytecodeProgram(language, module);
-                            var entry = program.entryTarget("wideCharRoundtrip");
+                            var entry = program.entryTarget("main:WideCharAddressAudit.wideCharRoundtrip");
                             var label = stage + "/" + backend + "/" + inlining;
                             for (int i = 0; i < 3; i++)
                                 for (var row : oracle) check(row, entry, language, label);

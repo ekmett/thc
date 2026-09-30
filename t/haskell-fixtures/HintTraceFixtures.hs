@@ -42,8 +42,8 @@ prepareHintTrace root = do
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
     forM_ entries $ \entry -> do
-      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
-        "--output", directory </> stage </> entry ++ ".audit.json", core </> "HintTraceAudit.json"] ""
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:HintTraceAudit." ++ entry,
+        "--output", directory </> stage </> entry ++ ".audit.json", core </> "HintTraceAudit.cbd"] ""
       pure ()
   let native = output </> "native"
       eventlog = native </> "oracle.eventlog"
@@ -71,7 +71,7 @@ prepareHintTrace root = do
   artifactHashes <- hashes root ([directory </> "oracle.tsv", directory </> "native/oracle",
     directory </> "native/oracle.eventlog"] ++
     [directory </> stage </> suffix | stage <- stages,
-      suffix <- "core/HintTraceAudit.json" : [entry ++ ".audit.json" | entry <- entries]])
+      suffix <- "core/HintTraceAudit.cbd" : [entry ++ ".audit.json" | entry <- entries]])
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entries" .= entries, "stages" .= stages, "nativeRows" .= (10 :: Int),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]

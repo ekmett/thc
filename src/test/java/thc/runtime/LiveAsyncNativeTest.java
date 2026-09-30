@@ -41,9 +41,9 @@ public class LiveAsyncNativeTest {
             var audit = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/live-async/" + stage + "/" + entry + "-audit.json").toPath()));
             assertEquals(true, audit.get("accepted"), entry); assertEquals(List.of(), audit.get("missingGlobals"), entry);
         }
-        var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/live-async/" + stage + "/core/LiveAsyncAudit.json").toPath()));
+        var module = thc.CoreCbdFixtures.read(new File(root, "build/live-async/" + stage + "/core/LiveAsyncAudit.cbd").toPath());
         var bindings = new LinkedHashMap<Object, Map<String, Object>>();
-        for (var entry : entries) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(module, entry).get("bindings")) bindings.putIfAbsent(binding.get("id"), binding);
+        for (var entry : entries) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(module, "main:LiveAsyncAudit." + entry).get("bindings")) bindings.putIfAbsent(binding.get("id"), binding);
         var result = new LinkedHashMap<>(module); result.put("bindings", new ArrayList<>(bindings.values())); result.put("instrument", true); return result;
     }
     private void compile(RootCallTarget target) throws Exception {
@@ -92,11 +92,11 @@ public class LiveAsyncNativeTest {
                 // ThreadAsyncNativeTest exercises that loader on both backends.
                 session.program = backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module, true);
                 assertEquals(backend, session.program.diagnostics().get("backend"));
-                for (var entry : entries) if (!entry.equals("asyncPayload")) session.functions.put(entry, context.asValue(new EntryValue(session.program, entry, 1)));
+                for (var entry : entries) if (!entry.equals("asyncPayload")) session.functions.put(entry, context.asValue(new EntryValue(session.program, "main:LiveAsyncAudit." + entry, 1)));
                 return null;
             });
             var program = session.program; var state = session.state;
-            var shared = (Thunk) program.entryValue("shared"); var loop = program.entryTarget("longLoop");
+            var shared = (Thunk) program.entryValue("main:LiveAsyncAudit." + "shared"); var loop = program.entryTarget("main:LiveAsyncAudit." + "longLoop");
             // Warm every loop branch without entering the shared CAF. Drain the
             // two signals so the next run synchronizes with the actual target.
             assertEquals(1L, session.call("releaseGate")); assertEquals(9999007L, session.call("warmLoop", 9999000L));
@@ -108,21 +108,21 @@ public class LiveAsyncNativeTest {
             try {
                 assertEquals(1007L, CompletableFuture.supplyAsync(() -> session.call("takeReady")).get(10, TimeUnit.SECONDS));
                 if (running) assertEquals(1007L, CompletableFuture.supplyAsync(() -> session.call("takeRunning")).get(10, TimeUnit.SECONDS));
-                assertFalse(result.isDone(), "Interruption must target the live computation"); assertSame(loop, program.entryTarget("longLoop"));
+                assertFalse(result.isDone(), "Interruption must target the live computation"); assertSame(loop, program.entryTarget("main:LiveAsyncAudit." + "longLoop"));
                 assertEquals(true, loop.getClass().getMethod("isValidLastTier").invoke(loop), "The actual loop remains compiled before delivery");
                 var delivery = ownerWait ? session.startTarget() : first;
                 if (ownerWait) awaitBoundary(delivery.thread(), delivery.answer(), "awaitOwner");
                 var victim = delivery.thread(); var answer = delivery.answer();
-                var request = state.getThreads().send(state.getThreads().pollState(victim).getCurrent().getIdentity(), program.entryValue("asyncPayload"));
+                var request = state.getThreads().send(state.getThreads().pollState(victim).getCurrent().getIdentity(), program.entryValue("main:LiveAsyncAudit." + "asyncPayload"));
                 assertEquals(-1L, answer.get(15, TimeUnit.SECONDS), "Original catch# must handle delivery");
                 victim.join(5000); assertFalse(victim.isAlive()); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
                 if (running) assertTrue(request.compiledCapture, "The executing compiled loop must claim the exception");
-                assertSame(loop, program.entryTarget("longLoop"));
+                assertSame(loop, program.entryTarget("main:LiveAsyncAudit." + "longLoop"));
                 assertEquals(ownerWait ? 1 : 5, shared.getState(), "An interrupted waiter must not change the other thread's ownership");
                 assertEquals(1L, session.call("prefixCount"));
                 if (repeat) {
                     var retry = session.startTarget(); awaitBoundary(retry.thread(), retry.answer(), "await");
-                    var second = state.getThreads().send(state.getThreads().pollState(retry.thread()).getCurrent().getIdentity(), program.entryValue("asyncPayload"));
+                    var second = state.getThreads().send(state.getThreads().pollState(retry.thread()).getCurrent().getIdentity(), program.entryValue("main:LiveAsyncAudit." + "asyncPayload"));
                     assertEquals(-1L, retry.answer().get(15, TimeUnit.SECONDS)); retry.thread().join(5000); assertFalse(retry.thread().isAlive());
                     assertEquals(AsyncRequestState.ACKNOWLEDGED, second.getState()); assertEquals(5, shared.getState()); assertEquals(1L, session.call("prefixCount"));
                 }
@@ -131,7 +131,7 @@ public class LiveAsyncNativeTest {
                 // This call uses a different Java thread from the original owner.
                 assertEquals(10000008L, session.call("forceShared", 1)); assertEquals(2, shared.getState());
                 assertEquals(1L, session.call("prefixCount"), "Resumption must not replay the effectful prefix");
-                assertSame(loop, program.entryTarget("longLoop"));
+                assertSame(loop, program.entryTarget("main:LiveAsyncAudit." + "longLoop"));
                 assertNull(shared.getTarget()); assertNull(shared.getEnvironment());
                 assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
             } finally {
