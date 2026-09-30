@@ -933,12 +933,22 @@ class FixturePreparationTest(unittest.TestCase):
             source = (project / '.github/workflows' / workflow).read_text()
             self.assertIn('install --yes clang-18 llvm-18 libgmp-dev', source)
             self.assertIn('echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"', source)
-            self.assertIn('for tool in clang llc opt; do', source)
+            tools = 'clang llc opt llvm-nm llvm-link llvm-objcopy' if workflow == 'build.yml' else 'clang llc opt'
+            self.assertIn(f'for tool in {tools}; do', source)
         policy = json.loads((project / '.github/scripts/fast-tests.json').read_text())
         for source in ('t/fixtures/compiler/OriginalGmpAudit.hs',
                        't/fixtures/compiler/OriginalGmpNative.hs',
                        't/haskell-fixtures/OriginalGmpFixtures.hs', 't/haskell-fixtures/Main.hs'):
             self.assertIn('thc.runtime.OriginalGmpTest', policy['owners'][source]['junit'])
+
+    def test_build_installs_matching_llvm_tools_on_macos(self):
+        project = Path(__file__).resolve().parents[2]
+        source = (project / '.github/workflows/build.yml').read_text()
+        self.assertIn("if: runner.os == 'macOS'", source)
+        self.assertIn('brew install llvm@18', source)
+        self.assertIn('echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"', source)
+        self.assertIn('for tool in clang llc opt llvm-nm llvm-link llvm-objcopy; do', source)
+        self.assertNotIn("- name: Check LLVM backend tools\n        if:", source)
 
     def gmp_preparation(self):
         project = Path(__file__).resolve().parents[2]

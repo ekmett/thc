@@ -107,10 +107,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
           echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
-      - name: Check Linux LLVM backend tools
-        if: runner.os == 'Linux'
+      - name: Install macOS LLVM build dependencies
+        if: runner.os == 'macOS'
         run: |
-          for tool in clang llc opt; do
+          brew install llvm@18
+          echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
+      - name: Check LLVM backend tools
+        run: |
+          for tool in clang llc opt llvm-nm llvm-link llvm-objcopy; do
             command -v "$tool"
             major=$("$tool" --version | sed -nE 's/.*version ([0-9]+).*/\1/p' | sed -n '1p')
             test "$major" = 18
