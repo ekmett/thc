@@ -50,7 +50,7 @@ import System.Directory (doesFileExist, doesDirectoryExist, listDirectory, canon
   createDirectoryIfMissing, removeFile, renameFile)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeFileName, takeDirectory, isAbsolute, takeExtension,
+import System.FilePath ((</>), takeDirectory, takeFileName, isAbsolute, takeExtension,
   replaceExtension, splitDirectories)
 import System.IO (hClose, openTempFile)
 import System.Process (CreateProcess(..), StdStream(..), proc, readProcessWithExitCode,
@@ -63,10 +63,11 @@ import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
 -- Capture external native libraries from the actual selected registration
 -- closure. Haskell archives (and therefore the native GHC RTS) are not inputs:
 -- those bodies execute as Core, while captured C objects execute in Sulong.
+-- The caller supplies its selected package tool (including an installed view's
+-- wrapper), not a companion inferred from the compiler executable's directory.
 nativeLinkInputs :: FilePath -> FilePath -> FilePath -> [FilePath] -> Maybe String -> [String] -> IO [String]
-nativeLinkInputs compiler libdir root publishedDatabases owner arguments = do
-  let ghcPkg = takeDirectory compiler </> "ghc-pkg"
-      absolute path = if isAbsolute path then path else root </> path
+nativeLinkInputs ghcPkg libdir root publishedDatabases owner arguments = do
+  let absolute path = if isAbsolute path then path else root </> path
       database option = case stripPrefix "--package-db=" option of
         Nothing -> pure [option]
         Just path -> do
@@ -130,11 +131,10 @@ nativeLinkInputs compiler libdir root publishedDatabases owner arguments = do
 -- RTS. The native linker extracts only the rooted archive members; no whole
 -- Haskell component is loaded alongside its Core implementation.
 nativeSymbolArchives :: FilePath -> FilePath -> FilePath -> String -> [String] -> [(String,Bool)] -> IO [(FilePath,[(String,Bool)])]
-nativeSymbolArchives compiler libdir root owner arguments symbols
+nativeSymbolArchives ghcPkg libdir root owner arguments symbols
   | null symbols = pure []
   | otherwise = do
-      let ghcPkg = takeDirectory compiler </> "ghc-pkg"
-          absolute path = if isAbsolute path then path else root </> path
+      let absolute path = if isAbsolute path then path else root </> path
           database option = if "--package-db=" `isPrefixOf` option
             then "--package-db=" ++ absolute (drop 13 option) else option
           options = ["--global-package-db=" ++ libdir </> "package.conf.d"] ++ map database (nativePackageOptions arguments)

@@ -20,22 +20,75 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
-import System.Directory (findExecutable, getCurrentDirectory, createDirectory, removeFile)
+import System.Directory (findExecutable, getCurrentDirectory, createDirectory, removeFile,
+  makeAbsolute, withCurrentDirectory, createFileLink)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.IO.Error (tryIOError)
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath ((</>))
 import System.Process (readProcess)
+import qualified System.Info as Host
 import Test.HUnit
 import THC.Driver.PackageNative
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (selectNativePieces, nativeSymbolArchives)
+import THC.Driver.Installed (installedContext, InstalledContext(..))
 import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestCase $ withScratch $ \root -> do
+  [ TestLabel "selected tools survive a package cwd" $ TestCase $ do
+      context <- installedContext "ghc" "ghc-pkg" "unused" [] Null
+      identifier <- readProcess "ghc-pkg" ["field","ghc-internal","id","--simple-output"] ""
+      unit <- case words identifier of [value] -> pure value; _ -> fail "expected one ghc-internal unit"
+      withScratch $ \root -> withCurrentDirectory root $ do
+        archives <- nativeSymbolArchives (installedPackageTool context) (installedLibdir context) root
+          unit [] [("__hscore_bufsiz",True)]
+        assertBool "original registered C archive remains selected" (not (null archives))
+      ghc <- findExecutable "ghc" >>= maybe (fail "ghc missing") makeAbsolute
+      pkg <- findExecutable "ghc-pkg" >>= maybe (fail "ghc-pkg missing") makeAbsolute
+      assertEqual "stored selected compiler is absolute" ghc (installedGhc context)
+      assertEqual "stored selected package tool is absolute" pkg (installedPackageTool context)
+  , TestLabel "explicit separate versioned wrappers retain selection" $ TestCase $
+      if Host.os == "mingw32" then pure () else withScratch $ \root -> do
+        ghc <- findExecutable "ghc" >>= maybe (fail "ghc missing") makeAbsolute
+        pkg <- findExecutable "ghc-pkg" >>= maybe (fail "ghc-pkg missing") makeAbsolute
+        createDirectory (root </> "compiler")
+        createDirectory (root </> "packages")
+        let wrapper = root </> "compiler/wrapper"
+            selected = root </> "compiler/ghc-9.14.1"
+            packageTool = root </> "packages/ghc-pkg-9.14.1"
+            wrong = root </> "packages/wrong-pkg"
+        writeExecutable wrapper ("#!/bin/sh\nexec " ++ show ghc ++ " \"$@\"\n")
+        createFileLink wrapper selected
+        writeExecutable packageTool ("#!/bin/sh\nexec " ++ show pkg ++ " \"$@\"\n")
+        writeExecutable wrong ("#!/bin/sh\nif [ \"$1\" = --version ]; then exec " ++ show pkg ++
+          " \"$@\"; fi\nprintf '/different/global/database\\n'\n")
+        context <- withCurrentDirectory root $
+          installedContext "compiler/ghc-9.14.1" "packages/ghc-pkg-9.14.1" "unused" [] Null
+        assertEqual "symlink selection is not dereferenced" selected (installedGhc context)
+        assertEqual "separate package selection is retained" packageTool (installedPackageTool context)
+        withCurrentDirectory (root </> "packages") $ do
+          assertEqual "compiler remains callable after cwd change" "9.14.1\n" =<<
+            readProcess (installedGhc context) ["--numeric-version"] ""
+          _ <- readProcess (installedPackageTool context) ["--version"] ""
+          identifier <- readProcess (installedPackageTool context)
+            ["field","ghc-internal","id","--simple-output"] ""
+          unit <- case words identifier of [value] -> pure value; _ -> fail "expected one ghc-internal unit"
+          archives <- nativeSymbolArchives (installedPackageTool context) (installedLibdir context) root
+            unit [] [("__hscore_bufsiz",True)]
+          assertBool "separate versioned package tool selects original native archive" (not (null archives))
+        rejected <- tryIOError (installedContext selected wrong "unused" [] Null)
+        assertBool "mismatched selected pair is rejected" (isLeft rejected)
+        assertBool "mismatch rejects the database identity, not executable lookup"
+          (case rejected of Left failure -> "global databases differ" `isInfixOf` show failure; Right _ -> False)
+        forM_ ["absent-tool", root </> "absent-tool"] $ \missing -> do
+          badCompiler <- tryIOError (installedContext missing packageTool "unused" [] Null)
+          badPackage <- tryIOError (installedContext selected missing "unused" [] Null)
+          assertBool "invalid compiler does not fall back" (isLeft badCompiler)
+          assertBool "invalid package tool does not fall back" (isLeft badPackage)
+  , TestCase $ withScratch $ \root -> do
       let adjacent = root </> "clang/llvm-objcopy"
           onPath = root </> "path/llvm-objcopy"
       createDirectory (root </> "clang")
@@ -73,8 +126,8 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
         [directory] -> pure directory
         _ -> fail "GHC did not report one libdir"
-      let ghcPkg = takeDirectory compiler </> "ghc-pkg"
-          unitId package = readProcess ghcPkg ["field",package,"id","--simple-output"] "" >>= \output ->
+      ghcPkg <- findExecutable "ghc-pkg" >>= maybe (fail "ghc-pkg missing") makeAbsolute
+      let unitId package = readProcess ghcPkg ["field",package,"id","--simple-output"] "" >>= \output ->
             case words output of
               [identifier] -> pure identifier
               _ -> fail ("GHC did not report one installed unit for " ++ package)
@@ -83,13 +136,13 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       if compilerUnit /= "ghc-9.14.1-inplace"
         then putStrLn ("SKIP compiler native-state archive regression: requires ghc-9.14.1-inplace; selected " ++ compilerUnit)
         else do
-          compilerArchives <- nativeSymbolArchives compiler libdir root compilerUnit []
+          compilerArchives <- nativeSymbolArchives ghcPkg libdir root compilerUnit []
             [("keepCAFsForGHCi",True),("setHeapSize",True),("enableTimingStats",True),
              ("ghc_unique_counter64",False),("ghc_unique_inc",False)]
           assertEqual "compiler process-state objects must not load beside context-owned RTS services"
             [] compilerArchives
       internalUnit <- unitId "ghc-internal"
-      ordinaryArchives <- nativeSymbolArchives compiler libdir root internalUnit [] [("__hscore_bufsiz",True)]
+      ordinaryArchives <- nativeSymbolArchives ghcPkg libdir root internalUnit [] [("__hscore_bufsiz",True)]
       assertBool "ordinary registered C objects remain native providers" (not (null ordinaryArchives))
   , TestCase $ do
       let rep kind prim = object ["kind" .= (kind::String), "primReps" .= (prim::[String]), "evaluated" .= False]

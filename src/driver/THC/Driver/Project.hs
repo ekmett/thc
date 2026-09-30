@@ -48,7 +48,7 @@ import qualified System.Directory as Directory
 import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories,
-                        takeDirectory, takeExtension, joinPath, replaceExtension)
+                        takeDirectory, takeFileName, takeExtension, joinPath, replaceExtension)
 import System.IO (IOMode(ReadMode), hClose, hGetContents, hPutStrLn,
                   hSetEncoding, openTempFile, stderr, utf8, withBinaryFile, withFile)
 import System.IO.Error (tryIOError)
@@ -138,7 +138,11 @@ runWindowsProject :: RunOptions -> FilePath -> IO ()
 runWindowsProject opts working = do
   require (not (null (runThcRoot opts))) "run requires --thc-root DIR"
   let flags = runPlan opts
-  compiler <- maybe (findExecutable "ghc" >>= maybe (fail "GHC compiler not found") pure) pure (ghcPath flags) >>= canonicalizePath
+  compiler <- case ghcPath flags of
+    Just path -> do
+      requestedCompiler <- if takeFileName path == path then pure path else makeAbsolute path
+      findExecutable requestedCompiler >>= maybe (fail "selected GHC compiler not found") makeAbsolute
+    Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") makeAbsolute
   packageTool <- selectedPackageTool compiler (ghcPkgPath flags)
   output <- makeAbsolute (distDirectory flags)
   let native = output </> "selection"
@@ -322,8 +326,10 @@ buildProject action opts target = do
   output <- canonicalizePath requestedOutput
   let native = output </> "native"
   compiler <- case ghcPath flags of
-    Just path -> canonicalizePath path
-    Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") canonicalizePath
+    Just path -> do
+      requestedCompiler <- if takeFileName path == path then pure path else makeAbsolute path
+      findExecutable requestedCompiler >>= maybe (fail "selected GHC compiler not found") makeAbsolute
+    Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") makeAbsolute
   packageTool <- Just <$> selectedPackageTool compiler (ghcPkgPath flags)
   source <- traverse canonicalizePath (runGhcSource opts)
   withProjectLock output $
@@ -358,14 +364,15 @@ selectedPackageTool :: FilePath -> Maybe FilePath -> IO FilePath
 selectedPackageTool ghc requested = do
   inherited <- lookupEnv "GHC_PKG"
   path <- case requested `orElse` inherited of
-    Just value -> if isAbsolute value then pure value else findExecutable value >>=
-      maybe (fail "selected ghc-pkg executable not found") pure
+    Just value -> do
+      requestedPkg <- if takeFileName value == value then pure value else makeAbsolute value
+      findExecutable requestedPkg >>= maybe (fail "selected ghc-pkg executable not found") pure
     Nothing -> do
       let suffix = if Host.os == "mingw32" then ".exe" else ""
           candidates = [takeDirectory ghc </> name ++ suffix | name <- ["ghc-pkg-9.14.1", "ghc-pkg"]]
       available <- filterM doesFileExist candidates
       case available of value:_ -> pure value; [] -> fail "no ghc-pkg beside selected GHC"
-  packageTool <- canonicalizePath path
+  packageTool <- makeAbsolute path
   compilerVersion <- output ghc ["--numeric-version"]
   packageVersion <- output packageTool ["--version"]
   require (compilerVersion == "9.14.1" && packageVersion == "GHC package manager version 9.14.1")
@@ -947,7 +954,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
           let path = temporary </> "core" </> show index <.> "cbd"
           BS.writeFile path bytes
           pure (name, path)
-        linked <- linkInstalledNative (installedGhc context) (installedLibdir context)
+        linked <- linkInstalledNative (installedGhc context) (installedPackageTool context) (installedLibdir context)
           nativeArguments nativeDirectory unit staged
         forM_ configuredInputs $ \input -> do
           path <- field input "path"
@@ -1748,7 +1755,8 @@ captureGlobalUnits context project target planned requested missing validateInpu
         bundle <- case ready of
           Just value -> pure value
           Nothing -> do
-            packGlobalBundle store dist capture byId unit buildKey exportKey path
+            selectedPkg <- maybe (fail "selected native ghc-pkg is missing") pure (contextGhcPkg context)
+            packGlobalBundle selectedPkg store dist capture byId unit buildKey exportKey path
             readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
               >>= maybe (fail "fresh Core bundle publication was not readable") pure
         names <- mapM (`field` "name") (bundleModules bundle)
@@ -1764,8 +1772,8 @@ captureGlobalUnits context project target planned requested missing validateInpu
 -- | Publish exactly one already captured store unit using its genuine Cabal
 -- plan, interfaces/Core and native products. No package solve, compiler replay
 -- or acquisition of unrelated units is performed here. The output must be new.
-publishCapturedStoreUnit :: FilePath -> FilePath -> FilePath -> FilePath -> String -> FilePath -> IO Bundle
-publishCapturedStoreUnit planPath store dist capture identifier destination = do
+publishCapturedStoreUnit :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> FilePath -> IO Bundle
+publishCapturedStoreUnit packageTool planPath store dist capture identifier destination = do
   selectedStore <- makeAbsolute store
   selectedDist <- makeAbsolute dist
   selectedCapture <- makeAbsolute capture
@@ -1788,14 +1796,14 @@ publishCapturedStoreUnit planPath store dist capture identifier destination = do
         ("thc-captured-store-native-build-v1" :: String,compiler,abi,platform,map sourceIdentity closure)))
       exportKey = shaHex (BL.toStrict (encode (buildKey,producer)))
   createDirectoryIfMissing True (takeDirectory destination)
-  packGlobalBundle selectedStore selectedDist selectedCapture planned unit buildKey exportKey selectedDestination
+  packGlobalBundle packageTool selectedStore selectedDist selectedCapture planned unit buildKey exportKey selectedDestination
   result <- readGlobalBundle True selectedDestination identifier (unitDepends unit) buildKey exportKey
   maybe (fail "new captured unit failed its ordinary bundle validation") pure result
 
-packGlobalBundle :: FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundle store dist capture planned unit buildKey exportKey destination =
+packGlobalBundle :: FilePath -> FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundle packageTool store dist capture planned unit buildKey exportKey destination =
   bracket temporary removePathForcibly $ \staging ->
-    packGlobalBundleStaged staging store dist capture planned unit buildKey exportKey destination
+    packGlobalBundleStaged packageTool staging store dist capture planned unit buildKey exportKey destination
   where
     temporary = do
       (path, handle) <- openTempFile (takeDirectory destination) "core-link-"
@@ -1806,8 +1814,8 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
 
 -- Retained captures are immutable inputs. Native linkage may amend only the
 -- private copies made here, including copied dependency modules.
-packGlobalBundleStaged :: FilePath -> FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundleStaged staging store dist capture planned unit buildKey exportKey destination = do
+packGlobalBundleStaged :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundleStaged packageTool staging store dist capture planned unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
   exported <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles core
   empty <- if not (null exported) then pure [] else do
@@ -1869,7 +1877,7 @@ packGlobalBundleStaged staging store dist capture planned unit buildKey exportKe
       bodies <- if owner == unitId unit then pure checked else if not nativeReceipt then pure [] else do
         paths <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles (sourceDirectory </> "core")
         stageModules owner paths
-      (prepared,component) <- finishPackageNativeWithDependencies capturedNative direct (storeDatabases ++ inplaceDatabases)
+      (prepared,component) <- finishPackageNativeWithDependencies packageTool capturedNative direct (storeDatabases ++ inplaceDatabases)
         pieces sourceDirectory (takeDirectory destination </> "native-components" </> owner) owner Nothing bodies
       let available = maybe forwarded (\value -> [([],value)]) component
       pure (Map.insert owner available providers,if owner == unitId unit then prepared else selected)
@@ -2111,7 +2119,8 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
           value <- readCoreMetadata path
           name <- field value "module"
           pure (name,path)
-        sortOn fst <$> finishPackageNative (contextNative context </> "cache/thc/native-pieces-v1") staging (unitId unit) nativeObjects updated
+        packageTool <- maybe (fail "selected native ghc-pkg is missing") pure (contextGhcPkg context)
+        sortOn fst <$> finishPackageNative packageTool (contextNative context </> "cache/thc/native-pieces-v1") staging (unitId unit) nativeObjects updated
       (Just recipe,Nothing,Just selectedHelper) -> do
         retained <- scalarInterfaceModules selectedHelper replayed unit objects expected
         linkScalarBitcode recipe buildKey retained

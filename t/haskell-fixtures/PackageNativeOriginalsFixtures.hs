@@ -123,13 +123,13 @@ preparePackageNativeOriginals root = do
   modules <- stage (capture </> unit </> "core") linkedDirectory
   unless (sort (map fst modules) == ["Data.Digest.Adler32.cbd","Data.Digest.CRC32.cbd","Data.Digest.CRC32C.cbd"])
     (fail "original digest retained module inventory differs")
-  linked <- finishPackageNative pieces (capture </> unit) unit Nothing modules
+  linked <- finishPackageNative ghcPkg pieces (capture </> unit) unit Nothing modules
   erfModules <- stage (capture </> erfUnit </> "core") erfLinkedDirectory
   unless (map fst erfModules == ["Data.Number.Erf.cbd"]) (fail "original erf retained module inventory differs")
-  erfLinked <- finishPackageNative pieces (capture </> erfUnit) erfUnit Nothing erfModules
+  erfLinked <- finishPackageNative ghcPkg pieces (capture </> erfUnit) erfUnit Nothing erfModules
   primitiveModules <- stage (capture </> primitiveUnit </> "core") primitiveLinkedDirectory
   unless (length primitiveModules == 14) (fail "original primitive retained module inventory differs")
-  primitiveLinked <- finishPackageNative pieces (capture </> primitiveUnit) primitiveUnit Nothing primitiveModules
+  primitiveLinked <- finishPackageNative ghcPkg pieces (capture </> primitiveUnit) primitiveUnit Nothing primitiveModules
   compiled <- execute "digest-native-build" [] ghc
     ["-O1","-package-db",native </> "packagedb/ghc-9.14.1","-package-id",unit,
      "t/fixtures/compiler/OriginalDigestNative.hs","-outputdir",output </> "oracle-objects",

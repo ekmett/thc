@@ -51,6 +51,8 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       withScratch $ \root -> withCurrentDirectory root $ do
         ghc <- maybe "ghc" id <$> lookupEnv "GHC"
         compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
+        selectedPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+        packageTool <- maybe (fail "ghc-pkg is required") makeAbsolute =<< findExecutable selectedPkg
         ar <- maybe "ar" id <$> lookupEnv "THC_AR"
         nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
         clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
@@ -78,7 +80,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
                     "pkg-src-sha256" .= digest (Text.encodeUtf8 (Text.pack source))]
               selected <- readNativeProduct planned dependencies registration pieces
               maybe (fail "mixed archive lost its captured C member") pure selected
-            finish owner captured dependencies = finishPackageNativeWithDependencies (Just captured) dependencies []
+            finish owner captured dependencies = finishPackageNativeWithDependencies packageTool (Just captured) dependencies []
               pieces (root </> "original" </> owner) (root </> "linked" </> owner) owner Nothing []
             field name (Object fields) = maybe (fail ("missing " ++ show name)) pure (KeyMap.lookup name fields)
             field _ _ = fail "component descriptor must be an object"
@@ -192,8 +194,9 @@ tests = TestLabel "actual native compiler receipts" $ TestList
   , TestLabel "published native dependencies survive removed Cabal package DBs" $ TestCase $ withScratch $ \root -> do
       ghc <- maybe "ghc" id <$> lookupEnv "GHC"
       compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
-      let ghcPkg = takeDirectory compiler </> "ghc-pkg"
-          published = root </> "published.db"
+      selectedPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+      ghcPkg <- maybe (fail "ghc-pkg is required") makeAbsolute =<< findExecutable selectedPkg
+      let published = root </> "published.db"
           retained = root </> "retained.db"
           temporary = root </> "unpacked/dist/package.conf.inplace"
           owner = "published-native-0.1-exact"
@@ -221,7 +224,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         _ -> fail "GHC must report one library directory"
       let arguments = ["-clear-package-db", "-global-package-db", "-package-db", retained,
             "-package-db", temporary, "-package-id", owner, "-optl-Wl,--as-needed"]
-          resolve databases extra = nativeLinkInputs compiler libdir (root </> "unpacked")
+          resolve databases extra = nativeLinkInputs ghcPkg libdir (root </> "unpacked")
             databases (Just owner) (arguments ++ extra)
       actual <- resolve [published] []
       assertEqual "published owner and retained dependency keep native link order"

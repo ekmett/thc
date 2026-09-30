@@ -392,7 +392,9 @@ staticExportsTest env = TestLabel "ordinary replay retains mixed static callback
     case nativeSignatures unit [core] of
       Left failure -> assertBool failure False
       Right signatures -> assertEqual "both actual C import declarations remain callable" 2 (length signatures)
-    published <- finishPackageNative pieces (capture </> unit) unit (Just [project </> "callbacks.o"])
+    selectedPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+    packageTool <- Directory.findExecutable selectedPkg >>= maybe (fail "ghc-pkg missing") Directory.makeAbsolute
+    published <- finishPackageNative packageTool pieces (capture </> unit) unit (Just [project </> "callbacks.o"])
       [("NativeExport", staged)]
       `finally` copyTree capture (scratch env </> "static-exports-capture")
     case published of

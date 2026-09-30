@@ -33,6 +33,7 @@ prepareDynamicCallbacks root = do
     (fail "Set THC_PACKAGE_NATIVE_SUPPORT to a genuine GHC/exception-runtime manifest") canonicalizePath
   copyFile support (output </> "runtime-support.json")
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
   built <- execute "helper-build" [] cabal ["build","--offline","-j2","lib:thc","exe:thc-interface"]
   located <- execute "helper-location" [] cabal ["list-bin","--offline","exe:thc-interface"]
@@ -62,7 +63,7 @@ prepareDynamicCallbacks root = do
   capturePackageNative root helper libdir ghc ["-dynamic","-odir",objects] "callback-fixture" output
   let staged = output </> "DynamicCallback.cbd"
   copyFile captured staged
-  _ <- finishPackageNative pieces output "callback-fixture" (Just [objects </> "callback.o"]) [("DynamicCallback.cbd",staged)]
+  _ <- finishPackageNative ghcPkg pieces output "callback-fixture" (Just [objects </> "callback.o"]) [("DynamicCallback.cbd",staged)]
   oracleBuilt <- execute "native-build" [] ghc
     ["--make","-O2","-fforce-recomp","-dcore-lint","-i","-it/fixtures/compiler",
      "-odir",native,"-hidir",native,"-stubdir",native,nativeSource,cSource,"-o",native </> "oracle"]
@@ -94,6 +95,7 @@ prepareDynamicCallbacks root = do
 -- Its C constructor retains the export; C also releases the guest StablePtr.
 prepareStaticExport :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> IO [CommandResult]
 prepareStaticExport root output ghc helper libdir pluginDb pluginUnit = do
+  ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   let source = "t/fixtures/run-static-exports"
       capture = output </> "static"
       objects = capture </> "objects"
@@ -114,7 +116,7 @@ prepareStaticExport root output ghc helper libdir pluginDb pluginUnit = do
   capturePackageNative root helper libdir ghc ["-dynamic", "-I" ++ root </> source </> "cbits", "-odir", objects] unit capture
   let staged = output </> "NativeExport.cbd"
   copyFile (capture </> "core/units/u-static-export-fixture/NativeExport.cbd") staged
-  _ <- finishPackageNative (capture </> "pieces") capture unit (Just [objects </> "callbacks.o"]) [("NativeExport.cbd",staged)]
+  _ <- finishPackageNative ghcPkg (capture </> "pieces") capture unit (Just [objects </> "callbacks.o"]) [("NativeExport.cbd",staged)]
   oracleBuilt <- execute "static-native-build" [] ghc
     ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-i", "-i" ++ source, "-I" ++ root </> source </> "cbits",
      "-odir", native, "-hidir", native, "-stubdir", native, source </> "Main.hs", source </> "cbits/callbacks.c", "-o", native </> "main"]

@@ -99,9 +99,9 @@ installedNativeSignatures unit value
 -- One component per installed unit, never one differently linked component per
 -- module. Source products are reused only when their ordinary C obligations can
 -- be linked; foreign exports/registration remain owned by the managed runtime.
-linkInstalledNative :: FilePath -> FilePath -> [String] -> FilePath -> String ->
+linkInstalledNative :: FilePath -> FilePath -> FilePath -> [String] -> FilePath -> String ->
   [(String,FilePath)] -> IO [(String,FilePath)]
-linkInstalledNative compiler libdir arguments directory unit modules = do
+linkInstalledNative compiler packageTool libdir arguments directory unit modules = do
   decoded <- mapM (\(_,path) -> BS.readFile path >>= either fail pure . readModuleValue) modules
   -- Do not splice a second component into an already acquired unit.
   let acquired = any (\value -> member value "packageNativeLink" /= Nothing) decoded
@@ -117,7 +117,7 @@ linkInstalledNative compiler libdir arguments directory unit modules = do
   let signatures = sort (nub (concat perModule))
       requestedAddresses = nub (concatMap (addressLabels . snd) selected)
       requestedSymbols = nub (requestedAddresses ++ [(symbol,True) | (symbol,_,_,_,_) <- signatures])
-  archives <- nativeSymbolArchives compiler libdir directory unit arguments requestedSymbols
+  archives <- nativeSymbolArchives packageTool libdir directory unit arguments requestedSymbols
   declaredAddresses <- mapM (either fail pure . nativeAddressDeclarations unit . snd) selected
   -- An ordinary callable root selects its native provider, not an address
   -- getter. The final companion extracts only actually unresolved members.
@@ -131,7 +131,7 @@ linkInstalledNative compiler libdir arguments directory unit modules = do
     writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
       unit root signatures [] sources perModule [] (const Nothing) addresses (map fst archives) True
     let original = [(name,bytes) | (name,bytes) <- modules, name `elem` map fst selected]
-    linked <- finishPackageNative (root </> "pieces") root unit (Just []) original
+    linked <- finishPackageNative packageTool (root </> "pieces") root unit (Just []) original
     pure [(name,maybe bytes id (lookup name linked)) | (name,bytes) <- modules]
 
 nativeSignatures :: String -> [Value] -> Either String [Signature]
@@ -851,15 +851,15 @@ nativeStaticExports value = case member value "staticForeignExports" of
         "static export declaration has no exact retained Core binder"
     pure exports
 
-finishPackageNative :: FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,FilePath)] -> IO [(String,FilePath)]
-finishPackageNative pieces directory unit objects modules =
-  fst <$> finishPackageNativeWithDependencies Nothing [] [] pieces directory directory unit objects modules
+finishPackageNative :: FilePath -> FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,FilePath)] -> IO [(String,FilePath)]
+finishPackageNative packageTool pieces directory unit objects modules =
+  fst <$> finishPackageNativeWithDependencies packageTool Nothing [] [] pieces directory directory unit objects modules
 
 -- | Declared dependency paths refer to separately linked components. Never
 -- embed another unit's C globals/constructors in this component's LLVM.
-finishPackageNativeWithDependencies :: Maybe NativeProduct -> [([String],Value)] -> [FilePath] -> FilePath -> FilePath -> FilePath ->
+finishPackageNativeWithDependencies :: FilePath -> Maybe NativeProduct -> [([String],Value)] -> [FilePath] -> FilePath -> FilePath -> FilePath ->
   String -> Maybe [FilePath] -> [(String,FilePath)] -> IO ([(String,FilePath)],Maybe Value)
-finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDatabases pieces sourceDirectory directory unit currentObjects modules = do
+finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths publishedDatabases pieces sourceDirectory directory unit currentObjects modules = do
   -- Validate retained call products against actual Core once, before linking.
   -- Header-only values intentionally have no bindings and are not call proofs.
   decoded <- forM modules $ \(_,path) -> do
@@ -1072,7 +1072,7 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
     libdir <- command directory compiler ["--print-libdir"] >>= \output -> case lines output of
       [path] -> pure path
       _ -> fail "native compiler did not report one library directory"
-    externalArguments <- nativeLinkInputs compiler libdir root publishedDatabases (Just unit) originalArguments
+    externalArguments <- nativeLinkInputs packageTool libdir root publishedDatabases (Just unit) originalArguments
     dataLibraries <- maybe (pure []) (either fail pure . parseValue) (member record "dataLibraries") :: IO [FilePath]
     let linkArguments = dataLibraries ++ externalArguments
     clang <- tool "THC_CLANG" "clang"

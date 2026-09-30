@@ -42,10 +42,10 @@ import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.ExposedModule (ExposedModule(..))
 import qualified Distribution.Types.InstalledPackageInfo as Package
-import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
+import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist, findExecutable, makeAbsolute)
 import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), pathSeparator)
+import System.FilePath ((</>), pathSeparator, takeFileName)
 import System.IO (IOMode(ReadMode), hClose, hSetBinaryMode, withBinaryFile)
 import qualified System.Info as Host
 import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
@@ -134,9 +134,19 @@ modulelessRegistration identifier dependencies bytes = do
 -- constructing an acquisition context. Arguments select GHC, ghc-pkg, the
 -- interface helper, additional databases and recorded compiler identity.
 installedContext :: FilePath -> FilePath -> FilePath -> [FilePath] -> Value -> IO InstalledContext
-installedContext ghc pkg helper databases compiler = do
+installedContext selectedGhc selectedPkg helper databases compiler = do
+  -- Resolve before any package changes cwd. Preserve the selected symlink or
+  -- wrapper spelling: dereferencing it can change argv[0]/dirname semantics.
+  let resolve selected = do
+        requested <- if takeFileName selected == selected then pure selected else makeAbsolute selected
+        findExecutable requested >>= maybe (fail ("selected executable not found: " ++ selected)) makeAbsolute
+  ghc <- resolve selectedGhc
+  pkg <- resolve selectedPkg
   version <- command ghc ["--numeric-version"]
   unless (version == "9.14.1") (fail "installed Core requires selected GHC 9.14.1")
+  packageVersion <- command pkg ["--version"]
+  unless (packageVersion == "GHC package manager version 9.14.1")
+    (fail "installed Core requires selected ghc-pkg 9.14.1")
   libdir <- canonicalizePath =<< command ghc ["--print-libdir"]
   global <- canonicalizePath =<< command ghc ["--print-global-package-db"]
   listing <- command pkg ["--global", "--no-user-package-db", "list"]
