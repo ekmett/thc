@@ -8,6 +8,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.Json;
 import thc.Language;
 import java.nio.file.Files;
@@ -47,7 +48,7 @@ class StateTupleTest {
         }
     }
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(root.resolve("build/state-tuple/" + stage + "-core/StateTupleAudit.json")));
+        return CoreCbdFixtures.read(root.resolve("build/state-tuple/" + stage + "-core/StateTupleAudit.cbd"));
     }
     private static Context context(boolean inlining) {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
@@ -61,11 +62,11 @@ class StateTupleTest {
         assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
     }
     private static ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
-    private static Object call(ExecutableProgram program, String entry, long x) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(entry), new Object[]{x}}); }
+    private static Object call(ExecutableProgram program, String entry, long x) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:StateTupleAudit." + entry), new Object[]{x}}); }
     private static List<Map<String, Object>> bindings(Map<String, Object> module) { return (List<Map<String, Object>>) module.get("bindings"); }
     private static Map<String, Object> named(List<Map<String, Object>> bindings, String name) {
         Map<String, Object> found = null;
-        for (var binding : bindings) if (name.equals(binding.get("name"))) {
+        for (var binding : bindings) if (("main:StateTupleAudit." + name).equals(binding.get("id"))) {
             if (found != null) throw new IllegalArgumentException("Collection contains more than one matching element.");
             found = binding;
         }
@@ -100,7 +101,7 @@ class StateTupleTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var entries = new LinkedHashSet<String>(); for (var row : rows) entries.add(row[0]);
                 for (var entry : entries) {
-                    var linked = CoreModules.reachable(module(stage), entry); var bindings = bindings(linked);
+                    var linked = CoreModules.reachable(module(stage), "main:StateTupleAudit." + entry); var bindings = bindings(linked);
                     var program = program(language, linked, backend); var target = program.entryTarget((String) named(bindings, entry).get("id"));
                     checkRows(rows, entry, stage, backend, inlining, program, target, language, false);
                     for (var binding : bindings) if (((List<?>) binding.get("expr")).get(0).equals("lam")) compile(program.entryTarget((String) binding.get("id")));
@@ -114,7 +115,7 @@ class StateTupleTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var linked = CoreModules.reachable(module(stage), "effectCase"); var program = program(language, linked, backend);
+                var linked = CoreModules.reachable(module(stage), "main:StateTupleAudit.effectCase"); var program = program(language, linked, backend);
                 var target = program.entryTarget((String) named(bindings(linked), "effectCase").get("id"));
                 assertEquals(7L, call(program, "effectCase", 7L));
                 assertThrows(GuestException.class, () -> call(program, "effectCase", -1L)); released(language);
@@ -151,7 +152,7 @@ class StateTupleTest {
                 var pair = (List<?>) named(bindings(module), "pair").get("expr"); var proof = (Map<String, Object>) ((Map<?, ?>) pair.get(3)).get("resultRep");
                 var fields = (List<Object>) proof.get("components");
                 fields.set(0, Map.of("kind", "unknown", "evaluated", true, "primReps", List.of(), "aggregate", "unboxed-tuple", "components", List.of()));
-                assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, "pairCase"), backend));
+                assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, "main:StateTupleAudit.pairCase"), backend));
             } finally { context.leave(); }
         }
     }
@@ -162,7 +163,7 @@ class StateTupleTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var module = module("pre");
                 var producer = (List<?>) named(bindings(module), "effectPair").get("expr"); var constructor = (List<?>) producer.get(2);
                 var operands = (List<Object>) constructor.get(2); operands.set(0, List.of("lit", "int", "123"));
-                var program = program(language, CoreModules.reachable(module, "effectCase"), backend);
+                var program = program(language, CoreModules.reachable(module, "main:StateTupleAudit.effectCase"), backend);
                 var failure = assertThrows(RuntimeFault.class, () -> call(program, "effectCase", 9L));
                 assertTrue(Objects.toString(failure.getMessage(), "").contains("zero-width scalar carrier"), failure.getMessage()); released(language);
             } finally { context.leave(); }

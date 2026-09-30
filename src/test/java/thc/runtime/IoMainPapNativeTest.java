@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import thc.Json;
+import thc.CoreModules;
+import thc.CoreCbdFixtures;
+import org.junit.jupiter.api.io.TempDir;
 import thc.Language;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,12 +31,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class IoMainPapNativeTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final Path folder = root.resolve("build/io-main-pap");
+    @TempDir Path temporary;
+    private int fixtureSequence;
     private final String prefix = "main:IoMainPapAudit.";
     private static Map<String, Object> read(Path file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file)); }
     private List<Map<String, Object>> modules(String stage) throws Exception {
         var result = new ArrayList<Map<String, Object>>();
-        for (var file : List.of("IoMainPapAudit.json", "THC.InterfaceClosure.json")) result.add(read(folder.resolve(stage + "/core/" + file)));
+        for (var path : paths(stage)) result.add(CoreCbdFixtures.read(Path.of(path)));
         return result;
+    }
+    private List<String> paths(String stage) {
+        return List.of("IoMainPapAudit.cbd", "THC.InterfaceClosure.cbd").stream().map(file -> folder.resolve(stage + "/core/" + file).toString()).toList();
     }
     private static List<Map<String, Object>> bindings(List<Map<String, Object>> modules) {
         var result = new ArrayList<Map<String, Object>>();
@@ -62,8 +70,17 @@ class IoMainPapNativeTest {
         assertEquals("app", expr.get(0));
         assertEquals(2, ((List<?>) expr.get(2)).size(), "The genuine fixture must retain its two-argument PAP"); return expr;
     }
-    private String request(List<Map<String, Object>> modules, String name, String backend) {
-        return Json.stringify(Map.of("modules", modules, "entry", prefix + name, "backend", backend, "instrument", true, "ioMain", true));
+    private String request(String stage, String name, String backend) {
+        return CoreModules.request(paths(stage), prefix + name, true, false, backend, true, true);
+    }
+    private String request(List<Map<String, Object>> modules, String name, String backend) throws Exception {
+        var paths = new ArrayList<String>();
+        for (var module : modules) {
+            // Decoder-only ownership metadata is not part of the CBD model.
+            module.remove("bindingOrigins");
+            paths.add(CoreCbdFixtures.write(temporary.resolve("control-" + fixtureSequence++ + ".cbd"), module).toString());
+        }
+        return CoreModules.request(paths, prefix + name, true, false, backend, true, true);
     }
     private static Context context() {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
@@ -100,7 +117,7 @@ class IoMainPapNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var good = context.eval("thc", request(modules, "goodMain", backend)); var bad = context.eval("thc", request(modules, "badMain", backend));
+                var good = context.eval("thc", request(stage, "goodMain", backend)); var bad = context.eval("thc", request(stage, "badMain", backend));
                 for (var action : List.of(good, bad)) { assertFalse(action.canExecute(), "IO actions must only expose runIO"); assertTrue(action.canInvokeMember("runIO")); }
                 // A cached PAP is reusable, but its action must execute each time.
                 for (int i = 0; i < 3; i++) {

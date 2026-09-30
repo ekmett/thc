@@ -63,7 +63,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/VectorMemory.java",
                   "src/test/java/thc/runtime/IntegerSimdModelTest.java",
                   "src/test/java/thc/runtime/IntegerSimdModel.java")
-MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """mask-functions bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -164,9 +164,23 @@ ORIGINAL_DIRECTORY_STREAMS_OUTPUTS = frozenset("build/original-directory-streams
 PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "api/predicate",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/ProxyVoidAudit.json", "core/THC.InterfaceClosure.json", "audit.json")),
+      for suffix in ("core/ProxyVoidAudit.cbd", "core/THC.InterfaceClosure.cbd", "core/ProxyVoidAudit.json", "core/THC.InterfaceClosure.json", "audit.json")),
     *(f"commands/{command}.{suffix}" for command in
       ("ghc-version", "predicate-build", "predicate-run", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
+      for suffix in ("stdout", "stderr", "command.json"))))
+IO_MAIN_PAP_OUTPUTS = frozenset("build/io-main-pap/" + name for name in (
+    "provenance.json", "oracle.tsv", "native-stderr.txt", "native/io-main-pap-oracle",
+    *(f"{stage}/core/{module}.{extension}" for stage in ("pre", "post")
+      for module in ("IoMainPapAudit", "THC.InterfaceClosure") for extension in ("cbd", "json")),
+    *(f"{stage}/{entry}-audit.json" for stage in ("pre", "post") for entry in ("goodMain", "badMain"))))
+MASK_FUNCTION_ENTRIES = ("maskedFunction", "unmaskedFunction", "uninterruptibleFunction", "lazyFunctions", "bareMasks")
+MASK_FUNCTION_OUTPUTS = frozenset("build/mask-functions/" + name for name in (
+    "manifest.json", "native/oracle",
+    *(f"{stage}/core/MaskFunctionAudit.{extension}" for stage in ("pre", "post") for extension in ("cbd", "json")),
+    *(f"{stage}/{entry}-audit.json" for stage in ("pre", "post") for entry in MASK_FUNCTION_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("ghc-version", "native-compile", "native-oracle",
+      *(f"{stage}-export" for stage in ("pre", "post")),
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in MASK_FUNCTION_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 RUBBISH_OUTPUTS = frozenset("build/rubbish-literals/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "Data.Sequence.Internal.cbd", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "native.s", "native.o", "native-codegen.json",
@@ -204,15 +218,17 @@ DELIMITED_ENTRIES = ("promptPure", "abortSuffix", "resumeTwice", "nestedPrompts"
                      "resumedScalar", "recapturedMask", "resumedApplication", "resumedScalarApplication", "polymorphicApplications",
                      "polymorphicScalarApplications")
 DELIMITED_COMMANDS = ("ghc-version", "native-build", "native-run",
+                      "parked-native-build", "parked-native-run", "parked-export", "parked-audit",
                       *(f"{stage}-export" for stage in ("pre", "post")),
                       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in DELIMITED_ENTRIES))
 DELIMITED_OUTPUTS = frozenset("build/delimited-continuations/" + name for name in (
-    "manifest.json", *(f"{stage}/{suffix}" for stage in ("pre", "post")
-        for suffix in ("core/DelimitedContinuations.json", *(f"{entry}-audit.json" for entry in DELIMITED_ENTRIES))),
+    "manifest.json", "parked/audit.json", "parked/core/ParkedControl.cbd", "parked/core/ParkedControl.json",
+    *(f"{stage}/{suffix}" for stage in ("pre", "post")
+        for suffix in ("core/DelimitedContinuations.cbd", "core/DelimitedContinuations.json", *(f"{entry}-audit.json" for entry in DELIMITED_ENTRIES))),
     *(f"commands/{command}.{suffix}" for command in DELIMITED_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
     "manifest.json", "oracle.txt", "callback-oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
-        for suffix in ("core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
+        for suffix in ("core/ThreadInventory.cbd", "core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
 THREAD_SCHEDULING_ENTRIES = ("emptySpark", "lazyPar", "lazySpark", "sparkValue", "currentCounter", "negativeCounter",
                              "pinnedFork", "otherCounter", "timedDelay")
 THREAD_SCHEDULING_OUTPUTS = frozenset("build/thread-scheduling/" + name for name in (
@@ -514,7 +530,7 @@ def integer_simd_artifact_hashes(family, manifest):
     return hashes
 
 
-PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
+PROVENANCE_DIRS = """io-main-pap aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
 simd-doublex2 simd-int16x8 simd-int8x16 simd-word8x16 simd-word16x8 simd-word32x4
@@ -589,7 +605,7 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
+NATIVE_EXECUTABLES = frozenset({"build/io-main-pap/native/io-main-pap-oracle", "build/mask-functions/native/oracle", "build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
     "build/floating-remainder/native/oracle",
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
@@ -1877,6 +1893,10 @@ def allowed_payload(name):
         return name in ORIGINAL_CURRENT_DIRECTORY_OUTPUTS
     if parts[1] == "original-directory-streams":
         return name in ORIGINAL_DIRECTORY_STREAMS_OUTPUTS
+    if parts[1] == "io-main-pap":
+        return name in IO_MAIN_PAP_OUTPUTS
+    if parts[1] == "mask-functions":
+        return name in MASK_FUNCTION_OUTPUTS
     if parts[1] == "proxy-void":
         return name in PROXY_VOID_OUTPUTS
     if parts[1] == "rubbish-literals":
@@ -1929,6 +1949,8 @@ def allowed_payload(name):
         return name in FLOAT_DECODE_OUTPUTS
     if parts[1] == "floating-remainder":
         return name in FLOATING_REMAINDER_OUTPUTS
+    if name in {f"build/state-tuple/{stage}-core/StateTupleAudit.cbd" for stage in ("pre", "post")}:
+        return True
     if name == "build/floating/core/FloatingAudit.cbd":
         return True
     if name in {f"build/{family}/{folder.format(stage=stage)}/{module}.cbd"
@@ -2121,6 +2143,16 @@ def inventory(root, current, read, core_files, verified=None):
             simd_bytearray_artifact_hashes(name.split("/")[1], doc)
         if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in INTEGER_SIMD_FAMILIES:
             integer_simd_artifact_hashes(name.split("/")[1], doc)
+        if name == "build/io-main-pap/provenance.json":
+            records = doc.get("artifacts")
+            require(isinstance(records, list), "Missing IO-main PAP artifacts")
+            paths = [record.get("path") for record in records]
+            require(len(paths) == len(set(paths)) and set(paths) == IO_MAIN_PAP_OUTPUTS - {name},
+                    "Incomplete/unreviewed IO-main PAP artifacts")
+        if name == "build/mask-functions/manifest.json":
+            artifacts = doc.get("artifactHashes")
+            require(isinstance(artifacts, dict) and set(artifacts) == MASK_FUNCTION_OUTPUTS - {name},
+                    "Incomplete/unreviewed mask-function artifacts")
         if name == "build/thread-inventory/manifest.json":
             thread_inventory_artifact_hashes(doc)
         if name == "build/thread-scheduling/manifest.json":
