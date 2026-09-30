@@ -43,6 +43,7 @@ import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
 import THC.Driver.Installed (boundedInterfaceProcess)
 import THC.Driver.NativeCache (nativeObjcopySelection)
+import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
 import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
@@ -55,10 +56,16 @@ installedNativeSignatures :: String -> Value -> Either String [Signature]
 installedNativeSignatures unit value
   | member value "staticForeignImports" /= Nothing = do
       imports <- nativeImports unit value
-      sort . nub . filter supportedSignature <$> mapM (nativeSignature unit) imports
-  | otherwise = pure . sort . nub $
-      [signature | call <- calls value, owned unit call, javascriptSymbol call == Nothing,
-        Just signature <- [direct call], supportedSignature signature]
+      signatures <- mapM (nativeSignature unit) imports
+      _ <- mapM coreNativeOverride (filter (owned unit) (calls value))
+      core <- mapM coreNativeImport imports
+      pure (sort (nub [signature | (signature,False) <- zip signatures core, supportedSignature signature]))
+  | otherwise = do
+      let descriptors = filter (owned unit) (calls value)
+      core <- mapM coreNativeOverride descriptors
+      pure . sort . nub $
+        [signature | (call,False) <- zip descriptors core, javascriptSymbol call == Nothing,
+          Just signature <- [direct call], supportedSignature signature]
   where
     direct call = do
       target <- member call "target"
@@ -138,8 +145,11 @@ nativeSignatures :: String -> [Value] -> Either String [Signature]
 nativeSignatures unit modules = do
   imports <- concat <$> mapM moduleImports modules
   called <- mapM (nativeSignature unit) imports
+  _ <- mapM coreNativeOverride (filter (owned unit) (concatMap calls modules))
+  core <- mapM coreNativeImport imports
   finalizers <- nativeFinalizers unit modules
-  let signatures = called ++ [(symbol,"ccall","unsafe",["AddrRep"],"void") | symbol <- finalizers]
+  let signatures = [signature | (signature,False) <- zip called core] ++
+        [(symbol,"ccall","unsafe",["AddrRep"],"void") | symbol <- finalizers]
   require (all supportedSignature signatures) "package native call has unsupported safety/carriers"
   let ordered = sort (nub signatures)
   forM_ (groupBy (\a b -> first a == first b) ordered) $ \variants -> do

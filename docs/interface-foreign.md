@@ -67,6 +67,12 @@ have process-wide state. THC supplies special adapters where a call must act on
 its own scheduler, managed files, environment or memory; ordinary package C is
 not automatically virtualized.
 
+Acquisition omits native wrappers for GHC calls verified against THC runtime
+handlers. This does not make those handlers callable from C. Native C
+references, public definitions, constructors, address imports and finalizers
+still need real native providers, including when they use the same symbol.
+Other RTS imports need their own implementation.
+
 Concrete lifted or unlifted GC-boxed declarations can retain verified stock
 import provenance, including boxed results. That evidence is not a native ABI:
 GC-boxed imports remain excluded from package-native adapters, and are never

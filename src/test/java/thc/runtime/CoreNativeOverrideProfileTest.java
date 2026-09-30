@@ -1,0 +1,75 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+package thc.runtime;
+
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import thc.Json;
+import static org.junit.jupiter.api.Assertions.*;
+
+/** Capability/ABI controls, not substituted original guest bodies or native adapters. */
+class CoreNativeOverrideProfileTest {
+    private List<Map<?, ?>> calls() throws Exception {
+        try (var input = getClass().getResourceAsStream("/thc/core-native-overrides.json")) {
+            assertNotNull(input);
+            var profile = (Map<?, ?>) Json.parse(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+            var result = new ArrayList<Map<?, ?>>();
+            for (var call : (List<?>) profile.get("calls")) result.add((Map<?, ?>) call);
+            return result;
+        }
+    }
+    private Map<Object, Object> with(Map<?, ?> value, String key, Object replacement) {
+        var result = new LinkedHashMap<Object, Object>(value); result.put(key, replacement); return result;
+    }
+    @Test void eachIncludedDescriptorRequiresItsActualLiveOwningValidator() throws Exception {
+        var calls = calls();
+        assertEquals(Set.of("freeHaskellFunctionPtr", "getNumberOfProcessors", "setNumCapabilities",
+            "getOrSetGHCConcSignalSignalHandlerStore", "getProgArgv", "setProgArgv", "getRTSStatsEnabled",
+            "getRTSStats", "performGC", "performMajorGC", "performBlockingMajorGC", "lockFile", "unlockFile",
+            "lookupIPE", "reportHeapOverflow", "rts_isThreaded", "shutdownHaskellAndExit"),
+            Set.copyOf(calls.stream().map(call -> ((Map<?, ?>) call.get("target")).get("symbol")).toList()));
+        assertEquals(17, calls.size());
+        for (var call : calls) {
+            assertTrue(CoreForeignOverride.nativeCall(call), call.toString());
+            assertTrue(CoreForeignOverride.nativeCall(with(call, "schema", 1)), "CBD/JSON integer carriers agree");
+        }
+    }
+    @Test void changedAbiNeverEscapesThroughTheNativeCompanion() throws Exception {
+        for (var call : calls()) {
+            var target = (Map<?, ?>) call.get("target");
+            var result = (Map<?, ?>) call.get("resultRep");
+            for (var wrong : List.of(with(call, "schema", 2L), with(call, "schema", 1.0),
+                    with(call, "arity", 0L), with(call, "suppliedArity", 0L),
+                    with(call, "convention", "capi"), with(call, "safety", "interruptible"),
+                    with(call, "argumentTypes", List.of()), with(call, "argumentReps", List.of()),
+                    with(call, "resultRep", with(result, "aggregate", "unboxed-sum")),
+                    with(call, "target", with(target, "kind", "dynamic")),
+                    with(call, "target", with(target, "isFunction", false))))
+                assertThrows(RuntimeFault.class, () -> CoreForeignOverride.nativeCall(wrong));
+            assertFalse(CoreForeignOverride.nativeCall(with(call, "target", with(target, "unit", "ordinary-unit"))));
+            assertFalse(CoreForeignOverride.nativeCall(with(call, "target", with(target, "symbol", target.get("symbol") + "_extra"))));
+        }
+        for (var symbol : List.of("getMonotonicNSec", "hs_spt_key_count", "libdwGetBacktrace"))
+            assertFalse(CoreForeignOverride.nativeCall(Map.of("target", Map.of("unit", "ghc-internal", "symbol", symbol))),
+                "unwired or unsupported native demands receive no new capability");
+    }
+    @Test void freeCallbackUsesTheExistingDynamicValidatorBeforePackageLookup() throws Exception {
+        var call = calls().stream().filter(entry -> "freeHaskellFunctionPtr".equals(((Map<?, ?>) entry.get("target")).get("symbol")))
+            .findFirst().orElseThrow();
+        var arguments = (List<?>) call.get("argumentReps"); var result = call.get("resultRep");
+        var metadata = Map.of("foreignCall", call, "rep", result);
+        var selected = CorePackageScalarForeign.validate(metadata, arguments, Collections.nCopies(arguments.size(), false), result, List.of());
+        assertNotNull(selected);
+        assertEquals(PackageScalarCall.Kind.FREE_CALLBACK, selected.getKind());
+        assertFalse(selected.executesForeign());
+        assertNull(selected.getLink(), "this is not a fabricated C entry or exported native callback namespace");
+        assertThrows(RuntimeFault.class, () -> CorePackageScalarForeign.validate(metadata, arguments,
+            List.of(true, false), result, List.of()), "the actual operand/flag validator still runs");
+    }
+}

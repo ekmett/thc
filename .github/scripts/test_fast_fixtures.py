@@ -2291,6 +2291,12 @@ class FixturePreparationTest(unittest.TestCase):
         stamp.write_text("[]")
         self.assertEqual(self.prepare("thc.AlphaTest")["rebuilt"], ["alpha"])
 
+    def test_core_native_override_profile_change_rebuilds(self):
+        self.prepare("thc.AlphaTest", "thc.BetaTest")
+        profile = self.root / "src/main/resources/thc/core-native-overrides.json"
+        profile.write_text("changed runtime-owned foreign call contract")
+        self.assertEqual(self.prepare("thc.AlphaTest", "thc.BetaTest")["rebuilt"], ["alpha", "beta"])
+
     def test_common_source_or_toolchain_change_rebuilds(self):
         self.prepare("thc.AlphaTest")
         self.calls.clear()

@@ -25,7 +25,8 @@ import System.Directory (findExecutable, getCurrentDirectory, createDirectory, r
 import System.Environment (getEnv, lookupEnv, setEnv, unsetEnv)
 import System.IO.Error (tryIOError)
 import System.FilePath ((</>), searchPathSeparator)
-import System.Process (readProcess)
+import System.Process (readProcess, readProcessWithExitCode)
+import System.Exit (ExitCode(..))
 import qualified System.Info as Host
 import Test.HUnit
 import THC.Driver.PackageNative
@@ -39,7 +40,60 @@ import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestLabel "PE deferred services omit only the unused container" $ TestCase $ do
+  [ TestLabel "Core-owned exact calls do not manufacture native wrappers" $ TestCase $ do
+      let rep kind prim evaluated = object ["kind" .= (kind::String),
+            "primReps" .= (prim::[String]), "evaluated" .= (evaluated::Bool)]
+          call = object ["schema" .= (1::Int), "target" .= object
+            ["kind" .= ("static"::String), "unit" .= ("ghc-internal"::String),
+             "symbol" .= ("getProgArgv"::String), "isFunction" .= True],
+            "convention" .= ("ccall"::String), "safety" .= ("unsafe"::String),
+            "arity" .= (3::Int), "suppliedArity" .= (3::Int),
+            "argumentReps" .= [rep "address" ["AddrRep"] False,
+              rep "address" ["AddrRep"] False, rep "void" [] False],
+            "resultRep" .= object ["kind" .= ("unknown"::String),
+              "primReps" .= ([]::[String]), "evaluated" .= False,
+              "aggregate" .= ("unboxed-tuple"::String), "components" .= [rep "void" [] True]]]
+          moduleValue owner descriptor = object ["unit" .= (owner::String),
+            "bindings" .= [object ["foreignCall" .= descriptor]]]
+          target = case call of Object fields -> maybe (error "test target") id (KM.lookup "target" fields); _ -> error "test call"
+          ordinaryCall = set "target" (set "unit" "ordinary-unit" target) call
+      assertEqual "the actual Core handler owns this exact call, not the native companion"
+        (Right []) (installedNativeSignatures "ghc-internal" (moduleValue "ghc-internal" call))
+      assertEqual "same spelling in an ordinary unit remains a strict native demand"
+        (Right [("getProgArgv","ccall","unsafe",["AddrRep","AddrRep"],"void")])
+        (installedNativeSignatures "ordinary-unit" (moduleValue "ordinary-unit" ordinaryCall))
+      assertBool "a selected runtime identity with the wrong safety is not a native RTS escape"
+        (isLeft (installedNativeSignatures "ghc-internal"
+          (moduleValue "ghc-internal" (set "safety" "safe" call))))
+      let imported = change "binder" "unit" "ghc-internal" $
+            changeEmitted "unit" "ghc-internal" (entry "getProgArgv" "ccall" ["AddrRep","AddrRep","void"] ["void"])
+          typedModule = set "unit" "ghc-internal" $ set "bindings" (toJSON [object ["foreignCall" .= call]]) $
+            changeProof "unit" "ghc-internal" $ changeProof "expectedCalls" (toJSON [call]) (moduleWith [imported])
+      assertEqual "installed typed imports use the same full call proof" (Right [])
+        (installedNativeSignatures "ghc-internal" typedModule)
+      assertEqual "source typed imports omit the same exact Core wrapper" (Right [])
+        (nativeSignatures "ghc-internal" [typedModule])
+      assertBool "omission cannot bypass the complete expectedCalls inventory"
+        (isLeft (nativeSignatures "ghc-internal" [changeProof "expectedCalls" (toJSON ([]::[Value])) typedModule]))
+      assertBool "typed ABI drift cannot be admitted as a Core capability"
+        (isLeft (nativeSignatures "ghc-internal" [changeProof "imports"
+          (toJSON [changeEmitted "arguments" (toJSON (["IntRep","AddrRep","void"]::[String])) imported]) typedModule]))
+  , TestLabel "actual native C references retain strict provider obligations" $ TestCase $ withScratch $ \root -> do
+      clang <- tool "THC_CLANG" "clang"
+      target <- takeWhile (/= '\n') <$> readProcess clang ["-dumpmachine"] ""
+      let source = root </> "ordinary.c"
+          output = root </> "ordinary-library"
+          strict = if Host.os == "darwin" then ["-Wl,-undefined,error"] else ["-Wl,--no-undefined"]
+          arguments name = ["-shared","-fPIC",source,"-o",output] ++ strict ++ nativeRootArguments target [name]
+      writeFile source "long ordinary_provider(void) { return 7; }\n"
+      (positive,_,positiveErrors) <- readProcessWithExitCode clang (arguments "ordinary_provider") ""
+      assertEqual ("selected compiler accepts the ordinary strict recipe: " ++ positiveErrors) ExitSuccess positive
+      writeFile source "extern void getProgArgv(void *, void *); void ordinary_consumer(void) { getProgArgv(0, 0); }\n"
+      (missing,_,missingErrors) <- readProcessWithExitCode clang (arguments "ordinary_consumer") ""
+      assertBool "a Core capability is not a native definition" (missing /= ExitSuccess)
+      assertBool "the actual retained C reference names its missing provider"
+        ("getProgArgv" `isInfixOf` missingErrors)
+  , TestLabel "PE deferred services omit only the unused container" $ TestCase $ do
       let services = ["hs_free_stable_ptr","rtsSupportsBoundThreads","peer_export"]
       forM_ ["x86_64-w64-mingw32","x86_64-w64-windows-gnu","x86_64-pc-windows-msvc"] $ \target -> do
         assertEqual "PE never receives ELF unresolved-symbol exclusions" Nothing

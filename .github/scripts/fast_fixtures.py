@@ -320,6 +320,7 @@ COMMON_SOURCES = (
     # The shared runtime ABI probe is also consumed by native fixture producers.
     "src/main/c/stdio-abi-probe.c",
     "src/main/resources/thc/scalar-primop-signatures.json",
+    "src/main/resources/thc/core-native-overrides.json",
 )
 
 

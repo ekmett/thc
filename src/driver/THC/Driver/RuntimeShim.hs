@@ -1,6 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- |
 -- Module      : THC.Driver.RuntimeShim
@@ -15,21 +16,89 @@
 module THC.Driver.RuntimeShim
   ( RuntimeShim, runtimeShimInputs, withRuntimeShim, validateRuntimeShimModules
   , validateRuntimeShimModule, validateRuntimeShimInventory, foreignExceptionBridgeUnit
+  , coreNativeOverride, coreNativeImport, coreNativeOverrideCalls
   ) where
 
 import Control.Monad (forM, forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
-import Data.Aeson (FromJSON, Value(..), object, toJSON, (.=), fromJSON, Result(..))
+import Data.Aeson (FromJSON, Value(..), object, toJSON, (.=), fromJSON, Result(..), eitherDecodeStrict')
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import Data.List (nub, sort)
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import Language.Haskell.TH.Syntax (addDependentFile, lift, loc_filename, location, runIO)
 import Numeric (showHex)
 import System.Directory (canonicalizePath)
 import System.FilePath
 import THC.Driver.NativeRecipe
 import THC.Compact.Module (readModuleValue)
+
+-- The JVM validates these same exact descriptors against its live selectors.
+-- This is a Core call capability, never an exemption for native C references,
+-- address imports, finalizers, public definitions or constructors.
+coreNativeOverrideCalls :: [Value]
+coreNativeOverrideCalls = either error id $ do
+  profile <- eitherDecodeStrict' (Text.encodeUtf8 (Text.pack embedded))
+  require (member profile "schema" == Just (Number 1) &&
+    member profile "profile" == Just "ghc-9.14.1-thc-core-native-overrides-v1" &&
+    member profile "ghc" == Just "9.14.1" && case profile of
+      Object fields -> sort (KM.keys fields) == ["calls","ghc","profile","schema"]
+      _ -> False) "invalid Core native override capability profile"
+  entries <- field profile "calls"
+  require (not (null entries) && length entries == length (nub (map identity entries)))
+    "empty or ambiguous Core native override capability profile"
+  pure entries
+  where
+    embedded = $(do
+      source <- loc_filename <$> location
+      let path = iterate takeDirectory source !! 5 </> "src/main/resources/thc/core-native-overrides.json"
+      addDependentFile path
+      runIO (readFile path) >>= lift)
+    identity call = member call "target" >>= \target ->
+      (,) <$> member target "unit" <*> member target "symbol"
+
+coreNativeOverride :: Value -> Either String Bool
+coreNativeOverride call = case [entry | entry <- coreNativeOverrideCalls,
+    identity entry == identity call, identity call /= Nothing] of
+  [] -> Right False
+  [entry] -> do
+    require (call == entry) "Core native override has the wrong exact foreign-call ABI"
+    Right True
+  _ -> Left "ambiguous Core native override capability"
+  where
+    identity descriptor = member descriptor "target" >>= \target ->
+      (,) <$> member target "unit" <*> member target "symbol"
+
+-- Source declarations keep their original type/product/call proof. Only their
+-- exact emitted variant may lack a native wrapper; nativeSignature validates
+-- the typed declaration before this predicate is consulted.
+coreNativeImport :: Value -> Either String Bool
+coreNativeImport entry = case [call | call <- coreNativeOverrideCalls,
+    identity (emitted call) == (member entry "emitted" >>= identity)] of
+  [] -> Right False
+  [call] -> do
+    require (member entry "isFunction" == Just (Bool True) && member entry "header" == Just Null &&
+      member entry "emitted" == Just (emitted call))
+      "Core native override import has the wrong exact emitted ABI"
+    Right True
+  _ -> Left "ambiguous Core native override import capability"
+  where
+    identity value = (,) <$> member value "unit" <*> member value "symbol"
+    emitted call = object
+      [ "unit" .= maybe Null id (member call "target" >>= (`member` "unit"))
+      , "symbol" .= maybe Null id (member call "target" >>= (`member` "symbol"))
+      , "convention" .= maybe Null id (member call "convention")
+      , "safety" .= maybe Null id (member call "safety")
+      , "arguments" .= map carrier (either error id (field call "argumentReps"))
+      , "result" .= map carrier (either error id (field call "resultRep" >>= (`field` "components")))
+      ]
+    carrier proof = case member proof "primReps" >>= either (const Nothing) Just . parse of
+      Just [] -> "void" :: String
+      Just [rep] -> rep
+      _ -> error "non-scalar Core native override capability"
+    parse value = case fromJSON value of Success result -> Right result; Error message -> Left message
 
 -- The selected dictionary belongs to the application's linked runtime unit.
 -- Merely finding a package called thc is not authority, and injecting a second

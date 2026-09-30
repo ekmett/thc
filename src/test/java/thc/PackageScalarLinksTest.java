@@ -34,6 +34,44 @@ class PackageScalarLinksTest {
     private Map<String, Object> binding(String id, List<?> calls) {
         return map("id", "scalar-fixture:Scalar." + id, "expr", list("lit", "int", "7", calls.stream().map(it -> map("foreignCall", it)).toList()));
     }
+    @Test void exactCoreOwnedImportDoesNotRequireAnInventedNativeEntry() throws Exception {
+        var base = module("ghc-internal", "Scalar", digest);
+        var scalar = object(base, "packageScalarLink"); var abi = single(scalar, "abi");
+        var link = with(scalar, "profile", "thc-package-c-ffi-v1",
+            "abi", list(with(abi, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
+        var proof = object(base, "staticForeignImports"); var original = single(proof, "imports");
+        var state = map("kind", "void", "primReps", List.of(), "evaluated", false);
+        var address = map("kind", "address", "primReps", list("AddrRep"), "evaluated", false);
+        var call = map("schema", 1L, "target", map("kind", "static", "unit", "ghc-internal",
+            "symbol", "getProgArgv", "isFunction", true), "convention", "ccall", "safety", "unsafe",
+            "arity", 3L, "suppliedArity", 3L, "argumentReps", list(address, address, state),
+            "resultRep", map("kind", "unknown", "primReps", List.of(), "evaluated", false,
+                "aggregate", "unboxed-tuple", "components", list(with(state, "evaluated", true))));
+        var emitted = map("symbol", "getProgArgv", "unit", "ghc-internal", "convention", "ccall",
+            "safety", "unsafe", "arguments", list("AddrRep", "AddrRep", "void"), "result", list("void"));
+        var owned = with(original, "symbol", "getProgArgv", "binder",
+            with(object(original, "binder"), "occurrence", "getProgArgv"), "emitted", emitted);
+        var mixed = with(without(base, "packageScalarLink"), "packageNativeLink", link,
+            "staticForeignImports", with(proof, "imports", list(original, owned), "expectedCalls", list(call)),
+            "bindings", list(map("foreignCall", call)));
+        assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(mixed)).getProved());
+        assertEquals(1, Objects.requireNonNull(PackageScalarLinks.read(mixed)).getLink().getAbi().size(),
+            "the real ordinary native entry stays; the Core operation is not advertised as native");
+        for (var bad : list(with(emitted, "unit", "ordinary-unit"), with(emitted, "safety", "safe"),
+                with(emitted, "arguments", list("IntRep", "AddrRep", "void"))))
+            assertThrows(RuntimeException.class, () -> PackageScalarLinks.read(with(mixed, "staticForeignImports",
+                with(proof, "imports", list(original, with(owned, "emitted", bad)), "expectedCalls", list(call)))));
+        for (var bad : list(with(call, "schema", 2L), with(call, "safety", "safe"),
+                with(call, "argumentTypes", list(null, null, null)),
+                with(call, "target", with(object(call, "target"), "isFunction", false))))
+            assertThrows(RuntimeException.class, () -> PackageScalarLinks.read(with(mixed,
+                "staticForeignImports", with(proof, "imports", list(original, owned), "expectedCalls", list(bad)),
+                "bindings", list(map("foreignCall", bad)))));
+        assertThrows(RuntimeException.class, () -> PackageScalarLinks.read(with(mixed,
+            "staticForeignImports", with(proof, "imports", list(with(original, "emitted",
+                with(object(original, "emitted"), "symbol", "missing_ordinary")), owned), "expectedCalls", list(call)))));
+        assertThrows(RuntimeException.class, () -> PackageScalarLinks.read(with(mixed, "bindings", List.of())));
+    }
     @Test void javascriptDescriptorLeavesRealNativeAdapterObligations() throws Exception {
         var base = module(); var scalar = object(base, "packageScalarLink"); var abi = single(scalar, "abi");
         var link = with(scalar, "profile", "thc-package-c-ffi-v1", "abi", list(with(abi, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
