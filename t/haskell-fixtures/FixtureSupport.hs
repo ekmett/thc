@@ -18,6 +18,7 @@ module FixtureSupport
   , unitArtifactReferences, retainUnitArtifacts
   ) where
 
+import Control.Concurrent (threadDelay)
 import Control.Monad (forM, unless)
 import qualified Crypto.Hash.SHA256 as SHA256
 import Data.Aeson (Value(..), object, (.=), encode)
@@ -34,8 +35,9 @@ import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..), die)
 import System.FilePath ((</>), takeFileName)
 import System.IO (IOMode(ReadMode, WriteMode), withBinaryFile)
+import qualified System.Info as Host
 import System.Process (CreateProcess(..), StdStream(..), proc, readCreateProcessWithExitCode,
-                       waitForProcess, withCreateProcess)
+                       getProcessExitCode, waitForProcess, withCreateProcess)
 import System.Timeout (timeout)
 
 -- The pinned package version may have a source-build or installed ABI suffix.
@@ -144,8 +146,12 @@ runLoggedExpectInput input expected seconds root logs label overrides program ar
       withBinaryFile (root </> errors) WriteMode $ \err ->
         withCreateProcess ((proc program args)
           {cwd = Just root, env = Just environment, std_in = stdinStream,
-           std_out = UseHandle out, std_err = UseHandle err}) $ \_ _ _ child ->
-            timeout (seconds * 1000000) (waitForProcess child)
+           std_out = UseHandle out, std_err = UseHandle err,
+           use_process_jobs = Host.os == "mingw32"}) $ \_ _ _ child -> do
+            -- Windows' blocking native wait defers the timeout exception.
+            -- Polling stays interruptible; the process job owns child cleanup.
+            let poll = getProcessExitCode child >>= maybe (threadDelay 100000 >> poll) pure
+            timeout (seconds * 1000000) (if Host.os == "mingw32" then poll else waitForProcess child)
   let exit = case completed of
         Just ExitSuccess -> Just (0 :: Int)
         Just (ExitFailure code) -> Just code

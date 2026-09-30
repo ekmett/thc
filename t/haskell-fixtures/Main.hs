@@ -132,7 +132,7 @@ import MutVarFixtures (prepareMutVar)
 import STMFixtures (prepareSTM)
 import HintTraceFixtures (prepareHintTrace)
 import ClosureInspectionFixtures (prepareClosureInspection)
-import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareWindowsBridge)
+import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareWindowsBridge, checkWindowsTimeout)
 import StablePointerFixtures (prepareStablePointers)
 import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
@@ -982,6 +982,7 @@ main = do
     ["integer-completion"] -> prepareIntegerCompletion root
     ["windows-smoke"] -> prepareWindowsSmoke root
     ["windows-driver"] -> prepareWindowsDriver root
+    ["windows-timeout"] -> checkWindowsTimeout root
     ["windows-bridge"] -> prepareWindowsBridge root
     ["windows-codepages"] -> prepareWindowsCodePages root
     ["word-floating"] -> prepareWordFloating root

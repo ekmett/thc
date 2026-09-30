@@ -11,9 +11,9 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Fixture acquisition support for windows smoke.
-module WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareWindowsBridge) where
+module WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareWindowsBridge, checkWindowsTimeout) where
 
-import Control.Exception (bracket)
+import Control.Exception (bracket, try)
 import Control.Monad (forM, unless)
 import Data.Aeson (Value(..), eitherDecodeStrict, object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -22,16 +22,36 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.Set as Set
 import qualified Data.Text as Text
-import Data.Time (defaultTimeLocale, formatTime, getCurrentTime)
+import Data.Time (defaultTimeLocale, formatTime, getCurrentTime, diffUTCTime)
 import FixtureSupport
 import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, listDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
-import System.Exit (die)
+import System.Exit (ExitCode(..), die)
 import System.FilePath ((</>), takeDirectory, takeExtension)
 import qualified System.Info as Host
 import GHC.ResponseFile (escapeArgs)
 import THC.Compact.Module (readModuleValue)
 import THC.Driver.Project (prepareWindowsRuntime)
+
+-- | Exercise the native wait boundary independently of compiler acquisition.
+-- A one-second deadline must terminate a four-second child promptly and retain
+-- its failed command record. No guest-call limits or assertions are changed.
+checkWindowsTimeout :: FilePath -> IO ()
+checkWindowsTimeout root = do
+  unless (Host.os == "mingw32") (die "windows-timeout requires native Windows")
+  stamp <- formatTime defaultTimeLocale "%Y%m%dT%H%M%S%q" <$> getCurrentTime
+  let logs = "build/windows-timeout" </> stamp
+  start <- getCurrentTime
+  result <- try (runLogged 1 root logs "sleep" [] "powershell.exe"
+    ["-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 4"])
+    :: IO (Either ExitCode CommandResult)
+  end <- getCurrentTime
+  unless (either (== ExitFailure 1) (const False) result && diffUTCTime end start < 3)
+    (die "native fixture deadline did not terminate the child promptly")
+  record <- either die pure . eitherDecodeStrict =<< BS.readFile (root </> logs </> "sleep.command.json")
+  unless (case record of Object fields -> KeyMap.lookup "timedOut" fields == Just (Bool True); _ -> False)
+    (die "native fixture deadline lost its failed evidence")
+  putStrLn "windows-timeout: native child deadline and failed evidence preserved"
 
 -- Execute the real opaque boxer/projector and its Exception dictionary. Native
 -- expected values and exported Core use the same actual Cabal runtime unit.
