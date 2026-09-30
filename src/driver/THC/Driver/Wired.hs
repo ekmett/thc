@@ -14,27 +14,57 @@
 -- Produce wired-module and source artifacts used by project Core acquisition.
 module THC.Driver.Wired
   ( WiredArtifacts(..), bootSources, moduleSources, sourceHashes, pinnedSourcePath
-  , exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout ) where
+  , exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout, preparePinnedInterfaces, pinnedDependencyOrder ) where
 
-import Control.Monad (forM, forM_, unless, when)
+import Control.Monad (filterM, foldM, forM, forM_, unless, when)
+import Control.Exception (bracket)
+import qualified Crypto.Hash.SHA256 as SHA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Aeson (Value(..), encode, eitherDecodeStrict', object, (.=))
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf, nub, sort)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf, nub, sort, stripPrefix)
+import Data.Graph (SCC(..), stronglyConnComp)
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Distribution.InstalledPackageInfo as Package
 import System.Directory (copyFile, createDirectoryIfMissing, createFileLink, doesDirectoryExist, doesFileExist,
-                         findExecutable, listDirectory, removeFile)
+                         findExecutable, listDirectory, removeFile, createDirectory, withCurrentDirectory, renameFile, renameDirectory)
 import System.Exit (ExitCode(..))
 import System.Environment (lookupEnv)
 import qualified System.Info as Host
-import System.FilePath ((</>), makeRelative, replaceExtension, takeDirectory, takeExtension)
-import System.Process (CreateProcess(..), createProcess, proc, readProcess, rawSystem, waitForProcess)
-import THC.Driver.Installed (boundedInterfaceProcess)
+import System.FilePath ((</>), makeRelative, replaceExtension, takeDirectory, takeExtension, takeFileName)
+import System.Process (CreateProcess(..), StdStream(UseHandle), createProcess, proc, readProcess, rawSystem, waitForProcess)
+import System.IO (hClose, openTempFile, stderr)
+import Text.Read (readEither)
+import THC.Driver.Installed (InstalledContext(..), InstalledUnit(..), boundedInterfaceProcess)
 import THC.Compact.Module (readModuleMetadata)
+import THC.Driver.InstalledForeign (createView, viewContext)
+import THC.Driver.GhcProxy (directPlugin)
+import THC.Driver.PinnedFlags (pinnedLibraryFlags)
+import THC.Driver.PinnedSetup (configurePinnedCustom)
+import THC.Driver.Lock (withLock)
+import Distribution.Package (pkgName, pkgVersion)
+import qualified Distribution.PackageDescription as PD
+import Distribution.Simple.PackageDescription (readGenericPackageDescription)
+import Distribution.Pretty (prettyShow)
+import Distribution.Simple.Configure (getPersistBuildConfig)
+import Distribution.Simple.LocalBuildInfo (localPkgDescr, compiler, hostPlatform,
+  allComponentsInBuildOrder, componentUnitId, componentPackageDeps, componentBuildDir, allLibModules)
+import Distribution.Simple.Build (initialBuildSteps)
+import Distribution.Simple.PreProcess (preprocessComponent, knownSuffixHandlers)
+import Distribution.Simple.GHC (componentGhcOptions)
+import Distribution.Simple.Program.GHC (renderGhcOptions, GhcOptions(..), GhcMode(..), GhcDynLinkMode(..))
+import Distribution.Simple.Setup (toFlag)
+import Distribution.Types.Component (Component(..))
+import Distribution.Utils.NubList (toNubListR)
+import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
+import Distribution.Verbosity (normal, silent)
+import Numeric (showHex)
+
 
 -- These are the original GHC 9.14.1 sources. Boot interfaces are compiled
 -- first; the installed ghc-internal dynamic interfaces fill the remaining
@@ -374,3 +404,269 @@ linkInterfaces vanilla installed overlay directory = do
       let target = overlay </> replaceExtension (makeRelative installed source) "hi"
       createDirectoryIfMissing True (takeDirectory target)
       if vanilla then copyFile source target else createFileLink source target
+
+-- | Order selected registrations before extending their shared interface view.
+pinnedDependencyOrder :: [InstalledUnit] -> Either String [InstalledUnit]
+pinnedDependencyOrder units
+  | Set.size (Set.fromList (map registeredId units)) /= length units = Left "duplicate pinned installed registrations"
+  | otherwise = traverse ordered (stronglyConnComp
+      [(unit, registeredId unit, installedDepends unit) | unit <- units])
+  where
+    ordered (AcyclicSCC unit) = Right unit
+    ordered (CyclicSCC members) = Left ("pinned installed dependency cycle: " ++ show (map registeredId members))
+
+-- | Rebuild the selected boot-library closure from the exact GHC release,
+-- retaining Cabal identities and native registrations in a private interface
+-- view, leaving the selected compiler and its package database untouched.
+preparePinnedInterfaces :: FilePath -> FilePath -> String -> FilePath ->
+                           InstalledContext -> [InstalledUnit] -> IO InstalledContext
+preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units = do
+  ordered <- either fail pure (pinnedDependencyOrder units)
+  settings <- either fail pure . readEither =<< readProcess (installedGhc original) ["--info"] ""
+  source <- pinnedRelease cache
+  pluginHash <- digest <$> BS.readFile pluginLibrary
+  helperHash <- digest <$> BS.readFile (installedHelper original)
+  foldM (prepare source pluginHash helperHash settings) original ordered
+  where
+    prepare source pluginHash helperHash settings context unit
+      | null (installedInterfaces unit) = pure context
+      | otherwise = do
+          (_, registered) <- either (fail . show) pure
+            (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack (registration unit))))
+          let name = prettyShow (pkgName (Package.sourcePackageId registered))
+              version = prettyShow (pkgVersion (Package.sourcePackageId registered))
+          flags <- either fail pure (pinnedLibraryFlags name (map fst (installedInterfaces unit)) settings)
+          backend <- if name /= "ghc-internal" then pure [] else do
+            path <- maybe (fail "selected ghc-internal has no bignum backend") pure
+              (lookup "GHC.Internal.Bignum.Backend.Selected" (installedInterfaces unit))
+            iface <- readProcess (installedGhc original) ["--show-iface", path] ""
+            case [flag | (flag, moduleName) <- [("gmp","GMP"),("native","Native"),("ffi","FFI")],
+                  ("GHC.Internal.Bignum.Backend." ++ moduleName) `isInfixOf` iface] of
+              [flag] -> pure ["-fbignum-" ++ flag]
+              _ -> fail "cannot identify selected ghc-internal bignum backend"
+          cppFlags <- maybe "" id <$> lookupEnv "CPPFLAGS"
+          let selectedFlags = flags ++ backend
+              key = digest (BL.toStrict (encode
+                ("pinned-library-core-v3" :: String, pinnedReleaseIdentity, driverHash, pluginUnit, pluginHash, helperHash,
+                 installedCompiler original, settings, selectedFlags, cppFlags, installedLibdir context, registration unit)))
+              destination = cache </> "pinned-libraries/v1" </> key
+              receipt = destination </> "complete"
+          createDirectoryIfMissing True (takeDirectory destination)
+          withLock (destination ++ ".lock") $ do
+            ready <- doesFileExist receipt
+            if ready then pure (viewContext context (destination </> "view")) else do
+              exists <- doesDirectoryExist destination
+              when exists $ do
+                -- An interrupted compiler/tool failure must not poison this
+                -- immutable key. Retain its evidence before a clean retry.
+                (retained, handle) <- openTempFile (takeDirectory destination) (takeFileName destination ++ ".failed-")
+                hClose handle
+                removeFile retained
+                renameDirectory destination retained
+                writeFile (retained </> "original-location") (destination ++ "\n")
+              createDirectory destination
+              BL.writeFile (destination </> "inputs.json") (encode (object
+                ["source" .= pinnedReleaseIdentity, "compiler" .= installedCompiler original,
+                 "registration" .= registration unit, "dependencyView" .= installedLibdir context,
+                 "driverHash" .= driverHash, "pluginHash" .= pluginHash, "helperHash" .= helperHash,
+                 "flags" .= selectedFlags, "cppFlags" .= cppFlags, "settings" .= settings]))
+              let package = destination </> "source"
+                  dist = destination </> "dist"
+              let roots = [source </> parent </> name | parent <-
+                    ["libraries", "libraries/Cabal", "utils", "utils/haddock"]] ++
+                    [source </> "compiler" | name == "ghc"]
+              candidates <- filterM (\path -> (||)
+                <$> doesFileExist (path </> name ++ ".cabal")
+                <*> doesFileExist (path </> name ++ ".cabal.in"))
+                (nub (concatMap (\path -> [path, path </> name]) roots))
+              origin <- case candidates of
+                [path] -> pure path
+                _ -> fail ("GHC 9.14.1 source has no unique package " ++ name)
+              copyTree origin package
+              let cabalFile = package </> name ++ ".cabal"
+              hasCabal <- doesFileExist cabalFile
+              unless hasCabal $ do
+                template <- readFile (cabalFile ++ ".in")
+                writeFile cabalFile (replace "@Suffix@" "" (replace "@SourceRoot@" "."
+                  (replace "@ProjectVersionForLib@" "9.1401"
+                    (replace "@ProjectVersionMunged@" "9.14.1" (replace "@ProjectVersion@" "9.14.1" template)))))
+              generic <- readGenericPackageDescription normal Nothing (makeSymbolicPath cabalFile)
+              let description = PD.packageDescription generic
+              unless (prettyShow (PD.package description) == name ++ "-" ++ version)
+                (fail ("Pinned package version differs from selected registration: " ++ name))
+              when (name == "ghc-internal") $ do
+                generatePrimitiveWrappers source package destination (installedGhc original)
+              dependencyOptions <- forM (installedDepends unit) $ \identifier -> do
+                text <- readProcess (installedPackageTool context)
+                  ["--global", "--no-user-package-db", "--ipid", "describe", identifier] ""
+                (_, dependency) <- either (fail . show) pure
+                  (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack text)))
+                pure ("--dependency=" ++ prettyShow (pkgName (Package.sourcePackageId dependency)) ++ "=" ++ identifier)
+              cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+              let includes = nub (package : Package.includeDirs registered)
+                  options = ["configure",
+                    "--builddir=" ++ dist, "--with-compiler=" ++ installedGhc original,
+                    "--with-hc-pkg=" ++ installedPackageTool context,
+                    "--package-db=clear", "--package-db=" ++ installedGlobalDb context,
+                    "--ipid=" ++ registeredId unit, "--enable-shared", "--disable-library-profiling",
+                    "--ghc-options=-O2 -fwrite-if-simplified-core"] ++ dependencyOptions ++ selectedFlags ++
+                    map ("--extra-include-dirs=" ++) includes ++
+                    -- Cabal runs Configure from dist/build; the genuine source
+                    -- headers live beside dist. Keep paths with spaces out of CPPFLAGS.
+                    ["--configure-option=CPPFLAGS=" ++ cppFlags ++ " -I../../source" | PD.buildType description == PD.Configure]
+              if PD.buildType description == PD.Custom
+                then configurePinnedCustom source package (destination </> "setup") (installedGhc original) options
+                else checkedIn package cabal
+                  (["act-as-setup", "--build-type=" ++ prettyShow (PD.buildType description), "--"] ++ options)
+              configured <- getPersistBuildConfig Nothing (makeSymbolicPath dist)
+              let configuredPackage = localPkgDescr configured
+              lib <- maybe (fail "pinned installed unit is not a library") pure (PD.library configuredPackage)
+              component <- case allComponentsInBuildOrder configured of
+                [value] -> pure value
+                _ -> fail "pinned library has multiple configured components"
+              unless (prettyShow (componentUnitId component) == registeredId unit &&
+                      sort (map (prettyShow . fst) (componentPackageDeps component)) == sort (installedDepends unit))
+                (fail "pinned Cabal configuration changed installed unit/dependency identities")
+              let realModule m = prettyShow m /= "GHC.Internal.Prim"
+                  selected = filter realModule (allLibModules lib component)
+                  expected = filter (/= "GHC.Internal.Prim") (map fst (installedInterfaces unit))
+                  info = PD.libBuildInfo lib
+                  executableLibrary = lib { PD.exposedModules = filter realModule (PD.exposedModules lib),
+                    PD.libBuildInfo = info { PD.otherModules = filter realModule (PD.otherModules info),
+                                            PD.autogenModules = filter realModule (PD.autogenModules info) } }
+                  output = componentBuildDir configured component
+              unless (sort (map prettyShow selected) == sort expected)
+                (fail ("configured pinned module inventory differs from installed package " ++ name))
+              -- The finder still needs the selected compiler's real primitive
+              -- interface at the home-unit search path. GHC supplies its actual
+              -- declarations; it has no source target or executable bodies.
+              forM_ (lookup "GHC.Internal.Prim" (installedInterfaces unit)) $ \primitive ->
+                forM_ ["hi", "dyn_hi"] $ \suffix -> do
+                  let target = getSymbolicPath output </> "GHC/Internal/Prim." ++ suffix
+                  createDirectoryIfMissing True (takeDirectory target)
+                  copyFile (replaceExtension primitive suffix) target
+              withCurrentDirectory package $ do
+                initialBuildSteps dist configuredPackage configured silent
+                preprocessComponent configuredPackage (CLib executableLibrary) configured component False silent knownSuffixHandlers
+                let base = componentGhcOptions normal configured info component output
+                    options' = base <> mempty
+                      { ghcOptMode = toFlag GhcModeMake, ghcOptNoLink = toFlag True,
+                        ghcOptInputModules = toNubListR selected,
+                        ghcOptDynLinkMode = toFlag GhcStaticAndDynamic, ghcOptFPic = toFlag True,
+                        ghcOptDynHiSuffix = toFlag "dyn_hi", ghcOptDynObjSuffix = toFlag "dyn_o" }
+                    core = destination </> "core"
+                    rendered = renderGhcOptions (compiler configured) (hostPlatform configured) options'
+                    graphArguments = filter (`notElem` ["--make", "-no-link"]) rendered
+                    request = destination </> "source-graph-request.json"
+                    exportFlags = ["-fplugin-trustworthy", directPlugin pluginLibrary pluginUnit
+                         [core,"post-tidy","unit-qualified","source-notes","foreign-import-provenance",
+                          "foreign-export-associations","foreign-export-registration"] []]
+                createDirectoryIfMissing True core
+                BL.writeFile request (encode graphArguments)
+                graphText <- readProcess (installedHelper context)
+                  ["--source-graph", installedLibdir context, request] ""
+                graph <- either fail pure (Aeson.eitherDecode (BL.pack graphText) :: Either String [Value])
+                nodes <- forM graph $ \node -> case node of
+                  Object fields -> do
+                    let get :: Aeson.FromJSON a => String -> IO a
+                        get key = case KeyMap.lookup (Key.fromString key) fields of
+                          Just value -> case Aeson.fromJSON value of
+                            Aeson.Success parsed -> pure parsed
+                            Aeson.Error message -> fail message
+                          Nothing -> fail ("source graph lacks " ++ key)
+                    (,,) <$> get "module" <*> get "source" <*> get "boot"
+                  _ -> fail "invalid source graph node"
+                unless (sort [moduleName | (moduleName, _, False) <- nodes] == sort expected)
+                  (fail "GHC source graph differs from complete Cabal module inventory")
+                BL.writeFile (destination </> "source-graph.json") (encode graph)
+                let compileFlags = filter (`notElem` ("--make" : "-no-link" : map prettyShow selected)) rendered ++
+                      ["-c", "-O2", "-fwrite-if-simplified-core", "-dcore-lint", "-fforce-recomp"] ++
+                      [option | name == "ghc-internal", option <- ["-package-id", registeredId unit]]
+                forM_ nodes $ \(_, path, boot) ->
+                  checkedIn package (installedGhc original) (compileFlags ++ (if boot then [] else exportFlags) ++ [path])
+              createDirectory (destination </> "interfaces")
+              forM_ expected $ \moduleName -> forM_ ["hi", "dyn_hi"] $ \extension -> do
+                let relative = map (\c -> if c == '.' then '/' else c) moduleName ++ "." ++ extension
+                    target = destination </> "interfaces" </> relative
+                createDirectoryIfMissing True (takeDirectory target)
+                createFileLink (getSymbolicPath output </> relative) target
+              view <- createView context unit destination expected
+              writeFile receipt (show (registeredId unit, expected) ++ "\n")
+              pure (viewContext context view)
+
+-- The release tarball carries upstream-generated parser sources/configure
+-- scripts. Its immutable checksum ties those products to the pinned release;
+-- users do not need a bootstrap GHC build or local Alex/Happy installation.
+pinnedReleaseIdentity :: Value
+pinnedReleaseIdentity = object
+  ["version" .= ("9.14.1" :: String),
+   "gitCommit" .= ("902339d332fb4ce2b3c87dcac1ee6495d41ad886" :: String),
+   "sha256" .= pinnedReleaseChecksum]
+
+pinnedReleaseChecksum :: String
+pinnedReleaseChecksum = "2a83779c9af86554a3289f2787a38d6aa83d00d136aa9f920361dd693c101e77"
+
+pinnedRelease :: FilePath -> IO FilePath
+pinnedRelease cache = do
+  let checksum = pinnedReleaseChecksum
+      directory = cache </> "pinned-sources" </> checksum
+      archive = directory </> "ghc-9.14.1-src.tar.xz"
+      source = directory </> "ghc-9.14.1"
+      ready = directory </> "complete"
+  createDirectoryIfMissing True directory
+  withLock (directory </> ".lock") $ do
+    exists <- doesFileExist ready
+    unless exists $ do
+      present <- doesFileExist archive
+      valid <- if present then (== checksum) . digest <$> BS.readFile archive else pure False
+      unless valid $ bracket (openTempFile directory "download-")
+        (\(temporary, _) -> do remaining <- doesFileExist temporary; when remaining (removeFile temporary)) $
+        \(temporary, handle) -> do
+          hClose handle
+          checkedIn directory "curl"
+            ["--fail","--location","--output",temporary,"https://downloads.haskell.org/ghc/9.14.1/ghc-9.14.1-src.tar.xz"]
+          actual <- digest <$> BS.readFile temporary
+          unless (actual == checksum) (fail "pinned GHC source archive checksum differs")
+          renameFile temporary archive
+      checkedIn directory "tar" ["-xJf",archive]
+      writeFile ready (checksum ++ "\n")
+    pure source
+
+generatePrimitiveWrappers :: FilePath -> FilePath -> FilePath -> FilePath -> IO ()
+generatePrimitiveWrappers source package destination ghc = do
+  let directory = destination </> "generator"
+      generator = directory </> "genprimopcode"
+      primops = directory </> "primops.txt"
+      upstream = source </> "utils/genprimopcode"
+  createDirectory directory
+  checkedIn upstream ghc ["--make","-O0","-i" ++ upstream,"-outputdir",directory,
+                         upstream </> "Main.hs","-o",generator]
+  checkedIn source ghc ["-E","-cpp","-optP-P","-x","hs",
+    source </> "compiler/GHC/Builtin/primops.txt.pp","-o",primops]
+  input <- unlines . filter (not . isPrefixOf "{-# LINE ") . lines <$> readFile primops
+  output <- readProcess generator ["--make-haskell-wrappers"] input
+  writeFile (package </> "src/GHC/Internal/PrimopWrappers.hs") output
+
+copyTree :: FilePath -> FilePath -> IO ()
+copyTree source target = do
+  createDirectoryIfMissing True target
+  names <- listDirectory source
+  forM_ names $ \name -> do
+    let from = source </> name; to = target </> name
+    directory <- doesDirectoryExist from
+    if directory then copyTree from to else copyFile from to
+
+checkedIn :: FilePath -> FilePath -> [String] -> IO ()
+checkedIn directory program arguments = do
+  (_,_,_,process) <- createProcess (proc program arguments) { cwd = Just directory, std_out = UseHandle stderr }
+  status <- waitForProcess process
+  unless (status == ExitSuccess) (fail ("pinned library command failed: " ++ program ++ " " ++ show arguments))
+
+digest :: BS.ByteString -> String
+digest = concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value) . BS.unpack . SHA.hash
+
+replace :: String -> String -> String -> String
+replace old new = go where
+  go [] = []
+  go input | Just rest <- stripPrefix old input = new ++ go rest
+  go (c:rest) = c : go rest

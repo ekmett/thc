@@ -10,10 +10,10 @@
 -- Portability : Native GHC; fixture compiler and host process services
 --
 -- Tests for project.
-module ProjectTests (tests, acquisitionTests, exceptionBridgeTests, interopTests) where
+module ProjectTests (tests, acquisitionTests, exceptionBridgeTests, interopTests, projectReplayTests) where
 
 import Control.Exception (bracket)
-import Control.Monad (forM, forM_)
+import Control.Monad (forM, forM_, when)
 import Data.Aeson (Value)
 import qualified Data.ByteString as BS
 import qualified Data.Text as Text
@@ -200,9 +200,9 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
 
 acquisitionTests :: Env -> Test
 acquisitionTests env = TestLabel "project acquisition stops before audit and execution" $ TestCase $
-  -- This real program builds with GHC, but its partial pinned-Core closure is
-  -- rejected by the strict auditor (see cstringTests). Acquisition must succeed
-  -- without claiming that audit result or launching the guest.
+  -- Acquire the original MonadFail/exception program with complete pinned Core.
+  -- Acquisition must still stop before audit or execution; cstringTests below
+  -- separately requires strict acceptance and the genuine executable lifecycle.
   withFixtureNamed env "t/fixtures/run-fail-frontier" "project café" $ \project ->
   withCache (scratch env </> "core-cache") $ do
     let base = takeDirectory project
@@ -257,7 +257,14 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
       =<< readText (output </> "audit.json")
 
 projectTests :: Env -> Test
-projectTests env = TestLabel "three-package project native versus THC run" $ TestCase $
+projectTests = projectTestsWithBootstrap True
+
+-- | Exercise the original TH project and warm replay using an already built THC.
+projectReplayTests :: Env -> Test
+projectReplayTests = projectTestsWithBootstrap False
+
+projectTestsWithBootstrap :: Bool -> Env -> Test
+projectTestsWithBootstrap bootstrapRoot env = TestLabel "three-package project native versus THC run" $ TestCase $
   -- GHC 9.14's Linux -g assembler cannot quote a double quote in .file paths.
   -- Plan/run tests retain the quoted Unicode path coverage.
   withFixtureNamed env "t/fixtures/run-project" "project café" $ \project ->
@@ -280,51 +287,52 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
           (string $ field bundle "path", string $ field bundle "sha256")
         modulePath manifest identifier = string $ field
           (one (const True) $ objects (unit manifest identifier) "modules") "path"
-    -- The first project run must bootstrap the ordinary Cabal plugin library.
-    -- Keep this source-only root private so shared compiler artifacts and other
-    -- worktrees are never renamed or deleted during the test.
-    forM_ ["bin", "src", "nih", "etc", "t"] $ \directory ->
-      copyTree (root env </> directory) (sourceOnlyRoot </> directory)
-    forM_ ["thc.cabal", "cabal.project", "Setup.hs", ".gitmodules", "LICENSE", "LICENSE.txt", "README.md"] $ \name ->
-      copyFile (root env </> name) (sourceOnlyRoot </> name)
-    createDirectoryIfMissing True (sourceOnlyRoot </> "docs")
-    copyFile (root env </> "docs/driver.md") (sourceOnlyRoot </> "docs/driver.md")
-    initiallyBuilt <- doesFileExist (sourceOnlyRoot </> "build/compiler/plugin.json")
-    assertBool "source-only checkout has no plugin manifest" (not initiallyBuilt)
-    bootstrap <- run env base Nothing 120
-      ["run", "--verify-artifacts", "--project-dir", project, "app-run:exe:missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
-       "--runtime", runtime env, "--dist-dir", output]
-    assertFailure bootstrap
-    assertNoStdout bootstrap
-    -- Targeted native acquisition lets Cabal reject the missing component
-    -- before a plan/build exists. Plugin bootstrapping must still happen first.
-    assertContains "The package app-run has no executable component 'missing-bootstrap-probe'."
-      (unwords $ words $ err bootstrap)
-    let pluginPath = sourceOnlyRoot </> "build/compiler/plugin.json"
-    requireFile pluginPath
-    plugin <- readJson pluginPath
-    assertEqual "plugin manifest schema" 1 (number $ field plugin "schema")
-    let pluginUnit = string $ field plugin "unitId"
-        pluginDb = string $ field plugin "packageDb"
-        shared = string $ field plugin "sharedLibrary"
-        registered = string $ field plugin "cabalSharedLibrary"
-    requireFile shared
-    requireFile registered
-    expectedPluginDir <- canonicalizePath (sourceOnlyRoot </> "build/compiler")
-    actualPluginDir <- canonicalizePath (takeDirectory shared)
-    assertEqual "published plugin directory" expectedPluginDir actualPluginDir
-    packageTool <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
-    let registeredField name = runExe env base Nothing 30 packageTool
-          ["--unit-id", "field", pluginUnit, name, "--simple-output",
-           "--package-db", pluginDb]
-    registeredId <- registeredField "id"
-    assertSuccess registeredId
-    assertEqual "registered plugin unit" [pluginUnit] (words $ out registeredId)
-    libraryDirs <- registeredField "dynamic-library-dirs"
-    assertSuccess libraryDirs
-    assertContains (takeDirectory registered) (out libraryDirs)
-    assertEqual "published library filename"
-      (takeFileName registered) (takeFileName shared)
+    when bootstrapRoot $ do
+      -- The first project run must bootstrap the ordinary Cabal plugin library.
+      -- Keep this source-only root private so shared compiler artifacts and other
+      -- worktrees are never renamed or deleted during the test.
+      forM_ ["bin", "src", "nih", "etc", "t"] $ \directory ->
+        copyTree (root env </> directory) (sourceOnlyRoot </> directory)
+      forM_ ["thc.cabal", "cabal.project", "Setup.hs", ".gitmodules", "LICENSE", "LICENSE.txt", "README.md"] $ \name ->
+        copyFile (root env </> name) (sourceOnlyRoot </> name)
+      createDirectoryIfMissing True (sourceOnlyRoot </> "docs")
+      copyFile (root env </> "docs/driver.md") (sourceOnlyRoot </> "docs/driver.md")
+      initiallyBuilt <- doesFileExist (sourceOnlyRoot </> "build/compiler/plugin.json")
+      assertBool "source-only checkout has no plugin manifest" (not initiallyBuilt)
+      bootstrap <- run env base Nothing 120
+        ["run", "--verify-artifacts", "--project-dir", project, "app-run:exe:missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
+         "--runtime", runtime env, "--dist-dir", output]
+      assertFailure bootstrap
+      assertNoStdout bootstrap
+      -- Targeted native acquisition lets Cabal reject the missing component
+      -- before a plan/build exists. Plugin bootstrapping must still happen first.
+      assertContains "The package app-run has no executable component 'missing-bootstrap-probe'."
+        (unwords $ words $ err bootstrap)
+      let pluginPath = sourceOnlyRoot </> "build/compiler/plugin.json"
+      requireFile pluginPath
+      plugin <- readJson pluginPath
+      assertEqual "plugin manifest schema" 1 (number $ field plugin "schema")
+      let pluginUnit = string $ field plugin "unitId"
+          pluginDb = string $ field plugin "packageDb"
+          shared = string $ field plugin "sharedLibrary"
+          registered = string $ field plugin "cabalSharedLibrary"
+      requireFile shared
+      requireFile registered
+      expectedPluginDir <- canonicalizePath (sourceOnlyRoot </> "build/compiler")
+      actualPluginDir <- canonicalizePath (takeDirectory shared)
+      assertEqual "published plugin directory" expectedPluginDir actualPluginDir
+      packageTool <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+      let registeredField name = runExe env base Nothing 30 packageTool
+            ["--unit-id", "field", pluginUnit, name, "--simple-output",
+             "--package-db", pluginDb]
+      registeredId <- registeredField "id"
+      assertSuccess registeredId
+      assertEqual "registered plugin unit" [pluginUnit] (words $ out registeredId)
+      libraryDirs <- registeredField "dynamic-library-dirs"
+      assertSuccess libraryDirs
+      assertContains (takeDirectory registered) (out libraryDirs)
+      assertEqual "published library filename"
+        (takeFileName registered) (takeFileName shared)
     firstBundles <- forBackends env invoke output project entryOf unit bundleRef modulePath
     original <- readText source
     assertContains "I# 42#" original
@@ -334,6 +342,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
     assertNoStdout changed
     audit <- readJson (output </> "audit.json")
     assertBool "failed action has accepted Core" (bool $ field audit "accepted")
+    assertExecutableLifecycle audit
     manifest <- readSourceManifest (output </> "packages.json")
     plan <- readJson (output </> "native/cache/plan.json")
     let dependency = one ((== "dep-data") . string . (`field` "pkg-name"))
@@ -369,6 +378,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
       assertEqual "unsupported traps" 0 (number $ field diagnostics "unsupportedTraps")
       audit <- readJson (output </> "audit.json")
       assertBool "strict audit" (bool $ field audit "accepted")
+      assertExecutableLifecycle audit
       assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
       assertBool "original CString binding reached" $ any
         ((== "ghc-internal:GHC.Internal.CString.unpackCString#") . string . (`field` "id"))
@@ -388,7 +398,10 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
       inputs <- readCore bundle "inplace-manifest.json"
       let layout = field inner "targetLayout"
           compiler = field inputs "compiler"
-          generated = objects inner "generatedSources"
+          component = field inputs "component"
+          registration = field component "registration"
+          registeredModules = map (string . (`field` "module")) (objects registration "interfaces")
+          generatedCore = objects inputs "generatedCore"
       assertEqual "wired layout receipt matches hashed build inputs"
         layout (field inputs "targetLayout")
       assertEqual "nonprofiling Core way" "dynamic-nonprofiling"
@@ -400,15 +413,26 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
          number (field layout "infoProvEntInfoOffset") &&
          number (field layout "infoProvEntProvOffset") <
          number (field layout "infoProvEntBytes"))
-      assertEqual "exact original hsc sources preprocessed"
-        (sort ["GHC/Internal/Heap/Constants.hsc", "GHC/Internal/Heap/InfoTable/Types.hsc",
-               "GHC/Internal/Heap/InfoTable.hsc", "GHC/Internal/Stack/Constants.hsc",
-               "GHC/Internal/InfoProv/Types.hsc", "GHC/Internal/Stack/CCS.hsc",
-               "GHC/Internal/ExecutionStack/Internal.hsc"])
-        (sort [string (field source "path") | source <- generated])
-      assertEqual "generated-source receipts match"
-        generated (objects inputs "generatedSources")
-      assertImportProvenanceOption inputs
+      assertEqual "complete pinned source uses the installed-interface boundary"
+        "installed-interface" (string $ field component "kind")
+      assertEqual "source coverage follows the actual registered library inventory"
+        "registered-owned-modules" (string $ field registration "coverage")
+      assertEqual "every registered module has captured genuine Core"
+        (sort registeredModules) (sort [string (field item "module") | item <- generatedCore])
+      assertEqual "every captured module is published"
+        (sort registeredModules) (sort sourceModules)
+      assertEqual "bundle module receipt matches publication"
+        (objects (wired manifest) "modules") (objects inner "modules")
+      forM_ (objects registration "interfaces") $ \interface ->
+        requireFile (string $ field interface "path")
+      assertEqual "layout belongs to the selected compiler target"
+        (field compiler "platform") (field layout "targetPlatform")
+      assertEqual "installed capture preserves the original native-call linkage recipe"
+        "installed-native-fcall-v1"
+        (string $ field (field inputs "exporter") "foreignLinkRecipe")
+      forM_ ["post-tidy", "unit-qualified", "source-notes", "dynamic"] $ \option ->
+        assertBool (option ++ " is part of installed export identity")
+          (option `elem` strings (field (field inputs "exporter") "options"))
       plan <- readJson (output </> "native/cache/plan.json")
       let entry = one ((== "exe:cstring") . string . (`field` "component-name"))
                       (objects plan "install-plan")
@@ -424,13 +448,17 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
         frontier = base </> "fail-frontier"
         frontierOutput = base </> "fail-output"
     copyTree (root env </> "t/fixtures/run-fail-frontier") frontier
-    frontierResult <- run env base Nothing 240
-      ["run", "--verify-artifacts", "--project-dir", frontier, "fail-frontier", "--thc-root", thcRoot env,
-       "--runtime", runtime env, "--dist-dir", frontierOutput]
-    assertFailure frontierResult
-    assertNoStdout frontierResult
-    frontierAudit <- readJson (frontierOutput </> "audit.json")
-    assertFailFrontierAudit frontierAudit
+    forM_ ["ast", "bytecode"] $ \backend -> do
+      frontierResult <- run env base (Just backend) 240
+        ["run", "--verify-artifacts", "--project-dir", frontier, "fail-frontier", "--thc-root", thcRoot env,
+         "--runtime", runtime env, "--dist-dir", frontierOutput]
+      assertSuccess frontierResult
+      assertNoStdout frontierResult
+      diagnostics <- json (last $ lines $ err frontierResult)
+      assertEqual "fail-frontier backend" backend (string $ field diagnostics "backend")
+      assertEqual "fail-frontier unsupported traps" 0 (number $ field diagnostics "unsupportedTraps")
+      frontierAudit <- readJson (frontierOutput </> "audit.json")
+      assertFailFrontierAudit frontierAudit
     frontierPlan <- readJson (frontierOutput </> "native/cache/plan.json")
     let entry = one ((== "exe:fail-frontier") . string . (`field` "component-name"))
                     (objects frontierPlan "install-plan")
@@ -440,10 +468,21 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
     staging <- listDirectory (frontierOutput </> "native/cache/thc/staging")
     assertEqual "disposable export staging cleaned" [] staging
 
+assertExecutableLifecycle :: Value -> IO ()
+assertExecutableLifecycle audit = do
+  let roots = ["main::Main.main", "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"]
+      reachable = map (string . (`field` "id")) (objects audit "reachableBindings")
+  assertEqual "generated main and original shutdown are audited together" roots
+    (strings $ field audit "roots")
+  forM_ roots $ \entry -> assertBool (entry ++ " is reachable") (entry `elem` reachable)
+
 assertFailFrontierAudit :: Value -> IO ()
 assertFailFrontierAudit audit = do
-  assertBool "the partial ghc-internal bundle rejects unresolved MonadFail dependencies"
-    (not $ bool $ field audit "accepted")
+  assertBool "complete pinned Core accepts the original MonadFail program"
+    (bool $ field audit "accepted")
+  assertEqual "complete pinned Core resolves every reachable global" []
+    (array $ field audit "missingGlobals")
+  assertExecutableLifecycle audit
   let missing = map (string . (`field` "id")) (objects audit "missingGlobals")
       missingName name = any (name `isInfixOf`) missing
       issues = objects audit "issues"
@@ -464,10 +503,8 @@ assertFailFrontierAudit audit = do
         ("/expr/" `isPrefixOf` string (field call "path"))
       assertBool (symbol ++ " is neither missing nor rejected at its call site")
         (not (missingName symbol) && not (any sameSite issues))
-  -- This pinned source subset still lacks Bignum and encoding definitions, but
-  -- the original decoder's foreign operations are now supported. Require their
-  -- admission instead of treating the old capability failures as a test result.
-  assertBool "missing source definitions explain the rejected partial bundle" (not $ null missing)
+  -- Complete source acquisition must preserve original decoder foreign-call
+  -- admission rather than replacing those calls or accepting missing globals.
   assertEqual "supplied definitions have no unsupported operations" [] issues
   let stackCalls = filter (\call ->
         "ghc-internal:GHC.Internal.Stack.Decode." `isPrefixOf` string (field call "owner"))
@@ -489,7 +526,8 @@ withCache path action = bracket acquire restore (const action)
   where
     acquire = do
       prior <- lookupEnv "THC_CACHE_HOME"
-      setEnv "THC_CACHE_HOME" path
+      override <- lookupEnv "THC_TEST_CORE_CACHE"
+      setEnv "THC_CACHE_HOME" (maybe path id override)
       pure prior
     restore = maybe (unsetEnv "THC_CACHE_HOME") (setEnv "THC_CACHE_HOME")
 
@@ -561,6 +599,7 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
       assertEqual "entry Core" ["Main"] (moduleNames $ unit manifest entryId)
       audit <- readJson (output </> "audit.json")
       assertBool "accepted" (bool $ field audit "accepted")
+      assertExecutableLifecycle audit
       assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
       assertBool "imported thunk reachable" $ any
         ((== depId ++ ":Answer.answerValue") . string . (`field` "id"))

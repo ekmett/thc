@@ -14,18 +14,28 @@
 -- Only a selected THC-only runnable unit omits its native final link. A second
 -- invocation exports Core while
 -- Cabal's unpacked source and generated files still exist.
-module THC.Driver.GhcProxy (runGhcProxy, ghcProxyCommand, ghcProxyWindowsCommand, directPlugin) where
+module THC.Driver.GhcProxy (runGhcProxy, ghcProxyCommand, ghcProxyWindowsCommand, directPlugin,
+                           coreReplayArguments) where
 
-import Control.Monad (unless, when)
+import Control.Monad (forM, forM_, unless, when)
+import Data.Aeson (eitherDecodeStrict')
 import Data.List (stripPrefix)
-import System.Directory (createDirectoryIfMissing)
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import qualified Distribution.InstalledPackageInfo as Package
+import Distribution.Pretty (prettyShow)
+import System.Directory (createDirectory, createDirectoryIfMissing, doesDirectoryExist,
+                         doesFileExist, removeFile)
 import GHC.ResponseFile (expandResponse)
+import THC.Driver.NativeLibrarySources (nativePackageOptions)
 import THC.Driver.NativeRecipe (captureNativeRecipe)
 import THC.Driver.PackageNative (captureNativeObject, captureNativeComponent, capturePackageNative)
 import System.Environment (getEnv, lookupEnv)
 import System.Exit (ExitCode(..), exitWith)
-import System.FilePath ((</>))
-import System.Process (rawSystem)
+import System.FilePath ((</>), takeDirectory)
+import System.IO (hClose, openTempFile)
+import System.Process (rawSystem, readProcess)
 
 -- Stop the driver's native RTS before getArgs: these are the compiler's RTS
 -- options, and must reach both the native compile and Core replay unchanged.
@@ -75,9 +85,26 @@ runGhcProxy arguments = do
       let root = capture </> unit
           core = root </> "core"
           objects = root </> "objects"
+          ready = root </> "interfaces-ready"
       createDirectoryIfMissing True core
       createDirectoryIfMissing True objects
+      previous <- doesFileExist ready
+      when previous (removeFile ready)
+      view <- lookupEnv "THC_PROXY_CORE_LIBDIR"
+      replayArguments <- case view of
+        Nothing -> pure []
+        Just libdir -> do
+          packageTool <- maybe (takeDirectory compiler </> "ghc-pkg") id <$> lookupEnv "THC_PROXY_GHC_PKG"
+          supplied <- maybe "{}" id <$> lookupEnv "THC_PROXY_CORE_INTERFACES"
+          warm <- either (fail . ("invalid Core interface map: " ++)) pure
+            (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack supplied)) :: Either String (Map.Map String FilePath))
+          completed <- fmap concat $ forM targetUnits $ \owner -> do
+            present <- doesFileExist (capture </> owner </> "interfaces-ready")
+            pure [(owner, capture </> owner </> "objects") | present]
+          let interfaces = Map.delete unit (Map.union (Map.fromList completed) warm)
+          coreReplayArguments packageTool libdir root (Map.toList interfaces) options
       exported <- rawSystem compiler (arguments ++
+        replayArguments ++
         ["-no-link", "-fforce-recomp", "-outputdir", objects, "-odir", objects,
          "-hidir", objects, "-hiedir", objects </> "hie", "-stubdir", objects,
          "-package-db", pluginDb, "-fplugin-trustworthy",
@@ -85,7 +112,7 @@ runGhcProxy arguments = do
            [core, "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance",
             "foreign-export-associations", "foreign-export-registration"] options,
          -- Adding -g only to the replay can change CSE/tidied helper names.
-         -- Consumers use the native interfaces, so preserve their debug flags.
+         -- Preserve caller debug flags for native compilation and TH.
          "-fwrite-if-simplified-core",
          "-dcore-lint"])
       unless (exported == ExitSuccess) (exitWith exported)
@@ -94,9 +121,51 @@ runGhcProxy arguments = do
       case (helper,libdir) of
         (Just executable,Just selectedLibdir) ->
           getEnv "THC_PROXY_ROOT" >>= \repository ->
-            capturePackageNative repository executable selectedLibdir compiler options unit root
+            capturePackageNative repository executable selectedLibdir compiler (options ++ replayArguments) unit root
         _ -> pure ()
+      forM_ view $ \_ -> writeFile ready ""
     _ -> pure ()
+
+-- | Add a boot-library view and completed source-package interfaces only to a
+-- Core replay. The caller owns the scratch directory until GHC exits. Each
+-- invocation gets its own immutable package database, so parallel Cabal builds
+-- never recache a database another compiler is using. Native registrations
+-- retain their original identities, dependencies and libraries.
+coreReplayArguments :: FilePath -> FilePath -> FilePath -> [(String, FilePath)] -> [String] -> IO [String]
+coreReplayArguments packageTool libdir scratch interfaces arguments = do
+  options <- expandResponse arguments
+  let boot = ["-B" ++ libdir]
+      stack = nativePackageOptions options
+  if null interfaces || null stack then pure boot else do
+    dumped <- readProcess packageTool
+      (["--global-package-db=" ++ libdir </> "package.conf.d", "--expand-pkgroot"] ++ stack ++ ["dump"]) ""
+    records <- mapM parseRegistration (splitRegistrations (lines dumped))
+    -- ghc-pkg dumps the stack from highest to lowest priority. Preserve the
+    -- first registration of each exact unit, as GHC does for imports.
+    let registered = Map.fromList [(prettyShow (Package.installedUnitId info), info) | info <- reverse records]
+        selected = [(info, directory) | (owner, directory) <- interfaces,
+                    Just info <- [Map.lookup owner registered]]
+    if null selected then pure boot else do
+      createDirectoryIfMissing True scratch
+      (database, handle) <- openTempFile scratch "core-packages-"
+      hClose handle
+      removeFile database
+      createDirectory database
+      forM_ (zip [0 :: Int ..] selected) $ \(index, (info, directory)) -> do
+        exists <- doesDirectoryExist directory
+        unless exists (fail ("missing completed Core interfaces: " ++ directory))
+        writeFile (database </> show index ++ ".conf")
+          (Package.showInstalledPackageInfo (info { Package.importDirs = [directory] }))
+      _ <- readProcess packageTool ["--package-db=" ++ database, "recache"] ""
+      pure (boot ++ ["-package-db", database])
+  where
+    parseRegistration value = either (fail . show) (pure . snd)
+      (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack value)))
+    splitRegistrations [] = []
+    splitRegistrations input =
+      let (record, rest) = break (== "---") input
+      in [unlines record | any (not . null) record] ++
+         case rest of [] -> []; _:remaining -> splitRegistrations remaining
 
 -- ExternalPluginSpec owns its options: GHC does not merge pluginModNameOpts.
 -- Keep the output directory first, then the required policy and caller options.
