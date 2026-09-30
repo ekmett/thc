@@ -4,7 +4,7 @@
 
 """Check precise constructor worker field proofs and their evaluation obligations."""
 import argparse
-import json
+from core_package_manifest import inspect_cbd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -46,16 +46,16 @@ def audit(module):
 
 
 def fixture(module):
-    constructors = {c['name']: c for c in module['constructors']}
-    fields = constructors['Record']['fieldTypes']
+    constructors = {c['id']: c for c in module['constructors']}
+    fields = constructors['main:ConstructorFieldAudit.Record']['fieldTypes']
     assert [(p['kind'], p['evaluated']) for p in fields] == [
         ('data', True), ('data', False), ('object', True), ('object', False),
         ('closure', True), ('closure', False)], fields
-    assert constructors['Primitive']['fieldTypes'] == [
+    assert constructors['main:ConstructorFieldAudit.Primitive']['fieldTypes'] == [
         {'primReps': ['IntRep'], 'kind': 'long', 'evaluated': True}]
-    wrapped = constructors['NewtypeField']['fieldTypes']
+    wrapped = constructors['main:ConstructorFieldAudit.NewtypeField']['fieldTypes']
     assert len(wrapped) == 1 and wrapped[0]['kind'] == 'object' and wrapped[0]['evaluated'] is False
-    evidence = constructors['Evidence']['fieldTypes']
+    evidence = constructors['main:ConstructorFieldAudit.Evidence']['fieldTypes']
     assert evidence[0] == {'primReps': [], 'kind': 'void', 'evaluated': True}, evidence
     assert evidence[1]['kind'] == 'data' and evidence[1]['evaluated'] is False, evidence
 
@@ -64,9 +64,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('modules', nargs='*', type=Path)
     args = parser.parse_args()
-    files = args.modules or [ROOT / 'build/core/ConstructorFieldAudit.json']
+    files = args.modules or [ROOT / 'build/core/ConstructorFieldAudit.cbd']
     for path in files:
-        module = json.loads(path.read_text())
+        module = inspect_cbd(path.read_bytes())
         count = audit(module)
         if module['module'] == 'ConstructorFieldAudit':
             fixture(module)

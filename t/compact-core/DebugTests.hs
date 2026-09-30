@@ -34,7 +34,7 @@ import THC.Compact.Debug
 import THC.Compact.Encode (newEncoder, internString)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
 import THC.Compact.Module (writeModuleWithDebug, writeModuleWithDebugCompressed, encodeModuleValue, readModuleValue, readModuleMetadata, readModuleSources, finalizeModuleMetadata)
-import THC.Compact.Inspect (inspectContainer, inspectSource, unpackContainer)
+import THC.Compact.Inspect (inspectContainer, inspectSource, inspectSources, unpackContainer)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
@@ -68,6 +68,8 @@ debugTests = TestList
         bytes <- BS.readFile destination
         assertBool "control: source-position inspection rejects the unrelated malformed table"
           (isLeft (inspectSource bytes 3))
+        assertBool "offline source inspection also rejects malformed persisted positions"
+          (isLeft (inspectSources bytes))
         assertEqual "restorations deduplicate exact records without collapsing presence"
           (Right files) (readModuleSources bytes)
   , TestLabel "source inventory preserves absence and rejects malformed filename records" $ TestCase $
@@ -184,6 +186,9 @@ debugTests = TestList
                        | offset >= 10 && offset < 12 = Just locationB
                        | otherwise = Just locationA
           assertEqual ("DATA " ++ show offset) (Right expected) (locationAt filenames positions strings 24 offset)
+        assertEqual "offline source ranges preserve the independent boundary union"
+          (Right [(3,10,locationA),(10,12,locationB),(12,20,locationA)])
+          (sourceLocations filenames positions strings 24)
         assertEqual "no source past DATA" (Right Nothing) (locationAt filenames positions strings 24 24)
         assertEqual "filename component coalesces across coordinate changes" (Right 3) (rowCount filenames)
         assertEqual "line/column restoration remains distinct" (Right 5) (rowCount positions)
@@ -196,6 +201,10 @@ debugTests = TestList
         assertBool "filename spans require actual selected common bytes"
           (isLeft (locationAt filenames positions BS.empty 24 3))
         assertBool "one missing source component" (isLeft (locationAt filenames BS.empty strings 24 3))
+        assertBool "offline source ranges reject a missing paired component"
+          (isLeft (sourceLocations filenames BS.empty strings 24))
+        assertBool "offline source ranges reject a truncated coordinate directory"
+          (isLeft (sourceLocations filenames (BS.take 7 positions) strings 24))
         assertEqual "explicit no-source needs no string bytes" (Right Nothing)
           (locationAt filenames positions BS.empty 24 0)
   , TestLabel "optional absent debug and invalid publication preserve original" $ TestCase $

@@ -6,7 +6,7 @@
 import argparse
 import json
 from collections import Counter
-from core_package_manifest import paired_diagnostic_cbd
+from core_package_manifest import inspect_cbd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,7 +23,7 @@ def walk(value):
 
 
 def definitions(module):
-    return [v for v in walk(module['bindings'])
+    return [v for v in walk(module)
             if isinstance(v, dict) and 'expr' in v and 'info' in v]
 
 
@@ -65,12 +65,12 @@ def audit(module):
 def fixture_checks(worker, joins, coercions):
     constructors = {c['id']: c for c in worker['constructors']}
     char = constructors['ghc-internal:GHC.Internal.Types.C#']
-    assert char['name'] == 'C#' and char['arity'] == 1 and char['kind'] == 'boxed', char
+    assert char['id'] == 'ghc-internal:GHC.Internal.Types.C#' and char['arity'] == 1 and char['kind'] == 'boxed', char
     assert char['fieldReps'] == [['WordRep']] and char['fieldLifted'] == [False], char
-    workers = {b['name']: b for b in definitions(worker)}
-    assert workers['charBox']['expr'][0] == 'lam', workers['charBox']
+    workers = {b['id']: b for b in worker['bindings']}
+    assert workers['main:CBVAudit.charBox']['expr'][0] == 'lam', workers['main:CBVAudit.charBox']
     for name in ('plainStrict', 'lazyIgnore'):
-        assert not any(workers[name]['entryStrict']), workers[name]
+        assert not any(workers['main:CBVAudit.' + name]['entryStrict']), workers['main:CBVAudit.' + name]
     marked_workers = [b for b in definitions(worker) if any(b['entryStrict'])]
     assert marked_workers, 'Real worker-wrapper fixture must produce a CBV worker'
     assert any('walk' in b['name'] for b in marked_workers)
@@ -81,11 +81,11 @@ def fixture_checks(worker, joins, coercions):
             for parameter, strict in zip(binding['expr'][1], binding['entryStrict']):
                 if strict:
                     assert parameter['lifted'] is True and not parameter['rep']['evaluated'], parameter
-    local = {b['name']: b for b in definitions(joins) if 'joinValueArity' in b}
-    done = local['done']
+    owners = {b['id']: b for b in joins['bindings']}
+    done, = [b for b in definitions(owners['main:CBVJoinAudit.polyJoin']) if 'joinValueArity' in b]
     assert done['info']['joinArity'] == 3 and done['joinValueArity'] == 2, done
     assert done['entryStrict'] == [False, True], done
-    returned = local['doneFunction']
+    returned, = [b for b in definitions(owners['main:CBVJoinAudit.functionJoin']) if 'joinValueArity' in b]
     assert returned['info']['joinArity'] == 2 and returned['joinValueArity'] == 1, returned
     assert len(returned['expr'][1]) == 2 and returned['entryStrict'] == [False, False], returned
     coercion_before_mark = False
@@ -106,21 +106,27 @@ def fixture_checks(worker, joins, coercions):
 
 def compare_actual_tidy(before, after):
     """A derived contract must agree with the actual post-Tidy Id marks."""
-    post = {}
-    for binding in definitions(after):
-        post.setdefault(binding['name'], []).append(binding)
-    matches = 0
-    for binding in definitions(before):
-        if not any(binding['entryStrict']):
-            continue
-        candidates = post.get(binding['name'], [])
-        assert len(candidates) == 1, (binding['name'], 'must find unique post-Tidy counterpart')
-        actual = candidates[0]
-        assert actual['entryStrictSource'] == 'ghc-id', actual
-        assert actual['entryStrict'] == binding['entryStrict'], (binding, actual)
-        matches += 1
-    assert matches, 'Fixture must exercise at least one actual GHC CBV contract'
-    return matches
+    owner = {'CBVAudit': 'walk', 'CBVJoinAudit': 'polyJoin', 'CBVCoercionAudit': 'witnessed'}[before['module']]
+    owner_id = before['unit'] + ':' + before['module'] + '.' + owner
+    def contract(module):
+        root, = [b for b in module['bindings'] if b['id'] == owner_id]
+        references = {node[1] for node in walk(root) if isinstance(node, list)
+                      and node and node[0] == 'var'}
+        candidates = [b for b in definitions(root) if any(b['entryStrict'])]
+        candidates += [b for b in module['bindings'] if b['id'] in references and any(b['entryStrict'])]
+        result, = candidates
+        return result
+    original, actual = contract(before), contract(after)
+    assert sum(any(b['entryStrict']) for b in definitions(before)) == 1
+    assert sum(any(b['entryStrict']) for b in definitions(after)) == 1
+    assert actual['entryStrictSource'] == 'ghc-id', actual
+    assert actual['entryStrict'] == original['entryStrict'], (original, actual)
+    assert actual['arity'] == original['arity']
+    assert actual.get('joinValueArity') == original.get('joinValueArity')
+    assert actual['info']['joinArity'] == original['info']['joinArity']
+    assert [(p['coercion'], p['lifted'], p['rep']) for p in actual['expr'][1]] == [
+        (p['coercion'], p['lifted'], p['rep']) for p in original['expr'][1]]
+    return 1
 
 
 def main():
@@ -130,12 +136,12 @@ def main():
     parser.add_argument('--post-tidy-dir', type=Path, default=ROOT / 'build/cbv-post-core')
     args = parser.parse_args()
     files = args.modules or [ROOT / 'build/core/CBVAudit.cbd', ROOT / 'build/core/CBVJoinAudit.cbd', ROOT / 'build/core/CBVCoercionAudit.cbd']
-    modules = [paired_diagnostic_cbd(p.with_suffix('.cbd')) for p in files]
+    modules = [inspect_cbd(p.read_bytes()) for p in files]
     summaries = [audit(module) for module in modules]
     if not args.modules:
         fixture_checks(*modules)
         for module in modules:
-            actual = paired_diagnostic_cbd(args.post_tidy_dir / (module['module'] + '.cbd'))
+            actual = inspect_cbd((args.post_tidy_dir / (module['module'] + '.cbd')).read_bytes())
             audit(actual)
             compare_actual_tidy(module, actual)
     if args.json:

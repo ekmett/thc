@@ -4,11 +4,10 @@
 
 """Check structured caller demand on genuine Core and GHC API edge cases."""
 import argparse
-import json
 import os
 import subprocess
 import tempfile
-from core_package_manifest import paired_diagnostic_cbd
+from core_package_manifest import inspect_cbd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,10 +50,10 @@ def audit(module):
 
 
 def fixture_checks(module, coercions):
-    bindings = {binding['name']: binding for binding in module['bindings']}
+    bindings = {binding['id']: binding for binding in module['bindings']}
 
     def demand(binding, callee, arity, marks):
-        found = calls(bindings[binding]['expr'], callee)
+        found = calls(bindings['main:DemandAudit.' + binding]['expr'], callee)
         assert len(found) == 1, (binding, callee, found)
         assert found[0][-1].get('callDemand') == {'arity': arity, 'strictArgs': marks}, found[0]
         return found[0]
@@ -63,7 +62,7 @@ def fixture_checks(module, coercions):
     produced = calls(direct[2][0], 'makeTree')
     assert len(produced) == 1 and produced[0][5] is False, produced
     for name in ('strictTree', 'strictPair', 'strictPoly'):
-        definition = bindings[name]
+        definition = bindings['main:DemandAudit.' + name]
         assert not any(definition['entryStrict']), definition
         assert definition['info']['cbvEligible'] is False, definition
         for parameter in definition['expr'][1]:
@@ -89,10 +88,12 @@ def fixture_checks(module, coercions):
         'kind': 'data', 'primReps': ['BoxedRep (Just Lifted)'], 'evaluated': False}, rewritten
 
     # This real GADT worker contains a retained coercion before its strict tree.
-    workers = [binding for binding in walk(coercions['bindings'])
-               if isinstance(binding, dict) and binding.get('name') == '$wwitnessed']
-    assert len(workers) == 1, workers
-    worker = workers[0]
+    witnessed = next(binding for binding in coercions['bindings']
+                     if binding['id'] == 'main:CBVCoercionAudit.witnessed')
+    worker_calls = [node for node in calls(witnessed)
+                    if node[1][0] == 'var' and node[1][1].startswith('main:CBVCoercionAudit.')]
+    worker_call, = worker_calls
+    worker, = [binding for binding in coercions['bindings'] if binding['id'] == worker_call[1][1]]
     assert worker['expr'][1][0]['coercion'] is True, worker
     applications = [node for node in calls(coercions['bindings'])
                     if node[1][:2] == ['var', worker['id']]]
@@ -157,16 +158,16 @@ def precise_exception_checks():
     with tempfile.TemporaryDirectory(prefix='thc-precise-demand-') as directory:
         work = Path(directory)
         env = dict(os.environ, THC_CORE_OUT=str(work / 'core'), THC_GHC_OUT=str(work / 'ghc'))
-        subprocess.run([str(ROOT / 'bin/export-core.sh'), '-fplugin-opt=THC.Plugin:pretty-diagnostics',
+        subprocess.run([str(ROOT / 'bin/export-core.sh'),
                         '-DTHC_PRECISE_EXCEPTION_AUDIT',
                         str(ROOT / 't/fixtures/compiler/DemandAudit.hs')],
                        check=True, cwd=ROOT, env=env)
-        module = paired_diagnostic_cbd(work / 'core/DemandAudit.cbd')
+        module = inspect_cbd((work / 'core/DemandAudit.cbd').read_bytes())
         audit(module)
-        bindings = {binding['name']: binding for binding in module['bindings']}
+        bindings = {binding['id']: binding for binding in module['bindings']}
         for callee, expected in [('preciseBranch', False), ('preciseScrutinee', False),
                                  ('strictControl', True)]:
-            applications = calls(bindings[callee + 'Entry']['expr'], callee)
+            applications = calls(bindings['main:DemandAudit.' + callee + 'Entry']['expr'], callee)
             assert len(applications) == 1, (callee, applications)
             certificate = applications[0][-1]['callDemand']
             assert certificate['arity'] == 3, (callee, certificate)
@@ -175,9 +176,9 @@ def precise_exception_checks():
             assert len(producer) == 1 and producer[0][5] is False, (callee, producer)
         for callee in ('preciseBranch', 'preciseStep'):
             assert any(isinstance(node, list) and node[:2] == ['prim', 'raiseIO#']
-                       for node in walk(bindings[callee]['expr'])), callee
-        assert len(calls(bindings['preciseScrutinee']['expr'], 'preciseStep')) == 1
-        assert len(calls(bindings['strictControl']['expr'], 'pureStep')) == 1
+                       for node in walk(bindings['main:DemandAudit.' + callee]['expr'])), callee
+        assert len(calls(bindings['main:DemandAudit.preciseScrutinee']['expr'], 'preciseStep')) == 1
+        assert len(calls(bindings['main:DemandAudit.strictControl']['expr'], 'pureStep')) == 1
         print('PASS: genuine GHC precise-exception branch/scrutinee demands stay lazy; pure control stays strict (metadata only)')
 
 
@@ -201,7 +202,7 @@ def main():
     parser.add_argument('modules', nargs='*', type=Path)
     args = parser.parse_args()
     paths = args.modules or [ROOT / 'build/core/DemandAudit.cbd', ROOT / 'build/core/CBVCoercionAudit.cbd']
-    modules = [paired_diagnostic_cbd(path.with_suffix('.cbd')) for path in paths]
+    modules = [inspect_cbd(path.read_bytes()) for path in paths]
     for module in modules:
         audit(module)
     if not args.modules:

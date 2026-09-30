@@ -18,7 +18,7 @@ import qualified Data.ByteString.Lazy as BL
 import System.Environment (getArgs)
 import System.Exit (die)
 import Text.Read (readMaybe)
-import THC.Compact.Inspect (inspectContainer, inspectName, inspectSource)
+import THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, inspectSources)
 
 main :: IO ()
 main = do
@@ -27,6 +27,10 @@ main = do
     ["decode",source,destination] -> do
       value <- BS.readFile source >>= either die pure . inspectContainer
       BL.writeFile destination (encode value)
+    ["sources",source] -> do
+      value <- BS.readFile source >>= either die pure . inspectSources
+      BL.putStr (encode value)
+      putStrLn ""
     ["source",source,offset] -> do
       position <- unsigned offset
       value <- BS.readFile source >>= either die pure . flip inspectSource position
@@ -41,7 +45,7 @@ main = do
     ["--help"] -> putStrLn usage
     _ -> die usage
   where
-    usage = "Usage: thc-compact decode MODULE.cbd MODULE.json\n       thc-compact source MODULE.cbd DATA_OFFSET\n       thc-compact name MODULE.cbd BINDING_OFFSET ORDINAL_SLOT"
+    usage = "Usage: thc-compact decode MODULE.cbd MODULE.json\n       thc-compact sources MODULE.cbd\n       thc-compact source MODULE.cbd DATA_OFFSET\n       thc-compact name MODULE.cbd BINDING_OFFSET ORDINAL_SLOT"
     unsigned text = case readMaybe text of
       Just value | value >= (0::Integer) && value <= 18446744073709551615 -> pure (fromInteger value)
       _ -> die "Expected unsigned 64-bit decimal position"

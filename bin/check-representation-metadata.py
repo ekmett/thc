@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 """Check representation and lexical WHNF proofs in actual GHC 9.14.1 Core."""
-import json
+from core_package_manifest import inspect_cbd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-module = json.loads((ROOT / 'build/core/RepresentationAudit.json').read_text())
-bindings = {b['name']: b for b in module['bindings']}
+module = inspect_cbd((ROOT / 'build/core/RepresentationAudit.cbd').read_bytes())
+bindings = {b['id']: b for b in module['bindings']}
 SLOTS = dict(var=2, lit=3, app=6, lam=3, let=4, case=4, con=3, prim=2, void=1)
 
 
@@ -48,32 +48,34 @@ for node in walk(module['bindings']):
             for alt in node[3]:
                 assert [b['id'] for b in alt[4]['binders']] == alt[2]
 
-apply = bindings['applyLong']['expr']
+apply = bindings['main:RepresentationAudit.applyLong']['expr']
 rep(apply[1][0]['rep'], 'closure', False)
 rep(apply[1][1]['rep'], 'long', True)
 rep(apply[3]['resultRep'], 'long')
 assert apply[1][1]['rep']['primReps'] == ['IntRep']
-rep(bindings['addressIdentity']['expr'][1][0]['rep'], 'address', True)
-rep(bindings['wrappedIdentity']['expr'][1][0]['rep'], 'object', False)
-rep(bindings['familyIdentity']['expr'][1][0]['rep'], 'object', False)
-rep(bindings['emptyTuple']['expr'][1][0]['rep'], 'unknown', True)
-assert bindings['emptyTuple']['expr'][1][0]['rep']['primReps'] == []
-rep(bindings['firstField']['expr'][1][0]['rep'], 'data', False)
-fields = [b for alt in nodes(bindings['firstField'], 'data') for b in alt[4]['binders']]
+rep(bindings['main:RepresentationAudit.addressIdentity']['expr'][1][0]['rep'], 'address', True)
+rep(bindings['main:RepresentationAudit.wrappedIdentity']['expr'][1][0]['rep'], 'object', False)
+rep(bindings['main:RepresentationAudit.familyIdentity']['expr'][1][0]['rep'], 'object', False)
+rep(bindings['main:RepresentationAudit.emptyTuple']['expr'][1][0]['rep'], 'unknown', True)
+assert bindings['main:RepresentationAudit.emptyTuple']['expr'][1][0]['rep']['primReps'] == []
+rep(bindings['main:RepresentationAudit.firstField']['expr'][1][0]['rep'], 'data', False)
+fields = [b for alt in nodes(bindings['main:RepresentationAudit.firstField'], 'data') for b in alt[4]['binders']]
 assert any(b['rep']['kind'] == 'long' and b['rep']['evaluated'] for b in fields)
 assert any(b['rep']['kind'] == 'data' and not b['rep']['evaluated'] for b in fields)
-strict = bindings['strictField']['expr']
+strict = bindings['main:RepresentationAudit.strictField']['expr']
 # Demand is strict here, but the caller still passes an unevaluated lifted value.
 rep(strict[1][0]['rep'], 'data', False)
 strict_field = nodes(strict, 'data')[0][4]['binders'][0]
 rep(strict_field['rep'], 'data', True)
 uses = [v for v in nodes(strict, 'var') if v[1] == strict_field['id']]
 assert uses and all(v[2]['rep']['evaluated'] for v in uses)
-joins = {b['name']: b for b in walk(module) if isinstance(b, dict) and 'joinValueArity' in b}
-assert joins['done']['info']['joinArity'] == 2
-assert joins['done']['joinValueArity'] == 1
-rep(joins['done']['joinResultRep'], 'long')
-returned = joins['doneFunction']
+done, = [b for b in walk(bindings['main:RepresentationAudit.polyJoin'])
+         if isinstance(b, dict) and 'joinValueArity' in b]
+assert done['info']['joinArity'] == 2
+assert done['joinValueArity'] == 1
+rep(done['joinResultRep'], 'long')
+returned, = [b for b in walk(bindings['main:RepresentationAudit.functionJoin'])
+             if isinstance(b, dict) and 'joinValueArity' in b]
 assert returned['info']['joinArity'] == 2 and returned['joinValueArity'] == 1
 assert len(returned['expr'][1]) == 2, 'The join prefix must leave a returned value lambda'
 rep(returned['joinResultRep'], 'closure', True)

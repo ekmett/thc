@@ -14,7 +14,7 @@
 -- are original source spelling. IEEE bit literals retain every payload bit.
 -- Reading a complete module here is an explicit inspection operation, never a
 -- runtime startup or linking prerequisite.
-module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, unpackContainer, unpackContainerWithMethods, moduleJSON) where
+module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, inspectSources, unpackContainer, unpackContainerWithMethods, moduleJSON) where
 
 import Data.Aeson
 import qualified Data.Aeson.Key as Key
@@ -23,6 +23,7 @@ import Data.Binary.Get (getByteString, getWord64le)
 import Data.Bits ((.&.))
 import qualified Data.ByteString as BS
 import Data.List (sortOn)
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word16, Word64)
@@ -77,6 +78,35 @@ inspectSource bytes position = do
       [("id",str identifier),("file",str fileId),("path",str path),
        ("startLine",toJSON sl),("startColumn",toJSON sc),("endLine",toJSON el),("endColumn",toJSON ec)]
       ++ p "content" str content ++ p "label" str label ++ p "charIndex" toJSON index ++ p "charLength" toJSON size
+
+-- | Explicit offline source-table view, independent of executable inspection.
+-- Every record comes from the persisted debug tables and keeps its DATA range.
+inspectSources :: BS.ByteString -> Either String Value
+inspectSources bytes = do
+  (_,_,segments) <- unpackContainer bytes
+  case segments of
+    [payload,strings,_,filenames,positions,_] -> do
+      let dataSize = fromIntegral (BS.length payload)
+      files <- sourceFiles filenames strings dataSize
+      locations <- sourceLocations filenames positions strings dataSize
+      let spans = Set.toAscList (Set.fromList
+            [(fileId,position) | (_,_,SourceLocation _ notes) <- locations,
+              (SourceFile fileId _ _,position) <- notes])
+      pure $ object ["dataSize" .= dataSize,"sourceFiles" .= map file files,
+        "sourceSpans" .= map spanRecord spans,"locations" .= map location locations]
+    _ -> Left "Compact container requires six segments"
+  where
+    file (SourceFile identifier path content) = object $
+      [("id",str identifier),("path",str path)] ++ p "content" str content
+    spanRecord (fileId,SourcePosition identifier label sl sc el ec index size) = object $
+      [("id",str identifier),("file",str fileId),("startLine",toJSON sl),("startColumn",toJSON sc),
+       ("endLine",toJSON el),("endColumn",toJSON ec)]
+      ++ p "label" str label ++ p "charIndex" toJSON index ++ p "charLength" toJSON size
+    location (start,end,SourceLocation primary notes) = object
+      ["start" .= start,"end" .= end,"primaryIndex" .= primary,
+       "source" .= identifier (snd (notes !! fromIntegral primary)),
+       "sourceNotes" .= map (identifier . snd) notes]
+    identifier (SourcePosition key _ _ _ _ _ _ _) = str key
 
 -- | Explicit offline archive inspection, including CRC/inflation checks. The
 -- returned payloads retain their original member-relative coordinate systems.
