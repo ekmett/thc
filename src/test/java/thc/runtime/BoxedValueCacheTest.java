@@ -9,6 +9,7 @@ import java.util.*;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.Json;
+import thc.CoreCbdFixtures;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.RepresentationTestSupport.*;
@@ -35,11 +36,11 @@ class BoxedValueCacheTest {
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     private Map<String, Object> exported(String path, String id) throws Exception {
-        var module = object(Json.parse(Files.readString(Path.of(System.getProperty("thc.projectRoot"), path))));
+        var module = CoreCbdFixtures.pairedDiagnostic(Path.of(System.getProperty("thc.projectRoot"), path));
         var matches = objects(module.get("constructors")).stream().filter(c -> id.equals(c.get("id"))).toList();
         assertEquals(1, matches.size()); return matches.getFirst();
     }
-    private Map<String, Object> metadata(Builtin builtin) throws Exception { return exported("build/core/CBVAudit.json", builtin.id()); }
+    private Map<String, Object> metadata(Builtin builtin) throws Exception { return exported("build/core/CBVAudit.cbd", builtin.id()); }
     @Test void wiredConstructorIdentitiesAndPrimitiveRepresentationsMatchActualPinnedExports() throws Exception {
         for (var builtin : builtins) {
             var constructor = metadata(builtin); assertEquals(builtin.name(), constructor.get("name")); assertEquals(1, ((Number) constructor.get("arity")).intValue());

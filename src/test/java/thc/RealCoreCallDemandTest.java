@@ -14,7 +14,7 @@ import static thc.runtime.CoreCallDemands.CALL_DEMANDS_PROPERTY;
 /** Original GHC demand signatures license individual calls without upgrading ordinary function entries. */
 class RealCoreCallDemandTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private Map<String, Object> exported() throws Exception { return object(Json.parse(Files.readString(root.resolve("build/core/DemandAudit.json")))); }
+    private Map<String, Object> exported() throws Exception { return CoreCbdFixtures.pairedDiagnostic(root.resolve("build/core/DemandAudit.cbd")); }
     private Map<String, Map<String, Object>> definitions(Map<String, Object> module) {
         var result = new LinkedHashMap<String, Map<String, Object>>();
         for (var binding : objects(module.get("bindings"))) result.put((String) binding.get("name"), binding); return result;
@@ -55,10 +55,10 @@ class RealCoreCallDemandTest {
     @Test void genuineOrdinaryPolymorphicLazyAndPartialCallsSurviveCompilation() throws Exception {
         var previous = System.getProperty(CALL_DEMANDS_PROPERTY);
         try {
-            System.setProperty(CALL_DEMANDS_PROPERTY, "true"); var module = exported();
+            System.setProperty(CALL_DEMANDS_PROPERTY, "true");
             for (String backend : list("ast", "bytecode")) for (String entry : list("ordinaryEntry", "polyDataEntry", "polyFunctionEntry", "absentEntry", "lazyBarrier", "bottomPAPEntry"))
                 try (var context = Main.executionContext(false)) {
-                    var function = context.eval("thc", Json.stringify(map("modules", list(module), "entry", entry, "backend", backend, "instrument", true)));
+                    var function = context.eval("thc", CoreModules.request(list(root.resolve("build/core/DemandAudit.cbd").toString()), "main:DemandAudit." + entry, true, false, backend));
                     LongConsumer check = n -> assertEquals(entry.equals("ordinaryEntry") || entry.equals("lazyBarrier") ? treeResult(n) : 41L,
                         function.execute(n).asLong(), backend + " " + entry + "(" + n + ")");
                     for (int i = 0; i < 12; i++) check.accept(7L);

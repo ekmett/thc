@@ -6,6 +6,7 @@
 import argparse
 import json
 from collections import Counter
+from core_package_manifest import paired_diagnostic_cbd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -128,13 +129,13 @@ def main():
     parser.add_argument('--json', action='store_true', help='Print per-definition audit results')
     parser.add_argument('--post-tidy-dir', type=Path, default=ROOT / 'build/cbv-post-core')
     args = parser.parse_args()
-    files = args.modules or [ROOT / 'build/core/CBVAudit.json', ROOT / 'build/core/CBVJoinAudit.json', ROOT / 'build/core/CBVCoercionAudit.json']
-    modules = [json.loads(p.read_text()) for p in files]
+    files = args.modules or [ROOT / 'build/core/CBVAudit.cbd', ROOT / 'build/core/CBVJoinAudit.cbd', ROOT / 'build/core/CBVCoercionAudit.cbd']
+    modules = [paired_diagnostic_cbd(p.with_suffix('.cbd')) for p in files]
     summaries = [audit(module) for module in modules]
     if not args.modules:
         fixture_checks(*modules)
         for module in modules:
-            actual = json.loads((args.post_tidy_dir / (module['module'] + '.json')).read_text())
+            actual = paired_diagnostic_cbd(args.post_tidy_dir / (module['module'] + '.cbd'))
             audit(actual)
             compare_actual_tidy(module, actual)
     if args.json:

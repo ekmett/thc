@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import tempfile
+from core_package_manifest import paired_diagnostic_cbd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -160,7 +161,7 @@ def precise_exception_checks():
                         '-DTHC_PRECISE_EXCEPTION_AUDIT',
                         str(ROOT / 't/fixtures/compiler/DemandAudit.hs')],
                        check=True, cwd=ROOT, env=env)
-        module = json.loads((work / 'core/DemandAudit.json').read_text())
+        module = paired_diagnostic_cbd(work / 'core/DemandAudit.cbd')
         audit(module)
         bindings = {binding['name']: binding for binding in module['bindings']}
         for callee, expected in [('preciseBranch', False), ('preciseScrutinee', False),
@@ -199,8 +200,8 @@ def main():
     parser.add_argument('--ghc-api', action='store_true', help='Also check synthetic GHC API edge cases')
     parser.add_argument('modules', nargs='*', type=Path)
     args = parser.parse_args()
-    paths = args.modules or [ROOT / 'build/core/DemandAudit.json', ROOT / 'build/core/CBVCoercionAudit.json']
-    modules = [json.loads(path.read_text()) for path in paths]
+    paths = args.modules or [ROOT / 'build/core/DemandAudit.cbd', ROOT / 'build/core/CBVCoercionAudit.cbd']
+    modules = [paired_diagnostic_cbd(path.with_suffix('.cbd')) for path in paths]
     for module in modules:
         audit(module)
     if not args.modules:

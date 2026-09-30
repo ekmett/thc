@@ -13,7 +13,7 @@ import static thc.CoreBackendTestSupport.*;
 /** Genuine GHC worker/join CBV marks must survive export, execution and compilation. */
 class RealCoreEntryContractTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private Map<String, Object> exported(String name) throws Exception { return object(Json.parse(Files.readString(root.resolve("build/core/" + name + ".json")))); }
+    private Map<String, Object> exported(String name) throws Exception { return CoreCbdFixtures.pairedDiagnostic(root.resolve("build/core/" + name + ".cbd")); }
     private List<Map<String, Object>> definitions(Object value) {
         var result = new ArrayList<Map<String, Object>>();
         if (value instanceof Map<?, ?> map) {
@@ -28,7 +28,7 @@ class RealCoreEntryContractTest {
     private long count(Value function, String name) { return ((Number) object(Json.parse(function.getMember("diagnostics").asString())).get(name)).longValue(); }
     private void checkEntry(Map<String, Object> module, String entry, boolean joins, LongUnaryOperator expected) {
         for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
-            var function = context.eval("thc", Json.stringify(map("modules", list(module), "entry", entry, "backend", backend)));
+            var function = context.eval("thc", CoreModules.request(list(root.resolve("build/core/" + module.get("module") + ".cbd").toString()), "main:" + module.get("module") + "." + entry, true, false, backend));
             LongConsumer check = input -> assertEquals(expected.applyAsLong(input), function.execute(input).asLong(), backend + " " + entry + "(" + input + ")");
             // Keep nonpositive case alternatives cold until compilation has succeeded.
             for (int i = 0; i < 30; i++) check.accept(i + 1L);

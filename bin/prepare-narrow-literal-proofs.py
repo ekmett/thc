@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from core_package_manifest import inspect_cbd
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/narrow-literal-proofs'
@@ -63,7 +64,7 @@ def bad_proofs():
 def audit(module):
     spec = importlib.util.spec_from_file_location('audit_core', ROOT/'bin/audit-core.py')
     tool = importlib.util.module_from_spec(spec); spec.loader.exec_module(tool)
-    return tool.Audit([('NarrowLiteralProofAudit.json', module)], json.loads((ROOT/'bin/core-capabilities.json').read_text())).run(ENTRIES)
+    return tool.Audit([('NarrowLiteralProofAudit.cbd', module)], json.loads((ROOT/'bin/core-capabilities.json').read_text())).run(['main:NarrowLiteralProofAudit.'+entry for entry in ENTRIES])
 
 
 def record(path):
@@ -76,8 +77,8 @@ def check_inputs():
     assert actual == expected, 'Native observations disagree with independent index/sign model'
     inventories = {}
     for stage in ('pre', 'post'):
-        path = OUT/f'{stage}-core/NarrowLiteralProofAudit.json'
-        module = json.loads(path.read_text())
+        path = OUT/f'{stage}-core/NarrowLiteralProofAudit.cbd'
+        module = inspect_cbd(path.read_bytes())
         assert module['ghc'] == '9.14.1'
         inventory = [(x[1], int(x[2])) for x in write_literals(module)]
         assert sorted(inventory) == sorted((kind, v) for kind in KINDS for v in values(kind)), inventory

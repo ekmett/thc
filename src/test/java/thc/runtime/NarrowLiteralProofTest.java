@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import thc.CoreModules;
 import thc.EntryValue;
 import thc.Json;
+import thc.CoreCbdFixtures;
 import thc.Language;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -96,7 +97,7 @@ public final class NarrowLiteralProofTest {
         return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
     }
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.INSTANCE.parse(Files.readString(directory.resolve(stage + "-core/NarrowLiteralProofAudit.json")));
+        return CoreCbdFixtures.read(directory.resolve(stage + "-core/NarrowLiteralProofAudit.cbd"));
     }
     private int visitWrites(Object value, Consumer<List<Object>> action) {
         int count = 0;
@@ -160,11 +161,11 @@ public final class NarrowLiteralProofTest {
                 try {
                     Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     String name = "write" + kind + "Literal";
-                    Map<String, Object> module = new LinkedHashMap<>(CoreModules.INSTANCE.reachable(projected, name, false));
+                    Map<String, Object> module = new LinkedHashMap<>(CoreModules.INSTANCE.reachable(projected, "main:NarrowLiteralProofAudit." + name, false));
                     module.put("instrument", true);
                     var program = program(language, module, backend);
-                    Value function = context.asValue(new EntryValue(program, name, 1));
-                    RootCallTarget host = program.hostEntryTarget(1), original = program.entryTarget(name);
+                    Value function = context.asValue(new EntryValue(program, "main:NarrowLiteralProofAudit." + name, 1));
+                    RootCallTarget host = program.hostEntryTarget(1), original = program.entryTarget("main:NarrowLiteralProofAudit." + name);
                     var selected = rows.stream().filter(r -> r[0].equals(name)).toList();
                     int bits = Integer.parseInt(kind.replaceAll("\\D", ""));
                     long[] values = kind.startsWith("Int") ? new long[] {-(1L << (bits - 1)), -1, 0, (1L << (bits - 1)) - 1}
@@ -206,7 +207,7 @@ public final class NarrowLiteralProofTest {
             try {
                 Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (String stage : List.of("pre", "post")) for (var proof : bad) for (String kind : kinds) {
-                    var module = CoreModules.INSTANCE.reachable(project(stage, "bad", proof), "write" + kind + "Literal", false);
+                    var module = CoreModules.INSTANCE.reachable(project(stage, "bad", proof), "main:NarrowLiteralProofAudit.write" + kind + "Literal", false);
                     assertThrows(RuntimeFault.class, () -> program(language, module, backend), stage + "/" + backend + "/" + kind + "/" + proof);
                 }
             } finally { context.leave(); }
@@ -223,7 +224,7 @@ public final class NarrowLiteralProofTest {
                 try {
                     Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (long value : invalid) {
-                        var module = CoreModules.INSTANCE.reachable(project("pre", "absent", null), "write" + kind + "Literal", false);
+                        var module = CoreModules.INSTANCE.reachable(project("pre", "absent", null), "main:NarrowLiteralProofAudit.write" + kind + "Literal", false);
                         assertEquals(4, visitWrites(module, literal -> literal.set(2, Long.toString(value))));
                         assertThrows(RuntimeFault.class, () -> program(language, module, backend));
                     }

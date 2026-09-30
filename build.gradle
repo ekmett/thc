@@ -225,7 +225,7 @@ tasks.withType(Test).configureEach {
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
         include("backend-annotations/**/*.cbd")
-        include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
+        include(["core/**/*.json", "core/**/*.cbd", "source-core/**/*.json", "source-core/**/*.cbd", "cbv-post-core/**/*.json", "cbv-post-core/**/*.cbd",
             "vector-api/core/**/*.json", "vector-api/*.tsv", "java-arrays/core/**/*.cbd", "java-arrays/core/**/*.json", "java-arrays/packages.json",
             "truffle-strings/core/**/*.json", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",
             "floating/core/**/*.json", "floating/core/**/*.cbd", "floating/checks.json", "floating/oracle.tsv",
@@ -240,7 +240,7 @@ tasks.withType(Test).configureEach {
             "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
             "show-int/**/*.json", "show-int/*.tsv", "show-int/native/**",
-            "narrow-literal-proofs/**/*.json", "narrow-literal-proofs/*.tsv", "narrow-literal-proofs/native/**",
+            "narrow-literal-proofs/**/*.json", "narrow-literal-proofs/**/*.cbd", "narrow-literal-proofs/*.tsv", "narrow-literal-proofs/native/**",
             "bignat-literals/**/*.cbd", "bignat-literals/**/*.json", "bignat-literals/*.tsv", "bignat-literals/native/**", "bignat-literals/commands/**",
             "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
             "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
@@ -268,7 +268,7 @@ tasks.withType(Test).configureEach {
             "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
             "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
             "sum-join/**/*.json", "sum-join/*.tsv", "sum-join/commands/**",
-            "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/post-core/**/*.json",
+            "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/pre-core/**/*.cbd", "tuple-arithmetic/post-core/**/*.json", "tuple-arithmetic/post-core/**/*.cbd",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
             "integer-completion/native/**", "integer-completion/commands/**",

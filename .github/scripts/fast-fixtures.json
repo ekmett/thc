@@ -1383,21 +1383,30 @@
       "commands": [
         {"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "bin/export-core.sh", "t/fixtures/compiler/TupleArithmeticAudit.hs"]},
         {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "bin/export-core.sh", "t/fixtures/compiler/Explicit64PrimopsAudit.hs"]},
-        {"argv": ["bin/export-core.sh", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs"]},
+        {"argv": ["bin/export-core.sh", "-fplugin-opt=THC.Plugin:pretty-diagnostics",
+            "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs"]},
         {"argv": ["python3", "bin/check-demand-metadata.py", "--ghc-api"]},
-        {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs"]},
+        {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:pretty-diagnostics",
+            "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs"]},
         {"argv": ["python3", "bin/check-cbv-metadata.py"]}
       ],
       "outputs": [
-        "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json",
+        "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
         "build/explicit64-primops/core/Explicit64PrimopsAudit.cbd",
         "build/core/CBVAudit.json",
+        "build/core/CBVAudit.cbd",
         "build/core/CBVJoinAudit.json",
+        "build/core/CBVJoinAudit.cbd",
         "build/core/CBVCoercionAudit.json",
+        "build/core/CBVCoercionAudit.cbd",
         "build/core/DemandAudit.json",
+        "build/core/DemandAudit.cbd",
         "build/cbv-post-core/CBVAudit.json",
+        "build/cbv-post-core/CBVAudit.cbd",
         "build/cbv-post-core/CBVJoinAudit.json",
-        "build/cbv-post-core/CBVCoercionAudit.json"
+        "build/cbv-post-core/CBVJoinAudit.cbd",
+        "build/cbv-post-core/CBVCoercionAudit.json",
+        "build/cbv-post-core/CBVCoercionAudit.cbd"
       ],
       "sources": [
         "t/fixtures/compiler/TupleArithmeticAudit.hs",
