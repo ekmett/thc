@@ -600,7 +600,10 @@ class ManagedWeakTest {
             assertTrue(primitives.containsAll(names));
             assertFalse(primitives.contains("addCFinalizerToWeak#"));
             var merged = merge(stageEntry.getValue());
-            var proof = new ArrayCoreEvidence(merged, "main:WeakAudit.weakComposite");
+            var diagnostic = CoreModules.merge(List.of(
+                json(new File(directory, stage + "/core/WeakAudit.json")),
+                json(new File(directory, stage + "/core/THC.InterfaceClosure.json"))));
+            var proof = new ArrayCoreEvidence(diagnostic, "main:WeakAudit.weakComposite");
             var lambda = (List<?>) proof.getRoot().get("expr");
             var exported = proof.guestLambdas(lambda);
             var types = new ArrayList<List<Object>>();

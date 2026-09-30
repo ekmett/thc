@@ -248,7 +248,7 @@ public class DoubleArrayNativeTest {
         boolean read = name.equals("moveDoubleBits");
         var helpers = evidence.getBindings()
                           .stream()
-                          .filter(b -> Objects.equals(b.get("name"), read ? "readDoubleSlot" : "indexDoubleSlot"))
+                          .filter(b -> Objects.equals(b.get("id"), coreEntry(read ? "readDoubleSlot" : "indexDoubleSlot")))
                           .toList();
         require(helpers.size() == 1, name + " lost its residual helper");
         var helper = single(helpers);
