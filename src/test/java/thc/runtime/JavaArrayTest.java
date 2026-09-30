@@ -35,8 +35,8 @@ public class JavaArrayTest {
         if (source != null) return source;
         var root = Path.of(System.getProperty("thc.projectRoot"), "build/java-arrays/core");
         var paths = new ArrayList<String>(List.of("@" + root.getParent().resolve("packages.json")));
-        for (String file : List.of("THC.Prim.json", "JavaArrays.json", "THC.Exception.json", "THC.Internal.Exception.json",
-                "THC.Interop.Java.json", "JavaInterop.json", "JavaInteropSafe.json"))
+        for (String file : List.of("THC.Prim.cbd", "JavaArrays.cbd", "THC.Exception.cbd", "THC.Internal.Exception.cbd",
+                "THC.Interop.Java.cbd", "JavaInterop.cbd", "JavaInteropSafe.cbd"))
             paths.add(root.resolve(file).toString());
         source = (Map<String, Object>) Json.parse(CoreModules.request(paths, PREFIX + "multiply", true, false, "ast", false));
         return source;
