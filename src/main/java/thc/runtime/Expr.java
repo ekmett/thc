@@ -29,8 +29,14 @@ public abstract class Expr extends Node {
     public final Expr proven(CoreRepresentation proof) { setRepresentation(proof); return this; }
     @Override public SourceSection getSourceSection() {
         if (coreSourceLocation != null) return coreSourceLocation.getSection();
-        Node parent = getParent();
-        return parent == null ? null : parent.getEncapsulatingSourceSection();
+        for (Node parent = getParent(); parent != null; parent = parent.getParent()) {
+            // Read an Expr ancestor's own metadata without restarting its ancestor scan.
+            SourceSection section = parent instanceof Expr expression ?
+                    expression.coreSourceLocation == null ? null : expression.coreSourceLocation.getSection() :
+                    parent.getSourceSection();
+            if (section != null) return section;
+        }
+        return null;
     }
     /** Bind an existing typed destination while lowering, without executing the expression. */
     public void prepareTuple(int[] slots, int offset) {}

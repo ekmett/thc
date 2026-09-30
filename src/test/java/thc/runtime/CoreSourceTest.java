@@ -3,7 +3,10 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.SourceSection;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
 import thc.Language;
@@ -46,6 +49,30 @@ class CoreSourceTest {
             try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); }
             finally { context.leave(); }
         }
+    }
+    private static final class SourceChain extends Expr {
+        @Child private Expr child;
+        SourceChain(Expr child) { this.child = child; }
+        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Source lookup must not execute code"); }
+    }
+    @Test void absentSourceMetadataDoesNotRescanAncestorSuffixes() throws Exception {
+        entered(language -> {
+            int depth = 12;
+            var leaf = new SourceChain(null);
+            Expr chain = leaf;
+            for (int i = 0; i < depth; i++) chain = new SourceChain(chain);
+            Expr body = chain;
+            int[] queries = {0};
+            var root = new RootNode(language) {
+                @Child private Expr child = body;
+                @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Source lookup must not execute code"); }
+                @Override public SourceSection getSourceSection() { queries[0]++; return null; }
+            };
+            root.adoptChildren();
+            assertNull(leaf.getSourceSection());
+            assertTrue(queries[0] > 0 && queries[0] <= depth + 1,
+                    "One source lookup must not repeatedly rescan missing ancestors: " + queries[0]);
+        });
     }
     private static Object run(Program program, long input) {
         return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("entry"), new Object[]{input}});
