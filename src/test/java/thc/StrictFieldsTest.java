@@ -107,11 +107,11 @@ class StrictFieldsTest {
         }
     }
     private String id(List<Map<String, Object>> rows, String name) {
-        var matches = rows.stream().filter(row -> name.equals(row.get("name"))).toList(); assertEquals(1, matches.size()); return (String) matches.getFirst().get("id");
+        var matches = rows.stream().filter(row -> ("main:StrictFields." + name).equals(row.get("id"))).toList(); assertEquals(1, matches.size()); return (String) matches.getFirst().get("id");
     }
     @Test void realGhcStrictConstructorPreservesPrimitiveValuesBeforeAndAfterCompilation() throws Exception {
         var root = Path.of(System.getProperty("thc.projectRoot"));
-        var exported = CoreCbdFixtures.pairedDiagnostic(root.resolve("build/core/StrictFields.cbd"));
+        var exported = CoreCbdFixtures.read(root.resolve("build/core/StrictFields.cbd"));
         String functionId = id(objects(exported.get("bindings")), "strictConstruct");
         String strictId = id(objects(exported.get("constructors")), "Strict"), boxId = id(objects(exported.get("constructors")), "Box");
         var value = apply(constructorValue(boxId, 1), list(variable("input")), list(false)); var strict = apply(variable(functionId), list(value), list(true));

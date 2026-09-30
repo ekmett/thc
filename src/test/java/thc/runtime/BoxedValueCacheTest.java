@@ -36,7 +36,7 @@ class BoxedValueCacheTest {
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     private Map<String, Object> exported(String path, String id) throws Exception {
-        var module = CoreCbdFixtures.pairedDiagnostic(Path.of(System.getProperty("thc.projectRoot"), path));
+        var module = CoreCbdFixtures.read(Path.of(System.getProperty("thc.projectRoot"), path));
         var matches = objects(module.get("constructors")).stream().filter(c -> id.equals(c.get("id"))).toList();
         assertEquals(1, matches.size()); return matches.getFirst();
     }

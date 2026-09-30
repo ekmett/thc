@@ -14,13 +14,13 @@ import static thc.CoreExecutionTestSupport.*;
 class RealCoreJoinTest {
     @TempDir Path temporary;
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private Map<String, Object> exported() throws Exception { return CoreCbdFixtures.pairedDiagnostic(root.resolve("build/source-core/RepresentationAudit.cbd")); }
+    private Map<String, Object> exported() throws Exception { return CoreCbdFixtures.read(root.resolve("build/source-core/RepresentationAudit.cbd")); }
     private long count(Value function, String key) { return ((Number) object(Json.parse(function.getMember("diagnostics").asString())).get(key)).longValue(); }
     private List<Object> variable(String id) { return list("var", id, map()); }
     private List<Object> integer(long value) { return list("lit", "int", Long.toString(value), map()); }
     private List<Object> apply(List<Object> fn, List<List<Object>> args, List<Boolean> lifted) { return list("app", fn, args, lifted, false, false, map()); }
     private String id(List<Map<String, Object>> definitions, String name) {
-        var matches = definitions.stream().filter(item -> name.equals(item.get("name"))).toList();
+        var matches = definitions.stream().filter(item -> ("main:RepresentationAudit." + name).equals(item.get("id"))).toList();
         assertEquals(1, matches.size()); return (String) matches.getFirst().get("id");
     }
     private void checkLoop(Value function, String backend, long n) { assertEquals(n <= 0 ? 0L : n * (n + 1) / 2, function.execute(n).asLong(), backend + " joinLoop(" + n + ")"); }
