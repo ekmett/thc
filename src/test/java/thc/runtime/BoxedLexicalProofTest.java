@@ -9,6 +9,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
 import thc.Json;
+import thc.CoreCbdFixtures;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.RepresentationTestSupport.*;
@@ -86,11 +87,11 @@ class BoxedLexicalProofTest {
     @Test void genuineBoxedNewtypeCastsPreserveLevityAndLazyFieldsInCompiledCode() throws Exception {
         visit((language, backend) -> {
             for (var stage : list("core", "cbv-post-core")) {
-                var input = object(Json.parse(Files.readString(root.resolve("build/" + stage + "/CBVCoercionAudit.json"))));
+                var input = CoreCbdFixtures.read(root.resolve("build/" + stage + "/CBVCoercionAudit.cbd"));
                 var bindings = new LinkedHashMap<String, Map<String, Object>>();
                 for (var binding : objects(input.get("bindings"))) bindings.put((String) binding.get("name"), binding);
                 for (var pair : list(new String[]{"wrapSpine", "Lifted"}, new String[]{"unwrapSpine", "Lifted"}, new String[]{"wrapProduct", "Unlifted"}, new String[]{"unwrapProduct", "Unlifted"})) {
-                    var name = pair[0]; var levity = pair[1]; var lambda = expression(Objects.requireNonNull(bindings.get(name)).get("expr"));
+                    var name = pair[0]; var levity = pair[1]; var lambda = expression(Objects.requireNonNull(bindings.get("main:CBVCoercionAudit." + name)).get("expr"));
                     var parameters = objects(lambda.get(1)); assertEquals(1, parameters.size());
                     var binder = CoreRepresentations.binder(parameters.getFirst()); var body = expression(lambda.get(2));
                     assertEquals("var", body.getFirst(), "Genuine newtype casts must erase to the lexical value");
@@ -100,11 +101,11 @@ class BoxedLexicalProofTest {
                     assertEquals(name.startsWith("unwrap") ? CoreKind.OBJECT : CoreKind.DATA, binder.getKind());
                 }
                 for (var name : list("boxedCastEntry", "unliftedBoxedCastEntry")) {
-                    var program = program(language, CoreModules.reachable(input, name, false), backend);
-                    var host = program.hostEntryTarget(1); var entry = program.entryValue(name);
+                    var program = program(language, CoreModules.reachable(input, "main:CBVCoercionAudit." + name, false), backend);
+                    var host = program.hostEntryTarget(1); var entry = program.entryValue("main:CBVCoercionAudit." + name);
                     long[] values = {Long.MIN_VALUE, -4097L, -1L, 0L, 1L, 4097L, Long.MAX_VALUE};
                     for (long x : values) assertEquals(x, Calls.target(host, new Object[]{entry, new Object[]{x}}));
-                    var target = program.entryTarget(name); var targetClass = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+                    var target = program.entryTarget("main:CBVCoercionAudit." + name); var targetClass = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
                     targetClass.getMethod("compile", boolean.class).invoke(target, true);
                     assertEquals(true, targetClass.getMethod("isValidLastTier").invoke(target));
                     for (int i = values.length - 1; i >= 0; i--) {

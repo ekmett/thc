@@ -1896,6 +1896,14 @@ class FastInputTests(unittest.TestCase):
         for name in ("test-results/results.json", "classes/Main.class", "unreviewed.sh"):
             self.assertFalse(cache.allowed_payload("build/word-floating/" + name), name)
 
+    def test_cbv_contract_cbd_payloads_are_closed_to_exact_modules_and_stages(self):
+        self.assertEqual(12, len(cache.CBV_CONTRACT_CBD_OUTPUTS))
+        for name in cache.CBV_CONTRACT_CBD_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name), name)
+        for name in ("build/core/Other.cbd", "build/cbv-post-core/DemandAudit.cbd",
+                     "build/source-core/StrictFields.cbd", "build/narrow-literal-proofs/other-core/NarrowLiteralProofAudit.cbd"):
+            self.assertFalse(cache.allowed_payload(name), name)
+
     def test_scalar_cbd_payloads_admit_only_the_exported_modules_and_stages(self):
         for family, module in (("word-floating", "WordFloatingAudit"), ("scalar-bitcasts", "ScalarBitCastAudit"),
                                ("fused-floating", "FloatingAudit"), ("sqrt", "SqrtAudit")):

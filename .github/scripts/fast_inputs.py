@@ -1872,6 +1872,13 @@ SYNCHRONOUS_EXCEPTION_OUTPUTS = frozenset("build/synchronous-exceptions/" + name
     *(f"logs/{label}{suffix}" for label in ("ghc-version", "python-version", "cabal-plugin-build", "plugin-metadata",
         "pre-export", "post-export", "native-build", "native-word-bits", "native-oracle")
       for suffix in (".stdout", ".stderr", ".command.json"))))
+CBV_CONTRACT_CBD_OUTPUTS = frozenset({
+    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+    "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
+    *(f"build/narrow-literal-proofs/{stage}-core/NarrowLiteralProofAudit.cbd" for stage in ("pre", "post")),
+})
+
 HEAP_CORPUS_CBD_OUTPUTS = frozenset(
     {f"build/addr-identity/{stage}-core/{module}.cbd" for stage in ("pre", "post")
      for module in ("AddressIdentityAudit", "THC.InterfaceClosure")} |
@@ -1978,6 +1985,8 @@ def allowed_payload(name):
     if parts[1] == "managed-mvars":
         return name in MANAGED_MVAR_OUTPUTS
     if parts[1] == "synchronous-exceptions" and name in SYNCHRONOUS_EXCEPTION_OUTPUTS:
+        return True
+    if name in CBV_CONTRACT_CBD_OUTPUTS:
         return True
     if name in HEAP_CORPUS_CBD_OUTPUTS:
         return True

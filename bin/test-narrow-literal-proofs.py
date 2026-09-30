@@ -14,7 +14,7 @@ prepare = importlib.util.module_from_spec(spec); spec.loader.exec_module(prepare
 class NarrowLiteralProofs(unittest.TestCase):
     def test_actual_prepared_direct_write_metadata_projections(self):
         for stage in ('pre', 'post'):
-            module = json.loads((prepare.OUT/f'{stage}-core/NarrowLiteralProofAudit.json').read_text())
+            module = prepare.inspect_cbd((prepare.OUT/f'{stage}-core/NarrowLiteralProofAudit.cbd').read_bytes())
             self.assertEqual(24, len(list(prepare.write_literals(module))))
             for variant in ('exact', 'absent', 'unknown'):
                 report = prepare.audit(prepare.project(module, variant))

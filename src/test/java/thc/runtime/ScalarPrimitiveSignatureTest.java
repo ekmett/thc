@@ -16,6 +16,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
 import thc.Json;
+import thc.CoreCbdFixtures;
 import thc.Language;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,7 +35,7 @@ public final class ScalarPrimitiveSignatureTest {
         return new LinkedHashMap<>(Map.of("kind", "long", "primReps", List.of(rep), "evaluated", true));
     }
     private Map<String, Object> module(String path) throws Exception {
-        return (Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.resolve(path)));
+        return CoreCbdFixtures.read(root.resolve(path));
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
@@ -85,14 +86,14 @@ public final class ScalarPrimitiveSignatureTest {
     @Test void nativeNewtypeCastsAroundScalarArithmeticAndConversionKeepCompiledEntries() throws Exception {
         visit((language, backend) -> {
             for (String stage : List.of("core", "cbv-post-core")) for (String name : List.of("addRaw", "rawToWord")) {
-                var input = CoreModules.INSTANCE.reachable(module("build/" + stage + "/CBVCoercionAudit.json"), name, false);
+                var input = CoreModules.INSTANCE.reachable(module("build/" + stage + "/CBVCoercionAudit.cbd"), "main:CBVCoercionAudit." + name, false);
                 var program = program(language, input, backend);
                 int arity = name.equals("addRaw") ? 2 : 1;
                 RootCallTarget host = program.hostEntryTarget(arity);
-                Object entry = program.entryValue(name);
+                Object entry = program.entryValue("main:CBVCoercionAudit." + name);
                 List<Long> values = List.of(Long.MIN_VALUE, -4097L, -1L, 0L, 1L, 4097L, Long.MAX_VALUE);
                 for (long x : values) check(host, entry, arity, x);
-                RootCallTarget target = program.entryTarget(name);
+                RootCallTarget target = program.entryTarget("main:CBVCoercionAudit." + name);
                 compile(target);
                 for (long x : values.reversed()) {
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();

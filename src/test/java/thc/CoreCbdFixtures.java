@@ -49,6 +49,17 @@ public final class CoreCbdFixtures {
         if (value instanceof List<?> fields) return fields.stream().map(CoreCbdFixtures::inspection).toList();
         return value;
     }
+    /** Offline source-name/type evidence, verified against the exact executable artifact. */
+    public static Map<String,Object> pairedDiagnostic(Path path) throws Exception {
+        var diagnostic = (Map<String,Object>) Json.parse(Files.readString(path.resolveSibling(path.getFileName().toString().replaceFirst("\\.cbd$", ".json"))));
+        var encoded = Files.createTempFile("thc-paired-diagnostic-", ".cbd");
+        try {
+            write(encoded, diagnostic);
+            if (!Arrays.equals(Files.readAllBytes(path), Files.readAllBytes(encoded)))
+                throw new IllegalArgumentException("Diagnostic JSON differs from executable CBD: " + path);
+            return diagnostic;
+        } finally { Files.deleteIfExists(encoded); }
+    }
     public static Map<String,Object> read(Path path) throws Exception {
         try (var file = new CoreCompactFile(path, hash(Files.readAllBytes(path)), true)) {
             var records = new CoreCompactRecords(file, path.toString());

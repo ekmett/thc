@@ -3028,7 +3028,11 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue(group["commands"] and group["outputs"])
         cbv = manifest["groups"]["cbv-coercion"]
         self.assertIn("build/cbv-post-core/CBVCoercionAudit.json", cbv["outputs"])
-        self.assertIn("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json", cbv["outputs"])
+        self.assertIn("build/cbv-post-core/CBVCoercionAudit.cbd", cbv["outputs"])
+        exports = [command["argv"] for command in cbv["commands"] if "t/fixtures/compiler/CBVAudit.hs" in command["argv"]]
+        self.assertEqual(2, len(exports))
+        self.assertTrue(all("-fplugin-opt=THC.Plugin:pretty-diagnostics" in command for command in exports))
+        self.assertIn("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd", cbv["outputs"])
         self.assertIn("build/explicit64-primops/core/Explicit64PrimopsAudit.cbd", cbv["outputs"])
         self.assertTrue(any("bin/check-cbv-metadata.py" in command["argv"]
                             for command in cbv["commands"]))
