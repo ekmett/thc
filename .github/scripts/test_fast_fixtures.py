@@ -255,7 +255,11 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         required = fast_fixtures.fast_inputs.PROXY_VOID_OUTPUTS
-        self.assertEqual(37, len(required))
+        self.assertEqual(41, len(required))
+        self.assertEqual({f"build/proxy-void/{stage}/core/{module}.cbd"
+                          for stage in ("pre", "post")
+                          for module in ("ProxyVoidAudit", "THC.InterfaceClosure")},
+                         {path for path in required if path.endswith(".cbd")})
         self.assertTrue(required <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/proxy-void', fast_fixtures.FULL_OUTPUT_ROOTS)
         for path in required:
@@ -504,7 +508,14 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('t/fixtures/core/DelimitedContinuations.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'delimited-continuations']}], group['commands'])
         self.assertIn('"$fixture_bin" delimited-continuations', (project / 'bin/prepare-tests.sh').read_text().splitlines())
-        self.assertEqual(154, len(cache.DELIMITED_OUTPUTS))
+        self.assertEqual(171, len(cache.DELIMITED_OUTPUTS))
+        self.assertEqual({f"build/delimited-continuations/{stage}/core/DelimitedContinuations.cbd"
+                          for stage in ("pre", "post")} |
+                         {"build/delimited-continuations/parked/core/ParkedControl.cbd"},
+                         {path for path in cache.DELIMITED_OUTPUTS if path.endswith(".cbd")})
+        for command in ("parked-native-build", "parked-native-run", "parked-export", "parked-audit"):
+            for suffix in ("stdout", "stderr", "command.json"):
+                self.assertIn(f"build/delimited-continuations/commands/{command}.{suffix}", cache.DELIMITED_OUTPUTS)
         self.assertTrue(cache.DELIMITED_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         name = 'build/delimited-continuations/manifest.json'
         artifacts = {}
