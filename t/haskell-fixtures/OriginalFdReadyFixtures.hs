@@ -14,6 +14,7 @@
 module OriginalFdReadyFixtures (prepareOriginalFdReady) where
 
 import Control.Monad (forM, unless)
+import CompactModelFixtures (writeCompactModel)
 import Data.Aeson (Value(..), eitherDecode, object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -43,6 +44,7 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 import THC.Interface
+import THC.Compact.JSON (parseModuleWithDebug)
 import THC.Plugin (serializePostTidyCore)
 import Text.Read (readMaybe)
 
@@ -130,6 +132,14 @@ negativeCases =
   ,("machine-result", changeField "resultRep" (wrongRep "IntRep"))]
   where wrongRep primitive = changeField "primReps" (const (toJSON [primitive :: String]))
 
+-- These exact malformed models cannot be represented by the typed codec.
+-- Keep their original diagnostics and prove rejection before publication,
+-- rather than inventing a CBD that no longer contains the malformed value.
+encodingRejections :: [(String, String)]
+encodingRejections =
+  [("dynamic-target", "Error in $: Unmapped Core fields: [\"isFunction\",\"symbol\",\"unit\"]")
+  ,("boolean-schema", "Error in $.schema: parsing Word64 failed, expected Number, but encountered Boolean")]
+
 foreignApplications :: Value -> [Value]
 foreignApplications value = case value of
   Object fields -> concatMap foreignApplications fields
@@ -183,6 +193,7 @@ prepareOriginalFdReady root = do
   let originalPath = directory </> "OriginalFDDeclarations.json"
       templatePath = directory </> "Template.json"
       adaptedPath = directory </> "OriginalFdReadyAudit.json"
+      adaptedCompact = directory </> "OriginalFdReadyAudit.cbd"
       factsPath = directory </> "facts.json"
   runGhc (Just libdir) $ do
     initialFlags <- getSessionDynFlags
@@ -252,46 +263,70 @@ prepareOriginalFdReady root = do
          "originalIdentityChecked" .= True, "originalNamesExternal" .= map (isExternalName . varName) originals,
          "originalProjection" .= ("original-interface-foreign-declarations-only" :: String),
          "boundary" .= ("GHC-compiled test consumer with original installed FD FCallIds; not unchanged Handle/FD execution" :: String)]
+  writeCompactModel (root </> adaptedPath) (root </> adaptedCompact)
   audits <- forM entries $ \entry -> do
     let output = directory </> entry ++ ".audit.json"
     audited <- execute ("audit-" ++ entry) [] "python3"
-      ["bin/audit-core.py", adaptedPath, "--entry", entry, "--output", output]
+      ["bin/audit-core.py", adaptedCompact, "--entry", "main:OriginalFdReadyAudit." ++ entry, "--output", output]
     pure (entry, output, audited)
   adaptedJSON <- either (die . ("Malformed generated readiness Core: " ++)) pure . eitherDecode =<<
     BL.readFile (root </> adaptedPath)
   createDirectoryIfMissing True (root </> directory </> "negative")
-  negatives <- fmap concat $ forM negativeCases $ \(label, change) -> do
+  controls <- forM negativeCases $ \(label, change) -> do
     let input = directory </> "negative" </> label ++ ".json"
+        compact = directory </> "negative" </> label ++ ".cbd"
         mutated = rewriteReady change adaptedJSON
     unless (mutated /= adaptedJSON) (die "Readiness negative control did not mutate the descriptor")
     writeJson (root </> input) mutated
-    forM entries $ \entry -> do
-      let output = directory </> "negative" </> label ++ "-" ++ entry ++ ".audit.json"
-      audited <- runLoggedExpect 1 180 root (directory </> "logs") ("negative-" ++ label ++ "-" ++ entry) [] "python3"
-        ["bin/audit-core.py", input, "--entry", entry, "--output", output]
-      report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
-      unless (jsonField "accepted" report == Bool False &&
-        case jsonField "issues" report of
-          Array issues -> any ((== String "foreign-call") . jsonField "code") issues
-          _ -> False) (die "Readiness negative control did not reject the original foreign descriptor")
-      pure (input, output, audited)
+    case lookup label encodingRejections of
+      Just expected -> case parseModuleWithDebug mutated of
+        Left actual | actual == expected -> do
+          let output = directory </> "negative" </> label ++ ".codec-rejection.json"
+          writeJson (root </> output) $ object
+            ["schema" .= (1 :: Int), "label" .= label,
+             "stage" .= ("compact-encoding" :: String), "accepted" .= False,
+             "input" .= input, "entries" .= map ("main:OriginalFdReadyAudit." ++) entries,
+             "error" .= actual]
+          pure ([input, output], [], Just (label, output))
+        Left actual -> die ("Unexpected readiness codec rejection: " ++ actual)
+        Right _ -> die "Malformed readiness control entered the typed codec"
+      Nothing -> do
+        writeCompactModel (root </> input) (root </> compact)
+        rejected <- forM entries $ \entry -> do
+          let output = directory </> "negative" </> label ++ "-" ++ entry ++ ".audit.json"
+          audited <- runLoggedExpect 1 180 root (directory </> "logs") ("negative-" ++ label ++ "-" ++ entry) [] "python3"
+            ["bin/audit-core.py", compact, "--entry", "main:OriginalFdReadyAudit." ++ entry, "--output", output]
+          report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
+          unless (jsonField "accepted" report == Bool False &&
+            case jsonField "issues" report of
+              Array issues -> any ((== String "foreign-call") . jsonField "code") issues
+              _ -> False) (die "Readiness negative control did not reject the original foreign descriptor")
+          pure (output, audited)
+        pure (input : compact : map fst rejected, map snd rejected, Nothing)
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  compactFiles <- listDirectory (root </> "src/cbd/THC/Compact")
   scriptFiles <- listDirectory (root </> "bin")
-  let commands = [version, info, libdirResult, importsResult, compiled, observed] ++
-        [command | (_,_,command) <- audits] ++ [command | (_,_,command) <- negatives]
+  let negatives = concat [rejected | (_,rejected,_) <- controls]
+      codecRejections = [(label,path) | (_,_,Just (label,path)) <- controls]
+      commands = [version, info, libdirResult, importsResult, compiled, observed] ++
+        [command | (_,_,command) <- audits] ++ negatives
       inputs = sort $ [source, driver, "t/haskell-fixtures/OriginalFdReadyFixtures.hs",
-        "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs", "thc.cabal",
+        "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/CompactModelFixtures.hs", "src/core-symbols/THC/CoreSymbols.hs", "thc.cabal",
         "bin/audit-core.py", "bin/core-capabilities.json"] ++
         ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
+        ["src/cbd/THC/Compact" </> name | name <- compactFiles, takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
-      artifacts = [oracle, originalPath, templatePath, adaptedPath, factsPath, binary,
+      artifacts = [oracle, originalPath, templatePath, adaptedPath, adaptedCompact, factsPath, binary,
         directory </> "native/private-file"] ++ [path | (_,path,_) <- audits] ++
-        concat [[input, output] | (input,output,_) <- negatives] ++ concatMap commandArtifacts commands
+        concat [paths | (paths,_,_) <- controls] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "nativeRows" .= length rows, "negativeAudits" .= length negatives,
+     "negativeEncodingRejections" .= length codecRejections, "negativeControls" .= length negativeCases,
+     "negativeControlLabels" .= map fst negativeCases, "codecRejections" .= Map.fromList codecRejections,
      "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
      "audits" .= Map.fromList [(entry,path) | (entry,path,_) <- audits], "commands" .= map commandRecord commands]
-  putStrLn "original-fd-ready:168 native observations, actual original FCallIds,2 strict entries,24 rejected ABI controls"
+  putStrLn "original-fd-ready:168 native observations, actual original FCallIds,2 strict entries,12 controls (20 rejected audits,2 typed encoding rejections)"

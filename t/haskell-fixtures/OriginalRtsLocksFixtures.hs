@@ -13,7 +13,8 @@
 -- Fixture acquisition support for original rts locks.
 module OriginalRtsLocksFixtures (prepareOriginalRtsLocks) where
 
-import Control.Monad (forM, unless)
+import Control.Monad (forM, forM_, unless)
+import CompactModelFixtures (writeCompactModel)
 import Data.Aeson (Value, eitherDecode, object, (.=))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
@@ -193,21 +194,28 @@ prepareOriginalRtsLocks root requireSupported = do
           fromIntegral result :: Int, fromIntegral before :: Int, fromIntegral after :: Int)
   writeJson (root </> directory </> "oracle.json") $ object ["rows" .= rows,
     "execution" .= ("GHC-compiled specialized Core invoking original native RTS FCallIds" :: String)]
+  forM_ ["pre", "post"] $ \stage ->
+    writeCompactModel (root </> directory </> stage ++ ".json")
+      (root </> directory </> stage ++ ".cbd")
   audits <- if not requireSupported then pure [] else forM ["pre","post"] $ \stage ->
     forM ["originalLock","originalUnlock"] $ \entry -> do
       let output = directory </> stage ++ "-" ++ entry ++ ".audit.json"
       command <- execute (stage ++ "-" ++ entry) [] "python3"
-        ["bin/audit-core.py", "--entry", entry, "--output", output, directory </> stage ++ ".json"]
+        ["bin/audit-core.py", "--entry", "main:OriginalRtsLocksAudit." ++ entry,
+         "--output", output, directory </> stage ++ ".cbd"]
       pure (output,command)
   let commands = [version,info,libdir,imports] ++ map snd (concat audits)
-      artifacts = map (directory </>) ["oracle.json","declarations.json","template-pre.json","pre.json","post.json"] ++
+      artifacts = map (directory </>) ["oracle.json","declarations.json","template-pre.json","pre.json","post.json","pre.cbd","post.cbd"] ++
         map fst (concat audits) ++ concatMap commandArtifacts commands
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  compactFiles <- listDirectory (root </> "src/cbd/THC/Compact")
   scriptFiles <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source,"t/haskell-fixtures/OriginalRtsLocksFixtures.hs",
-    "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/Main.hs","thc.cabal",
+    "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/CompactModelFixtures.hs",
+    "src/core-symbols/THC/CoreSymbols.hs","t/haskell-fixtures/Main.hs","thc.cabal",
     "bin/audit-core.py","bin/core-capabilities.json"] ++
     ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
+    ["src/cbd/THC/Compact" </> name | name <- compactFiles, takeExtension name == ".hs"] ++
     ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object ["schema" .= (1::Int),
