@@ -84,12 +84,12 @@ prepareSimdFloatFma root = do
     -- Canonical admission: no private capability profile or expected frontier.
     let audit = directory </> stage ++ "-audit.json"
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-audit") [] "python3"
-      (["bin/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json", "--output", audit] ++
-       concatMap (\entry -> ["--entry",entry]) (entries ++ wideEntries))
+      (["bin/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.cbd", "--output", audit] ++
+       concatMap (\entry -> ["--entry","main:SimdFloatFma." ++ entry]) (entries ++ wideEntries))
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-double-audit") [] "python3"
-      (["bin/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json",
+      (["bin/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.cbd",
         "--output", directory </> stage ++ "-double-audit.json"] ++
-       concatMap (\entry -> ["--entry",entry]) (doubleEntries ++ doubleWideEntries))
+       concatMap (\entry -> ["--entry","main:SimdFloatFma." ++ entry]) (doubleEntries ++ doubleWideEntries))
     pure ()
   let requests = [[entry] ++ map show values ++ [show lane] | entry <- entries, values <- inputs, lane <- [0..3 :: Int]] ++
         [[entry] ++ map show values ++ [show lane] | entry <- wideEntries, values <- inputs, lane <- [0..7 :: Int]] ++
@@ -107,7 +107,7 @@ prepareSimdFloatFma root = do
   inputHashes <- hashes root [source,driver,"t/haskell-fixtures/SimdFloatFmaFixtures.hs",
     "bin/core_vectors.py","bin/audit-core.py","bin/core-capabilities.json","bin/export-core.sh"]
   artifactHashes <- hashes root ([directory </> "oracle.txt" | not exportOnly] ++
-    [directory </> stage ++ suffix | stage <- stages, suffix <- ["-core/SimdFloatFma.json","-audit.json","-double-audit.json"]])
+    [directory </> stage ++ suffix | stage <- stages, suffix <- ["-core/SimdFloatFma.cbd","-audit.json","-double-audit.json"]])
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),
     "entries" .= entries,"wideEntries" .= wideEntries,"inputs" .= inputs,"stages" .= stages,"nativeFlags" .= nativeFlags,
     -- Decimal strings preserve unsigned Word64 bits through the JVM JSON reader.

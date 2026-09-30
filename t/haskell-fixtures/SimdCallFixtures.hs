@@ -55,10 +55,10 @@ prepareSimdCalls root = do
                    ("THC_GHC_OUT", output </> stage ++ "-ghc")]
       "bin/export-core.sh" ((if exportOnly then ["-fno-code", "-fwrite-if-simplified-core"] else []) ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
-    let core = directory </> stage ++ "-core/SimdCallAudit.json"
+    let core = directory </> stage ++ "-core/SimdCallAudit.cbd"
         audit = directory </> stage ++ "-audit.json"
     _ <- run root [] "python3" (["bin/audit-core.py", core, "--output", audit] ++
-      concatMap (\entry -> ["--entry", entry]) entries) ""
+      concatMap (\entry -> ["--entry", "main:SimdCallAudit." ++ entry]) entries) ""
     report <- BS.readFile (root </> audit)
     case decodeStrict' report of
       Just (Object fields) | Just (Bool True) <- KeyMap.lookup "accepted" fields,
@@ -90,7 +90,7 @@ prepareSimdCalls root = do
         "t/haskell-fixtures/Main.hs","t/haskell-fixtures/FixtureSupport.hs",
         "bin/audit-core.py","bin/core-capabilities.json","bin/export-core.sh","bin/build-compiler.sh"]
       artifacts = [directory </> "oracle.tsv" | not exportOnly] ++ [directory </> stage ++ suffix |
-        stage <- stages, suffix <- ["-core/SimdCallAudit.json","-audit.json"]]
+        stage <- stages, suffix <- ["-core/SimdCallAudit.cbd","-audit.json"]]
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

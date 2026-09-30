@@ -50,9 +50,9 @@ prepareSimdWideFloatFma root = do
   _ <- run root [("THC_CORE_OUT",output </> "pre-core"),("THC_GHC_OUT",output </> "pre-ghc")]
     "bin/export-core.sh" ["-fno-code","-fwrite-if-simplified-core",source] ""
   let audit suffix roots = runLogged 120 root (directory </> "logs") suffix [] "python3"
-        (["bin/audit-core.py",directory </> "pre-core/SimdWideFloatFma.json",
+        (["bin/audit-core.py",directory </> "pre-core/SimdWideFloatFma.cbd",
           "--output",directory </> ("pre-" ++ suffix ++ ".json")] ++
-          concatMap (\entry -> ["--entry",entry]) roots)
+          concatMap (\entry -> ["--entry","main:SimdWideFloatFma." ++ entry]) roots)
   _ <- audit "audit" floatEntries
   _ <- audit "double-audit" doubleEntries
   let requests = [[entry] ++ map show values ++ [show lane] | entry <- floatEntries, values <- inputs, lane <- [0..15::Int]] ++
@@ -72,7 +72,7 @@ prepareSimdWideFloatFma root = do
     "t/haskell-fixtures/SimdFloatFmaFixtures.hs","bin/core_vectors.py",
     "bin/audit-core.py","bin/core-capabilities.json","bin/export-core.sh"]
   artifactHashes <- hashes root [directory </> file | file <-
-    ["oracle.txt","pre-core/SimdWideFloatFma.json","pre-audit.json","pre-double-audit.json"]]
+    ["oracle.txt","pre-core/SimdWideFloatFma.cbd","pre-audit.json","pre-double-audit.json"]]
   writeJson manifest $ object ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),
     "hugeEntries" .= floatEntries,"doubleHugeEntries" .= doubleEntries,"inputs" .= inputs,
     "doubleInputs" .= map (map show) doubleInputs,"stages" .= (["pre"]::[String]),

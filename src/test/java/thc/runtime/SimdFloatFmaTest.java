@@ -230,27 +230,27 @@ class SimdFloatFmaTest {
                 .option("compiler.Inlining", Boolean.toString(inlining)).option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = json(new File(directory, stage + "-core/" + moduleName + ".json"));
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/" + moduleName + ".cbd").toPath());
                     for (int operation = 0; operation < names.size(); operation++) {
-                        var name = names.get(operation); var linked = new LinkedHashMap<>(CoreModules.reachable(source, name)); linked.put("instrument", true);
+                        var name = names.get(operation); var entryId = "main:" + moduleName + "." + name; var linked = new LinkedHashMap<>(CoreModules.reachable(source, entryId)); linked.put("instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                        var label = stage + "/" + backend + "/inlining=" + inlining + "/" + name; var host = program.hostEntryTarget(4); var function = context.asValue(new EntryValue(program, name, 4));
+                        var label = stage + "/" + backend + "/inlining=" + inlining + "/" + name; var host = program.hostEntryTarget(4); var function = context.asValue(new EntryValue(program, entryId, 4));
                         for (var input : inputs) for (int lane = 0; lane < laneCount; lane++) check(doubles, laneCount, nativeRows, name, operation, function, input, lane, label);
                         // These entries may be CAFs returning closures. Snapshot the resolved function, not its initial thunk root.
-                        var entry = program.entryTarget(name); var installedEntries = activeEntries(host, entry);
+                        var entry = program.entryTarget(entryId); var installedEntries = activeEntries(host, entry);
                         assertTrue(function.invokeMember("compile").asBoolean()); assertTrue(compiled(host), label + " host installation");
                         for (var target : installedEntries) assertTrue(compiled(target), label + " guest installation");
                         for (var input : inputs) for (int lane = 0; lane < laneCount; lane++) {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); check(doubles, laneCount, nativeRows, name, operation, function, input, lane, label);
                             assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, "Every first-installed lane call must enter compiled code");
-                            assertSame(entry, program.entryTarget(name), label + " entry identity"); assertSame(host, program.hostEntryTarget(4), label + " host identity");
+                            assertSame(entry, program.entryTarget(entryId), label + " entry identity"); assertSame(host, program.hostEntryTarget(4), label + " host identity");
                             assertEquals(installedEntries, activeEntries(host, entry), label + " installed entry identities"); assertTrue(compiled(host), label + " host retained");
                             for (var target : installedEntries) assertTrue(compiled(target), label + " guest retained");
                             assertEquals(0L, program.diagnostics().get("unsupportedTraps"));
                             assertEquals(0, language.getHandoffState().get().getArguments().retainedReferences()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences()); assertNull(language.getHandoffState().get().getPending());
                         }
                         // Compile the genuine vector worker itself as well: a compiled scalar wrapper alone could hide an interpreted FMA.
-                        var workerName = name.substring(0, name.length() - "Case".length()) + "Worker"; var worker = program.entryTarget(workerName); var workerRoot = (GuestRoot) worker.getRootNode();
+                        var workerName = entryId.substring(0, entryId.length() - "Case".length()) + "Worker"; var worker = program.entryTarget(workerName); var workerRoot = (GuestRoot) worker.getRootNode();
                         var inputLayout = Objects.requireNonNull(workerRoot.getTypedInput()); var resultShape = Objects.requireNonNull(workerRoot.getTupleResult());
                         assertEquals(3, inputLayout.getLogical().getLogicalArity()); assertEquals(3, inputLayout.getLogical().getPhysicalArity());
                         assertEquals(inputLayout.getHeader() + 3, inputLayout.getPacket().getReps().size()); assertEquals(1, resultShape.getWidth());
