@@ -132,7 +132,12 @@ public final class BytecodeStackPreparation {
             } else {
                 result = root.interceptControlFlowException(cfe, frame, this, (int) bci);
             }
-""", "            // THC unified frame v1: control flow\n            result = root.interceptControlFlowException(cfe, frame, this, (int) bci);\n"},
+""", """
+            // THC unified frame v1: control flow
+            // The cold interceptor may not inline; leave compiled code before forwarding its virtual frame.
+            CompilerDirectives.transferToInterpreter();
+            result = root.interceptControlFlowException(cfe, frame, this, (int) bci);
+"""},
         {"""
             if ((this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
                 FrameWithoutBoxing localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
@@ -247,6 +252,11 @@ public final class BytecodeStackPreparation {
             + java.util.Arrays.stream(FORWARDING).filter(p -> !p[0].contains("? (FrameWithoutBoxing)"))
                 .map(p -> p[0]).collect(java.util.stream.Collectors.joining()) + "}\n";
         String after = transform(before, VERSION);
+        String controlFlowCall = "            result = root.interceptControlFlowException(cfe, frame, this, (int) bci);\n";
+        String coldControlFlow = "            CompilerDirectives.transferToInterpreter();\n" + controlFlowCall;
+        require(after.contains(coldControlFlow), "Missing interpreter transfer before control-flow frame forwarding");
+        reject(after.replace(coldControlFlow, controlFlowCall), VERSION);
+        reject(after.replace(coldControlFlow, controlFlowCall + "            CompilerDirectives.transferToInterpreter();\n"), VERSION);
         require(transform(after, VERSION).equals(after), "Stack entry preparation is not idempotent");
         require(transform(before.replace("\n", "\r\n"), VERSION).equals(after.replace("\n", "\r\n")),
             "Stack entry preparation changed newlines");
