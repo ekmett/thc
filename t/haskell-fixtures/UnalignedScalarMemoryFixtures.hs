@@ -72,8 +72,8 @@ prepareUnalignedScalarMemory root = do
       [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [source])
     audited <- runLogged 120 root logs (stage ++ "-audit") [] "python3"
-      (["bin/audit-core.py"] ++ concatMap (\entry -> ["--entry",entry]) entries ++
-       ["--output",directory </> stage </> "audit.json",core </> "UnalignedScalarMemoryAudit.json"])
+      (["bin/audit-core.py"] ++ concatMap (\entry -> ["--entry","main:UnalignedScalarMemoryAudit." ++ entry]) entries ++
+       ["--output",directory </> stage </> "audit.json",core </> "UnalignedScalarMemoryAudit.cbd"])
     pure [exported,audited]
   let native = output </> "native"
   createDirectoryIfMissing True native
@@ -104,7 +104,7 @@ prepareUnalignedScalarMemory root = do
       commands = [version,inventory] ++ concat stages ++ [built,oracle]
       artifacts = [directory </> "oracle.tsv",directory </> "inputs.txt"] ++
         [directory </> stage </> suffix | stage <- ["pre","post"],
-          suffix <- ["core/UnalignedScalarMemoryAudit.json","audit.json"]] ++ concatMap commandArtifacts commands
+          suffix <- ["core/UnalignedScalarMemoryAudit.cbd","audit.json"]] ++ concatMap commandArtifacts commands
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),

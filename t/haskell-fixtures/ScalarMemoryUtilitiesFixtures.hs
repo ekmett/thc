@@ -57,15 +57,15 @@ prepareScalarMemoryUtilities root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [fixture])
     audited <- runLogged 120 root logs (stage ++ "-audit") [] "python3"
-      (["bin/audit-core.py", core </> "ScalarMemoryUtilities.json", "--output", auditPath] ++
-       concatMap (\entry -> ["--entry",entry]) entries)
+      (["bin/audit-core.py", core </> "ScalarMemoryUtilities.cbd", "--output", auditPath] ++
+       concatMap (\entry -> ["--entry","main:ScalarMemoryUtilities." ++ entry]) entries)
     bytes <- BS.readFile (root </> auditPath)
     case decodeStrict' bytes of
       Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
         KeyMap.lookup "issues" value == Just (Array mempty),
         KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
       _ -> die ("Strict scalar memory utilities audit rejected " ++ stage)
-    pure ([core </> "ScalarMemoryUtilities.json", auditPath] ++
+    pure ([core </> "ScalarMemoryUtilities.cbd", auditPath] ++
       commandArtifacts exported ++ commandArtifacts audited)
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")

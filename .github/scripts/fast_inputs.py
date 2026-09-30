@@ -196,7 +196,7 @@ SCALAR_MEMORY_ENTRIES = ("memoryCase", "pinCase", "thawCase", "shrinkCase", "dif
 SCALAR_MEMORY_OUTPUTS = frozenset("build/scalar-memory-utilities/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/ScalarMemoryUtilities.json", "audit.json")),
+      for suffix in ("core/ScalarMemoryUtilities.cbd", "audit.json")),
     *(f"commands/{command}.{suffix}" for command in ("native-build", "native-oracle", "pre-export", "post-export", "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json"))))
 DELIMITED_ENTRIES = ("promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest",
@@ -252,14 +252,14 @@ ATOMIC_INT_ARRAY_OUTPUTS = frozenset("build/atomic-int-arrays/" + name for name 
 ))
 ATOMIC_ADDRESS_OUTPUTS = frozenset("build/atomic-address/" + name for name in (
     "manifest.json", "inputs.txt", "oracle.tsv",
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in ("core/AtomicAddressAudit.json", "audit.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in ("core/AtomicAddressAudit.cbd", "audit.json")),
     *(f"logs/{label}.{suffix}" for label in (
         "version", "native-build", "native-oracle", *(f"{step}-{stage}" for stage in ("pre", "post") for step in ("export", "audit")))
       for suffix in ("stdout", "stderr", "command.json")),
 ))
 UNALIGNED_SCALAR_MEMORY_OUTPUTS = frozenset("build/unaligned-scalar-memory/" + name for name in (
     "manifest.json", "inputs.txt", "oracle.tsv",
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in ("core/UnalignedScalarMemoryAudit.json", "audit.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in ("core/UnalignedScalarMemoryAudit.cbd", "audit.json")),
     *(f"logs/{label}.{suffix}" for label in (
         "ghc-version", "ghc-inventory", "native-build", "native-oracle",
         *(f"{stage}-{step}" for stage in ("pre", "post") for step in ("export", "audit")))
@@ -342,9 +342,9 @@ BIGNAT_COMMANDS = ("plugin-build", "boot-export", "native-build", "native-oracle
                    *(f"{stage}-{name}-audit" for stage in ("pre", "post") for name in BIGNAT_AUDITS))
 BIGNAT_OUTPUTS = frozenset("build/bignat-literals/" + path for path in (
     "manifest.json", "requests.tsv", "oracle.tsv", "boot/boot-provenance.json",
-    *(f"boot/core/GHC.Internal.Bignum.{name}.json" for name in ("BigNat", "Integer", "Natural")),
+    *(f"boot/core/GHC.Internal.Bignum.{name}{suffix}" for name in ("BigNat", "Integer", "Natural") for suffix in (".cbd", ".json")),
     *(f"native/{name}" for name in ("bignat-literal-oracle", "Main.hi", "Main.o", "BigNatLiteralAudit.hi", "BigNatLiteralAudit.o")),
-    *(f"{stage}-core/{name}.json" for stage in ("pre", "post") for name in ("BigNatLiteralAudit", "THC.InterfaceClosure")),
+    *(f"{stage}-core/{name}.cbd" for stage in ("pre", "post") for name in ("BigNatLiteralAudit", "THC.InterfaceClosure")),
     *(f"{stage}-{name}.audit.json" for stage in ("pre", "post") for name in BIGNAT_AUDITS),
     *(f"commands/{name}.{suffix}" for name in BIGNAT_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 BIGNAT_SOURCES = frozenset(wired_source_path(path) for path in (

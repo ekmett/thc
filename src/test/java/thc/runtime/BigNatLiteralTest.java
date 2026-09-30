@@ -87,13 +87,14 @@ class BigNatLiteralTest {
     private static <T> List<T> concat(List<T> first, List<T> second) { var result = new ArrayList<>(first); result.addAll(second); return result; }
     private Map<String, Object> evidence() throws Exception { return report(DIRECTORY + "/manifest.json"); }
     private Map<String, Object> report(String path) throws Exception { return object(Json.parse(Files.readString(new File(root, path).toPath()))); }
+    private Map<String, Object> core(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
     private void verifyEvidence(Map<String, Object> manifest) throws Exception {
         assertEquals(1L, manifest.get("schema")); assertEquals(699L, manifest.get("nativeRows")); assertEquals(64L, manifest.get("wordBits"));
         assertEquals(ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? "little" : "big", manifest.get("byteOrder"));
         assertEquals(ENTRIES, manifest.get("entries")); assertEquals(ARITHMETIC, manifest.get("arithmeticControls")); assertEquals(list("integerAddFrontier"), manifest.get("frontiers"));
         assertEquals(VALUES.stream().map(BigInteger::toString).toList(), manifest.get("values")); assertEquals(SEEDS, manifest.get("seeds"));
         var stages = new LinkedHashMap<String, List<String>>();
-        for (var stage : list("pre", "post")) { var paths = new ArrayList<>(list(DIRECTORY + "/" + stage + "-core/BigNatLiteralAudit.json")); for (var module : MODULES) paths.add(DIRECTORY + "/boot/core/GHC.Internal.Bignum." + module + ".json"); stages.put(stage, paths); }
+        for (var stage : list("pre", "post")) { var paths = new ArrayList<>(list(DIRECTORY + "/" + stage + "-core/BigNatLiteralAudit.cbd")); for (var module : MODULES) paths.add(DIRECTORY + "/boot/core/GHC.Internal.Bignum." + module + ".cbd"); stages.put(stage, paths); }
         assertEquals(stages, manifest.get("stages"));
         var sources = concat(vendorSources(), list("t/fixtures/compiler/BigNatLiteralAudit.hs", "t/fixtures/compiler/BigNatLiteralAuditNative.hs", "t/haskell-fixtures/BigNatLiteralFixtures.hs",
             "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-boot.py", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
@@ -103,11 +104,11 @@ class BigNatLiteralTest {
         var commands = new ArrayList<>(list("plugin-build", "boot-export", "native-build", "native-oracle"));
         var auditNames = concat(concat(ENTRIES, ARITHMETIC), list("missing-source"));
         var artifacts = new ArrayList<>(list(DIRECTORY + "/requests.tsv", DIRECTORY + "/oracle.tsv", DIRECTORY + "/boot/boot-provenance.json"));
-        for (var module : MODULES) artifacts.add(DIRECTORY + "/boot/core/GHC.Internal.Bignum." + module + ".json");
+        for (var module : MODULES) for (var suffix : list(".cbd", ".json")) artifacts.add(DIRECTORY + "/boot/core/GHC.Internal.Bignum." + module + suffix);
         for (var name : list("bignat-literal-oracle", "Main.hi", "Main.o", "BigNatLiteralAudit.hi", "BigNatLiteralAudit.o")) artifacts.add(DIRECTORY + "/native/" + name);
         for (var stage : list("pre", "post")) {
             commands.add(stage + "-export"); for (var name : auditNames) commands.add(stage + "-" + name + "-audit");
-            for (var module : list("BigNatLiteralAudit", "THC.InterfaceClosure")) { artifacts.add(DIRECTORY + "/" + stage + "-core/" + module + ".json"); artifacts.add(DIRECTORY + "/" + stage + "-core/" + module + ".json.symbols"); }
+            for (var module : list("BigNatLiteralAudit", "THC.InterfaceClosure")) artifacts.add(DIRECTORY + "/" + stage + "-core/" + module + ".cbd");
             for (var name : auditNames) artifacts.add(DIRECTORY + "/" + stage + "-" + name + ".audit.json");
         }
         for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) artifacts.add(DIRECTORY + "/commands/" + command + "." + suffix);
@@ -123,13 +124,13 @@ class BigNatLiteralTest {
         for (var name : MODULES) {
             var original = report(DIRECTORY + "/boot/core/GHC.Internal.Bignum." + name + ".json"); assertEquals("9.14.1", original.get("ghc"));
             assertEquals("optimized-Core-after-Tidy-before-CorePrep", original.get("boundary")); assertNotNull(original.get("sourceCore")); assertNotNull(original.get("sourceSpans"));
-            var bindings = objects(original.get("bindings")); assertEquals(counts.get(name), (long) bindings.size()); for (var binding : bindings) originalIds.add(binding.get("id"));
+            var bindings = objects(core(DIRECTORY + "/boot/core/GHC.Internal.Bignum." + name + ".cbd").get("bindings")); assertEquals(counts.get(name), (long) bindings.size()); for (var binding : bindings) originalIds.add(binding.get("id"));
         }
         var coverage = object(manifest.get("coverage")); assertEquals(Set.of("pre", "post"), coverage.keySet());
         for (var stage : list("pre", "post")) {
-            var publicModule = report(DIRECTORY + "/" + stage + "-core/BigNatLiteralAudit.json"); assertEquals("9.14.1", publicModule.get("ghc"));
+            var publicModule = core(DIRECTORY + "/" + stage + "-core/BigNatLiteralAudit.cbd"); assertEquals("9.14.1", publicModule.get("ghc"));
             assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", publicModule.get("boundary"));
-            var closure = objects(report(DIRECTORY + "/" + stage + "-core/THC.InterfaceClosure.json").get("bindings")); assertTrue(originalIds.containsAll(closure.stream().map(binding -> binding.get("id")).toList()));
+            var closure = objects(core(DIRECTORY + "/" + stage + "-core/THC.InterfaceClosure.cbd").get("bindings")); assertTrue(originalIds.containsAll(closure.stream().map(binding -> binding.get("id")).toList()));
             assertEquals(new HashSet<>(concat(ENTRIES, ARITHMETIC)), object(coverage.get(stage)).keySet());
             for (var name : concat(ENTRIES, ARITHMETIC)) {
                 var audit = report(DIRECTORY + "/" + stage + "-" + name + ".audit.json"); verifyAudit(name, audit);
@@ -204,15 +205,15 @@ class BigNatLiteralTest {
         }
         assertEquals(modeled, rows, "Every size, sign, limb, byte, sentinel and wrapped public conversion"); assertEquals(699, new HashSet<>(rows).size()); assertEquals(((Number) manifest.get("nativeRows")).intValue(), rows.size());
         for (var stagePaths : object(manifest.get("stages")).entrySet()) {
-            var stage = stagePaths.getKey(); var sources = new ArrayList<Map<String, Object>>(); for (var path : expression(stagePaths.getValue())) sources.add(report((String) path)); var module = CoreModules.merge(sources);
+            var stage = stagePaths.getKey(); var sources = new ArrayList<Map<String, Object>>(); for (var path : expression(stagePaths.getValue())) sources.add(core((String) path)); var module = CoreModules.merge(sources);
             for (var name : ENTRIES) {
                 var audit = report(DIRECTORY + "/" + stage + "-" + name + ".audit.json"); assertEquals(true, audit.get("accepted")); var selected = rows.stream().filter(row -> row.name.equals(name)).toList();
                 for (var backend : list("ast", "bytecode")) try (var context = context(inlining)) {
                     context.initialize("thc"); context.enter();
                     try {
-                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var instrumented = with(CoreModules.reachable(module, name), "instrument", true);
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var instrumented = with(CoreModules.reachable(module, "main:BigNatLiteralAudit." + name), "instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, instrumented) : new BytecodeProgram(language, instrumented);
-                        var function = context.asValue(new EntryValue(program, name, 2)); var host = program.hostEntryTarget(2); var original = program.entryTarget(name);
+                        var function = context.asValue(new EntryValue(program, "main:BigNatLiteralAudit." + name, 2)); var host = program.hostEntryTarget(2); var original = program.entryTarget("main:BigNatLiteralAudit." + name);
                         var worker = "ghc-internal:GHC.Internal.Bignum." + (name.startsWith("integer") ? "Integer.integerToInt#" : name.startsWith("natural") ? "Natural.naturalToWord#" : "Integer.integerToBigNatSign#");
                         assertTrue(objects(audit.get("reachableBindings")).stream().anyMatch(binding -> worker.equals(binding.get("id")))); var workerTarget = program.entryTarget(worker);
                         var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
@@ -249,14 +250,18 @@ class BigNatLiteralTest {
         for (long bits : new long[]{-1L, 17179869121L, Long.MAX_VALUE}) assertThrows(RuntimeFault.class, () -> BigNatLiterals.byteSize(bits));
         for (var value : list("", "-1", "+1", "00", "01", " 1", "1 ", "1.0", "0x10", "١")) assertThrows(RuntimeFault.class, () -> BigNatLiterals.decode(value));
     }
-    private static String request(String backend, List<Object> body) {
-        var binding = map("id", "root", "name", "root", "lifted", true, "arity", 1, "expr", list("lam", list(map("id", "x", "lifted", false)), body));
-        return Json.stringify(map("entry", "root", "backend", backend, "modules", list(map("schema", 1, "ghc", "9.14.1", "constructors", list(), "bindings", list(binding)))));
+    private static Map<String, Object> model(List<Object> body) {
+        var binding = map("id", "main:BigNatControl.root", "name", "root", "lifted", true, "arity", 1, "expr", list("lam", list(map("id", "x", "lifted", false)), body, map("rep", map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true), "resultRep", unknown())));
+        return map("schema", 1, "ghc", "9.14.1", "unit", "main", "module", "BigNatControl", "boundary", "test-model", "constructors", list(), "bindings", list(binding));
+    }
+    private static String request(Path temporary, String backend, List<Object> body) throws Exception {
+        var source = thc.CoreCbdFixtures.write(Files.createTempFile(temporary, "control-", ".cbd"), model(body));
+        return CoreModules.request(list(source.toString()), "main:BigNatControl.root", true, false, backend);
     }
     private static Map<String, Object> exact() { return map("kind", "object", "primReps", list("BoxedRep (Just Unlifted)"), "evaluated", true); }
     private static Map<String, Object> unknown() { return map("kind", "unknown", "primReps", null, "evaluated", false); }
-    private static List<Object> literal(String value, Map<String, Object> proof) { var literal = new ArrayList<Object>(list("lit", "bignat", value)); if (proof != null) literal.add(map("rep", proof)); return literal; }
-    private static List<Object> size(List<Object> literal) { return list("app", list("prim", "sizeofByteArray#"), list(literal), list(false), false, false, map("rep", map("kind", "long", "primReps", list("IntRep"), "evaluated", true))); }
+    private static List<Object> literal(String value, Map<String, Object> proof) { return list("lit", "bignat", value, map("rep", proof == null ? unknown() : proof)); }
+    private static List<Object> size(List<Object> literal) { return list("app", list("prim", "sizeofByteArray#", map("rep", unknown())), list(literal), list(false), false, false, map("rep", map("kind", "long", "primReps", list("IntRep"), "evaluated", true))); }
     private static List<Map<String, Object>> aggregateForgeries() {
         var voidRep = map("kind", "void", "primReps", list(), "evaluated", true);
         return list(voidRep, map("kind", "unknown", "primReps", list(), "evaluated", true, "aggregate", "unboxed-tuple", "components", list()),
@@ -264,12 +269,12 @@ class BigNatLiteralTest {
             map("kind", "vector", "primReps", list("VecRep 2 Int64ElemRep"), "evaluated", true, "vector", map("lanes", 2, "element", "Int64ElemRep")));
     }
     private void audit(Path temporary, int serial, List<Object> body, boolean accepted, String issue) throws Exception {
-        var modules = expression(object(Json.parse(request("ast", body))).get("modules")); assertEquals(1, modules.size()); var name = "control-" + serial;
-        var source = temporary.resolve(name + ".json"); Files.writeString(source, Json.stringify(modules.getFirst())); var output = temporary.resolve(name + "-report.json");
-        var process = new ProcessBuilder("python3", "bin/audit-core.py", source.toString(), "--entry", "root", "--output", output.toString()).directory(root)
+        var name = "control-" + serial;
+        var source = temporary.resolve(name + ".cbd"); thc.CoreCbdFixtures.write(source, model(body)); var output = temporary.resolve(name + "-report.json");
+        var process = new ProcessBuilder("python3", "bin/audit-core.py", source.toString(), "--entry", "main:BigNatControl.root", "--output", output.toString()).directory(root)
             .redirectOutput(temporary.resolve(name + ".stdout").toFile()).redirectError(temporary.resolve(name + ".stderr").toFile()).start();
         if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared BigNat auditor timed out: " + name); }
-        assertEquals(accepted ? 0 : 1, process.exitValue(), name); var actual = object(Json.parse(Files.readString(output))); assertEquals(accepted, actual.get("accepted"), name);
+        var report = Files.readString(output); assertEquals(accepted ? 0 : 1, process.exitValue(), name + ": " + report); var actual = object(Json.parse(report)); assertEquals(accepted, actual.get("accepted"), name);
         if (accepted) { assertEquals(list(), actual.get("issues")); assertEquals(list(), actual.get("missingGlobals")); }
         else { var issues = objects(actual.get("issues")); assertFalse(issues.isEmpty(), name); if (issue != null) assertTrue(issues.stream().anyMatch(item -> issue.equals(item.get("code"))), name + "/" + issue); }
     }
@@ -280,7 +285,9 @@ class BigNatLiteralTest {
             // CLI recovers ByteArray# kind/PrimRep; auditor API separately checks evaluated=true.
             audit(temporary, serial++, size(literal(value, proof)), true, null);
         }
-        for (var value : list("", "-1", "+1", "00", "01", " 1", "1 ", "1.0", "0x10", "١")) audit(temporary, serial++, literal(value, exact), false, "invalid-literal-value");
+        // The ten malformed decimal spellings remain negative controls in the
+        // managed decoder above and the owning Python auditor API. CBD stores
+        // a numeric magnitude, not an unvalidated diagnostic spelling.
         var bad = new ArrayList<Map<String, Object>>();
         for (var pair : list(list("long", "IntRep"), list("long", "WordRep"), list("object", "BoxedRep (Just Lifted)"), list("object", "BoxedRep Nothing"), list("unknown", "BoxedRep (Just Unlifted)"), list("data", "BoxedRep (Just Unlifted)"), list("closure", "BoxedRep (Just Unlifted)")))
             bad.add(map("kind", pair.get(0), "primReps", list(pair.get(1)), "evaluated", true));
@@ -288,8 +295,8 @@ class BigNatLiteralTest {
         for (var proof : list(exact, null, unknown)) audit(temporary, serial++, size(literal("18446744073709551616", proof)), true, null);
         for (var kind : list("data", "closure", "unknown")) audit(temporary, serial++, size(literal("18446744073709551616", with(exact, "kind", kind))), false, null);
         for (var rep : list("BoxedRep (Just Lifted)", "BoxedRep Nothing", "IntRep", "WordRep")) audit(temporary, serial++, size(literal("18446744073709551616", with(exact, "primReps", list(rep)))), false, null);
-        audit(temporary, serial++, list("case", list("lit", "int", "0"), "scrutinee", list(list("lit", list("bignat", "1"), list(), list("lit", "int", "1")), list("default", null, list(), list("lit", "int", "0")))), false, "alternative-kind");
-        assertEquals(50, serial);
+        audit(temporary, serial++, list("case", list("lit", "int", "0", map()), "scrutinee", list(list("lit", list("bignat", "1"), list(), list("lit", "int", "1", map()), map("binders", list())), list("default", null, list(), list("lit", "int", "0", map()), map("binders", list()))), map()), false, "alternative-kind");
+        assertEquals(40, serial);
     }
     @Test void everyModelByteReconstructsMagnitudeAndSentinels() {
         for (int seed = 0; seed < VALUES.size(); seed++) {
@@ -306,23 +313,23 @@ class BigNatLiteralTest {
         var exact = exact(); var scalar = map("kind", "long", "primReps", list("IntRep"), "evaluated", true); var literal = literal("18446744073709551616", proof);
         // Direct calls recover the intrinsic proof; exact case binder is an independent control.
         var operand = bind ? list("var", "bytes", map("rep", exact)) : literal; var read = size(operand);
-        return !bind ? read : list("case", literal, "bytes", list(list("default", null, list(), read)), map("rep", scalar, "binder", map("id", "bytes", "lifted", false, "rep", exact)));
+        return !bind ? read : list("case", literal, "bytes", list(list("default", null, list(), read, map("binders", list()))), map("rep", scalar, "binder", map("id", "bytes", "lifted", false, "rep", exact)));
     }
-    @Test void exactUnliftedLiteralProofRejectsScalarAggregateAndBoxedForgeries() {
+    @Test void exactUnliftedLiteralProofRejectsScalarAggregateAndBoxedForgeries(@TempDir Path temporary) throws Exception {
         var exact = exact(); var bad = new ArrayList<>(list(with(exact, "primReps", list("BoxedRep (Just Lifted)")), with(exact, "primReps", list("BoxedRep Nothing")), with(exact, "kind", "unknown"), with(exact, "kind", "data"), with(exact, "kind", "closure"),
             map("kind", "long", "primReps", list("IntRep"), "evaluated", true), map("kind", "long", "primReps", list("WordRep"), "evaluated", true)));
         bad.addAll(aggregateForgeries());
         for (var backend : list("ast", "bytecode")) try (var context = context(true)) {
             for (boolean bind : new boolean[]{false, true}) {
-                for (var proof : list(exact, null, unknown())) assertEquals(16L, context.eval("thc", request(backend, size(proof, bind))).execute(0L).asLong());
-                for (var proof : bad) assertThrows(PolyglotException.class, () -> context.eval("thc", request(backend, size(proof, bind))));
+                for (var proof : list(exact, null, unknown())) assertEquals(16L, context.eval("thc", request(temporary, backend, size(proof, bind))).execute(0L).asLong());
+                for (var proof : bad) assertThrows(PolyglotException.class, () -> context.eval("thc", request(temporary, backend, size(proof, bind))));
             }
         }
     }
-    @Test void bignatLiteralAlternativesRemainForbidden() {
-        var body = list("case", list("lit", "int", "0"), "scrutinee", list(list("lit", list("bignat", "0"), list(), list("lit", "int", "1")), list("default", null, list(), list("lit", "int", "0"))));
+    @Test void bignatLiteralAlternativesRemainForbidden(@TempDir Path temporary) throws Exception {
+        var body = list("case", list("lit", "int", "0", map()), "scrutinee", list(list("lit", list("bignat", "0"), list(), list("lit", "int", "1", map()), map("binders", list())), list("default", null, list(), list("lit", "int", "0", map()), map("binders", list()))), map());
         for (var backend : list("ast", "bytecode")) try (var context = context(true)) {
-            var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request(backend, body)));
+            var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request(temporary, backend, body)));
             assertTrue(Objects.toString(failure.getMessage(), "").contains("BigNat/rubbish literal alternatives are invalid GHC Core"), failure.getMessage());
         }
     }

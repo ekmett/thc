@@ -31,15 +31,16 @@ import Foreign (Ptr, alloca, castPtr, peek, poke)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>), takeExtension)
+import System.FilePath ((</>), takeExtension, replaceExtension)
 import Text.Read (readMaybe)
+import THC.Compact.Module (readModuleValue)
 
 entries, arithmetic, modules, originals, vendorSources :: [String]
 entries = ["integerRoundTrip","naturalRoundTrip","integerLiteral","naturalLiteral",
   "magnitudeSize","magnitudeByte","magnitudeWord","magnitudeSign"]
 arithmetic = ["integerAddFrontier","naturalAddFrontier"]
 modules = ["BigNat","Integer","Natural"]
-originals = [directory </> "boot/core/GHC.Internal.Bignum." ++ name ++ ".json" | name <- modules]
+originals = [directory </> "boot/core/GHC.Internal.Bignum." ++ name ++ ".cbd" | name <- modules]
 vendorSources = ["nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum" </> name ++ suffix |
   name <- modules, suffix <- [".hs",".hs-boot"]] ++
   ["nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h","nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"]
@@ -92,6 +93,9 @@ field key _ = die ("Expected BigNat object for " ++ key)
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
 
+readCore :: FilePath -> IO Value
+readCore path = BS.readFile path >>= either die pure . readModuleValue
+
 walk :: Value -> [Value]
 walk value = value : concatMap walk (case value of Object fields -> toList fields; Array items -> toList items; _ -> [])
 
@@ -139,8 +143,10 @@ verifyBootSources root = do
 -- remains shared; no dynamic Python imports or replacement capability checker.
 inventory :: FilePath -> FilePath -> IO (Value,Value,Value)
 inventory root auditDirectory = do
-  original <- mapM (readJson . (root </>)) originals
-  forM_ original $ \core -> do
+  original <- mapM (readCore . (root </>)) originals
+  -- Pretty source text is diagnostic evidence, not executable input.
+  diagnostics <- mapM (readJson . (root </>) . (`replaceExtension` "json")) originals
+  forM_ diagnostics $ \core -> do
     ghc <- field "ghc" core :: IO String
     boundary <- field "boundary" core :: IO String
     sourceCore <- field "sourceCore" core :: IO String
@@ -151,15 +157,15 @@ inventory root auditDirectory = do
   originalBindings <- mapM (field "bindings") original :: IO [[Value]]
   sourceIds <- Set.fromList <$> mapM (field "id") (concat originalBindings) :: IO (Set.Set String)
   stages <- forM ["pre","post"] $ \stage -> do
-    let publicPath = directory </> stage ++ "-core/BigNatLiteralAudit.json"
-        closurePath = directory </> stage ++ "-core/THC.InterfaceClosure.json"
+    let publicPath = directory </> stage ++ "-core/BigNatLiteralAudit.cbd"
+        closurePath = directory </> stage ++ "-core/THC.InterfaceClosure.cbd"
         paths = publicPath:originals
-    public <- readJson (root </> publicPath)
+    public <- readCore (root </> publicPath)
     ghc <- field "ghc" public :: IO String
     boundary <- field "boundary" public :: IO String
     check (ghc == "9.14.1" && boundary == if stage == "pre" then "optimized-Core-before-Tidy"
       else "optimized-Core-after-Tidy-before-CorePrep") "Wrong public export boundary"
-    closure <- readJson (root </> closurePath) >>= field "bindings" :: IO [Value]
+    closure <- readCore (root </> closurePath) >>= field "bindings" :: IO [Value]
     closureIds <- Set.fromList <$> mapM (field "id") closure
     check (closureIds `Set.isSubsetOf` sourceIds) "Original source must replace complete interface closure"
     bindings <- (++) (concat originalBindings) <$> field "bindings" public

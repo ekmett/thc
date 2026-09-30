@@ -57,10 +57,10 @@ prepareAtomicAddress root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [source])
     audited <- runLogged 120 root logs ("audit-" ++ stage) [] "python3"
-      (["bin/audit-core.py"] ++ concatMap (\entry -> ["--entry",entry]) entries ++
-       ["--output",directory </> stage </> "audit.json",core </> "AtomicAddressAudit.json"])
+      (["bin/audit-core.py"] ++ concatMap (\entry -> ["--entry","main:AtomicAddressAudit." ++ entry]) entries ++
+       ["--output",directory </> stage </> "audit.json",core </> "AtomicAddressAudit.cbd"])
     pure (commandArtifacts exported ++ commandArtifacts audited ++
-      [core </> "AtomicAddressAudit.json", directory </> stage </> "audit.json"])
+      [core </> "AtomicAddressAudit.cbd", directory </> stage </> "audit.json"])
   let native = output </> "native"
   createDirectoryIfMissing True native
   built <- runLogged 180 root logs "native-build" [] ghc
