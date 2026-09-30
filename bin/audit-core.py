@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 import os
+import shutil
 import sqlite3
 import tempfile
 import core_data_tags
@@ -3211,6 +3212,8 @@ def main():
                 report = auditor.run(args.entry, io_main=args.io_main)
                 store.checkpoint('walked')
                 _emit_report(report, args.output, store)
+            if args.store is None and report['accepted']:
+                shutil.rmtree(directory)
     except (OSError, ValueError, TypeError, sqlite3.Error, AuditStoreError) as error:
         parser.error(str(error))
     print(json.dumps(dict(accepted=report['accepted'], **report['summary'])), file=sys.stderr)

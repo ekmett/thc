@@ -5454,6 +5454,38 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
         self.assertEqual('previous verified output', output.read_text())
         self.assertEqual(1, len(list(self.root.glob('.report.json.*.partial'))))
 
+    def test_automatic_catalogue_cleanup_preserves_explicit_and_failed_evidence(self):
+        source, output = self.root / 'input.cbd', self.root / 'report.json'
+        write_core(source, dict(schema=1, ghc='9.14.1',
+            bindings=[bind('root', [*lit(0), dict(rep=LONG)])], constructors=[]))
+        command = [sys.executable, str(ROOT / 'audit-core.py'), str(source)]
+        options = ['--entry', 'root', '--output', str(output)]
+        accepted = subprocess.run([*command, *options], capture_output=True, text=True)
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        report = output.read_bytes()
+        self.assertTrue(json.loads(report)['accepted'])
+        self.assertEqual([], list(self.root.glob('thc-core-audit-*')))
+
+        explicit = self.root / 'retained.sqlite'
+        retained = subprocess.run([*command, *options, '--store', str(explicit)], capture_output=True, text=True)
+        self.assertEqual(0, retained.returncode, retained.stderr)
+        self.assertTrue(explicit.is_file())
+        self.assertEqual(report, output.read_bytes())
+
+        rejected = subprocess.run([*command, '--entry', 'absent', '--output', str(output)],
+            capture_output=True, text=True)
+        self.assertEqual(1, rejected.returncode, rejected.stderr)
+        self.assertFalse(json.loads(output.read_bytes())['accepted'])
+        self.assertEqual(1, len(list(self.root.glob('thc-core-audit-*/catalogue.sqlite'))))
+
+        previous = output.read_bytes()
+        broken = self.root / 'broken.cbd'
+        broken.write_bytes(b'incomplete')
+        failed = subprocess.run([*command, str(broken), *options], capture_output=True, text=True)
+        self.assertEqual(2, failed.returncode, failed.stderr)
+        self.assertEqual(previous, output.read_bytes())
+        self.assertEqual(2, len(list(self.root.glob('thc-core-audit-*/catalogue.sqlite'))))
+
     def test_late_cli_parse_failure_never_replaces_report_or_seals_catalogue(self):
         first, last = self.root / 'first.cbd', self.root / 'last.cbd'
         write_core(first, dict(schema=1, ghc='9.14.1', bindings=[bind('root', [*lit(0), dict(rep=LONG)])], constructors=[]))
