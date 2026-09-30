@@ -115,8 +115,8 @@ prepareRubbishLiterals root = do
     _ <- setSessionDynFlags (gopt_unset configured Opt_IgnoreInterfacePragmas)
     flags <- getSessionDynFlags
     env <- getSession
-    original <- liftIO $ fmap concat $ forM (take 1 (map fst locations)) $ \installed -> do
-      raw <- readBinIface (targetProfile flags) (hsc_NC env) CheckHiWay QuietBinIFace installed
+    original <- liftIO $ fmap concat $ forM (take 1 (map fst locations)) $ \installedPath -> do
+      raw <- readBinIface (targetProfile flags) (hsc_NC env) CheckHiWay QuietBinIFace installedPath
       let owner = mi_module raw
           expected = [("GHC.Internal.Event.Manager","ghc-internal")]
       unless ((moduleNameString (moduleName owner),unitString (moduleUnit owner)) `elem` expected)
