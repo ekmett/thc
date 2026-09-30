@@ -40,9 +40,9 @@ class AddressIdentityNativeTest {
             assertEquals(true, audit.get("accepted"), stage);
             assertEquals(List.of(), audit.get("missingGlobals"), stage);
             assertEquals(List.of(), audit.get("issues"), stage);
-            var exported = json(output.resolve(stage + "-core/AddressIdentityAudit.json"));
-            var module = CoreModules.reachable(CoreModules.merge(List.of(exported)), "probe");
-            var evidence = new ArrayCoreEvidence(module, "probe");
+            var exported = CoreCbdFixtures.read(output.resolve(stage + "-core/AddressIdentityAudit.cbd"));
+            var module = CoreModules.reachable(CoreModules.merge(List.of(exported)), "main:AddressIdentityAudit.probe");
+            var evidence = new ArrayCoreEvidence(module, "main:AddressIdentityAudit.probe");
             var expression = evidence.getRoot().get("expr");
             assertEquals(2, evidence.guestLambdas(expression).size(), stage + " exported lambda inventory");
             // eb6aa293 lowers this exact immediate State# application in-frame.
@@ -52,7 +52,7 @@ class AddressIdentityNativeTest {
             assertSame(expression, single(lowered), stage + " public probe remains the root");
             long expectedEntries = lowered.size();
             var dummy = single(
-                evidence.getBindings().stream().filter(binding -> "bottomDummy".equals(binding.get("name"))).toList());
+                evidence.getBindings().stream().filter(binding -> ((String) binding.get("id")).matches("main:AddressIdentityAudit\\.bottomDummy(?:_[A-Za-z0-9]+)?")).toList());
             var dummyExpr = (List<?>) dummy.get("expr");
             assertEquals(List.of("var", dummy.get("id")), dummyExpr.subList(0, Math.min(2, dummyExpr.size())),
                 stage + " original nonterminating dummy");
@@ -122,7 +122,7 @@ class AddressIdentityNativeTest {
                         assertEquals(0L, checks.counter("compiledEntries"));
                         assertTrue(
                             function.invokeMember("compile").asBoolean(), stage + "/" + backend + " JIT installation");
-                        var target = program.entryTarget("probe");
+                        var target = program.entryTarget("main:AddressIdentityAudit.probe");
                         class Valid {
                             void check() throws Exception {
                                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target),
@@ -139,7 +139,7 @@ class AddressIdentityNativeTest {
                             assertEquals(before + expectedEntries, checks.counter("compiledEntries"),
                                 stage + "/" + backend + "/" + selector + " exact source-derived compiled entries");
                             assertSame(
-                                target, program.entryTarget("probe"), stage + "/" + backend + " retained probe target");
+                                target, program.entryTarget("main:AddressIdentityAudit.probe"), stage + "/" + backend + " retained probe target");
                             valid.check();
                             assertEquals(0L, checks.counter("unsupportedTraps"));
                             var pools = language.getHandoffState().get();

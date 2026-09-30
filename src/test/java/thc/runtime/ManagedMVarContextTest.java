@@ -26,6 +26,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -62,13 +63,13 @@ public class ManagedMVarContextTest {
         assertEquals(new LinkedHashSet<>(names.subList(0, names.size() - 1)), observedNames); assertEquals(rows.size(), keys.size());
         var stages = (Map<String, List<String>>) manifest.get("stages"); assertEquals(Set.of("pre", "post"), stages.keySet()); var modules = new LinkedHashMap<String, Map<String, Object>>();
         for (var stage : stages.entrySet()) {
-            var sources = new ArrayList<Map<String, Object>>(); for (var file : stage.getValue()) sources.add((Map<String, Object>) Json.parse(Files.readString(new File(root, file).toPath())));
+            var sources = new ArrayList<Map<String, Object>>(); for (var file : stage.getValue()) sources.add(CoreCbdFixtures.read(new File(root, file).toPath()));
             var module = CoreModules.merge(sources);
             // Merge root-specific closures, preserving constructor/source metadata and
             // deduplicating only shared identical bindings, never replacing their bodies.
             var seen = new LinkedHashSet<String>(); var reachedModules = new ArrayList<Map<String, Object>>();
             for (var name : names) {
-                var reached = CoreModules.reachable(module, name); var bindings = new ArrayList<Map<String, Object>>();
+                var reached = CoreModules.reachable(module, "main:ManagedMVarAudit." + name); var bindings = new ArrayList<Map<String, Object>>();
                 for (var binding : (List<Map<String, Object>>) reached.get("bindings")) if (seen.add((String) binding.get("id"))) bindings.add(binding);
                 var selected = new LinkedHashMap<>(reached); selected.put("bindings", bindings); reachedModules.add(selected);
             }
@@ -78,8 +79,8 @@ public class ManagedMVarContextTest {
     }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
-    private long call(Context context, ExecutableProgram program, String name, Object... arguments) { return context.asValue(new ManagedMVarContextCall(program, name, arguments.clone())).execute().asLong(); }
-    private Object box(ExecutableProgram program, long value) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("makeBox"), new Object[]{value}}); }
+    private long call(Context context, ExecutableProgram program, String name, Object... arguments) { return context.asValue(new ManagedMVarContextCall(program, "main:ManagedMVarAudit." + name, arguments.clone())).execute().asLong(); }
+    private Object box(ExecutableProgram program, long value) { return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:ManagedMVarAudit.makeBox"), new Object[]{value}}); }
     private void released(Language language, String label) {
         var handoff = language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth(), label + " argument depth"); assertEquals(0, handoff.getResults().getDepth(), label + " result depth");
         assertEquals(0, handoff.getArguments().retainedReferences(), label + " argument references"); assertEquals(0, handoff.getResults().retainedReferences(), label + " result references"); assertNull(handoff.getPending(), label + " pending transfer");

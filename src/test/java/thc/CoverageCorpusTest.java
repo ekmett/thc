@@ -37,14 +37,36 @@ class CoverageCorpusTest {
             var cold = ((List<?>) entry.get("coldInputs")).stream().map(value -> ((Number) value).longValue()).toList();
             var expected = object(entry.get("expected"));
             var shared = entry.get("sharedBindings") instanceof List<?> values ? values.stream().map(value -> (String) value).toList() : List.<String>of();
+            var sharedPaths = object(entry.get("sharedBindingPaths"));
+            assertEquals(new LinkedHashSet<>(shared), sharedPaths.keySet(), id + " sharing label inventory");
+            var runtimeLabels = new LinkedHashMap<String, String>();
+            if (!shared.isEmpty()) {
+                var decoded = new ArrayList<Map<String, Object>>();
+                for (var path : modules) decoded.addAll(objects(CoreCbdFixtures.read(Path.of(path)).get("bindings")));
+                var roots = decoded.stream().filter(b -> entry.get("entry").equals(b.get("id"))).toList();
+                assertEquals(1, roots.size(), id + " exact sharing root");
+                for (var label : shared) {
+                    var proof = object(sharedPaths.get(label)); Object binder = roots.getFirst();
+                    for (var step : (List<?>) proof.get("path")) binder = step instanceof Number number
+                        ? ((List<?>) binder).get(number.intValue()) : object(binder).get((String) step);
+                    var fields = object(binder); var compactId = (String) proof.get("compactId");
+                    assertTrue(compactId.startsWith("@local/"), id + " local sharing identity");
+                    var expectedId = "\u0000compact-local:" + compactId.substring("@local/".length());
+                    assertEquals(expectedId, fields.get("id"), id + " exact shared binder " + label);
+                    assertEquals(expectedId, fields.get("name"), id + " actual decoded label " + label);
+                    assertEquals(0, ((Number) fields.get("arity")).intValue(), id + " shared thunk arity");
+                    runtimeLabels.put(label, expectedId);
+                }
+                assertEquals(shared.size(), new HashSet<>(runtimeLabels.values()).size(), id + " shared identity collisions");
+            }
             tests.add(DynamicTest.dynamicTest(backend + " " + id + ": " + entry.get("focus"), () -> {
                 try (var context = Main.executionContext(false)) {
-                    var function = context.eval("thc", CoreModules.request(modules, (String) entry.get("name"), true, false, backend, true, false, null, null, false));
+                    var function = context.eval("thc", CoreModules.request(modules, (String) entry.get("entry"), true, false, backend, true, false, null, null, false));
                     assertEquals(backend, diagnostics(function).get("backend"));
                     LongConsumer check = n -> {
-                        var evaluations = new LinkedHashMap<String, Long>(); for (var label : shared) evaluations.put(label, labelCount(function, label));
+                        var evaluations = new LinkedHashMap<String, Long>(); for (var label : shared) evaluations.put(label, labelCount(function, runtimeLabels.get(label)));
                         assertEquals(((Number) Objects.requireNonNull(expected.get(Long.toString(n)))).longValue(), function.execute(n).asLong(), backend + " " + id + "(" + n + ")");
-                        for (var label : shared) assertEquals(1L, labelCount(function, label) - evaluations.get(label), backend + " " + id + "(" + n + "): shared " + label + " must be evaluated exactly once");
+                        for (var label : shared) assertEquals(1L, labelCount(function, runtimeLabels.get(label)) - evaluations.get(label), backend + " " + id + "(" + n + "): shared " + label + " must be evaluated exactly once");
                     };
                     warm.forEach(check::accept); for (int i = 0; i < 40; i++) check.accept(warm.get(i % warm.size()));
                     assertTrue(function.invokeMember("compile").asBoolean(), backend + " " + id + " compilation");

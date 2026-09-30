@@ -5,11 +5,13 @@
 
 import argparse
 import hashlib
+from core_package_manifest import inspect_cbd
 import importlib.util
 import json
 import os
 from pathlib import Path
 import random
+import shutil
 import subprocess
 import sys
 
@@ -190,15 +192,19 @@ def classify_audit(report, name):
             'reachableBindings': len(report['reachableBindings'])}
 
 
+def plugin_snapshot(build, field, suffix):
+    return build / 'plugin' / (field + suffix)
+
+
 def check_prepared(build, root=ROOT):
     """Read-only provenance/oracle check; never rebuild or repair an old preparation."""
     manifest = json.loads((build / 'manifest.json').read_text())
-    require(manifest.get('schema') == 1 and manifest.get('recipeVersion') == 1, 'Unknown preparation schema')
+    require(manifest.get('schema') == 1 and manifest.get('recipeVersion') == 2, 'Unknown preparation schema')
     require(manifest.get('ghc') == '9.14.1' and manifest.get('wordBits') == 64, 'Wrong native toolchain/word size')
     require(manifest.get('entries') == ENTRIES and manifest.get('inputs') == input_vectors(), 'Incomplete native input inventory')
     require(manifest.get('installedArtifactsHashed') is False, 'Installed-artifact hashing is not permitted')
     require(manifest.get('inputHashes') == hash_files(source_inputs(root), root), 'Source hashes changed or incomplete')
-    stages = {stage: sorted(str(path.relative_to(root)) for path in (build / stage / 'core').glob('*.json'))
+    stages = {stage: sorted(str(path.relative_to(root)) for path in (build / stage / 'core').glob('*.cbd'))
               for stage in ('pre', 'post')}
     require(all(stages.values()) and manifest.get('stages') == stages, 'Core artifact inventory changed or incomplete')
     required = {str((build / name).relative_to(root)) for name in ('contracts.json', 'oracle.tsv', 'native/synchronous-exception-oracle')}
@@ -218,10 +224,20 @@ def check_prepared(build, root=ROOT):
     plugin = json.loads((root / 'build/compiler/plugin.json').read_text())
     require(manifest.get('plugin') == plugin, 'Plugin metadata changed')
     required.add('build/compiler/plugin.json')
+    evidence = manifest.get('pluginArtifacts', {})
+    require(set(evidence) == {'sharedLibrary', 'cabalSharedLibrary'}, 'Incomplete original plugin evidence')
     for field in ('sharedLibrary', 'cabalSharedLibrary'):
         path = Path(plugin[field]).resolve()
         require(path.is_relative_to(root), 'Plugin artifact outside checkout')
-        required.add(str(path.relative_to(root)))
+        snapshot = plugin_snapshot(build, field, path.suffix)
+        record = evidence[field]
+        require(set(record) == {'originalLocation', 'path', 'sha256'} and
+                record['originalLocation'] == str(path.relative_to(root)) and
+                record['path'] == str(snapshot.relative_to(root)), 'Plugin snapshot provenance changed')
+        require(record['sha256'] == hashlib.sha256(snapshot.read_bytes()).hexdigest(), 'Original plugin snapshot changed')
+        if path.exists():
+            require(record['sha256'] == hashlib.sha256(path.read_bytes()).hexdigest(), 'Original plugin artifact changed')
+        required.add(str(snapshot.relative_to(root)))
     hashes = manifest.get('artifactHashes', {})
     require(set(hashes) == required and hashes == hash_files(required, root), 'Artifact hashes changed or incomplete')
     require((build / 'logs/native-word-bits.stdout').read_text().strip() == '64', 'Wrong native word size')
@@ -282,10 +298,17 @@ def main():
     run(['bin/build-compiler.sh'], 'cabal-plugin-build')
     plugin = json.loads(run([sys.executable, 'bin/plugin.py'], 'plugin-metadata'))
     require(plugin.get('schema') == 1 and plugin.get('unitId'), 'Invalid Cabal plugin identity')
+    plugin_artifacts = {}
     for field in ('sharedLibrary', 'cabalSharedLibrary'):
         path = Path(plugin[field]).resolve()
         require(path.is_relative_to(ROOT), 'Plugin artifact outside this checkout')
-        artifacts.append(relative(path))
+        snapshot = plugin_snapshot(build, field, path.suffix)
+        snapshot.parent.mkdir(exist_ok=True)
+        shutil.copy2(path, snapshot)
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        require(digest == hashlib.sha256(snapshot.read_bytes()).hexdigest(), 'Plugin changed while snapshotting')
+        plugin_artifacts[field] = dict(originalLocation=relative(path), path=relative(snapshot), sha256=digest)
+        artifacts.append(relative(snapshot))
     artifacts.append('build/compiler/plugin.json')
     # Use Cabal's registered unit and package DB, never invent a plugin package identity.
     flags = ['-package-env', '-', '-package-db', plugin['packageDb'], '-plugin-package-id', plugin['unitId'],
@@ -303,14 +326,14 @@ def main():
         run([ghc, '--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint', '-g', *flags,
              *['-fplugin-opt=THC.Plugin:' + option for option in options], '-it/fixtures/compiler',
              '-odir', directory / 'ghc', '-hidir', directory / 'ghc', SOURCE], stage + '-export')
-        paths = sorted(core.glob('*.json'))
+        paths = sorted(core.glob('*.cbd'))
         require(paths, 'Missing genuine Core export')
         stages[stage] = [relative(path) for path in paths]
         artifacts.extend(stages[stage])
-        modules = [(relative(path), json.loads(path.read_text())) for path in paths]
+        modules = [(relative(path), inspect_cbd(path.read_bytes())) for path in paths]
         bindings = {binding['id']: binding for _, module in modules for binding in module['bindings']}
         for name in ENTRIES:
-            report = audit.Audit(modules, capability).run([name])
+            report = audit.Audit(modules, capability).run(['main:SynchronousExceptionsAudit.' + name])
             save(directory / (name + '.audit.json'), report)
             statuses[stage + '/' + name] = classify_audit(report, name)
             observed = []
@@ -341,7 +364,7 @@ def main():
     artifacts.append(relative(oracle))
     save(build / 'contracts.json', contracts)
     require(input_hashes == hash_files(inputs), 'Sources changed during preparation')
-    save(build / 'manifest.json', dict(schema=1, recipeVersion=1, ghc='9.14.1', wordBits=64, plugin=plugin, entries=ENTRIES, inputs=values,
+    save(build / 'manifest.json', dict(schema=1, recipeVersion=2, pluginArtifacts=plugin_artifacts, ghc='9.14.1', wordBits=64, plugin=plugin, entries=ENTRIES, inputs=values,
         nativeRows=len(rows), stages=stages, auditStatus=statuses, inputHashes=input_hashes,
         artifactHashes=hash_files(artifacts), installedArtifactsHashed=False,
         limits=['Observed exception payloads/results are lifted boxed values, not every RuntimeRep.',

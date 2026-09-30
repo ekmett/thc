@@ -4,6 +4,7 @@
 
 """Export independent real-Core bundles and generate native results for the coverage corpus."""
 import hashlib
+from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
 import importlib.util
 import json
 import os
@@ -19,6 +20,23 @@ BUILD = ROOT / 'build/corpus'
 
 def run(command, **kwargs):
     subprocess.run([str(x) for x in command], cwd=ROOT, check=True, **kwargs)
+
+
+def named_binding_paths(value, name, path=()):
+    if isinstance(value, dict):
+        if value.get('name') == name and 'expr' in value:
+            yield path
+        for key, child in value.items():
+            yield from named_binding_paths(child, name, (*path, key))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from named_binding_paths(child, name, (*path, index))
+
+
+def at_path(value, path):
+    for key in path:
+        value = value[key]
+    return value
 
 
 def prepare():
@@ -58,6 +76,7 @@ def prepare():
     inputs.update(ROOT / p for p in ['t/fixtures/core/coverage.json', 'bin/build-compiler.sh', 'bin/export-core.sh',
         'bin/toolchain.sh', 'bin/export-boot.py', 'bin/prepare-corpus.py', 'bin/audit-core.py',
         'bin/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json', 'bin/check-corpus-structure.py'])
+    inputs.update((ROOT / 'bin').glob('core_*.py'))
     input_hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     for group in groups:
         directory = BUILD / 'groups' / group['id']
@@ -66,7 +85,7 @@ def prepare():
         core = directory / 'core'
         env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(directory / 'ghc'))
         # Each group gets its own interface closure: the plugin writes one frontier per module.
-        run([ROOT / 'bin/export-core.sh', *['-fplugin-opt=THC.Plugin:closure=' + e['name']
+        run([ROOT / 'bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *['-fplugin-opt=THC.Plugin:closure=' + e['name']
             for e in group['entries']], group['source']], env=env)
         if frontier := group.get('sourceLibraryFrontier'):
             run([sys.executable, ROOT / 'bin/export-boot.py', '--frontier', frontier,
@@ -77,12 +96,13 @@ def prepare():
                 digest = hashlib.sha256((ROOT / source['path']).read_bytes()).hexdigest()
                 assert digest == source['sha256'], 'Source provenance mismatch: ' + source['path']
                 input_hashes[source['path']] = digest
-        paths = sorted(core.glob('*.json'))
+        extra_artifacts.update(str(path.relative_to(ROOT)) for path in core.glob('*.json'))
+        paths = sorted(core.glob('*.cbd'))
         assert paths, 'No exported modules: ' + group['id']
-        modules = [(str(path.relative_to(ROOT)), json.loads(path.read_text())) for path in paths]
+        modules = [(str(path.relative_to(ROOT)), inspect_cbd(path.read_bytes())) for path in paths]
         for entry in group['entries']:
             entry_id = group['id'] + '/' + entry['name']
-            report = audit.Audit(modules, capabilities).run([entry['name']])
+            report = audit.Audit(modules, capabilities).run(['main:' + group['module'] + '.' + entry['name']])
             audit_path = directory / (entry['name'] + '.audit.json')
             audit_path.write_text(json.dumps(report, indent=2) + '\n')
             if not report['accepted']:
@@ -94,7 +114,26 @@ def prepare():
             missing_literals = set(entry.get('requiredLiteralKinds', [])) - {lit['kind'] for lit in report['literals']}
             if missing_literals:
                 raise RuntimeError(f'{entry_id}: intended literal kinds did not survive optimization: {sorted(missing_literals)}')
-            prepared.append(dict(entry, id=entry_id, modules=[p for p, _ in modules],
+            shared_paths = {}
+            if entry.get('sharedBindings'):
+                diagnostic = paired_diagnostic_cbd(core / (group['module'] + '.cbd'))
+                root_id = 'main:' + group['module'] + '.' + entry['name']
+                original = [b for b in diagnostic['bindings'] if b['id'] == root_id]
+                decoded = [b for _, module in modules for b in module['bindings'] if b['id'] == root_id]
+                assert len(original) == len(decoded) == 1, 'Ambiguous sharing entry: ' + root_id
+                labels = set()
+                for name in entry['sharedBindings']:
+                    paths_to_binding = list(named_binding_paths(original[0]['expr'], name))
+                    assert len(paths_to_binding) == 1, 'Ambiguous shared source binding: ' + name
+                    path = ['expr', *paths_to_binding[0]]
+                    source_binding, compact_binding = at_path(original[0], path), at_path(decoded[0], path)
+                    assert source_binding['expr'][0] == compact_binding['expr'][0]
+                    assert source_binding['arity'] == compact_binding['arity'] == 0
+                    label = compact_binding['id']
+                    assert label.startswith('@local/') and compact_binding['name'] == label and label not in labels
+                    labels.add(label)
+                    shared_paths[name] = dict(path=path, compactId=label)
+            prepared.append(dict(entry, id=entry_id, sharedBindingPaths=shared_paths, entry='main:' + group['module'] + '.' + entry['name'], modules=[p for p, _ in modules],
                                  audit=str(audit_path.relative_to(ROOT))))
     run([sys.executable, ROOT / 'bin/check-corpus-structure.py'])
     driver = BUILD / 'NativeCorpus.hs'

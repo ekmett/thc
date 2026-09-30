@@ -68,6 +68,24 @@ def read_core(path):
     return core_package_manifest.inspect_cbd(path.read_bytes())
 
 
+class PairedDiagnosticTest(unittest.TestCase):
+    def test_exact_pair_preserves_display_metadata_and_rejects_changed_evidence(self):
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'Model.cbd'
+            model = dict(schema=1, ghc='9.14.1', unit='fixture', module='Model',
+                         boundary='optimized-Core-before-Tidy', constructors=[],
+                         bindings=[dict(id='fixture:Model.entry', name='entry', type='Int#', arity=0,
+                                        lifted=False, expr=['lit', 'int', '1', {}])])
+            write_core(path, model)
+            diagnostic = path.with_suffix('.json')
+            diagnostic.write_text(core_package_manifest.json_dumps(model), encoding='utf-8')
+            self.assertEqual(model, core_package_manifest.paired_diagnostic_cbd(path))
+            model['bindings'][0]['expr'][2] = '2'
+            diagnostic.write_text(core_package_manifest.json_dumps(model), encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'Diagnostic/CBD export mismatch'):
+                core_package_manifest.paired_diagnostic_cbd(path)
+
+
 class DeepJsonTest(unittest.TestCase):
     def setUp(self):
         # New Python releases can decode deeper containers in C. Force the

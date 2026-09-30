@@ -21,6 +21,17 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_heap_exception_corpus_cbd_paths_are_closed(self):
+        self.assertIn("build/managed-mvars/manifest.json", DECLARED_REQUIRED)
+        for name in cache.MANAGED_MVAR_OUTPUTS | cache.SYNCHRONOUS_EXCEPTION_OUTPUTS | cache.HEAP_CORPUS_CBD_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name), name)
+        for family, folder in (("managed-mvars", "pre/core"), ("synchronous-exceptions", "post/core"),
+                               ("addr-identity", "pre-core"), ("corpus", "groups/lists/core")):
+            self.assertFalse(cache.allowed_payload(f"build/{family}/{folder}/Other.cbd"))
+            self.assertFalse(cache.allowed_payload(f"build/{family}/unreviewed/core/THC.InterfaceClosure.cbd"))
+        self.assertFalse(cache.allowed_payload("build/managed-mvars/logs/unknown.stdout"))
+        self.assertFalse(cache.allowed_payload("build/synchronous-exceptions/logs/unknown.stdout"))
+
     def test_original_path_stat_closed_receipt(self):
         name = 'build/original-path-stat/manifest.json'
         outputs = cache.ORIGINAL_PATH_STAT_OUTPUTS

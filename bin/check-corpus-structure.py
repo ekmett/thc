@@ -12,6 +12,7 @@ of the expected optimized fixture, but generated unique suffixes are ignored.
 
 import argparse
 import json
+from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
 from pathlib import Path
 import sys
 
@@ -34,6 +35,10 @@ def only(items, description):
     items = list(items)
     require(len(items) == 1, f"{description}: expected one, found {len(items)}")
     return items[0]
+
+
+def read_cbd(path):
+    return inspect_cbd(path.read_bytes())
 
 
 def read_json(path):
@@ -134,10 +139,10 @@ class CorpusChecks:
             group = only((g for g in manifest["groups"] if g["id"] == group_id),
                          f"Manifest group {group_id}")
             self.groups[group_id] = group
-            self.modules[group_id] = read_json(
-                self.build / "groups" / group_id / "core" / (group["module"] + ".json"))
-        self.modules["support"] = read_json(
-            self.build / "groups/functions/core/CoverageSupport.json")
+            self.modules[group_id] = paired_diagnostic_cbd(
+                self.build / "groups" / group_id / "core" / (group["module"] + ".cbd"))
+        self.modules["support"] = paired_diagnostic_cbd(
+            self.build / "groups/functions/core/CoverageSupport.cbd")
         for name, module in self.modules.items():
             require(module.get("ghc") == "9.14.1", f"{name}: expected GHC 9.14.1 export")
         self.global_ids = {b["id"] for module in self.modules.values()
@@ -323,7 +328,7 @@ class CorpusChecks:
         expected = {"Base": "++", "List": "reverse1"}
         identities = []
         for module, occurrence in expected.items():
-            source = read_json(directory / "core" / ("GHC.Internal." + module + ".json"))
+            source = read_cbd(directory / "core" / ("GHC.Internal." + module + ".cbd"))
             require(source.get("unit") == "ghc-internal" and
                     source.get("boundary") == "optimized-Core-after-Tidy-before-CorePrep",
                     f"{module}: expected original ghc-internal post-Tidy source export")
@@ -393,12 +398,12 @@ class CorpusChecks:
     def static_audits(self):
         for group_id, group in self.groups.items():
             directory = self.build / "groups" / group_id
-            closure = read_json(directory / "core/THC.InterfaceClosure.json")
+            closure = read_cbd(directory / "core/THC.InterfaceClosure.cbd")
             # Missing interface unfoldings remain recorded. Complete source
             # exports may resolve those exact identities without changing them.
-            source_ids = {b["id"] for path in (directory / "core").glob("*.json")
-                          if path.name != "THC.InterfaceClosure.json"
-                          for b in read_json(path)["bindings"]}
+            source_ids = {b["id"] for path in (directory / "core").glob("*.cbd")
+                          if path.name != "THC.InterfaceClosure.cbd"
+                          for b in read_cbd(path)["bindings"]}
             missing = {b["id"] for b in closure["missingDefinitions"]}
             require(missing <= source_ids,
                     f"{group_id}: interface closure has unresolved source definitions: {sorted(missing - source_ids)}")

@@ -6,6 +6,7 @@
 import argparse
 from collections import Counter
 import hashlib
+from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
 import importlib.util
 import json
 import os
@@ -198,9 +199,11 @@ def prepare_plugin(build, run, root=ROOT):
 
 def expected_artifacts(build, root=ROOT):
     stages = {stage: [str((build / stage / 'core' / name).relative_to(root))
-                      for name in ('ManagedMVarAudit.json', 'THC.InterfaceClosure.json')] for stage in ('pre', 'post')}
+                      for name in ('ManagedMVarAudit.cbd', 'THC.InterfaceClosure.cbd')] for stage in ('pre', 'post')}
     files = [build / stage / (name + '.audit.json') for stage in stages for name in ENTRIES + CONTEXT_ENTRIES]
     files += [build / 'logs' / (label + suffix) for label in COMMAND_LABELS for suffix in ('.stdout', '.stderr', '.command.json')]
+    files += [build / stage / 'core' / name for stage in stages
+              for name in ('ManagedMVarAudit.json', 'THC.InterfaceClosure.json')]
     files += [plugin_snapshot(build),
               build / 'native/managed-mvar-oracle', build / 'oracle.tsv', build / 'context-oracle.tsv', build / 'contracts.json']
     return stages, {str(path.relative_to(root)) for path in files} | {path for paths in stages.values() for path in paths}
@@ -330,21 +333,22 @@ def main():
     for stage in ('pre', 'post'):
         directory = build / stage
         core = directory / 'core'
-        options = [str(core), 'source-notes'] + (['post-tidy'] if stage == 'post' else [])
+        options = [str(core), 'source-notes', 'pretty-diagnostics'] + (['post-tidy'] if stage == 'post' else [])
         options += ['closure=' + name for name in ENTRIES + CONTEXT_ENTRIES]
         run([ghc, '--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint', '-g', *package_flags,
              '-package-db', plugin['packageDb'],
              '-fplugin-library=' + plugin['sharedLibrary'] + ';' + plugin['unitId'] + ';THC.Plugin;' + json.dumps(options),
              '-it/fixtures/compiler', '-odir', directory / 'ghc', '-hidir', directory / 'ghc', SOURCE], stage + '-export')
-        paths = sorted(core.glob('*.json'))
+        paths = sorted(core.glob('*.cbd'))
         require(paths, 'Missing genuine Core exports')
-        modules = [(relative(path), json.loads(path.read_text())) for path in paths]
+        modules = [(relative(path), inspect_cbd(path.read_bytes())) for path in paths]
         stages[stage] = [name for name, _ in modules]
         artifacts.extend(stages[stage])
+        artifacts.extend(relative(path) for path in sorted(core.glob("*.json")))
         bindings = {b['id']: b for _, module in modules for b in module['bindings']}
         observed = {name: set() for name in CONTRACTS}
         for name in ENTRIES + CONTEXT_ENTRIES:
-            report = audit.Audit(modules, capabilities).run([name])
+            report = audit.Audit(modules, capabilities).run(['main:ManagedMVarAudit.' + name])
             save(directory / (name + '.audit.json'), report)
             audit_status[stage + '/' + name] = classify_audit(report, stage + '/' + name)
             require(REQUIRED[name] <= {p['name'] for p in report['primitives']}, stage + '/' + name + ': missing primitive coverage')
@@ -362,8 +366,9 @@ def main():
         for name in ('takeMVar#', 'putMVar#', 'readMVar#', 'tryTakeMVar#', 'tryPutMVar#', 'tryReadMVar#'):
             require(observed[name] == both_levities, stage + '/' + name + ': incomplete boxed payload levity coverage')
         context_records[stage] = {}
+        diagnostic = paired_diagnostic_cbd(core / "ManagedMVarAudit.cbd")
         for name in CONTEXT_ENTRIES:
-            candidates = [b for b in bindings.values() if b['name'] == name and b['id'].startswith('main:ManagedMVarAudit.')]
+            candidates = [b for b in diagnostic['bindings'] if b['id'] == 'main:ManagedMVarAudit.' + name]
             require(len(candidates) == 1, stage + '/' + name + ': context entry not uniquely exported')
             binding = candidates[0]
             context_records[stage][name] = {key: binding[key] for key in ('id', 'name', 'type', 'arity')}
