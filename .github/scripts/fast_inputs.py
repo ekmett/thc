@@ -187,13 +187,13 @@ RUBBISH_OUTPUTS = frozenset("build/rubbish-literals/" + name for name in (
     *(f"logs/{command}.{suffix}" for command in
       ("version", "info", "libdir", "imports-ghc-internal", "imports-containers", "containers-unit", "native-assemble", "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json"))))
-BCO_ENTRIES = ("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing")
+BCO_ENTRIES = ('bcoConstant', 'bcoApply', 'bcoApplyTwo', 'bcoFunction', 'bcoArithmetic', 'bcoBranch', 'bcoLargeOperand', 'bcoSharing', 'bcoCase', 'bcoCaseNested', 'bcoCasePointer', 'bcoCaseFloat', 'bcoCaseDouble', 'bcoCaseLong', 'bcoCaseVoid', 'bcoPacked8', 'bcoPacked16', 'bcoPacked32', 'bcoCaseTuple', 'bcoCaseTupleCall', 'bcoCaseTupleOverapply', 'bcoCapturedPap', 'bcoCapturedAp', 'bcoCapturedNoUpd', 'bcoCapturedApChain', 'bcoCapturedRecursive', 'bcoCapturedFloat', 'bcoCapturedDouble', 'bcoCapturedLong', 'bcoCapturedNoUpdEscape', 'bcoApplyIntCore', 'bcoApplyFloatCore', 'bcoApplyDoubleCore', 'bcoApplyLongCore', 'bcoApplyVoidCore')
 BCO_COMMANDS = ("ghc-version", "native-build", "native-run",
                 *(f"{stage}-export" for stage in ("pre", "post")),
                 *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in BCO_ENTRIES))
 BCO_OUTPUTS = frozenset("build/ghc-bco/" + name for name in (
     "manifest.json", *(f"{stage}/{suffix}" for stage in ("pre", "post")
-        for suffix in ("core/GhcBCO.json", *(f"{entry}-audit.json" for entry in BCO_ENTRIES))),
+        for suffix in ("core/GhcBCO.cbd", *(f"{entry}-audit.json" for entry in BCO_ENTRIES))),
     *(f"commands/{command}.{suffix}" for command in BCO_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 STABLE_NAME_ENTRIES = ("sameLifted", "sameUnlifted", "differentUnlifted", "unevaluatedName")
 STABLE_NAME_COMMANDS = ("ghc-version", "native-build", "native-run",
@@ -201,7 +201,7 @@ STABLE_NAME_COMMANDS = ("ghc-version", "native-build", "native-run",
                        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in STABLE_NAME_ENTRIES))
 STABLE_NAME_OUTPUTS = frozenset("build/stable-names/" + name for name in (
     "manifest.json", *(f"{stage}/{suffix}" for stage in ("pre", "post")
-        for suffix in ("core/StableNames.json", *(f"{entry}-audit.json" for entry in STABLE_NAME_ENTRIES))),
+        for suffix in ("core/StableNames.cbd", *(f"{entry}-audit.json" for entry in STABLE_NAME_ENTRIES))),
     *(f"commands/{command}.{suffix}" for command in STABLE_NAME_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_ENTRIES = ("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot",
                             "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork", "callbackObservation")
@@ -233,13 +233,13 @@ THREAD_SCHEDULING_ENTRIES = ("emptySpark", "lazyPar", "lazySpark", "sparkValue",
                              "pinnedFork", "otherCounter", "timedDelay")
 THREAD_SCHEDULING_OUTPUTS = frozenset("build/thread-scheduling/" + name for name in (
     "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
-        for suffix in ("core/ThreadScheduling.json", *(f"{entry}-audit.json" for entry in THREAD_SCHEDULING_ENTRIES)))))
+        for suffix in ("core/ThreadScheduling.cbd", *(f"{entry}-audit.json" for entry in THREAD_SCHEDULING_ENTRIES)))))
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
 INTEGER_COMPLETION_OUTPUTS = frozenset("build/integer-completion/" + name for name in (
     "manifest.json", "requests.tsv", "oracle.tsv", "NativeIntegerCompletion.hs", "native/integer-completion-oracle",
-    *(f"{stage}{suffix}" for stage in ("pre", "post") for suffix in ("-audit.json", "-core/IntegerCompletionAudit.json")),
+    *(f"{stage}{suffix}" for stage in ("pre", "post") for suffix in ("-audit.json", "-core/IntegerCompletionAudit.cbd")),
     *(f"commands/{command}.{suffix}" for command in ("ghc-version", "ghc-info", "pre-export", "post-export",
       "pre-audit", "post-audit", "native-build", "native-oracle") for suffix in ("stdout", "stderr", "command.json"))))
 # These producers retain different command spellings and artifact layouts.
@@ -306,7 +306,7 @@ MEMORY_FIXTURE_OUTPUTS = {
 HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "native/oracle.eventlog",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
+      for suffix in ("core/HintTraceAudit.cbd", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json"))))
 SIMD_ARITHMETIC_SHAPES = ["Int8X32","Word8X32","Int8X64","Word8X64","Int16X32","Word16X32","Word64X2","Word32X8","Int32X8","Int32X16","Int64X2","FloatX4","DoubleX2","FloatX8","DoubleX4","Int64X4","Int64X8","Word64X4","Word64X8","Word32X16","FloatX16","DoubleX8","Int8X16","Int16X8","Int32X4","Word8X16","Word16X8","Word32X4","Int16X16","Word16X16"]
 SIMD_ARITHMETIC_ENTRIES = tuple(op + shape + suffix for shape in SIMD_ARITHMETIC_SHAPES
@@ -321,7 +321,7 @@ SIMD_ARITHMETIC_OUTPUTS = frozenset("build/simd-arithmetic/" + name for name in 
     *("commands/" + command + "." + suffix for command in SIMD_ARITHMETIC_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
 CLOSURE_INSPECTION_OUTPUTS = frozenset("build/closure-inspection/" + name for name in (
-    "manifest.json", "oracle.tsv", "native/oracle", "core/ClosureInspectionAudit.json",
+    "manifest.json", "oracle.tsv", "native/oracle", "core/ClosureInspectionAudit.cbd",
     *(name + ".audit.json" for name in ("payload", "sizeConsistent", "pointerCount", "notStack",
                                        "noCCS", "noProvenance", "cleared", "annotated", "annotatedResume"))))
 SIMD_WIDE_ARRAY_ENTRIES = tuple(shape + operation + mode
@@ -1830,7 +1830,7 @@ def bco_artifact_hashes(manifest):
             manifest.get("ghc") == "9.14.1", "Invalid GHC BCO manifest")
     require(manifest.get("entries") == list(BCO_ENTRIES) and manifest.get("stages") == ["pre", "post"] and
             manifest.get("arguments") == [-2, 0, 7] and isinstance(manifest.get("native"), list) and
-            len(manifest["native"]) == 24 and all(type(value) is int for value in manifest["native"]),
+            len(manifest["native"]) == 3 * len(BCO_ENTRIES) and all(type(value) is int for value in manifest["native"]),
             "Invalid GHC BCO provenance")
     artifacts = manifest.get("artifactHashes")
     require(isinstance(artifacts, dict) and set(artifacts) == BCO_OUTPUTS - {"build/ghc-bco/manifest.json"},

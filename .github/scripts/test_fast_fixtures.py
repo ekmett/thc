@@ -19,6 +19,27 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_native_inspection_families_require_cbd_without_flat_core_json(self):
+        for family, module, outputs in (
+                ("ghc-bco", "GhcBCO", fast_fixtures.fast_inputs.BCO_OUTPUTS),
+                ("stable-names", "StableNames", fast_fixtures.fast_inputs.STABLE_NAME_OUTPUTS),
+                ("thread-scheduling", "ThreadScheduling", fast_fixtures.fast_inputs.THREAD_SCHEDULING_OUTPUTS),
+                ("integer-completion", "IntegerCompletionAudit", fast_fixtures.fast_inputs.INTEGER_COMPLETION_OUTPUTS),
+                ("hint-trace", "HintTraceAudit", fast_fixtures.fast_inputs.HINT_TRACE_OUTPUTS),
+                ("closure-inspection", "ClosureInspectionAudit", fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS)):
+            stems = ([f"build/{family}/core/{module}"] if family == "closure-inspection" else
+                     [f"build/{family}/{stage}-core/{module}" if family == "integer-completion" else
+                      f"build/{family}/{stage}/core/{module}" for stage in ("pre", "post")])
+            for stem in stems:
+                self.assertIn(stem + ".cbd", outputs)
+                self.assertNotIn(stem + ".json", outputs)
+                self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(stem + ".cbd"))
+                self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(stem + ".json"))
+                self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(stem.replace(module, "Unreviewed") + ".cbd"))
+                if family in ("hint-trace", "closure-inspection"):
+                    self.assertIn(stem + ".cbd", fast_fixtures.FULL_REQUIRED)
+                    self.assertNotIn(stem + ".json", fast_fixtures.FULL_REQUIRED)
+
     def test_standalone_array_required_core_products_are_cbd(self):
         for family, fixture in (("atomic-int-arrays", "AtomicIntArrayAudit"),
                                 ("fetch-add-int-array", "FetchAddIntArrayAudit"),
@@ -480,7 +501,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('ghc-bco', owners['thc.runtime.GhcBCOTest'])
         self.assertIn('t/fixtures/core/GhcBCO.hs', group['sources'])
         self.assertIn('"$fixture_bin" ghc-bco', (project / 'bin/prepare-tests.sh').read_text().splitlines())
-        self.assertEqual(82, len(cache.BCO_OUTPUTS))
+        self.assertEqual(298, len(cache.BCO_OUTPUTS))
         self.assertTrue(cache.BCO_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         name = 'build/ghc-bco/manifest.json'
         artifacts = {}
@@ -488,11 +509,11 @@ class FixturePreparationTest(unittest.TestCase):
             path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
         receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.BCO_ENTRIES), stages=['pre', 'post'],
-                       arguments=[-2, 0, 7], native=[0] * 24, artifactHashes=artifacts)
+                       arguments=[-2, 0, 7], native=[0] * 105, artifactHashes=artifacts)
         (self.root / name).write_text(json.dumps(receipt))
         self.assertEqual(cache.BCO_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
         for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
-                    dict(receipt, native=[0] * 23), dict(receipt, native=[False] * 24),
+                    dict(receipt, native=[0] * 104), dict(receipt, native=[False] * 105),
                     dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
             with self.assertRaises(cache.CacheMiss): cache.bco_artifact_hashes(bad)
         self.assertFalse(cache.allowed_payload('build/ghc-bco/unknown.json'))
