@@ -1719,6 +1719,8 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['simd-capability-smoke']
         self.assertEqual('simd-capability-smoke', owners['thc.runtime.SimdCapabilitySmokeTest'])
         sources = fast_fixtures.fast_inputs.SIMD_SMOKE_SOURCES
+        self.assertIn('build/simd-capability-smoke/pre-core/GeneratedSimdSmoke.cbd', fast_fixtures.fast_inputs.SIMD_SMOKE_OUTPUTS)
+        self.assertNotIn('build/simd-capability-smoke/pre-core/GeneratedSimdSmoke.json', fast_fixtures.fast_inputs.SIMD_SMOKE_OUTPUTS)
         self.assertEqual({'build/simd-capability-smoke'} | sources, set(group['outputs']))
         self.assertLessEqual(sources, fast_fixtures.FULL_REQUIRED)
         self.assertNotIn('bin/prepare-simd-families.py', group['sources'])
