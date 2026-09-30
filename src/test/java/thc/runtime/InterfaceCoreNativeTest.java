@@ -11,9 +11,14 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import thc.CoreForeignArtifacts;
 import thc.CoreModules;
 import thc.CoreCbdFixtures;
+import thc.CoreUnitDirectory;
+import thc.ForeignExceptionFixtureSupport;
+import thc.PackageScalarLink;
+import thc.PackageScalarSignature;
 import thc.Json;
 import thc.Language;
 import java.nio.ByteBuffer;
@@ -96,7 +101,9 @@ class InterfaceCoreNativeTest {
         assertEquals(Map.of("isInitializer", true, "unit", "thc-interface-fixture-0.1", "module", "InterfaceForeign", "name", "fexports"), initializer);
         var file = single((List<Map<String, Object>>) artifacts.get("files")); assertEquals("int thc_interface_c_control(void) { return 29; }\n", file.get("source"));
         for (var backend : List.of("ast", "bytecode")) for (boolean diagnostic : List.of(false, true)) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).build()) {
-            var error = assertThrows(PolyglotException.class, () -> context.eval("thc", Json.stringify(Map.of("entry", "exported", "backend", backend, "diagnosticUnsupported", diagnostic, "modules", List.of(archived)))));
+            var request = CoreModules.request(List.of("@" + directory.resolve("foreign-packages.json").toAbsolutePath()),
+                "thc-interface-fixture-0.1:InterfaceForeign.exported", true, diagnostic, backend, true, false, null, false, true);
+            var error = assertThrows(PolyglotException.class, () -> context.eval("thc", request));
             assertTrue(error.getMessage().contains("Unsupported foreign code/registration"), error.getMessage()); assertTrue(error.getMessage().contains("thc-interface-fixture-0.1:InterfaceForeign"));
         }
     }
@@ -115,6 +122,9 @@ class InterfaceCoreNativeTest {
                 assertEquals((byte) 0x5a, bytes[4]); assertEquals((byte) 0x5a, bytes[21]);
                 assertEquals(0L, cbits.capiWordAddress(link.getUnit(), "fixture_clock_resolution", clock, address).getValue());
                 nanos = view.getLong(13); assertTrue(nanos >= 0 && nanos < 1_000_000_000L);
+                var unchanged = bytes();
+                assertThrows(RuntimeFault.class, () -> cbits.capiWordAddress(link.getUnit(), "fixture_clock_time", clock, ManagedAddress.fromByteArray(unchanged).plus(20)));
+                assertArrayEquals(bytes(), unchanged, "The timespec boundary rejects short storage before the original native call");
             } finally { context.leave(); }
         }
     }
@@ -124,11 +134,19 @@ class InterfaceCoreNativeTest {
             "primReps", rep == null ? List.of() : List.of(rep), "evaluated", evaluated);
     }
     private static Map<String, Object> tuple(boolean evaluated) { return Map.of("kind", "unknown", "primReps", List.of("Int32Rep"), "aggregate", "unboxed-tuple", "components", List.of(scalar(null), scalar("Int32Rep")), "evaluated", evaluated); }
+    @Tag("foreign-exceptions-full-core")
     @Test void linkedCapiStateAndAddressCallsRetainTypedCompiledAstAndBytecodeEntries() throws Exception {
         oracle(); var archived = CoreCbdFixtures.read(directory.resolve("clock-capi.cbd")); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(archived));
         var reps = Arrays.asList("Word64Rep", "AddrRep", null); var formals = new ArrayList<Map<String, Object>>();
         for (int i = 0; i < reps.size(); i++) formals.add(Map.of("id", "p" + i, "lifted", false, "rep", scalar(reps.get(i))));
         var symbols = new ArrayList<String>(); for (var symbol : link.getSymbols()) if (symbol.endsWith("fixture_clock_time")) symbols.add(symbol); var symbol = single(symbols);
+        var abi = new ArrayList<PackageScalarSignature>();
+        for (var name : link.getSymbols()) {
+            boolean zero = link.getAbi().get(name).equals("clock-id");
+            abi.add(new PackageScalarSignature(name, name, zero ? List.of() : List.of("Word64Rep", "AddrRep"), zero ? "Word64Rep" : "Int32Rep", "capi", "unsafe"));
+        }
+        var provenance = (Map<String, Object>) archived.get("foreignLink");
+        var nativeLink = new PackageScalarLink(link.getUnit(), link.getTarget(), (String) provenance.get("sourceSha256"), (String) provenance.get("bitcodeSha256"), link.getBytes(), abi);
         var argumentReps = new ArrayList<Map<String, Object>>(); for (var rep : reps) argumentReps.add(scalar(rep, false));
         var descriptor = Map.of("schema", 1L, "target", Map.of("kind", "static", "symbol", symbol, "unit", link.getUnit(), "isFunction", true),
             "convention", "capi", "safety", "unsafe", "arity", 3L, "suppliedArity", 3L, "argumentReps", argumentReps, "resultRep", tuple(false));
@@ -138,28 +156,32 @@ class InterfaceCoreNativeTest {
         var binders = List.of(Map.of("id", "s", "lifted", false, "rep", scalar(null)), Map.of("id", "value", "lifted", false, "rep", scalar("Int32Rep")));
         var alternative = List.of("data", "T2", List.of("s", "value"), List.of("var", "value", Map.of("rep", scalar("Int32Rep"))), Map.of("binders", binders));
         var body = List.of("case", call, "pair", List.of(alternative), Map.of("rep", scalar("Int32Rep"), "binder", Map.of("id", "pair", "lifted", false, "rep", tuple(true))));
-        Map<String, Object> module = Map.of("instrument", true, "foreignLinks", List.of(link), "constructors", List.of(Map.of("id", "T2", "kind", "unboxed-tuple", "arity", 2, "tag", 1)),
+        Map<String, Object> module = Map.of("instrument", true, "packageScalarLinks", List.of(nativeLink), "constructors", List.of(Map.of("id", "T2", "kind", "unboxed-tuple", "arity", 2, "tag", 1)),
             "bindings", List.of(Map.of("id", "clock", "name", "clock", "arity", 3, "lifted", true, "rep", scalar("BoxedRep (Just Lifted)"),
                 "expr", List.of("lam", formals, body, Map.of("rep", scalar("BoxedRep (Just Lifted)"), "resultRep", scalar("Int32Rep"))))));
+        var linked = ForeignExceptionFixtureSupport.link(module, "clock");
         for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); Language.currentState().cbits().link(link);
-                ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+                Language.currentState().getPackageCbits().link(nativeLink);
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                 var target = program.entryTarget("clock"); var cbits = Language.currentState().cbits(); long clock = cbits.capiZero(link.getUnit(), "fixture_clock_id", false);
                 checkClock(program, target, clock, false); target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); checkClock(program, target, clock, true);
-                var unchanged = bytes();
-                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, clock, ManagedAddress.fromByteArray(unchanged).plus(20), thc.runtime.Unit.INSTANCE}));
-                assertArrayEquals(bytes(), unchanged);
+                var unchanged = ManagedAllocation.mutable(32, 8, true); unchanged.copyBytesIn(bytes(), 0, 0, 32);
+                assertThrows(RuntimeFault.class, () -> ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, clock, ManagedAddress.fromAllocation(unchanged).plus(5), 0L}));
+                assertArrayEquals(bytes(), unchanged.copyBytesOut(0, 32), "An invalid State# carrier cannot enter the native call");
             } finally { context.leave(); }
         }
     }
     private static void checkClock(ExecutableProgram program, RootCallTarget target, long clock, boolean compiled) throws Exception {
-        var bytes = bytes(); var address = ManagedAddress.fromByteArray(bytes).plus(5);
+        var allocation = ManagedAllocation.mutable(32, 8, true); allocation.copyBytesIn(bytes(), 0, 0, 32);
+        var address = ManagedAddress.fromAllocation(allocation).plus(5);
         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-        assertEquals(0, Calls.target(target, new Object[]{0L, clock, address, thc.runtime.Unit.INSTANCE}));
+        assertEquals(0, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, clock, address, thc.runtime.Unit.INSTANCE}));
         if (compiled) { assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue()); valid(target); }
+        var bytes = allocation.copyBytesOut(0, 32);
         var view = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()); assertTrue(view.getLong(5) >= 0);
         long nanos = view.getLong(13); assertTrue(nanos >= 0 && nanos < 1_000_000_000L);
         assertEquals((byte) 0x5a, bytes[4]); assertEquals((byte) 0x5a, bytes[21]);
@@ -192,13 +214,29 @@ class InterfaceCoreNativeTest {
         assertEquals("thc-interface-fixture-0.1", source.get("unit")); assertFalse(Files.exists(directory.resolve("source/InterfaceLibrary.hs")));
         var bindings = (List<Map<String, Object>>) source.get("bindings"); var worker = single(bindings.stream().filter(binding -> ((String) binding.get("id")).startsWith("thc-interface-fixture-0.1:InterfaceLibrary.privateWorker_")).toList());
         assertTrue(((String) worker.get("id")).startsWith("thc-interface-fixture-0.1:InterfaceLibrary.privateWorker_"));
-        boolean recursive = false;
-        for (var group : (List<Map<String, Object>>) source.get("groups")) if (Boolean.TRUE.equals(group.get("recursive"))) { recursive = true; break; }
-        assertTrue(recursive); boolean token = false;
+        var recursive = new ArrayCoreEvidence(source, entryId("recursiveEntry"));
+        assertEquals(List.of(entryId("recursiveEntry")), recursive.globalReferences(recursive.getRoot().get("expr")), "Recovered body retains its recursive call");
+        boolean token = false;
         for (var constructor : (List<Map<String, Object>>) source.get("constructors")) if (((String) constructor.get("id")).endsWith("InterfaceLibrary.Token")) { token = true; break; }
-        assertTrue(token); var files = (List<Map<String, Object>>) source.get("sourceFiles"); assertTrue(!files.isEmpty());
-        boolean missing = true; for (var file : files) if (file.get("content") != null) { missing = false; break; }
-        assertTrue(missing, "Missing source text must not be fabricated"); assertTrue(!((List<?>) source.get("sourceSpans")).isEmpty());
+        assertTrue(token);
+        // CBD keeps source notes in selected debug records, outside the decoded module header.
+        var unit = CoreUnitDirectory.read(read("packages.json")); int notes = 0;
+        try (var loaded = unit.open(true)) {
+            loaded.verifyModule(Objects.requireNonNull(unit.owner(entryId("opaqueEntry"))));
+            var sources = new CoreSources(Map.of());
+            for (var binding : bindings) {
+                var hydrated = Objects.requireNonNull(loaded.binding((String) binding.get("id")));
+                assertEquals(binding, CoreCbdFixtures.snapshot(hydrated), "Inspect the exact executed CBD binding");
+                for (var expression : OriginalStdioChecks.nodes(hydrated.get("expr"))) {
+                    var location = sources.expression(expression); if (location == null) continue;
+                    for (var note : location.getNotes()) {
+                        assertFalse(note.section().getSource().hasCharacters(), "Missing source text must not be fabricated");
+                        assertEquals(note.startLine(), note.section().getStartLine()); notes++;
+                    }
+                }
+            }
+        }
+        assertTrue(notes > 0, "Recovered CBD preserves original source spans");
         for (var entry : entries) {
             var audit = read(entry + "-audit.json"); assertEquals(true, audit.get("accepted"), entry);
             assertEquals(List.of(), audit.get("issues"), entry); assertEquals(List.of(), audit.get("missingGlobals"), entry);
