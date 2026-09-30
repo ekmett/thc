@@ -7,6 +7,7 @@ import java.nio.file.*;
 import java.util.*;
 import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import thc.runtime.*;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreBackendTestSupport.*;
 
 class CStringTest {
+    @TempDir Path temporary;
     @Test void statelessAddressReadsPreserveCarriersAndRejectCoercions() {
         var address = ManagedAddress.fromHex("0000");
         assertEquals(0L, BytecodeRoot.AddressIndexManagedScalar.index(ManagedAddressRead.CHAR, address, 0L));
@@ -110,18 +112,23 @@ class CStringTest {
     private Map<String, Object> binding(String id, String argument, boolean lifted, List<Object> body) {
         return map("id", id, "name", id, "arity", 1, "lifted", true, "type", "Synthetic", "expr", list("lam", list(map("id", argument, "name", argument, "type", "Synthetic", "lifted", lifted, "coercion", false)), body));
     }
-    private Map<String, Object> module(List<Map<String, Object>> bindings) { return map("schema", 1, "ghc", "9.14.1", "module", "Synthetic.CString", "bindings", bindings, "constructors", list()); }
-    private String request(List<Map<String, Object>> modules) { return Json.stringify(map("entry", "entry", "modules", modules)); }
+    private Map<String, Object> module(List<Map<String, Object>> bindings) { return map("schema", 1, "ghc", "9.14.1", "unit", "main", "boundary", "pre-core", "module", "Synthetic.CString", "bindings", bindings, "constructors", list()); }
+    private Path artifact(Map<String, Object> module) throws Exception {
+        return CoreCbdFixtures.write(temporary.resolve(UUID.randomUUID() + ".cbd"), module);
+    }
+    private String request(Map<String, Object> module) throws Exception {
+        return CoreModules.request(list(artifact(module).toString()), "entry", false, false, null);
+    }
     private long count(Value fn, String key) { return ((Number) object(Json.parse(fn.getMember("diagnostics").asString())).get(key)).longValue(); }
-    @Test void literalPrimitivesExecuteInGuestCodeAndRejectNumericFakePointers() {
+    @Test void literalPrimitivesExecuteInGuestCodeAndRejectNumericFakePointers() throws Exception {
         var at = primitive("plusAddr#", list("lit", "string-bytes", "ff4100"), variable("offset")); var read = primitive("indexCharOffAddr#", at, integer(0));
         try (var context = Main.executionContext(false)) {
-            var fn = context.eval("thc", request(list(module(list(binding("entry", "offset", false, read)))))); long[] expected = {255L, 65L, 0L, 0L};
+            var fn = context.eval("thc", request(module(list(binding("entry", "offset", false, read))))); long[] expected = {255L, 65L, 0L, 0L};
             for (int i = 0; i < 10; i++) for (int offset = 0; offset < expected.length; offset++) assertEquals(expected[offset], fn.execute(offset).asLong());
             assertTrue(fn.invokeMember("compile").asBoolean()); long before = count(fn, "compiledEntries");
             for (int offset = 0; offset < expected.length; offset++) assertEquals(expected[offset], fn.execute(offset).asLong()); assertTrue(count(fn, "compiledEntries") > before);
             var bounds = assertThrows(PolyglotException.class, () -> fn.execute(4)); assertTrue(bounds.getMessage().contains("outside its backing storage"), bounds.getMessage());
-            var fake = context.eval("thc", request(list(module(list(binding("entry", "address", false, primitive("indexCharOffAddr#", variable("address"), integer(0))))))));
+            var fake = context.eval("thc", request(module(list(binding("entry", "address", false, primitive("indexCharOffAddr#", variable("address"), integer(0)))))));
             var wrong = assertThrows(PolyglotException.class, () -> fake.execute(0)); assertTrue(wrong.getMessage().contains("Expected a managed literal Addr#"), wrong.getMessage());
         }
     }
@@ -129,7 +136,7 @@ class CStringTest {
         var matches = constructors.stream().filter(value -> Objects.equals(value.get("name"), name)).toList(); assertEquals(1, matches.size()); return (String) matches.getFirst().get("id");
     }
     @Test void genuineGhcCStringDecoderConsumesLiteralBytesBeforeAndAfterCompilation() throws Exception {
-        var root = Path.of(System.getProperty("thc.projectRoot")); var exported = CoreCbdFixtures.read(root.resolve("build/map/boot-core/GHC.Internal.CString.cbd"));
+        var root = Path.of(System.getProperty("thc.projectRoot")); var original = root.resolve("build/map/boot-core/GHC.Internal.CString.cbd"); var exported = CoreCbdFixtures.read(original);
         var constructors = objects(exported.get("constructors")); var bindings = objects(exported.get("bindings"));
         var matches = bindings.stream().filter(value -> Objects.equals(value.get("id"), "ghc-internal:GHC.Internal.CString.unpackCString#")).toList(); assertEquals(1, matches.size()); var unpack = (String) matches.getFirst().get("id");
         var summed = primitive("+#", primitive("ord#", variable("char")), apply(variable("sumChars"), list(variable("tail")), list(true)));
@@ -137,8 +144,9 @@ class CStringTest {
         var traverse = list("case", variable("list"), "spine", list(list("data", constructor(constructors, "[]"), list(), integer(0)), list("data", constructor(constructors, ":"), list("head", "tail"), unbox)));
         var address = primitive("plusAddr#", list("lit", "string-bytes", "41ff420043"), variable("offset")); var decoded = apply(variable(unpack), list(address), list(false));
         var driver = module(list(binding("sumChars", "list", true, traverse), binding("entry", "offset", false, apply(variable("sumChars"), list(decoded), list(true)))));
+        var driverFile = artifact(driver);
         for (var backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
-            var fn = context.eval("thc", Json.stringify(map("entry", "entry", "modules", list(exported, driver), "backend", backend))); long[] expected = {386L, 321L, 66L, 0L, 67L, 0L};
+            var fn = Main.loadEntry(context, list(original.toString(), driverFile.toString()), "entry", false, backend); long[] expected = {386L, 321L, 66L, 0L, 67L, 0L};
             for (int i = 0; i < 8; i++) for (int offset = 0; offset < expected.length; offset++) assertEquals(expected[offset], fn.execute(offset).asLong(), backend + "/" + offset);
             assertTrue(fn.invokeMember("compile").asBoolean()); long before = count(fn, "compiledEntries");
             for (int offset = 0; offset < expected.length; offset++) assertEquals(expected[offset], fn.execute(offset).asLong(), backend + "/" + offset + " compiled");
