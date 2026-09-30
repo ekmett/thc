@@ -605,7 +605,7 @@ class FixturePreparationTest(unittest.TestCase):
         for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
                     dict(receipt, nativeThread='main'), dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
             with self.assertRaises(cache.CacheMiss): cache.thread_inventory_artifact_hashes(bad)
-        (self.root / 'build/thread-inventory/pre/core/ThreadInventory.json').write_text('mutated')
+        (self.root / 'build/thread-inventory/pre/core/ThreadInventory.cbd').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
     def test_thread_scheduling_has_closed_outputs_and_native_rts_provenance(self):

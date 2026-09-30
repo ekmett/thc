@@ -616,7 +616,7 @@ class FastInputTests(unittest.TestCase):
             self.rejected_without_writes(changed)
 
     def test_thread_inventory_exact_closed_archive_roundtrip_and_missing_member(self):
-        self.assertEqual(25, len(cache.THREAD_INVENTORY_OUTPUTS))
+        self.assertEqual(23, len(cache.THREAD_INVENTORY_OUTPUTS))
         self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)
         for path in cache.THREAD_INVENTORY_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path), path)

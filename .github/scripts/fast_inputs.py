@@ -232,7 +232,7 @@ DELIMITED_OUTPUTS = frozenset("build/delimited-continuations/" + name for name i
     *(f"commands/{command}.{suffix}" for command in DELIMITED_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
     "manifest.json", "oracle.txt", "callback-oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
-        for suffix in ("core/ThreadInventory.cbd", "core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
+        for suffix in ("core/ThreadInventory.cbd", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
 THREAD_SCHEDULING_ENTRIES = ("emptySpark", "lazyPar", "lazySpark", "sparkValue", "currentCounter", "negativeCounter",
                              "pinnedFork", "otherCounter", "timedDelay")
 THREAD_SCHEDULING_OUTPUTS = frozenset("build/thread-scheduling/" + name for name in (
