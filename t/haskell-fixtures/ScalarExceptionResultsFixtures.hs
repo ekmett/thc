@@ -50,8 +50,8 @@ prepareScalarExceptionResults root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "bin/export-core.sh" (options ++ [source])
     audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
-      ["bin/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
-       core </> "ScalarExceptionResultsAudit.json"]
+      ["bin/audit-core.py", "--entry", "main:ScalarExceptionResultsAudit." ++ entry, "--output", directory </> stage </> entry ++ "-audit.json",
+       core </> "ScalarExceptionResultsAudit.cbd"]
     pure (exported : audits)
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
@@ -63,7 +63,7 @@ prepareScalarExceptionResults root = do
         ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [version, compiled, observed] ++ concat stages
       artifacts = [binary] ++ concatMap commandArtifacts commands ++
-        [directory </> stage </> "core/ScalarExceptionResultsAudit.json" | stage <- ["pre", "post"]] ++
+        [directory </> stage </> "core/ScalarExceptionResultsAudit.cbd" | stage <- ["pre", "post"]] ++
         [directory </> stage </> entry ++ "-audit.json" | stage <- ["pre", "post"], entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

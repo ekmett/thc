@@ -45,7 +45,7 @@ public class ExceptionResultLayoutsNativeTest {
         return result.build();
     }
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "/core/ExceptionResultLayoutsAudit.json").toPath()));
+        return (Map<String, Object>) thc.CoreCbdFixtures.read(new File(directory, stage + "/core/ExceptionResultLayoutsAudit.cbd").toPath());
     }
     private record Row(long mode, long input, long expected) {}
     private Map<String, List<Row>> oracle() throws Exception {
@@ -94,7 +94,7 @@ public class ExceptionResultLayoutsNativeTest {
     @Test public void genuineProofsKeepResultShapeAndIndependentPayloadLevity() throws Exception {
         oracle();
         for (var stage : stages) for (var entry : entries) {
-            var linked = CoreModules.reachable(module(stage), entry, true); var primitives = new ArrayList<List<Object>>();
+            var linked = CoreModules.reachable(module(stage), "main:ExceptionResultLayoutsAudit." + entry, true); var primitives = new ArrayList<List<Object>>();
             for (var call : calls(linked)) if (Set.of("catch#", "raiseIO#", "maskAsyncExceptions#", "maskUninterruptible#", "unmaskAsyncExceptions#").contains(((List<?>) call.get(1)).get(1))) primitives.add(call);
             assertFalse(primitives.isEmpty(), stage + "/" + entry);
             for (var call : primitives) {
@@ -166,9 +166,9 @@ public class ExceptionResultLayoutsNativeTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var linked = new LinkedHashMap<>(CoreModules.reachable(module(stage), entry, true)); linked.put("instrument", true);
+                    var linked = new LinkedHashMap<>(CoreModules.reachable(module(stage), "main:ExceptionResultLayoutsAudit." + entry, true)); linked.put("instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, true) : new BytecodeProgram(language, linked, true);
-                    var target = program.entryTarget(entry); var function = context.asValue(new EntryValue(program, entry, 2)); var label = stage + "/" + backend + "/" + entry;
+                    var target = program.entryTarget("main:ExceptionResultLayoutsAudit." + entry); var function = context.asValue(new EntryValue(program, "main:ExceptionResultLayoutsAudit." + entry, 2)); var label = stage + "/" + backend + "/" + entry;
                     class Runner { void check(Row row) {
                         assertEquals(row.expected(), function.execute(row.mode(), row.input()).asLong(), label + "/" + row);
                         assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(target.getRootNode()), label);
@@ -181,7 +181,7 @@ public class ExceptionResultLayoutsNativeTest {
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                     runner.check(selected.getLast()); // Immediate first invocation; no settling/recovery call.
                     assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, label);
-                    assertSame(target, program.entryTarget(entry), label);
+                    assertSame(target, program.entryTarget("main:ExceptionResultLayoutsAudit." + entry), label);
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label + " retained after first installed call");
                     for (var row : selected) runner.check(row);
                     assertEquals(0L, program.diagnostics().get("unsupportedTraps"), label); assertEquals(0L, program.diagnostics().get("blackholes"), label);

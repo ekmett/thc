@@ -66,13 +66,13 @@ public class ThreadLabelNativeTest {
                 .option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "/core/ThreadLabelAudit.json").toPath()));
+                    var module = (Map<String, Object>) thc.CoreCbdFixtures.read(new File(directory, stage + "/core/ThreadLabelAudit.cbd").toPath());
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var linked = new LinkedHashMap<>(CoreModules.reachable(module, entry)); linked.put("instrument", true);
+                    var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:ThreadLabelAudit." + entry)); linked.put("instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true);
-                    var function = context.asValue(new EntryValue(program, entry, 1));
+                    var function = context.asValue(new EntryValue(program, "main:ThreadLabelAudit." + entry, 1));
                     for (int i = 0; i < 3; i++) assertEquals(expected(entry, 0L), function.execute(0L).asLong(), stage + "/" + backend + "/" + entry);
-                    var active = targets(program.entryTarget(entry));
+                    var active = targets(program.entryTarget("main:ThreadLabelAudit." + entry));
                     var observe = program.entryTarget(module.get("unit") + ":ThreadLabelAudit.observe");
                     var identity = ((GuestRoot) observe.getRootNode()).getCoreIdentity();
                     assertNotNull(identity, "The exported observe binding has a Core identity");

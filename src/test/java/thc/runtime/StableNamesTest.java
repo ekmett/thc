@@ -67,16 +67,16 @@ public class StableNamesTest {
                 .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000").build()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/stable-names/" + stage + "/core/StableNames.json").toPath()));
+                    var module = (Map<String, Object>) thc.CoreCbdFixtures.read(new File(root, "build/stable-names/" + stage + "/core/StableNames.cbd").toPath());
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var source = new LinkedHashMap<>(CoreModules.reachable(module, entry)); source.put("instrument", true);
+                    var source = new LinkedHashMap<>(CoreModules.reachable(module, "main:StableNames." + entry)); source.put("instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source);
-                    var function = context.asValue(new EntryValue(program, entry, 1));
+                    var function = context.asValue(new EntryValue(program, "main:StableNames." + entry, 1));
                     for (long input : inputs) assertEquals(expected(entry, input), function.execute(input).asLong(), stage + "/" + backend + "/" + entry + "/" + input);
                     assertTrue(function.invokeMember("compile").asBoolean());
                     var before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                     assertEquals(expected(entry, 17), function.execute(17L).asLong(), stage + "/" + backend + "/" + entry + " first installed call");
-                    var evidence = new ArrayCoreEvidence(module, entry);
+                    var evidence = new ArrayCoreEvidence(module, "main:StableNames." + entry);
                     // Unforced bottom is a separate CAF, not an executed root.
                     evidence.stateLambda(evidence.getRoot().get("expr"));
                     assertEquals((long) evidence.loweredStateLambdas(evidence.getRoot().get("expr")).size(),

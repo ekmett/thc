@@ -30,8 +30,8 @@ prepareTruffleStrings root = do
     "bin/toolchain.sh", "bin/plugin.py", "thc.cabal"] ++
     ["src/compiler/THC" </> file | file <- compiler, takeExtension file == ".hs"])
   artifactHashes <- hashes root ["build/truffle-strings" </> file | file <-
-    ["core/THC.Prim.json", "core/StringPrimitives.json", "core/IntrinsicOperands.json",
-     "core/TruffleStringExceptions.json", "core/THC.Exception.json", "core/THC.Internal.Exception.json",
+    ["core/THC.Prim.cbd", "core/StringPrimitives.cbd", "core/IntrinsicOperands.cbd",
+     "core/TruffleStringExceptions.cbd", "core/THC.Exception.cbd", "core/THC.Internal.Exception.cbd",
      "oracle.json", "native/oracle"]]
   writeJson (output </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]

@@ -32,7 +32,7 @@ class IntrinsicOperandContinuationTest {
                 var bytes = Files.readAllBytes(Path.of(System.getProperty("thc.projectRoot"), entry.getKey()));
                 assertEquals(entry.getValue(), HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)));
             }
-        var source = (Map<String, Object>) Json.parse(Files.readString(path.resolve("core/IntrinsicOperands.json")));
+        var source = thc.CoreCbdFixtures.read(path.resolve("core/IntrinsicOperands.cbd"));
         String name = vector ? "vectorOperands" : "stringOperands";
         var selected = CoreModules.reachable(source, List.of(PREFIX + name, PREFIX + "takeRaw", PREFIX + "takeIndex", PREFIX + "takeInt64"), true);
         selected.put("instrument", true);

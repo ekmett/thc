@@ -173,7 +173,7 @@ public class ClosureInspectionTest {
         return value;
     }
     private void runOriginal(boolean eraseAnnotations) throws Exception {
-        var receipt = fixture(); var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/closure-inspection/core/ClosureInspectionAudit.json").toPath()));
+        var receipt = fixture(); var module = (Map<String, Object>) thc.CoreCbdFixtures.read(new File(root, "build/closure-inspection/core/ClosureInspectionAudit.cbd").toPath());
         var rows = new ArrayList<List<String>>(); for (var line : Files.readAllLines(new File(root, "build/closure-inspection/oracle.tsv").toPath())) rows.add(Arrays.asList(line.split("\t", -1)));
         assertEquals(45, rows.size());
         for (var backend : List.of("ast", "bytecode")) for (var name : (List<String>) receipt.get("entries")) {
@@ -181,7 +181,7 @@ public class ClosureInspectionTest {
             try (var context = context()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var original = CoreModules.reachable(module, List.of(name), true);
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var original = CoreModules.reachable(module, List.of("main:ClosureInspectionAudit." + name), true);
                     var source = new LinkedHashMap<>(eraseAnnotations ? (Map<String, Object>) withoutAnnotations(original) : original); source.put("instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source);
                     var selected = new ArrayList<List<String>>(); for (var row : rows) if (row.get(0).equals(name)) selected.add(row);
@@ -190,13 +190,13 @@ public class ClosureInspectionTest {
                         long model = switch (name) { case "payload" -> input; case "sizeConsistent", "notStack" -> 0L; case "pointerCount" -> 2L; case "noCCS" -> 1L;
                             case "noProvenance" -> 123L; case "cleared" -> input + 1; case "annotated" -> input + 2; case "annotatedResume" -> input + 21; default -> throw new IllegalStateException(name); };
                         assertEquals(model, Long.parseLong(row.get(2)), "native/" + name + "/" + input);
-                        assertEquals(model, Calls.target(program.entryTarget(name), new Object[]{0L, input}), backend + "/" + name + "/" + input);
+                        assertEquals(model, Calls.target(program.entryTarget("main:ClosureInspectionAudit." + name), new Object[]{0L, input}), backend + "/" + name + "/" + input);
                         var state = language.getHandoffState().get(); assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getResults().getDepth());
                         assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().retainedReferences());
                         assertTrue(StackAnnotations.current(null).values().isEmpty(), backend + "/" + name + " annotation return");
                     } }
                     var runner = new Runner(); for (var row : selected) runner.check(row);
-                    var entry = program.entryTarget(name); var installed = targets(entry); var runtime = Truffle.getRuntime();
+                    var entry = program.entryTarget("main:ClosureInspectionAudit." + name); var installed = targets(entry); var runtime = Truffle.getRuntime();
                     var bypass = runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"));
                     for (var target : installed) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); bypass.invoke(runtime, target); valid(target); }
                     // The immediate runRW State# wrapper is beta-reduced by
@@ -205,7 +205,7 @@ public class ClosureInspectionTest {
                     for (var row : selected) {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); runner.check(row);
                         assertEquals(before + entries, ((Number) program.diagnostics().get("compiledEntries")).longValue(), backend + "/" + name + "/" + row.get(1));
-                        assertSame(entry, program.entryTarget(name)); for (var target : installed) valid(target);
+                        assertSame(entry, program.entryTarget("main:ClosureInspectionAudit." + name)); for (var target : installed) valid(target);
                     }
                 } finally { context.leave(); }
             }

@@ -61,8 +61,8 @@ prepareExceptionResultLayouts root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "bin/export-core.sh" (options ++ [source])
     audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
-      ["bin/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
-       core </> "ExceptionResultLayoutsAudit.json"]
+      ["bin/audit-core.py", "--entry", "main:ExceptionResultLayoutsAudit." ++ entry, "--output", directory </> stage </> entry ++ "-audit.json",
+       core </> "ExceptionResultLayoutsAudit.cbd"]
     pure (exported : audits)
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
@@ -74,7 +74,7 @@ prepareExceptionResultLayouts root = do
         ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [version, compiled] ++ observed ++ concat stages
       artifacts = [binary, directory </> "oracle.tsv"] ++ concatMap commandArtifacts commands ++
-        [directory </> stage </> "core/ExceptionResultLayoutsAudit.json" | stage <- stagesToExport] ++
+        [directory </> stage </> "core/ExceptionResultLayoutsAudit.cbd" | stage <- stagesToExport] ++
         [directory </> stage </> entry ++ "-audit.json" | stage <- stagesToExport, entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

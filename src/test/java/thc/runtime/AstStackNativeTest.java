@@ -43,8 +43,8 @@ public class AstStackNativeTest {
         assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("issues")); assertEquals(List.of(), audit.get("missingGlobals"));
         var modules = new ArrayList<Map<String, Object>>();
         for (var name : List.of("DeepEvaluation", "THC.InterfaceClosure"))
-            modules.add((Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "/core/" + name + ".json").toPath())));
-        var source = new LinkedHashMap<>(CoreModules.reachable(CoreModules.merge(modules), "probe", true)); source.put("instrument", true); return source;
+            modules.add(thc.CoreCbdFixtures.read(new File(directory, stage + "/core/" + name + ".cbd").toPath()));
+        var source = new LinkedHashMap<>(CoreModules.reachable(CoreModules.merge(modules), "main:DeepEvaluation.probe", true)); source.put("instrument", true); return source;
     }
     @Test public void genuineDeepLazyEvaluationMatchesNativeWithoutGuestCompilation() throws Exception {
         var rows = rows();
@@ -59,7 +59,7 @@ public class AstStackNativeTest {
                     var scope = state.getThreadPollState().get().getAstStack();
                     for (var row : rows) {
                         var before = scope.getSpills();
-                        assertEquals(row.expected(), Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("probe"), new Object[]{row.input()}}), stage + "/" + row.input());
+                        assertEquals(row.expected(), Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:DeepEvaluation.probe"), new Object[]{row.input()}}), stage + "/" + row.input());
                         if (row.input() >= 5000) assertTrue(scope.getSpills() > before);
                         assertEquals(0, scope.getDepth()); assertFalse(scope.getDriving());
                     }
@@ -77,7 +77,7 @@ public class AstStackNativeTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = new Program(language, source(stage), true);
-                var function = context.asValue(new EntryValue(program, "probe", 1));
+                var function = context.asValue(new EntryValue(program, "main:DeepEvaluation.probe", 1));
                 for (int i = 0; i < 10; i++) assertEquals(100L, function.execute(100L).asLong());
                 assertTrue(function.invokeMember("compile").asBoolean());
                 var before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
