@@ -83,6 +83,30 @@ public class ThreadInventoryNativeTest {
         // Seed genuine function bindings without forcing CAFs.
         for (var value : (List<?>) module.get("bindings")) { var binding = (Map<?, ?>) value; if (Objects.equals(((List<?>) binding.get("expr")).get(0), "lam")) for (var target : targets(program.entryTarget((String) binding.get("id")))) if (seen.add(target)) result.add(target); } return result;
     }
+    private void assertForkRoots(List<RootCallTarget> active, Map<String, Object> compact, String entry, String backend, int sourceRoots) throws ReflectiveOperationException {
+        var prepared = new ArrayList<RootCallTarget>();
+        for (var target : active) if (target.getRootNode() instanceof BytecodeRoot root && root.entryMask() == 0L) prepared.add(target);
+        var expected = new LinkedHashSet<String>();
+        if (backend.equals("bytecode")) {
+            var evidence = new ArrayCoreEvidence(compact, entryId(entry));
+            var polling = Objects.requireNonNull(evidence.getAllBindings().get(entryId("awaitStatus")));
+            var joins = new ArrayList<Map<String, Object>>();
+            for (var node : evidence.nodes(polling.get("expr"))) if (Objects.equals(first(node), "let")) joins.addAll((List<Map<String, Object>>) node.get(2));
+            assertEquals(1, joins.size(), "The proven polling loop has one closed recursive join");
+            assertEquals(3L, joins.getFirst().get("joinValueArity"));
+            expected.add("join region " + joins.getFirst().get("id"));
+        }
+        var names = new LinkedHashSet<String>();
+        for (var target : prepared) {
+            names.add(target.getRootNode().getName());
+            assertEquals(0, target.getClass().getMethod("getCallCount").invoke(target), "Prepared recovery roots have executed no guest work");
+        }
+        assertEquals(expected, names, "Exact source-derived prepared recovery roots");
+        assertEquals(expected.size(), prepared.size());
+        // Keep every physical target in installation/stability checks below;
+        // pass-through recovery plans add no source-level guest invocation.
+        assertEquals(sourceRoots, active.size() - prepared.size(), entry + " exact source roots");
+    }
     private static void joinCompletedChildren(GuestThreads registry) throws InterruptedException {
         for (var value : registry.snapshot()) if (value instanceof GuestThreadId id && id.getForked()) { var carrier = id.getCarrier().get(); if (carrier != null) { carrier.join(5000); assertFalse(carrier.isAlive(), "Completion signal must be followed by actual carrier termination"); } }
     }
@@ -92,7 +116,7 @@ public class ThreadInventoryNativeTest {
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sourcePaths.add("src/compiler/THC/" + file.getName());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sourcePaths.add("bin/" + file.getName());
         var artifacts = new LinkedHashSet<>(List.of("build/thread-inventory/oracle.txt", "build/thread-inventory/callback-oracle.txt"));
-        for (var stage : List.of("pre", "post")) { artifacts.add("build/thread-inventory/" + stage + "/core/ThreadInventory.json"); for (var entry : entries) artifacts.add("build/thread-inventory/" + stage + "/" + entry + "-audit.json"); }
+        for (var stage : List.of("pre", "post")) { artifacts.add("build/thread-inventory/" + stage + "/core/ThreadInventory.json"); artifacts.add("build/thread-inventory/" + stage + "/core/ThreadInventory.cbd"); for (var entry : entries) artifacts.add("build/thread-inventory/" + stage + "/" + entry + "-audit.json"); }
         assertEquals(sourcePaths, ((Map<?, ?>) manifest.get("inputHashes")).keySet()); assertEquals(artifacts, ((Map<?, ?>) manifest.get("artifactHashes")).keySet());
         for (var kind : List.of("inputHashes", "artifactHashes")) for (var item : ((Map<?, ?>) manifest.get(kind)).entrySet()) {
             var actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(root, (String) item.getKey()).toPath()))); assertEquals(item.getValue(), actual, "Stale thread inventory fixture: " + item.getKey());
@@ -106,7 +130,26 @@ public class ThreadInventoryNativeTest {
     }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true).option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build(); }
     private Map<String, Object> module(String stage) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "/core/ThreadInventory.json").toPath())); }
+    private static String entryId(String name) { return "main:ThreadInventory." + name; }
+    private Map<String, Object> compact(String stage) throws Exception { return CoreCbdFixtures.read(new File(directory, stage + "/core/ThreadInventory.cbd").toPath()); }
     private static Map<String, Object> instrument(Map<String, Object> module) { var result = new LinkedHashMap<>(module); result.put("instrument", true); return result; }
+    @Test void compactRootLabelsKeepTheSourceBijectionAndRejectCollisions() throws Exception {
+        provenance();
+        for (var stage : List.of("pre", "post")) {
+            var source = module(stage); var compact = compact(stage);
+            for (var entry : entries.subList(0, 4)) {
+                var proof = new ThreadInventoryCoreEvidence(source, compact, entry);
+                assertThrows(NullPointerException.class, () -> proof.sourceLabel("unrecognized root"));
+            }
+            // Same bindings, calls and lambda arities; only distinct unary
+            // root labels collide. They must not share compilation accounting.
+            var collided = (Map<String, Object>) CoreCbdFixtures.snapshot(compact);
+            var evidence = new ArrayCoreEvidence(collided, entryId("forkSnapshot"));
+            for (var binding : evidence.getBindings()) for (var lambda : evidence.guestLambdas(binding.get("expr")))
+                for (var parameter : (List<Map<String, Object>>) lambda.get(1)) parameter.put("name", "same");
+            assertThrows(AssertionError.class, () -> new ThreadInventoryCoreEvidence(source, collided, "forkSnapshot"));
+        }
+    }
     private static long count(ExecutableProgram program) { return ((Number) program.diagnostics().get("compiledEntries")).longValue(); }
     private static boolean allValid(List<RootCallTarget> active) throws ReflectiveOperationException { for (var target : active) if (!valid(target)) return false; return true; }
     @Test void genuineCallbacksStartUnmaskedAndBoundWithoutStealingCallerDelivery() throws Exception {
@@ -114,9 +157,9 @@ public class ThreadInventoryNativeTest {
         for (var stage : List.of("pre", "post")) for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var module = module(stage); var proof = new ArrayCoreEvidence(module, "callbackObservation"); var lambda = (List<?>) proof.getRoot().get("expr"); proof.immediateStateLambda(lambda.get(2)); assertEquals(1, proof.getBindings().size()); assertEquals(2, proof.guestLambdas(lambda).size()); int calls = proof.loweredGuestLambdas(lambda).size(); assertEquals(1, calls, "Only the original entry survives immediate State# lowering");
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var owner = Language.currentState(); var linked = instrument(CoreModules.reachable(module, "callbackObservation"));
-                ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, true) : new BytecodeProgram(language, linked, true); var function = context.asValue(new EntryValue(program, "callbackObservation", 1)); var active = targets(program.entryTarget("callbackObservation")); assertEquals(calls, active.size());
+                var module = module(stage); var compact = compact(stage); var proof = new ArrayCoreEvidence(module, "callbackObservation"); var lambda = (List<?>) proof.getRoot().get("expr"); proof.immediateStateLambda(lambda.get(2)); assertEquals(1, proof.getBindings().size()); assertEquals(2, proof.guestLambdas(lambda).size()); int calls = proof.loweredGuestLambdas(lambda).size(); assertEquals(1, calls, "Only the original entry survives immediate State# lowering");
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var owner = Language.currentState(); var linked = instrument(CoreModules.reachable(compact, entryId("callbackObservation")));
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, true) : new BytecodeProgram(language, linked, true); var function = context.asValue(new EntryValue(program, entryId("callbackObservation"), 1)); var active = targets(program.entryTarget(entryId("callbackObservation"))); assertEquals(calls, active.size());
                 // Existing managed reverse entries; native trampoline is an independent oracle.
                 for (int i = 0; i < 3; i++) { var foreign = owner.getThreads().enterForeign(ForeignSafety.SAFE); try { assertEquals(1L, function.execute(0L).asLong()); } finally { owner.getThreads().leaveForeign(foreign); } }
                 long beforeInstallation = count(program); var interpretedBefore = interpretedCalls(active); install(active); assertTrue(function.invokeMember("compile").asBoolean()); assertEquals(beforeInstallation, count(program)); assertEquals(interpretedBefore, interpretedCalls(active), "Installation executes no guest calls");
@@ -133,7 +176,7 @@ public class ThreadInventoryNativeTest {
                                 finally { registry.leaveForeign(nestedForeign); }
                             } finally { registry.leaveCurrent(); }
                         } finally { registry.leaveForeign(foreign); }
-                        assertSame(caller, registry.currentIdentity()); owner.getMaskingState().set(MaskingState.UNMASKED); var node = program.entryTarget("callbackObservation").getRootNode(); assertSame(request, registry.poll(node)); request.acknowledge(); released(language);
+                        assertSame(caller, registry.currentIdentity()); owner.getMaskingState().set(MaskingState.UNMASKED); var node = program.entryTarget(entryId("callbackObservation")).getRootNode(); assertSame(request, registry.poll(node)); request.acknowledge(); released(language);
                     } finally { registry.leaveCurrent(); }
                 }
             } finally { context.leave(); }
@@ -146,37 +189,44 @@ public class ThreadInventoryNativeTest {
             try (var context = context()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var module = module(stage); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(Handoff.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
-                    var linked = instrument(CoreModules.reachable(module, entry)); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true); var function = context.asValue(new EntryValue(program, entry, 1));
-                    var proof = entries.subList(0, 4).contains(entry) ? new ThreadInventoryCoreEvidence(module, entry) : null; var fixedProof = proof == null ? forkCalls(module, entry) : null; var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
+                    var module = module(stage); var compact = compact(stage); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(Handoff.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
+                    var linked = instrument(CoreModules.reachable(compact, entryId(entry))); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true); var function = context.asValue(new EntryValue(program, entryId(entry), 1));
+                    var proof = entries.subList(0, 4).contains(entry) ? new ThreadInventoryCoreEvidence(module, compact, entry) : null; var fixedProof = proof == null ? forkCalls(module, entry) : null; var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
                     try {
                         for (int i = 0; i < 3; i++) { assertEquals(expected, function.execute(0L).asLong(), stage + "/" + backend + "/" + entry); joinCompletedChildren(registry); released(language); }
-                        var retained = registry.snapshot(); int population = retained.length + (entry.equals("forkSnapshot") ? 1 : 0); var active = proof != null ? targets(program.entryTarget(entry)) : forkTargets(program, linked);
-                        if (proof != null) proof.assertRoots(active); else { var labels = new ArrayList<String>(); for (var target : active) labels.add(target.getRootNode().getName()); assertEquals(fixedProof.roots(), active.size(), entry + " source-derived roots, including child, head thunk and already-forced CAF: " + labels); }
+                        var retained = registry.snapshot(); int population = retained.length + (entry.equals("forkSnapshot") ? 1 : 0); var active = proof != null ? targets(program.entryTarget(entryId(entry))) : forkTargets(program, linked);
+                        if (proof != null) proof.assertRoots(active); else assertForkRoots(active, compact, entry, backend, fixedProof.roots());
                         long before = count(program); var calls = interpretedCalls(active); install(active); assertTrue(function.invokeMember("compile").asBoolean()); assertEquals(before, count(program), "Installation executes no guest roots"); assertEquals(calls, interpretedCalls(active), "No interpreted settling call");
                         assertEquals(expected + 1L, function.execute(1L).asLong(), stage + "/" + backend + "/" + entry + " first installed observation"); joinCompletedChildren(registry); long delta = count(program) - before; System.out.println("THREAD_INVENTORY_ENTRIES " + stage + "/" + backend + "/" + entry + " population=" + population + " delta=" + delta);
-                        assertEquals(fixedProof != null ? fixedProof.calls() : proof.compiledCalls(population), delta, stage + "/" + backend + "/" + entry + " every original guest invocation enters installed code"); assertEquals(calls, interpretedCalls(active), "No guest root silently interpreted"); assertEquals(active, proof != null ? targets(program.entryTarget(entry)) : forkTargets(program, linked));
+                        assertEquals(fixedProof != null ? fixedProof.calls() : proof.compiledCalls(population), delta, stage + "/" + backend + "/" + entry + " every original guest invocation enters installed code"); assertEquals(calls, interpretedCalls(active), "No guest root silently interpreted"); assertEquals(active, proof != null ? targets(program.entryTarget(entryId(entry))) : forkTargets(program, linked));
                         for (var target : active) assertTrue(valid(target), stage + "/" + backend + "/" + entry + " first observation retired " + target.getRootNode().getName()); assertEquals(0L, program.diagnostics().get("unsupportedTraps")); Reference.reachabilityFence(retained);
                     } finally { released(language); registry.leaveCurrent(); }
                 } finally { context.leave(); }
             }
         }
     }
-    @Test void managedBlockedChildrenAreCancelledByContextCloseAndAstRejectsExternalDelivery() throws Exception {
+    @Test void managedBlockedChildrenReceiveExternalDeliveryAndRemainingChildIsCancelledByContextClose() throws Exception {
         provenance();
         for (var stage : List.of("pre", "post")) for (var backend : List.of("ast", "bytecode")) {
             var context = context(); var carriers = new ArrayList<Thread>(); final GuestThreads registry;
             try {
                 context.initialize("thc"); context.enter();
                 try {
-                    var module = module(stage); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = instrument(CoreModules.reachable(module, "parkedFork")); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true);
-                    var function = context.asValue(new EntryValue(program, "parkedFork", 1)); assertEquals(1L, function.execute(0L).asLong()); long expectedCalls = forkCalls(module, "parkedFork").calls(); var active = forkTargets(program, linked); assertEquals(3, active.size()); var calls = interpretedCalls(active); install(active); assertTrue(function.invokeMember("compile").asBoolean()); long before = count(program);
-                    assertEquals(2L, function.execute(1L).asLong()); assertEquals(expectedCalls, count(program) - before); assertEquals(calls, interpretedCalls(active)); for (var target : active) assertTrue(valid(target)); assertTrue(valid(program.entryTarget("parkedFork"))); registry = Language.currentState(null).getThreads(); registry.enterCurrent();
+                    var module = module(stage); var compact = compact(stage); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = instrument(CoreModules.reachable(compact, entryId("parkedFork"))); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true);
+                    var function = context.asValue(new EntryValue(program, entryId("parkedFork"), 1)); assertEquals(1L, function.execute(0L).asLong()); var proof = forkCalls(module, "parkedFork"); long expectedCalls = proof.calls(); var active = forkTargets(program, linked); assertForkRoots(active, compact, "parkedFork", backend, proof.roots()); var calls = interpretedCalls(active); install(active); assertTrue(function.invokeMember("compile").asBoolean()); long before = count(program);
+                    assertEquals(2L, function.execute(1L).asLong()); assertEquals(expectedCalls, count(program) - before); assertEquals(calls, interpretedCalls(active)); for (var target : active) assertTrue(valid(target)); assertTrue(valid(program.entryTarget(entryId("parkedFork")))); registry = Language.currentState(null).getThreads(); registry.enterCurrent();
                     try {
                         var self = registry.currentIdentity(); var children = new ArrayList<GuestThreadId>(); for (var value : registry.snapshot()) if (value instanceof GuestThreadId child && child != self) children.add(child); assertEquals(2, children.size());
                         for (var child : children) { assertEquals(GuestThreadStatus.MVAR, registry.status(child)); var carrier = Objects.requireNonNull(child.getCarrier().get()); carriers.add(carrier); assertTrue(carrier.isAlive()); assertNotSame(Thread.currentThread(), carrier);
-                            if (backend.equals("ast")) { assertThrows(UnsupportedCore.class, () -> registry.send(child, "unsupported cancellation")); assertEquals(GuestThreadStatus.MVAR, registry.status(child)); }
                         }
+                        var delivered = children.getFirst(); var waiting = children.getLast(); var payload = new Object();
+                        var request = registry.send(delivered, payload);
+                        assertEquals(delivered.getLogicalId(), request.getTargetId()); assertSame(payload, request.getPayload());
+                        assertSame(self, registry.currentIdentity()); assertNull(registry.poll(program.entryTarget(entryId("parkedFork")).getRootNode(), false), "Sender cannot steal the child's delivery");
+                        var carrier = Objects.requireNonNull(delivered.getCarrier().get()); carrier.join(5000);
+                        assertFalse(carrier.isAlive(), "External delivery terminates the selected child");
+                        assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState()); assertEquals(GuestThreadStatus.DIED, registry.status(delivered));
+                        assertEquals(GuestThreadStatus.MVAR, registry.status(waiting)); assertTrue(Objects.requireNonNull(waiting.getCarrier().get()).isAlive(), "Context close still has a genuinely blocked child to cancel");
                     } finally { registry.leaveCurrent(); }
                     assertEquals(0L, program.diagnostics().get("unsupportedTraps"));
                 } finally { context.leave(); }
@@ -190,9 +240,9 @@ public class ThreadInventoryNativeTest {
         for (var stage : List.of("pre", "post")) for (var backendName : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var module = module(stage); var proof = new ThreadInventoryCoreEvidence(module, "selfInventory"); assertEquals(3L, proof.compiledCalls(1), "Public and occurrences at indices zero and one; State# wrapper is inlined");
+                var module = module(stage); var compact = compact(stage); var proof = new ThreadInventoryCoreEvidence(module, compact, "selfInventory"); assertEquals(3L, proof.compiledCalls(1), "Public and occurrences at indices zero and one; State# wrapper is inlined");
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(Handoff.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_BOUNDARY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
-                var linked = instrument(CoreModules.reachable(module, "selfInventory")); ExecutableProgram program = backendName.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true); var entry = program.entryTarget("selfInventory"); var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
+                var linked = instrument(CoreModules.reachable(compact, entryId("selfInventory"))); ExecutableProgram program = backendName.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true); var entry = program.entryTarget(entryId("selfInventory")); var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
                 try {
                     for (int i = 0; i < 3; i++) { assertEquals(10L, Calls.target(entry, new Object[]{0L, 0L})); released(language); }
                     var active = targets(entry); proof.assertRoots(active); assertEquals(1, registry.snapshot().length); var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); var jvmci = Class.forName("jdk.vm.ci.runtime.JVMCI").getMethod("getRuntime").invoke(null);
@@ -204,7 +254,7 @@ public class ThreadInventoryNativeTest {
                         var sourceCalls = Map.of("lambda token", 1, "lambda wanted, threads, i", 2); assertEquals(proof.getLabels(), sourceCalls.keySet()); var observed = new LinkedHashMap<String, Integer>(); for (int i = 0; i < active.size(); i++) observed.put(active.get(i).getRootNode().getName(), interpreted.get(i)); System.out.println("THREAD_INVENTORY_BOUNDARY " + stage + "/" + backendName + " negative=" + negative + " interpreted=" + observed);
                         // Account for actual bypass paths, including previously compiled Java call sites.
                         assertEquals(1, interpreted.get(active.indexOf(entry)), "The outer entry deliberately bypasses code"); int sum = 0;
-                        for (int i = 0; i < active.size(); i++) { var target = active.get(i); int value = interpreted.get(i); assertTrue(value >= 0 && value <= sourceCalls.get(target.getRootNode().getName()), "Interpreted calls fit the original root: " + target.getRootNode().getName()); sum += value; }
+                        for (int i = 0; i < active.size(); i++) { var target = active.get(i); int value = interpreted.get(i); assertTrue(value >= 0 && value <= sourceCalls.get(proof.sourceLabel(target.getRootNode().getName())), "Interpreted calls fit the original root: " + target.getRootNode().getName()); sum += value; }
                         assertEquals(proof.compiledCalls(1), negative + sum, "Every source call is accounted for as compiled or interpreted"); assertTrue(negative < proof.compiledCalls(1), "The deliberate bypass misses required compiled entries"); assertThrows(AssertionError.class, () -> assertEquals(proof.compiledCalls(1), negative)); retained(active, entry, language);
                         reprofile.invoke(boundary); assertEquals(false, hasCode.invoke(boundary)); long beforeInstall = count(program); var callsBeforeInstall = interpretedCalls(active); install(active); assertEquals(true, hasCode.invoke(boundary)); assertEquals(beforeInstall, count(program), "Restoration executes no guest code"); assertEquals(callsBeforeInstall, interpretedCalls(active), "No settling call");
                         assertEquals(12L, Calls.target(entry, new Object[]{0L, 2L})); System.out.println("THREAD_INVENTORY_BOUNDARY " + stage + "/" + backendName + " positive=" + (count(program) - beforeInstall)); assertEquals(proof.compiledCalls(1), count(program) - beforeInstall); assertEquals(callsBeforeInstall, interpretedCalls(active)); retained(active, entry, language);
@@ -218,8 +268,8 @@ public class ThreadInventoryNativeTest {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var module = module("pre"); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(module, List.of("snapshotSize", "selfInventory")); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                var size = context.asValue(new EntryValue(program, "snapshotSize", 1)); var self = context.asValue(new EntryValue(program, "selfInventory", 1)); assertEquals(1L, size.execute(0L).asLong()); var registry = Language.currentState(null).getThreads(); var ready = new CountDownLatch(1); var release = new CountDownLatch(1); var failure = new AtomicReference<Throwable>();
+                var module = module("pre"); var compact = compact("pre"); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(compact, List.of(entryId("snapshotSize"), entryId("selfInventory"))); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+                var size = context.asValue(new EntryValue(program, entryId("snapshotSize"), 1)); var self = context.asValue(new EntryValue(program, entryId("selfInventory"), 1)); assertEquals(1L, size.execute(0L).asLong()); var registry = Language.currentState(null).getThreads(); var ready = new CountDownLatch(1); var release = new CountDownLatch(1); var failure = new AtomicReference<Throwable>();
                 var worker = new Thread(() -> { context.enter(); registry.enterCurrent(); try { assertEquals(10L, self.execute(0L).asLong()); ready.countDown(); assertTrue(release.await(20, TimeUnit.SECONDS)); } catch (Throwable error) { failure.set(error); ready.countDown(); } finally { registry.leaveCurrent(); context.leave(); } }); worker.start();
                 try {
                     assertTrue(ready.await(20, TimeUnit.SECONDS)); if (failure.get() != null) throw new AssertionError("concurrent guest failed", failure.get()); assertEquals(2L, size.execute(0L).asLong()); assertEquals(10L, self.execute(0L).asLong());
