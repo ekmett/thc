@@ -33,8 +33,8 @@ class TruffleStringExceptionTest {
         var selected = directory.resolve("exception-packages.json");
         Files.writeString(selected, Json.stringify(packages));
         var paths = new ArrayList<String>(); paths.add("@" + selected);
-        for (String file : List.of("THC.Prim.json", "StringPrimitives.json", "TruffleStringExceptions.json",
-                "THC.Exception.json", "THC.Internal.Exception.json")) paths.add(directory.resolve("core").resolve(file).toString());
+        for (String file : List.of("THC.Prim.cbd", "StringPrimitives.cbd", "TruffleStringExceptions.cbd",
+                "THC.Exception.cbd", "THC.Internal.Exception.cbd")) paths.add(directory.resolve("core").resolve(file).toString());
         return paths;
     }
     private static Value entry(Context context, List<String> inputs, String name, String backend) {

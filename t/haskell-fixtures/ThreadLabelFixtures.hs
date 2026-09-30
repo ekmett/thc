@@ -48,8 +48,8 @@ prepareThreadLabel root = do
       "bin/export-core.sh" (options ++ [source]) ""
     forM_ entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
-      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
-        "--output", report, core </> "ThreadLabelAudit.json"] ""
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:ThreadLabelAudit." ++ entry,
+        "--output", report, core </> "ThreadLabelAudit.cbd"] ""
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
         Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
@@ -79,7 +79,7 @@ prepareThreadLabel root = do
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
-          suffix <- "core/ThreadLabelAudit.json" : [entry ++ "-audit.json" | entry <- entries]]
+          suffix <- "core/ThreadLabelAudit.cbd" : [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

@@ -74,14 +74,14 @@ public class ThreadStatusNativeTest {
                 .option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "/core/ThreadStatusAudit.json").toPath()));
+                    var module = (Map<String, Object>) thc.CoreCbdFixtures.read(new File(directory, stage + "/core/ThreadStatusAudit.cbd").toPath());
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var linked = new LinkedHashMap<>(CoreModules.reachable(module, entry)); linked.put("instrument", true);
+                    var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:ThreadStatusAudit." + entry)); linked.put("instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, asyncExceptions) : new BytecodeProgram(language, linked, asyncExceptions);
-                    var function = context.asValue(new EntryValue(program, entry, reader == null ? 1 : 2));
+                    var function = context.asValue(new EntryValue(program, "main:ThreadStatusAudit." + entry, reader == null ? 1 : 2));
                     var label = stage + "/" + backend + "/async=" + asyncExceptions + "/" + entry;
                     for (int i = 0; i < 3; i++) assertEquals(expected, execute(function, reader, 0L), label);
-                    var active = targets(program.entryTarget(entry));
+                    var active = targets(program.entryTarget("main:ThreadStatusAudit." + entry));
                     var observe = program.entryTarget(module.get("unit") + ":ThreadStatusAudit.observe");
                     var identity = ((GuestRoot) observe.getRootNode()).getCoreIdentity();
                     assertNotNull(identity, "The exported observe binding has a Core identity");
@@ -114,7 +114,7 @@ public class ThreadStatusNativeTest {
                 try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
                     .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build()) {
-                    var source = new File(directory, stage + "/core/ThreadStatusAudit.json");
+                    var source = new File(directory, stage + "/core/ThreadStatusAudit.cbd");
                     context.initialize("thc"); context.enter();
                     EntryValue loaded;
                     try {

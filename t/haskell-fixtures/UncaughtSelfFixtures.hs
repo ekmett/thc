@@ -50,9 +50,9 @@ prepareUncaughtSelf root = do
     forM_ [("selfUncaught", "audit.json"), ("selfUncaughtIO", "io-audit.json")] $ \(entry, reportName) -> do
       let report = directory </> stage </> reportName
       (status, _, errors) <- readCreateProcessWithExitCode
-        ((proc "python3" (["bin/audit-core.py", "--entry", entry] ++
+        ((proc "python3" (["bin/audit-core.py", "--entry", "main:UncaughtSelfAudit." ++ entry] ++
           ["--io-main" | entry == "selfUncaughtIO"] ++
-          ["--output", report, core </> "UncaughtSelfAudit.json"])) { cwd = Just root }) ""
+          ["--output", report, core </> "UncaughtSelfAudit.cbd"])) { cwd = Just root }) ""
       unless (status == ExitSuccess) (die ("Uncaught self Core audit failed: " ++ errors))
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
@@ -80,7 +80,7 @@ prepareUncaughtSelf root = do
         ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"]
       artifacts = (directory </> "native/oracle") :
         [directory </> stage </> suffix | stage <- stages,
-          suffix <- ["core/UncaughtSelfAudit.json", "audit.json", "io-audit.json"]]
+          suffix <- ["core/UncaughtSelfAudit.cbd", "audit.json", "io-audit.json"]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

@@ -49,8 +49,8 @@ public class UncaughtSelfNativeTest {
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw").build()) {
-                var source = new File(root, "build/uncaught-self/" + stage + "/core/UncaughtSelfAudit.json");
-                var entry = context.eval("thc", CoreModules.request(List.of(source.getPath()), "selfUncaught", true, false, backend, true, false, null, true));
+                var source = new File(root, "build/uncaught-self/" + stage + "/core/UncaughtSelfAudit.cbd");
+                var entry = context.eval("thc", CoreModules.request(List.of(source.getPath()), "main:UncaughtSelfAudit.selfUncaught", true, false, backend, true, false, null, true));
                 var failure = assertThrows(PolyglotException.class, () -> entry.execute(0L));
                 assertGuestFailure(failure, backend + " " + stage);
                 assertTrue(entry.invokeMember("compile").asBoolean());
@@ -59,7 +59,7 @@ public class UncaughtSelfNativeTest {
                 assertGuestFailure(installed, backend + " " + stage + " compiled entry");
                 var after = (Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString());
                 assertTrue(((Number) after.get("compiledEntries")).longValue() > ((Number) before.get("compiledEntries")).longValue(), backend + " " + stage + " installed guest code");
-                var io = context.eval("thc", CoreModules.request(List.of(source.getPath()), "selfUncaughtIO", true, false, backend, true, true, null, true));
+                var io = context.eval("thc", CoreModules.request(List.of(source.getPath()), "main:UncaughtSelfAudit.selfUncaughtIO", true, false, backend, true, true, null, true));
                 assertFalse(io.canExecute(), stage + " IO action must use runIO");
                 assertTrue(io.canInvokeMember("runIO"));
                 var ioFailure = assertThrows(PolyglotException.class, () -> io.invokeMember("runIO"));

@@ -39,7 +39,7 @@ class ScalarExceptionResultsNativeTest {
         return cases.stream();
     }
     private Map<String, Object> module(String stage) throws Exception {
-        return object(Json.parse(Files.readString(directory.resolve(stage + "/core/ScalarExceptionResultsAudit.json"))));
+        return object(thc.CoreCbdFixtures.read(directory.resolve(stage + "/core/ScalarExceptionResultsAudit.cbd")));
     }
     private record Row(long input, long output) {}
     private Map<String, List<Row>> oracle() throws Exception {
@@ -77,7 +77,7 @@ class ScalarExceptionResultsNativeTest {
     @Test void genuineScalarProofsAndMalformedBoundaries() throws Exception {
         oracle();
         for (var stage : list("pre", "post")) for (var entry : ENTRIES) {
-            var linked = CoreModules.reachable(module(stage), entry, true);
+            var linked = CoreModules.reachable(module(stage), "main:ScalarExceptionResultsAudit." + entry, true);
             var primitives = calls(linked).stream().filter(call -> Set.of("catch#", "raiseIO#", "maskAsyncExceptions#", "maskUninterruptible#", "unmaskAsyncExceptions#").contains(expression(call.get(1)).get(1))).toList();
             assertFalse(primitives.isEmpty(), stage + "/" + entry + " retains original exception primops");
             var expected = entry.endsWith("Word") ? "WordRep" : entry.endsWith("Addr") ? "AddrRep" : "IntRep";
@@ -110,9 +110,9 @@ class ScalarExceptionResultsNativeTest {
             .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000").build()) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = with(CoreModules.reachable(module(stage), entry, true), "instrument", true);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = with(CoreModules.reachable(module(stage), "main:ScalarExceptionResultsAudit." + entry, true), "instrument", true);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, async) : new BytecodeProgram(language, linked, async);
-                var target = program.entryTarget(entry); var function = context.asValue(new EntryValue(program, entry, 1)); var label = stage + "/" + backend + "/" + entry + "/async=" + async;
+                var target = program.entryTarget("main:ScalarExceptionResultsAudit." + entry); var function = context.asValue(new EntryValue(program, "main:ScalarExceptionResultsAudit." + entry, 1)); var label = stage + "/" + backend + "/" + entry + "/async=" + async;
                 CheckedConsumer<Row> check = row -> {
                     assertEquals(row.output(), function.execute(row.input()).asLong(), label); assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(target.getRootNode()), label);
                     assertEquals(0, language.getHandoffState().get().getArguments().getDepth(), label); assertEquals(0, language.getHandoffState().get().getResults().getDepth(), label);
@@ -120,7 +120,7 @@ class ScalarExceptionResultsNativeTest {
                 for (var row : selected) check.accept(row); assertTrue(function.invokeMember("compile").asBoolean(), label); valid(target, label + " installed");
                 long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); check.accept(selected.getLast()); // No settling invocation after installation.
                 assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, label + " first installed call entered guest code");
-                assertSame(target, program.entryTarget(entry), label + " same guest identity"); valid(target, label + " retained after first installed call");
+                assertSame(target, program.entryTarget("main:ScalarExceptionResultsAudit." + entry), label + " same guest identity"); valid(target, label + " retained after first installed call");
                 assertEquals(0L, program.diagnostics().get("unsupportedTraps"), label); assertEquals(0L, program.diagnostics().get("blackholes"), label);
             } finally { context.leave(); }
         }

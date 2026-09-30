@@ -50,8 +50,8 @@ class TruffleStringTest {
             }
         }
         var modules = new ArrayList<Map<String, Object>>();
-        for (String file : List.of("THC.Prim.json", "StringPrimitives.json"))
-            modules.add((Map<String, Object>) Json.parse(Files.readString(DATA.resolve("core").resolve(file))));
+        for (String file : List.of("THC.Prim.cbd", "StringPrimitives.cbd"))
+            modules.add(thc.CoreCbdFixtures.read(DATA.resolve("core").resolve(file)));
         return CoreModules.merge(modules);
     }
     private static ExecutableProgram program(String backend, String entry) throws Exception {

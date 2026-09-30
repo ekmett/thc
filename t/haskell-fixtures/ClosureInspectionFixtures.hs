@@ -38,8 +38,8 @@ prepareClosureInspection root = do
   _ <- run root [("THC_CORE_OUT", output </> "core"), ("THC_GHC_OUT", output </> "ghc")]
     "bin/export-core.sh" [source] ""
   forM_ entries $ \entry -> do
-    _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
-      "--output", directory </> entry ++ ".audit.json", directory </> "core/ClosureInspectionAudit.json"] ""
+    _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:ClosureInspectionAudit." ++ entry,
+      "--output", directory </> entry ++ ".audit.json", directory </> "core/ClosureInspectionAudit.cbd"] ""
     pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
@@ -58,7 +58,7 @@ prepareClosureInspection root = do
     ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
     ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
   artifactHashes <- hashes root ([directory </> "oracle.tsv", directory </> "native/oracle",
-    directory </> "core/ClosureInspectionAudit.json"] ++ [directory </> entry ++ ".audit.json" | entry <- entries])
+    directory </> "core/ClosureInspectionAudit.cbd"] ++ [directory </> entry ++ ".audit.json" | entry <- entries])
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entries" .= entries, "nativeRows" .= (45 :: Int),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]

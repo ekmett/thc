@@ -52,7 +52,7 @@ prepareStableNames root = do
     audits <- fmap concat $ forM entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
       audited <- runLogged 30 root logs (stage ++ "-audit-" ++ entry) [] "python3"
-        ["bin/audit-core.py", "--entry", entry, "--output", report, core </> "StableNames.json"]
+        ["bin/audit-core.py", "--entry", "main:StableNames." ++ entry, "--output", report, core </> "StableNames.cbd"]
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
         Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
@@ -60,7 +60,7 @@ prepareStableNames root = do
           KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
         _ -> die ("Strict stable-name audit rejected " ++ entry)
       pure (report : commandArtifacts audited)
-    pure ((core </> "StableNames.json") : commandArtifacts exported ++ audits)
+    pure ((core </> "StableNames.cbd") : commandArtifacts exported ++ audits)
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = [source, driver, "thc.cabal", "t/haskell-fixtures/Main.hs",

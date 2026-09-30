@@ -52,7 +52,7 @@ prepareGhcBCO root = do
     audits <- fmap concat $ forM entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
       audited <- runLogged 30 root logs (stage ++ "-audit-" ++ entry) [] "python3"
-        ["bin/audit-core.py", "--entry", entry, "--output", report, core </> "GhcBCO.json"]
+        ["bin/audit-core.py", "--entry", "main:GhcBCO." ++ entry, "--output", report, core </> "GhcBCO.cbd"]
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
         Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
@@ -60,7 +60,7 @@ prepareGhcBCO root = do
           KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
         _ -> die ("Strict BCO audit rejected " ++ entry)
       pure (report : commandArtifacts audited)
-    pure ((core </> "GhcBCO.json") : commandArtifacts exported ++ audits)
+    pure ((core </> "GhcBCO.cbd") : commandArtifacts exported ++ audits)
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = [source, driver, "thc.cabal", "t/haskell-fixtures/Main.hs",

@@ -52,8 +52,8 @@ prepareDeepEvaluation root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "bin/export-core.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=probe", source])
     audited <- run (stage ++ "-audit") [] "python3"
-      ["bin/audit-core.py", "--entry", "probe", "--output", directory </> stage </> "audit.json",
-       core </> "DeepEvaluation.json", core </> "THC.InterfaceClosure.json"]
+      ["bin/audit-core.py", "--entry", "main:DeepEvaluation.probe", "--output", directory </> stage </> "audit.json",
+       core </> "DeepEvaluation.cbd", core </> "THC.InterfaceClosure.cbd"]
     pure [exported, audited]
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
@@ -71,7 +71,7 @@ prepareDeepEvaluation root = do
       commands = [version, compiled, observed] ++ concat stages
       artifacts = [binary, "build/compiler/plugin.json", shared] ++ concatMap commandArtifacts commands ++
         [directory </> stage </> file | stage <- ["pre", "post"],
-          file <- ["core/DeepEvaluation.json", "core/THC.InterfaceClosure.json", "audit.json"]]
+          file <- ["core/DeepEvaluation.cbd", "core/THC.InterfaceClosure.cbd", "audit.json"]]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object
