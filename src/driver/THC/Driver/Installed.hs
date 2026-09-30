@@ -13,7 +13,8 @@
 -- GHC-independent discovery and subprocess boundary. Only thc-interface links
 -- the selected GHC API. Never substitute ordinary unfoldings for a full payload.
 module THC.Driver.Installed
-  ( InstalledContext(..), InstalledUnit(..), InstalledCore(..), MissingCore(..)
+  ( InstalledContext(..), InterfaceWay(..), interfaceWayName, packageGlobalArguments, helperDatabases, installedViewIdentity
+  , InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe
   , emptyRegistration, modulelessRegistration
@@ -46,6 +47,7 @@ import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), pathSeparator, takeFileName)
 import System.IO (IOMode(ReadMode), hClose, hSetBinaryMode, withBinaryFile)
+import qualified System.Info as Host
 import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
                        terminateProcess, waitForProcess, withCreateProcess)
 import System.Timeout (timeout)
@@ -55,13 +57,36 @@ import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Error (lenientDecode)
 import THC.Compact.Module (readModuleMetadata)
 
+data InterfaceWay = DynamicInterfaces | VanillaInterfaces deriving (Eq, Show)
+
+interfaceWayName :: InterfaceWay -> String
+interfaceWayName DynamicInterfaces = "dynamic"
+interfaceWayName VanillaInterfaces = "vanilla"
+
 data InstalledContext = InstalledContext
   { installedHelper :: FilePath, installedLibdir :: FilePath
   , installedPackageTool :: FilePath, installedGlobalDb :: FilePath
   , installedDatabases :: [FilePath], installedCompiler :: Value
   , installedGhc :: FilePath
   , installedSource :: Maybe FilePath
+  , installedInterfaceWay :: InterfaceWay
+  , installedLibdirGlobalDb :: FilePath
   } deriving (Eq, Show)
+
+packageGlobalArguments :: InstalledContext -> [String]
+packageGlobalArguments context = ["--global", "--global-package-db", installedGlobalDb context,
+  "--no-user-package-db", "--expand-pkgroot"]
+
+helperDatabases :: InstalledContext -> [FilePath]
+helperDatabases context = [installedGlobalDb context |
+  installedGlobalDb context /= installedLibdirGlobalDb context] ++ installedDatabases context
+
+-- | Bind replay and acquisition receipts to the actual selected package stack.
+installedViewIdentity :: InstalledContext -> Value
+installedViewIdentity context = object
+  ["libdir" .= installedLibdir context, "globalDatabase" .= installedGlobalDb context,
+   "implicitGlobalDatabase" .= installedLibdirGlobalDb context,
+   "databases" .= helperDatabases context, "way" .= interfaceWayName (installedInterfaceWay context)]
 
 data InstalledUnit = InstalledUnit
   { registeredId :: String, registration :: String, installedDepends :: [String]
@@ -132,14 +157,15 @@ installedContext selectedGhc selectedPkg helper databases compiler = do
   dbs <- mapM canonicalizePath databases
   unless (length dbs == length (nub dbs) && global `notElem` dbs)
     (fail "duplicate selected installed-Core package database")
-  pure (InstalledContext helper libdir pkg global dbs compiler ghc Nothing)
+  pure (InstalledContext helper libdir pkg global dbs compiler ghc Nothing
+    (if Host.os == "mingw32" then VanillaInterfaces else DynamicInterfaces) global)
 
 -- | Cabal's parsed registration is authoritative, including hidden modules and
 -- exact reexport providers. Do not invent bodies for native-only/facade units.
 discoverInstalled :: InstalledContext -> String -> IO InstalledUnit
 discoverInstalled context identifier = do
   description <- command (installedPackageTool context)
-    (["--global", "--no-user-package-db", "--expand-pkgroot"] ++
+    (packageGlobalArguments context ++
      concatMap (\db -> ["--package-db", db]) (installedDatabases context) ++
      ["--ipid", "describe", identifier])
   info <- case parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack description)) of
@@ -155,11 +181,15 @@ discoverInstalled context identifier = do
   paths <- forM names $ \name -> do
     unless (not (null name) && all (\c -> isAlphaNum c || c `elem` ("._'" :: String)) name &&
             all (not . null) (wordsByDot name)) (fail "invalid installed module name")
-    let relative = map (\c -> if c == '.' then pathSeparator else c) name ++ ".dyn_hi"
+    let suffix = case installedInterfaceWay context of
+          DynamicInterfaces -> ".dyn_hi"
+          VanillaInterfaces -> ".hi"
+        relative = map (\c -> if c == '.' then pathSeparator else c) name ++ suffix
     matches <- filterM doesFileExist [directory </> relative | directory <- directories]
     path <- case matches of
       [found] -> canonicalizePath found
-      _ -> fail ("expected exactly one dynamic interface for " ++ identifier ++ ":" ++ name)
+      _ -> fail ("expected exactly one " ++ interfaceWayName (installedInterfaceWay context) ++
+        " interface for " ++ identifier ++ ":" ++ name)
     pure (name, path)
   reexports <- fmap concat $ forM (Package.exposedModules info) $ \entry ->
     case exposedReexport entry of
@@ -193,8 +223,8 @@ installedProvenance :: InstalledContext -> InstalledUnit -> Value
 installedProvenance context unit = object $
   ["registeredUnit" .= registeredId unit, "registration" .= registration unit,
    "compiler" .= installedCompiler context, "libdir" .= installedLibdir context,
-   "packageDatabases" .= (installedGlobalDb context : installedDatabases context),
-   "way" .= ("dynamic" :: String), "coverage" .= ("registered-owned-modules" :: String),
+   "packageDatabases" .= (installedLibdirGlobalDb context : helperDatabases context),
+   "way" .= interfaceWayName (installedInterfaceWay context), "coverage" .= ("registered-owned-modules" :: String),
    "interfaces" .= [object ["module" .= name, "path" .= path] | (name, path) <- installedInterfaces unit],
    "reexports" .= installedReexports unit, "depends" .= installedDepends unit] ++
    ["configuredSource" .= source | Just source <- [installedSource context]]
@@ -205,7 +235,7 @@ installedProvenance context unit = object $
 installedLayoutHeaders :: InstalledContext -> InstalledUnit -> IO (String, [FilePath])
 installedLayoutHeaders context unit = do
   let pkg = installedPackageTool context
-      global = ["--global", "--no-user-package-db", "--expand-pkgroot"]
+      global = packageGlobalArguments context
       selected = global ++
         concatMap (\db -> ["--package-db", db]) (installedDatabases context)
   ids <- words <$> command pkg (global ++ ["field", "rts", "id", "--simple-output"])
@@ -237,8 +267,8 @@ installedLayoutHeaders context unit = do
 helperCommand :: InstalledContext -> InstalledUnit -> (String, FilePath) -> [String]
 helperCommand context unit (name, path) =
   ["--libdir", installedLibdir context, "--unit", registeredId unit,
-   "--module", name, "--interface", path, "--way", "dynamic", "--source-notes"] ++
-  concatMap (\db -> ["--package-db", db]) (installedDatabases context)
+     "--module", name, "--interface", path, "--way", interfaceWayName (installedInterfaceWay context), "--source-notes"] ++
+    concatMap (\db -> ["--package-db", db]) (helperDatabases context)
 
 -- Exact registered dependency closure, including mutable boot/-inplace units.
 -- This is an acceleration hint, never a substitute for ordinary acquisition:
@@ -317,13 +347,14 @@ probeInstalledUnits context requested units = do
         "interfaces" .= [object ["unit" .= identifier, "module" .= name, "interface" .= path]
                          | (identifier, name, path) <- entries]]
       arguments = ["--libdir", installedLibdir context, "--unit", registeredId requested,
-                   "--way", "dynamic", "--probe-inventory"] ++
-        concatMap (\db -> ["--package-db", db]) (installedDatabases context)
+                   "--way", interfaceWayName (installedInterfaceWay context), "--probe-inventory"] ++
+        concatMap (\db -> ["--package-db", db]) (helperDatabases context)
   (status, output, diagnostic) <- boundedProcessInput (installedHelper context) arguments
     (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode request))))
   response <- either (fail . ("invalid interface probe: " ++)) pure
     (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
   unless (status == ExitSuccess && valueAt response "schema" == Just (1 :: Int) &&
+          valueAt response "way" == Just (interfaceWayName (installedInterfaceWay context)) &&
           valueAt response "status" == Just ("probed" :: String))
     (fail ("interface probe unavailable: " ++ take 2000 output ++ take 2000 diagnostic))
   rows <- required response "interfaces" :: IO [Value]
@@ -431,7 +462,7 @@ acquireInstalledWithJobs jobs context unit = do
                   valueAt response "capability" == Just ("complete-interface-core" :: String) &&
                   valueAt response "unit" == Just (registeredId unit) &&
                   valueAt response "module" == Just name && valueAt response "interface" == Just path &&
-                  valueAt response "way" == Just ("dynamic" :: String) &&
+                  valueAt response "way" == Just (interfaceWayName (installedInterfaceWay context)) &&
                   valueAt response "core" == (Nothing :: Maybe Value))
             (fail "inconsistent missing-Core response")
           pure (Left (MissingCore (registeredId unit) name path))

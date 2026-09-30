@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
-import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -123,8 +122,8 @@ class WindowsDistributionTest {
         assertEquals(manifests.subList(0, 1), audited);
         for (var manifest : manifests) {
             var output = root.resolve(manifest).getParent().getParent();
-            var original = (List<Map<String, Object>>) document(output.resolve("core/Main.json")).get("bindings");
-            var host = (List<Map<String, Object>>) document(output.resolve("core/THC.WindowsRunMain.json")).get("bindings");
+            var original = (List<Map<String, Object>>) CoreCbdFixtures.read(output.resolve("core/Main.cbd")).get("bindings");
+            var host = (List<Map<String, Object>>) CoreCbdFixtures.read(output.resolve("core/THC.WindowsRunMain.cbd")).get("bindings");
             var main = single(original, "id", "main:Main.main");
             assertEquals(0L, main.get("arity"), "The actual no-interface-pragmas main remains a thunk");
             assertEquals("IO ()", main.get("type"));
@@ -158,20 +157,14 @@ class WindowsDistributionTest {
         }
         assertEquals(1, new HashSet<>(units).size(), "All CLI modes must reuse the same exact support publication");
         var unit = units.getFirst();
-        var direct = (Map<String, String>) unit.get("json");
-        Map<String, String> bundle;
-        if (direct == null) bundle = (Map<String, String>) unit.get("bundle");
-        else {
-            assertFalse(unit.containsKey("bundle"));
-            var symbols = (Map<String, String>) unit.get("symbols");
-            for (var artifact : List.of(direct, symbols)) assertEquals(artifact.get("sha256"), digest(Path.of(artifact.get("path"))));
-            // The producer keeps the original validated archive for its native
-            // source-build receipts; the runtime itself selects only the pair.
-            var publication = document(Path.of(direct.get("path")).getParent().resolve("publication.json"));
-            var published = (Map<String, Object>) publication.get("unit");
-            for (var key : List.of("id", "modules", "json", "symbols")) assertEquals(unit.get(key), published.get(key), key);
-            bundle = (Map<String, String>) publication.get("source");
-        }
+        for (var legacy : List.of("bundle", "json", "symbols")) assertFalse(unit.containsKey(legacy));
+        var selected = (List<Map<String, Object>>) unit.get("modules");
+        assertFalse(selected.isEmpty());
+        var first = (Map<String, String>) selected.getFirst().get("compact");
+        var publication = document(Path.of(first.get("path")).getParent().resolve("publication.json"));
+        var published = (Map<String, Object>) publication.get("unit");
+        for (var key : List.of("id", "modules", "targetLayout")) assertEquals(unit.get(key), published.get(key), key);
+        var bundle = (Map<String, String>) publication.get("source");
         assertEquals(bundle.get("sha256"), digest(Path.of(bundle.get("path"))));
         try (var projected = new ZipFile(bundle.get("path"))) {
             var inputs = document(projected, "inplace-manifest.json");
@@ -196,43 +189,47 @@ class WindowsDistributionTest {
                 var projectedModules = new LinkedHashMap<Object, Map<String, Object>>();
                 for (var module : (List<Map<String, Object>>) document(projected, "manifest.json").get("modules"))
                     projectedModules.put(module.get("name"), module);
-                var selected = (List<Map<String, Object>>) unit.get("modules");
                 assertEquals(211, fullModules.size());
                 assertEquals(210, selected.size());
+                assertEquals(document(projected, "manifest.json").get("modules"), publication.get("modules"));
                 for (var module : selected) {
                     var original = single(fullModules, "name", module.get("name"));
                     assertEquals(original, projectedModules.get(module.get("name")), "original source projection retains its full record");
-                    for (var field : original.entrySet()) if (direct == null || !field.getKey().equals("index"))
+                    for (var field : original.entrySet()) if (!field.getKey().equals("index"))
                         assertEquals(field.getValue(), module.get(field.getKey()), field.getKey());
+                    var compact = (Map<String, String>) module.get("compact");
+                    assertEquals("thc-cbd-v1", compact.get("format"));
+                    assertEquals(module.get("sha256"), compact.get("sha256"));
+                    assertEquals(compact.get("sha256"), digest(Path.of(compact.get("path"))));
                     var member = (String) module.get("path");
                     // Source-rich genuine modules can each exceed the test heap.
                     // Compare every byte and the checked digest with bounded buffers.
                     var hash = MessageDigest.getInstance("SHA-256");
                     try (var expected = full.getInputStream(full.getEntry(member));
                          var actual = projected.getInputStream(projected.getEntry(member));
-                         var pair = direct == null ? null : new RandomAccessFile(direct.get("path"), "r")) {
-                        if (pair != null) pair.seek((Long) module.get("start"));
+                         var compactInput = Files.newInputStream(Path.of(compact.get("path")))) {
                         var left = new byte[64 * 1024];
                         var right = new byte[left.length];
-                        var published = new byte[left.length];
+                        var publishedBytes = new byte[left.length];
                         while (true) {
                             int count = expected.readNBytes(left, 0, left.length);
                             assertEquals(count, actual.readNBytes(right, 0, right.length), member);
+                            assertEquals(count, compactInput.readNBytes(publishedBytes, 0, publishedBytes.length), member);
                             if (count == 0) break;
                             assertEquals(-1, Arrays.mismatch(left, 0, count, right, 0, count), member);
-                            if (pair != null) {
-                                pair.readFully(published, 0, count);
-                                assertEquals(-1, Arrays.mismatch(left, 0, count, published, 0, count), member);
-                            }
+                            assertEquals(-1, Arrays.mismatch(left, 0, count, publishedBytes, 0, count), member);
                             hash.update(right, 0, count);
                         }
-                        if (pair != null) assertEquals(module.get("end"), pair.getFilePointer(), "exact published module span");
                     }
                     assertEquals(module.get("sha256"), HexFormat.of().formatHex(hash.digest()));
                 }
                 var archived = single(fullModules, "name", "GHC.Internal.Conc.Bound");
                 assertNull(projected.getEntry((String) archived.get("path")));
-                var module = document(full, (String) archived.get("path"));
+                var archivedFile = temporary.resolve("GHC.Internal.Conc.Bound.cbd");
+                try (var input = full.getInputStream(full.getEntry((String) archived.get("path")))) {
+                    Files.copy(input, archivedFile);
+                }
+                var module = CoreCbdFixtures.read(archivedFile);
                 assertTrue(assertThrows(IllegalArgumentException.class, () -> CoreModules.INSTANCE.merge(List.of(module)))
                     .getMessage().contains("Unsupported foreign"));
             }

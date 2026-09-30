@@ -13,14 +13,23 @@
 module PinnedFlagsTests (tests) where
 
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
-import THC.Driver.PinnedFlags (pinnedLibraryFlags)
+import THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions)
 import Data.List (elemIndex, sort)
 import THC.Driver.Installed (InstalledUnit(..))
 import THC.Driver.Wired (pinnedDependencyOrder)
 
 tests :: Test
 tests = TestLabel "pinned library configuration evidence" $ TestList $
-  [ TestCase $ assertEqual "stock native text disables the upstream SIMD default"
+  [ TestCase $ assertEqual "native Windows configure selects upstream Windows branches"
+      (Right ["--configure-option=--host=x86_64-unknown-mingw32"])
+      (pinnedConfigureOptions "mingw32" [("Host platform", "x86_64-unknown-mingw32")])
+  , TestCase $ rejects (pinnedConfigureOptions "mingw32" [])
+  , TestCase $ rejects (pinnedConfigureOptions "mingw32" [("Host platform", "")])
+  , TestCase $ assertEqual "Unix configure arguments remain unchanged" (Right [])
+      (pinnedConfigureOptions "linux" [])
+  , TestCase $ assertEqual "macOS configure arguments remain unchanged" (Right [])
+      (pinnedConfigureOptions "darwin" [])
+  , TestCase $ assertEqual "stock native text disables the upstream SIMD default"
       (Right ["-f-simdutf"]) (pinnedLibraryFlags "text" nativeText [])
   , TestCase $ assertEqual "registered SIMD module enables the matching source flag"
       (Right ["-fsimdutf"])

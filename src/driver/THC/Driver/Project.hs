@@ -119,7 +119,7 @@ data ExportContext = ExportContext
   , contextNativeTools :: Value
   , contextVerifyArtifacts :: Bool
   , contextNoLinkUnit :: Maybe String
-  , contextCoreLibdir :: Maybe FilePath
+  , contextCoreView :: Maybe InstalledContext
   , contextCoreInterfaces :: Map.Map String FilePath }
 
 boundary :: String
@@ -526,7 +526,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
           Just _ -> do
             when (installedPolicy == "pinned") $ do
               request <- field supplied "request"
-              require (jsonField request "coreInterfaceView" == Just (installedLibdir helperContext))
+              require (jsonField request "coreInterfaceView" == Just (installedViewIdentity helperContext))
                 "captured installed Core uses a different pinned interface view"
             Just <$> readCapturedInstalledBundles verifyArtifacts (installedCompiler originalContext) originalRegistrations path
     bundles <- case retained of
@@ -552,8 +552,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
                   installedOwner item `notElem` registered && Map.notMember (installedOwner item) byId) bundles)
       "installed Core owner collides with another Cabal unit"
     pure (Map.fromList bundles, helperContext)
-  let coreContext = context { contextCoreLibdir = if installedPolicy == "pinned"
-        then Just (installedLibdir acquiredContext) else Nothing }
+  let coreContext = context { contextCoreView = if installedPolicy == "pinned"
+        then Just acquiredContext else Nothing }
   captured <- traverse (\_ -> prepareGlobalBundles coreContext project targetComponent byId localComponents globals) capturedPath
   selectedPackage <- field (unitValue selected) "pkg-name"
   selectedComponent <- field (unitValue selected) "component-name"
@@ -695,12 +695,7 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
           "--builddir=" ++ componentDist, "lib:runtime"] root (Just environment)
       let present = [identifier | record <- described, Just identifier <- [jsonField record "id" :: Maybe String]]
           missing = [unit | unit <- ordered, unitId unit /= unitId runtime, unitId unit `notElem` present]
-      dependencies <- if installedPolicy == "pinned" && Host.os == "mingw32"
-        then do
-          require (null missing)
-            "complete pinned runtime-sidecar Core is not supported on Windows; use --installed-core required with complete installed Core"
-          pure []
-        else do
+      dependencies <- do
           original <- prepareInterfaceHelper context root
           registrations <- mapM (discoverInstalled original . unitId) missing
           helper <- if installedPolicy == "pinned" then
@@ -734,10 +729,12 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  buildDirectory <- lookupEnv "THC_CABAL_BUILD_DIR"
   let ghc = contextGhc context
       pkg = maybe (takeDirectory ghc </> "ghc-pkg") id (contextGhcPkg context)
       selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
-        ["--disable-shared" | Host.os == "mingw32"]
+        ["--disable-shared" | Host.os == "mingw32"] ++
+        ["--builddir=" ++ directory | Just directory <- [buildDirectory]]
   runCommand True cabal ("build" : selection) root
   (status, output, diagnostic) <- readCreateProcessWithExitCode
     (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
@@ -751,7 +748,7 @@ prepareInterfaceHelper context root = do
   original <- installedContext ghc pkg helper [] (object
     ["id" .= contextCompiler context, "abi" .= contextAbi context,
      "platform" .= contextPlatform context, "way" .= (exportInterfaceWay ++ "-nonprofiling")])
-  pure (maybe original (viewContext original . takeDirectory) (contextCoreLibdir context))
+  pure (maybe original id (contextCoreView context))
 
 -- The probe retains complete installed source/native identities. A successful
 -- selection receipt can then avoid reopening an unchanged archive; explicit
@@ -952,7 +949,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
             modules = sortOn fst (coreModules core)
             nativeDirectory = temporary </> "native-link"
             arguments = ["-no-user-package-db"] ++
-              concatMap (\path -> ["-package-db", path]) (installedDatabases context) ++
+              concatMap (\path -> ["-package-db", path]) (helperDatabases context) ++
               ["-package-id", registered] ++ map ("-I" ++) includes
         require (all cacheName [compilerId, compilerAbi, compilerPlatform, registered])
           "installed Core compiler or registered package-cache identity is invalid"
@@ -988,7 +985,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
               "dependencies" .= installedDepends registrationUnit]
             buildKey = shaHex (BL.toStrict (encode (object inputFields)))
             exporter = object ["helperHash" .= helperHash, "driverHash" .= driverHash,
-              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String]),
+              "options" .= (["post-tidy", "unit-qualified", "source-notes", interfaceWayName (installedInterfaceWay context)] :: [String]),
               "foreignLinkRecipe" .= ("installed-native-fcall-v1" :: String)]
             exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v2" :: String, buildKey, exporter)))
             inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
@@ -1420,7 +1417,7 @@ globalLocation context units inputs unit = do
          contextAbi context, contextPlatform context, unitId unit,
          sourceHash, unitDepends unit, contextNativeTools context)))
       providerKey = maybe globalKey (\path -> shaHex (BL.toStrict (encode
-        ("core-interface-view-v1" :: String, globalKey, path)))) (contextCoreLibdir context)
+        ("core-interface-view-v2" :: String, globalKey, installedViewIdentity path)))) (contextCoreView context)
       -- Repository packages depending on a project library are Cabal 'inplace'
       -- builds, not immutable store IDs. Their key must follow that library's
       -- actual configured/native inputs and every intervening package identity.
@@ -1455,7 +1452,7 @@ exporterIdentity context = do
                                 "foreign-import-provenance", "foreign-export-associations", "foreign-export-registration",
                                 "native-debug-info", "-dynamic", "-dcore-lint",
                                 "-fplugin-trustworthy"] :: [String])] ++
-                 ["coreInterfaceView" .= path | Just path <- [contextCoreLibdir context]]
+                 ["coreInterfaceView" .= installedViewIdentity path | Just path <- [contextCoreView context]]
 
 prepareGlobalBundles :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [(Unit, Component)] -> [Unit] -> IO (Map.Map String Bundle)
 prepareGlobalBundles _ _ _ _ _ [] = pure Map.empty
@@ -1487,7 +1484,7 @@ prepareGlobalBundles context project target planned locals units = do
       let closure = Map.elems (Map.fromList [(unitId unit, unit) | unit <- concat closures])
           request = object $ ["compiler" .= contextCompiler context, "abi" .= contextAbi context,
             "platform" .= contextPlatform context, "units" .= map sourceIdentity closure, "inputs" .= inputs] ++
-            ["coreInterfaceView" .= view | Just view <- [contextCoreLibdir context]]
+            ["coreInterfaceView" .= installedViewIdentity view | Just view <- [contextCoreView context]]
       -- This is the current consumer snapshot, not invented historical producer
       -- evidence. An explicit retained-stage handoff must bind its bundles to it.
       atomicJson (path ++ ".request.json") request
@@ -1546,7 +1543,7 @@ replayInterfacePath :: FilePath -> FilePath
 replayInterfacePath path = path ++ ".interfaces"
 
 replayInterfacesReady :: ExportContext -> Bundle -> IO Bool
-replayInterfacesReady context bundle = case contextCoreLibdir context of
+replayInterfacesReady context bundle = case contextCoreView context of
   Nothing -> pure True
   Just _ | null (bundleModules bundle) -> pure True
          | otherwise -> do
@@ -1574,7 +1571,7 @@ readGlobalForReplay context path unit dependencies buildKey exportKey = do
       pure (if ready then Just bundle else Nothing)
 
 publishReplayInterfaces :: ExportContext -> FilePath -> [String] -> Bool -> FilePath -> IO ()
-publishReplayInterfaces context objects modules dynamicHi bundle = forM_ (contextCoreLibdir context) $ \_ -> unless (null modules) $ do
+publishReplayInterfaces context objects modules dynamicHi bundle = forM_ (contextCoreView context) $ \_ -> unless (null modules) $ do
   let destination = replayInterfacePath bundle
   ready <- doesFileExist (destination </> "complete")
   unless ready $ do
@@ -1725,8 +1722,10 @@ captureGlobalUnits context project target planned requested missing validateInpu
                      ("THC_PROXY_INTERFACE_HELPER", installedHelper helper),
                      ("THC_PROXY_INTERFACE_LIBDIR", installedLibdir helper),
                      ("THC_PROXY_GLOBAL_UNITS", unlines (map unitId requested))] ++
-                     [("THC_PROXY_CORE_LIBDIR", path) | Just path <- [contextCoreLibdir context]]
-        environment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_CORE_LIBDIR" : map fst overrides)) inherited
+                     concat [[("THC_PROXY_CORE_LIBDIR", installedLibdir view),
+                       ("THC_PROXY_CORE_DATABASES", Text.unpack (Text.decodeUtf8 (BL.toStrict (encode (helperDatabases view)))))]
+                       | Just view <- [contextCoreView context]]
+        environment = overrides ++ filter (\(key, _) -> key `notElem` ("THC_PROXY_CORE_DATABASES" : "THC_PROXY_CORE_LIBDIR" : map fst overrides)) inherited
     runCommandWithEnv True "cabal" arguments project (Just environment)
     plan <- readJson (dist </> "cache/plan.json")
     isolatedCompiler <- field plan "compiler-id"
@@ -2002,7 +2001,7 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
                                            | (path, digest) <- nativeInputs],
                      "dependencies" .= [object ["id" .= identifier, "buildKey" .= identity]
                                         | (identifier, identity) <- dependencies]] ++
-                    ["coreInterfaceView" .= path | Just path <- [contextCoreLibdir context]] ++
+                    ["coreInterfaceView" .= installedViewIdentity path | Just path <- [contextCoreView context]] ++
                     maybe [] (\recipe -> ["packageNativeRecipe" .= normalized recipe]) nativePieces ++
                     maybe [] (\recipe -> ["packageScalarRecipe" .= scalarBuildInputs recipe]) scalar ++
                     maybe [] (\recipe -> ["runtimeShimRecipe" .= runtimeShimInputs recipe]) runtimeShim
@@ -2101,11 +2100,11 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
            "-package-db", contextPluginDb context, "-fplugin-trustworthy"] ++ pluginFlags ++ exportWayOptions ++
           ["-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
           map snd (componentSources component)
-    replay <- case contextCoreLibdir context of
+    replay <- case contextCoreView context of
       Nothing -> pure []
-      Just libdir -> Directory.withCurrentDirectory sourceDir $ coreReplayArguments
+      Just view -> Directory.withCurrentDirectory sourceDir $ coreReplayArguments
         (maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id (contextGhcPkg context))
-        libdir staging (Map.toList (contextCoreInterfaces context)) (componentArguments component)
+        (installedLibdir view) (helperDatabases view) staging (Map.toList (contextCoreInterfaces context)) (componentArguments component)
     runCommand True (componentCompiler component) (arguments ++ replay) sourceDir
     let replayed = component { componentArguments = componentArguments component ++ replay }
     exported <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles core

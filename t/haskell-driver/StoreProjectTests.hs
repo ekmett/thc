@@ -434,7 +434,7 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
       permissions <- getPermissions path
       setPermissions path permissions { Directory.executable = True }
     original <- getEnvironment
-    let coreVariables = ["THC_PROXY_CORE_LIBDIR", "THC_PROXY_CORE_INTERFACES", "THC_PROXY_GHC_PKG"]
+    let coreVariables = ["THC_PROXY_CORE_LIBDIR", "THC_PROXY_CORE_DATABASES", "THC_PROXY_CORE_INTERFACES", "THC_PROXY_GHC_PKG"]
         environment = settings ++ filter ((`notElem` (coreVariables ++ map fst settings)) . fst) original
         ordinary = [ (True, ["--make", "-this-unit-id", "sample", "+RTS", "-A8m", "-RTS"])
                 , (False, ["--numeric-version", "+RTS", "-A8m", "-RTS", "--",

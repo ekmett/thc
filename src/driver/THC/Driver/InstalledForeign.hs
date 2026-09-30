@@ -178,7 +178,7 @@ prepareForeignInterfaces producer cache source context registrations = do
       probe <- probeInstalled selected unit
       dependencyInterfaces <- observeProbeInterfaces probe
       global <- command (installedPackageTool selected)
-        ["--global", "--no-user-package-db", "--expand-pkgroot", "dump"] Nothing
+        (packageGlobalArguments selected ++ ["dump"]) Nothing
       pure $ object ["schema" .= (1 :: Int), "recipe" .= recipeIdentity config,
         "files" .= observed, "installed" .= probe, "dependencyInterfaces" .= dependencyInterfaces,
         "globalRegistrations" .= global,
@@ -291,8 +291,8 @@ configuredRecipe producer context unit root names = do
   registered <- hashFile (foreignRegisteredLibrary producer)
   check (published == registered) "published and registered THC plugin libraries differ"
   pluginDescription <- command (installedPackageTool context)
-    ["--global", "--no-user-package-db", "--expand-pkgroot", "--package-db", foreignPluginDb producer,
-     "--ipid", "describe", foreignPluginUnit producer] Nothing
+    (packageGlobalArguments context ++ ["--package-db", foreignPluginDb producer,
+     "--ipid", "describe", foreignPluginUnit producer]) Nothing
   plugin <- parseRegistration pluginDescription
   libraryMatches <- filterM doesFileExist
     [directory </> "lib" ++ name ++ "-ghc9.14.1.so"
@@ -303,7 +303,7 @@ configuredRecipe producer context unit root names = do
   -- those exact registered library paths may be additional producer inputs;
   -- accepting every .so (or ignoring every non-.h) would hide a new CPP include.
   descriptions <- command (installedPackageTool context)
-    ["--global", "--no-user-package-db", "--expand-pkgroot", "--package-db", foreignPluginDb producer, "dump"] Nothing
+    (packageGlobalArguments context ++ ["--package-db", foreignPluginDb producer, "dump"]) Nothing
   records <- mapM parseRegistration (splitRegistrations (lines descriptions))
   dependencies <- registrationClosure records (foreignPluginUnit producer)
   producerLibraries <- sort . nub <$> (mapM canonicalizePath =<< filterM doesFileExist
@@ -370,20 +370,22 @@ createView context unit destination names = do
   createDirectoryIfMissing True db
   entries <- listDirectory (installedLibdir context)
   forM_ entries $ \name ->
-    unless (name == "package.conf.d") $ do
+    unless (name == "package.conf.d" || Host.os == "mingw32") $ do
       let original = installedLibdir context </> name
       directory <- doesDirectoryExist original
       (if directory then createDirectoryLink else createFileLink) original (libdir </> name)
   forM_ (installedInterfaces unit) $ \(name, original) ->
-    forM_ ["hi", "dyn_hi"] $ \suffix -> do
-      -- Another annotated unit can depend on this view. GHC's dependency
-      -- observer reads both ways, even though Core export selects dyn_hi.
+    forM_ (case installedInterfaceWay context of
+      VanillaInterfaces -> ["hi"]
+      DynamicInterfaces -> ["hi", "dyn_hi"]) $ \suffix -> do
+      -- Dynamic compilation also reads vanilla dependencies; a vanilla-only
+      -- view must not manufacture a dynamic interface from vanilla bytes.
       let target = interfaces </> modulePath name <.> suffix
           actual = if name `elem` names then destination </> "interfaces" </> modulePath name <.> suffix
                    else replaceExtension original suffix
       createDirectoryIfMissing True (takeDirectory target)
-      createFileLink actual target
-  dumped <- command (installedPackageTool context) ["--global", "--no-user-package-db", "--expand-pkgroot", "dump"] Nothing
+      (if Host.os == "mingw32" then copyFile else createFileLink) actual target
+  dumped <- command (installedPackageTool context) (packageGlobalArguments context ++ ["dump"]) Nothing
   records <- mapM parseRegistration (splitRegistrations (lines dumped))
   check (length [() | record <- records, prettyShow (Package.installedUnitId record) == registeredId unit] == 1)
     "selected package database lost the original foreign unit"
@@ -392,16 +394,20 @@ createView context unit destination names = do
                  then original { Package.importDirs = [interfaces] } else original
     writeFile (db </> show index <.> "conf") (showInstalledPackageInfo record)
   _ <- command (installedPackageTool context) ["--global-package-db", db, "--global", "recache"] Nothing
-  let wrapper = view </> "ghc-pkg"
-  writeFile wrapper ("#!/bin/sh\nexec " ++ shellQuote (installedPackageTool context) ++
-    " --global-package-db " ++ shellQuote db ++ " \"$@\"\n")
-  permissions <- getPermissions wrapper
-  setPermissions wrapper permissions { executable = True }
+  unless (Host.os == "mingw32") $ do
+    let wrapper = view </> "ghc-pkg"
+    writeFile wrapper ("#!/bin/sh\nexec " ++ shellQuote (installedPackageTool context) ++
+      " --global-package-db " ++ shellQuote db ++ " \"$@\"\n")
+    permissions <- getPermissions wrapper
+    setPermissions wrapper permissions { executable = True }
   pure view
 
 viewContext :: InstalledContext -> FilePath -> InstalledContext
-viewContext context view = context { installedLibdir = view </> "lib",
-  installedGlobalDb = view </> "lib/package.conf.d", installedPackageTool = view </> "ghc-pkg" }
+viewContext context view
+  | Host.os == "mingw32" = context { installedGlobalDb = view </> "lib/package.conf.d" }
+  | otherwise = context { installedLibdir = view </> "lib",
+      installedGlobalDb = view </> "lib/package.conf.d",
+      installedLibdirGlobalDb = view </> "lib/package.conf.d", installedPackageTool = view </> "ghc-pkg" }
 
 validateView :: InstalledContext -> InstalledUnit -> [(String, Value)] -> IO ()
 validateView context original needed = do
@@ -527,18 +533,23 @@ observeProbeInterfaces probe = do
   registrations <- field probe "registrations" :: IO [Value]
   paths <- fmap concat $ forM registrations $ \record -> do
     info <- parseRegistration =<< field record "registration"
+    way <- field record "way" :: IO String
+    suffixes <- case way of
+      "dynamic" -> pure ["hi", "dyn_hi"]
+      "vanilla" -> pure ["hi"]
+      _ -> fail "invalid selected dependency interface way"
     modules <- field record "interfaces" :: IO [Value]
     fmap concat $ forM modules $ \entry -> do
       name <- field entry "module"
       expected <- field entry "path"
-      forM ["hi", "dyn_hi"] $ \suffix -> do
+      forM suffixes $ \suffix -> do
         matches <- filterM doesFileExist
           [directory </> modulePath name <.> suffix | directory <- Package.importDirs info]
         path <- case matches of
           [found] -> canonicalizePath found
           _ -> fail ("expected exactly one dependency " ++ suffix ++ " interface for " ++ name)
-        check (suffix /= "dyn_hi" || path == expected)
-          "dependency dynamic interface changed after inventory probe"
+        check (suffix /= (if way == "dynamic" then "dyn_hi" else "hi") || path == expected)
+          "dependency selected interface changed after inventory probe"
         pure path
   fileInventory (sort (nub paths))
 

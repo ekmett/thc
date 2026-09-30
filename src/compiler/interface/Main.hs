@@ -245,7 +245,7 @@ probeSelected options = do
     -- encode those bytes a second time, corrupting non-ASCII interface paths
     -- and making the driver's exact inventory check reject every cache hit.
     let output = BS.snoc (BL.toStrict (encode (object ["schema" .= (1 :: Int),
-          "status" .= ("probed" :: String), "interfaces" .= rows]))) 10
+          "status" .= ("probed" :: String), "way" .= way options, "interfaces" .= rows]))) 10
     Exception.evaluate output
 
 withSelected :: Options -> (HscEnv -> IO a) -> IO a

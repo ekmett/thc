@@ -242,6 +242,7 @@ prepareWindowsDriver root = do
   unless (Host.os == "mingw32") (die "windows-driver requires native Windows")
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  buildDirectory <- lookupEnv "THC_CABAL_BUILD_DIR"
   stamp <- formatTime defaultTimeLocale "%Y%m%dT%H%M%S%q" <$> getCurrentTime
   let logs = "build/windows-driver" </> stamp
       package = logs </> "package with spaces"
@@ -260,7 +261,8 @@ prepareWindowsDriver root = do
      "-o", root </> native </> "completed.exe"]
   observed <- runLogged 60 root logs "native-run" [] (root </> native </> "completed.exe") []
   unless (BS.null (commandStdout observed)) (die "unexpected run-pure native output")
-  driver <- oneLine <$> run root [] cabal ["list-bin", "exe:thc", "--disable-shared", "--with-compiler=" ++ ghc] ""
+  driver <- oneLine <$> run root [] cabal (["list-bin", "exe:thc", "--disable-shared", "--with-compiler=" ++ ghc] ++
+    ["--builddir=" ++ directory | Just directory <- [buildDirectory]]) ""
   -- The build script sets GHC_PKG, which would hide a broken .exe companion
   -- lookup. Exercise ordinary compiler-relative discovery, restoring our
   -- process environment even if a CLI regression throws.

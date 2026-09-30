@@ -95,6 +95,9 @@ runGhcProxy arguments = do
         Nothing -> pure []
         Just libdir -> do
           packageTool <- maybe (takeDirectory compiler </> "ghc-pkg") id <$> lookupEnv "THC_PROXY_GHC_PKG"
+          selected <- maybe "[]" id <$> lookupEnv "THC_PROXY_CORE_DATABASES"
+          databases <- either (fail . ("invalid Core database stack: " ++)) pure
+            (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack selected)) :: Either String [FilePath])
           supplied <- maybe "{}" id <$> lookupEnv "THC_PROXY_CORE_INTERFACES"
           warm <- either (fail . ("invalid Core interface map: " ++)) pure
             (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack supplied)) :: Either String (Map.Map String FilePath))
@@ -102,7 +105,7 @@ runGhcProxy arguments = do
             present <- doesFileExist (capture </> owner </> "interfaces-ready")
             pure [(owner, capture </> owner </> "objects") | present]
           let interfaces = Map.delete unit (Map.union (Map.fromList completed) warm)
-          coreReplayArguments packageTool libdir root (Map.toList interfaces) options
+          coreReplayArguments packageTool libdir databases root (Map.toList interfaces) options
       exported <- rawSystem compiler (arguments ++
         replayArguments ++
         ["-no-link", "-fforce-recomp", "-outputdir", objects, "-odir", objects,
@@ -131,11 +134,11 @@ runGhcProxy arguments = do
 -- invocation gets its own immutable package database, so parallel Cabal builds
 -- never recache a database another compiler is using. Native registrations
 -- retain their original identities, dependencies and libraries.
-coreReplayArguments :: FilePath -> FilePath -> FilePath -> [(String, FilePath)] -> [String] -> IO [String]
-coreReplayArguments packageTool libdir scratch interfaces arguments = do
+coreReplayArguments :: FilePath -> FilePath -> [FilePath] -> FilePath -> [(String, FilePath)] -> [String] -> IO [String]
+coreReplayArguments packageTool libdir databases scratch interfaces arguments = do
   options <- expandResponse arguments
-  let boot = ["-B" ++ libdir]
-      stack = nativePackageOptions options
+  let boot = ["-B" ++ libdir] ++ concatMap (\database -> ["-package-db", database]) databases
+      stack = map ("--package-db=" ++) databases ++ nativePackageOptions options
   if null interfaces || null stack then pure boot else do
     dumped <- readProcess packageTool
       (["--global-package-db=" ++ libdir </> "package.conf.d", "--expand-pkgroot"] ++ stack ++ ["dump"]) ""

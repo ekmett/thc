@@ -10,7 +10,16 @@
 -- Portability : Haskell 2010
 --
 -- Select source-package flags from the selected stock compiler's evidence.
-module THC.Driver.PinnedFlags (pinnedLibraryFlags) where
+module THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions) where
+
+-- | Select the original configure script's Windows branches from the actual
+-- compiler host triplet. Cabal's native build otherwise omits @--host@, leaving
+-- ghc-internal's @host_alias@ empty even when its C compiler targets Windows.
+pinnedConfigureOptions :: String -> [(String, String)] -> Either String [String]
+pinnedConfigureOptions "mingw32" info = case lookup "Host platform" info of
+  Just platform | not (null platform) -> Right ["--configure-option=--host=" ++ platform]
+  _ -> Left "pinned Windows configure: selected compiler has no host platform"
+pinnedConfigureOptions _ _ = Right []
 
 -- | Package name, exact registered owned modules, and selected GHC @--info@.
 -- The caller must still require complete module and dependency equality after

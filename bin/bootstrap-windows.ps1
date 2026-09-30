@@ -43,6 +43,16 @@ $env:THC_CLANG = Join-Path $ghcRoot 'mingw/bin/clang.exe'
 $env:CABAL_DIR = Join-Path $Prefix 'cabal-home'
 $env:GRADLE_USER_HOME = Join-Path $Prefix 'gradle-home'
 $env:PATH = "$javaRoot/bin;$ghcRoot/bin;$ghcRoot/mingw/bin;$Prefix/cabal;$env:PATH"
+# Cabal runs the pinned libraries' genuine configure scripts through sh.
+# Reuse Git for Windows' MSYS utilities without changing the machine PATH.
+if (!(Get-Command sh.exe -CommandType Application -ErrorAction SilentlyContinue)) {
+    $git = Get-Command git.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    $shellBin = Join-Path (Split-Path (Split-Path $git.Source)) 'usr/bin'
+    if (!(Test-Path -LiteralPath "$shellBin/sh.exe")) {
+        throw 'Pinned library configure requires sh.exe and its Unix utilities on PATH (for example Git for Windows usr/bin)'
+    }
+    $env:PATH = "$javaRoot/bin;$ghcRoot/bin;$ghcRoot/mingw/bin;$Prefix/cabal;$shellBin;$env:PATH"
+}
 Assert-ThcJava
 $null = Get-ThcGhc
 $cabalVersion = Invoke-ThcTool $env:CABAL @('--numeric-version')
