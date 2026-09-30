@@ -13,9 +13,10 @@
 -- Fixture acquisition support for interface foreign facts.
 module InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, prepareImportStubs, inspectInstalledBound) where
 
-import Control.Monad (forM, forM_, unless, when)
+import Control.Monad (forM, forM_, unless)
 import Data.Aeson (Value(..), object, (.=), eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.Foldable (toList)
 import Data.List (isInfixOf, sortOn)
@@ -37,7 +38,6 @@ import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
 import FixtureSupport (CommandResult(..), runLogged, runLoggedExpect, writeJson)
 import THC.Interface
-import THC.Compact.Module (writeModuleValue)
 import THC.Plugin (serializePostTidyCoreWithAnnotations)
 
 check :: Bool -> String -> IO ()
@@ -215,7 +215,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
           expected = mkModule (stringToUnit unitName) (mkModuleName name)
       loaded <- loadInterfaceCore environment expected path
       core <- maybe (die "Typed association control lost complete Core") pure loaded
-      rendered <- interfaceCoreJSON ["unit-qualified"] core
+      rendered <- interfaceCoreJSON ["unit-qualified", "pretty-diagnostics"] core
       value <- either die pure (eitherDecodeStrict' (BSC.pack rendered))
       let metadata = field "staticForeignExports" value
       check (field "schema" metadata == Number 1 && field "execution" metadata == String "not-linked" &&
@@ -271,6 +271,8 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
               "Changed retained stub product inherited registration-only provenance") altered
         _ -> die "Alias registration control lost its actual native products"
       writeJson (root </> directory </> "typed-foreign-exports" </> variant ++ ".json") value
+      compact <- interfaceCoreCBD ["unit-qualified"] core
+      BS.writeFile (root </> directory </> "typed-foreign-exports" </> variant ++ ".cbd") compact
       pure (metadata, provenance)
   case records of
     [(first, _), (second, _), (signatures, _), (staticSignatures, _), _, _, (managedSignatures, _), _] -> do
@@ -397,7 +399,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
       let expected = mkModule (stringToUnit unitName) (mkModuleName "ForeignImportStubs")
       loaded <- loadInterfaceCore environment expected (root </> output variant </> "ForeignImportStubs.hi")
       core <- maybe (die "Import provenance control lost complete Core") pure loaded
-      rendered <- interfaceCoreJSON ["unit-qualified"] core
+      rendered <- interfaceCoreJSON ["unit-qualified", "pretty-diagnostics"] core
       value <- either die pure (eitherDecodeStrict' (BSC.pack rendered))
       let field name (Object fields) = KeyMap.lookup name fields
           field _ _ = Nothing
@@ -475,9 +477,8 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
                 "Changed C stub product retained managed import admission"
           _ -> die "Original CAPI control lost its products"
       writeFile (root </> directory </> "import-stubs" </> variant ++ ".json") rendered
-      when (variant `elem` map fst labelVariants) $ do
-        _ <- writeModuleValue (root </> directory </> "import-stubs" </> variant ++ ".cbd") value
-        pure ()
+      compact <- interfaceCoreCBD ["unit-qualified"] core
+      BS.writeFile (root </> directory </> "import-stubs" </> variant ++ ".cbd") compact
   audits <- forM [(variant, entryName, status) | (variant, _) <- labelVariants,
       (entryName, status) <- [("probe", 0), ("unknownData", 1), ("unknownFunction", 1)]] $ \(variant, entryName, status) -> do
     let report = directory </> "import-stubs" </> variant ++ "-" ++ entryName ++ "-audit.json"

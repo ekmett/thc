@@ -258,7 +258,8 @@ prepareInterfaceCore root = do
          directory </> "installed-bound-facts.json", directory </> "installed-wrapper-facts.json", directory </> "foreign-alias/a.json",
          directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
         [directory </> "typed-foreign-exports.json"] ++
-        [directory </> "typed-foreign-exports" </> variant ++ ".json" |
+        [directory </> "typed-foreign-exports" </> variant ++ extension |
+          extension <- [".json", ".cbd"],
           variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented", "managed", "registration"]] ++
         [directory </> "typed-foreign-exports/managed/ForeignExportManaged.hi",
          directory </> "typed-export-source/ForeignExportManaged.hs.saved",
@@ -266,7 +267,7 @@ prepareInterfaceCore root = do
          directory </> "typed-export-source/ForeignExportRegistration.hs.saved"] ++
         [directory </> "import-stubs" </> variant ++ ".json" | variant <- ["plain", "labels", "extra-file", "wrapper", "instrumented"]] ++
         [directory </> "import-stubs" </> variant ++ ".cbd" |
-          variant <- ["labels", "labels-header", "capi-labels", "capi-labels-header", "finalizer-label"]] ++
+          variant <- ["plain", "labels", "labels-header", "capi-labels", "capi-labels-header", "finalizer-label", "extra-file", "wrapper", "instrumented"]] ++
         [directory </> "import-stubs" </> "labels-" ++ entry ++ "-audit.json" |
           entry <- ["probe", "unknownData", "unknownFunction"]] ++
         [directory </> "source/ForeignImportStubs.hs.saved", directory </> "import-stubs/plain/ForeignImportStubs.hi"] ++
