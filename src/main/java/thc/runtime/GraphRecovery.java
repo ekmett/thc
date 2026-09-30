@@ -66,7 +66,8 @@ public final class GraphRecovery implements AutoCloseable {
     }
 
     private void failed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanent) {
-        if (!graphTooBig(reason, bailout, permanent)) return;
+        if (!graphTooBig(reason, bailout, permanent) && !(bailout && permanent &&
+                "jdk.vm.ci.code.BailoutException: Code installation failed: code is too large".equals(reason))) return;
         ContextRoot root = owned(target);
         if (root == null) return;
         Failure observed;
