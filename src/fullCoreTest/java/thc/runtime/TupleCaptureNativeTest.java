@@ -33,7 +33,7 @@ public class TupleCaptureNativeTest {
     @TestFactory public List<DynamicTest> originalCapturedPropertiesRemainLazyAndSurviveTheirCreator() {
         var tests = new ArrayList<DynamicTest>();
         for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) tests.add(DynamicTest.dynamicTest(stage + "/" + backend + "/owned storage", () -> {
-            verifyEvidence(); var source = json(new File(directory, stage + "/core/TupleCaptureAudit.json"));
+            verifyEvidence(); var source = CoreCbdFixtures.read(new File(directory, stage + "/core/TupleCaptureAudit.cbd").toPath());
             var linked = new LinkedHashMap<>(CoreModules.reachable(source, List.of("main:TupleCaptureAudit.escaped", "main:TupleCaptureAudit.thunk", "main:TupleCaptureAudit.emptyCapture"), true)); linked.put("instrument", true);
             try (Context context = Context.newBuilder("thc").build()) {
                 context.initialize("thc"); context.enter();
@@ -72,7 +72,7 @@ public class TupleCaptureNativeTest {
         }
         assertEquals(8, rows.size()); assertEquals(296, count); var tests = new ArrayList<DynamicTest>();
         for (String stage : List.of("pre", "post")) {
-            assertEquals(true, json(new File(directory, stage + "/audit.json")).get("accepted")); var source = json(new File(directory, stage + "/core/TupleCaptureAudit.json"));
+            assertEquals(true, json(new File(directory, stage + "/audit.json")).get("accepted")); var source = CoreCbdFixtures.read(new File(directory, stage + "/core/TupleCaptureAudit.cbd").toPath());
             for (var group : rows.entrySet()) {
                 String entry = group.getKey(), name = "main:TupleCaptureAudit." + entry; var cases = group.getValue();
                 var linked = new LinkedHashMap<>(CoreModules.reachable(source, name, true)); linked.put("instrument", true);

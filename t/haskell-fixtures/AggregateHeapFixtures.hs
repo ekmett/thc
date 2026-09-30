@@ -24,6 +24,7 @@ import Data.List (intercalate, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import FixtureSupport
+import THC.Compact.Module (readModuleValue)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -40,6 +41,9 @@ inputs = [-9223372036854775808, -2147483649, -2147483648, -5, -1,
 
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
+
+readCore :: FilePath -> IO Value
+readCore path = BS.readFile path >>= either die pure . readModuleValue
 
 -- Check the shape actually exported by GHC, including zero-width components.
 -- The retained full records include the physical primReps and sum slot maps.
@@ -58,7 +62,7 @@ constructorProofs :: Value -> IO [Value]
 constructorProofs (Object moduleFields) = case KeyMap.lookup "constructors" moduleFields of
   Just (Array constructors) -> forM expected $ \(name, shapes) -> do
     fields <- case [fields | Object fields <- toList constructors,
-      KeyMap.lookup "name" fields == Just (String (Text.pack name))] of
+      KeyMap.lookup "id" fields == Just (String (Text.pack (if name == "BoxedRep" then "ghc-9.14.1-inplace:GHC.Core.TyCon.BoxedRep" else "main:AggregateHeapFields." ++ name)))] of
       [fields] -> pure fields
       _ -> die ("aggregate-heap: missing or ambiguous constructor " ++ name)
     unless (KeyMap.lookup "kind" fields == Just (String "boxed"))
@@ -117,14 +121,14 @@ prepareAggregateHeap root exportOnly = do
   BS.writeFile (output </> "oracle.tsv") (commandStdout observations)
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        modulePath = core </> "AggregateHeapFields.json"
+        modulePath = core </> "AggregateHeapFields.cbd"
         report = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-package", "ghc", source])
-    proof <- constructorProofs =<< readJson (root </> modulePath)
-    modules <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
+    proof <- constructorProofs =<< readCore (root </> modulePath)
+    modules <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
     let modulePaths = map (core </>) modules
     audits <- if exportOnly then pure [] else do
       audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"

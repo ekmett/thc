@@ -25,6 +25,7 @@ import Data.List (sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import FixtureSupport
+import THC.Compact.Module (readModuleValue)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory,
                          listDirectory, removeFile)
 import System.Environment (getArgs, lookupEnv)
@@ -55,6 +56,9 @@ arrayField key value = case field key value of Just (Array values) -> toList val
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
 
+readCore :: FilePath -> IO Value
+readCore path = BS.readFile path >>= either die pure . readModuleValue
+
 check :: Bool -> String -> IO ()
 check condition message = unless condition (die ("fourway-aggregate: " ++ message))
 
@@ -78,7 +82,7 @@ partialCall _ _ = False
 constructorProofs :: Value -> IO Value
 constructorProofs core = do
   original <- case [con | con <- arrayField "constructors" core,
-      field "name" con == Just (String "VirtualRegWithFormat")] of
+      field "id" con == Just (String "ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat")] of
     [con] -> pure con
     _ -> die "fourway-aggregate: missing or ambiguous original constructor"
   let originalId = "ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat" :: String
@@ -109,7 +113,7 @@ constructorProofs core = do
   forM_ [("residualProducer", "makeOriginal"), ("residualConsumer", "consumeWithSalt"),
       ("nestedResidualProducer", "makeNested"), ("nestedResidualConsumer", "consumeNested"),
       ("mixedNestedCapture", "consumeMixedNested")] $ \(owner, target) -> do
-    let bodies = [body | binding <- bindings, field "name" binding == Just (toJSON owner),
+    let bodies = [body | binding <- bindings, field "id" binding == Just (toJSON (qualified owner)),
                         Just body <- [field "expr" binding]]
     check (any (partialCall target) (concatMap walk bodies)) ("lost partial application in " ++ owner)
   let tupleProof components = object ["kind" .= ("unknown" :: String), "evaluated" .= True,
@@ -126,7 +130,7 @@ constructorProofs core = do
       nested sumField = tupleProof [integer, tupleProof [state, tupleProof [], sumField, lazy], leaf]
   nestedProofs <- forM [("NestedBox", [integer, nested sumProof, leaf]),
       ("MixedBox", [nested mixed, leaf])] $ \(name, expected) -> do
-    con <- case [value | value <- arrayField "constructors" core, field "name" value == Just (toJSON (name :: String))] of
+    con <- case [value | value <- arrayField "constructors" core, field "id" value == Just (toJSON (qualified name))] of
       [value] -> pure value
       _ -> die ("fourway-aggregate: missing nested heap constructor " ++ name)
     check (field "fieldTypes" con == Just (toJSON expected)) ("changed nested logical/physical tree " ++ name)
@@ -184,14 +188,14 @@ prepareFourWayAggregate root = do
   BS.writeFile (output </> "oracle.tsv") (commandStdout observed)
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        modulePath = core </> "FourWayAggregateFields.json"
+        modulePath = core </> "FourWayAggregateFields.cbd"
         reportPath = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-dstg-lint", "-package", "ghc", source])
-    proof <- constructorProofs =<< readJson (root </> modulePath)
-    modules <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
+    proof <- constructorProofs =<< readCore (root </> modulePath)
+    modules <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
     let paths = map (core </>) modules
     audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
       (["bin/audit-core.py", "--output", reportPath] ++

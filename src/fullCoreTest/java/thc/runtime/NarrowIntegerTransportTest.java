@@ -37,7 +37,7 @@ public class NarrowIntegerTransportTest {
     }
     private List<Map<String, Object>> modules(String stage) throws Exception {
         var files = new File(directory, stage + "/core").listFiles(); assertNotNull(files); var result = new ArrayList<Map<String, Object>>();
-        for (File file : files) if (file.getName().endsWith(".json")) result.add(json(file)); return result;
+        for (File file : files) if (file.getName().endsWith(".cbd")) result.add(CoreCbdFixtures.read(file.toPath())); return result;
     }
     @FunctionalInterface private interface Action { void run(Context context, Language language) throws Exception; }
     private void entered(boolean inline, Action action) throws Exception {

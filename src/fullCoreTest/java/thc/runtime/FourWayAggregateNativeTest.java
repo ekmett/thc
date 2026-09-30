@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 import thc.*;
 import java.io.File;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
@@ -22,8 +23,8 @@ public class FourWayAggregateNativeTest {
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath(), StandardCharsets.UTF_8)); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), target.toString()); }
     private void observe(List<String> row, Value callable, Language language) {
-        long result = callable.execute(Long.parseLong(row.get(2)), Long.parseUnsignedLong(row.get(3))).asLong();
-        assertEquals(row.get(4), Long.toUnsignedString(result), String.join("/", row)); var handoff = language.getHandoffState().get();
+        var result = callable.execute(Long.parseLong(row.get(2)), new BigInteger(row.get(3))).asBigInteger();
+        assertEquals(row.get(4), result.toString(), String.join("/", row)); var handoff = language.getHandoffState().get();
         assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getArguments().getDepth());
         assertEquals(0, handoff.getResults().retainedReferences()); assertEquals(0, handoff.getArguments().retainedReferences());
     }
@@ -37,7 +38,7 @@ public class FourWayAggregateNativeTest {
         for (String stage : List.of("pre", "post")) {
             assertEquals(true, json(new File(directory, stage + "/audit.json")).get("accepted"));
             var files = new File(directory, stage + "/core").listFiles(); assertNotNull(files); var modules = new ArrayList<Map<String, Object>>();
-            for (File file : files) if (file.getName().endsWith(".json")) modules.add(json(file));
+            for (File file : files) if (file.getName().endsWith(".cbd")) modules.add(CoreCbdFixtures.read(file.toPath()));
             for (var group : rows.entrySet()) for (String backend : List.of("ast", "bytecode")) {
                 String entry = group.getKey(); var cases = group.getValue(); String lower = entry.toLowerCase(Locale.ROOT);
                 // Residual edges additionally exercise durable captures/PAPs without inlining.

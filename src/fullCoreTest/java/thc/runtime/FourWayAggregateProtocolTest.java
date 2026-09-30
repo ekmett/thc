@@ -21,11 +21,11 @@ public class FourWayAggregateProtocolTest {
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath(), StandardCharsets.UTF_8)); }
     private List<Map<String, Object>> modules(String stage) throws Exception {
         FourWayEvidence.verify(root); var files = new File(root, "build/fourway-aggregate/" + stage + "/core").listFiles(); assertNotNull(files);
-        var result = new ArrayList<Map<String, Object>>(); for (File file : files) if (file.getName().endsWith(".json")) result.add(json(file)); return result;
+        var result = new ArrayList<Map<String, Object>>(); for (File file : files) if (file.getName().endsWith(".cbd")) result.add(CoreCbdFixtures.read(file.toPath())); return result;
     }
     private CoreRepresentation originalProof() throws Exception {
-        FourWayEvidence.verify(root); var module = json(new File(root, "build/fourway-aggregate/pre/core/FourWayAggregateFields.json")); Map<String, Object> original = null;
-        for (var constructor : (List<Map<String, Object>>) module.get("constructors")) if ("VirtualRegWithFormat".equals(constructor.get("name"))) { assertNull(original); original = constructor; }
+        FourWayEvidence.verify(root); var module = CoreCbdFixtures.read(new File(root, "build/fourway-aggregate/pre/core/FourWayAggregateFields.cbd").toPath()); Map<String, Object> original = null;
+        for (var constructor : (List<Map<String, Object>>) module.get("constructors")) if ("ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat".equals(constructor.get("id"))) { assertNull(original); original = constructor; }
         assertNotNull(original); return new CoreFields(original).getLogicalProofs()[0];
     }
     @FunctionalInterface private interface Action { void run(Context context, Language language) throws Exception; }

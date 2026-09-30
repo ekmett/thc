@@ -7,6 +7,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.EntryValue;
 import thc.Json;
 import thc.Language;
@@ -49,7 +50,7 @@ public class AggregateHeapNativeTest {
             assertEquals(true, json(new File(directory, stage + "/audit.json")).get("accepted"));
             var modules = new ArrayList<Map<String, Object>>();
             for (File file : Objects.requireNonNull(new File(directory, stage + "/core").listFiles()))
-                if (file.getName().endsWith(".json")) modules.add(json(file));
+                if (file.getName().endsWith(".cbd")) modules.add(CoreCbdFixtures.read(file.toPath()));
             for (var group : rows.entrySet()) for (String backend : List.of("ast", "bytecode")) {
                 String entry = group.getKey();
                 var cases = group.getValue();
