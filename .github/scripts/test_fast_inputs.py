@@ -684,7 +684,9 @@ class FastInputTests(unittest.TestCase):
             self.assertTrue(cache.allowed_payload('build/' + name), name)
 
     def test_array_core_products_require_cbd_not_diagnostic_json(self):
-        for family, folder, module in (('fetch-add-int-array', '{stage}/core', 'FetchAddIntArrayAudit'),
+        for family, folder, module in (('boxed-arrays', '{stage}/core', 'BoxedArrayAudit'),
+                                       ('array-slices', '{stage}-core', 'ArraySliceAudit'),
+                                       ('fetch-add-int-array', '{stage}/core', 'FetchAddIntArrayAudit'),
                                        ('shrink-bytearrays', '{stage}/core', 'ShrinkMutableByteArrayAudit'),
                                        ('managed-address-reads', '{stage}-core', 'ManagedAddressReadAudit')):
             for stage in ('pre', 'post'):
@@ -692,6 +694,8 @@ class FastInputTests(unittest.TestCase):
                     path = f'build/{family}/{folder.format(stage=stage)}/{name}.cbd'
                     self.assertTrue(cache.allowed_payload(path), path)
                     self.assertFalse(cache.allowed_payload(path.replace(name, 'Extra')), path)
+        self.assertTrue(cache.allowed_payload('build/floating/core/FloatingAudit.cbd'))
+        self.assertFalse(cache.allowed_payload('build/floating/core/Extra.cbd'))
         for outputs in (cache.ADDRESS_ARRAY_COPY_OUTPUTS, cache.ATOMIC_INT_ARRAY_OUTPUTS):
             products = [name for name in outputs if name.endswith('.cbd')]
             self.assertTrue(products)

@@ -41,7 +41,7 @@ class ArraySliceTest {
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (String path : paths) modules.add(json(path));
+        for (String path : paths) modules.add(CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -142,10 +142,10 @@ class ArraySliceTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var guest = program(language,
-                                changed(CoreModules.reachable(merged(paths), name), "instrument", true), backend);
-                            var function = context.asValue(new EntryValue(guest, name, 1));
+                                changed(CoreModules.reachable(merged(paths), "main:ArraySliceAudit." + name), "instrument", true), backend);
+                            var function = context.asValue(new EntryValue(guest, "main:ArraySliceAudit." + name, 1));
                             var host = guest.hostEntryTarget(1);
-                            var original = guest.entryTarget(name);
+                            var original = guest.entryTarget("main:ArraySliceAudit." + name);
                             String label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                             class Checks {
                                 void check(Row row) {
@@ -372,7 +372,7 @@ void exactSliceSignaturesAndColdPublicFrontierRemainEnforced() throws Exception 
                 for (var operation : operations)
                     for (int mutation = 0; mutation <= 10; mutation++)
                         for (boolean diagnostic : List.of(false, true)) {
-                            var module = CoreModules.reachable(merged(paths), "sliceSnapshots");
+                            var module = CoreModules.reachable(merged(paths), "main:ArraySliceAudit.sliceSnapshots");
                             var app = application(module, operation);
                             var args = (List<Object>) app.get(2);
                             var flags = (List<Object>) app.get(3);
@@ -424,7 +424,7 @@ void exactSliceSignaturesAndColdPublicFrontierRemainEnforced() throws Exception 
                                 operation + "/" + mutation + "/" + backend + "/" + diagnostic);
                         }
                 for (var operation : operations) {
-                    var module = CoreModules.reachable(merged(paths), "sliceSnapshots");
+                    var module = CoreModules.reachable(merged(paths), "main:ArraySliceAudit.sliceSnapshots");
                     var app = application(module, operation);
                     var primitive = new ArrayList<>((List<?>) app.get(1));
                     app.clear();
@@ -432,7 +432,7 @@ void exactSliceSignaturesAndColdPublicFrontierRemainEnforced() throws Exception 
                     assertThrows(UnsupportedCore.class, () -> program(language, module, backend));
                 }
                 assertThrows(UnsupportedCore.class,
-                    () -> program(language, CoreModules.reachable(merged(paths), "publicFreezeThaw"), backend));
+                    () -> program(language, CoreModules.reachable(merged(paths), "main:ArraySliceAudit.publicFreezeThaw"), backend));
             } finally {
                 context.leave();
             }

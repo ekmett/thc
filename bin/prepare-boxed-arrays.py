@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from core_package_manifest import inspect_cbd
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/boxed-arrays'
@@ -50,12 +51,12 @@ def main():
         run([ROOT/'bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
              *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES+FRONTIERS], SOURCE],
             env=dict(THC_CORE_OUT=str(core),THC_GHC_OUT=str(directory/'ghc')))
-        paths = sorted(core.glob('*.json')); modules = [(str(p.relative_to(ROOT)),json.loads(p.read_text())) for p in paths]
+        paths = sorted(core.glob('*.cbd')); modules = [(str(p.relative_to(ROOT)),inspect_cbd(p.read_bytes())) for p in paths]
         boundary = 'optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep'
-        assert json.loads((core/'BoxedArrayAudit.json').read_text())['boundary'] == boundary
+        assert dict(modules)[str((core/'BoxedArrayAudit.cbd').relative_to(ROOT))]['boundary'] == boundary
         stages[stage] = [p for p,_ in modules]; artifacts += paths
         for name in ENTRIES+FRONTIERS:
-            report = audit.Audit(modules,cap).run([name])
+            report = audit.Audit(modules,cap).run(['main:BoxedArrayAudit.'+name])
             path = directory/(name+'.audit.json'); path.write_text(json.dumps(report,indent=2)+'\n'); artifacts.append(path)
             counts = {p['name']: len(p['uses']) for p in report['primitives']}
             if name in ENTRIES:

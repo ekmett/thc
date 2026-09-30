@@ -28,7 +28,7 @@ class BoxedArrayTest {
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (String path : paths) modules.add(json(path));
+        for (String path : paths) modules.add(CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -107,8 +107,8 @@ class BoxedArrayTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var guest = program(language,
-                                changed(CoreModules.reachable(merged(paths), name), "instrument", true), backend);
-                            var function = context.asValue(new EntryValue(guest, name, 1));
+                                changed(CoreModules.reachable(merged(paths), "main:BoxedArrayAudit." + name), "instrument", true), backend);
+                            var function = context.asValue(new EntryValue(guest, "main:BoxedArrayAudit." + name, 1));
                             var host = guest.hostEntryTarget(1);
                             String label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                             class Checks {
@@ -120,7 +120,7 @@ class BoxedArrayTest {
                             var checks = new Checks();
                             for (var row : cases) checks.check(row);
                             assertTrue(function.invokeMember("compile").asBoolean(), label + " install");
-                            var original = guest.entryTarget(name);
+                            var original = guest.entryTarget("main:BoxedArrayAudit." + name);
                             Supplier<List<RootCallTarget>> activeTargets = ()
                                 -> NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class)
                                        .stream()
@@ -343,7 +343,7 @@ class BoxedArrayTest {
                         List.of(ArrayOp.NEW, ArrayOp.READ, ArrayOp.WRITE, ArrayOp.FREEZE, ArrayOp.INDEX))
                         for (int mutation = 0; mutation <= 7; mutation++)
                             for (boolean diagnostic : List.of(false, true)) {
-                                var module = CoreModules.reachable(merged(paths), "boxedSTRecursive");
+                                var module = CoreModules.reachable(merged(paths), "main:BoxedArrayAudit.boxedSTRecursive");
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -405,7 +405,7 @@ class BoxedArrayTest {
                             }
                     for (var operation :
                         List.of(ArrayOp.NEW, ArrayOp.READ, ArrayOp.WRITE, ArrayOp.FREEZE, ArrayOp.INDEX)) {
-                        var module = CoreModules.reachable(merged(paths), "boxedSTRecursive");
+                        var module = CoreModules.reachable(merged(paths), "main:BoxedArrayAudit.boxedSTRecursive");
                         var app = application(module, operation);
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();
@@ -415,7 +415,7 @@ class BoxedArrayTest {
                     for (String name : (List<String>) manifest().get("frontiers"))
                         assertThrows(UnsupportedCore.class,
                             ()
-                                -> program(language, CoreModules.reachable(merged(paths), name), backend),
+                                -> program(language, CoreModules.reachable(merged(paths), "main:BoxedArrayAudit." + name), backend),
                             backend + " frontier " + name);
                 } finally {
                     context.leave();

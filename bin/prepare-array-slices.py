@@ -5,6 +5,7 @@
 """Fresh shallow Array# slice semantics with an explicit public-copy frontier."""
 from pathlib import Path
 import hashlib, importlib.util, json, os, subprocess
+from core_package_manifest import inspect_cbd
 ROOT=Path(__file__).resolve().parent.parent
 OUT=ROOT/'build/array-slices'
 SOURCE=ROOT/'t/fixtures/compiler/ArraySliceAudit.hs'
@@ -48,12 +49,12 @@ def main():
         run(['bin/export-core.sh',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
              *['-fplugin-opt=THC.Plugin:closure='+n for n in ENTRIES+FRONTIERS],SOURCE],
             env=dict(THC_CORE_OUT=str(core),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
-        paths=sorted(core.glob('*.json'));modules=[(str(p.relative_to(ROOT)),json.loads(p.read_text())) for p in paths]
+        paths=sorted(core.glob('*.cbd'));modules=[(str(p.relative_to(ROOT)),inspect_cbd(p.read_bytes())) for p in paths]
         stages[stage]=[p for p,_ in modules];artifacts+=paths
-        fixture=dict(modules)[str((core/'ArraySliceAudit.json').relative_to(ROOT))]
+        fixture=dict(modules)[str((core/'ArraySliceAudit.cbd').relative_to(ROOT))]
         assert fixture['boundary']==('optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep')
         for name in ENTRIES+FRONTIERS:
-            report=audit.Audit(modules,caps).run([name]);path=OUT/f'{stage}-{name}.audit.json';path.write_text(json.dumps(report,indent=2)+'\n');artifacts.append(path)
+            report=audit.Audit(modules,caps).run(['main:ArraySliceAudit.'+name]);path=OUT/f'{stage}-{name}.audit.json';path.write_text(json.dumps(report,indent=2)+'\n');artifacts.append(path)
             counts={p['name']:len(p['uses']) for p in report['primitives']}
             if name in ENTRIES:
                 assert report['accepted'],(stage,name,report['issues'],report['missingGlobals'])

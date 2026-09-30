@@ -1929,8 +1929,12 @@ def allowed_payload(name):
         return name in FLOAT_DECODE_OUTPUTS
     if parts[1] == "floating-remainder":
         return name in FLOATING_REMAINDER_OUTPUTS
+    if name == "build/floating/core/FloatingAudit.cbd":
+        return True
     if name in {f"build/{family}/{folder.format(stage=stage)}/{module}.cbd"
-                for family, folder, fixture in (("fetch-add-int-array", "{stage}/core", "FetchAddIntArrayAudit"),
+                for family, folder, fixture in (("boxed-arrays", "{stage}/core", "BoxedArrayAudit"),
+                                                ("array-slices", "{stage}-core", "ArraySliceAudit"),
+                                                ("fetch-add-int-array", "{stage}/core", "FetchAddIntArrayAudit"),
                                                 ("shrink-bytearrays", "{stage}/core", "ShrinkMutableByteArrayAudit"),
                                                 ("managed-address-reads", "{stage}-core", "ManagedAddressReadAudit"))
                 for stage in ("pre", "post") for module in (fixture, "THC.InterfaceClosure")}:

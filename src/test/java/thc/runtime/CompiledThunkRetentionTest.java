@@ -33,7 +33,7 @@ class CompiledThunkRetentionTest {
         assertEquals(41, rows.size());
         var reversed = new ArrayList<>(rows); Collections.reverse(reversed);
         for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet())
-            check(stage.getKey(), stage.getValue(), "boxedSTRecursive", rows, reversed);
+            check(stage.getKey(), stage.getValue(), "main:BoxedArrayAudit.boxedSTRecursive", rows, reversed);
     }
     @Test void cachedFloatingNaNThunksRetainEveryCompiledCall() throws Exception {
         var rows = new ArrayList<String[]>();
@@ -46,7 +46,7 @@ class CompiledThunkRetentionTest {
             var compiled = new ArrayList<>(selected);
             // Select the cached NaN branch on the very first compiled call.
             compiled.sort(Comparator.comparingInt(row -> row.input == -16777216L ? 0 : 1));
-            check("pre", List.of("build/floating/core/FloatingAudit.json"), entry, selected, compiled);
+            check("pre", List.of("build/floating/core/FloatingAudit.cbd"), "main:FloatingAudit." + entry, selected, compiled);
         }
     }
     private List<RootCallTarget> active(RootCallTarget host, RootCallTarget original) {
@@ -60,7 +60,7 @@ class CompiledThunkRetentionTest {
     }
     private void check(String stage, List<String> paths, String entry, List<Row> warm, List<Row> compiled) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var path : paths) modules.add((Map<String, Object>) Json.parse(Files.readString(root.resolve(path))));
+        for (var path : paths) modules.add(CoreCbdFixtures.read(root.resolve(path)));
         var module = new LinkedHashMap<>(CoreModules.reachable(CoreModules.merge(modules), entry)); module.put("instrument", true);
         for (var backend : List.of("ast", "bytecode")) try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();
