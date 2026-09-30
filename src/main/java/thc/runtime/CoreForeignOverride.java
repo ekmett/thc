@@ -48,7 +48,11 @@ public enum CoreForeignOverride {
             var arguments = ((List<?>) expected.get("argumentReps")).stream().map(CoreForeignOverride::carrier).toList();
             var result = ((List<?>) ((Map<?, ?>) expected.get("resultRep")).get("components")).stream()
                 .map(CoreForeignOverride::carrier).toList();
-            if (!Boolean.TRUE.equals(entry.get("isFunction")) || entry.get("header") != null ||
+            // A retained ccall header is source provenance, not a different emitted ABI.
+            Object header = entry.get("header");
+            boolean validHeader = header == null || header instanceof String text && !text.isEmpty() &&
+                text.chars().noneMatch(value -> "\u0000\n\r\"\\".indexOf(value) >= 0);
+            if (!Boolean.TRUE.equals(entry.get("isFunction")) || !validHeader ||
                     !Objects.equals(entry.get("symbol"), target.get("symbol")) ||
                     !Objects.equals(entry.get("convention"), expected.get("convention")) ||
                     !Objects.equals(entry.get("safety"), expected.get("safety")) ||

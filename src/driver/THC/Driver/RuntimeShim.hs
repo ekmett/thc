@@ -79,7 +79,12 @@ coreNativeImport entry = case [call | call <- coreNativeOverrideCalls,
     identity (emitted call) == (member entry "emitted" >>= identity)] of
   [] -> Right False
   [call] -> do
-    require (member entry "isFunction" == Just (Bool True) && member entry "header" == Just Null &&
+    -- A retained ccall header is source provenance, not a different emitted ABI.
+    require (member entry "isFunction" == Just (Bool True) &&
+      (case member entry "header" of
+        Just Null -> True
+        Just (String header) -> not (Text.null header) && Text.all (`notElem` ['\0','\n','\r','"','\\']) header
+        _ -> False) &&
       member entry "emitted" == Just (emitted call))
       "Core native override import has the wrong exact emitted ABI"
     Right True

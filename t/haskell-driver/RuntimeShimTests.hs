@@ -39,14 +39,37 @@ tests = TestLabel "exact runtime shim native fallback profile" $ TestList
                alter "target" (alter "kind" "dynamic" targetValue) descriptorValue] $ \wrong ->
           assertBool "a selected identity never falls back to native RTS on ABI drift" (isLeft (coreNativeOverride wrong))
   , TestCase $ do
+      -- GHC.Internal.TopHandler's genuine retained declaration includes Rts.h.
+      -- The header is source provenance, not a different ccall ABI.
+      let emitted = object ["symbol" .= ("shutdownHaskellAndExit"::String), "unit" .= ("ghc-internal"::String),
+            "convention" .= ("ccall"::String), "safety" .= ("safe"::String),
+            "arguments" .= (["Int32Rep","Int32Rep","void"]::[String]), "result" .= (["void"]::[String])]
+          imported = object ["isFunction" .= True, "header" .= ("Rts.h"::String), "emitted" .= emitted]
+      assertEqual "the original configured ccall header preserves the exact Core capability" (Right True)
+        (coreNativeImport imported)
+      forM_ [String "", String "bad\0.h", String "bad\n.h", String "bad\r.h",
+             String "bad\".h", String "bad\\.h", Number 1] $ \header ->
+        assertBool "retained source headers still require well-formed provenance"
+          (isLeft (coreNativeImport (alter "header" header imported)))
+      forM_ [alter "isFunction" (Bool False) imported,
+             alter "emitted" (alter "convention" "capi" emitted) imported,
+             alter "emitted" (alter "safety" "unsafe" emitted) imported,
+             alter "emitted" (alter "arguments" (strings ["IntRep","Int32Rep","void"]) emitted) imported,
+             alter "emitted" (alter "result" (strings ["void","Int32Rep"]) emitted) imported] $ \wrong ->
+        assertBool "a source header never grants a different invocation ABI" (isLeft (coreNativeImport wrong))
+      assertEqual "same spelling with another owner still needs an ordinary provider" (Right False)
+        (coreNativeImport (alter "emitted" (alter "unit" "ordinary-unit" emitted) imported))
+  , TestCase $ do
       let emitted = object ["symbol" .= ("getProgArgv"::String), "unit" .= ("ghc-internal"::String),
             "convention" .= ("ccall"::String), "safety" .= ("unsafe"::String),
             "arguments" .= (["AddrRep","AddrRep","void"]::[String]), "result" .= (["void"]::[String])]
           imported = object ["isFunction" .= True, "header" .= Null, "emitted" .= emitted]
       assertEqual "exact source import uses the same descriptor-derived ABI" (Right True) (coreNativeImport imported)
+      assertEqual "a configured ccall header is not a per-symbol capability" (Right True)
+        (coreNativeImport (alter "header" "native.h" imported))
       assertEqual "ordinary same-name provider is still required" (Right False)
         (coreNativeImport (alter "emitted" (alter "unit" "ordinary-unit" emitted) imported))
-      forM_ [alter "header" "native.h" imported, alter "isFunction" (Bool False) imported,
+      forM_ [alter "isFunction" (Bool False) imported,
              alter "emitted" (alter "safety" "safe" emitted) imported,
              alter "emitted" (alter "arguments" (strings ["AddrRep","IntRep","void"]) emitted) imported] $ \wrong ->
         assertBool "native declarations cannot borrow a merely similar Core capability" (isLeft (coreNativeImport wrong))
