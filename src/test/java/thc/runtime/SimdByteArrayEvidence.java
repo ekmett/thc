@@ -86,12 +86,13 @@ final class SimdByteArrayEvidence {
         }
         var artifacts = new ArrayList<>(List.of(directory + "/expected.tsv", directory + "/requests.tsv"));
         for (String stage : stages) {
-            artifacts.add(directory + "/" + stage + "-core/" + module + ".json");
+            artifacts.add(directory + "/" + stage + "-core/" + module + ".cbd");
             artifacts.add(directory + "/" + stage + "-audit.json");
         }
         for (String audit : audits) artifacts.add(attempt + "/audits/" + audit + ".json");
-        for (String mutation : mutations) artifacts.add(attempt + "/mutations/" + mutation + ".json");
-        artifacts.addAll(List.of(attempt + "/retained/pre.json", attempt + "/retained/post.json"));
+        for (String mutation : mutations) artifacts.add(attempt + "/mutations/" + mutation + ".cbd");
+        artifacts.addAll(List.of(attempt + "/retained/pre.json", attempt + "/retained/post.json",
+            attempt + "/retained/pre.cbd", attempt + "/retained/post.cbd"));
         if (!floating(family)) artifacts.add(attempt + "/retained-original-source.hs");
         for (String command : commands) for (String suffix : List.of("stdout", "stderr", "command.json"))
             artifacts.add(attempt + "/commands/" + command + "." + suffix);

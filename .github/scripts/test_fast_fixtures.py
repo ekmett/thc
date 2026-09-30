@@ -2971,6 +2971,12 @@ class FixturePreparationTest(unittest.TestCase):
                 attempt = f"build/{group_id}/prepare-run-Abc123"; name = f"build/{group_id}/provenance.json"
                 rows = fast_fixtures.fast_inputs.SIMD_BYTEARRAY_FAMILIES[group_id][1]
                 expected = {path: "0"*64 for path in fast_fixtures.fast_inputs.simd_bytearray_outputs(group_id, attempt, native)}
+                module = fast_fixtures.fast_inputs.SIMD_BYTEARRAY_FAMILIES[group_id][0]
+                self.assertIn(f"build/{group_id}/pre-core/{module}.cbd", expected)
+                self.assertNotIn(f"build/{group_id}/pre-core/{module}.json", expected)
+                self.assertIn(f"{attempt}/retained/pre.json", expected)
+                self.assertIn(f"{attempt}/retained/pre.cbd", expected)
+                self.assertTrue(all(path.endswith(".cbd") for path in expected if "/mutations/" in path))
                 with mock.patch.object(fast_fixtures.fast_inputs, "file_path") as path, mock.patch.object(fast_fixtures, "_manifest_output_hashes") as output:
                     path.return_value.read_text.return_value = json.dumps(dict(schema=1, vector=f"{family}-bytearray",
                         stages=["pre", "post"] if native else ["pre"], attempt=attempt, modelRows=rows, modelByteOrder="little",
