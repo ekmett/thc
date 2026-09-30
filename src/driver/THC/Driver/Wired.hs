@@ -41,7 +41,8 @@ import System.Process (CreateProcess(..), StdStream(UseHandle), createProcess, p
 import System.IO (hClose, openTempFile, stderr, stdout)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 import Text.Read (readEither)
-import THC.Driver.Installed (InstalledContext(..), InstalledUnit(..), boundedInterfaceProcess)
+import THC.Driver.Installed (InstalledContext(..), InstalledUnit(..), InterfaceWay(..),
+  boundedInterfaceProcess, packageGlobalArguments, installedViewIdentity)
 import THC.Compact.Module (readModuleMetadata)
 import THC.Driver.InstalledForeign (createView, viewContext)
 import THC.Driver.GhcProxy (directPlugin)
@@ -448,9 +449,11 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
               _ -> fail "cannot identify selected ghc-internal bignum backend"
           cppFlags <- maybe "" id <$> lookupEnv "CPPFLAGS"
           let selectedFlags = flags ++ backend
+              dynamic = installedInterfaceWay context == DynamicInterfaces
+              suffixes = if dynamic then ["hi", "dyn_hi"] else ["hi"]
               key = digest (BL.toStrict (encode
-                ("pinned-library-core-v3" :: String, pinnedReleaseIdentity, driverHash, pluginUnit, pluginHash, helperHash,
-                 installedCompiler original, settings, selectedFlags, cppFlags, installedLibdir context, registration unit)))
+                ("pinned-library-core-v4" :: String, pinnedReleaseIdentity, driverHash, pluginUnit, pluginHash, helperHash,
+                 installedCompiler original, settings, selectedFlags, cppFlags, installedViewIdentity context, registration unit)))
               destination = cache </> "pinned-libraries/v1" </> key
               receipt = destination </> "complete"
           createDirectoryIfMissing True (takeDirectory destination)
@@ -469,7 +472,7 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
               createDirectory destination
               BL.writeFile (destination </> "inputs.json") (encode (object
                 ["source" .= pinnedReleaseIdentity, "compiler" .= installedCompiler original,
-                 "registration" .= registration unit, "dependencyView" .= installedLibdir context,
+                 "registration" .= registration unit, "dependencyView" .= installedViewIdentity context,
                  "driverHash" .= driverHash, "pluginHash" .= pluginHash, "helperHash" .= helperHash,
                  "flags" .= selectedFlags, "cppFlags" .= cppFlags, "settings" .= settings]))
               let package = destination </> "source"
@@ -504,7 +507,7 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                 generatePrimitiveWrappers source package destination (installedGhc original)
               dependencyOptions <- forM (installedDepends unit) $ \identifier -> do
                 text <- readProcess (installedPackageTool context)
-                  ["--global", "--no-user-package-db", "--ipid", "describe", identifier] ""
+                  (packageGlobalArguments context ++ ["--ipid", "describe", identifier]) ""
                 (_, dependency) <- either (fail . show) pure
                   (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack text)))
                 pure ("--dependency=" ++ prettyShow (pkgName (Package.sourcePackageId dependency)) ++ "=" ++ identifier)
@@ -513,8 +516,9 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                     "--builddir=" ++ dist, "--with-compiler=" ++ installedGhc original,
                     "--with-hc-pkg=" ++ installedPackageTool context,
                     "--package-db=clear", "--package-db=" ++ installedGlobalDb context,
-                    "--ipid=" ++ registeredId unit, "--enable-shared", "--disable-library-profiling",
-                    "--ghc-options=-O2 -fwrite-if-simplified-core"] ++ dependencyOptions ++ selectedFlags ++
+                    "--ipid=" ++ registeredId unit, if dynamic then "--enable-shared" else "--disable-shared",
+                    "--disable-library-profiling", "--ghc-options=-O2 -fwrite-if-simplified-core"] ++
+                    map ("--package-db=" ++) (installedDatabases context) ++ dependencyOptions ++ selectedFlags ++
                     map ("--extra-include-dirs=" ++) includes ++
                     -- Cabal runs Configure from dist/build; the genuine source
                     -- headers live beside dist. Keep paths with spaces out of CPPFLAGS.
@@ -554,7 +558,7 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
               -- interface at the home-unit search path. GHC supplies its actual
               -- declarations; it has no source target or executable bodies.
               forM_ (lookup "GHC.Internal.Prim" (installedInterfaces unit)) $ \primitive ->
-                forM_ ["hi", "dyn_hi"] $ \suffix -> do
+                forM_ suffixes $ \suffix -> do
                   let target = getSymbolicPath output </> "GHC/Internal/Prim." ++ suffix
                   createDirectoryIfMissing True (takeDirectory target)
                   copyFile (replaceExtension primitive suffix) target
@@ -566,7 +570,7 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                     options' = base <> mempty
                       { ghcOptMode = toFlag GhcModeMake, ghcOptNoLink = toFlag True,
                         ghcOptInputModules = toNubListR selected,
-                        ghcOptDynLinkMode = toFlag GhcStaticAndDynamic, ghcOptFPic = toFlag True,
+                        ghcOptDynLinkMode = toFlag (if dynamic then GhcStaticAndDynamic else GhcStaticOnly), ghcOptFPic = toFlag True,
                         ghcOptDynHiSuffix = toFlag "dyn_hi", ghcOptDynObjSuffix = toFlag "dyn_o" }
                     core = destination </> "core"
                     rendered = renderGhcOptions (compiler configured) (hostPlatform configured) options'
@@ -599,11 +603,11 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                 forM_ nodes $ \(_, path, boot) ->
                   checkedIn package (installedGhc original) (compileFlags ++ (if boot then [] else exportFlags) ++ [path])
               createDirectory (destination </> "interfaces")
-              forM_ expected $ \moduleName -> forM_ ["hi", "dyn_hi"] $ \extension -> do
+              forM_ expected $ \moduleName -> forM_ suffixes $ \extension -> do
                 let relative = map (\c -> if c == '.' then '/' else c) moduleName ++ "." ++ extension
                     target = destination </> "interfaces" </> relative
                 createDirectoryIfMissing True (takeDirectory target)
-                createFileLink (getSymbolicPath output </> relative) target
+                (if Host.os == "mingw32" then copyFile else createFileLink) (getSymbolicPath output </> relative) target
               view <- createView context unit destination expected
               writeFile receipt (show (registeredId unit, expected) ++ "\n")
               pure (viewContext context view)

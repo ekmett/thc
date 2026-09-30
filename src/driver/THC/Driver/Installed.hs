@@ -13,7 +13,7 @@
 -- GHC-independent discovery and subprocess boundary. Only thc-interface links
 -- the selected GHC API. Never substitute ordinary unfoldings for a full payload.
 module THC.Driver.Installed
-  ( InstalledContext(..), InterfaceWay(..), interfaceWayName, packageGlobalArguments
+  ( InstalledContext(..), InterfaceWay(..), interfaceWayName, packageGlobalArguments, helperDatabases, installedViewIdentity
   , InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe
@@ -80,6 +80,13 @@ packageGlobalArguments context = ["--global", "--global-package-db", installedGl
 helperDatabases :: InstalledContext -> [FilePath]
 helperDatabases context = [installedGlobalDb context |
   installedGlobalDb context /= installedLibdirGlobalDb context] ++ installedDatabases context
+
+-- | Bind replay and acquisition receipts to the actual selected package stack.
+installedViewIdentity :: InstalledContext -> Value
+installedViewIdentity context = object
+  ["libdir" .= installedLibdir context, "globalDatabase" .= installedGlobalDb context,
+   "implicitGlobalDatabase" .= installedLibdirGlobalDb context,
+   "databases" .= helperDatabases context, "way" .= interfaceWayName (installedInterfaceWay context)]
 
 data InstalledUnit = InstalledUnit
   { registeredId :: String, registration :: String, installedDepends :: [String]

@@ -140,6 +140,8 @@ tests = TestLabel "bounded installed-interface hydration" $ TestList
       assertEqual "vanilla discovery selects only hi" [("A", vanillaPath)] (installedInterfaces selected)
       assertEqual "dynamic discovery still selects dyn_hi" [("A", dynamicPath)] (installedInterfaces dynamic)
       assertBool "way changes provenance" (installedProvenance context dynamic /= installedProvenance vanilla selected)
+      assertBool "same libdir with private database changes replay identity"
+        (installedViewIdentity vanilla /= installedViewIdentity private)
       assertBool "helper uses vanilla" (["--way", "vanilla"] `isInfixOf` helperCommand vanilla selected ("A", vanillaPath))
       assertBool "helper receives private database before additional databases"
         (["--package-db", installedGlobalDb private, "--package-db", directory] `isInfixOf`
