@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,8 +32,9 @@ public final class ThreadInventoryCoreEvidence {
     private final int originalOnce;
     private final int once;
     private final Set<String> labels;
+    private final Map<String, String> sourceLabels = new LinkedHashMap<>();
 
-    public ThreadInventoryCoreEvidence(Map<String, Object> module, String name) {
+    public ThreadInventoryCoreEvidence(Map<String, Object> module, Map<String, Object> compact, String name) {
         this.name = name;
         evidence = new ArrayCoreEvidence(module, name);
         scans = switch (name) {
@@ -108,17 +110,34 @@ public final class ThreadInventoryCoreEvidence {
             }
         }
         labels = new LinkedHashSet<>();
-        for (var lambda : originalRoots) {
-            var text = new StringBuilder("lambda ");
-            boolean first = true;
-            for (var parameter : (List<Map<String, Object>>) lambda.get(1)) {
-                if (!first) text.append(", "); first = false;
-                text.append(String.valueOf(parameter.get("name")));
-            }
-            labels.add(text.toString());
-        }
+        for (var lambda : originalRoots) labels.add(label(lambda));
         assertEquals(once + (scans == 0 ? 0 : 1), labels.size(), name + " distinct source roots");
+        // The producer proves byte-identical encoding of this diagnostic view
+        // and the executed CBD. Pair lexical lambdas within each exact global.
+        var executable = new ArrayCoreEvidence(compact, (String) evidence.getRoot().get("id"));
+        assertEquals(Set.copyOf(evidence.getBindings().stream().map(binding -> binding.get("id")).toList()),
+            Set.copyOf(executable.getBindings().stream().map(binding -> binding.get("id")).toList()));
+        for (var binding : evidence.getBindings()) {
+            var selected = executable.getAllBindings().get((String) binding.get("id"));
+            assertNotNull(selected);
+            var original = evidence.guestLambdas(binding.get("expr"));
+            var decoded = executable.guestLambdas(selected.get("expr"));
+            assertEquals(original.size(), decoded.size());
+            for (int i = 0; i < original.size(); i++) {
+                var lambda = original.get(i);
+                assertEquals(((List<?>) lambda.get(1)).size(), ((List<?>) decoded.get(i).get(1)).size());
+                if (originalRoots.stream().anyMatch(rootLambda -> rootLambda == lambda))
+                    assertNull(sourceLabels.put(label(decoded.get(i)), label(lambda)), "Distinct CBD root labels");
+            }
+        }
+        assertEquals(labels, new LinkedHashSet<>(sourceLabels.values()));
     }
+    private static String label(List<?> lambda) {
+        var names = new ArrayList<String>();
+        for (var parameter : (List<Map<String, Object>>) lambda.get(1)) names.add((String) parameter.get("name"));
+        return "lambda " + String.join(", ", names);
+    }
+    public String sourceLabel(String runtimeLabel) { return java.util.Objects.requireNonNull(sourceLabels.get(runtimeLabel)); }
     public Set<String> getLabels() { return labels; }
     public long compiledCalls(int population) {
         if (population < 1) throw new IllegalArgumentException("Failed requirement.");
@@ -128,7 +147,7 @@ public final class ThreadInventoryCoreEvidence {
     public void assertRoots(List<RootCallTarget> targets) {
         var names = new LinkedHashSet<String>();
         for (var target : targets) names.add(target.getRootNode().getName());
-        assertEquals(labels, names, name + " source-derived root labels");
+        assertEquals(sourceLabels.keySet(), names, name + " source-derived root labels");
         assertEquals(labels.size(), targets.size(), name + " exact original root inventory");
     }
     /** Prove the eliminated wrapper from original Core, never target discovery. */

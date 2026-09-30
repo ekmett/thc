@@ -108,7 +108,7 @@ prepareInterfaceCore root = do
           "-odir", output, "-hidir", output] ++
           (if complete then ["-package-db", pluginDb, "-plugin-package-id", pluginUnit,
             "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:" ++ root </> directory </> "direct",
-            "-fplugin-opt=THC.Plugin:post-tidy"] else [])
+            "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:pretty-diagnostics"] else [])
     compiled <- run (mode ++ "-compile") ghc (common ++ [generated])
     cbvCompiled <- run (mode ++ "-cbv-compile") ghc (common ++ [cbvSource])
     exists <- doesDirectoryExist database
@@ -265,6 +265,8 @@ prepareInterfaceCore root = do
          directory </> "typed-foreign-exports/registration/ForeignExportRegistration.hi",
          directory </> "typed-export-source/ForeignExportRegistration.hs.saved"] ++
         [directory </> "import-stubs" </> variant ++ ".json" | variant <- ["plain", "labels", "extra-file", "wrapper", "instrumented"]] ++
+        [directory </> "import-stubs" </> variant ++ ".cbd" |
+          variant <- ["labels", "labels-header", "capi-labels", "capi-labels-header", "finalizer-label"]] ++
         [directory </> "import-stubs" </> "labels-" ++ entry ++ "-audit.json" |
           entry <- ["probe", "unknownData", "unknownFunction"]] ++
         [directory </> "source/ForeignImportStubs.hs.saved", directory </> "import-stubs/plain/ForeignImportStubs.hi"] ++
@@ -444,11 +446,12 @@ checkHelper root directory libdir helper = do
         "--interface", root </> directory </> mode </> name ++ ".hi", "--source-notes"]
       run code label args = runLoggedExpect code 180 root (directory </> "logs") label [] helper args
       decode result = maybe (die "Helper output is not one JSON value") pure (decodeStrict' (commandStdout result))
+      decodeCore result = either die pure (readModuleValue (commandStdout result))
   full <- forM ["InterfaceLibrary", "CBVCoercionAudit"] $ \name -> do
     result <- run 0 ("helper-" ++ name) (arguments "full" name)
-    output <- decode result
-    check (valueAt "schema" output == Number 1 && valueAt "status" output == String "loaded") "Helper did not load full Core"
-    let core = valueAt "core" output
+    core <- decodeCore result
+    check (valueAt "schema" core == Number 1 && valueAt "unit" core == toJSON unitName &&
+      valueAt "module" core == toJSON name) "Helper did not load the exact full Core module"
     writeJson (root </> directory </> name ++ ".json") core
     pure result
   thin <- run 3 "helper-thin" (arguments "thin" "InterfaceLibrary")
@@ -460,14 +463,15 @@ checkHelper root directory libdir helper = do
     if argument == root </> directory </> "full/InterfaceLibrary.hi"
     then root </> directory </> "full/InterfaceLibrary.dyn_hi" else argument)
     (arguments "full" "InterfaceLibrary") ++ ["--way", "dynamic"])
-  dynamicOutput <- decode dynamic
-  check (valueAt "status" dynamicOutput == String "loaded") "Matching dynamic interface did not load"
+  dynamicOutput <- decodeCore dynamic
+  check (valueAt "unit" dynamicOutput == toJSON unitName && valueAt "module" dynamicOutput == String "InterfaceLibrary")
+    "Matching dynamic interface did not load"
   badWay <- run 1 "helper-wrong-way" (arguments "full" "InterfaceLibrary" ++ ["--way", "dynamic"])
   foreignLoaded <- run 0 "helper-foreign" (arguments "full" "InterfaceForeign")
-  foreignOutput <- decode foreignLoaded
-  check (valueAt "status" foreignOutput == String "loaded" &&
-    valueAt "schema" (valueAt "core" foreignOutput) == Number 2) "Foreign Core did not use archive-only schema"
-  writeJson (root </> directory </> "InterfaceForeign.json") (valueAt "core" foreignOutput)
+  foreignOutput <- decodeCore foreignLoaded
+  check (valueAt "unit" foreignOutput == toJSON unitName && valueAt "module" foreignOutput == String "InterfaceForeign" &&
+    valueAt "schema" foreignOutput == Number 2) "Foreign Core did not use archive-only schema"
+  writeJson (root </> directory </> "InterfaceForeign.json") foreignOutput
   badModule <- run 1 "helper-wrong-module"
     ["--libdir", libdir, "--unit", unitName, "--module", "Wrong", "--package-db",
      root </> directory </> "full/package.conf.d", "--interface", root </> directory </> "full/InterfaceLibrary.hi"]
@@ -481,7 +485,7 @@ checkHelper root directory libdir helper = do
       marked value = case valueAt "entryStrict" value of Array xs -> Bool True `elem` toList xs; _ -> False
       workers = filter marked (bindings direct)
   check (not (null workers)) "Direct late export has no genuine CBV worker"
-  forM_ workers $ \original -> case filter ((== valueAt "name" original) . valueAt "name") (bindings loaded) of
+  forM_ workers $ \original -> case filter ((== valueAt "id" original) . valueAt "id") (bindings loaded) of
     [hydrated] -> do
       check (valueAt "entryStrictSource" original == String "ghc-id" &&
         valueAt "entryStrictSource" hydrated == String "ghc-id") "CBV evidence was synthesized"
@@ -561,9 +565,10 @@ checkWiredHelper root directory libdir helper registered otherRegistration = do
     ["registeredUnit" .= registered, "interfaceUnit" .= canonical, "module" .= ("GHC.Internal.Char" :: String),
      "interface" .= path, "completeCore" .= complete, "expectedExit" .= expectedExit]
   loaded <- run expectedExit "helper-wired-unit" registered
-  output <- maybe (die "Wired helper response is not JSON") pure (decodeStrict' (commandStdout loaded))
-  if complete then check (valueAt "status" output == String "loaded" &&
-      valueAt "unit" (valueAt "core" output) == String "ghc-internal") "Wired Core identity was rewritten"
+  output <- if complete then either die pure (readModuleValue (commandStdout loaded))
+    else maybe (die "Wired helper response is not JSON") pure (decodeStrict' (commandStdout loaded))
+  if complete then check (valueAt "unit" output == String "ghc-internal" &&
+      valueAt "module" output == String "GHC.Internal.Char") "Wired Core identity was rewritten"
     else check (valueAt "status" output == String "unavailable" && valueAt "core" output == Null &&
       valueAt "capability" output == String "complete-interface-core" &&
       valueAt "unit" output == toJSON registered) "Thin wired input was not an exact-registration missing capability"
@@ -646,12 +651,12 @@ checkInstalledWrappers environment charPath root directory = do
       Nothing -> pure (object ["wrapper" .= occurrence, "completeCore" .= False], [])
       Just core -> do
         checkWrapper environment core occurrence
-        rendered <- interfaceCoreJSON ["unit-qualified"] core
-        let exported = root </> directory </> occurrence ++ ".json"
+        rendered <- interfaceCoreCBD ["unit-qualified"] core
+        let exported = root </> directory </> occurrence ++ ".cbd"
             audit = root </> directory </> occurrence ++ "-audit.json"
             entry = unitString (moduleUnit (interfaceModule core)) ++ ":" ++
               moduleNameString (moduleName (interfaceModule core)) ++ "." ++ occurrence
-        writeFile exported rendered
+        BS.writeFile exported rendered
         audited <- runLogged 180 root (directory </> "logs") ("audit-" ++ occurrence) [] "python3"
           ["bin/audit-core.py", exported, "--entry", entry, "--output", audit]
         pure (object ["wrapper" .= occurrence, "completeCore" .= True,

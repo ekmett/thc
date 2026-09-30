@@ -13,7 +13,7 @@
 -- Fixture acquisition support for interface foreign facts.
 module InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, prepareImportStubs, inspectInstalledBound) where
 
-import Control.Monad (forM, forM_, unless)
+import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value(..), object, (.=), eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BSC
@@ -37,6 +37,7 @@ import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
 import FixtureSupport (CommandResult(..), runLogged, runLoggedExpect, writeJson)
 import THC.Interface
+import THC.Compact.Module (writeModuleValue)
 import THC.Plugin (serializePostTidyCoreWithAnnotations)
 
 check :: Bool -> String -> IO ()
@@ -474,11 +475,14 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
                 "Changed C stub product retained managed import admission"
           _ -> die "Original CAPI control lost its products"
       writeFile (root </> directory </> "import-stubs" </> variant ++ ".json") rendered
+      when (variant `elem` map fst labelVariants) $ do
+        _ <- writeModuleValue (root </> directory </> "import-stubs" </> variant ++ ".cbd") value
+        pure ()
   audits <- forM [(variant, entryName, status) | (variant, _) <- labelVariants,
       (entryName, status) <- [("probe", 0), ("unknownData", 1), ("unknownFunction", 1)]] $ \(variant, entryName, status) -> do
     let report = directory </> "import-stubs" </> variant ++ "-" ++ entryName ++ "-audit.json"
     result <- runLoggedExpect status 60 root (directory </> "logs") ("import-" ++ variant ++ "-" ++ entryName) [] "python3"
-      ["bin/audit-core.py", directory </> "import-stubs" </> variant ++ ".json", "--entry",
+      ["bin/audit-core.py", directory </> "import-stubs" </> variant ++ ".cbd", "--entry",
        unitName ++ ":ForeignImportStubs." ++ entryName, "--output", report]
     bytes <- BSC.readFile (root </> report)
     value <- either die pure (eitherDecodeStrict' bytes)

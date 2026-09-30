@@ -23,6 +23,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import THC.Compact.Module (encodeModuleValue)
 
 prepareThreadInventory :: FilePath -> IO ()
 prepareThreadInventory root = do
@@ -43,13 +44,21 @@ prepareThreadInventory root = do
   unless (version == "9.14.1\n") (die "Thread inventory requires GHC 9.14.1")
   forM_ stages $ \stage -> do
     let core = directory </> stage </> "core"
-        options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
+        options = ["-fplugin-opt=THC.Plugin:pretty-diagnostics"] ++
+          ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [source]) ""
+    -- The printed types/names prove source call counts; execution uses the
+    -- sibling CBD. Require both views to encode the exact same module.
+    diagnostic <- BS.readFile (root </> core </> "ThreadInventory.json")
+    diagnosticValue <- maybe (die "Invalid thread inventory diagnostic Core") pure (decodeStrict' diagnostic)
+    encoded <- encodeModuleValue diagnosticValue
+    compact <- BS.readFile (root </> core </> "ThreadInventory.cbd")
+    unless (encoded == compact) (die "Thread inventory diagnostic/CBD export mismatch")
     forM_ entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
-      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
-        "--output", report, core </> "ThreadInventory.json"] ""
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:ThreadInventory." ++ entry,
+        "--output", report, core </> "ThreadInventory.cbd"] ""
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
         Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
@@ -83,7 +92,7 @@ prepareThreadInventory root = do
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt", directory </> "callback-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
-          suffix <- "core/ThreadInventory.json" : [entry ++ "-audit.json" | entry <- entries]]
+          suffix <- ["core/ThreadInventory.cbd", "core/ThreadInventory.json"] ++ [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
