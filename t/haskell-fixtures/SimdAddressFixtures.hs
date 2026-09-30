@@ -182,14 +182,14 @@ prepareSimdAddresses root = do
   exported <- forM (("pre","SimdAddressAudit",entries,False) :
     [("post128","SimdAddress128Audit",narrow,True) | native128]) $ \(stage,moduleName,selected,post) -> do
       let coreDirectory = directory </> stage ++ "-core"
-          core = coreDirectory </> moduleName <.> "json"
+          core = coreDirectory </> moduleName <.> "cbd"
           audit = directory </> stage ++ "-audit.json"
       compiled <- execute (stage ++ "-export")
         [("THC_CORE_OUT",root </> coreDirectory),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
         "bin/export-core.sh" ((if post then ["-fllvm","-fplugin-opt=THC.Plugin:post-tidy"]
           else ["-fno-code","-fwrite-if-simplified-core"]) ++ [sourceDir </> moduleName <.> "hs"])
       audited <- execute (stage ++ "-audit") [] "python3"
-        (["bin/audit-core.py",core,"--output",audit] ++ concatMap (\entry -> ["--entry",entryName entry]) selected)
+        (["bin/audit-core.py",core,"--output",audit] ++ concatMap (\entry -> ["--entry","main:" ++ moduleName ++ "." ++ entryName entry]) selected)
       report <- BS.readFile (root </> audit) >>= either die pure . eitherDecodeStrict'
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
