@@ -15,6 +15,7 @@ import java.nio.ByteOrder;
 import java.security.MessageDigest;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ThreadInventoryCoreEvidence.interpretedCalls;
 
 @SuppressWarnings("unchecked")
 public class DoubleArrayNativeTest {
@@ -351,7 +352,10 @@ public class DoubleArrayNativeTest {
                             .toList());
                     boolean read = name.equals("moveDoubleBits");
                     switch (mutation) {
-                        case 0 -> helper.put("name", "wrongHelper");
+                        case 0 -> {
+                            helper.put("id", coreEntry("wrongHelper"));
+                            ((List<Object>) call.get(1)).set(1, helper.get("id"));
+                        }
                         case 1 -> helper.put("arity", (Long) helper.get("arity") + 1);
                         case 2 -> ((List<Object>) call.get(2)).removeLast();
                         case 3 ->
@@ -426,7 +430,8 @@ public class DoubleArrayNativeTest {
         for (var stage : stages.entrySet()) {
             var module = merged(stage.getValue());
             for (var name : names) {
-                long expectedCalls = checkCore(new ArrayCoreEvidence(module, coreEntry(name)), name);
+                var evidence = new ArrayCoreEvidence(module, coreEntry(name));
+                long expectedCalls = checkCore(evidence, name);
                 var cases = rows.get(name);
                 assertEquals(cases.size(), new HashSet<>(cases.stream().map(Row::input).toList()).size());
                 assertEquals(inputs(), cases.stream().map(Row::input).toList());
@@ -450,16 +455,32 @@ public class DoubleArrayNativeTest {
                             // The checked immediate runRW State# lambda is beta-reduced.
                             var expectedLabels = new HashSet<String>();
                             for (var binding : bindings) expectedLabels.add(lambdaLabel((List<?>) binding.get("expr")));
+                            var expectedPrepared = backend.equals("bytecode") ? preparedJoinLabels(evidence) : Set.of();
                             List<RootCallTarget> targets = List.of();
                             checkCases(cases, stage.getKey(), backend, name, inlining, p, entry, expectedCalls, targets,
                                 false, language);
                             targets = activeTargets(entry);
-                            assertEquals((int) expectedCalls, targets.size(),
+                            var prepared = targets.stream()
+                                .filter(t -> t.getRootNode() instanceof BytecodeRoot r && r.entryMask() == 0L).toList();
+                            assertEquals(expectedPrepared,
+                                new HashSet<>(prepared.stream().map(t -> t.getRootNode().getName()).toList()),
+                                stage.getKey() + "/" + backend + "/" + name + " prepared join labels");
+                            assertEquals(expectedPrepared.size(), prepared.size());
+                            for (var target : prepared)
+                                assertEquals(0, target.getClass().getMethod("getCallCount").invoke(target),
+                                    "Prepared join bodies have executed no guest work");
+                            assertEquals((int) expectedCalls, targets.size() - prepared.size(),
                                 stage.getKey() + "/" + backend + "/" + name + " active guest roots");
                             assertEquals(expectedLabels,
-                                new HashSet<>(targets.stream().map(t -> t.getRootNode().getName()).toList()),
+                                new HashSet<>(targets.stream().filter(t -> !prepared.contains(t))
+                                    .map(t -> t.getRootNode().getName()).toList()),
                                 stage.getKey() + "/" + backend + "/" + name + " guest root labels");
+                            // Install and retain every physical target, including dormant recovery plans.
+                            long beforeInstallation = count(p, "compiledEntries");
+                            var interpretedBefore = interpretedCalls(targets);
                             for (var target : targets) compile(target);
+                            assertEquals(beforeInstallation, count(p, "compiledEntries"));
+                            assertEquals(interpretedBefore, interpretedCalls(targets), "Installation executes no guest calls");
                             long allocations = language.getHandoffState().get().getResults().getAllocations();
                             checkCases(cases, stage.getKey(), backend, name, inlining, p, entry, expectedCalls, targets,
                                 true, language);
@@ -479,9 +500,35 @@ public class DoubleArrayNativeTest {
         var formals = (List<Map<String, Object>>) expression.get(1);
         return "lambda " + String.join(", ", formals.stream().map(f -> String.valueOf(f.get("name"))).toList());
     }
+    private Set<String> preparedJoinLabels(ArrayCoreEvidence evidence) {
+        var labels = new HashSet<String>();
+        for (var binding : evidence.getBindings())
+            for (var node : evidence.nodes(binding.get("expr")))
+                if (!node.isEmpty() && "let".equals(node.getFirst()) && Boolean.FALSE.equals(node.get(1)))
+                    for (var join : (List<Map<String, Object>>) node.get(2))
+                        if (join.get("joinValueArity") instanceof Number arity) {
+                            var lambda = (List<?>) join.get("expr");
+                            assertEquals("lam", lambda.getFirst());
+                            assertEquals(arity.longValue(), (long) ((List<?>) lambda.get(1)).size());
+                            assertTrue(evidence.nodes(lambda.get(2)).stream().noneMatch(n -> !n.isEmpty()
+                                && ("let".equals(n.getFirst()) || "lam".equals(n.getFirst()))),
+                                "The source join body has no nested join groups or guest closures");
+                            if (joinBodyWork(lambda.get(2)) >= 64)
+                                labels.add("join body " + join.get("id"));
+                        }
+        return labels;
+    }
+    // These source bodies contain no nested join groups; metadata is not guest work.
+    private int joinBodyWork(Object value) {
+        if (!(value instanceof List<?> list) || list.isEmpty() || "lam".equals(list.getFirst())) return 0;
+        int work = 1;
+        for (var child : list) work += joinBodyWork(child);
+        return work;
+    }
     private void checkCases(List<Row> cases, String stage, String backend, String name, boolean inlining,
         ExecutableProgram program, RootCallTarget entry, long expectedCalls, List<RootCallTarget> targets,
         boolean compiled, Language language) throws Exception {
+        var interpretedBefore = interpretedCalls(targets);
         for (var row : cases) {
             var label = stage + "/" + backend + "/" + name + "/" + row.input + "/inlining=" + inlining;
             long before = count(program, "compiledEntries");
@@ -494,6 +541,7 @@ public class DoubleArrayNativeTest {
                 assertTrue(active.stream().allMatch(t -> targets.stream().anyMatch(old -> old == t)),
                     label + " active target identities");
                 for (var target : targets) valid(target, label);
+                assertEquals(interpretedBefore, interpretedCalls(targets), label + " no interpreted guest calls");
             }
             released(language);
         }
