@@ -19,6 +19,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import thc.runtime.BytecodeRoot;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -84,9 +85,9 @@ public final class IntegerPrimopsTest {
             entries.stream().map(e -> ((Number) e.get("selector")).intValue()).toList());
         List<Map<String, Object>> modules = new ArrayList<>();
         for (String path : (List<String>) manifest.get("modules"))
-            modules.add((Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.resolve(path))));
+            modules.add(CoreCbdFixtures.read(root.resolve(path)));
         var merged = CoreModules.INSTANCE.merge(modules);
-        var compositeCalls = NumericPrimopCoreEvidence.calls(merged, (String) composite.get("name"), true);
+        var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:IntegerPrimopsAudit." + composite.get("name"), true);
         for (var entry : entries) {
             String name = (String) entry.get("name");
             String operation = operation(name);
@@ -97,7 +98,7 @@ public final class IntegerPrimopsTest {
                 : List.of(word, operation.startsWith("uncheckedShift") ? "IntRep" : word);
             String result = Set.of("eq", "ne", "gt", "ge").contains(operation) ? "IntRep" : word;
             String primitive = (String) entry.get("primitive");
-            NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(merged, name),
+            NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(merged, "main:IntegerPrimopsAudit." + name),
                 primitive, arguments, result, name);
             NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, "composite/" + name);
         }
@@ -117,9 +118,9 @@ public final class IntegerPrimopsTest {
         }
         for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContext.primopTestContext()) {
             NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged,
-                entries.stream().map(e -> (String) e.get("name")).toList(), backend);
-            Value function = context.eval("thc", Json.INSTANCE.stringify(Map.of("modules", modules,
-                "entry", composite.get("name"), "backend", backend, "instrument", true)));
+                entries.stream().map(e -> "main:IntegerPrimopsAudit." + e.get("name")).toList(), backend);
+            Value function = context.eval("thc", CoreModules.request((List<String>) manifest.get("modules"),
+                "main:IntegerPrimopsAudit." + composite.get("name"), true, false, backend));
             // Warm every selector and native row, then repeat each through installed code.
             for (var entry : entries) for (long[] row : casesByName.get(entry.get("name")))
                 check(function, backend, entry, row);
@@ -137,7 +138,7 @@ public final class IntegerPrimopsTest {
         }
     }
 
-    @Test void everyAddedPrimitiveRejectsWrongAritiesEvenInDiagnosticMode() throws Exception {
+    @Test void everyAddedPrimitiveRejectsWrongAritiesEvenInDiagnosticMode(@TempDir Path temporary) throws Exception {
         var entries = (List<Map<String, Object>>) manifest().get("entries");
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
             try (Context context = Main.executionContext(false)) {
@@ -145,13 +146,14 @@ public final class IntegerPrimopsTest {
                     String name = (String) entry.get("primitive");
                     int arity = ((Number) entry.get("arity")).intValue();
                     for (int supplied : new int[] {arity - 1, arity + 1}) {
-                        var body = List.of("app", List.of("prim", name),
-                            Collections.nCopies(supplied, List.of("lit", "word", "1")), Collections.nCopies(supplied, false));
-                        var module = Map.of("schema", 1, "ghc", "9.14.1", "module", "Malformed.IntegerPrimop",
-                            "constructors", List.of(), "bindings", List.of(Map.of("id", "entry", "name", "entry",
+                        var body = List.of("app", List.of("prim", name, Map.of()),
+                            Collections.nCopies(supplied, List.of("lit", "word", "1", Map.of())), Collections.nCopies(supplied, false), false, false, Map.of());
+                        var module = Map.of("schema", 1, "ghc", "9.14.1", "unit", "main", "module", "Malformed.IntegerPrimop", "boundary", "test-model",
+                            "constructors", List.of(), "bindings", List.of(Map.of("id", "main:Malformed.IntegerPrimop.entry", "name", "entry",
                                 "lifted", true, "arity", 0, "expr", body)));
-                        var error = assertThrows(PolyglotException.class, () -> context.eval("thc", Json.INSTANCE.stringify(
-                            Map.of("entry", "entry", "backend", backend, "diagnosticUnsupported", diagnostic, "modules", List.of(module)))));
+                        var source = CoreCbdFixtures.write(Files.createTempFile(temporary, "arity-", ".cbd"), module);
+                        var error = assertThrows(PolyglotException.class, () -> context.eval("thc", CoreModules.request(
+                            List.of(source.toString()), "main:Malformed.IntegerPrimop.entry", false, diagnostic, backend)));
                         assertTrue(error.getMessage() != null && error.getMessage().contains("Primitive arity mismatch: " + name), error.getMessage());
                     }
                 }

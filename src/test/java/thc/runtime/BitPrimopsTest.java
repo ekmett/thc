@@ -24,6 +24,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import thc.CoreModules;
 import thc.EntryValue;
 import thc.Json;
@@ -110,28 +111,28 @@ public final class BitPrimopsTest {
         assertEquals(1953, cases.size());
         for (var stage : stages.entrySet()) {
             List<Map<String, Object>> modules = new ArrayList<>();
-            for (String path : stage.getValue()) modules.add((Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.resolve(path))));
+            for (String path : stage.getValue()) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
             var merged = CoreModules.INSTANCE.merge(modules);
-            var compositeCalls = NumericPrimopCoreEvidence.calls(merged, composite, true);
+            var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:BitPrimopsAudit." + composite, true);
             for (var entry : entries) {
                 String name = (String) entry.get("name"), primitive = (String) entry.get("primitive");
                 List<String> arguments = List.of((String) entry.get("argumentRep"));
                 String result = (String) entry.get("resultRep");
-                NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, stage.getKey() + "/" + name);
+                NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(merged, "main:BitPrimopsAudit." + name), primitive, arguments, result, stage.getKey() + "/" + name);
                 NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, stage.getKey() + "/" + composite);
             }
             for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContext.primopTestContext()) {
-                NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged, entries.stream().map(e -> (String) e.get("name")).toList(), backend);
+                NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged, entries.stream().map(e -> "main:BitPrimopsAudit." + e.get("name")).toList(), backend);
                 context.enter();
                 try {
                     String label = stage.getKey() + "/" + backend;
                     Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    Map<String, Object> module = new LinkedHashMap<>(CoreModules.INSTANCE.reachable(merged, composite, false));
+                    Map<String, Object> module = new LinkedHashMap<>(CoreModules.INSTANCE.reachable(merged, "main:BitPrimopsAudit." + composite, false));
                     module.put("instrument", true);
                     assertEquals(1, ((List<?>) module.get("bindings")).size(), label + " one composite guest root");
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
                     RootCallTarget host = program.hostEntryTarget(entries.size() + 1);
-                    Value function = context.asValue(new EntryValue(program, composite, entries.size() + 1));
+                    Value function = context.asValue(new EntryValue(program, "main:BitPrimopsAudit." + composite, entries.size() + 1));
                     for (Long[] row : cases) check(function, label, row, 0);
                     List<Long[]> wrongExpectations = new ArrayList<>();
                     for (int i = 0; i < entries.size(); i++) {
@@ -142,7 +143,7 @@ public final class BitPrimopsTest {
                     }
                     assertEquals(0L, compiled(program), label + " waits for the explicit compilation request");
                     assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
-                    RootCallTarget original = program.entryTarget(composite);
+                    RootCallTarget original = program.entryTarget("main:BitPrimopsAudit." + composite);
                     List<RootCallTarget> active = NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class).stream()
                         .filter(n -> n.getCallTarget() == original).map(n -> (RootCallTarget) n.getCurrentCallTarget()).toList();
                     if (active.isEmpty()) active = List.of(original);
@@ -166,17 +167,18 @@ public final class BitPrimopsTest {
         }
     }
 
-    @Test void malformedArityIsRejectedAtLoadEvenWithDiagnosticExecutionEnabled() throws Exception {
+    @Test void malformedArityIsRejectedAtLoadEvenWithDiagnosticExecutionEnabled(@TempDir Path temporary) throws Exception {
         var entries = (List<Map<String, Object>>) manifest().get("entries");
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
             try (Context context = Main.executionContext(false)) {
                 for (var entry : entries) for (int supplied : new int[] {0, 2}) {
                     String primitive = (String) entry.get("primitive");
-                    var body = List.of("app", List.of("prim", primitive), Collections.nCopies(supplied, List.of("lit", "word", "1")), Collections.nCopies(supplied, false));
-                    var module = Map.of("schema", 1, "ghc", "9.14.1", "module", "Malformed.BitPrimitive", "constructors", List.of(),
-                        "bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "arity", 0, "expr", body)));
-                    var error = assertThrows(PolyglotException.class, () -> context.eval("thc", Json.INSTANCE.stringify(Map.of(
-                        "entry", "entry", "backend", backend, "diagnosticUnsupported", diagnostic, "modules", List.of(module)))));
+                    var body = List.of("app", List.of("prim", primitive, Map.of()), Collections.nCopies(supplied, List.of("lit", "word", "1", Map.of())), Collections.nCopies(supplied, false), false, false, Map.of());
+                    var module = Map.of("schema", 1, "ghc", "9.14.1", "unit", "main", "module", "Malformed.BitPrimitive", "boundary", "test-model", "constructors", List.of(),
+                        "bindings", List.of(Map.of("id", "main:Malformed.BitPrimitive.entry", "name", "entry", "lifted", true, "arity", 0, "expr", body)));
+                    var source = thc.CoreCbdFixtures.write(Files.createTempFile(temporary, "arity-", ".cbd"), module);
+                    var error = assertThrows(PolyglotException.class, () -> context.eval("thc", CoreModules.request(
+                        List.of(source.toString()), "main:Malformed.BitPrimitive.entry", false, diagnostic, backend)));
                     assertTrue(error.getMessage() != null && error.getMessage().contains("Primitive arity mismatch: " + primitive), error.getMessage());
                 }
             }

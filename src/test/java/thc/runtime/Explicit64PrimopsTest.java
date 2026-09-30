@@ -33,7 +33,7 @@ public final class Explicit64PrimopsTest {
         return (Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.resolve("build/explicit64-primops/manifest.json")));
     }
     private Map<String, Object> module() throws Exception {
-        return (Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.resolve("build/explicit64-primops/core/Explicit64PrimopsAudit.json")));
+        return thc.CoreCbdFixtures.read(root.resolve("build/explicit64-primops/core/Explicit64PrimopsAudit.cbd"));
     }
     private Context context() {
         return Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -94,7 +94,7 @@ public final class Explicit64PrimopsTest {
             for (long[] row : casesByName.get(name)) assertEquals(mathematical(entry, row[0], row[1]), row[2],
                 "native " + name + "(" + row[0] + "," + row[1] + ")");
             String primitive = (String) entry.get("primitive");
-            if (primitive != null) NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(exported, name),
+            if (primitive != null) NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(exported, "main:Explicit64PrimopsAudit." + name),
                 primitive, (List<String>) entry.get("arguments"), (String) entry.get("result"), name);
         }
         visit((language, backend) -> {
@@ -102,7 +102,7 @@ public final class Explicit64PrimopsTest {
                 String name = (String) entry.get("name");
                 int arity = ((Number) entry.get("arity")).intValue();
                 var cases = casesByName.get(name);
-                var module = CoreModules.INSTANCE.reachable(exported, name, false);
+                var module = CoreModules.INSTANCE.reachable(exported, "main:Explicit64PrimopsAudit." + name, false);
                 var bindings = (List<Map<String, Object>>) module.get("bindings");
                 assertEquals(1, bindings.size());
                 var lambda = (List<Object>) bindings.getFirst().get("expr");
@@ -110,10 +110,10 @@ public final class Explicit64PrimopsTest {
                     ((List<Map<String, Object>>) lambda.get(1)).stream().map(b -> CoreRepresentations.binder(b).getPrimReps()).toList());
                 assertEquals(List.of(entry.get("result")), CoreRepresentations.lambdaResult(lambda).getPrimReps());
                 var program = program(language, module, backend);
-                Object value = program.entryValue(name);
+                Object value = program.entryValue("main:Explicit64PrimopsAudit." + name);
                 RootCallTarget host = program.hostEntryTarget(arity);
                 for (long[] row : cases) check(host, value, arity, backend + "/" + name, row);
-                RootCallTarget target = program.entryTarget(name);
+                RootCallTarget target = program.entryTarget("main:Explicit64PrimopsAudit." + name);
                 compile(target);
                 long before = count(program, "compiledEntries");
                 for (long[] row : cases.reversed()) check(host, value, arity, backend + "/" + name, row);
@@ -180,7 +180,7 @@ public final class Explicit64PrimopsTest {
                     List.of("long", "Word64Rep"), List.of("long", "IntRep"), List.of("float", "FloatRep"),
                     List.of("double", "DoubleRep"), List.of("object", "BoxedRep (Just Lifted)"))) {
                 String kind = representation.get(0), rep = representation.get(1);
-                var module = CoreModules.INSTANCE.reachable(module(), "plusInt64", false);
+                var module = CoreModules.INSTANCE.reachable(module(), "main:Explicit64PrimopsAudit.plusInt64", false);
                 var bindings = (List<Map<String, Object>>) module.get("bindings");
                 assertEquals(1, bindings.size());
                 var lambda = (List<Object>) bindings.getFirst().get("expr");
@@ -191,7 +191,7 @@ public final class Explicit64PrimopsTest {
                     var program = program(language, diagnostic(module, diagnostic), backend);
                     for (long[] pair : new long[][] {{0, 1}, {Long.MAX_VALUE, 1}, {Long.MIN_VALUE, -1}, {-1, 1}})
                         assertEquals(ScalarPrimopModel.explicit64("plus", false, pair[0], pair[1]),
-                            Calls.target(program.hostEntryTarget(2), new Object[] {program.entryValue("plusInt64"), new Object[] {pair[0], pair[1]}}), label);
+                            Calls.target(program.hostEntryTarget(2), new Object[] {program.entryValue("main:Explicit64PrimopsAudit.plusInt64"), new Object[] {pair[0], pair[1]}}), label);
                 } else assertThrows(RuntimeFault.class, () -> program(language, diagnostic(module, diagnostic), backend), label);
             }
         });
