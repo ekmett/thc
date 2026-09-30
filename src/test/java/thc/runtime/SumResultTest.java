@@ -12,6 +12,8 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
+import java.nio.file.Path;
 import thc.Json;
 import thc.Language;
 import java.io.File;
@@ -24,8 +26,12 @@ import static thc.runtime.SumEvidence.verifySumEvidence;
 class SumResultTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     @BeforeEach void verifyEvidence() throws Exception { verifySumEvidence(root); }
-    private Map<String, Object> module(String stage, boolean extended) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/" + (extended ? "sum-result" : "sum-layout") + "/" + stage + "-core/" + (extended ? "SumResultAudit" : "SumLayoutAudit") + ".json").toPath()));
+    private Path artifact(String stage, boolean extended) {
+        return new File(root, "build/" + (extended ? "sum-result" : "sum-layout") + "/" + stage + "-core/" + (extended ? "SumResultAudit" : "SumLayoutAudit") + ".cbd").toPath();
+    }
+    private Map<String, Object> module(String stage, boolean extended) throws Exception { return CoreCbdFixtures.read(artifact(stage, extended)); }
+    private String entry(String name, boolean extended, boolean frontier) {
+        return "main:" + (frontier ? "AggregateFrontier" : extended ? "SumResultAudit" : "SumLayoutAudit") + "." + name;
     }
     private Context context(boolean inlining) {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining)).option("engine.BackgroundCompilation", "false")
@@ -52,7 +58,7 @@ class SumResultTest {
     private long count(ExecutableProgram program) { return ((Number) program.diagnostics().get("compiledEntries")).longValue(); }
     private String bindingId(List<Map<String, Object>> bindings, String name) {
         Map<String, Object> result = null;
-        for (var binding : bindings) if (Objects.equals(binding.get("name"), name)) { if (result != null) throw new IllegalArgumentException("Collection contains more than one matching element."); result = binding; }
+        for (var binding : bindings) if (Objects.equals(binding.get("id"), name)) { if (result != null) throw new IllegalArgumentException("Collection contains more than one matching element."); result = binding; }
         if (result == null) throw new NoSuchElementException("Collection contains no element matching the predicate.");
         return (String) result.get("id");
     }
@@ -77,18 +83,20 @@ class SumResultTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var group : rows.entrySet()) {
                     String name = group.getKey(); var inputs = group.getValue();
-                    var source = frontier ? (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/" + (stage.equals("pre") ? "aggregate-core" : "aggregate-post-core") + "/AggregateFrontier.json").toPath())) : module(stage, extended);
-                    var linked = CoreModules.reachable(source, name); var bindings = (List<Map<String, Object>>) linked.get("bindings");
+                    var artifact = frontier ? new File(root, "build/" + (stage.equals("pre") ? "aggregate-core" : "aggregate-post-core") + "/AggregateFrontier.cbd").toPath() : artifact(stage, extended);
+                    var source = CoreCbdFixtures.read(artifact);
+                    var id = entry(name, extended, frontier);
+                    var linked = CoreModules.reachable(source, id); var bindings = (List<Map<String, Object>>) linked.get("bindings");
                     List<String> retainedPath = switch (name) {
-                        case "zeroCase" -> new ArrayCoreEvidence(source, name).loweredStateFunctionPath("zeroSum", name, List.of(2));
-                        case "mixedCase" -> new ArrayCoreEvidence(source, name).loweredStateFunctionPath("mixed", name, List.of(2));
+                        case "zeroCase" -> new ArrayCoreEvidence(CoreCbdFixtures.pairedDiagnostic(artifact), name).loweredStateFunctionPath("zeroSum", name, List.of(2));
+                        case "mixedCase" -> new ArrayCoreEvidence(CoreCbdFixtures.pairedDiagnostic(artifact), name).loweredStateFunctionPath("mixed", name, List.of(2));
                         // Only the nonnegative source arm contains runRW, but its
                         // exact State# lambda is in-frame on both lowered paths.
-                        case "boxedKindsCase" -> new ArrayCoreEvidence(source, name).loweredStateFunctionPath("boxedKindsSum", "boxedKindsSum", List.of(2, 3, 0, 3));
+                        case "boxedKindsCase" -> new ArrayCoreEvidence(CoreCbdFixtures.pairedDiagnostic(artifact), name).loweredStateFunctionPath("boxedKindsSum", "boxedKindsSum", List.of(2, 3, 0, 3));
                         default -> null;
                     };
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                    var target = program.entryTarget(bindingId(bindings, name)); var host = program.hostEntryTarget(1); var entry = program.entryValue(name);
+                    var target = program.entryTarget(bindingId(bindings, id)); var host = program.hostEntryTarget(1); var entry = program.entryValue(id);
                     class Check {
                         List<RootCallTarget> active = List.of();
                         Object invoke(long x) { return Calls.target(host, new Object[]{entry, new Object[]{x}}); }
@@ -152,9 +160,9 @@ class SumResultTest {
         for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(module(stage, true), "pairedInputs"); var bindings = (List<Map<String, Object>>) linked.get("bindings");
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(module(stage, true), "main:SumResultAudit.pairedInputs"); var bindings = (List<Map<String, Object>>) linked.get("bindings");
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                var original = program.entryTarget(bindingId(bindings, "pairedInputs")); var host = program.hostEntryTarget(2); var entry = program.entryValue("pairedInputs");
+                var original = program.entryTarget(bindingId(bindings, "main:SumResultAudit.pairedInputs")); var host = program.hostEntryTarget(2); var entry = program.entryValue("main:SumResultAudit.pairedInputs");
                 java.util.function.Function<List<String>, Object> invoke = row -> Calls.target(host, new Object[]{entry, new Object[]{Long.parseLong(row.get(1)), Long.parseLong(row.get(2))}});
                 for (var row : rows) assertEquals(Long.parseLong(row.get(3)), invoke.apply(row));
                 var active = activeTargets(host); assertTrue(active.size() > 1);

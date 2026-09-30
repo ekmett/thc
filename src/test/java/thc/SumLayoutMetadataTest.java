@@ -33,10 +33,10 @@ class SumLayoutMetadataTest {
             String name = (String) stage.get("stage");
             assertEquals(19, ((Number) stage.get("exactResultShapes")).intValue());
             assertEquals(32, ((List<?>) stage.get("audits")).size());
-            var module = Json.parse(Files.readString(root.resolve("build/sum-layout/" + name + "-core/SumLayoutAudit.json")));
+            var artifact = root.resolve("build/sum-layout/" + name + "-core/SumLayoutAudit.cbd");
             for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
                 for (var entry : objects(stage.get("audits"))) {
-                    String request = Json.stringify(map("modules", list(module), "entry", entry.get("entry"), "backend", backend, "diagnosticUnsupported", false));
+                    String request = CoreModules.request(list(artifact.toString()), "main:SumLayoutAudit." + entry.get("entry"), true, false, backend);
                     if (Boolean.TRUE.equals(entry.get("accepted"))) {
                         var target = context.eval("thc", request);
                         for (String row : Files.readAllLines(root.resolve("build/sum-layout/oracle.tsv"))) {
