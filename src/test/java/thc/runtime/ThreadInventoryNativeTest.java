@@ -31,17 +31,23 @@ public class ThreadInventoryNativeTest {
     private record ForkCalls(long calls, int roots) {}
     /** Fixed source calls; awaitStatus retries through one local join, not extra guest entries. */
     private ForkCalls forkCalls(Map<String, Object> module, String entry) {
-        var proof = new ArrayCoreEvidence(module, entry);
+        var proof = new ArrayCoreEvidence(module, entryId(entry));
         class Evidence {
-            Map<String, Object> binding(String name) { Map<String, Object> found = null; int count = 0; for (var binding : proof.getBindings()) if (name.equals(binding.get("name"))) { found = binding; count++; } assertEquals(1, count); return found; }
+            Map<String, Object> binding(String name) { Map<String, Object> found = null; int count = 0; for (var binding : proof.getBindings()) if (entryId(name).equals(binding.get("id"))) { found = binding; count++; } assertEquals(1, count); return found; }
             int lambdas(String name) { return proof.guestLambdas(binding(name).get("expr")).size(); }
             int references(String name, String target) { int count = 0; for (var id : proof.globalReferences(binding(name).get("expr"))) if (Objects.equals(id, binding(target).get("id"))) count++; return count; }
         }
         var evidence = new Evidence(); var polling = (List<?>) evidence.binding("awaitStatus").get("expr"); assertEquals("lam", polling.get(0));
-        var names = new ArrayList<Object>(); for (var parameter : (List<?>) polling.get(1)) names.add(((Map<?, ?>) parameter).get("name")); assertEquals(List.of("tid", "wanted", "fuel", "s"), names);
+        var formals = (List<Map<String, Object>>) polling.get(1); assertEquals(4, formals.size());
+        assertEquals(List.of(CoreKind.OBJECT, CoreKind.LONG, CoreKind.LONG, CoreKind.VOID), formals.stream().map(formal -> CoreRepresentations.binder(formal).getKind()).toList());
+        assertEquals(List.of(List.of("BoxedRep (Just Unlifted)"), List.of("IntRep"), List.of("IntRep"), List.of()), formals.stream().map(formal -> CoreRepresentations.binder(formal).getPrimReps()).toList());
+        for (var formal : formals) { assertEquals(false, formal.get("lifted")); assertEquals(false, formal.get("coercion")); }
+        assertEquals("State# RealWorld", formals.getLast().get("type"));
+        var status = unique(proof.nodes(polling), node -> Objects.equals(first(node), "app") && Objects.equals(take(node.get(1), 2), List.of("prim", "threadStatus#")));
+        assertEquals(List.of("var", formals.getFirst().get("id")), take(((List<?>) status.get(2)).getFirst(), 2));
         assertEquals(List.of(), proof.globalReferences(polling), "Polling cannot add global calls"); var joins = new ArrayList<Object>(); int lambdas = 0;
         for (var node : proof.nodes(polling)) { if (Objects.equals(first(node), "let")) joins.addAll((List<?>) node.get(2)); if (Objects.equals(first(node), "lam")) lambdas++; }
-        assertEquals(1, joins.size()); var join = (Map<?, ?>) joins.getFirst(); assertEquals(3L, join.get("joinValueArity")); assertEquals("wait", join.get("name"));
+        assertEquals(1, joins.size()); var join = (Map<?, ?>) joins.getFirst(); assertEquals(3L, join.get("joinValueArity"));
         assertEquals(2, lambdas, "Only the global entry and non-root join prefix occur in awaitStatus"); assertEquals(1, evidence.references(entry.equals("forkMasks") ? "forkMask" : entry, "awaitStatus"));
         switch (entry) {
             case "forkMasks": assertEquals(1, evidence.lambdas(entry)); assertEquals(2, evidence.lambdas("forkMask")); assertEquals(3, evidence.references(entry, "forkMask")); return new ForkCalls(1L + 3L * (2L + 1L), 4);
@@ -116,7 +122,7 @@ public class ThreadInventoryNativeTest {
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sourcePaths.add("src/compiler/THC/" + file.getName());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sourcePaths.add("bin/" + file.getName());
         var artifacts = new LinkedHashSet<>(List.of("build/thread-inventory/oracle.txt", "build/thread-inventory/callback-oracle.txt"));
-        for (var stage : List.of("pre", "post")) { artifacts.add("build/thread-inventory/" + stage + "/core/ThreadInventory.json"); artifacts.add("build/thread-inventory/" + stage + "/core/ThreadInventory.cbd"); for (var entry : entries) artifacts.add("build/thread-inventory/" + stage + "/" + entry + "-audit.json"); }
+        for (var stage : List.of("pre", "post")) { artifacts.add("build/thread-inventory/" + stage + "/core/ThreadInventory.cbd"); for (var entry : entries) artifacts.add("build/thread-inventory/" + stage + "/" + entry + "-audit.json"); }
         assertEquals(sourcePaths, ((Map<?, ?>) manifest.get("inputHashes")).keySet()); assertEquals(artifacts, ((Map<?, ?>) manifest.get("artifactHashes")).keySet());
         for (var kind : List.of("inputHashes", "artifactHashes")) for (var item : ((Map<?, ?>) manifest.get(kind)).entrySet()) {
             var actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(root, (String) item.getKey()).toPath()))); assertEquals(item.getValue(), actual, "Stale thread inventory fixture: " + item.getKey());
@@ -129,7 +135,7 @@ public class ThreadInventoryNativeTest {
         }
     }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true).option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build(); }
-    private Map<String, Object> module(String stage) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "/core/ThreadInventory.json").toPath())); }
+    private Map<String, Object> module(String stage) throws Exception { return CoreCbdFixtures.read(new File(directory, stage + "/core/ThreadInventory.cbd").toPath()); }
     private static String entryId(String name) { return "main:ThreadInventory." + name; }
     private Map<String, Object> compact(String stage) throws Exception { return CoreCbdFixtures.read(new File(directory, stage + "/core/ThreadInventory.cbd").toPath()); }
     private static Map<String, Object> instrument(Map<String, Object> module) { var result = new LinkedHashMap<>(module); result.put("instrument", true); return result; }
@@ -138,7 +144,7 @@ public class ThreadInventoryNativeTest {
         for (var stage : List.of("pre", "post")) {
             var source = module(stage); var compact = compact(stage);
             for (var entry : entries.subList(0, 4)) {
-                var proof = new ThreadInventoryCoreEvidence(source, compact, entry);
+                var proof = new ThreadInventoryCoreEvidence(source, entry);
                 assertThrows(NullPointerException.class, () -> proof.sourceLabel("unrecognized root"));
             }
             // Same bindings, calls and lambda arities; only distinct unary
@@ -147,7 +153,7 @@ public class ThreadInventoryNativeTest {
             var evidence = new ArrayCoreEvidence(collided, entryId("forkSnapshot"));
             for (var binding : evidence.getBindings()) for (var lambda : evidence.guestLambdas(binding.get("expr")))
                 for (var parameter : (List<Map<String, Object>>) lambda.get(1)) parameter.put("name", "same");
-            assertThrows(AssertionError.class, () -> new ThreadInventoryCoreEvidence(source, collided, "forkSnapshot"));
+            assertThrows(AssertionError.class, () -> new ThreadInventoryCoreEvidence(collided, "forkSnapshot"));
         }
     }
     private static long count(ExecutableProgram program) { return ((Number) program.diagnostics().get("compiledEntries")).longValue(); }
@@ -157,7 +163,7 @@ public class ThreadInventoryNativeTest {
         for (var stage : List.of("pre", "post")) for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var module = module(stage); var compact = compact(stage); var proof = new ArrayCoreEvidence(module, "callbackObservation"); var lambda = (List<?>) proof.getRoot().get("expr"); proof.immediateStateLambda(lambda.get(2)); assertEquals(1, proof.getBindings().size()); assertEquals(2, proof.guestLambdas(lambda).size()); int calls = proof.loweredGuestLambdas(lambda).size(); assertEquals(1, calls, "Only the original entry survives immediate State# lowering");
+                var module = module(stage); var compact = compact(stage); var proof = new ArrayCoreEvidence(module, entryId("callbackObservation")); var lambda = (List<?>) proof.getRoot().get("expr"); proof.immediateStateLambda(lambda.get(2)); assertEquals(1, proof.getBindings().size()); assertEquals(2, proof.guestLambdas(lambda).size()); int calls = proof.loweredGuestLambdas(lambda).size(); assertEquals(1, calls, "Only the original entry survives immediate State# lowering");
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var owner = Language.currentState(); var linked = instrument(CoreModules.reachable(compact, entryId("callbackObservation")));
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, true) : new BytecodeProgram(language, linked, true); var function = context.asValue(new EntryValue(program, entryId("callbackObservation"), 1)); var active = targets(program.entryTarget(entryId("callbackObservation"))); assertEquals(calls, active.size());
                 // Existing managed reverse entries; native trampoline is an independent oracle.
@@ -191,7 +197,7 @@ public class ThreadInventoryNativeTest {
                 try {
                     var module = module(stage); var compact = compact(stage); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(Handoff.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
                     var linked = instrument(CoreModules.reachable(compact, entryId(entry))); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true); var function = context.asValue(new EntryValue(program, entryId(entry), 1));
-                    var proof = entries.subList(0, 4).contains(entry) ? new ThreadInventoryCoreEvidence(module, compact, entry) : null; var fixedProof = proof == null ? forkCalls(module, entry) : null; var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
+                    var proof = entries.subList(0, 4).contains(entry) ? new ThreadInventoryCoreEvidence(module, entry) : null; var fixedProof = proof == null ? forkCalls(module, entry) : null; var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
                     try {
                         for (int i = 0; i < 3; i++) { assertEquals(expected, function.execute(0L).asLong(), stage + "/" + backend + "/" + entry); joinCompletedChildren(registry); released(language); }
                         var retained = registry.snapshot(); int population = retained.length + (entry.equals("forkSnapshot") ? 1 : 0); var active = proof != null ? targets(program.entryTarget(entryId(entry))) : forkTargets(program, linked);
@@ -240,7 +246,7 @@ public class ThreadInventoryNativeTest {
         for (var stage : List.of("pre", "post")) for (var backendName : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var module = module(stage); var compact = compact(stage); var proof = new ThreadInventoryCoreEvidence(module, compact, "selfInventory"); assertEquals(3L, proof.compiledCalls(1), "Public and occurrences at indices zero and one; State# wrapper is inlined");
+                var module = module(stage); var compact = compact(stage); var proof = new ThreadInventoryCoreEvidence(module, "selfInventory"); assertEquals(3L, proof.compiledCalls(1), "Public and occurrences at indices zero and one; State# wrapper is inlined");
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(Handoff.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_BOUNDARY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
                 var linked = instrument(CoreModules.reachable(compact, entryId("selfInventory"))); ExecutableProgram program = backendName.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true); var entry = program.entryTarget(entryId("selfInventory")); var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
                 try {
@@ -251,7 +257,7 @@ public class ThreadInventoryNativeTest {
                     try {
                         reprofile.invoke(boundary); assertEquals(false, hasCode.invoke(boundary)); for (var target : active) rawCompile(target); assertEquals(false, hasCode.invoke(boundary), "Raw installation leaves the boundary retired"); long before = count(program); var calls = interpretedCalls(active);
                         assertEquals(11L, Calls.target(entry, new Object[]{0L, 1L})); long negative = count(program) - before; var interpreted = new ArrayList<Integer>(); var after = interpretedCalls(active); for (int i = 0; i < after.size(); i++) interpreted.add(after.get(i) - calls.get(i));
-                        var sourceCalls = Map.of("lambda token", 1, "lambda wanted, threads, i", 2); assertEquals(proof.getLabels(), sourceCalls.keySet()); var observed = new LinkedHashMap<String, Integer>(); for (int i = 0; i < active.size(); i++) observed.put(active.get(i).getRootNode().getName(), interpreted.get(i)); System.out.println("THREAD_INVENTORY_BOUNDARY " + stage + "/" + backendName + " negative=" + negative + " interpreted=" + observed);
+                        var sourceCalls = Map.of(entryId("selfInventory"), 1, entryId("occurrences"), 2); assertEquals(proof.getLabels(), sourceCalls.keySet()); var observed = new LinkedHashMap<String, Integer>(); for (int i = 0; i < active.size(); i++) observed.put(active.get(i).getRootNode().getName(), interpreted.get(i)); System.out.println("THREAD_INVENTORY_BOUNDARY " + stage + "/" + backendName + " negative=" + negative + " interpreted=" + observed);
                         // Account for actual bypass paths, including previously compiled Java call sites.
                         assertEquals(1, interpreted.get(active.indexOf(entry)), "The outer entry deliberately bypasses code"); int sum = 0;
                         for (int i = 0; i < active.size(); i++) { var target = active.get(i); int value = interpreted.get(i); assertTrue(value >= 0 && value <= sourceCalls.get(proof.sourceLabel(target.getRootNode().getName())), "Interpreted calls fit the original root: " + target.getRootNode().getName()); sum += value; }

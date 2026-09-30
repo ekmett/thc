@@ -34,9 +34,9 @@ public final class ThreadInventoryCoreEvidence {
     private final Set<String> labels;
     private final Map<String, String> sourceLabels = new LinkedHashMap<>();
 
-    public ThreadInventoryCoreEvidence(Map<String, Object> module, Map<String, Object> compact, String name) {
+    public ThreadInventoryCoreEvidence(Map<String, Object> module, String name) {
         this.name = name;
-        evidence = new ArrayCoreEvidence(module, name);
+        evidence = new ArrayCoreEvidence(module, "main:ThreadInventory." + name);
         scans = switch (name) {
             case "selfInventory" -> 1;
             case "forkSnapshot" -> 3;
@@ -52,8 +52,11 @@ public final class ThreadInventoryCoreEvidence {
         var immediate = (List<?>) root.get(2);
         assertEquals("app", immediate.get(0));
         assertSame(lambdas.get(1), immediate.get(1), name + " retains its immediately applied runRW# lambda");
-        assertEquals(List.of("Int#"), types(root.get(1)));
-        for (var lambda : lambdas.subList(1, lambdas.size())) assertEquals(List.of("State# RealWorld"), types(lambda.get(1)));
+        assertEquals(List.of("IntRep"), representations(root.get(1)));
+        for (var lambda : lambdas.subList(1, lambdas.size())) {
+            assertEquals(List.of("void"), representations(lambda.get(1)));
+            assertEquals("State# RealWorld", ((Map<?, ?>) ((List<?>) lambda.get(1)).getFirst()).get("type"));
+        }
         var inlined = inlinedStateWrapper(evidence);
         var originalRoots = new ArrayList<List<?>>();
         for (var lambda : lambdas) if (lambda != inlined) originalRoots.add(lambda);
@@ -62,16 +65,16 @@ public final class ThreadInventoryCoreEvidence {
             assertEquals(List.of(), evidence.globalReferences(root));
         } else {
             var names = new LinkedHashSet<Object>();
-            for (var binding : evidence.getBindings()) names.add(binding.get("name"));
-            assertEquals(Set.of(name, "occurrences"), names);
-            var recursive = single(evidence.getBindings(), item -> "occurrences".equals(item.get("name")));
+            for (var binding : evidence.getBindings()) names.add(binding.get("id"));
+            assertEquals(Set.of("main:ThreadInventory." + name, "main:ThreadInventory.occurrences"), names);
+            var recursive = single(evidence.getBindings(), item -> "main:ThreadInventory.occurrences".equals(item.get("id")));
             var id = (String) recursive.get("id");
             var loop = (List<Object>) recursive.get("expr");
             assertEquals("lam", loop.get(0));
             assertEquals(1, evidence.guestLambdas(loop).size());
             originalRoots.add(loop);
             var formals = (List<Map<String, Object>>) loop.get(1);
-            assertEquals(List.of("ThreadId#", "Array# ThreadId#", "Int#"), types(formals));
+            assertEquals(List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep"), representations(formals));
             var wanted = formals.get(0).get("id");
             var array = formals.get(1).get("id");
             var index = formals.get(2).get("id");
@@ -103,33 +106,41 @@ public final class ThreadInventoryCoreEvidence {
             for (var item : evidence.nodes(root)) if (head(item, "app", "var", id)) calls.add(item);
             assertEquals(scans, calls.size());
             assertEquals(Collections.nCopies(scans, id), evidence.globalReferences(root));
+            var identities = new LinkedHashSet<Object>();
+            for (var node : evidence.nodes(root)) if ("case".equals(at(node, 0))
+                && at(node, 1) instanceof List<?> producing && at(producing, 1) instanceof List<?> function
+                && (take(function, 2).equals(List.of("prim", "myThreadId#"))
+                    || take(function, 2).equals(List.of("prim", "fork#")))) {
+                var alternative = (List<?>) single((List<?>) node.get(3));
+                identities.add(((List<?>) alternative.get(2)).get(1));
+            }
+            assertEquals(name.equals("forkSnapshot") ? 2 : 1, identities.size(), "Original thread identity producers");
             for (var call : calls) {
                 var inputs = (List<?>) call.get(2);
                 assertEquals(3, inputs.size());
+                assertEquals("var", ((List<?>) inputs.get(0)).getFirst());
+                assertTrue(identities.contains(((List<?>) inputs.get(0)).get(1)), "Wanted identity comes from myThreadId# or fork#");
                 variable(inputs.get(1), snapshot); literal(inputs.get(2), "0");
             }
         }
         labels = new LinkedHashSet<>();
-        for (var lambda : originalRoots) labels.add(label(lambda));
-        assertEquals(once + (scans == 0 ? 0 : 1), labels.size(), name + " distinct source roots");
-        // The producer proves byte-identical encoding of this diagnostic view
-        // and the executed CBD. Pair lexical lambdas within each exact global.
-        var executable = new ArrayCoreEvidence(compact, (String) evidence.getRoot().get("id"));
-        assertEquals(Set.copyOf(evidence.getBindings().stream().map(binding -> binding.get("id")).toList()),
-            Set.copyOf(executable.getBindings().stream().map(binding -> binding.get("id")).toList()));
+        if (name.equals("forkSnapshot")) {
+            var fork = single(evidence.nodes(root), node -> head(node, "app", "prim", "fork#"));
+            assertSame(lambdas.get(2), ((List<?>) fork.get(2)).getFirst(), "Retain the original fork action role");
+        }
         for (var binding : evidence.getBindings()) {
-            var selected = executable.getAllBindings().get((String) binding.get("id"));
-            assertNotNull(selected);
+            var owner = (String) binding.get("id");
             var original = evidence.guestLambdas(binding.get("expr"));
-            var decoded = executable.guestLambdas(selected.get("expr"));
-            assertEquals(original.size(), decoded.size());
-            for (int i = 0; i < original.size(); i++) {
-                var lambda = original.get(i);
-                assertEquals(((List<?>) lambda.get(1)).size(), ((List<?>) decoded.get(i).get(1)).size());
-                if (originalRoots.stream().anyMatch(rootLambda -> rootLambda == lambda))
-                    assertNull(sourceLabels.put(label(decoded.get(i)), label(lambda)), "Distinct CBD root labels");
+            for (int index = 0; index < original.size(); index++) {
+                var lambda = original.get(index);
+                if (originalRoots.stream().anyMatch(rootLambda -> rootLambda == lambda)) {
+                    var role = owner + (index == 0 ? "" : " child");
+                    assertTrue(labels.add(role), "Distinct original global/lexical root roles");
+                    assertNull(sourceLabels.put(label(lambda), role), "Distinct CBD root labels");
+                }
             }
         }
+        assertEquals(once + (scans == 0 ? 0 : 1), labels.size(), name + " distinct source roots");
         assertEquals(labels, new LinkedHashSet<>(sourceLabels.values()));
     }
     private static String label(List<?> lambda) {
@@ -249,10 +260,24 @@ public final class ThreadInventoryCoreEvidence {
         }
         found.add(target);
     }
-    private static List<Object> types(Object formals) {
-        var types = new ArrayList<Object>();
-        for (var formal : (List<Map<?, ?>>) formals) types.add(formal.get("type"));
-        return types;
+    private static List<String> representations(Object formals) {
+        var representations = new ArrayList<String>();
+        for (var formal : (List<Map<String, Object>>) formals) {
+            assertEquals(false, formal.get("lifted"));
+            assertEquals(false, formal.get("coercion"));
+            var proof = CoreRepresentations.binder(formal);
+            assertTrue(proof.getPresent());
+            assertFalse(proof.isAggregate());
+            assertFalse(proof.isVector());
+            var reps = proof.getPrimReps();
+            if (reps.isEmpty()) { assertEquals(CoreKind.VOID, proof.getKind()); representations.add("void"); }
+            else {
+                assertEquals(1, reps.size());
+                assertEquals(reps.equals(List.of("IntRep")) ? CoreKind.LONG : CoreKind.OBJECT, proof.getKind());
+                representations.add(reps.getFirst());
+            }
+        }
+        return representations;
     }
     private static Object at(List<?> list, int index) { return index < list.size() ? list.get(index) : null; }
     private static List<?> take(List<?> list, int size) { return list.subList(0, Math.min(size, list.size())); }
