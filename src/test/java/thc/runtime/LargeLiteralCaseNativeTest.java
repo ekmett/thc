@@ -34,8 +34,8 @@ class LargeLiteralCaseNativeTest {
             var actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(item.getKey()))));
             assertEquals(item.getValue(), actual, "Stale original literal-case fixture: " + item.getKey());
         }
-        var module = (Map<String, Object>) Json.parse(Files.readString(directory.resolve("core/LargeLiteralCaseAudit.json")));
-        var linked = new LinkedHashMap<>(CoreModules.reachable(module, List.of("largeInt", "largeWordCheck", "largeLazy", "boxInt"), true));
+        var module = thc.CoreCbdFixtures.read(directory.resolve("core/LargeLiteralCaseAudit.cbd"));
+        var linked = new LinkedHashMap<>(CoreModules.reachable(module, List.of("main:LargeLiteralCaseAudit.largeInt", "main:LargeLiteralCaseAudit.largeWordCheck", "main:LargeLiteralCaseAudit.largeLazy", "main:LargeLiteralCaseAudit.boxInt"), true));
         linked.put("instrument", true); return linked;
     }
     @FunctionalInterface private interface Action { void run(String backend, ExecutableProgram program) throws Exception; }
@@ -52,7 +52,7 @@ class LargeLiteralCaseNativeTest {
         }
     }
     private static Object call(ExecutableProgram program, String entry, Object input) {
-        return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(entry), new Object[]{input}});
+        return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:LargeLiteralCaseAudit." + entry), new Object[]{input}});
     }
     private static void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
@@ -73,7 +73,7 @@ class LargeLiteralCaseNativeTest {
             }
             if (backend.equals("bytecode")) assertTrue(((BytecodeProgram) program).bytecodeDump().contains("LiteralBelow"));
             for (var entry : List.of(new Entry("int", "largeInt"), new Entry("word", "largeWordCheck"))) {
-                compile(program.entryTarget(entry.name()));
+                compile(program.entryTarget("main:LargeLiteralCaseAudit." + entry.name()));
                 long before = (Long) program.diagnostics().get("compiledEntries");
                 String[] first = null;
                 for (int i = rows.size() - 1; i >= 0; i--) if (rows.get(i)[0].equals(entry.kind())) { first = rows.get(i); break; }
@@ -95,7 +95,7 @@ class LargeLiteralCaseNativeTest {
             }.getCallTarget(), null);
             // Demand the new thunk through the original boxed wrapper, then enter
             // the compiled numeric case whose branch lowering this test exercises.
-            compile(program.entryTarget("largeInt"));
+            compile(program.entryTarget("main:LargeLiteralCaseAudit.largeInt"));
             long before = (Long) program.diagnostics().get("compiledEntries");
             assertEquals(115L, call(program, "largeLazy", value), backend + " first compiled demand");
             assertTrue((Long) program.diagnostics().get("compiledEntries") > before, backend + " first compiled demand");

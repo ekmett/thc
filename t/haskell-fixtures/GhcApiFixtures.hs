@@ -14,7 +14,7 @@
 module GhcApiFixtures (prepareGhcApi, prepareRecordFields) where
 
 import Control.Monad (forM, forM_, unless, when)
-import Data.Aeson (Value, decodeStrict', object, (.=))
+import Data.Aeson (Value, object, (.=))
 import qualified Data.ByteString.Char8 as BS
 import FixtureSupport
 import GhcApiAudit (ghcApiOptions, ghcApiAuditArguments, ghcApiAuditEvidence)
@@ -23,6 +23,7 @@ import System.Directory (canonicalizePath, createDirectoryIfMissing, doesFileExi
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
+import THC.Compact.Module (readModuleValue)
 
 -- Two independently compiled modules retain duplicate record selectors and a
 -- cross-module ordinary selector alias. Both plugin boundaries and subsequent
@@ -62,20 +63,19 @@ prepareRecordFields root = do
       loaded <- execute ("installed-" ++ name) [] helper
         ["--libdir", libdir, "--unit", "main", "--module", name,
          "--interface", build </> name ++ ".hi", "--home-interfaces", build]
-      response <- maybe (die "record-fields: invalid helper JSON") pure (decodeStrict' (commandStdout loaded))
-      core <- field response "core" :: IO Value
-      writeJson (root </> directory </> "installed" </> name ++ ".json") core
+      _ <- either (die . ("record-fields: invalid helper CBD: " ++)) pure (readModuleValue (commandStdout loaded))
+      BS.writeFile (root </> directory </> "installed" </> name ++ ".cbd") (commandStdout loaded)
       pure loaded
     pure ([compiled, oracle] ++ recovered)
   audits <- forM [(stage, entry) | stage <- ["pre", "post", "installed"], entry <- ["fieldAlias", "duplicateFields"]] $
     \(stage, entry) -> execute (stage ++ "-audit-" ++ entry) [] "python3"
       (["bin/audit-core.py", "--entry", "main:RecordFieldClient." ++ entry,
         "--output", directory </> stage </> entry ++ "-audit.json"] ++
-       map (\name -> directory </> stage </> name ++ ".json") modules)
+       map (\name -> directory </> stage </> name ++ ".cbd") modules)
   inputs <- hashes root (sources ++ ["src/compiler/THC/Plugin.hs", "t/haskell-fixtures/GhcApiFixtures.hs"])
   let records = [plugin, helperLocation, library] ++ commands ++ audits
   artifacts <- hashes root (concatMap commandArtifacts records ++
-    [directory </> stage </> name ++ ".json" | stage <- ["pre", "post", "installed"], name <- modules])
+    [directory </> stage </> name ++ ".cbd" | stage <- ["pre", "post", "installed"], name <- modules])
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "inputHashes" .= inputs, "artifactHashes" .= artifacts,
      "commands" .= map commandRecord records]
