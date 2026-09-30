@@ -80,12 +80,12 @@ prepareManagedAddressReads root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_,_) <- entries]
     _ <- run root [("THC_CORE_OUT",root </> core), ("THC_GHC_OUT",root </> ghcOut)]
       "bin/export-core.sh" (options ++ [source]) ""
-    files <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
-    unless ("ManagedAddressReadAudit.json" `elem` files)
+    files <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
+    unless ("ManagedAddressReadAudit.cbd" `elem` files)
       (die ("Missing " ++ stage ++ " managed-address Core"))
     forM_ entries $ \(name,_,_) -> do
       let report = directory </> (stage ++ "-" ++ name ++ ".audit.json")
-      _ <- run root [] "python3" ["bin/audit-core.py", "--entry",name,
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry","main:ManagedAddressReadAudit." ++ name,
         "--output",report,core] ""
       pure ()
     pure (stage,map (core </>) files)

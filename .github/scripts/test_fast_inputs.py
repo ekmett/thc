@@ -683,6 +683,27 @@ class FastInputTests(unittest.TestCase):
                      'unaligned-scalar-memory/inputs.txt', 'unaligned-scalar-memory/logs/ghc-inventory.stdout'):
             self.assertTrue(cache.allowed_payload('build/' + name), name)
 
+    def test_array_core_products_require_cbd_not_diagnostic_json(self):
+        for family, folder, module in (('fetch-add-int-array', '{stage}/core', 'FetchAddIntArrayAudit'),
+                                       ('shrink-bytearrays', '{stage}/core', 'ShrinkMutableByteArrayAudit'),
+                                       ('managed-address-reads', '{stage}-core', 'ManagedAddressReadAudit')):
+            for stage in ('pre', 'post'):
+                for name in (module, 'THC.InterfaceClosure'):
+                    path = f'build/{family}/{folder.format(stage=stage)}/{name}.cbd'
+                    self.assertTrue(cache.allowed_payload(path), path)
+                    self.assertFalse(cache.allowed_payload(path.replace(name, 'Extra')), path)
+        for outputs in (cache.ADDRESS_ARRAY_COPY_OUTPUTS, cache.ATOMIC_INT_ARRAY_OUTPUTS):
+            products = [name for name in outputs if name.endswith('.cbd')]
+            self.assertTrue(products)
+            for name in products:
+                self.assertTrue(cache.allowed_payload(name), name)
+                self.assertFalse(cache.allowed_payload(name[:-4] + '.json'), name)
+        for name in cache.BOXED_ARRAY_EXTENSION_FILES:
+            if name.endswith('.cbd'):
+                path = 'build/boxed-array-extensions/run-1/' + name
+                self.assertTrue(cache.allowed_payload(path), path)
+                self.assertFalse(cache.allowed_payload(path[:-4] + '.json'), path)
+
     def test_memory_manifest_rejects_omitted_extra_and_invalid_artifact_hashes(self):
         for directory in cache.MEMORY_FIXTURE_OUTPUTS:
             with self.subTest(directory=directory):

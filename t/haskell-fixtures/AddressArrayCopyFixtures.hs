@@ -78,11 +78,11 @@ prepareAddressArrayCopy root = do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    let core = directory </> stage ++ "-core/AddressArrayCopyAudit.json"
+    let core = directory </> stage ++ "-core/AddressArrayCopyAudit.cbd"
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["bin/audit-core.py",core,"--entry",name,"--output",reportPath]
+        ["bin/audit-core.py",core,"--entry","main:AddressArrayCopyAudit." ++ name,"--output",reportPath]
       report <- BS.readFile (root </> reportPath) >>= either die pure . eitherDecodeStrict'
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),

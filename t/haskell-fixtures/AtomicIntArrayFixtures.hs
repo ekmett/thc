@@ -68,19 +68,19 @@ prepareAtomicIntArrays root = do
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        modules = [core </> "AtomicIntArrayAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "AtomicIntArrayAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries]
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
       "bin/export-core.sh" (options ++ [source])
-    inventory <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
-    unless (inventory == ["AtomicIntArrayAudit.json", "THC.InterfaceClosure.json"]) $
+    inventory <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
+    unless (inventory == ["AtomicIntArrayAudit.cbd", "THC.InterfaceClosure.cbd"]) $
       die ("Unexpected atomic-array Core inventory: " ++ show inventory)
     audits <- forM entries $ \name -> do
       let report = stageDir </> name ++ ".audit.json"
       audit <- runLogged 60 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        (["bin/audit-core.py", "--entry", name, "--output", report] ++ modules)
+        (["bin/audit-core.py", "--entry", "main:AtomicIntArrayAudit." ++ name, "--output", report] ++ modules)
       pure (report : commandArtifacts audit)
     pure (stage, modules, commandArtifacts exported ++ concat audits)
   let native = directory </> "native"

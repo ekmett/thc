@@ -19,6 +19,16 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_standalone_array_required_core_products_are_cbd(self):
+        for family, fixture in (("atomic-int-arrays", "AtomicIntArrayAudit"),
+                                ("fetch-add-int-array", "FetchAddIntArrayAudit"),
+                                ("shrink-bytearrays", "ShrinkMutableByteArrayAudit")):
+            for stage in ("pre", "post"):
+                for module in (fixture, "THC.InterfaceClosure"):
+                    path = f"build/{family}/{stage}/core/{module}"
+                    self.assertIn(path + ".cbd", fast_fixtures.FULL_REQUIRED)
+                    self.assertNotIn(path + ".json", fast_fixtures.FULL_REQUIRED)
+
     def test_selector_proof_is_required_for_full_preparation_reuse(self):
         project = Path(__file__).resolve().parents[2]
         source = (project / "bin/prepare-tests.sh").read_text()
