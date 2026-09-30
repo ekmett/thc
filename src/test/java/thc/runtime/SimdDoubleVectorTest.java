@@ -24,11 +24,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class SimdDoubleVectorTest {
+    private static final String PREFIX = "main:SimdDoubleX2.";
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/simd-doublex2");
     private Map<String, Object> module() throws Exception { return module("pre"); }
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdDoubleX2.json").toPath()));
+        return thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdDoubleX2.cbd").toPath());
     }
     private Map<String, Object> metadata() {
         return Map.of("kind", "vector", "evaluated", true, "primReps", List.of("VecRep 2 DoubleElemRep"),
@@ -49,7 +50,7 @@ class SimdDoubleVectorTest {
         return program(language, backend, input, entry, false);
     }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> input, String entry, boolean diagnostic) {
-        var linked = new LinkedHashMap<>(CoreModules.reachable(input, entry));
+        var linked = new LinkedHashMap<>(CoreModules.reachable(input, entry.equals("root") ? entry : PREFIX + entry));
         linked.put("instrument", true); linked.put("diagnosticUnsupported", diagnostic);
         return backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
     }
@@ -277,7 +278,7 @@ class SimdDoubleVectorTest {
                 boolean correctArity = true; for (var input : cases) if (input.size() != arity) { correctArity = false; break; }
                 assertTrue(correctArity);
                 var program = program(language, backend, module(stage), name);
-                var host = program.hostEntryTarget(arity); var closure = program.entryValue(name); var target = program.entryTarget(name);
+                var host = program.hostEntryTarget(arity); var closure = program.entryValue(PREFIX + name); var target = program.entryTarget(PREFIX + name);
                 var stageStructure = ((Map<String, Map<String, Object>>) provenance.get("structure")).get(stage);
                 long compiledEntries = ((Map<String, Number>) stageStructure.get("compiledEntriesByEntry")).get(name).longValue();
                 assertTrue(compiledEntries >= 1);

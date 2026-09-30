@@ -500,11 +500,12 @@ class VectorAuditTest(unittest.TestCase):
         self.assertFalse(run(bad)['accepted'])
     def test_real_double_core_local_entries_and_formal_frontier(self):
         from doublex2_model import entries
-        path=ROOT.parent/'build/simd-doublex2/pre-core/SimdDoubleX2.json'
+        from core_package_manifest import inspect_cbd
+        path=ROOT.parent/'build/simd-doublex2/pre-core/SimdDoubleX2.cbd'
         if not path.exists(): self.skipTest('Double SIMD Core export not generated')
-        m=json.loads(path.read_text())
-        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertTrue(run(m,'vectorArgument')['accepted'])
+        m=inspect_cbd(path.read_bytes())
+        for entry in entries(): self.assertTrue(run(m,'main:SimdDoubleX2.' + entry['name'])['accepted'],entry['name'])
+        self.assertTrue(run(m,'main:SimdDoubleX2.vectorArgument')['accepted'])
     def test_real_int16_core_local_entries_and_formal_frontier(self):
         path=ROOT.parent/'build/simd-int16x8/pre-core/SimdInt16X8.json'
         if not path.exists(): self.skipTest('Int16 SIMD Core export not generated')
@@ -542,11 +543,12 @@ class VectorAuditTest(unittest.TestCase):
         self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_real_int32_multiply_core_entries_and_formal_frontier(self):
         from int32x4_multiply_model import entries
-        path=ROOT.parent/'build/simd-int32x4-multiply/pre-core/SimdInt32X4Multiply.json'
+        from core_package_manifest import inspect_cbd
+        path=ROOT.parent/'build/simd-int32x4-multiply/pre-core/SimdInt32X4Multiply.cbd'
         if not path.exists(): self.skipTest('Int32 multiplication Core export not generated')
-        m=json.loads(path.read_text())
-        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertTrue(run(m,'vectorArgument')['accepted'])
+        m=inspect_cbd(path.read_bytes())
+        for entry in entries(): self.assertTrue(run(m,'main:SimdInt32X4Multiply.' + entry['name'])['accepted'],entry['name'])
+        self.assertTrue(run(m,'main:SimdInt32X4Multiply.vectorArgument')['accepted'])
     def test_float_local_shape_requires_concrete_float_lanes(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastFloatX4#'
@@ -565,12 +567,13 @@ class VectorAuditTest(unittest.TestCase):
         bad=copy.deepcopy(TUPLE_FLOAT_REP); bad['components'][0]=dict(LANE_FLOAT_REP,kind='unknown')
         self.assertFalse(signature_matches(TUPLE_FLOAT_REP,bad))
     def test_real_float_core_local_entries_and_formal_frontier(self):
-        path=ROOT.parent/'build/simd-floatx4/pre-core/SimdFloatX4.json'
+        from core_package_manifest import inspect_cbd
+        path=ROOT.parent/'build/simd-floatx4/pre-core/SimdFloatX4.cbd'
         if not path.exists(): self.skipTest('Float SIMD Core export not generated')
-        m=json.loads(path.read_text())
+        m=inspect_cbd(path.read_bytes())
         for name in ('plusCase','minusCase','timesCase','edgePlus','edgeMinus','edgeTimes','nonFmaCase'):
-            self.assertTrue(run(m,name)['accepted'], name)
-        self.assertTrue(run(m,'vectorArgument')['accepted'])
+            self.assertTrue(run(m,'main:SimdFloatX4.' + name)['accepted'], name)
+        self.assertTrue(run(m,'main:SimdFloatX4.vectorArgument')['accepted'])
     def test_exact_local_vector_is_accepted(self): self.assertTrue(run(fixture())['accepted'])
     def test_missing_or_wrong_shape_is_rejected(self):
         for mutation in ('missing', 'lane-count', 'physical', 'boxed', 'tuple'):
