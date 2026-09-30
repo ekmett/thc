@@ -7001,8 +7001,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (originalStdio.getWindowsEncoding()) {
                 if (originalStdio == OriginalStdioOp.MULTI_BYTE_TO_WIDE) {
                     b.beginOriginalWindowsMultiByte(result); for (var operand : operands) operand.emit(e); b.endOriginalWindowsMultiByte();
-                } else if (originalStdio == OriginalStdioOp.WIDE_TO_MULTI_BYTE) {
-                    b.beginOriginalWindowsWideChar(result); for (var operand : operands) operand.emit(e); b.endOriginalWindowsWideChar();
+                } else if (originalStdio == OriginalStdioOp.WIDE_TO_MULTI_BYTE || originalStdio == OriginalStdioOp.WIDE_TO_MULTI_BYTE_SAFE) {
+                    b.beginOriginalWindowsWideChar(result, ForeignSafety.synchronous(originalStdio.getSafety())); for (var operand : operands) operand.emit(e); b.endOriginalWindowsWideChar();
                 } else {
                     var values = new ArrayList<BytecodeLocal>();
                     for (int index = 0; index < operands.size() - 1; ++index) {
@@ -7019,6 +7019,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     else b.emitLoadConstant(ManagedAddress.nullAddress());
                     operands.getLast().emit(e); b.endOriginalWindowsEncoding();
                 }
+                if (enableAsync && "safe".equals(originalStdio.getSafety())) emitAsyncPoll(e);
                 return;
             }
             if (originalStdio.getWindowsDirectory()) {

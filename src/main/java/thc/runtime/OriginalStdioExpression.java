@@ -47,6 +47,16 @@ final class OriginalStdioExpression extends Expr {
             return null;
         }
     }
+    private void pollSafeAfterEffect() {
+        if ("safe".equals(operation.getSafety()) && AstControl.enabled(this)) {
+            boolean compiled = CompilerDirectives.inCompiledCode();
+            var request = GuestThreads.pollCurrent(this, false);
+            if (request != null) {
+                request.compiledCapture = compiled;
+                throw new AstCapture(request, SynchronousMasking.current(this)).append(ResumeCompleted.INSTANCE);
+            }
+        }
+    }
 
     @com.oracle.truffle.api.nodes.ExplodeLoop
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
@@ -57,31 +67,24 @@ final class OriginalStdioExpression extends Expr {
                     ? operands[i].executeRequiredAddress(frame) : readInteger(frame, i);
             TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
             writeInteger(frame, slots[offset], NativeUnix.execute(operation, arguments));
-            if ("safe".equals(operation.getSafety()) && AstControl.enabled(this)) {
-                boolean compiled = CompilerDirectives.inCompiledCode();
-                var request = GuestThreads.pollCurrent(this, false);
-                if (request != null) {
-                    request.compiledCapture = compiled;
-                    throw new AstCapture(request, SynchronousMasking.current(this)).append(ResumeCompleted.INSTANCE);
-                }
-            }
+            pollSafeAfterEffect();
             return null;
         }
         if (operation.getWindowsEncoding()) {
             var windows = WindowsCodePages.current(this);
-            if (operation == OriginalStdioOp.MULTI_BYTE_TO_WIDE || operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE) {
+            if (operation == OriginalStdioOp.MULTI_BYTE_TO_WIDE || operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE || operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE_SAFE) {
                 long codePage = readInteger(frame, 0);
                 long flags = readInteger(frame, 1);
                 var input = operands[2].executeRequiredAddress(frame);
                 long count = readInteger(frame, 3);
                 var output = operands[4].executeRequiredAddress(frame);
                 long capacity = readInteger(frame, 5);
-                var defaultChar = operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE ? operands[6].executeRequiredAddress(frame) : null;
-                var usedDefault = operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE ? operands[7].executeRequiredAddress(frame) : null;
+                var defaultChar = operation == OriginalStdioOp.MULTI_BYTE_TO_WIDE ? null : operands[6].executeRequiredAddress(frame);
+                var usedDefault = operation == OriginalStdioOp.MULTI_BYTE_TO_WIDE ? null : operands[7].executeRequiredAddress(frame);
                 TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
                 writeInteger(frame, slots[offset], operation == OriginalStdioOp.MULTI_BYTE_TO_WIDE
                     ? windows.multiByte(codePage, flags, input, count, output, capacity)
-                    : windows.wideChar(codePage, flags, input, count, output, capacity, defaultChar, usedDefault));
+                    : windows.wideChar(codePage, flags, input, count, output, capacity, defaultChar, usedDefault, ForeignSafety.synchronous(operation.getSafety())));
             } else {
                 long number = operation == OriginalStdioOp.CODE_PAGE_INFO || operation == OriginalStdioOp.DBCS_LEAD_BYTE ||
                     operation == OriginalStdioOp.MAP_ERRNO_VALUE || operation == OriginalStdioOp.WINDOWS_ERROR_MESSAGE ? readInteger(frame, 0) : 0L;
@@ -98,6 +101,7 @@ final class OriginalStdioExpression extends Expr {
                     : operation == OriginalStdioOp.MAP_ERRNO_VALUE ? windows.mapErrno(number)
                     : windows.codePage(operation == OriginalStdioOp.CONSOLE_CODE_PAGE));
             }
+            pollSafeAfterEffect();
             return null;
         }
         if (operation.getWindowsDirectory()) {
@@ -406,14 +410,7 @@ final class OriginalStdioExpression extends Expr {
             result = operation.getReading() ? stdio.read(fd, address, count, safety) : stdio.write(fd, address, count, safety);
         }
         writeInteger(frame, slots[offset], result);
-        if (operation.getTransfer() && "safe".equals(operation.getSafety()) && AstControl.enabled(this)) {
-            boolean compiled = CompilerDirectives.inCompiledCode();
-            var request = GuestThreads.pollCurrent(this, false);
-            if (request != null) {
-                request.compiledCapture = compiled;
-                throw new AstCapture(request, SynchronousMasking.current(this)).append(ResumeCompleted.INSTANCE);
-            }
-        }
+        if (operation.getTransfer()) pollSafeAfterEffect();
         return null;
     }
 }

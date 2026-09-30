@@ -1586,7 +1586,7 @@ class Audit:
                 # carriers handled by this checker. The catalog regression guards
                 # new carrier kinds; do not maintain a second symbol whitelist.
                 # Select the validated unit-specific ABI (e.g. array's memcpy).
-                for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.operation(target)[2])):
+                for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.operation(target, call.get('argumentReps'))[2])):
                     self.original_stack_operand(argument, primitive, bound, index)
                 if core_original_foreign.operation_symbol(target) not in self.cap.get('managedForeignCalls', []):
                     raise ValueError('Original foreign-call capability disabled')

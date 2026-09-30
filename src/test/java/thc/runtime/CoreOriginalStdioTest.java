@@ -46,6 +46,60 @@ class CoreOriginalStdioTest {
         var error = assertThrows(RuntimeFault.class, input::validate);
         assertTrue(error.getMessage().startsWith("Invalid original stdio call: "), error.getMessage());
     }
+    private Map<String,Object> declaration(String symbol, String safety, List<String> primitives) {
+        // Checked models of the pinned declarations. Windows CMode is Word16#;
+        // IO.Windows.Encoding also declares the safe WideCharToMultiByte call.
+        var result = OriginalStdioFixtures.tuple("dup2", true);
+        var call = new LinkedHashMap<String,Object>();
+        call.put("schema", 1);
+        call.put("target", Map.of("kind", "static", "symbol", symbol, "unit", "ghc-internal", "isFunction", true));
+        call.put("convention", "ccall");
+        call.put("safety", safety);
+        call.put("arity", primitives.size() + 1);
+        call.put("suppliedArity", primitives.size() + 1);
+        var declared = new ArrayList<Map<String,Object>>();
+        for (var primitive : primitives) declared.add(OriginalStdioFixtures.scalar(primitive, false));
+        declared.add(OriginalStdioFixtures.scalar(null, false));
+        call.put("argumentReps", declared);
+        call.put("resultRep", OriginalStdioFixtures.tuple("dup2", false));
+        return Map.of("foreignCall", call, "rep", result);
+    }
+    private OriginalStdioOp validateDeclaration(Map<String,Object> metadata) {
+        var call = (Map<?,?>) metadata.get("foreignCall");
+        var declared = (List<?>) call.get("argumentReps");
+        var actual = new ArrayList<Map<String,Object>>();
+        for (var raw : declared) {
+            var argument = new LinkedHashMap<>((Map<String,Object>) raw);
+            argument.put("evaluated", true);
+            actual.add(argument);
+        }
+        return CoreOriginalStdio.validate(metadata, actual, Collections.nCopies(actual.size(), false), metadata.get("rep"));
+    }
+    @Test void originalOpenRetainsBothUnsignedModeWidthsAndEveryDeclaredSafety() {
+        for (var mode : List.of("Word16Rep", "Word32Rep")) {
+            for (var safety : List.of("unsafe", "safe", "interruptible")) {
+                var operation = validateDeclaration(declaration("__hscore_open", safety, List.of("AddrRep", "Int32Rep", mode)));
+                assertTrue(operation.getOpening());
+                assertEquals(mode, operation.getArguments().get(2));
+                assertEquals(safety, operation.getSafety());
+                CoreOriginalStdio.validateScalarOperand(operation, 2,
+                    CoreRepresentations.parse(OriginalStdioFixtures.scalar(mode, true)), null);
+            }
+        }
+        for (var mode : List.of("Word8Rep", "Int16Rep", "Int32Rep", "Word64Rep"))
+            assertThrows(RuntimeFault.class, () -> validateDeclaration(declaration("__hscore_open", "unsafe", List.of("AddrRep", "Int32Rep", mode))));
+    }
+    @Test void windowsWideConversionRetainsSafeAndUnsafeDeclarations() {
+        var primitives = List.of("Word32Rep", "Word32Rep", "AddrRep", "Int32Rep", "AddrRep", "Int32Rep", "AddrRep", "AddrRep");
+        for (var safety : List.of("unsafe", "safe")) {
+            var metadata = declaration("WideCharToMultiByte", safety, primitives);
+            assertSame(CoreForeignOverride.STDIO, CoreForeignOverride.select(metadata));
+            var operation = validateDeclaration(metadata);
+            assertTrue(operation.getWindowsEncoding());
+            assertEquals(safety, operation.getSafety());
+        }
+        assertThrows(RuntimeFault.class, () -> validateDeclaration(declaration("WideCharToMultiByte", "interruptible", primitives)));
+    }
     @Test void unixPipeAndDupToKeepTheirOriginalOwnerAndExactAbi() {
         // unix-2.8.8.0 System.Posix.IO.Common: c_pipe and c_dup2.
         for (var symbol : List.of("pipe", "dup2")) {

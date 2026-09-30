@@ -29,7 +29,7 @@ WINDOWS_ENCODING_OPERATIONS = {
     'GetCPInfo': ('ccall', 'unsafe', ('Word32Rep', 'AddrRep', None), (None, 'IntRep')),
     'IsDBCSLeadByteEx': ('ccall', 'unsafe', ('Word32Rep', 'Word8Rep', None), (None, 'IntRep')),
     'MultiByteToWideChar': ('ccall', 'unsafe', ('Word32Rep', 'Word32Rep', 'AddrRep', 'Int32Rep', 'AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
-    'WideCharToMultiByte': ('ccall', 'unsafe', ('Word32Rep', 'Word32Rep', 'AddrRep', 'Int32Rep', 'AddrRep', 'Int32Rep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    'WideCharToMultiByte': ('ccall', ('unsafe', 'safe'), ('Word32Rep', 'Word32Rep', 'AddrRep', 'Int32Rep', 'AddrRep', 'Int32Rep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     'maperrno': ('ccall', 'unsafe', (None,), (None,)),
     'maperrno_func': ('ccall', 'unsafe', ('Word32Rep', None), (None, 'Int32Rep')),
     'base_getErrorMessage': ('ccall', 'unsafe', ('Word32Rep', None), (None, 'AddrRep')),
@@ -464,8 +464,11 @@ def win32_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'Win32-2\.14\.2\.1-(?:inplace|[0-9a-f]+)', unit) is not None
 
 
-def operation(target):
+def operation(target, declared=None):
     unit, symbol = target.get('unit'), operation_symbol(target)
+    if symbol == '__hscore_open' and isinstance(declared, list) and len(declared) == 4 and scalar(declared[2], 'Word16Rep', True):
+        convention, safety, _, output = OPERATIONS[symbol]
+        return convention, safety, ('AddrRep', 'Int32Rep', 'Word16Rep', None), output
     if symbol == 'strlen' and bytestring_unit(unit):
         return LIBRARY_OPERATIONS['bytestring-0.12.2.0-inplace', symbol]
     return (LIBRARY_OPERATIONS.get((unit, symbol), OPERATIONS[symbol])
@@ -721,7 +724,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     symbol = operation_symbol(target)
     if symbol not in OPERATIONS:
         return None
-    convention, safety, expected, output = operation(target)
+    convention, safety, expected, output = operation(target, descriptor.get('argumentReps'))
     if 'ZCunixzm' in target['symbol']:
         unit = target.get('unit')
         require(unix_libc_unit(unit) and 'ZC' + unit.replace('-', 'zm').replace('.', 'zi') + 'ZC' in target['symbol'],

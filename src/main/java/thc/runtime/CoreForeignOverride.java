@@ -228,7 +228,7 @@ public enum CoreForeignOverride {
             switch (operation) {
                 case ERRNO, SET_ERRNO, CLOSE, SEEK, TRUNCATE, ISATTY, ACCESS, UNLINKAT, FSTATAT,
                     TCSETATTR, LAST_ERROR, MAP_ERRNO, WINDOWS_ERROR_MESSAGE, LOCAL_FREE,
-                    CONSOLE_CODE_PAGE, CODE_PAGE_INFO, DBCS_LEAD_BYTE, MULTI_BYTE_TO_WIDE, WIDE_TO_MULTI_BYTE -> true;
+                    CONSOLE_CODE_PAGE, CODE_PAGE_INFO, DBCS_LEAD_BYTE, MULTI_BYTE_TO_WIDE, WIDE_TO_MULTI_BYTE, WIDE_TO_MULTI_BYTE_SAFE -> true;
                 default -> false;
             };
     }

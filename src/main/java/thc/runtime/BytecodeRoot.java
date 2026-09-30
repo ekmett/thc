@@ -2174,12 +2174,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = ForeignSafety.class, name = "safety")
     public static final class OriginalWindowsWideChar {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, ForeignSafety safety,
                 long codePage, long flags, ManagedAddress input, long count, ManagedAddress output, long capacity,
                 ManagedAddress defaultChar, ManagedAddress usedDefault, Object state, @Bind Node node) {
             TupleResults.requireVoidCarrier(state);
-            long result = WindowsCodePages.current(node).wideChar(codePage, flags, input, count, output, capacity, defaultChar, usedDefault);
+            long result = WindowsCodePages.current(node).wideChar(codePage, flags, input, count, output, capacity, defaultChar, usedDefault, safety);
             destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }

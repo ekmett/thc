@@ -162,6 +162,14 @@ Win32 supplies the actual code pages, conversion flags, fallback characters and
 localized error text; ANSI conversion is not replaced with UTF-8. Buffers retain
 their capacity and mutability checks, including native partial-failure writes.
 
+Both safe and unsafe `WideCharToMultiByte` declarations retain their exact
+argument widths. Safe calls release guest scheduling admission during native
+execution, and asynchronous delivery after the call does not repeat the
+conversion.
+
+Windows file and Handle opening remains unsupported. Ordinary imports require
+the package's native artifacts alongside its Core.
+
 Messages allocated by `base_getErrorMessage` must be released with `LocalFree`.
 Aliases become invalid after release, and context disposal frees remaining
 messages. Interior, stale, cross-context and wrong-allocator frees are rejected.

@@ -6,6 +6,7 @@ import thc.CoreCbdFixtures;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -83,6 +85,7 @@ class WindowsCodePagesTest {
         operations.put("leadByte", OriginalStdioOp.DBCS_LEAD_BYTE);
         operations.put("multiByte", OriginalStdioOp.MULTI_BYTE_TO_WIDE);
         operations.put("wideChar", OriginalStdioOp.WIDE_TO_MULTI_BYTE);
+        operations.put("wideCharSafe", OriginalStdioOp.WIDE_TO_MULTI_BYTE_SAFE);
         operations.put("mapError", OriginalStdioOp.MAP_ERRNO_VALUE);
         operations.put("mapCurrentError", OriginalStdioOp.MAP_ERRNO);
         operations.put("errorMessage", OriginalStdioOp.WINDOWS_ERROR_MESSAGE);
@@ -102,6 +105,14 @@ class WindowsCodePagesTest {
     }
 
     @Test void genuineDeclarationsMatchNativeEncodingAndErrorsOnEveryFirstCompiledCall() throws Exception {
+        exerciseDeclarations(false);
+    }
+
+    @Test void genuineSafeAndUnsafeWideConversionsMatchEveryNativeFirstCompiledCall() throws Exception {
+        exerciseDeclarations(true);
+    }
+
+    private void exerciseDeclarations(boolean wideOnly) throws Exception {
         var proof = receipt();
         var logs = proof.get("logs").toString().replace('\\', '/');
         assertEquals("9.14.1", proof.get("ghc"));
@@ -119,6 +130,7 @@ class WindowsCodePagesTest {
         }
         OriginalStdioChecks.hashes(root, sourceHashes, Set.of(upstream + "src/GHC/Internal/Windows.hs",
             upstream + "src/GHC/Internal/IO/Encoding/CodePage.hs", upstream + "src/GHC/Internal/IO/Encoding/CodePage/API.hs",
+            upstream + "src/GHC/Internal/IO/Windows/Encoding.hs",
             upstream + "cbits/Win32Utils.c", "nih/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in"), "nih/pinned/");
         for (var command : (List<Map<String, Object>>) proof.get("commands")) assertEquals(command.get("expectedExit"), command.get("exit"));
         var oracle = json(logs + "/oracle.json");
@@ -126,6 +138,7 @@ class WindowsCodePagesTest {
         assertEquals(16, ((List<?>) oracle.get("lead")).size());
         assertEquals(12, ((List<?>) oracle.get("multi")).size());
         assertEquals(13, ((List<?>) oracle.get("wide")).size());
+        assertEquals(13, ((List<?>) oracle.get("wideSafe")).size());
         for (var stage : List.of("pre", "post")) {
             for (var operation : operations.entrySet()) {
                 assertEquals(operation.getValue(), validate(original(operation.getKey())));
@@ -141,7 +154,9 @@ class WindowsCodePagesTest {
                     module.put("instrument", true);
                     var executable = program(language, backend, module);
                     var targets = new LinkedHashMap<String, RootCallTarget>();
-                    for (var entry : operations.keySet()) targets.put(entry, executable.entryTarget(entryId(entry)));
+                    for (var entry : operations.keySet())
+                        if (!wideOnly || List.of("wideChar", "wideCharSafe", "windowsError").contains(entry))
+                            targets.put(entry, executable.entryTarget(entryId(entry)));
                     class Exercise {
                         boolean compiled;
                         Object invoke(String name, Object... args) throws Exception {
@@ -151,7 +166,7 @@ class WindowsCodePagesTest {
                             var arguments = new Object[args.length + 1];
                             arguments[0] = 0L;
                             System.arraycopy(args, 0, arguments, 1, args.length);
-                            var result = Calls.target(target, arguments);
+                            var result = ScalarTestCalls.callScalarTestTarget(target, arguments);
                             if (compiled) {
                                 assertEquals(before + 1, ((Number) executable.diagnostics().get("compiledEntries")).longValue(), stage + "/" + backend + "/" + name + " first compiled entry");
                                 valid(target);
@@ -164,6 +179,7 @@ class WindowsCodePagesTest {
                             return result;
                         }
                         void run() throws Exception {
+                            if (!wideOnly) {
                             assertEquals(oracle.get("ansi"), invoke("ansiPage", 0L));
                             assertEquals(oracle.get("console"), invoke("consolePage", 0L));
                             if (Long.valueOf(0).equals(oracle.get("console"))) assertEquals(oracle.get("consoleError"), invoke("windowsError", 0L));
@@ -197,7 +213,9 @@ class WindowsCodePagesTest {
                                 if (Long.valueOf(0).equals(row.get("result"))) assertEquals(row.get("error"), invoke("windowsError", 0L), label);
                                 assertEquals(row.get("bytes"), bytes(output), label);
                             }
-                            for (var row : (List<Map<String, Object>>) oracle.get("wide")) {
+                            }
+                            for (var name : List.of("wideChar", "wideCharSafe"))
+                            for (var row : (List<Map<String, Object>>) oracle.get(name.equals("wideChar") ? "wide" : "wideSafe")) {
                                 var input = buffer(64, 165, true);
                                 var output = buffer(64, 165, true);
                                 var values = (List<Long>) row.get("input");
@@ -207,7 +225,7 @@ class WindowsCodePagesTest {
                                 for (int i = 0; i < def.size(); i++) defaultChar.writeWord8(i, def.get(i));
                                 var used = buffer(4, 90);
                                 var label = row.get("case").toString();
-                                assertEquals(row.get("result"), invoke("wideChar", row.get("page"), row.get("flags"), input, row.get("count"),
+                                assertEquals(row.get("result"), invoke(name, row.get("page"), row.get("flags"), input, row.get("count"),
                                     Boolean.TRUE.equals(row.get("sizing")) ? ManagedAddress.nullAddress() : output, row.get("capacity"),
                                     defaultChar, Boolean.TRUE.equals(row.get("used")) ? used : ManagedAddress.nullAddress()), label);
                                 if (Long.valueOf(0).equals(row.get("result"))) assertEquals(row.get("error"), invoke("windowsError", 0L), label);
@@ -215,7 +233,7 @@ class WindowsCodePagesTest {
                                 assertEquals(row.get("usedValue"), used.readWord8(0) | (used.readWord8(1) << 8) |
                                     (used.readWord8(2) << 16) | (used.readWord8(3) << 24), label);
                             }
-                            for (var row : (List<Map<String, Object>>) oracle.get("messages")) {
+                            if (!wideOnly) for (var row : (List<Map<String, Object>>) oracle.get("messages")) {
                                 var address = (ManagedAddress) invoke("errorMessage", row.get("error"));
                                 assertEquals(row.get("null"), address == ManagedAddress.nullAddress());
                                 if (address != ManagedAddress.nullAddress()) {
@@ -248,6 +266,66 @@ class WindowsCodePagesTest {
         }
     }
 
+    @Test void safeAstConversionSavesCompletedResultWithoutReplayingAndUnsafeDoesNotPoll() throws Exception {
+        try (var context = context()) {
+            var language = enter(context);
+            try {
+                var threads = Language.currentState(null).getThreads();
+                long identity = threads.enterCurrent();
+                try {
+                    for (var name : List.of("wideChar", "wideCharSafe")) {
+                        var operation = operations.get(name);
+                        var proof = CoreRepresentations.parse(((Map<?, ?>) original(name).get(6)).get("rep"));
+                        var shape = new TupleShape(proof, language);
+                        var layout = new FrameLayout();
+                        int[] slots = {layout.bind("completed Windows CInt")};
+                        var input = buffer(2);
+                        input.writeNativeScalar(0, 2, 65);
+                        var output = buffer(8);
+                        class Effect { AsyncRequest pending; int evaluated; }
+                        var effect = new Effect();
+                        Object[] values = {65001, 0, input, 1, output, 8, ManagedAddress.nullAddress(), ManagedAddress.nullAddress()};
+                        var operands = new Expr[9];
+                        for (int index = 0; index < values.length; index++) {
+                            Object value = values[index];
+                            operands[index] = new Expr() { @Override public Object execute(VirtualFrame frame) { return value; } };
+                        }
+                        operands[8] = new Expr() { @Override public Object execute(VirtualFrame frame) {
+                            effect.evaluated++;
+                            effect.pending = threads.send(identity, "after completed Windows conversion");
+                            return thc.runtime.Unit.INSTANCE;
+                        } };
+                        var body = new OriginalStdioExpression(operation, operands, proof);
+                        var root = new FunctionRoot(language, layout.build(), "Windows conversion completion control", null,
+                            new int[0], new int[0], new int[0], body, new Metrics(false), new CoreRepresentation[0],
+                            body.getRepresentation(), body.getCoreSourceLocation(), new boolean[0], null, shape, slots,
+                            null, true, new int[0][], false, FunctionRootRole.FUNCTION, false);
+                        var result = Calls.target(root.getCallTarget(), new Object[]{0L});
+                        final Object completed;
+                        if (operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE_SAFE) {
+                            var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(result));
+                            assertSame(effect.pending, saved.asyncRequest());
+                            Objects.requireNonNull(effect.pending).acknowledge();
+                            // Repeating the conversion would now produce two UTF-8 bytes.
+                            input.writeNativeScalar(0, 2, 0x00e9);
+                            completed = saved.continueWith(thc.runtime.Unit.INSTANCE);
+                        } else {
+                            assertEquals(AsyncRequestState.PENDING, Objects.requireNonNull(effect.pending).getState());
+                            assertSame(effect.pending, threads.poll(root, false));
+                            effect.pending.acknowledge();
+                            completed = result;
+                        }
+                        assertEquals(1, shape.getLayout().getInt(TupleResults.ownedTupleResult(completed, shape), 0));
+                        assertEquals(List.of(65L, 165L), bytes(output, 2));
+                        assertEquals(1, effect.evaluated);
+                        assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                        assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
+                    }
+                } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void bufferValidationAndAllocatorIdentityPreserveOwnershipAndContext() {
         WindowsCodePages service;
         ManagedAddress retained;
@@ -266,7 +344,7 @@ class WindowsCodePagesTest {
                 assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, ManagedAddress.nullAddress(), 1, output, 4));
                 assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, buffer(1), -2, output, 4));
                 assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, buffer(1), 1, output, -1));
-                assertThrows(RuntimeFault.class, () -> service.wideChar(1252, 0, buffer(2), 1, buffer(1), 2, ManagedAddress.nullAddress(), buffer(3)));
+                assertThrows(RuntimeFault.class, () -> service.wideChar(1252, 0, buffer(2), 1, buffer(1), 2, ManagedAddress.nullAddress(), buffer(3), ForeignSafety.UNSAFE));
                 var message = service.message(2);
                 var alias = message.plus(2);
                 assertThrows(RuntimeFault.class, () -> allocations.free(message));
@@ -277,7 +355,7 @@ class WindowsCodePagesTest {
                 assertTrue(message.availableBytes() > 2);
                 // A context-owned native message may also be a conversion input.
                 assertTrue(service.wideChar(65001, 0, message, -1, ManagedAddress.nullAddress(), 0,
-                    ManagedAddress.nullAddress(), ManagedAddress.nullAddress()) > 0);
+                    ManagedAddress.nullAddress(), ManagedAddress.nullAddress(), ForeignSafety.UNSAFE) > 0);
                 service.localFree(message);
                 assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
                 assertThrows(RuntimeFault.class, () -> service.localFree(message));
@@ -332,7 +410,9 @@ class WindowsCodePagesTest {
         for (var operation : operations.entrySet()) {
             var call = original(operation.getKey());
             assertEquals(operation.getValue(), validate(call));
-            for (var field : Map.of("safety", "safe", "convention", "stdcall", "arity", 42L).entrySet()) {
+            var rejectedSafety = operation.getValue() == OriginalStdioOp.WIDE_TO_MULTI_BYTE || operation.getValue() == OriginalStdioOp.WIDE_TO_MULTI_BYTE_SAFE
+                ? "interruptible" : "safe";
+            for (var field : Map.of("safety", rejectedSafety, "convention", "stdcall", "arity", 42L).entrySet()) {
                 var bad = (List<Object>) Json.INSTANCE.parse(Json.INSTANCE.stringify(call));
                 ((Map<String, Object>) ((Map<?, ?>) bad.get(6)).get("foreignCall")).put(field.getKey(), field.getValue());
                 assertThrows(RuntimeFault.class, () -> validate(bad));
