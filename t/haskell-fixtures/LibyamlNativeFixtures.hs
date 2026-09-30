@@ -55,7 +55,10 @@ prepareLibyamlNative root = do
       store = stage </> "store"
   copyTree (stage </> "capture" </> identifier) (capture </> identifier)
   createDirectoryLink (stage </> "native-pieces") (output </> "native-pieces")
-  bundle <- publishCapturedStoreUnit (stage </> "dist/cache/plan.json") store (stage </> "dist")
+  selectedPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+  requestedPkg <- if takeFileName selectedPkg == selectedPkg then pure selectedPkg else makeAbsolute selectedPkg
+  packageTool <- findExecutable requestedPkg >>= maybe (fail "selected ghc-pkg executable not found") makeAbsolute
+  bundle <- publishCapturedStoreUnit packageTool (stage </> "dist/cache/plan.json") store (stage </> "dist")
     capture identifier (output </> "libyaml.zip")
   archives <- concat <$> mapM (registeredArchives store) [identifier,cIdentifier]
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
