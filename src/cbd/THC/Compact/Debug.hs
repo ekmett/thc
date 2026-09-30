@@ -15,7 +15,7 @@
 module THC.Compact.Debug
   ( SourceFile(..), SourcePosition(..), SourceLocation(..)
   , DebugEncoder, newDebugEncoder, recordName, recordLocation, finishDebug
-  , nameAt, locationAt, sourceFiles
+  , nameAt, locationAt, sourceFiles, sourceLocations
   ) where
 
 import Control.Monad (foldM, forM_, replicateM, unless, void, when)
@@ -213,16 +213,39 @@ sourceFiles :: BS.ByteString -> BS.ByteString -> Word64 -> Either String [Source
 sourceFiles filenames strings dataSize
   | BS.null filenames = Right []
   | otherwise = do
-      (index,count) <- table filenames 24
-      rows <- at filenames index (24*count) $ replicateM (fromIntegral count)
-        ((,,) <$> getWord64le <*> getWord64le <*> getWord64le)
-      (_,payloads) <- foldM (\(previous,seen) (start,end,payload) -> do
-        unless (previous <= start && start < end && end <= dataSize)
-          (Left "Invalid compact source interval")
-        pure (end,Set.insert payload seen)) (0,Set.empty) rows
+      (index,rows) <- intervalRows filenames dataSize
+      let payloads = Set.fromList [payload | (_,_,payload) <- rows]
       files <- mapM (\payload -> intervalPayload filenames index payload
         (\limit -> getList limit (getFile strings))) (Set.toAscList payloads)
       pure (Set.toAscList (Set.fromList (concat [values | Just values <- files])))
+
+-- | Explicit offline enumeration of the actual paired source observations.
+-- Independent table boundaries split DATA ranges; executable records and
+-- display names remain unread, and absent origins do not invent observations.
+sourceLocations :: BS.ByteString -> BS.ByteString -> BS.ByteString -> Word64
+  -> Either String [(Word64,Word64,SourceLocation)]
+sourceLocations filenames positions strings dataSize = do
+  (_,files) <- intervalRows filenames dataSize
+  (_,coords) <- intervalRows positions dataSize
+  let boundaries = Set.toAscList (Set.fromList (0:dataSize:
+        concat [[start,end] | (start,end,_) <- files ++ coords]))
+  observed <- mapM (\(start,end) -> do
+    location <- locationAt filenames positions strings dataSize start
+    pure (start,end,location)) (zip boundaries (drop 1 boundaries))
+  pure [(start,end,location) | (start,end,Just location) <- observed]
+
+intervalRows :: BS.ByteString -> Word64 -> Either String (Word64,[(Word64,Word64,Word64)])
+intervalRows bytes dataSize
+  | BS.null bytes = Right (0,[])
+  | otherwise = do
+      (index,count) <- table bytes 24
+      rows <- at bytes index (24*count) $ replicateM (fromIntegral count)
+        ((,,) <$> getWord64le <*> getWord64le <*> getWord64le)
+      void $ foldM (\previous (start,end,_) -> do
+        unless (previous <= start && start < end && end <= dataSize)
+          (Left "Invalid compact source interval")
+        pure end) 0 rows
+      pure (index,rows)
 
 intervalAt :: BS.ByteString -> Word64 -> Word64 -> (Word64 -> Get a) -> Either String (Maybe a)
 intervalAt bytes dataSize position decode

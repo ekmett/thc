@@ -47,21 +47,22 @@ def _compact_executable():
     return str(executable)
 
 
-def inspect_cbd(data):
-    """Explicit offline inspection via the sole CBD decoder; JSON is output only."""
+def inspect_cbd(data, *, sources=False):
+    """Explicit offline executable or source inspection; JSON is output only."""
     if not data.startswith(b'PK\x03\x04'):
         raise ValueError('Core input must be CBD; JSON Core input is not supported')
     with TemporaryDirectory(prefix='thc-cbd-audit-') as temporary:
         source, output = Path(temporary) / 'module.cbd', Path(temporary) / 'inspection.json'
         source.write_bytes(data)
         try:
-            result = subprocess.run([_compact_executable(), 'decode', str(source), str(output)],
-                                    capture_output=True, text=True, encoding='utf-8', timeout=60)
+            command = ([_compact_executable(), 'sources', str(source)] if sources else
+                       [_compact_executable(), 'decode', str(source), str(output)])
+            result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', timeout=60)
         except subprocess.TimeoutExpired as error:
             raise ValueError('CBD inspection timed out') from error
         if result.returncode:
             raise ValueError('CBD inspection failed: ' + result.stderr.strip())
-        return strict_json(output.read_text(encoding='utf-8'))
+        return strict_json(result.stdout if sources else output.read_text(encoding='utf-8'))
 
 
 def paired_diagnostic_cbd(path):
