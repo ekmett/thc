@@ -79,7 +79,7 @@ public class ForeignExceptionTest {
                 context.initialize("thc"); context.initialize("js"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var original = context.eval("js", "globalThis.thcFailure = new Error('identity retained')");
-                    for (String entry : List.of("rethrowNow", "rethrowLater")) {
+                    for (String entry : List.of("main:ForeignExceptionAudit.rethrowNow", "main:ForeignExceptionAudit.rethrowLater")) {
                         var linked = linked(source, entry); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                         var function = context.asValue(new EntryValue(program, entry, 1)); assertEquals(8L, function.execute(1L).asLong()); assertTrue(function.invokeMember("compile").asBoolean());
                         var failure = assertThrows(PolyglotException.class, () -> function.execute(0L)); assertTrue(failure.isGuestException());
