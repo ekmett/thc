@@ -65,6 +65,7 @@ class PointerEqualityTest {
     private void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
         type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     @FunctionalInterface

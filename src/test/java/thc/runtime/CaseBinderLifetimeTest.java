@@ -94,6 +94,7 @@ class CaseBinderLifetimeTest {
                 observed.setRepresentation(scrutinee.getRepresentation());
                 scrutinee.replace(observed);
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                target.getClass().getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 assertEquals(used ? 7L : 42L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 7L}));
                 assertArrayEquals(new int[]{1, 1, 1}, observations);
@@ -138,6 +139,7 @@ class CaseBinderLifetimeTest {
                 observed.setRepresentation(((GuestRoot) target.getRootNode()).getScalarResultProof());
                 selection.replace(observed);
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                target.getClass().getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 assertEquals(42L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, 0L}));
                 assertArrayEquals(new int[]{1, 1, 1}, observations);
@@ -199,6 +201,7 @@ class CaseBinderLifetimeTest {
                     body.replace(new Observe(body, selection.binderSlot, observations));
                 }
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                target.getClass().getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 for (long input : new long[]{0L, defaults ? 7L : 0L})
                     assertEquals(used ? input : 42L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, input}));

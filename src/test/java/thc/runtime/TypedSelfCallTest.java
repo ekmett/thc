@@ -66,6 +66,7 @@ class TypedSelfCallTest {
     private static long count(ExecutableProgram program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
     private static void compile(RootCallTarget target) throws Exception {
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+        target.getClass().getMethod("waitForCompilation").invoke(target);
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
     }
     @FunctionalInterface private interface Action { void run(String backend, Language language, ExecutableProgram program) throws Exception; }

@@ -54,6 +54,7 @@ class AstSelfCallTest {
     private void compile(RootCallTarget target) throws ReflectiveOperationException {
         Class<?> type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
         type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     @FunctionalInterface private interface ProgramAction { void run(Program program) throws Exception; }

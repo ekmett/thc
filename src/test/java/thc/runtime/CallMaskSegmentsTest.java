@@ -32,7 +32,7 @@ class CallMaskSegmentsTest {
     }
     @FunctionalInterface private interface Action<T> { T run() throws Exception; }
     private <T> T entered(Context context, Action<T> action) throws Exception { context.enter(); try { return action.run(); } finally { context.leave(); } }
-    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); assertTrue(type.isInstance(target)); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); assertTrue(type.isInstance(target)); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     @Test void parkingKeepsTheRequestEvenIfAnotherEvaluatorHasFinishedTheSegment() throws Exception {
         try (var context = executionContext()) { context.initialize("thc"); entered(context, () -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var threads = Language.currentState().getThreads(); var request = threads.send(Long.MIN_VALUE, "request identity");

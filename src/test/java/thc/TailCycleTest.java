@@ -35,6 +35,7 @@ class TailCycleTest {
     private Object invoke(ExecutableProgram program, String name, Object... arguments) { return Calls.target(program.hostEntryTarget(arguments.length), new Object[]{program.entryValue(name), arguments}); }
     private void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target), "Guest code must be installed");
     }
     /** Identity-derived bloom collisions are valid; these fixtures select active-ancestor reentry. */

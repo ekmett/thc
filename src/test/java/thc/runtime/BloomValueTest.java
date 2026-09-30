@@ -86,6 +86,7 @@ class BloomValueTest {
     private Object invoke(RootNode root, long mask) { return Calls.target(root.getCallTarget(), new Object[]{mask}); }
     private void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     @Test void threeWideMasksReuseBoxesAndMegamorphicFallbackPreservesEveryBit() throws Exception {

@@ -50,6 +50,7 @@ class BindingCellMetadataTest {
     private long count(ExecutableProgram program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
     private void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     @Test void ordinaryObjectParametersFieldsAndCapturesNeedNoRecursiveCellReads() throws Exception {

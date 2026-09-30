@@ -83,6 +83,7 @@ class CoreSourceTest {
             var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
             for (var program : List.of(enabled, disabled)) {
                 type.getMethod("compile", boolean.class).invoke(program.entryTarget("entry"), true);
+                type.getMethod("waitForCompilation").invoke(program.entryTarget("entry"));
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(program.entryTarget("entry")));
                 for (long input : List.of(Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_001L)) assertEquals(input + 1, run(program, input));
             }
@@ -122,6 +123,7 @@ class CoreSourceTest {
                 }
                 for (int i = 0; i < 20; i++) assertEquals((long) i + increment, invoke(sources, name, i));
                 compiler.getMethod("compile", boolean.class).invoke(target, true);
+                compiler.getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, compiler.getMethod("isValidLastTier").invoke(target));
                 assertEquals(Long.MAX_VALUE + increment, invoke(sources, name, Long.MAX_VALUE));
             }

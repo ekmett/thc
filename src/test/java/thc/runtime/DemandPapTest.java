@@ -40,6 +40,7 @@ class DemandPapTest {
                 var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
                 assertEquals(true, type.getMethod("prepareForAOT").invoke(target));
                 type.getMethod("compile", boolean.class).invoke(target, true);
+                type.getMethod("waitForCompilation").invoke(target);
                 var runtime = Truffle.getRuntime();
                 runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, target);
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
@@ -70,6 +71,7 @@ class DemandPapTest {
                 }).getNode(0).getCallTarget();
                 var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
                 type.getMethod("compile", boolean.class).invoke(target, true);
+                type.getMethod("waitForCompilation").invoke(target);
                 var runtime = Truffle.getRuntime();
                 runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, target);
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
@@ -147,6 +149,7 @@ class DemandPapTest {
                     var target = fixture.demand.program("caller").entryTarget("caller");
                     if (!early) {
                         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                        target.getClass().getMethod("waitForCompilation").invoke(target);
                         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                         // Reinstall HotSpot's call-boundary stub, without executing the guest.
                         var runtime = Truffle.getRuntime();

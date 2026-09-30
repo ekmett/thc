@@ -39,6 +39,7 @@ class ResumableThunkProofTest {
     private static void compile(RootCallTarget target) throws Exception {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
         assertTrue(type.isInstance(target)); type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
     private record TargetDriver(RootCallTarget target, Driver driver) {}

@@ -66,7 +66,7 @@ class LeadingCaseReturnTest {
     private Object run(ExecutableProgram p, String name, Object... args) { return Calls.target(p.hostEntryTarget(args.length), new Object[]{p.entryValue(name), args.clone()}); }
     private long count(ExecutableProgram p) { return count(p, "leadingCaseReturns"); }
     private long count(ExecutableProgram p, String name) { return ((Number) p.diagnostics().get(name)).longValue(); }
-    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(RootCallTarget target) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     private static class CloneCaller extends RootNode {
         @Child private DirectCallNode call;
         CloneCaller(RootCallTarget target) { super(null); call = DirectCallNode.create(target); }
