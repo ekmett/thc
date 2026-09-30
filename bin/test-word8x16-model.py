@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import unittest
 import word8x16_model as model
+from core_package_manifest import inspect_cbd
 
 spec = importlib.util.spec_from_file_location('word8x16_prepare', Path(__file__).with_name('prepare-word8x16-audit.py'))
 prepare = importlib.util.module_from_spec(spec); spec.loader.exec_module(prepare)
@@ -61,10 +62,10 @@ def fixture(name):
                 ['lit', 'int', '0'], dict(resultRep=result_rep())])
     bindings = [root]
     if name in model.HELPERS:
-        helper = dict(id='helper', name=model.HELPERS[name],
+        helper = dict(id='main:SimdWord8X16.' + model.HELPERS[name], name=model.HELPERS[name],
                       expr=['lam', [formal('x'), formal('y')], ['lit', 'int', '0'],
                             dict(resultRep=tuple_rep() if name == 'tupleHelperCase' else result_rep())])
-        call = ['app', ['var', 'helper'], [['var', 'a'], ['var', 'b']], [False, False], False, False]
+        call = ['app', ['var', helper['id']], [['var', 'a'], ['var', 'b']], [False, False], False, False]
         root['expr'][2] = ['case', call, {}, [['default', None, [], ['lit', 'int', '0']]]]
         bindings.append(helper)
     report = dict(roots=['root'], reachableBindings=[dict(id=b['id']) for b in bindings],
@@ -113,7 +114,7 @@ class Word8X16ModelTest(unittest.TestCase):
         tuple_value = ['tuple', dict(rep=tuple_rep())]
         packed = ['app', ['prim', 'packWord8X16#'], [tuple_value], dict(rep=proof)]
         plus = ['app', ['prim', 'plusWord8X16#'], [packed, copy.deepcopy(packed)], dict(rep=copy.deepcopy(proof))]
-        module = dict(bindings=[dict(name='plusCase', expr=plus)])
+        module = dict(bindings=[dict(id='main:SimdWord8X16.plusCase', name='plusCase', expr=plus)])
         saved = copy.deepcopy(module)
         for variant in ('signedLaneTuple', 'signedVectorOperand'):
             altered = prepare.signed_control(module, variant)
@@ -139,9 +140,9 @@ class Word8X16ModelTest(unittest.TestCase):
         provenance = json.loads((prepare.OUT/'provenance.json').read_text())
         self.assertIn(provenance['stages'], [['pre'], ['pre', 'post']])
         for stage in provenance['stages']:
-            path = prepare.OUT/f'{stage}-core/SimdWord8X16.json'
-            module = json.loads(path.read_text())
-            self.assertTrue(auditor.Audit([(str(path), module)], capabilities).run(['plusCase'])['accepted'])
+            path = prepare.OUT/f'{stage}-core/SimdWord8X16.cbd'
+            module = inspect_cbd(path.read_bytes())
+            self.assertTrue(auditor.Audit([(str(path), module)], capabilities).run(['main:SimdWord8X16.plusCase'])['accepted'])
             controls = prepare.audit_signed_controls(module, path, auditor, capabilities)
             self.assertEqual(set(controls), {'signedLaneTuple', 'signedVectorOperand'})
             for name, count in [('signedLaneTuple', 34), ('signedVectorOperand', 4)]:

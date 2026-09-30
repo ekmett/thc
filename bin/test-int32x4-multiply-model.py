@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import unittest
 import int32x4_multiply_model as model
+from core_package_manifest import inspect_cbd
 
 spec = importlib.util.spec_from_file_location('int32x4_multiply_prepare', Path(__file__).with_name('prepare-int32x4-multiply-audit.py'))
 prepare = importlib.util.module_from_spec(spec); spec.loader.exec_module(prepare)
@@ -50,10 +51,10 @@ def fixture(name):
                 ['lit', 'int', '0'], dict(resultRep=result_rep())])
     bindings = [root]
     if name in model.HELPERS:
-        helper = dict(id='helper', name=model.HELPERS[name],
+        helper = dict(id='main:SimdInt32X4Multiply.' + model.HELPERS[name], name=model.HELPERS[name],
                       expr=['lam', [formal('x'), formal('y')], ['lit', 'int', '0'],
                             dict(resultRep=tuple_rep() if name == 'tupleHelperCase' else result_rep())])
-        call = ['app', ['var', 'helper'], [['var', 'a'], ['var', 'b']], [False, False], False, False]
+        call = ['app', ['var', helper['id']], [['var', 'a'], ['var', 'b']], [False, False], False, False]
         root['expr'][2] = ['case', call, {}, [['default', None, [], ['lit', 'int', '0']]]]
         bindings.append(helper)
     report = dict(roots=['root'], reachableBindings=[dict(id=b['id']) for b in bindings],
@@ -76,7 +77,7 @@ class Int32X4MultiplyModelTest(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('int32x4_signedness_auditor', root / 'bin/audit-core.py')
         auditor = importlib.util.module_from_spec(spec); spec.loader.exec_module(auditor)
         capabilities = json.loads((root / 'bin/core-capabilities.json').read_text())
-        prepared = [root / f'build/simd-int32x4-multiply/{stage}-core/SimdInt32X4Multiply.json'
+        prepared = [root / f'build/simd-int32x4-multiply/{stage}-core/SimdInt32X4Multiply.cbd'
                     for stage in ('pre', 'post')]
         # ARM's export-only preparation may supply just pre-Tidy; retained
         # native evidence above always supplies both stages without a skip.
@@ -88,7 +89,7 @@ class Int32X4MultiplyModelTest(unittest.TestCase):
                              hashes[f'build/simd-int32x4-multiply/{stage}-core/SimdInt32X4Multiply.json'])
             inputs.append((stage, path, json.loads(raw)))
             if fresh.exists():
-                inputs.append((stage, fresh, json.loads(fresh.read_text())))
+                inputs.append((stage, fresh, inspect_cbd(fresh.read_bytes())))
         expected = {
             'unsignedLaneTuple': {'vector-shape': 1, 'aggregate-shape': 5, 'scalar-representation': 4},
             'unsignedVectorOperand': {'vector-shape': 2, 'aggregate-shape': 2},
@@ -97,7 +98,7 @@ class Int32X4MultiplyModelTest(unittest.TestCase):
             with self.subTest(stage=stage, path=str(path)):
                 prepare.inventory(module, stage)
                 original = copy.deepcopy(module)
-                positive = auditor.Audit([(str(path), module)], capabilities).run(['timesCase'])
+                positive = auditor.Audit([(str(path), module)], capabilities).run(['main:SimdInt32X4Multiply.timesCase'])
                 self.assertTrue(positive['accepted'])
                 self.assertEqual(positive['issues'], [])
                 self.assertEqual(positive['missingGlobals'], [])
@@ -157,7 +158,7 @@ class Int32X4MultiplyModelTest(unittest.TestCase):
         tuple_value = ['tuple', dict(rep=tuple_rep())]
         packed = ['app', ['prim', 'packInt32X4#'], [tuple_value], dict(rep=proof)]
         times = ['app', ['prim', 'timesInt32X4#'], [packed, copy.deepcopy(packed)], dict(rep=copy.deepcopy(proof))]
-        module = dict(bindings=[dict(name='timesCase', expr=times)])
+        module = dict(bindings=[dict(id='main:SimdInt32X4Multiply.timesCase', name='timesCase', expr=times)])
         saved = copy.deepcopy(module)
         for variant in ('unsignedLaneTuple', 'unsignedVectorOperand'):
             altered = prepare.unsigned_control(module, variant)

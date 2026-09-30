@@ -2507,10 +2507,10 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" simd-floatx4-fma', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/simd-floatx4-fma', fast_fixtures.FULL_OUTPUT_ROOTS)
-        for suffix in ('manifest.json', 'pre-audit.json', 'pre-double-audit.json', 'pre-core/SimdFloatFma.json'):
+        for suffix in ('manifest.json', 'pre-audit.json', 'pre-double-audit.json', 'pre-core/SimdFloatFma.cbd'):
             self.assertIn('build/simd-floatx4-fma/' + suffix, fast_fixtures.FULL_REQUIRED)
         native = fast_fixtures.platform.machine().lower() not in ('arm64', 'aarch64')
-        for suffix in ('oracle.txt', 'post-audit.json', 'post-double-audit.json', 'post-core/SimdFloatFma.json'):
+        for suffix in ('oracle.txt', 'post-audit.json', 'post-double-audit.json', 'post-core/SimdFloatFma.cbd'):
             self.assertEqual(native, 'build/simd-floatx4-fma/' + suffix in fast_fixtures.FULL_REQUIRED)
         gradle = (project / 'build.gradle').read_text()
         for suffix in ('**/*.json', 'oracle.txt'):
@@ -2527,7 +2527,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/simd-wide-floating-fma', fast_fixtures.FULL_OUTPUT_ROOTS)
         # Scalar FMA expectations are mandatory on every supported host; AVX512 is not required.
         for suffix in ('manifest.json', 'oracle.txt', 'pre-audit.json', 'pre-double-audit.json',
-                       'pre-core/SimdWideFloatFma.json'):
+                       'pre-core/SimdWideFloatFma.cbd'):
             self.assertIn('build/simd-wide-floating-fma/' + suffix, fast_fixtures.FULL_REQUIRED)
         for suffix in ('**/*.json', 'oracle.txt'):
             self.assertIn('"simd-wide-floating-fma/' + suffix + '"', gradle)
