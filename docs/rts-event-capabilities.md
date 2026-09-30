@@ -37,11 +37,19 @@ stable-pointer protocol, each with an independent slot:
 - `getOrSetSystemEventThreadIOManagerThreadStore`
 - `getOrSetSystemTimerThreadEventManagerStore`
 - `getOrSetSystemTimerThreadIOManagerThreadStore`
+- `getOrSetGHCConcWindowsPendingDelaysStore`
+- `getOrSetGHCConcWindowsIOManagerThreadStore`
+- `getOrSetGHCConcWindowsProddingStore`
 
 A null argument queries without installing. The winning valid stable pointer
 is retained until context disposal; losers remain caller-owned. Foreign-context
 pointers, invalid candidates, freeing a winner and use after disposal reject.
-These slots do not themselves start a timer or event-manager thread.
+These slots do not themselves start a timer or event-manager thread or implement
+Windows IOCP. The Windows declarations come from the unchanged pinned
+`GHC.Internal.Conc.POSIX` interface. Their genuine pre/post-tidy exports and
+native GHC identity oracle are prepared with `thc-fixtures windows-shared-caf`;
+`./bin/windows.ps1 -Action SharedCAFTest -Jobs 2` checks both backends and handoff
+modes, including installation on the first compiled entry without a warmup.
 
 `__hscore_f_setfd` (`Int32#`), `__hscore_fd_cloexec` (`Int64#`) and
 `__hscore_sizeof_siginfo_t` (`Word64#`, safe) return values measured by the native

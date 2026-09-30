@@ -12,12 +12,14 @@
 --
 -- Export genuine Windows foreign declarations and compare native encoding,
 -- error-state and allocation behavior with the JVM runtime.
-module WindowsCodePageFixtures (prepareWindowsCodePages) where
+module WindowsCodePageFixtures (prepareWindowsCodePages, prepareWindowsSharedCAFStores) where
 
 #if !defined(mingw32_HOST_OS)
 import System.Exit (die)
 prepareWindowsCodePages :: FilePath -> IO ()
 prepareWindowsCodePages _ = die "windows-codepages requires native Windows GHC 9.14.1"
+prepareWindowsSharedCAFStores :: FilePath -> IO ()
+prepareWindowsSharedCAFStores _ = die "windows-shared-caf requires native Windows GHC 9.14.1"
 #else
 import Control.Exception (finally)
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -28,6 +30,8 @@ import qualified Data.ByteString as Bytes
 import qualified Data.ByteString.Char8 as BS
 import Data.Char (toUpper)
 import Data.List (isPrefixOf, nubBy, sort)
+import Data.IORef (newIORef)
+import Control.Concurrent (ThreadId, newMVar)
 import qualified Data.Map.Strict as Map
 import qualified Distribution.InstalledPackageInfo as Package
 import Data.Time (getCurrentTime, defaultTimeLocale, formatTime)
@@ -37,6 +41,7 @@ import Foreign.Marshal.Alloc (allocaBytes)
 import Foreign.Marshal.Array (peekArray, peekArray0, pokeArray)
 import Foreign.Marshal.Utils (fillBytes)
 import Foreign.Ptr (Ptr, castPtr, nullPtr)
+import Foreign.StablePtr (newStablePtr, freeStablePtr, castStablePtrToPtr, castPtrToStablePtr)
 import Foreign.Storable (peek)
 import FixtureSupport
 import GHC hiding (exprType)
@@ -58,11 +63,15 @@ import qualified THC.Interface as Interface
 import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 
-operations :: [(String,String)]
-operations = [("ansiPage","GetACP"),("consolePage","GetConsoleCP"),("windowsError","GetLastError"),
+codePageOperations :: [(String,String)]
+codePageOperations = [("ansiPage","GetACP"),("consolePage","GetConsoleCP"),("windowsError","GetLastError"),
   ("pageInfo","GetCPInfo"),("leadByte","IsDBCSLeadByteEx"),("multiByte","MultiByteToWideChar"),
   ("wideChar","WideCharToMultiByte"),("wideCharSafe","WideCharToMultiByte"),("mapError","maperrno_func"),("mapCurrentError","maperrno"),
   ("errorMessage","base_getErrorMessage"),("localFree","LocalFree")]
+
+sharedCAFOperations :: [(String,String)]
+sharedCAFOperations = [("pendingDelays","getOrSetGHCConcWindowsPendingDelaysStore"),
+  ("ioManagerThread","getOrSetGHCConcWindowsIOManagerThreadStore"),("prodding","getOrSetGHCConcWindowsProddingStore")]
 
 field :: FromJSON a => Key -> Value -> IO a
 field name (Object values) = case KeyMap.lookup name values of
@@ -81,8 +90,8 @@ variables expression = case expression of
   Tick _ body -> variables body
   _ -> []
 
-originalCall :: Id -> Maybe (String,F.Safety)
-originalCall value = case isFCallId_maybe value of
+originalCall :: [(String,String)] -> Id -> Maybe (String,F.Safety)
+originalCall operations value = case isFCallId_maybe value of
   Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just owner) True) F.CCallConv safety))
     | unitString owner == "ghc-internal", unpackFS name `elem` map snd operations,
       safety == F.PlayRisky || (safety == F.PlaySafe && unpackFS name == "WideCharToMultiByte") -> Just (unpackFS name,safety)
@@ -96,20 +105,31 @@ filesUnder directory = do
     if nested then map (name </>) <$> filesUnder (directory </> name) else pure [name]
 
 prepareWindowsCodePages :: FilePath -> IO ()
-prepareWindowsCodePages root = do
+prepareWindowsCodePages = prepareWindowsDeclarations False
+
+-- | Export the pinned Windows shared-CAF calls and observe their native stores.
+prepareWindowsSharedCAFStores :: FilePath -> IO ()
+prepareWindowsSharedCAFStores = prepareWindowsDeclarations True
+
+prepareWindowsDeclarations :: Bool -> FilePath -> IO ()
+prepareWindowsDeclarations sharedCAF root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC" >>= canonicalizePath
   python <- maybe "python" id <$> lookupEnv "THC_PYTHON"
   stamp <- formatTime defaultTimeLocale "%Y%m%dT%H%M%S%q" <$> getCurrentTime
-  let directory = "build/windows-codepages"
+  let directory = if sharedCAF then "build/windows-shared-caf" else "build/windows-codepages"
       logs = directory </> stamp
       overlay = root </> logs </> "interfaces"
       output = root </> logs </> "consumer"
-      source = "t/fixtures/compiler/WindowsCodePageAudit.hs"
+      consumer = if sharedCAF then "WindowsSharedCAFCalls" else "WindowsCodePageAudit"
+      source = "t/fixtures/compiler/" ++ consumer ++ ".hs"
+      operations = if sharedCAF then sharedCAFOperations else codePageOperations
+      selectOriginal = originalCall operations
       execute = runLogged 180 root logs
       pkg = takeDirectory ghc </> "ghc-pkg.exe"
       oneLine = BS.unpack . BS.takeWhile (/= '\r') . BS.takeWhile (/= '\n') . commandStdout
-      modules = ["GHC.Internal.Windows","GHC.Internal.IO.Encoding.CodePage","GHC.Internal.IO.Encoding.CodePage.API",
-        "GHC.Internal.IO.Windows.Encoding"]
+      modules = if sharedCAF then ["GHC.Internal.Conc.POSIX"] else
+        ["GHC.Internal.Windows","GHC.Internal.IO.Encoding.CodePage","GHC.Internal.IO.Encoding.CodePage.API",
+         "GHC.Internal.IO.Windows.Encoding"]
       relative name = map (\c -> if c == '.' then '/' else c) name
       sources = ["src/" ++ relative name ++ ".hs" | name <- modules]
       upstream = root </> "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
@@ -137,10 +157,11 @@ prepareWindowsCodePages root = do
     unless (actual == expected) (die ("Changed pinned source " ++ path))
     pure original
   -- This native oracle source is separate from the Core graph inventory.
-  let nativeSource = upstream </> "cbits/Win32Utils.c"
+  let nativeSource = if sharedCAF then root </> "nih/pinned/ghc-9.14.1/rts/Globals.c" else upstream </> "cbits/Win32Utils.c"
   nativeHash <- hashFile nativeSource
-  unless (nativeHash == "f62b489b53c951d02b769a35801abbd9945632ecb9a1f6ade3ccc4ca20060dac")
-    (die "Changed pinned Win32Utils.c")
+  unless (nativeHash == if sharedCAF then "c541f9755f63bb0bac926e088e805e1b7642e383b07fd147fe658a6c847c8eb9" else
+      "f62b489b53c951d02b769a35801abbd9945632ecb9a1f6ade3ccc4ca20060dac")
+    (die ("Changed pinned native source " ++ nativeSource))
   let usedSources = nativeSource : pinnedFiles
   sourceHashes <- hashes root usedSources
   registration <- execute "ghc-internal-package" [] pkg ["--expand-pkgroot","describe","ghc-internal"]
@@ -172,8 +193,8 @@ prepareWindowsCodePages root = do
       let expected = mkModule (stringToUnit "ghc-internal") (mkModuleName name)
       core <- Interface.loadInterfaceCore environment expected (overlay </> relative name ++ ".hi") >>= maybe
         (die "Original Windows declaration interface lacks full Core") pure
-      pure [value | (_,body) <- flattenBinds (Interface.interfaceBindings core), value <- variables body, originalCall value /= Nothing]
-    let distinct = nubBy (\a b -> originalCall a == originalCall b && eqType (idType a) (idType b)) values
+      pure [value | (_,body) <- flattenBinds (Interface.interfaceBindings core), value <- variables body, selectOriginal value /= Nothing]
+    let distinct = nubBy (\a b -> selectOriginal a == selectOriginal b && eqType (idType a) (idType b)) values
     liftIO $ unless (length distinct == length operations) (die "Missing original Windows FCallIds")
     pure distinct
   oracle <- runGhc (Just (oneLine library)) $ do
@@ -200,7 +221,7 @@ prepareWindowsCodePages root = do
           _ -> expression
         specialize name symbol = case ([(value,body) | (value,body) <- bindings,
                  getOccString value == name, isExternalName (varName value)],
-                 [value | value <- originals, originalCall value == Just (symbol,
+                 [value | value <- originals, selectOriginal value == Just (symbol,
                    if name `elem` ["wideCharSafe","nativeWideCharSafe"] then F.PlaySafe else F.PlayRisky)]) of
           ([(value,body)],[original]) | Just (_,_,formal,_) <- splitFunTy_maybe (idType value), eqType formal (idType original) ->
             let applied = simpleOptExpr (initSimpleOpts flagsNow) (App (resolve body) (Var original))
@@ -219,10 +240,10 @@ prepareWindowsCodePages root = do
       (value,_,_) <- hscCompileCoreExpr current noSrcSpan (mkLets (mg_binds optimized) (snd (specialize nativeName symbol)))
       native <- wormhole (hscInterp current) value
       pure (name,native)
-    liftIO $ observe (Map.fromList natives)
+    liftIO $ (if sharedCAF then observeSharedCAFs else observe) (Map.fromList natives)
   writeJson (root </> logs </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre","post"] $ \stage -> forM (map fst operations) $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] python ["bin/audit-core.py","--entry","main:WindowsCodePageAudit." ++ name,
+    execute (stage ++ "-audit-" ++ name) [] python ["bin/audit-core.py","--entry","main:" ++ consumer ++ "." ++ name,
       "--output",logs </> stage ++ "-" ++ name ++ ".audit.json",logs </> stage ++ ".cbd"]
   afterHashes <- hashes root usedSources
   unless (sourceHashes == afterHashes) (die "Compiling declaration interfaces changed upstream sources")
@@ -230,7 +251,12 @@ prepareWindowsCodePages root = do
       inputs = [source,"etc/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/WindowsCodePageFixtures.hs",
         "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
-        "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
+        "bin/core-capabilities.json"] ++ if sharedCAF then
+        ["src/main/java/thc/runtime/CoreSharedCAFStores.java","src/main/java/thc/runtime/SharedCAFStore.java",
+         "src/main/java/thc/runtime/StablePointers.java","src/main/java/thc/runtime/SharedCAFStoreExpression.java",
+         "src/main/java/thc/runtime/BytecodeProgram.java","src/main/java/thc/runtime/BytecodeRoot.java",
+         "src/main/java/thc/runtime/Program.java"] else
+        ["src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
         "src/main/java/thc/runtime/OriginalStdioExpression.java","src/main/java/thc/runtime/BytecodeProgram.java",
         "src/main/java/thc/runtime/BytecodeRoot.java","src/main/java/thc/runtime/WindowsCodePages.java","src/main/c/windows-directory-abi.c"]
   inputHashes <- hashes root inputs
@@ -243,7 +269,34 @@ prepareWindowsCodePages root = do
      "originalFCallIds" .= True,"upstream" .= upstreamIdentity,"sourceHashes" .= sourceHashes,
      "inheritedInterfaceHashes" .= inheritedHashes,"inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
-  putStrLn "windows-codepages: twelve genuine GHC FCallIds, native encoding/error oracle and 24 strict audits"
+  putStrLn (directory ++ ": " ++ show (length operations) ++ " genuine GHC FCallIds, native oracle and " ++
+    show (length audits) ++ " strict audits")
+
+-- A native IO manager may already own a slot in this GHC process. Query it
+-- without replacing or freeing its root. Only an empty slot receives our
+-- correctly shaped initial candidate; the native RTS then owns the winner
+-- until process exit. The losing bottom is a referent-forcing negative control.
+observeSharedCAFs :: Map.Map String a -> IO Value
+observeSharedCAFs natives = do
+ stores <- forM sharedCAFOperations $ \(name,_) -> do
+  let call = unsafeCoerce (natives Map.! name) :: Ptr () -> IO (Ptr ())
+  before <- call nullPtr
+  candidate <- case name of
+    "pendingDelays" -> newIORef ([] :: [()]) >>= fmap castStablePtrToPtr . newStablePtr
+    "ioManagerThread" -> newMVar (Nothing :: Maybe ThreadId) >>= fmap castStablePtrToPtr . newStablePtr
+    "prodding" -> newIORef False >>= fmap castStablePtrToPtr . newStablePtr
+    _ -> die "Unknown native shared CAF"
+  loser <- newStablePtr (error "Shared CAF forced a losing referent" :: ())
+  installed <- call candidate
+  repeated <- call (castStablePtrToPtr loser)
+  queried <- call nullPtr
+  unless (installed /= nullPtr && repeated == installed && queried == installed &&
+      (before == nullPtr || before == installed)) (die ("Native shared CAF identity failed: " ++ name))
+  freeStablePtr loser
+  when (installed /= candidate) (freeStablePtr (castPtrToStablePtr candidate))
+  pure (object ["name" .= name,"initiallyEmpty" .= (before == nullPtr),"firstWon" .= (installed == candidate),
+    "repeatMatches" .= (repeated == installed),"queryMatches" .= (queried == installed),"loserForced" .= False])
+ pure (object ["stores" .= stores])
 
 -- Each value was compiled by GHC from the typed consumer and its actual
 -- original FCallId, as in the existing native directory oracle.

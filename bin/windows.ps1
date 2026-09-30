@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'SharedCAFTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -19,19 +19,21 @@ try {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'SharedCAFTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
         $cabal = if ($env:CABAL) { $env:CABAL } else { 'cabal' }
         $flags = @('--disable-shared', "-j$Jobs", '-fdevelopment',
             "--with-compiler=$($tools.Compiler)", "--with-hc-pkg=$($tools.PackageTool)")
+        if ($env:THC_CABAL_BUILD_DIR) { $flags += "--builddir=$env:THC_CABAL_BUILD_DIR" }
         if ($Action -eq 'CheckCore') {
             Invoke-ThcTool (Join-Path (Split-Path $tools.Compiler) 'runghc.exe') @('-f', $tools.Compiler,
                 '--ghc-arg=-package', '--ghc-arg=ghc', '--ghc-arg=-package', '--ghc-arg=Cabal',
                 'bin/check-ghc-core.hs', 'check', 'ghc-internal', 'base')
         } else {
-            Invoke-ThcTool $cabal (@('build', 'all') + $flags)
+            $targets = if ($Action -eq 'SharedCAFTest') { @('build', 'exe:thc-fixtures') } else { @('build', 'all') }
+            Invoke-ThcTool $cabal ($targets + $flags)
         }
     }
     if ($Action -in @('Fixtures', 'Test')) {
@@ -87,6 +89,14 @@ try {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-codepages')
         $focusedTests += 'thc.runtime.WindowsCodePagesTest'
+    }
+    if ($Action -in @('Test', 'SharedCAFTest', 'WindowsServicesTest')) {
+        Assert-ThcJava
+        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
+        Invoke-ThcTool $fixture @('windows-shared-caf')
+        $focusedTests += @('thc.runtime.WindowsSharedCAFTest',
+            'thc.runtime.StablePointerTest.windowsSharedCAFIdentitiesKeepIndependentOwnedRoots',
+            'thc.runtime.StablePointerTest.rtsSharedCAFSlotsInstallOneLiveHandleAndReleaseRootsAtContextClose')
     }
     if ($Action -in @('Test', 'LibdwTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)

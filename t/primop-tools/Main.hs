@@ -23,13 +23,13 @@ import Data.List (isInfixOf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.IO as T
+import GHC.IO.Encoding (getLocaleEncoding, setLocaleEncoding)
 import PrimopTools hiding (main)
 import System.Directory hiding (executable)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..), exitFailure)
 import System.FilePath ((</>), takeDirectory)
-import System.IO (hClose, openTempFile)
+import System.IO (hClose, latin1, openTempFile)
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import Test.HUnit hiding (counts, path)
 
@@ -182,11 +182,11 @@ coverageTests = map (uncurry (~:))
       expected <- ok (derive changed scalars >>= \r -> checklist r changed)
       withTemp $ \dir -> do
         let path = dir </> "primops.md"
-        T.writeFile path original
+        BS.writeFile path (T.encodeUtf8 original)
         checkDocument path original
         rejected <- try (checkDocument path expected) :: IO (Either ExitCode ())
         assertBool "Stale check unexpectedly passed" (case rejected of Left (ExitFailure _) -> True; _ -> False)
-        T.readFile path >>= (@?= original)
+        BS.readFile path >>= (@?= T.encodeUtf8 original)
       contains "- [x] `+#`" original
       contains "- [x] `packInt64X2#`" original
       contains "- [ ] `packInt64X2#`" expected
@@ -197,6 +197,15 @@ coverageTests = map (uncurry (~:))
       actual @?= expected
       -- Pure inputs are immutable, so there is no mutation escape to copy/check.
       ok (derive capability scalars >>= \r -> checklist r capability) >>= (@?= expected))
+  , ("checklist UTF-8 bytes do not depend on the host locale", withTemp $ \dir ->
+      bracket getLocaleEncoding setLocaleEncoding $ \_ -> do
+        setLocaleEncoding latin1
+        document <- ok (derive capability scalars >>= \r -> checklist r capability)
+        let path = dir </> "primops.md"
+            bytes = T.encodeUtf8 document
+        BS.writeFile path bytes
+        checkDocument path document
+        BS.readFile path >>= (@?= bytes))
   ]
 
 scalarTests :: [Test]
@@ -249,6 +258,8 @@ cliTests root executable =
       BS.readFile (dir </> scalarPath) >>= (@?= stale))
   , "CLI stale checklist removes previous report without rewriting docs" ~: isolated (\dir -> do
       run dir ["coverage", "--write-checklist"] >>= expectSuccess
+      original <- BS.readFile (root </> checklistPath)
+      BS.readFile (dir </> checklistPath) >>= (@?= original)
       run dir ["coverage", "--check"] >>= expectSuccess
       result <- readJson (dir </> "build/primop-coverage.json")
       count "implemented" result @?= Right 1491

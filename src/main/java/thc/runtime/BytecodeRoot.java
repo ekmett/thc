@@ -4225,14 +4225,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = SharedCAFStore.class, name = "store")
     public static final class RtsSharedCAFStore {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                thc.runtime.SharedCAFStore store, ManagedAddress candidate, Object state, @Bind("$node") Node node) {
+                thc.runtime.SharedCAFStore store, Object candidate, Object state, @Bind("$node") Node node) {
+            if (!(candidate instanceof ManagedAddress address)) throw fail("Expected managed Addr# for RTS shared CAF store");
             TupleResults.requireVoidCarrier(state);
-            ManagedAddress result = StablePointers.current(node).getOrSetSharedCAF(store, candidate);
+            ManagedAddress result = StablePointers.current(node).getOrSetSharedCAF(store, address);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-        }
-        @Fallback public static void invalid(VirtualFrame frame, LocalAccessor destination,
-                thc.runtime.SharedCAFStore store, Object candidate, Object state) {
-            throw fail("Expected managed Addr# for RTS shared CAF store");
         }
     }
     @Operation

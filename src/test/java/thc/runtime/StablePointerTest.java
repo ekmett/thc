@@ -121,6 +121,33 @@ public class StablePointerTest {
             assertThrows(RuntimeFault.class, () -> registry.dereference(winner)); assertThrows(RuntimeFault.class, () -> registry.getOrSetSharedCAF(event, none));
         } finally { workers.shutdownNow(); foreign.close(); registry.close(); }
     }
+    @Test public void windowsSharedCAFIdentitiesKeepIndependentOwnedRoots() {
+        var registry = new StablePointers(); var foreign = new StablePointers();
+        var winners = new ArrayList<ManagedAddress>();
+        try {
+            for (var symbol : List.of("getOrSetGHCConcWindowsPendingDelaysStore",
+                    "getOrSetGHCConcWindowsIOManagerThreadStore", "getOrSetGHCConcWindowsProddingStore")) {
+                var store = SharedCAFStore.named(symbol);
+                assertNotNull(store, symbol);
+                assertEquals("ghc-internal", store.getUnit());
+                var none = ManagedAddress.nullAddress(); var referent = new Object();
+                var winner = registry.make(referent); var loser = registry.make(new Object());
+                assertSame(none, registry.getOrSetSharedCAF(store, none));
+                assertTrue(registry.equal(winner, registry.getOrSetSharedCAF(store, winner)));
+                assertTrue(registry.equal(winner, registry.getOrSetSharedCAF(store, loser)));
+                assertTrue(registry.equal(winner, registry.getOrSetSharedCAF(store, none)));
+                assertSame(referent, registry.dereference(winner));
+                for (var previous : winners) assertFalse(registry.equal(previous, winner));
+                registry.free(loser);
+                assertThrows(RuntimeFault.class, () -> registry.getOrSetSharedCAF(store, loser));
+                assertThrows(RuntimeFault.class, () -> registry.getOrSetSharedCAF(store, foreign.make(new Object())));
+                assertThrows(RuntimeFault.class, () -> registry.free(winner));
+                winners.add(winner);
+            }
+            registry.close();
+            for (var winner : winners) assertThrows(RuntimeFault.class, () -> registry.dereference(winner));
+        } finally { foreign.close(); registry.close(); }
+    }
     private void nodes(Object value, List<List<?>> result) {
         if (value instanceof Map<?, ?> map) for (var child : map.values()) nodes(child, result);
         else if (value instanceof List<?> list) { result.add(list); for (var child : list) nodes(child, result); }

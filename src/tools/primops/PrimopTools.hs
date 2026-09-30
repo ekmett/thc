@@ -28,7 +28,7 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import Data.Scientific (base10Exponent)
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import qualified Data.Text.Encoding as T
 import GHC.Builtin.PrimOps (allThePrimOps, primOpOcc, primOpSig, primOpType)
 import GHC.Core.Type (Type, splitTyConApp_maybe)
 import GHC.Core.TyCon (PrimRep(..), isPrimTyCon)
@@ -202,7 +202,7 @@ renderScalars signatures = T.pack $ unlines
 checkDocument :: FilePath -> T.Text -> IO ()
 checkDocument path expected = do
   exists <- doesFileExist path
-  actual <- if exists then T.readFile path else pure ""
+  actual <- if exists then T.decodeUtf8 <$> BS.readFile path else pure ""
   unless (exists && actual == expected) $ die
     (takeFileName path ++ " is stale; run cabal run exe:thc-primops -- coverage --write-checklist")
 
@@ -320,7 +320,7 @@ main = do
       inventory <- either die pure (report rows declared >>= \r -> classify r cap scalarContract)
       document <- either die pure (checklist inventory cap)
       case mode of
-        Just True -> T.writeFile checklistPath document
+        Just True -> BS.writeFile checklistPath (T.encodeUtf8 document)
         Just False -> checkDocument checklistPath document
         Nothing -> pure ()
       proof <- provenance
@@ -333,8 +333,8 @@ main = do
       declared <- either die pure (field "primitives" cap)
       signatures <- either die pure (deriveScalars scalarRows declared)
       let expected = renderScalars signatures
-      if write then T.writeFile scalarPath expected else do
-        actual <- T.readFile scalarPath
+      if write then BS.writeFile scalarPath (T.encodeUtf8 expected) else do
+        actual <- T.decodeUtf8 <$> BS.readFile scalarPath
         unless (actual == expected) $ die "Scalar signature contract differs from pinned GHC; review then regenerate with --write"
       proof <- provenance
       writeJson "build/scalar-signatures/provenance.json" (setFields proof

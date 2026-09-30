@@ -2599,7 +2599,10 @@ class OriginalGcStatsDeclarationTest(unittest.TestCase):
                 ('__hscore_fd_cloexec', (None,), 'Int64Rep', 'unsafe'),
                 ('getOrSetSystemEventThreadIOManagerThreadStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
                 ('getOrSetSystemTimerThreadEventManagerStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
-                ('getOrSetSystemTimerThreadIOManagerThreadStore', ('AddrRep', None), 'AddrRep', 'unsafe')):
+                ('getOrSetSystemTimerThreadIOManagerThreadStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
+                ('getOrSetGHCConcWindowsPendingDelaysStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
+                ('getOrSetGHCConcWindowsIOManagerThreadStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
+                ('getOrSetGHCConcWindowsProddingStore', ('AddrRep', None), 'AddrRep', 'unsafe')):
             declaration = dict(schema=1, target=dict(kind='static', symbol=symbol,
                 unit='ghc-internal', isFunction=True), convention='ccall', safety=safety,
                 arity=len(arguments), suppliedArity=len(arguments),

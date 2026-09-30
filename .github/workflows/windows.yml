@@ -40,6 +40,9 @@ jobs:
           & {
             . ./bin/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
             Invoke-ThcTool $env:CABAL @('update')
+            Invoke-ThcTool $env:CABAL @('test', 'primop-tools', '--disable-shared', '-j4', '-fdevelopment',
+              "--with-compiler=$env:GHC", "--with-hc-pkg=$env:GHC_PKG", '--test-show-details=direct')
+            & ./bin/windows.ps1 -Action SharedCAFTest -Jobs 4
             & ./bin/windows.ps1 -Action Test -Jobs 4
           } *>&1 | Tee-Object build/windows-ci.log
       - name: Preserve native evidence
@@ -55,6 +58,7 @@ jobs:
             build/windows-driver/
             build/windows-bridge/
             build/windows-codepages/
+            build/windows-shared-caf/
             build/libdw-unavailable/
             build/windows-directory/*.json
             build/windows-directory/logs/

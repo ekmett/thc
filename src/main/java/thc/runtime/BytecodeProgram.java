@@ -1019,7 +1019,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                 // Every resumable tail restore checks the same exact scalar carrier.
                 // Deferred boxed demands likewise keep both ingress and WHNF as references.
                 int argumentIndex = argumentIndices.getOrDefault(local.id, -1);
-                boolean typedFormal = context.typedInput != null && typedFormals.contains(local.id) && !enableAsync;
+                // An evaluated Addr# is already an exact reference carrier, even with capture enabled.
+                boolean typedFormal = context.typedInput != null && typedFormals.contains(local.id)
+                    && (!enableAsync || local.proof.getKind() == CoreKind.ADDRESS && local.proof.getEvaluated());
                 boolean fixedLoopCarrier = resumable && context.typedInput == null && local.proof.getEvaluated()
                     && (local.proof.isInt() || local.proof.isLong() || local.proof.isFloat() || local.proof.isDouble());
                 boolean strictReference = enableAsync && context.typedInput == null && argumentIndex >= 0
