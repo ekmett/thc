@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
 import shutil
 import subprocess
 
@@ -74,7 +75,8 @@ def main():
         flags=['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []
         run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics',*flags,'t/fixtures/compiler/SumResultAudit.hs'],
             dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
-        path=OUT/f'{stage}-core/SumResultAudit.json'; module=json.loads(path.read_text())
+        path=OUT/f'{stage}-core/SumResultAudit.cbd'; module=paired_diagnostic_cbd(path)
+        executable=inspect_cbd(path.read_bytes())
         require(module['ghc']=='9.14.1' and module['schema']==1 and module['boundary']==
                 ('optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep'),'Wrong export boundary')
         bindings={b['name']:b for b in module['bindings']}
@@ -89,7 +91,7 @@ def main():
         require(paired['primReps']==['WordRep','WordRep','WordRep'] and paired['alternativeSlots']==[[1,2],[1,2]],'Pair payload projection changed')
         # A genuine recursive bottom remains reachable as a lazy alternative; no Core rewriting.
         require(any(b['expr'][0]=='var' and b['expr'][1]==b['id'] for b in module['bindings']), 'Lazy bottom control disappeared')
-        report=audit.Audit([(str(path),module)],capabilities).run(ENTRIES+['pairedInputs'])
+        report=audit.Audit([(str(path),executable)],capabilities).run(['main:SumResultAudit.'+name for name in ENTRIES+['pairedInputs']])
         require(report['accepted'],f'{stage}: strict sum result audit failed: {report}')
         (OUT/f'{stage}-audit.json').write_text(json.dumps(report,indent=2)+'\n')
         inventories.append(dict(stage=stage,producerShapes=shapes,strictRoots=ENTRIES+['pairedInputs']))

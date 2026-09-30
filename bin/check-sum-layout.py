@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
 import shutil
 import subprocess
 from sum_layout_model import alternative_slots
@@ -104,8 +105,9 @@ def validate_layout(record):
         check(all(type(index) is int for row in record['alternativeSlots'] for index in row), 'Invalid slot index')
 
 def inventory(stage):
-    path = OUT / f'{stage}-core/SumLayoutAudit.json'
-    module = json.loads(path.read_text())
+    path = OUT / f'{stage}-core/SumLayoutAudit.cbd'
+    module = paired_diagnostic_cbd(path)
+    executable = inspect_cbd(path.read_bytes())
     check(module['ghc'] == '9.14.1' and module['schema'] == 1 and module['boundary'] == STAGES[stage], 'Wrong export provenance')
     bindings = {b['name']: b for b in module['bindings']}
     for name, expected in EXPECTED.items():
@@ -137,7 +139,7 @@ def inventory(stage):
     roots = [*EXPECTED, *ENTRIES]
     reports = []
     for name in roots:
-        report = audit.Audit([(str(path), module)], cap).run([name])
+        report = audit.Audit([(str(path), executable)], cap).run(['main:SumLayoutAudit.' + name])
         check(report['accepted'] == (name in supported), stage+'/'+name+': sum rejection changed')
         if name not in supported:
             check(any(i['code'] in ('aggregate-representation', 'aggregate-boundary') and i['detail'].startswith('unboxed-sum') for i in report['issues']), name+': missing explicit sum rejection')

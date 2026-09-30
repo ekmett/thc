@@ -15,6 +15,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
 import shutil
 import subprocess
 from sum_layout_model import alternative_slots
@@ -111,8 +112,9 @@ SUPPORTED = {'nestedIdentity', 'lazyIdentity', 'alternativesIdentity',
 
 
 def inventory(stage):
-    path = OUT / f'{stage}-core/AggregateLayoutAudit.json'
-    module = json.loads(path.read_text())
+    path = OUT / f'{stage}-core/AggregateLayoutAudit.cbd'
+    module = paired_diagnostic_cbd(path)
+    executable = inspect_cbd(path.read_bytes())
     check(module['schema'] == 1 and module['ghc'] == '9.14.1', 'Pinned schema/compiler mismatch')
     check(module['boundary'] == STAGES[stage], f'{stage}: wrong real export boundary')
     bindings = {b['name']: b for b in module['bindings']}
@@ -139,7 +141,7 @@ def inventory(stage):
         if name.endswith('Identity'):
             check(expr[1][0]['rep'] == expected, f'{stage}/{name}: wrong formal layout')
             check(expr[2][0] == 'var', f'{stage}/{name}: identity must remain constructor-free')
-        report = audit_core.Audit([(str(path), module)], CAP).run([name])
+        report = audit_core.Audit([(str(path), executable)], CAP).run(['main:AggregateLayoutAudit.' + name])
         check(report['accepted'] == (name in SUPPORTED),
               f'{stage}/{name}: retained host signature admission mismatch: {report["issues"]}')
         if name not in SUPPORTED:
@@ -153,13 +155,13 @@ def inventory(stage):
     recursive = bindings['recursiveNewtypeIdentity']['expr']
     check(recursive[1][0]['rep'] == leaf('object', [LIFTED], False),
           'Recursive scalar newtype changed classification or unwrapping did not terminate')
-    check(audit_core.Audit([(str(path), module)], CAP).run(['recursiveNewtypeIdentity'])['accepted'],
+    check(audit_core.Audit([(str(path), executable)], CAP).run(['main:AggregateLayoutAudit.recursiveNewtypeIdentity'])['accepted'],
           'Unreachable aggregate bindings must not reject the scalar newtype control')
     for name in ('stateAliasIdentity', 'proxyIdentity'):
         primitive = bindings[name]['expr']
         check(primitive[1][0]['rep'] == VOID and primitive[3]['resultRep'] == VOID,
               f'{name}: an exposed zero-width primitive must not become an empty tuple')
-        check(audit_core.Audit([(str(path), module)], CAP).run([name])['accepted'],
+        check(audit_core.Audit([(str(path), executable)], CAP).run(['main:AggregateLayoutAudit.' + name])['accepted'],
               f'{name}: a known primitive/alias must remain supported')
     for name, expected in BOXED_CONTROLS.items():
         expr = bindings[name]['expr']
@@ -167,7 +169,7 @@ def inventory(stage):
               f'{stage}/{name}: boxedness must not be inferred from liftedness or tuple syntax')
         check(not any(isinstance(value, dict) and {'aggregate', 'components', 'alternatives'} & value.keys()
                       for value in walk(bindings[name])), f'{stage}/{name}: boxed value acquired an aggregate layout')
-        check(audit_core.Audit([(str(path), module)], CAP).run([name])['accepted'],
+        check(audit_core.Audit([(str(path), executable)], CAP).run(['main:AggregateLayoutAudit.' + name])['accepted'],
               f'{stage}/{name}: ordinary boxed control must remain accepted')
     for name, register in (('boxedLazy', LIFTED), ('unliftedLazy', 'BoxedRep (Just Unlifted)')):
         expr = bindings[name]['expr']
@@ -177,7 +179,7 @@ def inventory(stage):
                     and value[0] == 'var' and value[1] == bindings['bottomBox']['id']]
         check(payloads and all(value[2]['rep'] == BOX for value in payloads),
               f'{stage}/{name}: enclosing WHNF must not evaluate the bottom payload')
-        check(audit_core.Audit([(str(path), module)], CAP).run([name + 'Use'])['accepted'],
+        check(audit_core.Audit([(str(path), executable)], CAP).run(['main:AggregateLayoutAudit.' + name + 'Use'])['accepted'],
               f'{stage}/{name}: lazy payload observer must remain accepted')
     constructors = {c['name']: c for c in module['constructors']}
     for name in ('UnliftedProduct', '(,)'):

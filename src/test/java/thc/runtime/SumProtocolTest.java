@@ -15,6 +15,9 @@ import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
+import java.nio.file.Path;
+import org.junit.jupiter.api.io.TempDir;
 import thc.Json;
 import thc.Language;
 import java.io.File;
@@ -27,6 +30,7 @@ import static thc.runtime.SumEvidence.verifySumEvidence;
 
 @SuppressWarnings("unchecked")
 class SumProtocolTest {
+    @TempDir Path temporary;
     private final File root = new File(System.getProperty("thc.projectRoot"));
     @BeforeEach void verifyEvidence() throws Exception { verifySumEvidence(root); }
     private static List<Object> list(Object... elements) { return Arrays.asList(elements); }
@@ -40,9 +44,11 @@ class SumProtocolTest {
     }
     private Map<String, Object> module() throws Exception { return module(false); }
     private Map<String, Object> module(boolean extended) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/" + (extended ? "sum-result" : "sum-layout") + "/pre-core/" + (extended ? "SumResultAudit" : "SumLayoutAudit") + ".json").toPath()));
+        return CoreCbdFixtures.read(artifact(extended));
     }
-    private Map<String, Object> binding(Map<String, Object> module, String name) { return single((List<Map<String, Object>>) module.get("bindings"), it -> Objects.equals(it.get("name"), name)); }
+    private Path artifact(boolean extended) { return new File(root, "build/" + (extended ? "sum-result" : "sum-layout") + "/pre-core/" + (extended ? "SumResultAudit" : "SumLayoutAudit") + ".cbd").toPath(); }
+    private String id(Map<String, Object> module, String name) { return "main:" + module.get("module") + "." + name; }
+    private Map<String, Object> binding(Map<String, Object> module, String name) { return single((List<Map<String, Object>>) module.get("bindings"), it -> Objects.equals(it.get("id"), id(module, name))); }
     private Map<String, Object> shape(Map<String, Object> module, String name) { return (Map<String, Object>) ((Map<?, ?>) ((List<?>) binding(module, name).get("expr")).get(3)).get("resultRep"); }
     private Context context() { return context(true); }
     private Context context(boolean inline) { return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inline)).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
@@ -51,7 +57,7 @@ class SumProtocolTest {
     private void withLanguage(boolean inline, Action action) throws Exception {
         try (var context = context(inline)) { context.initialize("thc"); context.enter(); try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); } finally { context.leave(); } }
     }
-    private ExecutableProgram program(Language language, Map<String, Object> module, String entry, String backend) { var linked = CoreModules.reachable(module, entry); return backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); }
+    private ExecutableProgram program(Language language, Map<String, Object> module, String entry, String backend) { var linked = CoreModules.reachable(module, id(module, entry)); return backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); }
     private void compile(RootCallTarget target) throws ReflectiveOperationException { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }
     private void valid(RootCallTarget target) throws ReflectiveOperationException { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private void released(Language language) {
@@ -173,8 +179,9 @@ class SumProtocolTest {
         for (String backend : List.of("ast", "bytecode")) try (var context = context()) {
             var module = module(true); var source = binding(module, "produce");
             var alias = map("id", "sum-alias", "name", "sumAlias", "arity", 1L, "lifted", true, "rep", source.get("rep"), "expr", list("var", source.get("id"), map("rep", source.get("rep"))));
-            ((List<Object>) module.get("bindings")).add(alias);
-            var entry = context.eval("thc", Json.stringify(map("modules", list(module), "entry", "sumAlias", "backend", backend)));
+            var driver = map("schema", 1, "ghc", "9.14.1", "unit", "main", "boundary", "main", "module", "Synthetic.SumAlias", "constructors", list(), "bindings", list(alias));
+            var encoded = CoreCbdFixtures.write(temporary.resolve("alias-" + backend + ".cbd"), driver);
+            var entry = context.eval("thc", CoreModules.request(List.of(artifact(true).toString(), encoded.toString()), "sum-alias", true, false, backend));
             var negative = entry.execute(-7L);
             assertEquals(2, negative.getArraySize()); assertEquals(1L, negative.getArrayElement(0).asLong());
             assertEquals(-7L, negative.getArrayElement(1).asLong());
@@ -209,8 +216,8 @@ class SumProtocolTest {
                 var function = list("lam", list(map("id", "ignored", "lifted", false, "rep", scalar)), literal, map("rep", closure, "resultRep", scalar)); lambda.set(2, list("app", function, list(body), list(false), false, false, map("rep", scalar)));
                 // Ordinary sum arguments now lower, including an inferred case result.
                 // The scalar callee still cannot accept that logical aggregate layout.
-                var p = program(language, module, "sumCase", backend); var error = assertThrows(RuntimeFault.class, () -> Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue("sumCase"), new Object[]{-1L}}));
-                assertTrue(Objects.toString(error.getMessage(), "").contains("logical tuple argument"), backend + "/" + explicitUnknown + ": " + error.getMessage()); released(language);
+                var error = assertThrows(RuntimeFault.class, () -> program(language, module, "sumCase", backend));
+                assertEquals("Conflicting scalar and aggregate representation proofs", error.getMessage(), backend + "/" + explicitUnknown); released(language);
             }
         });
     }

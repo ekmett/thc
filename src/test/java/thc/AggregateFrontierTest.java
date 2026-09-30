@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
+import com.oracle.truffle.api.TruffleLanguage;
 import java.nio.file.*;
 import java.util.*;
 import org.graalvm.polyglot.Context;
@@ -9,42 +10,45 @@ import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import thc.runtime.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreExecutionTestSupport.*;
 
 /** Genuine aggregate exports retain logical host shapes and strict malformed-proof rejection. */
 class AggregateFrontierTest {
+    @TempDir Path temporary;
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final List<String> constructors = list("tupleOutstanding", "tupleZeroLazy", "sumPayload", "sumZeroLazy", "coldTuple", "coldSum");
     private final Map<String, String> boundaries = Map.of("emptyIdentity", "unboxed-tuple", "emptyDiscard", "unboxed-tuple",
         "singletonIdentity", "unboxed-tuple", "pairIdentity", "unboxed-tuple", "sumIdentity", "unboxed-sum");
     private Map<String, Object> exported(String stage) throws Exception {
-        return object(Json.parse(Files.readString(root.resolve("build/" + stage + "/AggregateFrontier.json"))));
+        return CoreCbdFixtures.read(artifact(stage));
     }
-    private String request(Map<String, Object> module, String entry, String backend) {
-        return Json.stringify(map("modules", list(module), "entry", entry, "backend", backend, "diagnosticUnsupported", false));
+    private Path artifact(String stage) { return root.resolve("build/" + stage + "/AggregateFrontier.cbd"); }
+    private String request(Path artifact, String entry, String backend) {
+        return CoreModules.request(list(artifact.toString()), "main:AggregateFrontier." + entry, true, false, backend);
     }
     @Test void strictLoadingAcceptsExactConstructorFreeHostShapes() throws Exception {
         for (String stage : list("aggregate-core", "aggregate-post-core")) {
             var module = exported(stage);
             for (String backend : list("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowHostAccess(HostAccess.ALL).build()) {
-                var empty = context.eval("thc", request(module, "emptyIdentity", backend));
+                var empty = context.eval("thc", request(artifact(stage), "emptyIdentity", backend));
                 assertEquals(0, empty.execute((Object) new Object[0]).getArraySize());
-                var discard = context.eval("thc", request(module, "emptyDiscard", backend));
+                var discard = context.eval("thc", request(artifact(stage), "emptyDiscard", backend));
                 assertEquals(41L, discard.execute((Object) new Object[0]).asLong());
-                var singleton = context.eval("thc", request(module, "singletonIdentity", backend));
+                var singleton = context.eval("thc", request(artifact(stage), "singletonIdentity", backend));
                 assertEquals(Long.MIN_VALUE, singleton.execute((Object) new Object[]{Long.MIN_VALUE}).getArrayElement(0).asLong());
-                var pair = context.eval("thc", request(module, "pairIdentity", backend));
+                var pair = context.eval("thc", request(artifact(stage), "pairIdentity", backend));
                 var pairResult = pair.execute((Object) new Object[]{Long.MIN_VALUE, Long.MAX_VALUE});
                 assertEquals(2, pairResult.getArraySize());
                 assertEquals(Long.MIN_VALUE, pairResult.getArrayElement(0).asLong());
                 assertEquals(Long.MAX_VALUE, pairResult.getArrayElement(1).asLong());
-                var sum = context.eval("thc", request(module, "sumIdentity", backend));
+                var sum = context.eval("thc", request(artifact(stage), "sumIdentity", backend));
                 var left = sum.execute((Object) new Object[]{1L, new Object[0]});
                 assertEquals(2, left.getArraySize()); assertEquals(1L, left.getArrayElement(0).asLong());
                 assertEquals(0, left.getArrayElement(1).getArraySize());
-                var producer = context.eval("thc", request(module, "zeroSumProducer", backend));
+                var producer = context.eval("thc", request(artifact(stage), "zeroSumProducer", backend));
                 var original = producer.execute(1L); // The selected payload is the unforced bottomBox.
                 var right = sum.execute(original);
                 assertEquals(2L, right.getArrayElement(0).asLong());
@@ -52,12 +56,12 @@ class AggregateFrontierTest {
                 assertThrows(PolyglotException.class, () -> sum.execute((Object) new Object[]{3L, new Object[0]}));
                 assertThrows(PolyglotException.class, () -> sum.execute((Object) new Object[]{2L, 0L}));
                 assertThrows(PolyglotException.class, () -> pair.execute((Object) new Object[]{1L}));
-                var identity = context.eval("thc", request(module, "abstractIdentity", backend));
-                var boxedProducer = context.eval("thc", request(module, "sumProducer", backend));
+                var identity = context.eval("thc", request(artifact(stage), "abstractIdentity", backend));
+                var boxedProducer = context.eval("thc", request(artifact(stage), "sumProducer", backend));
                 var pointer = boxedProducer.execute(1L).getArrayElement(1).getArrayElement(1);
                 assertEquals(pointer, identity.execute(pointer));
                 assertThrows(PolyglotException.class, () -> identity.execute(1234L));
-                context.eval("thc", request(module, "stateIdentity", backend));
+                context.eval("thc", request(artifact(stage), "stateIdentity", backend));
             }
         }
     }
@@ -74,9 +78,27 @@ class AggregateFrontierTest {
     }
     @Test void existingConstructorRejectionAlsoCoversColdAndZeroWidthArms() throws Exception {
         var legacy = object(withoutMarkers(exported("aggregate-core")));
+        var artifact = CoreCbdFixtures.write(temporary.resolve("legacy.cbd"), legacy);
         for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                // Internal eager-model validation retains the original cold-definition control.
+                for (String entry : constructors) {
+                    var linked = CoreModules.reachable(legacy, "main:AggregateFrontier." + entry);
+                    var error = assertThrows(UnsupportedCore.class, () -> {
+                        if (backend.equals("ast")) new Program(language, linked);
+                        else new BytecodeProgram(language, linked);
+                    }, backend + "/" + entry);
+                    assertTrue(error.getMessage().contains("Unsupported constructor representation unboxed-"), backend + "/" + entry + ": " + error.getMessage());
+                }
+            } finally { context.leave(); }
             for (String entry : constructors) {
-                var error = assertThrows(PolyglotException.class, () -> context.eval("thc", request(legacy, entry, backend)));
+                // Public CBD definitions are prepared lazily; cold arms must still reject when reached.
+                var error = assertThrows(PolyglotException.class, () -> {
+                    var function = context.eval("thc", request(artifact, entry, backend));
+                    if (entry.startsWith("cold")) function.execute(31337L);
+                }, backend + "/" + entry);
                 assertTrue(Objects.toString(error.getMessage(), "").contains("Unsupported constructor representation unboxed-"), backend + "/" + entry + ": " + error.getMessage());
             }
         }
@@ -84,9 +106,10 @@ class AggregateFrontierTest {
     private long compiledEntries(Value function) { return ((Number) object(Json.parse(function.getMember("diagnostics").asString())).get("compiledEntries")).longValue(); }
     @Test void diagnosticModeKeepsLegacyColdAggregatePathsLazyAndTrapsWhenReached() throws Exception {
         var module = object(withoutMarkers(exported("aggregate-core")));
+        var legacy = CoreCbdFixtures.write(temporary.resolve("legacy.cbd"), module);
         for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
             String entry = "coldSum"; long expected = -7L;
-            var function = context.eval("thc", Json.stringify(map("modules", list(module), "entry", entry, "backend", backend, "diagnosticUnsupported", true)));
+            var function = context.eval("thc", CoreModules.request(list(legacy.toString()), "main:AggregateFrontier." + entry, true, true, backend));
             for (int i = 0; i < 8; i++) assertEquals(expected, function.execute(0L).asLong());
             assertTrue(function.invokeMember("compile").asBoolean());
             long before = compiledEntries(function);
@@ -100,7 +123,7 @@ class AggregateFrontierTest {
         var module = exported("aggregate-core");
         for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
             for (var boundary : boundaries.entrySet()) {
-                var function = context.eval("thc", Json.stringify(map("modules", list(module), "entry", boundary.getKey(), "backend", backend, "diagnosticUnsupported", true)));
+                var function = context.eval("thc", CoreModules.request(list(artifact("aggregate-core").toString()), "main:AggregateFrontier." + boundary.getKey(), true, true, backend));
                 var error = assertThrows(PolyglotException.class, () -> function.execute(0L));
                 assertTrue(Objects.toString(error.getMessage(), "").contains("Host ABI requires an array of"), backend + "/" + boundary.getKey() + ": " + error.getMessage());
             }
@@ -113,7 +136,7 @@ class AggregateFrontierTest {
             var module = exported(stage);
             for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
                 var entries = new HashMap<String, Value>();
-                for (String name : constructors) entries.put(name, context.eval("thc", request(module, name, backend)));
+                for (String name : constructors) entries.put(name, context.eval("thc", request(artifact(stage), name, backend)));
                 for (String row : rows) {
                     var fields = row.split("\t");
                     assertEquals(Long.parseLong(fields[2]), entries.get(fields[0]).execute(Long.parseLong(fields[1])).asLong(),

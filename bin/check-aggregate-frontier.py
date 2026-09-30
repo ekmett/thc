@@ -11,6 +11,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
 
 ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'bin/audit-core.py')
@@ -57,7 +58,8 @@ def variables(expr):
 
 
 def inventory(path, stage):
-    module = json.loads(path.read_text())
+    module = paired_diagnostic_cbd(path)
+    executable = inspect_cbd(path.read_bytes())
     bindings = {b['name']: b for b in module['bindings']}
     check(module['ghc'] == '9.14.1', 'Pinned compiler mismatch')
     first = bindings['tupleOutstanding']['expr'][2]
@@ -81,7 +83,7 @@ def inventory(path, stage):
               for n in nodes(bindings['zeroLazy']['expr'])), 'Zero-width tuple component disappeared')
     rows = []
     for entry, features in CASES.items():
-        report = audit_core.Audit([(str(path), module)], CAP).run([entry])
+        report = audit_core.Audit([(str(path), executable)], CAP).run(['main:AggregateFrontier.' + entry])
         codes = sorted({i['code'] for i in report['issues']})
         supported = entry in SUPPORTED
         check(report['accepted'] == supported, f'{stage}/{entry}: staged aggregate capability mismatch: {report["issues"]}')
@@ -102,7 +104,7 @@ def inventory(path, stage):
                          reachableBindings=sorted(r['id'].split('.')[-1] for r in report['reachableBindings']),
                          constructorKinds=sorted({c['metadata']['kind'] for c in constructors})))
     for control in ('abstractIdentity', 'stateIdentity'):
-        check(audit_core.Audit([(str(path), module)], CAP).run([control])['accepted'], f'{control}: unrelated aggregate globals must remain unreachable')
+        check(audit_core.Audit([(str(path), executable)], CAP).run(['main:AggregateFrontier.' + control])['accepted'], f'{control}: unrelated aggregate globals must remain unreachable')
     return dict(stage=stage, entries=rows)
 
 
@@ -147,8 +149,8 @@ def check_unknown_compatibility():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--pre', type=Path, default=ROOT / 'build/aggregate-core/AggregateFrontier.json')
-    parser.add_argument('--post', type=Path, default=ROOT / 'build/aggregate-post-core/AggregateFrontier.json')
+    parser.add_argument('--pre', type=Path, default=ROOT / 'build/aggregate-core/AggregateFrontier.cbd')
+    parser.add_argument('--post', type=Path, default=ROOT / 'build/aggregate-post-core/AggregateFrontier.cbd')
     parser.add_argument('--oracle', type=Path, default=ROOT / 'build/aggregate-native/oracle.tsv')
     parser.add_argument('--output', type=Path, default=ROOT / 'build/aggregate-frontier.json')
     args = parser.parse_args()

@@ -556,9 +556,17 @@ simd-floatx4-bytearray simd-doublex2-bytearray""".split()
 CHECK_DIRS = """aggregate-layout empty-join-input empty-tuple-input floating-tuple
 state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
 tuple-return unsafe-equality""".split()
+CORE_CONTRACT_CBD_REQUIRED = frozenset({
+    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+    "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
+    "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
+})
+
 CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
              "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
+    *CORE_CONTRACT_CBD_REQUIRED,
     *RUBBISH_OUTPUTS,
     *PROXY_VOID_OUTPUTS,
     *UNIX_LIBC_OUTPUTS,
@@ -1889,6 +1897,13 @@ SYNCHRONOUS_EXCEPTION_OUTPUTS = frozenset("build/synchronous-exceptions/" + name
     *(f"logs/{label}{suffix}" for label in ("ghc-version", "python-version", "cabal-plugin-build", "plugin-metadata",
         "pre-export", "post-export", "native-build", "native-word-bits", "native-oracle")
       for suffix in (".stdout", ".stderr", ".command.json"))))
+AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
+    "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
+    *(f"build/{family}/{stage}-core/{module}.cbd" for family, module in (
+        ("aggregate-layout", "AggregateLayoutAudit"), ("sum-layout", "SumLayoutAudit"), ("sum-result", "SumResultAudit"))
+      for stage in ("pre", "post")),
+})
+
 CBV_CONTRACT_CBD_OUTPUTS = frozenset({
     *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
     *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
@@ -2002,6 +2017,8 @@ def allowed_payload(name):
     if parts[1] == "managed-mvars":
         return name in MANAGED_MVAR_OUTPUTS
     if parts[1] == "synchronous-exceptions" and name in SYNCHRONOUS_EXCEPTION_OUTPUTS:
+        return True
+    if name in AGGREGATE_HOST_CBD_OUTPUTS:
         return True
     if name in CBV_CONTRACT_CBD_OUTPUTS:
         return True

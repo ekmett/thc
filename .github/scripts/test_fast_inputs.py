@@ -1900,6 +1900,45 @@ class FastInputTests(unittest.TestCase):
         for name in ("test-results/results.json", "classes/Main.class", "unreviewed.sh"):
             self.assertFalse(cache.allowed_payload("build/word-floating/" + name), name)
 
+    def test_full_pack_restores_exact_executable_contract_siblings(self):
+        expected = {
+            *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
+            *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+            "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
+            "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
+        }
+        self.assertEqual(expected, cache.CORE_CONTRACT_CBD_REQUIRED)
+        self.assertTrue(expected <= set(DECLARED_REQUIRED))
+        originals = {name: b"compact fixture bytes: " + name.encode() for name in expected}
+        for name, data in originals.items():
+            self.put(name, data)
+        # These executable siblings have no provenance record seeding them: exercise actual REQUIRED acquisition.
+        with patch.object(cache, "REQUIRED", tuple(name for name in DECLARED_REQUIRED if name in expected)):
+            packed = self.pack()
+            self.assertTrue(expected <= set(packed["payload"]))
+            self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            for name, data in originals.items():
+                self.assertEqual(data, (self.root / name).read_bytes(), name)
+            self.remove_payload(packed)
+            omitted = "build/core/CBVCoercionAudit.cbd"
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != "files/" + omitted])
+            self.rejected_without_writes(changed)
+            self.put(omitted, originals[omitted])
+            with self.assertRaises(cache.CacheMiss):
+                self.pack()
+
+    def test_aggregate_host_cbd_payloads_are_closed_to_exact_modules_and_stages(self):
+        self.assertEqual(8, len(cache.AGGREGATE_HOST_CBD_OUTPUTS))
+        for name in ("build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd"):
+            self.assertIn(name, DECLARED_REQUIRED)
+        for name in cache.AGGREGATE_HOST_CBD_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name), name)
+        for name in ("build/aggregate-core/Other.cbd", "build/aggregate-post-core/SumLayoutAudit.cbd",
+                     "build/sum-layout/other-core/SumLayoutAudit.cbd", "build/sum-result/pre-core/Other.cbd"):
+            self.assertFalse(cache.allowed_payload(name), name)
+
     def test_cbv_contract_cbd_payloads_are_closed_to_exact_modules_and_stages(self):
         self.assertEqual(12, len(cache.CBV_CONTRACT_CBD_OUTPUTS))
         for name in cache.CBV_CONTRACT_CBD_OUTPUTS:
@@ -2147,8 +2186,8 @@ class RenamedInputContractTests(unittest.TestCase):
 
     def test_required_cbv_modules_match_renamed_genuine_fixture_declarations(self):
         root = Path(__file__).resolve().parents[2]
-        expected = {f"build/{folder}/{module}.json" for folder in ("core", "cbv-post-core")
-                    for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")}
+        expected = {f"build/{folder}/{module}.{suffix}" for folder in ("core", "cbv-post-core")
+                    for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit") for suffix in ("json", "cbd")}
         self.assertEqual(expected, {name for name in cache.REQUIRED if "CBV" in name})
         self.assertFalse(any("Cbv" in name for name in cache.REQUIRED))
         for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit"):
