@@ -26,6 +26,7 @@ import System.Directory (canonicalizePath, createDirectory, doesFileExist, getCu
 import System.Environment (getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>))
+import Data.List (isInfixOf)
 import System.IO (hClose, hSetBinaryMode, openTempFile, stdin, stderr, stdout)
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
@@ -70,12 +71,13 @@ helperMode arguments = case arguments of
     else pure ()
     let missing = object ["schema" .= (1 :: Int), "status" .= ("unavailable" :: String),
           "capability" .= ("complete-interface-core" :: String), "unit" .= identifier,
-          "module" .= name, "interface" .= option "--interface", "way" .= ("dynamic" :: String)]
+          "module" .= name, "interface" .= option "--interface", "way" .=
+            (if mode == "wrong-way" then (if option "--way" == "vanilla" then "dynamic" else "vanilla") else option "--way")]
         core = object ["schema" .= (1 :: Int), "unit" .= identifier, "module" .= name,
           "ghc" .= ("9.14.1" :: String), "boundary" .= ("optimized-Core-after-Tidy-before-CorePrep" :: String),
           "constructors" .= ([] :: [String]), "bindings" .= ([] :: [String])]
     if mode == "invalid-stdout" then BS.hPut stdout (BS.singleton 255)
-    else if mode == "missing-after-B" then BL.putStrLn (encode missing) >> exitWith (ExitFailure 3)
+    else if mode `elem` ["missing-after-B", "missing", "wrong-way"] then BL.putStrLn (encode missing) >> exitWith (ExitFailure 3)
     else if mode `elem` ["error", "error-after-B"] then do
       BL.putStrLn (encode (object ["schema" .= (1 :: Int), "status" .= ("error" :: String)]))
       exitWith (ExitFailure 1)
@@ -116,6 +118,7 @@ fixture names action = do
        "key: " ++ identifier, "exposed: True", "exposed-modules: " ++ unwords names,
        "import-dirs: " ++ show directory]
     let context = InstalledContext executable directory executable (directory </> "global") [directory] Null executable Nothing
+          DynamicInterfaces (directory </> "global")
     unit <- discoverInstalled context identifier
     action directory context unit
   where
@@ -128,7 +131,32 @@ fixture names action = do
 
 tests :: Test
 tests = TestLabel "bounded installed-interface hydration" $ TestList
-  [ TestCase $ fixture [] $ \directory context _ -> do
+  [ TestCase $ fixture ["A"] $ \directory context dynamic -> do
+      writeFile (directory </> "A.hi") "orchestration control only"
+      let vanilla = context { installedInterfaceWay = VanillaInterfaces }
+          private = vanilla { installedGlobalDb = directory </> "private database with spaces" }
+      vanillaPath <- canonicalizePath (directory </> "A.hi")
+      dynamicPath <- canonicalizePath (directory </> "A.dyn_hi")
+      selected <- discoverInstalled vanilla identifier
+      assertEqual "vanilla discovery selects only hi" [("A", vanillaPath)] (installedInterfaces selected)
+      assertEqual "dynamic discovery still selects dyn_hi" [("A", dynamicPath)] (installedInterfaces dynamic)
+      assertBool "way changes provenance" (installedProvenance context dynamic /= installedProvenance vanilla selected)
+      assertBool "helper uses vanilla" (["--way", "vanilla"] `isInfixOf` helperCommand vanilla selected ("A", vanillaPath))
+      assertBool "helper receives private database before additional databases"
+        (["--package-db", installedGlobalDb private, "--package-db", directory] `isInfixOf`
+          helperCommand private selected ("A", vanillaPath))
+      assertBool "native package tool receives the same private global database"
+        (["--global-package-db", installedGlobalDb private] `isInfixOf` packageGlobalArguments private)
+      writeFile (directory </> "A.mode") "missing"
+      assertEqual "matching vanilla missing-Core response retains its exact identity"
+        (Left (MissingCore identifier "A" vanillaPath)) =<< acquireInstalledWithJobs 1 vanilla selected
+      writeFile (directory </> "A.mode") "wrong-way"
+      failed <- try (acquireInstalledWithJobs 1 vanilla selected) :: IO (Either IOException (Either MissingCore InstalledCore))
+      assertBool "other-way response is a protocol failure" (case failed of Left _ -> True; _ -> False)
+      removeFile (directory </> "A.dyn_hi")
+      missing <- try (discoverInstalled context identifier) :: IO (Either IOException InstalledUnit)
+      assertBool "dynamic discovery never falls back to vanilla" (case missing of Left _ -> True; _ -> False)
+  , TestCase $ fixture [] $ \directory context _ -> do
       before <- getCurrentDirectory
       (status, output, _) <- boundedInterfaceProcessIn directory (installedHelper context) ["--child-directory-fixture"]
       expected <- canonicalizePath directory

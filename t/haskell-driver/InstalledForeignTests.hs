@@ -24,7 +24,7 @@ import Data.List (isPrefixOf, sort)
 import Distribution.InstalledPackageInfo (parseInstalledPackageInfo, showInstalledPackageInfo)
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import GHC.Fingerprint (getFileHash)
-import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
+import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing, doesFileExist,
   copyFile, removeFile, removePathForcibly)
 import System.Environment (getEnv, lookupEnv)
 import System.Exit (ExitCode(..))
@@ -255,7 +255,15 @@ viewTests env = TestLabel "acquisition view preserves native registration" $ Tes
     after <- parsed (registration selected)
     assertEqual "only interface directories change" before
       after { Package.importDirs = Package.importDirs before }
-    assertEqual "every interface resolves to its original payload"
+    if Host.os == "mingw32" then do
+      assertEqual "native view preserves every registered module"
+        (map fst (installedInterfaces original)) (map fst (installedInterfaces selected))
+      forM_ (zip (installedInterfaces original) (installedInterfaces selected)) $ \((_, source), (_, copied)) -> do
+        bytes <- BS.readFile source
+        assertEqual "native view copies exact original interface bytes" bytes =<< BS.readFile copied
+      assertEqual "native view retains the real package tool" (installedPackageTool context) (installedPackageTool (viewContext context view))
+      assertEqual "native view retains the real compiler libdir" (installedLibdir context) (installedLibdir (viewContext context view))
+    else assertEqual "every interface resolves to its original payload"
       (installedInterfaces original) (installedInterfaces selected)
     expectedDirectory <- canonicalizePath (view </> "interfaces")
     assertEqual "view uses its own interface directory" [expectedDirectory] (Package.importDirs after)
@@ -268,25 +276,34 @@ viewTests env = TestLabel "acquisition view preserves native registration" $ Tes
       (lookup "GHC.Internal.Conc.Bound" (installedInterfaces original))
     originalVanilla <- canonicalizePath (replaceExtension originalDynamic "hi")
     viewedVanilla <- canonicalizePath (view </> "interfaces/GHC/Internal/Conc/Bound.hi")
-    assertEqual "composed views retain vanilla dependency interfaces" originalVanilla viewedVanilla
+    if Host.os == "mingw32"
+      then do
+        bytes <- BS.readFile originalVanilla
+        assertEqual "native view retains exact vanilla dependency bytes" bytes =<< BS.readFile viewedVanilla
+      else assertEqual "composed views retain vanilla dependency interfaces" originalVanilla viewedVanilla
     let dependency = directory </> "dependency"
         dynamic = dependency </> "GHC/Internal/Conc/Bound.dyn_hi"
         vanilla = replaceExtension dynamic "hi"
     createDirectoryIfMissing True (takeDirectory dynamic)
-    copyFile originalDynamic dynamic
+    when (installedInterfaceWay context == DynamicInterfaces) (copyFile originalDynamic dynamic)
     copyFile (replaceExtension originalDynamic "hi") vanilla
+    selectedPath <- canonicalizePath (if installedInterfaceWay context == DynamicInterfaces then dynamic else vanilla)
     let probe = object ["registrations" .= [object
           ["registration" .= showInstalledPackageInfo before { Package.importDirs = [dependency] },
-           "interfaces" .= [object ["module" .= ("GHC.Internal.Conc.Bound" :: String), "path" .= dynamic]]]]]
+           "way" .= interfaceWayName (installedInterfaceWay context),
+           "interfaces" .= [object ["module" .= ("GHC.Internal.Conc.Bound" :: String),
+             "path" .= selectedPath]]]]]
     observed <- observeProbeInterfaces probe
-    assertEqual "both compiler-read ways observed" 2 (length observed)
-    dynamicBytes <- BS.readFile dynamic
+    assertEqual "every compiler-read way observed" (if installedInterfaceWay context == DynamicInterfaces then 2 else 1) (length observed)
+    dynamicBytes <- if installedInterfaceWay context == DynamicInterfaces then Just <$> BS.readFile dynamic else pure Nothing
     BS.appendFile vanilla "changed-vanilla-interface"
     changed <- observeProbeInterfaces probe
     assertBool "vanilla dependency mutation invalidates cache inputs" (observed /= changed)
     assertEqual "dynamic observation alone is unchanged"
       (lookup dynamic observed) (lookup dynamic changed)
-    assertEqual "dynamic payload remains unchanged" dynamicBytes =<< BS.readFile dynamic
+    case dynamicBytes of
+      Just bytes -> assertEqual "dynamic payload remains unchanged" bytes =<< BS.readFile dynamic
+      Nothing -> assertBool "vanilla acquisition does not manufacture a dynamic interface" . not =<< doesFileExist dynamic
     -- A cache hash alone merely observes today's headers. Recompilation needs
     -- the old interface's UsageFile association: changing HAVE_GETPID must
     -- reject before invoking the producer, even with unchanged source/stubs.
