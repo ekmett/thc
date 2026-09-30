@@ -56,7 +56,7 @@ import System.IO (hClose, openTempFile)
 import System.Process (CreateProcess(..), StdStream(..), proc, readProcessWithExitCode,
   waitForProcess, withCreateProcess)
 import THC.Driver.Installed (emptyRegistration, boundedInterfaceProcessIn)
-import THC.Driver.ScalarBitcode (parseDependencies)
+import THC.Driver.ScalarBitcode (readDependencies)
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 
@@ -289,7 +289,7 @@ configuredNativeArchive source destination compilerIdentity registration = do
       check (builtByHadrian || present == objects) "pinned native PIC compiler did not produce every declared object"
       if present /= objects then pure Nothing else do
         dependencies <- if builtByHadrian then pure [] else fmap concat $ forM objects $ \path -> do
-          dependencyPaths <- either fail pure . parseDependencies =<< readFile (replaceExtension path "d")
+          dependencyPaths <- readDependencies (replaceExtension path "d")
           mapM (canonicalizePath . (packageDirectory </>)) dependencyPaths
         let sources = [packageDirectory </> getSymbolicPath path | (path,_) <- declarations, not builtByHadrian]
             products = zip sources objects

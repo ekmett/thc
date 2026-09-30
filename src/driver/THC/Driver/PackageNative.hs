@@ -37,7 +37,7 @@ import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
-import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
+import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
@@ -1220,7 +1220,7 @@ compileC compiler root original directory generated = do
   _ <- command root compiler (arguments ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
     map (option ++) ["-emit-llvm","-O1","-MD","-MF",dependency,
                     "-MT","thc_scalar_input","-Werror=date-time"])
-  dependencies <- either fail pure . parseDependencies =<< readFile dependency
+  dependencies <- readDependencies dependency
   observed <- forM (sort (nub dependencies)) $ \path -> do
     absolute <- canonicalizePath (root </> path)
     digest <- sha <$> BS.readFile absolute

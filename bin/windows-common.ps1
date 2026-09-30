@@ -17,8 +17,13 @@ function Invoke-ThcTool {
 function Get-ThcGhc {
     $selected = if ($env:GHC) { $env:GHC } else { 'ghc' }
     $compiler = (Get-Command $selected -CommandType Application -ErrorAction Stop).Source
-    $packageTool = Join-Path (Split-Path $compiler) 'ghc-pkg.exe'
+    $versioned = Join-Path (Split-Path $compiler) 'ghc-9.14.1.exe'
+    if ((Split-Path $compiler -Leaf) -eq 'ghc.exe' -and (Test-Path -LiteralPath $versioned)) { $compiler = $versioned }
+    $packageTool = Join-Path (Split-Path $compiler) 'ghc-pkg-9.14.1.exe'
+    if (!(Test-Path -LiteralPath $packageTool)) { $packageTool = Join-Path (Split-Path $compiler) 'ghc-pkg.exe' }
     if ($env:GHC_PKG) { $packageTool = (Get-Command $env:GHC_PKG -CommandType Application -ErrorAction Stop).Source }
+    $versioned = Join-Path (Split-Path $packageTool) 'ghc-pkg-9.14.1.exe'
+    if ((Split-Path $packageTool -Leaf) -eq 'ghc-pkg.exe' -and (Test-Path -LiteralPath $versioned)) { $packageTool = $versioned }
     $version = Invoke-ThcTool $compiler @('--numeric-version')
     $packageVersion = Invoke-ThcTool $packageTool @('--version')
     if ($version -ne '9.14.1' -or $packageVersion -ne 'GHC package manager version 9.14.1') {
