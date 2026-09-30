@@ -13,6 +13,8 @@ import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
 import com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import thc.Language;
@@ -22,7 +24,19 @@ public final class GraphRecovery implements AutoCloseable {
     private static final Pattern GRAPH_TOO_BIG = Pattern.compile(
             "jdk\\.graal\\.compiler\\.truffle\\.GraphTooBigBailoutException: " +
             "Graph too big to safely compile\\. Node count: [0-9]+\\. Graph Size: [0-9]+\\. Limit: [0-9]+\\.");
-    record Failure(OptimizedCallTarget target, String reason, boolean claimed) {}
+    private record Observation(OptimizedCallTarget target, String reason) {}
+    /** Distinct failures from this source generation; the head's identity survives sibling callbacks. */
+    record Failure(List<Observation> observations, boolean claimed) {
+        OptimizedCallTarget target() { return observations.getFirst().target; }
+        String reason() { return observations.getFirst().reason; }
+        boolean sameClaim(Failure other) {
+            return claimed && other.claimed && observations.getFirst() == other.observations.getFirst();
+        }
+        Failure remaining() {
+            return observations.size() == 1 ? null :
+                    new Failure(List.copyOf(observations.subList(1, observations.size())), false);
+        }
+    }
     private final WeakReference<Object> owner;
     private final OptimizedTruffleRuntime runtime;
     private final Listener listener;
@@ -71,32 +85,56 @@ public final class GraphRecovery implements AutoCloseable {
         ContextRoot root = owned(target);
         if (root == null) return;
         Failure observed;
+        Failure updated;
         do {
             observed = root.graphFailure.get();
-            if (observed != null && observed.claimed) return;
-        } while (!root.graphFailure.compareAndSet(observed, new Failure(target, reason, false)));
+            if (observed != null && observed.observations.stream().anyMatch(o -> o.target == target)) return;
+            var observations = new ArrayList<Observation>(observed == null ? List.of() : observed.observations);
+            observations.add(new Observation(target, reason));
+            updated = new Failure(List.copyOf(observations), observed != null && observed.claimed);
+        } while (!root.graphFailure.compareAndSet(observed, updated));
     }
 
     private void succeeded(OptimizedCallTarget target) {
         ContextRoot root = owned(target);
         if (root == null) return;
         Failure observed = root.graphFailure.get();
-        if (observed != null && observed.target == target) root.graphFailure.compareAndSet(observed, null);
+        if (observed == null) return;
+        var success = observed.observations.stream().filter(o -> o.target == target).findFirst().orElse(null);
+        if (success == null) return;
+        while (observed != null) {
+            var remaining = observed.observations.stream().filter(o -> o != success).toList();
+            if (remaining.size() == observed.observations.size()) return;
+            Failure updated = remaining.isEmpty() ? null :
+                    new Failure(remaining, observed.claimed && observed.observations.getFirst() != success);
+            if (root.graphFailure.compareAndSet(observed, updated)) return;
+            observed = root.graphFailure.get();
+        }
     }
 
     Failure claim(ContextRoot root) {
         if (closed || root.compilationOwner() != owner.get() || root.compilationOwner() == null ||
                 Language.currentState().getCompilationOwner() != root.compilationOwner()) return null;
         Failure observed = root.graphFailure.get();
-        if (observed == null || observed.claimed || observed.target.isSubmittedForCompilation()) return null;
-        if (observed.target.isValid()) { root.graphFailure.compareAndSet(observed, null); return null; }
-        Failure claimed = new Failure(observed.target, observed.reason, true);
+        if (observed == null || observed.claimed || observed.target().isSubmittedForCompilation()) return null;
+        if (observed.target().isValid()) { root.graphFailure.compareAndSet(observed, observed.remaining()); return null; }
+        Failure claimed = new Failure(observed.observations, true);
         return root.graphFailure.compareAndSet(observed, claimed) ? claimed : null;
     }
 
     boolean publishable(ContextRoot root, Failure claim) {
-        return !closed && root.graphFailure.get() == claim && !claim.target.isSubmittedForCompilation() &&
-                !claim.target.isValid() && root.compilationOwner() == Language.currentState().getCompilationOwner();
+        Failure observed = root.graphFailure.get();
+        return !closed && observed != null && observed.sameClaim(claim) && !claim.target().isSubmittedForCompilation() &&
+                !claim.target().isValid() && root.compilationOwner() == Language.currentState().getCompilationOwner();
+    }
+
+    void complete(ContextRoot root, Failure claim, boolean replaced) {
+        Failure observed;
+        do {
+            observed = root.graphFailure.get();
+            if (observed == null || !observed.sameClaim(claim)) return;
+            // A published replacement retires this generation; otherwise retain untried siblings.
+        } while (!root.graphFailure.compareAndSet(observed, replaced ? null : observed.remaining()));
     }
 
     @Override public void close() {

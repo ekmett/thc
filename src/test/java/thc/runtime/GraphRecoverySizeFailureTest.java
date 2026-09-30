@@ -4,10 +4,15 @@ package thc.runtime;
 
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.junit.jupiter.api.Test;
@@ -24,6 +29,16 @@ class GraphRecoverySizeFailureTest {
     @Test void sizeReceiptsKeepTheirOwnerAndSingleClaim() throws Exception {
         Truffle.getRuntime();
         Controls.ownership();
+    }
+
+    @Test void siblingFailureSurvivesAnUnextractableClaim() throws Exception {
+        Truffle.getRuntime();
+        Controls.siblingFailure(false);
+    }
+
+    @Test void laterUnextractableSiblingCannotDisplacePendingReduction() throws Exception {
+        Truffle.getRuntime();
+        Controls.siblingFailure(true);
     }
 
     private static final class Controls {
@@ -50,6 +65,86 @@ class GraphRecoverySizeFailureTest {
             return Engine.newBuilder().allowExperimentalOptions(true)
                     .option("engine.BackgroundCompilation", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000").build();
+        }
+
+        private static RootCallTarget sideTarget(AstSameFrameArm arm) throws Exception {
+            var field = AstSameFrameArm.class.getDeclaredField("targets");
+            field.setAccessible(true);
+            var targets = (RootCallTarget[]) field.get(arm);
+            return targets == null ? null : targets[0];
+        }
+
+        private static final class FailureDuringCopy extends Expr {
+            @Children private AstSameFrameArm[] arms;
+            private final AtomicReference<Runnable> onCopy = new AtomicReference<>();
+            private final AtomicInteger effects;
+            private final AtomicReference<Node> executed;
+            FailureDuringCopy(AstSameFrameArm[] arms, AtomicInteger effects, AtomicReference<Node> executed) {
+                this.arms = arms; this.effects = effects; this.executed = executed;
+                setRepresentation(arms[0].getRepresentation());
+            }
+            @Override public Node copy() {
+                Node copy = super.copy();
+                Runnable callback = onCopy.getAndSet(null);
+                if (callback != null) callback.run();
+                return copy;
+            }
+            @Override public Object execute(VirtualFrame frame) {
+                effects.incrementAndGet(); executed.set(getRootNode());
+                long result = 0;
+                for (var arm : arms) result += (Long) arm.execute(frame);
+                return result;
+            }
+        }
+
+        static void siblingFailure(boolean laterUnextractable) throws Exception {
+            try (var engine = engine(); var context = Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var effects = new AtomicInteger(); var executed = new AtomicReference<Node>();
+                    var first = new AstSameFrameArm(new Literal(1L));
+                    var inner = new AstSameFrameArm(new Literal(2L));
+                    var second = new AstSameFrameArm(inner);
+                    var last = new AstSameFrameArm(new Literal(3L));
+                    var body = new FailureDuringCopy(new AstSameFrameArm[]{first, second, last}, effects, executed);
+                    var root = new FunctionRoot(language, new FrameLayout().build(), "sibling failures", null,
+                            new int[0], new int[0], new int[0], body, new Metrics(true));
+                    var target = (OptimizedCallTarget) root.getCallTarget();
+                    target.prepareForAOT();
+                    assertFalse(target.wasExecuted());
+                    assertTrue(AstSameFrameArm.extract(first));
+                    assertTrue(AstSameFrameArm.extract(second));
+                    assertTrue(AstSameFrameArm.extract(last));
+                    var firstTarget = (OptimizedCallTarget) sideTarget(first);
+                    var secondTarget = (OptimizedCallTarget) sideTarget(second);
+                    var lastTarget = (OptimizedCallTarget) sideTarget(last);
+                    var listener = listener(Language.currentState().getGraphRecovery());
+                    listener.onCompilationFailed(firstTarget, CODE_SIZE, true, true, 2, () -> "unused");
+                    body.onCopy.set(() -> {
+                        assertTrue(root.graphFailure.get().claimed());
+                        assertSame(firstTarget, root.graphFailure.get().target());
+                        assertEquals(0, effects.get());
+                        listener.onCompilationFailed(secondTarget, CODE_SIZE, true, true, 2, () -> "unused");
+                        if (laterUnextractable)
+                            listener.onCompilationFailed(lastTarget, CODE_SIZE, true, true, 2, () -> "unused");
+                    });
+                    assertEquals(6L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(1, effects.get()); assertSame(root, executed.get());
+                    assertEquals(0, root.getGraphBudgetGeneration());
+                    assertEquals(6L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(2, effects.get());
+                    assertNotSame(root, executed.get(), "the reducible sibling failure must survive the first claim");
+                    var fresh = (FunctionRoot) executed.get();
+                    assertEquals(1, fresh.getGraphBudgetGeneration());
+                    assertEquals(0, root.getGraphBudgetGeneration());
+                    assertSame(root.compilationOwner(), fresh.compilationOwner());
+                    assertSame(secondTarget, sideTarget(second)); assertNull(sideTarget(inner));
+                    int innerIndex = NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class).indexOf(inner);
+                    var copiedInner = NodeUtil.findAllNodeInstances(fresh, AstSameFrameArm.class).get(innerIndex);
+                    assertNotNull(sideTarget(copiedInner), "recovery must reduce the failed sibling's nested arm");
+                } finally { context.leave(); }
+            }
         }
 
         static void classification() throws Exception {
