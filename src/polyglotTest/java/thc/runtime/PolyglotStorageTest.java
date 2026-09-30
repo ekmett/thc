@@ -221,9 +221,9 @@ class PolyglotStorageTest {
                         : new Object[]{0L, value, 2L, 4L, Unit.INSTANCE});
                     assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
                     assertEquals(count, target.getClass().getMethod("getCallCount").invoke(target));
-                    // Ordinary storage calls must retain their first installed target. Async
-                    // bytecode uses upstream branch profiles: its first poll deoptimizes.
-                    boolean retained = !deliver || backend.equals("ast");
+                    // Both backends must retain their first installed target, including
+                    // the original cold async branch, without fabricated observations.
+                    boolean retained = true;
                     assertEquals(retained, target.getClass().getMethod("isValidLastTier").invoke(target), entry + " async=" + deliver);
                     if (deliver) {
                         var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(answer));
