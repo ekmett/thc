@@ -31,11 +31,14 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
 import System.Info (arch, os)
+import THC.Compact.Module (readModuleValue, writeModuleValue)
 
 data Family = Family { shape :: String, width :: Int, lanes :: Int, signed :: Bool }
 families :: [Family]
 families = [Family "Int8X16" 8 16 True, Family "Int16X8" 16 8 True,
             Family "Word16X8" 16 8 False, Family "Word32X4" 32 4 False]
+entryId :: Family -> String -> String
+entryId f name = "main:Simd" ++ shape f ++ "." ++ name
 modulus :: Family -> Integer
 modulus f = 2 ^ width f
 laneRep, element :: Family -> String
@@ -146,7 +149,7 @@ guestStructure f name report modul = do
   rootId <- case roots of [ident] -> Right ident; _ -> Left "Expected one root"
   root <- maybe (Left "Missing root") Right (Map.lookup rootId bindings)
   let reachable = Set.fromList (map (get "id") (items (get "reachableBindings" report)))
-      helpers = [b | ident <- Set.toList reachable, Just b <- [Map.lookup ident bindings], get "name" b == toJSON (helper name), not (null (helper name))]
+      helpers = [b | ident <- Set.toList reachable, Just b <- [Map.lookup ident bindings], get "id" b == toJSON (entryId f (helper name)), not (null (helper name))]
       actual = root:helpers
   ensure (length actual == guestCalls name && reachable == Set.fromList (map (get "id") actual)) "Actual global closure changed"
   forM_ actual $ \binding -> do
@@ -156,14 +159,14 @@ guestStructure f name report modul = do
         wantedRefs = [get "id" h | h <- helpers, isRoot]
     ensure (at 0 e == String "lam" && length formals == (if isRoot then arity name else 2) && all (scalar "IntRep" . get "rep") formals) "Machine Int formal boundary changed"
     ensure (length (exprs "lam" e) == 1) "Extra guest lambda"
-    ensure ((if get "name" binding == String "tupleWorker" then laneTuple f else scalar "IntRep") (get "resultRep" (last (Null:items e)))) "Result boundary changed"
+    ensure ((if get "id" binding == toJSON (entryId f "tupleWorker") then laneTuple f else scalar "IntRep") (get "resultRep" (last (Null:items e)))) "Result boundary changed"
     ensure (refs == wantedRefs && length calls == length wantedRefs) "Guest call references changed"
     forM_ calls $ \call -> ensure (length (items (at 2 call)) == 2 && take 3 (drop 3 (items call)) == [toJSON [False,False],Bool False,Bool False] &&
       map (take 2 . items) (items (at 2 call)) == [[String "var",get "id" formal] | formal <- formals]) "Helper call saturation/arguments changed"
     unless (null helpers) $ ensure (all ((== 1) . length . items . at 3) (exprs "case" e)) "Conditional helper path"
   let counts = Map.fromList [(str (get "name" p),length (items (get "uses" p))) | p <- items (get "primitives" report), str (get "name" p) `elem` primitives f]
   ensure (counts == primitiveCounts f name) "Local vector operation counts changed"
-  pure $ object ["guestCalls" .= length actual,"roots" .= [object ["id" .= get "id" b,"name" .= get "name" b] | b <- actual],"vectorPrimitiveCounts" .= counts]
+  pure $ object ["guestCalls" .= length actual,"roots" .= [object ["id" .= get "id" b,"name" .= (if b == root then name else helper name)] | b <- actual],"vectorPrimitiveCounts" .= counts]
   where bindings = Map.fromList [(get "id" b,b) | b <- items (get "bindings" modul)]; roots = items (get "roots" report)
 inventory :: Family -> String -> Value -> Either String Value
 inventory f stage modul = do
@@ -185,7 +188,7 @@ inventory f stage modul = do
         unpacks = filter ((== toJSON ("unpack" ++ shape f ++ "#")) . at 1 . at 1) calls
         literals = filter ((== toJSON (map toLower (take (length (laneRep f)-3) (laneRep f)))) . at 1) (exprs "lit" (get "bindings" modul))
         validLiteral v = case readInteger (str (at 2 v)) of Just n -> narrow f n == n; _ -> False
-        frontiers = [get "expr" b | b <- items (get "bindings" modul),get "name" b == String "vectorArgument"]
+        frontiers = [get "expr" b | b <- items (get "bindings" modul),get "id" b == toJSON (entryId f "vectorArgument")]
 
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
@@ -202,7 +205,7 @@ lastItem change value = index (length (items value)-1) change value
 mapField :: String -> (Value -> Value) -> Value -> Value
 mapField key change value = set key (change (get key value)) value
 mapBinding :: String -> (Value -> Value) -> Value -> Value
-mapBinding name change = mapField "bindings" (toJSON . map (\b -> if get "name" b == toJSON name then change b else b) . items)
+mapBinding ident change = mapField "bindings" (toJSON . map (\b -> if get "id" b == toJSON ident then change b else b) . items)
 firstExpression :: String -> (Value -> Value) -> Value -> Value
 firstExpression prim change = snd . go
   where go value | at 0 value == String "app" && at 1 (at 1 value) == toJSON prim = (True,change value)
@@ -218,7 +221,7 @@ proofControls :: Family -> Value -> Map.Map String Value -> IO ()
 proofControls f modul reports = do
   forM_ ["plusCase","scalarHelperCase","tupleHelperCase"] $ \name -> do
     let report = reports Map.! name
-        rootExpr change = mapBinding name (mapField "expr" change) modul
+        rootExpr change = mapBinding (entryId f name) (mapField "expr" change) modul
         reject m r = case guestStructure f name r m of Left _ -> pure (); Right _ -> die (name ++ ": negative guest structure accepted")
     checked (guestStructure f name report modul) >> pure ()
     reject (rootExpr (index 1 (index 0 (mapField "rep" (set "primReps" (toJSON [laneRep f])))))) report
@@ -240,7 +243,7 @@ proofControls f modul reports = do
       reject (callChange (index 2 (index 0 (const (toJSON [String "lit",String "int",String "0"]))))) report
       reject (rootExpr conditional) report
       let wrongResult = object ["kind" .= ("vector" :: String)]
-      reject (mapBinding (helper name) (mapField "expr" (lastItem (set "resultRep" wrongResult))) modul) report
+      reject (mapBinding (entryId f (helper name)) (mapField "expr" (lastItem (set "resultRep" wrongResult))) modul) report
   let good = object ["kind" .= ("unknown" :: String),"aggregate" .= ("unboxed-tuple" :: String),
         "primReps" .= replicate (lanes f) (laneRep f),"components" .= replicate (lanes f) (object ["kind" .= ("long" :: String),"primReps" .= [laneRep f]])]
       rejectTuple value = unless (not (laneTuple f value)) (die "Negative lane tuple accepted")
@@ -252,7 +255,7 @@ proofControls f modul reports = do
          set "primReps" (toJSON ([] :: [String])) good,set "kind" (String "object") good,set "aggregate" Null good] rejectTuple
 
 signedControl :: Family -> String -> Value -> Value
-signedControl f variant = mapBinding "plusCase" (mapField "expr" (firstExpression primitive (index 2 (index 0 (lastItem (mapField "rep" mutate))))))
+signedControl f variant = mapBinding (entryId f "plusCase") (mapField "expr" (firstExpression primitive (index 2 (index 0 (lastItem (mapField "rep" mutate))))))
   where primitive = (if variant == "signedLaneTuple" then "pack" else "plus") ++ shape f ++ "#"
         signedLane = "Int" ++ show (width f) ++ "Rep"
         signedElement = "Int" ++ show (width f) ++ "ElemRep"
@@ -287,18 +290,18 @@ prepareIntegerSimd root family options = do
   writeFile (root </> out </> "expected.tsv") table
   writeFile (root </> out </> "requests.tsv") requests
   stageResults <- forM stages $ \stage -> do
-    let path = out </> stage ++ "-core/Simd" ++ shape f ++ ".json"
+    let path = out </> stage ++ "-core/Simd" ++ shape f ++ ".cbd"
         env = [("THC_CORE_OUT",root </> out </> stage ++ "-core"),("THC_GHC_OUT",root </> out </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
     exists <- doesFileExist (root </> path); when exists (removeFile (root </> path))
     exported <- runStep (stage ++ "-export") env "bin/export-core.sh" $
       (if exportOnly then ["-fno-code","-fwrite-if-simplified-core"] else []) ++
       ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [fixture]
-    modul <- readJson (root </> path)
+    modul <- BS.readFile (root </> path) >>= either die pure . readModuleValue
     structure <- checked (inventory f stage modul)
     audited <- forM (entryNames f ++ ["vectorArgument"]) $ \name -> do
       let reportPath = out </> stage ++ "-" ++ name ++ "-audit.json"
       command <- runLoggedExpect 0 120 root logs (stage ++ "-audit-" ++ name) [] python
-        ["bin/audit-core.py","--entry",name,"--output",reportPath,path]
+        ["bin/audit-core.py","--entry",entryId f name,"--output",reportPath,path]
       report <- readJson (root </> reportPath)
       unless (get "missingGlobals" report == toJSON ([] :: [Value])) $ die (name ++ ": missing globals")
       unless (get "accepted" report == Bool True && null (items (get "issues" report))) $ die "Strict positive audit failed"
@@ -308,7 +311,7 @@ prepareIntegerSimd root family options = do
     proofControls f modul reports
     negative <- if signed f then pure [] else forM ["signedLaneTuple","signedVectorOperand"] $ \variant -> do
       let changed = signedControl f variant modul
-          inputPath = out </> stage ++ "-MUTATED-" ++ variant ++ ".json"
+          inputPath = out </> stage ++ "-MUTATED-" ++ variant ++ ".cbd"
           reportPath = out </> stage ++ "-MUTATED-" ++ variant ++ "-audit.json"
           argument = ("vector-shape","Exact vector primitive argument representation required")
           aggregate = ("aggregate-shape","Conflicting or missing logical aggregate representation proofs")
@@ -316,9 +319,9 @@ prepareIntegerSimd root family options = do
             [(argument,1),(aggregate,lanes f+1),(("scalar-representation","Conflicting exact scalar primitive representations"),lanes f)] else
             [(argument,1),(aggregate,2),(("vector-shape","Exact vector primitive result representation required"),1)]
       unless (changed /= modul) $ die "Signed metadata control did not mutate"
-      writeJson (root </> inputPath) changed
+      _ <- writeModuleValue (root </> inputPath) changed
       command <- runLoggedExpect 1 120 root logs (stage ++ "-" ++ variant) [] python
-        ["bin/audit-core.py","--entry","plusCase","--output",reportPath,inputPath]
+        ["bin/audit-core.py","--entry",entryId f "plusCase","--output",reportPath,inputPath]
       report <- readJson (root </> reportPath)
       let actual = Map.fromListWith (+) [((str (get "code" i),str (get "detail" i)),1 :: Int) | i <- items (get "issues" report)]
       unless (get "accepted" report == Bool False && null (items (get "missingGlobals" report)) && actual == expected) $ die (variant ++ ": exact signedness errors changed: " ++ show actual)

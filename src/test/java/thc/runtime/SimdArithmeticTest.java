@@ -112,19 +112,19 @@ class SimdArithmeticTest {
     }
     private void check(Value function, Row row, String backend) { assertEquals(row.result, function.execute(row.a, row.b).asLong(), backend + "/" + row); }
     @Test void originalCoreKeepsExactFirstInstalledEntriesOnBothBackends() throws Exception {
-        var evidence = evidence(); var module = json(new File(directory, "pre-core/SimdArithmeticAudit.json"));
+        var evidence = evidence(); var module = thc.CoreCbdFixtures.read(new File(directory, "pre-core/SimdArithmeticAudit.cbd").toPath());
         var cases = new LinkedHashMap<String, List<Row>>(); for (var row : evidence.rows) cases.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row);
         for (var backend : List.of("ast", "bytecode")) language((context, language) -> {
             for (var shape : evidence.shapes) {
                 var label = backend + "/" + shape.name; var audit = json(new File(directory, shape.name + "-audit.json"));
                 assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("missingGlobals")); assertEquals(List.of(), audit.get("issues"));
                 assertEquals(1, ((List<?>) audit.get("reachableBindings")).size(), label);
-                var input = new LinkedHashMap<>(CoreModules.reachable(module, shape.name)); input.put("instrument", true);
+                var entryId = "main:SimdArithmeticAudit." + shape.name; var input = new LinkedHashMap<>(CoreModules.reachable(module, entryId)); input.put("instrument", true);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input);
-                var function = context.asValue(new EntryValue(program, shape.name, 2));
+                var function = context.asValue(new EntryValue(program, entryId, 2));
                 for (var row : cases.get(shape.name)) check(function, row, backend);
                 assertEquals(0L, compiled(program), label + " interpreted");
-                var entry = program.entryTarget(shape.name); var host = program.hostEntryTarget(2); var active = targets(host);
+                var entry = program.entryTarget(entryId); var host = program.hostEntryTarget(2); var active = targets(host);
                 assertEquals(2, active.size(), label + " exact target graph"); assertTrue(active.contains(entry));
                 for (var target : active) if (target != host) {
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertTrue(valid(target), label);
@@ -135,7 +135,7 @@ class SimdArithmeticTest {
                 assertTrue(function.invokeMember("compile").asBoolean(), label);
                 for (var row : cases.get(shape.name).reversed()) {
                     long before = compiled(program); check(function, row, backend); assertEquals(before + 1, compiled(program), label + " first-installed/" + row);
-                    assertEquals(active, targets(host)); assertSame(entry, program.entryTarget(shape.name));
+                    assertEquals(active, targets(host)); assertSame(entry, program.entryTarget(entryId));
                     for (var target : active) assertTrue(valid(target), label + "/" + row);
                     var state = language.getHandoffState().get();
                     assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
@@ -151,11 +151,11 @@ class SimdArithmeticTest {
         return result;
     }
     @Test void literalShuffleIndicesAreCheckedBeforeExecution() throws Exception {
-        evidence(); var module = json(new File(directory, "pre-core/SimdArithmeticAudit.json"));
+        evidence(); var module = thc.CoreCbdFixtures.read(new File(directory, "pre-core/SimdArithmeticAudit.cbd").toPath());
         var shapes = new LinkedHashMap<String, Integer>(); shapes.put("Int8X16", 16); shapes.put("Int8X64", 64); shapes.put("Word16X32", 32);
         for (var backend : List.of("ast", "bytecode")) language((context, language) -> {
             for (var shape : shapes.entrySet()) {
-                var primitive = "shuffle" + shape.getKey() + "#"; var original = CoreModules.reachable(module, "shuffle" + shape.getKey() + "Pattern0");
+                var primitive = "shuffle" + shape.getKey() + "#"; var original = CoreModules.reachable(module, "main:SimdArithmeticAudit.shuffle" + shape.getKey() + "Pattern0");
                 for (var bad : Arrays.asList(-1L, 2L * shape.getValue(), Long.MAX_VALUE, null)) {
                     var input = (Map<String, Object>) Json.parse(Json.stringify(original)); var matches = new ArrayList<List<Object>>();
                     for (var node : nodes(input)) if (!node.isEmpty() && Objects.equals(node.getFirst(), "app") && node.size() > 1 &&

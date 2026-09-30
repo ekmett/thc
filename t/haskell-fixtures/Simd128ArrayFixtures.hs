@@ -29,6 +29,7 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath
 import System.Info (arch)
+import THC.Compact.Module (readModuleValue)
 
 families :: [(String, Int, Int)]
 families = [("int8",16,1),("word8",16,1),("int16",8,2),("word16",8,2),("int64",2,8),("word64",2,8)]
@@ -115,16 +116,16 @@ prepareSimd128Arrays root = do
     BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout observed)
     pure ([binary,directory </> "oracle.tsv"] ++ commandArtifacts built ++ commandArtifacts observed)
   exported <- forM stages $ \stage -> do
-    let corePath = directory </> stage ++ "-core/Simd128ArrayAudit.json"
+    let corePath = directory </> stage ++ "-core/Simd128ArrayAudit.cbd"
     compilation <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
       "bin/export-core.sh" ((if exportedOnly then ["-fno-code","-fwrite-if-simplified-core"] else ["-fllvm"]) ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    core <- readJson (root </> corePath)
+    core <- BS.readFile (root </> corePath) >>= either die pure . readModuleValue
     reports <- forM entries $ \(name,_,_) -> do
       let path = directory </> stage ++ "-" ++ name ++ "-audit.json"
       command <- execute (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["bin/audit-core.py",corePath,"--entry",name,"--output",path]
+        ["bin/audit-core.py",corePath,"--entry","main:Simd128ArrayAudit." ++ name,"--output",path]
       report <- readJson (root </> path)
       accepted <- field report "accepted"
       missing <- field report "missingGlobals" :: IO [Value]

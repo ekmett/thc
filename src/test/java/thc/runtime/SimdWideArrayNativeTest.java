@@ -152,7 +152,7 @@ class SimdWideArrayNativeTest {
         for (var stage : stages.entrySet()) {
             var core = (String) stage.getValue().get("core");
             assertTrue(artifacts.containsKey(core));
-            assertEquals(stage.getKey().equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", read(core).get("boundary"));
+            assertEquals(stage.getKey().equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", thc.CoreCbdFixtures.read(new File(root, core).toPath()).get("boundary"));
             var records = (Map<String, Map<String, Object>>) stage.getValue().get("entries");
             assertEquals(new LinkedHashSet<>(entries), records.keySet());
             for (var item : records.entrySet()) {
@@ -222,12 +222,12 @@ class SimdWideArrayNativeTest {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var core = read((String) data.get("core"));
+                        var core = thc.CoreCbdFixtures.read(new File(root, (String) data.get("core")).toPath());
                         for (var entry : entries) {
-                            var linked = new LinkedHashMap<>(CoreModules.reachable(core, entry)); linked.put("instrument", true);
+                            var entryId = "main:SimdWideArrayAudit." + entry; var linked = new LinkedHashMap<>(CoreModules.reachable(core, entryId)); linked.put("instrument", true);
                             ExecutableProgram p = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                             int arity = entry.contains("Write") ? 3 : 2;
-                            var host = p.hostEntryTarget(arity); var closure = p.entryValue(entry); var original = p.entryTarget(entry);
+                            var host = p.hostEntryTarget(arity); var closure = p.entryValue(entryId); var original = p.entryTarget(entryId);
                             var cases = new ArrayList<Input>();
                             for (var request : requests) if (request.entry.equals(entry)) cases.add(request);
                             for (var input : cases) call(input, host, closure, language, stage, backend, inlining);

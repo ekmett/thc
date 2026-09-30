@@ -153,7 +153,7 @@ class SimdAddressFamiliesTest {
         for (var stageItem : stages.entrySet()) {
             var stage = stageItem.getKey(); var data = stageItem.getValue(); var audit = read((String) data.get("audit"));
             assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("issues")); assertEquals(List.of(), audit.get("missingGlobals"));
-            var core = read((String) data.get("core")); var selected = (List<String>) data.get("entries");
+            var core = thc.CoreCbdFixtures.read(new File(root, (String) data.get("core")).toPath()); var selected = (List<String>) data.get("entries");
             var expectedSelected = new ArrayList<String>(); for (var name : entries) if (stage.equals("pre") || new Shape(name, pattern).bytes == 16) expectedSelected.add(name);
             assertEquals(expectedSelected, selected);
             for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -163,13 +163,14 @@ class SimdAddressFamiliesTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (var name : selected) {
-                        var linked = new LinkedHashMap<>(CoreModules.reachable(core, name)); linked.put("instrument", true);
+                        var entryId = "main:" + (stage.equals("pre") ? "SimdAddressAudit" : "SimdAddress128Audit") + "." + name;
+                        var linked = new LinkedHashMap<>(CoreModules.reachable(core, entryId)); linked.put("instrument", true);
                         var bindings = (List<Map<String, Object>>) linked.get("bindings"); assertEquals(1, bindings.size());
                         long expectedEntries = name.contains("Index") ? 1L : 2L, lambdas = 0;
                         for (var node : nodes(bindings)) if (!node.isEmpty() && Objects.equals(node.getFirst(), "lam")) lambdas++;
                         assertEquals(expectedEntries, lambdas);
                         ExecutableProgram p = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                        var entry = p.entryTarget(name); var corpus = new ArrayList<Input>(); for (var input : requests) if (input.entry.equals(name)) corpus.add(input);
+                        var entry = p.entryTarget(entryId); var corpus = new ArrayList<Input>(); for (var input : requests) if (input.entry.equals(name)) corpus.add(input);
                         var pools = language.getHandoffState().get(); for (var input : corpus) call(entry, input, language, stage, backend);
                         assertEquals(0L, ((Number) p.diagnostics().get("unsupportedTraps")).longValue()); if (!compiled.contains(name)) continue;
                         var active = targets(entry); assertEquals(expectedEntries, (long) active.size()); var callCounts = callCounts(active);

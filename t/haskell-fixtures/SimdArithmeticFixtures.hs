@@ -130,7 +130,7 @@ prepareSimdArithmetic root = do
       driver = generated </> "Native.hs"
       inputs = directory </> "inputs.tsv"
       binary = directory </> "native/oracle"
-      core = directory </> "pre-core/SimdArithmeticAudit.json"
+      core = directory </> "pre-core/SimdArithmeticAudit.cbd"
       manifest = root </> directory </> "manifest.json"
       logs = directory </> "commands"
       execute = runLogged 300 root logs
@@ -165,7 +165,7 @@ prepareSimdArithmetic root = do
     "bin/export-core.sh" ["-fno-code","-fwrite-if-simplified-core",source]
   audits <- forM entries $ \entry -> do
     let path = directory </> name entry ++ "-audit.json"
-    command <- execute (name entry ++ "-audit") [] "python3" ["bin/audit-core.py",core,"--entry",name entry,"--output",path]
+    command <- execute (name entry ++ "-audit") [] "python3" ["bin/audit-core.py",core,"--entry","main:SimdArithmeticAudit." ++ name entry,"--output",path]
     report <- readJson (root </> path)
     accepted <- field report "accepted"
     missing <- field report "missingGlobals" :: IO [Value]

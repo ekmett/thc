@@ -28,6 +28,7 @@ import System.Directory
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath
+import THC.Compact.Module (readModuleValue)
 
 families :: [(String, Int, Int)]
 families = [("int8",32,1),("word8",32,1),("int8",64,1),("word8",64,1),("int16",32,2),("word16",32,2),
@@ -114,16 +115,16 @@ prepareSimdWideArrays root = do
     BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout observed)
     pure ([binary,directory </> "oracle.tsv"] ++ commandArtifacts built ++ commandArtifacts observed)
   exported <- forM stages $ \stage -> do
-    let corePath = directory </> stage ++ "-core/SimdWideArrayAudit.json"
+    let corePath = directory </> stage ++ "-core/SimdWideArrayAudit.cbd"
     compilation <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fno-code","-fwrite-if-simplified-core"] ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    core <- readJson (root </> corePath)
+    core <- BS.readFile (root </> corePath) >>= either die pure . readModuleValue
     reports <- forM entries $ \(name,_,_,_) -> do
       let path = directory </> stage ++ "-" ++ name ++ "-audit.json"
       command <- execute (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["bin/audit-core.py",corePath,"--entry",name,"--output",path]
+        ["bin/audit-core.py",corePath,"--entry","main:SimdWideArrayAudit." ++ name,"--output",path]
       report <- readJson (root </> path)
       accepted <- field report "accepted"
       missing <- field report "missingGlobals" :: IO [Value]
