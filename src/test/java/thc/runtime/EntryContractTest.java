@@ -119,6 +119,27 @@ class EntryContractTest {
             } finally { context.leave(); }
         }
     }
+    @Test void astStrictReferenceCarrierIsCheckedAfterItsSharedThunkCompletes() {
+        var worker = binding("worker", lambda(List.of(parameter("ignored", closure)), integer(9), List.of(true)));
+        // Host ingress deliberately violates the closure certificate: forcing
+        // must finish and publish WHNF before the final carrier check rejects.
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, map("bindings", List.of(worker, binding("wrong", choose(integer(1), integer(6), integer(7)))), "instrument", true));
+                var thunk = assertInstanceOf(Thunk.class, program.entryValue("wrong"));
+                var function = program.entryValue("worker");
+                long before = count(program, "thunkEvaluations");
+                assertThrows(RuntimeFault.class, () -> call(program, function, thunk));
+                assertEquals(before + 1, count(program, "thunkEvaluations"));
+                assertEquals(2, thunk.getState()); assertEquals(7L, thunk.getValue());
+                assertThrows(RuntimeFault.class, () -> call(program, function, thunk));
+                assertEquals(before + 1, count(program, "thunkEvaluations"), "The rejected caller must not replay its completed child");
+                assertEquals(2, thunk.getState()); assertEquals(7L, thunk.getValue());
+            } finally { context.leave(); }
+        }
+    }
     @Test void megamorphicCallsEnforceAndShareStrictPapPrefixes() throws ReflectiveOperationException {
         var workers = new ArrayList<Map<String, Object>>();
         for (int index = 0; index <= 3; index++) workers.add(binding("worker" + index, lambda(List.of(parameter("tree", data), parameter("extra")), unbox(variable("tree"), primitive("+#", variable("payload"), variable("extra"))), List.of(true, false))));

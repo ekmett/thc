@@ -55,6 +55,17 @@ Direct self calls use parallel local moves and internal control transfers;
 longer tail cycles use the [matching-root protocol](typed-tail.md).
 These paths preserve PAP arguments, changed captures and entry obligations.
 
+Ordinary scalar AST self transfers retain continuation capture. Preparation saves
+the function, completed operands and current strict force without replacing live
+arguments until all preparation completes. A saved self transfer unwinds its
+lexical mask, handler and cleanup scopes before the owning function restarts its
+body. Typed-input and reusable-code self-transfer admission is unchanged.
+
+Strict AST ingress, including a handoff loan, may initially retain a thunk despite
+the formal's evaluated reference proof. Its completed value is checked against
+the reference carrier after forcing; an invalid result still rejects before the
+body starts. A rejected caller does not replay its completed shared child.
+
 The [residual call ABI](call-boundaries.md) remains `Object[] → Object`.
 Typed local storage does not by itself eliminate argument arrays or primitive
 boxing at a call that does not inline. Compiler graphs and measurements must
