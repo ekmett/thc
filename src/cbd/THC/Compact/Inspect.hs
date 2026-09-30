@@ -104,9 +104,9 @@ inspectSources bytes = do
       ++ p "label" str label ++ p "charIndex" toJSON index ++ p "charLength" toJSON size
     location (start,end,SourceLocation primary notes) = object
       ["start" .= start,"end" .= end,"primaryIndex" .= primary,
-       "source" .= identifier (snd (notes !! fromIntegral primary)),
-       "sourceNotes" .= map (identifier . snd) notes]
-    identifier (SourcePosition key _ _ _ _ _ _ _) = str key
+       "source" .= positionId (snd (notes !! fromIntegral primary)),
+       "sourceNotes" .= map (positionId . snd) notes]
+    positionId (SourcePosition key _ _ _ _ _ _ _) = str key
 
 -- | Explicit offline archive inspection, including CRC/inflation checks. The
 -- returned payloads retain their original member-relative coordinate systems.
