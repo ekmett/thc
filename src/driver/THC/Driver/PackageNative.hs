@@ -17,7 +17,7 @@ module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
   , linkInstalledNative, installedNativeSignatures, nativeCapiSource
-  , nativeIrSymbol, nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, tool
+  , nativeIrSymbol, nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, nativeDeferredLinkArguments, nativeRootArguments, tool
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -851,6 +851,25 @@ nativeStaticExports value = case member value "staticForeignExports" of
         "static export declaration has no exact retained Core binder"
     pure exports
 
+-- Nothing omits the machine-code container; its LLVM artifact and separately
+-- rooted archive companion retain the actual execution and native providers.
+nativeDeferredLinkArguments :: String -> [String] -> Maybe [String]
+nativeDeferredLinkArguments target symbols
+  | not (null symbols) && ("-windows" `isInfixOf` target || "-mingw" `isInfixOf` target) = Nothing
+  | otherwise = Just $ concatMap (\symbol ->
+      if "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
+        then ["-Xlinker","-U","-Xlinker",'_' : symbol]
+        else ["-Xlinker","--ignore-unresolved-symbol=" ++ symbol]) symbols
+
+nativeRootArguments :: String -> [String] -> [String]
+nativeRootArguments target
+  -- Without the component's machine-code references, -u can extract an archive
+  -- but still succeed when a root has no definition. PE must prove each one.
+  | "-windows" `isInfixOf` target || "-mingw" `isInfixOf` target =
+      concatMap (\symbol -> ["-Xlinker","--require-defined=" ++ symbol])
+  | otherwise = concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",
+      if "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target then '_' : symbol else symbol])
+
 finishPackageNative :: FilePath -> FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,FilePath)] -> IO [(String,FilePath)]
 finishPackageNative packageTool pieces directory unit objects modules =
   fst <$> finishPackageNativeWithDependencies packageTool Nothing [] [] pieces directory directory unit objects modules
@@ -1105,11 +1124,17 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
             embedding = if darwin
               then concatMap (\argument -> ["-Xlinker",argument]) ["-sectcreate","__LLVM","__bundle",final]
               else ["-fembed-bitcode"]
-            exclusions = concatMap (\symbol -> if darwin then ["-Xlinker","-U","-Xlinker",'_' : symbol]
-              else ["-Xlinker","--ignore-unresolved-symbol=" ++ symbol]) deferredExternals
-            arguments = ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
-              linkArguments ++ resolution ++ exclusions ++ ["-o",container]
-        _ <- command directory clang arguments
+            deferredArguments = nativeDeferredLinkArguments target deferredExternals
+            exclusions = maybe [] id deferredArguments
+            -- PE has no per-symbol undefined allowance. Its deferred component
+            -- stays raw LLVM; record no container argv for a skipped command.
+            arguments = case deferredArguments of
+              Nothing -> []
+              Just _ -> ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
+                linkArguments ++ resolution ++ exclusions ++ ["-o",container]
+        unless (null arguments) $ do
+          _ <- command directory clang arguments
+          pure ()
         -- A container's machine code is not executed by Sulong. Materialize
         -- native dependencies separately, rooting archive extraction with the
         -- actual unresolved symbols. Never include the component here: its
@@ -1125,8 +1150,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
             pure (filter (`elem` definitions) nativeExternals)
           else pure nativeExternals
         let dependency = directory </> if darwin then "native/dependencies.dylib" else "native/dependencies.so"
-            nativeRoots = concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",if darwin then '_' : symbol else symbol])
-              rooted
+            nativeRoots = nativeRootArguments target rooted
             dependencyArguments = ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
               resolution ++ exclusions ++ ["-o",dependency]
         _ <- command directory clang dependencyArguments
