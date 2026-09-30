@@ -288,6 +288,7 @@ public final class PackageScalarLinks {
                      !in(result.get(1), "ByteArray#", "MutableByteArray#")), "JavaScript declaration differs from emitted ABI");
                 continue;
             }
+            if (nativeLink && thc.runtime.CoreForeignOverride.nativeImport(item, list(proof.get("expectedCalls")))) continue;
             if (nativeLink && Objects.equals(item.get("safety"), "interruptible")) {
                 // Retain the original obligation, not an executable adapter.
                 // A reached call still needs its actual scheduling boundary.

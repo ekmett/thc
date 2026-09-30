@@ -67,6 +67,14 @@ have process-wide state. THC supplies special adapters where a call must act on
 its own scheduler, managed files, environment or memory; ordinary package C is
 not automatically virtualized.
 
+For an exact GHC 9.14.1 Core call covered by the shared
+`thc/core-native-overrides.json` capability profile, acquisition omits the native
+call wrapper and admission checks the same descriptor against its existing THC
+handler. This does not export that handler to C. Native C references, public
+definitions, constructors, address imports and finalizers retain their ordinary
+link obligations, even when a Core call uses the same symbol. Other RTS imports
+do not gain support from this profile.
+
 Concrete lifted or unlifted GC-boxed declarations can retain verified stock
 import provenance, including boxed results. That evidence is not a native ABI:
 GC-boxed imports remain excluded from package-native adapters, and are never

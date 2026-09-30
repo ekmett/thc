@@ -18,11 +18,39 @@ import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Test.HUnit
-import THC.Driver.RuntimeShim (validateRuntimeShimModule, validateRuntimeShimInventory, foreignExceptionBridgeUnit)
+import THC.Driver.RuntimeShim (validateRuntimeShimModule, validateRuntimeShimInventory, foreignExceptionBridgeUnit,
+  coreNativeOverride, coreNativeImport, coreNativeOverrideCalls)
 
 tests :: Test
 tests = TestLabel "exact runtime shim native fallback profile" $ TestList
-  [ TestCase $ assertEqual "exact runtime query declaration is admitted"
+  [ TestCase $ do
+      assertEqual "one exact shared capability for each currently wired variant" (17::Int)
+        (length coreNativeOverrideCalls)
+      forM_ coreNativeOverrideCalls $ \descriptorValue -> do
+        assertEqual "complete selected descriptor omits only its Core wrapper" (Right True) (coreNativeOverride descriptorValue)
+        let targetValue = case descriptorValue of Object fields -> maybe (error "test target") id (KM.lookup "target" fields); _ -> error "test call"
+        assertEqual "an ordinary unit cannot acquire a context-owned capability" (Right False)
+          (coreNativeOverride (alter "target" (alter "unit" "ordinary-unit" targetValue) descriptorValue))
+        assertEqual "names are not prefix capabilities" (Right False)
+          (coreNativeOverride (alter "target" (alter "symbol" "getProgArgv_extra" targetValue) descriptorValue))
+        forM_ [alter "schema" (Number 2) descriptorValue, alter "suppliedArity" (Number 0) descriptorValue,
+               alter "argumentTypes" (Array mempty) descriptorValue, alter "convention" "capi" descriptorValue,
+               alter "target" (alter "isFunction" (Bool False) targetValue) descriptorValue,
+               alter "target" (alter "kind" "dynamic" targetValue) descriptorValue] $ \wrong ->
+          assertBool "a selected identity never falls back to native RTS on ABI drift" (isLeft (coreNativeOverride wrong))
+  , TestCase $ do
+      let emitted = object ["symbol" .= ("getProgArgv"::String), "unit" .= ("ghc-internal"::String),
+            "convention" .= ("ccall"::String), "safety" .= ("unsafe"::String),
+            "arguments" .= (["AddrRep","AddrRep","void"]::[String]), "result" .= (["void"]::[String])]
+          imported = object ["isFunction" .= True, "header" .= Null, "emitted" .= emitted]
+      assertEqual "exact source import uses the same descriptor-derived ABI" (Right True) (coreNativeImport imported)
+      assertEqual "ordinary same-name provider is still required" (Right False)
+        (coreNativeImport (alter "emitted" (alter "unit" "ordinary-unit" emitted) imported))
+      forM_ [alter "header" "native.h" imported, alter "isFunction" (Bool False) imported,
+             alter "emitted" (alter "safety" "safe" emitted) imported,
+             alter "emitted" (alter "arguments" (strings ["AddrRep","IntRep","void"]) emitted) imported] $ \wrong ->
+        assertBool "native declarations cannot borrow a merely similar Core capability" (isLeft (coreNativeImport wrong))
+  , TestCase $ assertEqual "exact runtime query declaration is admitted"
       (Right (["thc_runtime_v1_query"], ["thc_runtime_v1_query"]))
       (validateRuntimeShimModule owner (moduleValue [declaration] [descriptor]))
   , TestCase $ do
