@@ -22,7 +22,15 @@ tests = TestLabel "closed scalar C producer inputs" $ TestList
       (Right ["cbits/scalar.c","include/a b.h","system/header.h"])
       (parseDependencies "thc_scalar_input: cbits/scalar.c \\\n include/a\\ b.h system/header.h\n")
   , TestCase $ mapM_ (assertBool "ambiguous Make syntax rejected" . isLeft . parseDependencies)
-      ["wrong: source.c\n","thc_scalar_input: $(input)\n","thc_scalar_input: source.c\nother: x\n"]
+      ["wrong: source.c\n","thc_scalar_input: $(input)\n","thc_scalar_input: source.c\nother: x\n",
+       "thc_scalar_input: C:relative.c\n", "thc_scalar_input: owner:/source.c\n",
+       "thc_scalar_input: C:/source.c\nother:/target.h\n"]
+  , TestCase $ assertEqual "native Clang rooted drive paths retain exact dependency names"
+      (Right ["C:/sdk/header.h", "d:/project/a b.c"])
+      (parseDependencies "thc_scalar_input: d:/project/a\\ b.c \\\n C:/sdk/header.h\n")
+  , TestCase $ assertEqual "raw Windows dependency continuations retain complete tokens"
+      (Right ["C:/sdk/header.h", "d:/project/source.c"])
+      (parseDependencies "thc_scalar_input: d:/project/source.c \\\r\n C:/sdk/header.h\r\n")
   , TestCase $ assertEqual "exact scalar LLVM types, with internal helpers excluded from foreign ABI"
       (Right [("mixed",["Int32Rep","Int64Rep","FloatRep","DoubleRep"],"DoubleRep")])
       (scalarFunctions $ unlines

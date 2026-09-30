@@ -296,6 +296,11 @@ parseDependencies text = case break (== ':') text of
     tokens = go [] []
     go word found [] = Right (reverse (if null word then found else reverse word:found))
     go word found ('\\':'\n':rest) = go word found rest
+    go word found ('\\':'\r':'\n':rest) = go word found rest
+    -- Native Clang spells rooted Windows dependencies with forward slashes.
+    -- Only that drive prefix is admitted; other colons still reject Make rules.
+    go [drive] found (':':'/':rest)
+      | drive `elem` (['A'..'Z'] ++ ['a'..'z']) = go ['/',':',drive] found rest
     go word found ('\\':c:rest) = go (c:word) found rest
     go _ _ ['\\'] = Left "scalar cbits dependency escape is incomplete"
     go word found (c:rest) | isSpace c = go [] (if null word then found else reverse word:found) rest
