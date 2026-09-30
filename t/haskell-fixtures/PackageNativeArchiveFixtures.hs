@@ -332,7 +332,7 @@ preparePackageNativeArchives root = do
       createDirectoryIfMissing True (takeDirectory destination)
       copyFile path destination
       pure (takeFileName path,destination)
-    products <- finishPackageNative pieces (capture </> unit) unit Nothing modules
+    products <- finishPackageNative ghcPkg pieces (capture </> unit) unit Nothing modules
     pure [makeRelative root path | (_,path) <- products])
   let mixed = mixedUnit ++ ":Mixed."
       acceptedEntries = [mixed ++ "allowed", mixedUnit ++ ":Narrow.allowed",

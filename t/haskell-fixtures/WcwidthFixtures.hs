@@ -91,7 +91,7 @@ prepareWcwidth root = do
     let destination = output </> takeFileName path
     copyFile path destination
     pure (takeFileName path,destination)
-  _ <- finishPackageNative pieces (capture </> unit) unit Nothing modules
+  _ <- finishPackageNative ghcPkg pieces (capture </> unit) unit Nothing modules
   audits <- forM ["rawWidth","displayWidth"] $ \entry -> execute ("audit-" ++ entry) [] "python3"
     ["bin/audit-core.py","--entry",unit ++ ":Width." ++ entry,
      "--output",output </> entry <.> "json",output </> "Width.cbd"]

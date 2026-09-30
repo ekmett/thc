@@ -91,7 +91,7 @@ prepareGetEntropy root = do
     pure (takeFileName path,destination)
   unless (sort (map fst modules) == ["System.Random.SplitMix.Init.cbd","System.Random.SplitMix.cbd","System.Random.SplitMix32.cbd"])
     (fail "splitmix retained module inventory differs")
-  linked <- finishPackageNative pieces (capture </> unit) unit Nothing modules
+  linked <- finishPackageNative ghcPkg pieces (capture </> unit) unit Nothing modules
   let entryOutput = output </> "entry"
       entryPath = entryOutput </> "units/u-original-splitmix-entry/OriginalSplitmixEntry.cbd"
   createDirectoryIfMissing True entryOutput
