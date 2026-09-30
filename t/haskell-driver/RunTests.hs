@@ -81,7 +81,7 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
         sourcePath <- canonicalizePath (package </> "app" </> moduleName ++ ".hs")
         hasSource <- anyM (\(SourceFile _ file content) -> do
           path <- canonicalizePath (Text.unpack (Text.decodeUtf8 file))
-          pure (path == sourcePath && case content of Known source -> not (BS.null source); _ -> False))
+          pure (path == sourcePath && case content of Known sourceBytes -> not (BS.null sourceBytes); _ -> False))
           sources
         assertBool "source content" hasSource
         native <- executable

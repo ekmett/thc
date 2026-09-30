@@ -26,7 +26,6 @@ import System.Directory (canonicalizePath, createDirectory, doesFileExist, getCu
 import System.Environment (getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>))
-import Data.List (isInfixOf)
 import System.IO (hClose, hSetBinaryMode, openTempFile, stdin, stderr, stdout)
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
