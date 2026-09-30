@@ -17,6 +17,6 @@ for stage in pre post; do
   if [ "$stage" = post ]; then set -- -fplugin-opt=THC.Plugin:post-tidy; else set --; fi
   THC_CORE_OUT="$out/$stage-core" THC_GHC_OUT="$out/$stage-ghc" \
     bin/export-core.sh "$@" t/fixtures/compiler/AddressIdentityAudit.hs
-  python3 bin/audit-core.py --entry probe --output "$out/$stage.audit.json" \
-    "$out/$stage-core/AddressIdentityAudit.json"
+  python3 bin/audit-core.py --entry main:AddressIdentityAudit.probe --output "$out/$stage.audit.json" \
+    "$out/$stage-core/AddressIdentityAudit.cbd"
 done

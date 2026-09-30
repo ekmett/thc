@@ -66,7 +66,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
 MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
-int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
+int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 BYTESTRING_SORT_ENTRIES = ("sortBytes",)
@@ -1839,6 +1839,34 @@ def thread_scheduling_artifact_hashes(manifest):
     return artifacts
 
 
+MANAGED_MVAR_ENTRIES = ("transitions", "lazyPayload", "aliasRoundTrip", "unliftedPayload", "closurePayload",
+                        "waitTake", "waitRead", "waitPut", "makeBox")
+MANAGED_MVAR_OUTPUTS = frozenset("build/managed-mvars/" + name for name in (
+    "manifest.json", "contracts.json", "oracle.tsv", "context-oracle.tsv", "native/managed-mvar-oracle",
+    "plugin/thc-core-plugin." + ("dylib" if platform.system() == "Darwin" else "so"),
+    *(f"{stage}/core/{module}.json" for stage in ("pre", "post") for module in ("ManagedMVarAudit", "THC.InterfaceClosure")),
+    *(f"{stage}/core/{module}.cbd" for stage in ("pre", "post") for module in ("ManagedMVarAudit", "THC.InterfaceClosure")),
+    *(f"{stage}/{entry}.audit.json" for stage in ("pre", "post") for entry in MANAGED_MVAR_ENTRIES),
+    *(f"logs/{label}{suffix}" for label in ("ghc-version", "ghc-package-db", "ghc-info", "plugin-build", "plugin-metadata",
+        "pre-export", "post-export", "native-build", "native-word-bits", "native-ready", "native-concurrent-N1", "native-concurrent-N2")
+      for suffix in (".stdout", ".stderr", ".command.json"))))
+SYNCHRONOUS_EXCEPTION_OUTPUTS = frozenset("build/synchronous-exceptions/" + name for name in (
+    *(f"plugin/{field}." + ("dylib" if platform.system() == "Darwin" else "so") for field in ("sharedLibrary", "cabalSharedLibrary")),
+    *(f"{stage}/core/{module}.cbd" for stage in ("pre", "post") for module in ("SynchronousExceptionsAudit", "THC.InterfaceClosure")),
+    *(f"logs/{label}{suffix}" for label in ("ghc-version", "python-version", "cabal-plugin-build", "plugin-metadata",
+        "pre-export", "post-export", "native-build", "native-word-bits", "native-oracle")
+      for suffix in (".stdout", ".stderr", ".command.json"))))
+HEAP_CORPUS_CBD_OUTPUTS = frozenset(
+    {f"build/addr-identity/{stage}-core/{module}.cbd" for stage in ("pre", "post")
+     for module in ("AddressIdentityAudit", "THC.InterfaceClosure")} |
+    {f"build/corpus/groups/{group}/core/{module}.cbd" for group, modules in (
+        ("int64-conversions", ("Int64Conversions",)), ("lists", ("ListCoverage", "CoverageSupport", "GHC.Internal.Base", "GHC.Internal.List", "GHC.InterfaceClosure")),
+        ("functions", ("FunctionCoverage", "CoverageSupport")), ("trees", ("TreeCoverage",)),
+        ("numeric", ("NumericCoverage",)), ("narrow-ints", ("NarrowIntCoverage",)),
+        ("narrow-words", ("NarrowWordCoverage",)), ("pointers", ("PointerCoverage", "CoverageSupport")))
+     for module in (*modules, "THC.InterfaceClosure")})
+
+
 def allowed_payload(name):
     parts = PurePosixPath(relative(name)).parts
     if name in ("build/primop-coverage.json", "build/aggregate-frontier.json"):
@@ -1927,6 +1955,12 @@ def allowed_payload(name):
         return name in PINNED_ADDRESS_OUTPUTS
     if parts[1] == "float-decode":
         return name in FLOAT_DECODE_OUTPUTS
+    if parts[1] == "managed-mvars":
+        return name in MANAGED_MVAR_OUTPUTS
+    if parts[1] == "synchronous-exceptions" and name in SYNCHRONOUS_EXCEPTION_OUTPUTS:
+        return True
+    if name in HEAP_CORPUS_CBD_OUTPUTS:
+        return True
     if parts[1] == "floating-remainder":
         return name in FLOATING_REMAINDER_OUTPUTS
     if name == "build/floating/core/FloatingAudit.cbd":

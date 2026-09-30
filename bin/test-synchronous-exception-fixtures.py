@@ -177,7 +177,7 @@ class ProvenanceTests(unittest.TestCase):
         artifact(self.build / 'native/synchronous-exception-oracle', 'synthetic executable placeholder\n')
         stages, statuses = {}, {}
         for stage in ('pre', 'post'):
-            path = self.build / stage / 'core/module.json'
+            path = self.build / stage / 'core/module.cbd'
             artifact(path, '{}\n')
             stages[stage] = [str(path.relative_to(self.root))]
             for name in recipe.ENTRIES:
@@ -187,19 +187,36 @@ class ProvenanceTests(unittest.TestCase):
         plugin = dict(schema=1, unitId='synthetic-test-unit', packageDb=str(self.root / 'dist-newstyle/packagedb'),
                       sharedLibrary=str(self.root / 'build/compiler/plugin.so'),
                       cabalSharedLibrary=str(self.root / 'dist-newstyle/build/plugin.so'))
+        plugin_artifacts = {}
         for field in ('sharedLibrary', 'cabalSharedLibrary'):
-            artifact(Path(plugin[field]), 'synthetic shared-library placeholder\n')
+            path = Path(plugin[field]); self.write(path, 'synthetic shared-library placeholder\n')
+            snapshot = recipe.plugin_snapshot(self.build, field, path.suffix)
+            artifact(snapshot, path.read_text())
+            plugin_artifacts[field] = dict(originalLocation=str(path.relative_to(self.root)),
+                                          path=str(snapshot.relative_to(self.root)), sha256=recipe.hash_files([str(path.relative_to(self.root))], self.root)[str(path.relative_to(self.root))])
         artifact(self.root / 'build/compiler/plugin.json', json.dumps(plugin))
-        manifest = dict(schema=1, recipeVersion=1, ghc='9.14.1', wordBits=64, entries=recipe.ENTRIES,
+        manifest = dict(schema=1, recipeVersion=2, ghc='9.14.1', wordBits=64, entries=recipe.ENTRIES,
                         inputs=recipe.input_vectors(), installedArtifactsHashed=False,
                         inputHashes=recipe.hash_files(recipe.source_inputs(self.root), self.root),
                         artifactHashes=recipe.hash_files(artifacts, self.root), stages=stages,
-                        auditStatus=statuses, plugin=plugin, nativeRows=len(recipe.ENTRIES) * len(recipe.input_vectors()))
+                        auditStatus=statuses, plugin=plugin, pluginArtifacts=plugin_artifacts, nativeRows=len(recipe.ENTRIES) * len(recipe.input_vectors()))
         self.save(manifest)
         return manifest
 
     def save(self, manifest):
         self.write(self.build / 'manifest.json', json.dumps(manifest))
+
+    def test_original_plugin_and_snapshot_hashes_remain_strict(self):
+        manifest = self.prepared()
+        original = Path(manifest['plugin']['cabalSharedLibrary'])
+        self.write(original, 'changed original library')
+        with self.assertRaisesRegex(ValueError, 'Original plugin artifact changed'):
+            recipe.check_prepared(self.build, self.root)
+        manifest = self.prepared()
+        snapshot = self.root / manifest['pluginArtifacts']['cabalSharedLibrary']['path']
+        self.write(snapshot, 'changed snapshot')
+        with self.assertRaisesRegex(ValueError, 'Original plugin snapshot changed'):
+            recipe.check_prepared(self.build, self.root)
 
     def test_check_is_read_only_and_executes_no_tools(self):
         manifest = self.prepared()

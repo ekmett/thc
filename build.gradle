@@ -234,7 +234,7 @@ tasks.withType(Test).configureEach {
             "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
             "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
             "io-main-pap/**/*.json", "io-main-pap/*.tsv", "io-main-pap/native/**",
-            "addr-identity/**/*.json", "addr-identity/oracle.txt", "addr-identity/native",
+            "addr-identity/**/*.json", "addr-identity/**/*.cbd", "addr-identity/oracle.txt", "addr-identity/native",
             "empty-join-input/**/*.json", "empty-join-input/*.tsv", "empty-join-input/native/**",
             "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
             "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
@@ -281,8 +281,8 @@ tasks.withType(Test).configureEach {
             "shrink-bytearrays/**/*.cbd", "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
             "fetch-add-int-array/**/*.cbd", "fetch-add-int-array/**/*.json", "fetch-add-int-array/oracle.tsv", "fetch-add-int-array/NativeFetchAddIntArray.hs",
             "atomic-int-arrays/**/*.cbd", "atomic-int-arrays/**/*.json", "atomic-int-arrays/*.tsv", "atomic-int-arrays/NativeAtomicIntArrays.hs", "atomic-int-arrays/commands/*",
-            "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
-            "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
+            "managed-mvars/**/*.json", "managed-mvars/**/*.cbd", "managed-mvars/*.tsv", "managed-mvars/native/**",
+            "synchronous-exceptions/**/*.json", "synchronous-exceptions/**/*.cbd", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "thread-status/**/*.json", "thread-status/oracle.txt",
             "thread-inventory/**/*.json", "thread-inventory/oracle.txt",
@@ -454,7 +454,7 @@ tasks.withType(Test).configureEach {
             "simd-word32x4-bytearray/prepare-run-*/commands/*", "simd-word32x4-bytearray/prepare-run-*/retained-original-source.hs",
             "simd-floatx4-bytearray/prepare-run-*/commands/*", "simd-doublex2-bytearray/prepare-run-*/commands/*",
             "signed-narrow-primops/core/**/*.cbd", "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
-            "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv"])
+            "corpus/**/*.json", "corpus/**/*.cbd", "corpus/oracle.tsv", "native/oracle.tsv"])
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
     inputs.files(fileTree("src/compiler") { include("**/*.hs") })

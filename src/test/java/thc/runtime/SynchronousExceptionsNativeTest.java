@@ -50,7 +50,7 @@ public class SynchronousExceptionsNativeTest {
         for (var stage : List.of("pre", "post")) {
             var paths = ((Map<String, List<String>>) manifest.get("stages")).get(stage);
             var modules = new ArrayList<Map<String, Object>>();
-            for (var path : paths) modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            for (var path : paths) modules.add(CoreCbdFixtures.read(new File(root, path).toPath()));
             var module = CoreModules.merge(modules);
             for (var backend : List.of("ast", "bytecode")) for (var name : supported) {
                 var selected = cases.get(name); var actualInputs = new ArrayList<Long>(); for (var row : selected) actualInputs.add(row.input());
@@ -60,12 +60,12 @@ public class SynchronousExceptionsNativeTest {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var linked = new LinkedHashMap<>(CoreModules.reachable(module, name)); linked.put("instrument", true);
+                        var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:SynchronousExceptionsAudit." + name)); linked.put("instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                        var function = context.asValue(new EntryValue(program, name, 1));
+                        var function = context.asValue(new EntryValue(program, "main:SynchronousExceptionsAudit." + name, 1));
                         var label = stage + "/" + backend + "/" + name;
                         for (var row : selected) assertEquals(row.expected(), function.execute(row.input()).asLong(), label + "/" + row.input());
-                        compile(program.entryTarget(name));
+                        compile(program.entryTarget("main:SynchronousExceptionsAudit." + name));
                         assertTrue(function.invokeMember("compile").asBoolean(), label + " host compilation");
                         for (var row : selected.subList(0, Math.min(2, selected.size()))) {
                             var before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
@@ -73,9 +73,9 @@ public class SynchronousExceptionsNativeTest {
                             var after = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             assertTrue(after > before, label + " entered compiled guest code");
                         }
-                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(program.entryTarget(name).getRootNode()), label + " restored caller masking state");
+                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(program.entryTarget("main:SynchronousExceptionsAudit." + name).getRootNode()), label + " restored caller masking state");
                         if (name.equals("handlerMaskState")) {
-                            var node = program.entryTarget(name).getRootNode();
+                            var node = program.entryTarget("main:SynchronousExceptionsAudit." + name).getRootNode();
                             // Preserve outer guest lifetime while testing nested restoration.
                             var threads = Language.currentState(node).getThreads();
                             threads.enterCurrent(null, false, true, null);

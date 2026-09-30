@@ -91,7 +91,7 @@ public class ManagedMVarNativeTest {
         var stages = (Map<String, List<String>>) manifest.get("stages"); assertEquals(Set.of("pre", "post"), stages.keySet());
         for (var stageRecord : stages.entrySet()) {
             var stage = stageRecord.getKey(); var modules = new ArrayList<Map<String, Object>>();
-            for (var path : stageRecord.getValue()) modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            for (var path : stageRecord.getValue()) modules.add(CoreCbdFixtures.read(new File(root, path).toPath()));
             var module = CoreModules.merge(modules);
             for (var name : names) {
                 var cases = rows.get(name); var expectedInputs = new ArrayList<Long>(); var actualInputs = new ArrayList<Long>();
@@ -103,9 +103,9 @@ public class ManagedMVarNativeTest {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var linked = new LinkedHashMap<>(CoreModules.reachable(module, name)); linked.put("instrument", true);
+                        var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:ManagedMVarAudit." + name)); linked.put("instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                        var entry = program.entryTarget(name); var host = program.hostEntryTarget(1); var function = context.asValue(new EntryValue(program, name, 1));
+                        var entry = program.entryTarget("main:ManagedMVarAudit." + name); var host = program.hostEntryTarget(1); var function = context.asValue(new EntryValue(program, "main:ManagedMVarAudit." + name, 1));
                         var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                         // Retain original normal compilation policy during warmup.
                         for (var row : cases) check(function, language, label, row);
