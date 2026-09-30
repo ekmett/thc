@@ -17,6 +17,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 public class PinnedPointerCellsTest {
+    private static String coreEntry(String name) {
+        return "main:PinnedPointerCellsAudit." + name;
+    }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private record Row(long input, long pointer, long array, long order, long char8, long byte8, long halfwordRead,
         long halfwordWrite, long mutableContents, long touchLazy, long nonOverlappingCopy, List<Long> wideBytes,
@@ -92,8 +95,8 @@ public class PinnedPointerCellsTest {
     }
     private Map<String, Object> module(String stage) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (String name : List.of("PinnedPointerCellsAudit.json", "THC.InterfaceClosure.json"))
-            modules.add(json("build/pinned-pointer-cells/" + stage + "/core/" + name));
+        for (String name : List.of("PinnedPointerCellsAudit.cbd", "THC.InterfaceClosure.cbd"))
+            modules.add(thc.CoreCbdFixtures.read(root.resolve("build/pinned-pointer-cells/" + stage + "/core/" + name)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> source, String backend) {
@@ -143,7 +146,7 @@ public class PinnedPointerCellsTest {
         var artifacts = new HashSet<>(Set.of("build/pinned-pointer-cells/oracle.tsv"));
         for (String stage : List.of("pre", "post"))
             for (String name :
-                List.of("audit.json", "core/PinnedPointerCellsAudit.json", "core/THC.InterfaceClosure.json"))
+                List.of("audit.json", "core/PinnedPointerCellsAudit.cbd", "core/THC.InterfaceClosure.cbd"))
                 artifacts.add("build/pinned-pointer-cells/" + stage + "/" + name);
         for (var item : List.of(Map.entry("inputHashes", inputs), Map.entry("artifactHashes", artifacts))) {
             var hashes = (Map<String, String>) manifest.get(item.getKey());
@@ -252,8 +255,8 @@ public class PinnedPointerCellsTest {
             var source = module(stage);
             // The copy root also uses mutable contents and touch. Keep these
             // original ABI controls scoped to their two original entry roots.
-            var mutable = CoreModules.reachable(source, "mutableContentsRoundtrip");
-            var lazy = CoreModules.reachable(source, "touchLazyPayload");
+            var mutable = CoreModules.reachable(source, coreEntry("mutableContentsRoundtrip"));
+            var lazy = CoreModules.reachable(source, coreEntry("touchLazyPayload"));
             var calls = new ArrayList<>(primitiveCalls(mutable));
             calls.addAll(primitiveCalls(lazy));
             var contents = single(
@@ -361,8 +364,8 @@ public class PinnedPointerCellsTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             for (String entry : List.of("mutableContentsRoundtrip", "touchLazyPayload")) {
-                                var source = plus(CoreModules.reachable(module(stage), entry), "instrument", true);
-                                var evidence = new ArrayCoreEvidence(source, entry);
+                                var source = plus(CoreModules.reachable(module(stage), coreEntry(entry)), "instrument", true);
+                                var evidence = new ArrayCoreEvidence(source, coreEntry(entry));
                                 assertEquals(2, evidence.getBindings().size());
                                 assertEquals(2, evidence.guestLambdas(evidence.getRoot().get("expr")).size());
                                 assertEquals(1, evidence.loweredStateLambdas(evidence.getRoot().get("expr")).size());
@@ -370,7 +373,7 @@ public class PinnedPointerCellsTest {
                                     entry.equals("mutableContentsRoundtrip") ? "mutableContentsAt" : "opaqueBottom";
                                 var helper = single(evidence.getBindings()
                                         .stream()
-                                        .filter(it -> helperName.equals(it.get("name")))
+                                        .filter(it -> coreEntry(helperName).equals(it.get("id")))
                                         .toList());
                                 assertEquals(1, evidence.guestLambdas(helper.get("expr")).size());
                                 assertEquals(Collections.nCopies(
@@ -379,7 +382,7 @@ public class PinnedPointerCellsTest {
                                 int expectedTargets = entry.equals("mutableContentsRoundtrip") ? 2 : 1;
                                 long expectedCalls = entry.equals("mutableContentsRoundtrip") ? 3L : 1L;
                                 var program = program(language, source, backend);
-                                var target = program.entryTarget(entry);
+                                var target = program.entryTarget(coreEntry(entry));
                                 java.util.function.Consumer<Row> check = row -> {
                                     assertEquals(
                                         entry.equals("mutableContentsRoundtrip") ? row.mutableContents : row.touchLazy,
@@ -434,9 +437,9 @@ public class PinnedPointerCellsTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var program = program(language,
-                                plus(CoreModules.reachable(module(stage), "mutableContentsAt"), "instrument", true),
+                                plus(CoreModules.reachable(module(stage), coreEntry("mutableContentsAt")), "instrument", true),
                                 backend);
-                            var target = program.entryTarget("mutableContentsAt");
+                            var target = program.entryTarget(coreEntry("mutableContentsAt"));
                             record Alias(ManagedAddress retained, WeakReference<ManagedAllocation> owner) {}
                             class Check {
                                 boolean compiled = false;
@@ -643,10 +646,10 @@ public class PinnedPointerCellsTest {
                            .get("uses");
             assertEquals(Set.of("main:PinnedPointerCellsAudit.nonOverlappingCopy"),
                 uses.stream().map(it -> it.get("owner")).collect(Collectors.toSet()));
-            var source = plus(CoreModules.reachable(module(stage), "nonOverlappingCopy"), "instrument", true);
+            var source = plus(CoreModules.reachable(module(stage), coreEntry("nonOverlappingCopy")), "instrument", true);
             // Preserve the exported state lambda while proving its exact
             // immediate application lowers within the public root.
-            var evidence = new ArrayCoreEvidence(source, "nonOverlappingCopy");
+            var evidence = new ArrayCoreEvidence(source, coreEntry("nonOverlappingCopy"));
             assertEquals(2, evidence.immediateStateCalls(), stage + " original source lambda inventory");
             long expectedEntries = evidence.loweredImmediateStateCalls();
             assertEquals(1L, expectedEntries, stage + " lowered public root");
@@ -688,9 +691,9 @@ public class PinnedPointerCellsTest {
                             String label = stage + "/" + backend + "/inlining=" + inlining;
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var program = program(language, source, backend);
-                            var function = context.asValue(new EntryValue(program, "nonOverlappingCopy", 1));
+                            var function = context.asValue(new EntryValue(program, coreEntry("nonOverlappingCopy"), 1));
                             var host = program.hostEntryTarget(1);
-                            var original = program.entryTarget("nonOverlappingCopy");
+                            var original = program.entryTarget(coreEntry("nonOverlappingCopy"));
                             class Check {
                                 List<RootCallTarget> measuredTargets() {
                                     var entry =
@@ -835,9 +838,9 @@ public class PinnedPointerCellsTest {
                         for (String entry :
                             List.of("pointerRoundtrip", "pointerArrayRoundtrip", "pointerOrder", "char8Roundtrip",
                                 "byte8Roundtrip", "halfwordReadRoundtrip", "halfwordWriteRoundtrip")) {
-                            var source = plus(CoreModules.reachable(merged, entry), "instrument", true);
+                            var source = plus(CoreModules.reachable(merged, coreEntry(entry)), "instrument", true);
                             var program = program(language, source, backend);
-                            var function = context.asValue(new EntryValue(program, entry, 1));
+                            var function = context.asValue(new EntryValue(program, coreEntry(entry), 1));
                             class Check {
                                 void run(long input, long expected) {
                                     assertEquals(expected, function.execute(input).asLong(),
@@ -883,9 +886,9 @@ public class PinnedPointerCellsTest {
                             }
                         }
                         String entry = "wideStoreByte";
-                        var source = plus(CoreModules.reachable(merged, entry), "instrument", true);
+                        var source = plus(CoreModules.reachable(merged, coreEntry(entry)), "instrument", true);
                         var program = program(language, source, backend);
-                        var function = context.asValue(new EntryValue(program, entry, 2));
+                        var function = context.asValue(new EntryValue(program, coreEntry(entry), 2));
                         class Wide {
                             void check(Row row, boolean reverse) {
                                 for (int selector = reverse ? 39 : 0; reverse ? selector >= 0 : selector <= 39;
@@ -916,9 +919,9 @@ public class PinnedPointerCellsTest {
                                 stage + "/" + backend + "/" + entry + "/" + row.input + ": " + before + "->" + after);
                         }
                         String readEntry = "wideReadSelector";
-                        var readSource = plus(CoreModules.reachable(merged, readEntry), "instrument", true);
+                        var readSource = plus(CoreModules.reachable(merged, coreEntry(readEntry)), "instrument", true);
                         var readProgram = program(language, readSource, backend);
-                        var readFunction = context.asValue(new EntryValue(readProgram, readEntry, 2));
+                        var readFunction = context.asValue(new EntryValue(readProgram, coreEntry(readEntry), 2));
                         class Read {
                             void check(Row row, boolean reverse) {
                                 for (int selector = reverse ? 7 : 0; reverse ? selector >= 0 : selector <= 7;

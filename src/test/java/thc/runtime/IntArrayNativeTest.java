@@ -23,6 +23,9 @@ import static thc.Main.executionContext;
 
 @SuppressWarnings("unchecked")
 public class IntArrayNativeTest {
+    private static String coreEntry(String name) {
+        return "main:" + (name.startsWith("unboxed") ? "UnboxedArrays" : "IntArrayAudit") + "." + name;
+    }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final List<String> names =
         List.of("unboxedAccum", "unboxedST", "unboxedEmpty", "orderedInts", "aliasIntBytes");
@@ -33,7 +36,7 @@ public class IntArrayNativeTest {
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var path : paths) modules.add((Map<String, Object>) Json.parse(Files.readString(root.resolve(path))));
+        for (var path : paths) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -243,13 +246,13 @@ public class IntArrayNativeTest {
     public void exportedCoreRequiresAllPrimitiveNamesAndExactUseCounts() throws Exception {
         var source = merged(paths());
         for (var name : names) {
-            checkedCore(name, new ArrayCoreEvidence(source, name));
+            checkedCore(name, new ArrayCoreEvidence(source, coreEntry(name)));
             for (var primitive : required(name))
                 for (boolean all : List.of(false, true)) {
                     if (!all && exactCounts.getOrDefault(name, Map.of()).getOrDefault(primitive, 0) < 2)
                         continue;
-                    var module = (Map<String, Object>) Json.parse(Json.stringify(source));
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var module = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(source);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     var uses = new ArrayList<List<Object>>();
                     for (var binding : evidence.getBindings())
                         for (var node : evidence.nodes(binding.get("expr")))
@@ -260,7 +263,7 @@ public class IntArrayNativeTest {
                         node.set(1, "missingArrayPrimitive#");
                     assertThrows(IllegalArgumentException.class,
                         ()
-                            -> checkedCore(name, new ArrayCoreEvidence(module, name)),
+                            -> checkedCore(name, new ArrayCoreEvidence(module, coreEntry(name))),
                         name + "/" + primitive + "/all=" + all);
                 }
         }
@@ -316,7 +319,7 @@ public class IntArrayNativeTest {
         for (var stage : stages.entrySet()) {
             var module = merged(stage.getValue());
             for (var name : names) {
-                checkedCore(name, new ArrayCoreEvidence(module, name));
+                checkedCore(name, new ArrayCoreEvidence(module, coreEntry(name)));
                 var cases = rows.get(name);
                 assertEquals(cases.size(), cases.stream().map(Row::input).distinct().count());
                 assertEquals(
@@ -331,14 +334,14 @@ public class IntArrayNativeTest {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var label = stage.getKey() + "/" + backend + "/" + name;
                             var p = program(
-                                language, changed(CoreModules.reachable(module, name), "instrument", true), backend);
+                                language, changed(CoreModules.reachable(module, coreEntry(name)), "instrument", true), backend);
                             var host = p.hostEntryTarget(1);
-                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var function = context.asValue(new EntryValue(p, coreEntry(name), 1));
                             for (var row : cases)
                                 assertEquals(
                                     row.answer, function.execute(row.input).asLong(), label + "(" + row.input + ")");
                             assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
-                            var original = p.entryTarget(name);
+                            var original = p.entryTarget(coreEntry(name));
                             var active = new ArrayList<RootCallTarget>();
                             for (var call : NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class))
                                 if (call.getCallTarget() == original)
@@ -404,7 +407,7 @@ public class IntArrayNativeTest {
                     for (var operation : operations)
                         for (int mutation = 0; mutation <= 9; mutation++)
                             for (boolean diagnostic : List.of(false, true)) {
-                                var module = CoreModules.reachable(merged(paths), "orderedInts");
+                                var module = CoreModules.reachable(merged(paths), coreEntry("orderedInts"));
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -465,7 +468,7 @@ public class IntArrayNativeTest {
                                         label);
                             }
                     for (var operation : operations) {
-                        var module = CoreModules.reachable(merged(paths), "orderedInts");
+                        var module = CoreModules.reachable(merged(paths), coreEntry("orderedInts"));
                         var app = application(module, operation);
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();
@@ -487,12 +490,12 @@ public class IntArrayNativeTest {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (var operation : operations)
                         for (long index : List.of(Long.MIN_VALUE, -1L, 3L, 1L << 32, 1L << 61, Long.MAX_VALUE)) {
-                            var module = CoreModules.reachable(merged(paths), "orderedInts");
+                            var module = CoreModules.reachable(merged(paths), coreEntry("orderedInts"));
                             var app = application(module, operation);
                             var args = (List<Object>) app.get(2);
                             args.set(1, Arrays.asList("lit", "int", Long.toString(index), metadata(args.get(1))));
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, "orderedInts", 1));
+                            var function = context.asValue(new EntryValue(p, coreEntry("orderedInts"), 1));
                             var failure = assertThrows(PolyglotException.class, () -> function.execute(5L));
                             var guard = index < 0 || index > Long.MAX_VALUE / 8 ? "element" : "range";
                             assertEquals(RuntimeFault.class.getName() + ": Managed allocation " + guard
@@ -502,8 +505,8 @@ public class IntArrayNativeTest {
                             assertEquals(0L, count(p, "unsupportedTraps"));
                         }
                     var good = context.asValue(
-                        new EntryValue(program(language, CoreModules.reachable(merged(paths), "orderedInts"), backend),
-                            "orderedInts", 1));
+                        new EntryValue(program(language, CoreModules.reachable(merged(paths), coreEntry("orderedInts")), backend),
+                            coreEntry("orderedInts"), 1));
                     assertEquals(mathematical("orderedInts", 5), good.execute(5L).asLong());
                 } finally {
                     context.leave();

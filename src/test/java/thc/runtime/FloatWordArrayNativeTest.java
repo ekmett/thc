@@ -20,6 +20,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 public class FloatWordArrayNativeTest {
+    private static String coreEntry(String name) {
+        return "main:" + (name.startsWith("unboxedFloat") ? "UnboxedFloatArrays"
+            : name.startsWith("unboxedWord") ? "UnboxedWordArrays"
+            : name.equals("aliasWordBytes") ? "WordArrayAudit" : "FloatArrayAudit") + "." + name;
+    }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
 
     private final List<String> names = List.of("unboxedFloatAccum", "unboxedFloatST", "unboxedWordAccum",
@@ -32,7 +37,7 @@ public class FloatWordArrayNativeTest {
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var path : paths) modules.add((Map<String, Object>) Json.parse(Files.readString(root.resolve(path))));
+        for (var path : paths) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -480,7 +485,7 @@ public class FloatWordArrayNativeTest {
         boolean read = name.equals("moveFloatBits");
         var helpers = evidence.getBindings()
                           .stream()
-                          .filter(b -> Objects.equals(b.get("name"), read ? "readFloatSlot" : "indexFloatSlot"))
+                          .filter(b -> Objects.equals(b.get("id"), coreEntry(read ? "readFloatSlot" : "indexFloatSlot")))
                           .toList();
         require(helpers.size() == 1, name + " lost its residual helper");
         var helper = single(helpers);
@@ -525,22 +530,22 @@ public class FloatWordArrayNativeTest {
             var paths = stage.getValue();
             for (var name : names)
                 assertEquals(List.of("moveFloatBits", "indexFloatBits").contains(name) ? 2L : 1L,
-                    checkCore(new ArrayCoreEvidence(merged(paths), name), name), stage.getKey() + "/" + name);
+                    checkCore(new ArrayCoreEvidence(merged(paths), coreEntry(name)), name), stage.getKey() + "/" + name);
             for (var name : names.subList(0, 4))
                 for (var primitive : requiredPrimitives(name)) {
                     var module = merged(paths);
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     for (var binding : evidence.getBindings())
                         for (var node : evidence.nodes(binding.get("expr")))
                             if (prefix(node).equals(List.of("prim", primitive)))
                                 node.set(1, "missing#");
                     assertThrows(
-                        IllegalArgumentException.class, () -> checkCore(new ArrayCoreEvidence(module, name), name));
+                        IllegalArgumentException.class, () -> checkCore(new ArrayCoreEvidence(module, coreEntry(name)), name));
                 }
             for (var name : exactPrimitives.keySet())
                 for (var mutation : List.of("missing", "extra", "count")) {
                     var module = merged(paths);
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     var node = evidence.getBindings()
                                    .stream()
                                    .flatMap(b -> evidence.nodes(b.get("expr")).stream())
@@ -555,7 +560,7 @@ public class FloatWordArrayNativeTest {
                         default -> List.of("app", original, List.of(original));
                     });
                     var failure = assertThrows(
-                        IllegalArgumentException.class, () -> checkCore(new ArrayCoreEvidence(module, name), name));
+                        IllegalArgumentException.class, () -> checkCore(new ArrayCoreEvidence(module, coreEntry(name)), name));
                     assertTrue(Objects.toString(failure.getMessage(), "").contains("primitive movement"),
                         stage.getKey() + "/" + name + "/" + mutation + ": " + failure);
                 }
@@ -567,7 +572,7 @@ public class FloatWordArrayNativeTest {
             for (var name : List.of("moveFloatBits", "indexFloatBits"))
                 for (int mutation = 0; mutation <= 10; mutation++) {
                     var module = merged(stage.getValue());
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     var root = (List<Object>) evidence.getRoot().get("expr");
                     var state = evidence.stateLambda(root);
                     var helper = single(evidence.getBindings()
@@ -628,7 +633,7 @@ public class FloatWordArrayNativeTest {
                     }
                     assertThrows(IllegalArgumentException.class,
                         ()
-                            -> checkCore(new ArrayCoreEvidence(module, name), name),
+                            -> checkCore(new ArrayCoreEvidence(module, coreEntry(name)), name),
                         stage.getKey() + "/" + name + "/mutation" + mutation);
                 }
     }
@@ -662,7 +667,7 @@ public class FloatWordArrayNativeTest {
         for (var stage : stages.entrySet()) {
             var module = merged(stage.getValue());
             for (var name : names) {
-                long expectedCalls = checkCore(new ArrayCoreEvidence(module, name), name);
+                long expectedCalls = checkCore(new ArrayCoreEvidence(module, coreEntry(name)), name);
                 var cases = rows.get(name);
                 boolean movement = List.of("moveFloatBits", "indexFloatBits").contains(name);
                 assertEquals(movement ? 590 : 397, cases.size(), name + " pinned input domain");
@@ -681,11 +686,11 @@ public class FloatWordArrayNativeTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var linked = CoreModules.reachable(module, name);
+                            var linked = CoreModules.reachable(module, coreEntry(name));
                             var bindings = (List<Map<String, Object>>) linked.get("bindings");
                             var program = program(language, changed(linked, "instrument", true), backend);
                             var entry = program.entryTarget(
-                                (String) single(bindings.stream().filter(b -> name.equals(b.get("name"))).toList())
+                                (String) single(bindings.stream().filter(b -> coreEntry(name).equals(b.get("id"))).toList())
                                     .get("id"));
                             // The checked immediate runRW State# lambda is beta-reduced.
                             var expectedLabels = new HashSet<String>();
@@ -796,7 +801,7 @@ public class FloatWordArrayNativeTest {
                     for (var operation : operations)
                         for (int mutation = 0; mutation <= 15; mutation++)
                             for (boolean diagnostic : List.of(false, true)) {
-                                var module = CoreModules.reachable(merged(paths), owner(operation));
+                                var module = CoreModules.reachable(merged(paths), coreEntry(owner(operation)));
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -888,7 +893,7 @@ public class FloatWordArrayNativeTest {
                                     for (long seed : List.of(5L, 0x80000000L, Long.MIN_VALUE)) {
                                         assertEquals(model(name, seed),
                                             Calls.target(p.hostEntryTarget(1),
-                                                new Object[] {p.entryValue(name), new Object[] {seed}}),
+                                                new Object[] {p.entryValue(coreEntry(name)), new Object[] {seed}}),
                                             backend + "/" + operation + "/mutation" + mutation + "/" + diagnostic + "/"
                                                 + seed);
                                         released(language);
@@ -906,7 +911,7 @@ public class FloatWordArrayNativeTest {
                                     var failure = assertThrows(RuntimeFault.class,
                                         ()
                                             -> Calls.target(p.hostEntryTarget(1),
-                                                new Object[] {p.entryValue(owner(operation)), new Object[] {5L}}));
+                                                new Object[] {p.entryValue(coreEntry(owner(operation))), new Object[] {5L}}));
                                     assertEquals(
                                         "Diagnostic unsupported path reached: " + reason, failure.getMessage());
                                     assertEquals(1L, count(p, "unsupportedTraps"));
@@ -919,7 +924,7 @@ public class FloatWordArrayNativeTest {
                                         backend + "/" + operation + "/mutation" + mutation + "/" + diagnostic);
                             }
                     for (var operation : operations) {
-                        var module = CoreModules.reachable(merged(paths), owner(operation));
+                        var module = CoreModules.reachable(merged(paths), coreEntry(owner(operation)));
                         var app = application(module, operation);
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();
@@ -944,12 +949,12 @@ public class FloatWordArrayNativeTest {
                             List.of(Long.MIN_VALUE, -1L, operation.getPrimitive().contains("Float") ? 1L : 2L, 1L << 32,
                                 1L << 61, 1L << 62, Long.MAX_VALUE)) {
                             var name = owner(operation);
-                            var module = CoreModules.reachable(merged(paths), name);
+                            var module = CoreModules.reachable(merged(paths), coreEntry(name));
                             var app = application(module, operation);
                             var args = (List<Object>) app.get(2);
                             args.set(1, Arrays.asList("lit", "int", Long.toString(index), metadata(args.get(1))));
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var function = context.asValue(new EntryValue(p, coreEntry(name), 1));
                             var failure = assertThrows(PolyglotException.class, () -> function.execute(5L));
                             int width = operation.getPrimitive().contains("Float") ? 4 : 8;
                             var guard = index < 0 || index > Long.MAX_VALUE / width ? "element" : "range";

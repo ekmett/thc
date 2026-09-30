@@ -18,6 +18,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 public class Int32ArrayNativeTest {
+    private static String coreEntry(String name) {
+        return "main:" + (name.startsWith("unboxed") ? "Unboxed32Arrays" : "Int32ArrayAudit") + "." + name;
+    }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
 
     private final List<String> names = List.of("unboxedInt32Accum", "unboxedInt32ST", "unboxedWord32Accum",
@@ -29,7 +32,7 @@ public class Int32ArrayNativeTest {
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var path : paths) modules.add((Map<String, Object>) Json.parse(Files.readString(root.resolve(path))));
+        for (var path : paths) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -214,7 +217,7 @@ public class Int32ArrayNativeTest {
         var entry = (List<Object>) evidence.getRoot().get("expr");
         var workers = evidence.getBindings()
                           .stream()
-                          .filter(b -> Objects.equals(b.get("name"), "literal" + kind + "Worker"))
+                          .filter(b -> Objects.equals(b.get("id"), coreEntry("literal" + kind + "Worker")))
                           .toList();
         var worker = workers.size() == 1 ? workers.getFirst() : null;
         require(evidence.getBindings().size() == 2 && worker != null, name + ": expected entry and opaque worker");
@@ -255,7 +258,7 @@ public class Int32ArrayNativeTest {
     }
     private Map<String, Object> literalModule(List<String> paths, String name, boolean unknownProof) throws Exception {
         var module = merged(paths);
-        var evidence = new ArrayCoreEvidence(module, name);
+        var evidence = new ArrayCoreEvidence(module, coreEntry(name));
         assertEquals(2, literalCalls(name, evidence));
         if (unknownProof) {
             // Keep the genuine export exact. Separately project the older erased
@@ -406,13 +409,13 @@ public class Int32ArrayNativeTest {
     public void exportedCoreRequiresAllPrimitiveNamesAndExactAliasCounts() throws Exception {
         var source = merged(paths());
         for (var name : names) {
-            checkedCore(name, new ArrayCoreEvidence(source, name));
+            checkedCore(name, new ArrayCoreEvidence(source, coreEntry(name)));
             for (var primitive : required(name))
                 for (boolean all : List.of(false, true)) {
                     if (!all && exactAlias(name).getOrDefault(primitive, 0) < 2)
                         continue;
-                    var module = (Map<String, Object>) Json.parse(Json.stringify(source));
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var module = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(source);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     var uses = new ArrayList<List<Object>>();
                     for (var binding : evidence.getBindings())
                         for (var node : evidence.nodes(binding.get("expr")))
@@ -423,19 +426,19 @@ public class Int32ArrayNativeTest {
                         node.set(1, "missingArrayPrimitive#");
                     assertThrows(IllegalArgumentException.class,
                         ()
-                            -> checkedCore(name, new ArrayCoreEvidence(module, name)),
+                            -> checkedCore(name, new ArrayCoreEvidence(module, coreEntry(name))),
                         name + "/" + primitive + "/all=" + all);
                 }
             if (name.startsWith("alias")) {
-                var module = (Map<String, Object>) Json.parse(Json.stringify(source));
-                var evidence = new ArrayCoreEvidence(module, name);
+                var module = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(source);
+                var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                 var state = evidence.stateLambda(evidence.getRoot().get("expr"));
                 state.set(2,
                     List.of("let", false,
                         List.of(Map.of("id", "extraPrimitive", "expr", List.of("prim", "unexpectedArrayPrimitive#"))),
                         state.get(2)));
                 assertThrows(
-                    IllegalArgumentException.class, () -> checkedCore(name, new ArrayCoreEvidence(module, name)));
+                    IllegalArgumentException.class, () -> checkedCore(name, new ArrayCoreEvidence(module, coreEntry(name))));
             }
         }
     }
@@ -444,10 +447,10 @@ public class Int32ArrayNativeTest {
         for (var paths : ((Map<String, List<String>>) manifest().get("stages")).values())
             for (var name : literalNames) {
                 var source = merged(paths);
-                assertEquals(2, literalCalls(name, new ArrayCoreEvidence(source, name)));
+                assertEquals(2, literalCalls(name, new ArrayCoreEvidence(source, coreEntry(name))));
                 for (int mutation = 0; mutation <= 13; mutation++) {
-                    var module = (Map<String, Object>) Json.parse(Json.stringify(source));
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var module = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(source);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     var entry = (List<Object>) evidence.getRoot().get("expr");
                     var call = (List<Object>) entry.get(2);
                     var args = (List<Object>) call.get(2);
@@ -485,7 +488,7 @@ public class Int32ArrayNativeTest {
                         case 13 -> metadata(literal).put("rep", unknownLiteralProof);
                     }
                     assertThrows(IllegalArgumentException.class,
-                        () -> literalCalls(name, new ArrayCoreEvidence(module, name)), name + "/mutation" + mutation);
+                        () -> literalCalls(name, new ArrayCoreEvidence(module, coreEntry(name))), name + "/mutation" + mutation);
                 }
             }
     }
@@ -519,7 +522,7 @@ public class Int32ArrayNativeTest {
         for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet())
             for (var name : entries) {
                 var module = merged(stage.getValue());
-                int expectedCalls = literalCalls(name, new ArrayCoreEvidence(module, name));
+                int expectedCalls = literalCalls(name, new ArrayCoreEvidence(module, coreEntry(name)));
                 var cases = rows.get(name);
                 assertEquals(((List<Number>) manifest.get("literalInputs")).stream().map(Number::longValue).toList(),
                     cases.stream().map(Row::input).toList());
@@ -533,11 +536,11 @@ public class Int32ArrayNativeTest {
                                 try {
                                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                                     var linked = CoreModules.reachable(
-                                        literalModule(stage.getValue(), name, unknownProof), name);
+                                        literalModule(stage.getValue(), name, unknownProof), coreEntry(name));
                                     var bindings = (List<Map<String, Object>>) linked.get("bindings");
                                     var program = program(language, changed(linked, "instrument", true), backend);
                                     var entry = program.entryTarget((String) single(
-                                        bindings.stream().filter(b -> name.equals(b.get("name"))).toList())
+                                        bindings.stream().filter(b -> coreEntry(name).equals(b.get("id"))).toList())
                                             .get("id"));
                                     for (var row : cases)
                                         assertEquals(row.answer, Calls.target(entry, new Object[] {0L, row.input}));
@@ -595,7 +598,7 @@ public class Int32ArrayNativeTest {
         for (var stage : stages.entrySet()) {
             var module = merged(stage.getValue());
             for (var name : names) {
-                var evidence = new ArrayCoreEvidence(module, name);
+                var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                 checkedCore(name, evidence);
                 long expectedCalls = evidence.loweredImmediateStateCalls();
                 var cases = rows.get(name);
@@ -610,11 +613,11 @@ public class Int32ArrayNativeTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var linked = CoreModules.reachable(module, name);
+                            var linked = CoreModules.reachable(module, coreEntry(name));
                             var bindings = (List<Map<String, Object>>) linked.get("bindings");
                             var p = program(language, changed(linked, "instrument", true), backend);
                             var entry = p.entryTarget(
-                                (String) single(bindings.stream().filter(b -> name.equals(b.get("name"))).toList())
+                                (String) single(bindings.stream().filter(b -> coreEntry(name).equals(b.get("id"))).toList())
                                     .get("id"));
                             // The checked immediate runRW State# lambda is beta-reduced.
                             var expectedLabels = new HashSet<String>();
@@ -711,7 +714,7 @@ public class Int32ArrayNativeTest {
                     for (var operation : operations)
                         for (int mutation = 0; mutation <= 13; mutation++)
                             for (boolean diagnostic : List.of(false, true)) {
-                                var module = CoreModules.reachable(merged(paths), owner(operation));
+                                var module = CoreModules.reachable(merged(paths), coreEntry(owner(operation)));
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -790,7 +793,7 @@ public class Int32ArrayNativeTest {
                                     for (long seed : List.of(5L, -1L, Long.MIN_VALUE)) {
                                         assertEquals(model(name, seed),
                                             Calls.target(p.hostEntryTarget(1),
-                                                new Object[] {p.entryValue(name), new Object[] {seed}}),
+                                                new Object[] {p.entryValue(coreEntry(name)), new Object[] {seed}}),
                                             backend + "/" + operation + "/mutation" + mutation + "/" + diagnostic + "/"
                                                 + seed);
                                         released(language);
@@ -803,7 +806,7 @@ public class Int32ArrayNativeTest {
                                         backend + "/" + operation + "/mutation" + mutation + "/" + diagnostic);
                             }
                     for (var operation : operations) {
-                        var module = CoreModules.reachable(merged(paths), owner(operation));
+                        var module = CoreModules.reachable(merged(paths), coreEntry(owner(operation)));
                         var app = application(module, operation);
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();
@@ -826,12 +829,12 @@ public class Int32ArrayNativeTest {
                     for (var operation : operations)
                         for (long index : List.of(Long.MIN_VALUE, -1L, 2L, 1L << 32, 1L << 62, Long.MAX_VALUE)) {
                             var name = owner(operation);
-                            var module = CoreModules.reachable(merged(paths), name);
+                            var module = CoreModules.reachable(merged(paths), coreEntry(name));
                             var app = application(module, operation);
                             var args = (List<Object>) app.get(2);
                             args.set(1, Arrays.asList("lit", "int", Long.toString(index), metadata(args.get(1))));
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var function = context.asValue(new EntryValue(p, coreEntry(name), 1));
                             var failure = assertThrows(PolyglotException.class, () -> function.execute(5L));
                             var guard = index < 0 || index > Long.MAX_VALUE / 4 ? "element" : "range";
                             assertEquals(RuntimeFault.class.getName() + ": Managed allocation " + guard
