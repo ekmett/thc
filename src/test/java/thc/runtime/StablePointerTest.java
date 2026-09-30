@@ -24,7 +24,7 @@ public class StablePointerTest {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.SingleTierCompilationThreshold", "10000").option("engine.CompilationFailureAction", "Throw").option("compiler.CompilationTimeout", "30").build();
     }
-    private Map<String, Object> merge(List<String> paths) throws Exception { var modules = new ArrayList<Map<String, Object>>(); for (var path : paths) modules.add(json(new File(root, path))); return CoreModules.merge(modules); }
+    private Map<String, Object> merge(List<String> paths) throws Exception { var modules = new ArrayList<Map<String, Object>>(); for (var path : paths) modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath())); return CoreModules.merge(modules); }
     private Map<String, Object> with(Map<String, Object> source, String key, Object value) { var result = new LinkedHashMap<>(source); result.put(key, value); return result; }
     private record Row(long input, long expected) {}
 
@@ -54,9 +54,9 @@ public class StablePointerTest {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var linked = with(CoreModules.reachable(merged, name), "instrument", true);
+                        var linked = with(CoreModules.reachable(merged, (shared ? "main:SharedCAFNative." : "main:StablePointerAudit.") + name), "instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                        var host = program.hostEntryTarget(1); var function = context.asValue(new EntryValue(program, name, 1));
+                        var host = program.hostEntryTarget(1); var function = context.asValue(new EntryValue(program, (shared ? "main:SharedCAFNative." : "main:StablePointerAudit.") + name, 1));
                         for (var row : cases) assertEquals(row.expected, function.execute(row.input).asLong(), stage.getKey() + "/" + backend + "/" + name + "(" + row.input + ")");
                         assertTrue(function.invokeMember("compile").asBoolean(), stage.getKey() + "/" + backend + "/" + name + " install");
                         for (var row : cases.reversed()) {
@@ -137,7 +137,7 @@ public class StablePointerTest {
 
     @Test public void installedStablePointerAbiRejectsRetypedAndRelabeledCalls() throws Exception {
         for (var stage : List.of("pre", "post")) {
-            var core = json(new File(directory, stage + "/core/StablePointerAudit.json")); var all = new ArrayList<List<?>>(); nodes(core.get("bindings"), all);
+            var core = thc.CoreCbdFixtures.read(new File(directory, stage + "/core/StablePointerAudit.cbd").toPath()); var all = new ArrayList<List<?>>(); nodes(core.get("bindings"), all);
             var applications = new ArrayList<List<?>>(); for (var node : all) if (!node.isEmpty() && Objects.equals(node.getFirst(), "app")) applications.add(node);
             List<?> free = null;
             for (var app : applications) if (Objects.equals(symbol(app), "hs_free_stable_ptr")) { free = app; break; }
@@ -154,7 +154,7 @@ public class StablePointerTest {
             var operation = StablePointerOp.MAKE; var input = new ArrayList<CoreRepresentation>(); for (var arg : (List<?>) make.get(2)) input.add(CoreRepresentations.expression((List<?>) arg));
             var output = CoreRepresentations.expression(make); operation.validate(input, (List<?>) make.get(3), output);
             assertThrows(RuntimeFault.class, () -> operation.validate(input, List.of(false, false), output));
-            var synthetic = json(new File(directory, stage + "/synthetic/SharedCAFNative.json")); var syntheticNodes = new ArrayList<List<?>>(); nodes(synthetic.get("bindings"), syntheticNodes);
+            var synthetic = thc.CoreCbdFixtures.read(new File(directory, stage + "/synthetic/SharedCAFNative.cbd").toPath()); var syntheticNodes = new ArrayList<List<?>>(); nodes(synthetic.get("bindings"), syntheticNodes);
             var shared = new ArrayList<List<?>>(); for (var app : syntheticNodes) if (SharedCAFStore.named(symbol(app)) != null) shared.add(app);
             var symbols = new HashSet<Object>(); for (var app : shared) symbols.add(symbol(app)); assertEquals(2, symbols.size());
             for (var app : shared) {

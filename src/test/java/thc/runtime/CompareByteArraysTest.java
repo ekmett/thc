@@ -135,7 +135,7 @@ class CompareByteArraysTest {
             var stage = stageEntry.getKey();
             var modules = new ArrayList<Map<String, Object>>();
             for (var path : stageEntry.getValue())
-                modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+                modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
             var module = CoreModules.merge(modules);
             for (var name : names)
                 for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
@@ -143,12 +143,12 @@ class CompareByteArraysTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, name));
+                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:CompareByteArraysAudit." + name));
                             linked.put("instrument", true);
                             var p = program(language, linked, backend);
-                            var entry = p.entryTarget(name);
+                            var entry = p.entryTarget("main:CompareByteArraysAudit." + name);
                             var host = p.hostEntryTarget(1);
-                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var function = context.asValue(new EntryValue(p, "main:CompareByteArraysAudit." + name, 1));
                             var label = stage + "/" + backend + "/" + name + "/inline=" + inlining;
                             var cases = Objects.requireNonNull(rows.get(name));
                             var wanted = new ArrayList<Long>();

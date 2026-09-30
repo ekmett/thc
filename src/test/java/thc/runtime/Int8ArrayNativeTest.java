@@ -17,6 +17,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 public class Int8ArrayNativeTest {
+    private static String coreEntry(String name) {
+        return "main:" + (name.startsWith("unboxed") ? "Unboxed8Arrays" : "Int8ArrayAudit") + "." + name;
+    }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final List<String> names = List.of("unboxedInt8Accum", "unboxedInt8ST", "unboxedWord8Accum",
         "unboxedWord8ST", "aliasBytes", "emptyBytes", "rawSignedRead", "rawUnsignedRead", "rawSignedIndex");
@@ -27,7 +30,7 @@ public class Int8ArrayNativeTest {
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var path : paths) modules.add((Map<String, Object>) Json.parse(Files.readString(root.resolve(path))));
+        for (var path : paths) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -287,7 +290,7 @@ public class Int8ArrayNativeTest {
         return result;
     }
     private long checkedCalls(Map<String, Object> module, String name) {
-        var evidence = new ArrayCoreEvidence(module, name);
+        var evidence = new ArrayCoreEvidence(module, coreEntry(name));
         require(evidence.getPrimitiveCounts().keySet().containsAll(requiredPrimitives(name)),
             name + " missing required primitive");
         return evidence.loweredImmediateStateCalls();
@@ -299,8 +302,8 @@ public class Int8ArrayNativeTest {
                 var module = merged(paths);
                 assertEquals(1L, checkedCalls(module, name));
                 for (var primitive : requiredPrimitives(name)) {
-                    var changed = (Map<String, Object>) Json.parse(Json.stringify(module));
-                    var nodes = new ArrayCoreEvidence(changed, name)
+                    var changed = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(module);
+                    var nodes = new ArrayCoreEvidence(changed, coreEntry(name))
                                     .nodes(changed)
                                     .stream()
                                     .filter(n -> prefix(n).equals(List.of("prim", primitive)))
@@ -347,11 +350,11 @@ public class Int8ArrayNativeTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var linked = CoreModules.reachable(module, name);
+                            var linked = CoreModules.reachable(module, coreEntry(name));
                             var bindings = (List<Map<String, Object>>) linked.get("bindings");
                             var p = program(language, changed(linked, "instrument", true), backend);
                             var entry = p.entryTarget(
-                                (String) single(bindings.stream().filter(b -> name.equals(b.get("name"))).toList())
+                                (String) single(bindings.stream().filter(b -> coreEntry(name).equals(b.get("id"))).toList())
                                     .get("id"));
                             // The checked immediate runRW State# lambda is beta-reduced.
                             var expectedLabels = new HashSet<String>();
@@ -451,7 +454,7 @@ public class Int8ArrayNativeTest {
                     for (var operation : operations)
                         for (int mutation = 0; mutation <= 18; mutation++)
                             for (boolean diagnostic : List.of(false, true)) {
-                                var module = CoreModules.reachable(merged(paths), owner(operation));
+                                var module = CoreModules.reachable(merged(paths), coreEntry(owner(operation)));
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -537,7 +540,7 @@ public class Int8ArrayNativeTest {
                                     for (long seed : List.of(5L, -1L, Long.MIN_VALUE)) {
                                         assertEquals(model(name, seed),
                                             Calls.target(p.hostEntryTarget(1),
-                                                new Object[] {p.entryValue(name), new Object[] {seed}}),
+                                                new Object[] {p.entryValue(coreEntry(name)), new Object[] {seed}}),
                                             backend + "/" + operation + "/mutation" + mutation + "/" + diagnostic + "/"
                                                 + seed);
                                         released(language);
@@ -554,7 +557,7 @@ public class Int8ArrayNativeTest {
                                     var failure = assertThrows(RuntimeFault.class,
                                         ()
                                             -> Calls.target(p.hostEntryTarget(1),
-                                                new Object[] {p.entryValue(owner(operation)), new Object[] {5L}}));
+                                                new Object[] {p.entryValue(coreEntry(owner(operation))), new Object[] {5L}}));
                                     assertEquals(
                                         "Diagnostic unsupported path reached: " + reason, failure.getMessage());
                                     assertEquals(1L, count(p, "unsupportedTraps"));
@@ -567,7 +570,7 @@ public class Int8ArrayNativeTest {
                                         backend + "/" + operation + "/mutation" + mutation + "/" + diagnostic);
                             }
                     for (var operation : operations) {
-                        var module = CoreModules.reachable(merged(paths), owner(operation));
+                        var module = CoreModules.reachable(merged(paths), coreEntry(owner(operation)));
                         var app = application(module, operation);
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();
@@ -590,12 +593,12 @@ public class Int8ArrayNativeTest {
                     for (var operation : operations)
                         for (long index : List.of(Long.MIN_VALUE, -1L, 2L, 1L << 32, 1L << 62, Long.MAX_VALUE)) {
                             var name = owner(operation);
-                            var module = CoreModules.reachable(merged(paths), name);
+                            var module = CoreModules.reachable(merged(paths), coreEntry(name));
                             var app = application(module, operation);
                             var args = (List<Object>) app.get(2);
                             args.set(1, Arrays.asList("lit", "int", Long.toString(index), metadata(args.get(1))));
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var function = context.asValue(new EntryValue(p, coreEntry(name), 1));
                             var failure = assertThrows(PolyglotException.class, () -> function.execute(5L));
                             assertEquals(
                                 RuntimeFault.class.getName() + ": Managed allocation range outside its backing storage",

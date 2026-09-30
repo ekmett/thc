@@ -29,6 +29,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import THC.Compact.Module (readModuleValue, writeModuleValue)
 
 source, nativeSource, certificate, directory :: FilePath
 source = "t/fixtures/compiler/StablePointerAudit.hs"
@@ -183,11 +184,11 @@ prepareStablePointers root = do
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        modules = [core </> "StablePointerAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "StablePointerAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
         sharedCore = stageDir </> "shared-core"
-        sharedSource = sharedCore </> "SharedCAFNative.json"
-        synthetic = stageDir </> "synthetic/SharedCAFNative.json"
-        sharedModules = [synthetic, sharedCore </> "THC.InterfaceClosure.json"]
+        sharedSource = sharedCore </> "SharedCAFNative.cbd"
+        synthetic = stageDir </> "synthetic/SharedCAFNative.cbd"
+        sharedModules = [synthetic, sharedCore </> "THC.InterfaceClosure.cbd"]
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots names = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
@@ -195,15 +196,15 @@ prepareStablePointers root = do
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine StablePtr Core export: " ++ path))) modules
-    exported <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
-    unless (exported == ["StablePointerAudit.json", "THC.InterfaceClosure.json"]) $
+    exported <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
+    unless (exported == ["StablePointerAudit.cbd", "THC.InterfaceClosure.cbd"]) $
       die ("Unexpected StablePtr Core module inventory: " ++ show exported)
     _ <- run root [("THC_CORE_OUT", root </> sharedCore), ("THC_GHC_OUT", root </> stageDir </> "shared-ghc")]
       "bin/export-core.sh" (postTidy ++ roots sharedEntries ++ [nativeSource]) ""
-    exportedShared <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> sharedCore)
-    unless (exportedShared == ["SharedCAFNative.json", "THC.InterfaceClosure.json"]) $
+    exportedShared <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> sharedCore)
+    unless (exportedShared == ["SharedCAFNative.cbd", "THC.InterfaceClosure.cbd"]) $
       die ("Unexpected shared-CAF Core module inventory: " ++ show exportedShared)
-    sharedJSON <- either (die . ("Invalid GHC-compiled shared-CAF consumer: " ++)) pure . eitherDecode
+    sharedJSON <- either (die . ("Invalid GHC-compiled shared-CAF consumer: " ++)) pure . readModuleValue . BL.toStrict
       =<< BL.readFile (root </> sharedSource)
     let found = filter ((`elem` sharedSymbols) . fst) (sharedCalls sharedJSON)
     unless (Set.fromList (map fst found) == Set.fromList sharedSymbols && length found >= 2 &&
@@ -214,11 +215,11 @@ prepareStablePointers root = do
     unless (sort adaptedCalls == sort [(symbol, "ghc-internal") | (symbol, _) <- found]) $
       die "Synthetic shared-CAF consumer changed the call inventory or target units"
     createDirectoryIfMissing True (root </> stageDir </> "synthetic")
-    writeJson (root </> synthetic) adapted
+    _ <- writeModuleValue (root </> synthetic) adapted
     _ <- forM entries $ \name -> do
       let report = stageDir </> name ++ ".audit.json"
           inputs = if name `elem` sharedEntries then sharedModules else modules
-      _ <- run root [] "python3" (["bin/audit-core.py", "--entry", name, "--output", report] ++ inputs) ""
+      _ <- run root [] "python3" (["bin/audit-core.py", "--entry", (if name `elem` sharedEntries then "main:SharedCAFNative." else "main:StablePointerAudit.") ++ name, "--output", report] ++ inputs) ""
       pure ()
     pure (stage, modules, sharedSource : sharedModules)
   let native = directory </> "native"

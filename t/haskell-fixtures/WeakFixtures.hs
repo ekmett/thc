@@ -15,7 +15,8 @@
 module WeakFixtures (prepareWeaks) where
 
 import Control.Monad (forM, unless, when)
-import Data.Aeson (object, (.=))
+import Data.Aeson (decodeStrict', object, (.=))
+import qualified Data.ByteString as BS
 import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import FixtureSupport (hashes, readInteger, run, runWithTimeout, writeJson)
@@ -23,6 +24,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import THC.Compact.Module (encodeModuleValue)
 
 source, directory :: FilePath
 source = "t/fixtures/compiler/WeakAudit.hs"
@@ -68,14 +70,22 @@ prepareWeaks root = do
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        modules = [core </> "WeakAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "WeakAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:pretty-diagnostics"] ++
+        ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=weakComposite", source]) ""
-    exported <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
-    unless (exported == ["THC.InterfaceClosure.json", "WeakAudit.json"]) $
+    -- Printed Int# types support the source proof; execution uses its exact CBD.
+    _ <- forM ["WeakAudit", "THC.InterfaceClosure"] $ \name -> do
+      diagnostic <- BS.readFile (root </> core </> name ++ ".json")
+      value <- maybe (die "Invalid explicit weak diagnostic Core") pure (decodeStrict' diagnostic)
+      encoded <- encodeModuleValue value
+      actual <- BS.readFile (root </> core </> name ++ ".cbd")
+      unless (encoded == actual) (die "Explicit weak diagnostic/CBD export mismatch")
+    exported <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
+    unless (exported == ["THC.InterfaceClosure.cbd", "WeakAudit.cbd"]) $
       die ("Unexpected explicit weak module inventory: " ++ show exported)
-    _ <- run root [] "python3" (["bin/audit-core.py", "--entry", "weakComposite", "--output",
+    _ <- run root [] "python3" (["bin/audit-core.py", "--entry", "main:WeakAudit.weakComposite", "--output",
       stageDir </> "audit.json"] ++ modules) ""
     pure (stage, modules)
   plugin <- listDirectory (root </> "src/compiler/THC")
@@ -86,7 +96,9 @@ prepareWeaks root = do
         "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh"] ++
         ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
-      artifacts = [driver, oracle] ++ concat [modules ++ [directory </> stage </> "audit.json"] | (stage, modules) <- stages]
+      artifacts = [driver, oracle] ++ concat [modules ++ [directory </> stage </> "audit.json"] ++
+        [directory </> stage </> "core" </> name ++ ".json" | name <- ["WeakAudit", "THC.InterfaceClosure"]]
+        | (stage, modules) <- stages]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

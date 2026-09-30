@@ -178,13 +178,15 @@ public class PinnedAddressTest {
             List.of("pinned-address-oracle", "Main.hi", "Main.o", "PinnedAddressAudit.hi", "PinnedAddressAudit.o"))
             artifacts.add(directory + "/native/" + name);
         for (String stage : List.of("pre", "post")) {
-            artifacts.addAll(List.of(directory + "/" + stage + "/core/PinnedAddressAudit.json",
+            artifacts.addAll(List.of(directory + "/" + stage + "/core/PinnedAddressAudit.cbd",
+                directory + "/" + stage + "/core/THC.InterfaceClosure.cbd",
+                directory + "/" + stage + "/core/PinnedAddressAudit.json",
                 directory + "/" + stage + "/core/THC.InterfaceClosure.json",
                 directory + "/" + stage + "/negative-proofs.json"));
             for (String name : auditEntries()) artifacts.add(directory + "/" + stage + "/" + name + ".audit.json");
             for (String name : negatives)
                 for (int i = 0; i <= 1; i++)
-                    artifacts.add(directory + "/" + stage + "/negative/" + name + "-" + i + ".json");
+                    artifacts.add(directory + "/" + stage + "/negative/" + name + "-" + i + ".cbd");
         }
         for (String command : commands)
             for (String suffix : List.of("stdout", "stderr", "command.json"))
@@ -207,8 +209,8 @@ public class PinnedAddressTest {
         var stages = new LinkedHashMap<String, List<String>>();
         for (String stage : List.of("pre", "post"))
             stages.put(stage,
-                List.of(directory + "/" + stage + "/core/PinnedAddressAudit.json",
-                    directory + "/" + stage + "/core/THC.InterfaceClosure.json"));
+                List.of(directory + "/" + stage + "/core/PinnedAddressAudit.cbd",
+                    directory + "/" + stage + "/core/THC.InterfaceClosure.cbd"));
         assertEquals(stages, manifest.get("stages"));
         for (var item : requiredHashes().entrySet()) {
             var hashes = (Map<String, String>) manifest.get(item.getKey());
@@ -399,7 +401,7 @@ public class PinnedAddressTest {
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (String path : paths) modules.add(report(path));
+        for (String path : paths) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -478,11 +480,11 @@ public class PinnedAddressTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var program = program(language,
-                                plus(CoreModules.reachable(merged(stage.getValue()), name), "instrument", true),
+                                plus(CoreModules.reachable(merged(stage.getValue()), "main:PinnedAddressAudit." + name), "instrument", true),
                                 backend);
-                            var function = context.asValue(new EntryValue(program, name, (int) arity));
+                            var function = context.asValue(new EntryValue(program, "main:PinnedAddressAudit." + name, (int) arity));
                             var host = program.hostEntryTarget((int) arity);
-                            var original = program.entryTarget(name);
+                            var original = program.entryTarget("main:PinnedAddressAudit." + name);
                             String label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
                             java.util.function.Consumer<List<String>> check = row -> {
                                 var arguments = row.subList(1, row.size() - 1).stream().map(Long::valueOf).toArray();

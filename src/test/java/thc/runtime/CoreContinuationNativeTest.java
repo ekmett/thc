@@ -76,8 +76,8 @@ class CoreContinuationNativeTest {
     }
     @SuppressWarnings("unchecked")
     private Map<String, Object> module() throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(new File(root,
-            "build/core-continuation/core/CoreContinuationAudit.json").toPath()));
+        return thc.CoreCbdFixtures.read(new File(root,
+            "build/core-continuation/core/CoreContinuationAudit.cbd").toPath());
     }
     private List<String> oracle() throws Exception {
         return Files.readAllLines(new File(root, "build/core-continuation/native-output.txt").toPath());
@@ -98,8 +98,8 @@ class CoreContinuationNativeTest {
             entered(context, () -> {
                 var language = language();
                 var checkpoint = new BytecodeCheckpoint();
-                var program = new BytecodeProgram(language, CoreModules.reachable(module, "catchActionAnswer", true), checkpoint);
-                var parent = (Thunk) program.entryValue("catchActionAnswer");
+                var program = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit.catchActionAnswer", true), checkpoint);
+                var parent = (Thunk) program.entryValue("main:CoreContinuationAudit.catchActionAnswer");
                 var target = parent.getTarget();
                 var warm = (DataValue) Calls.target(target, new Object[]{0L});
                 assertEquals(42L, number(warm));
@@ -150,8 +150,8 @@ class CoreContinuationNativeTest {
             context.initialize("thc");
             entered(context, () -> {
                 var language = language();
-                var program = new BytecodeProgram(language, CoreModules.reachable(module, "applicationAnswer"), true);
-                var thunk = (Thunk) program.entryValue("applicationAnswer");
+                var program = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit.applicationAnswer"), true);
+                var thunk = (Thunk) program.entryValue("main:CoreContinuationAudit.applicationAnswer");
                 var target = thunk.getTarget();
                 var warm = (DataValue) Calls.target(target, new Object[]{0L});
                 assertEquals(208L, number(warm)); compile(target);
@@ -177,8 +177,8 @@ class CoreContinuationNativeTest {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> linkedWithPayload(Map<String, Object> module, String entry) {
-        var action = CoreModules.reachable(module, entry);
-        var payload = CoreModules.reachable(module, "asyncPayload");
+        var action = CoreModules.reachable(module, "main:CoreContinuationAudit." + entry);
+        var payload = CoreModules.reachable(module, "main:CoreContinuationAudit.asyncPayload");
         var bindings = new ArrayList<Map<String, Object>>();
         var ids = new LinkedHashSet<Object>();
         for (var binding : (List<Map<String, Object>>) action.get("bindings"))
@@ -204,9 +204,9 @@ class CoreContinuationNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = language();
-                var linked = CoreModules.reachable(module, "applicationAnswer");
+                var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.applicationAnswer");
                 var ast = new Program(language, linked);
-                var astThunk = (Thunk) ast.entryValue("applicationAnswer");
+                var astThunk = (Thunk) ast.entryValue("main:CoreContinuationAudit.applicationAnswer");
                 var astTarget = astThunk.getTarget();
                 var astAnswer = (DataValue) Calls.target(ast.hostEntryTarget(0), new Object[]{astThunk});
                 assertEquals(208L, number(astAnswer)); compile(astTarget);
@@ -214,9 +214,9 @@ class CoreContinuationNativeTest {
                 assertEquals(208L, number(compiledAst));
                 var checkpoint = new BytecodeCheckpoint();
                 var program = new BytecodeProgram(language, linked, checkpoint);
-                var parent = (Thunk) program.entryValue("applicationAnswer");
+                var parent = (Thunk) program.entryValue("main:CoreContinuationAudit.applicationAnswer");
                 var target = parent.getTarget();
-                var callee = program.entryTarget("delayed");
+                var callee = program.entryTarget("main:CoreContinuationAudit.delayed");
                 assertTrue(Calls.target(callee, new Object[]{0L, 7L}) instanceof DataValue); compile(callee);
                 assertTrue(Calls.target(target, new Object[]{0L}) instanceof DataValue); compile(target);
                 long compiledBefore = ((Number) program.diagnostics().get("compiledEntries")).longValue();
@@ -267,8 +267,8 @@ class CoreContinuationNativeTest {
             context.initialize("thc");
             entered(context, () -> {
                 for (String entry : List.of("overapplicationAnswer", "tupleOverapplicationAnswer")) {
-                    var program = new BytecodeProgram(language(), CoreModules.reachable(module, entry, true), true);
-                    var root = (BytecodeRoot) program.entryTarget(entry).getRootNode();
+                    var program = new BytecodeProgram(language(), CoreModules.reachable(module, "main:CoreContinuationAudit." + entry, true), true);
+                    var root = (BytecodeRoot) program.entryTarget("main:CoreContinuationAudit." + entry).getRootNode();
                     int shapes = 0;
                     boolean pending = false, zeroArity = false;
                     for (var instruction : root.getBytecodeNode().getInstructions()) {
@@ -304,17 +304,17 @@ class CoreContinuationNativeTest {
             context.initialize("thc");
             entered(context, () -> {
                 var language = language();
-                var linked = CoreModules.reachable(module, "overapplicationThunk", true);
+                var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.overapplicationThunk", true);
                 var driver = new Driver();
                 for (var ordinary : List.of(new Program(language, linked), new BytecodeProgram(language, linked))) {
-                    var answer = (DataValue) driver.force((Thunk) ordinary.entryValue("overapplicationThunk"));
+                    var answer = (DataValue) driver.force((Thunk) ordinary.entryValue("main:CoreContinuationAudit.overapplicationThunk"));
                     assertEquals(209L, number(answer));
                 }
                 var checkpoint = new BytecodeCheckpoint();
                 var program = new BytecodeProgram(language, linked, checkpoint);
-                var parent = (Thunk) program.entryValue("overapplicationThunk");
-                var stage = program.entryTarget("stagedFunction");
-                assertEquals(1, ((Closure) program.entryValue("stagedFunction")).arity);
+                var parent = (Thunk) program.entryValue("main:CoreContinuationAudit.overapplicationThunk");
+                var stage = program.entryTarget("main:CoreContinuationAudit.stagedFunction");
+                assertEquals(1, ((Closure) program.entryValue("main:CoreContinuationAudit.stagedFunction")).arity);
                 assertTrue(Calls.target(parent.getTarget(), new Object[]{0L}) instanceof DataValue);
                 compile(parent.getTarget()); checkpoint.setArmed(true);
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk());
@@ -345,10 +345,10 @@ class CoreContinuationNativeTest {
         try (var context = executionContext()) {
             context.initialize("thc");
             entered(context, () -> {
-                var language = language(); var linked = CoreModules.reachable(module, "overapplicationTail", true);
+                var language = language(); var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.overapplicationTail", true);
                 var driver = new Driver(); var checkpoint = new BytecodeCheckpoint();
                 var program = new BytecodeProgram(language, linked, checkpoint);
-                var parent = (Thunk) program.entryValue("overapplicationTail"); var target = parent.getTarget();
+                var parent = (Thunk) program.entryValue("main:CoreContinuationAudit.overapplicationTail"); var target = parent.getTarget();
                 assertTrue(Calls.target(target, new Object[]{0L}) instanceof DataValue); compile(target);
                 checkpoint.setArmed(true);
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk());
@@ -366,9 +366,9 @@ class CoreContinuationNativeTest {
         try (var context = executionContext()) {
             context.initialize("thc");
             entered(context, () -> {
-                var language = language(); var linked = CoreModules.reachable(module, "directOverapplicationTailThunk", true);
+                var language = language(); var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.directOverapplicationTailThunk", true);
                 var checkpoint = new BytecodeCheckpoint(); var program = new BytecodeProgram(language, linked, checkpoint);
-                var parent = (Thunk) program.entryValue("directOverapplicationTailThunk"); var driver = new Driver();
+                var parent = (Thunk) program.entryValue("main:CoreContinuationAudit.directOverapplicationTailThunk"); var driver = new Driver();
                 var warm = (DataValue) Calls.target(parent.getTarget(), new Object[]{0L});
                 assertEquals(8L, number(warm)); compile(parent.getTarget()); checkpoint.setArmed(true);
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk());
@@ -388,20 +388,20 @@ class CoreContinuationNativeTest {
             try (var context = executionContext()) {
                 context.initialize("thc");
                 entered(context, () -> {
-                    var language = language(); var linked = CoreModules.reachable(module, entry, true); var driver = new Driver();
+                    var language = language(); var linked = CoreModules.reachable(module, "main:CoreContinuationAudit." + entry, true); var driver = new Driver();
                     for (var ordinary : List.of(new Program(language, linked), new BytecodeProgram(language, linked))) {
-                        var answer = (DataValue) driver.force((Thunk) ordinary.entryValue(entry));
+                        var answer = (DataValue) driver.force((Thunk) ordinary.entryValue("main:CoreContinuationAudit." + entry));
                         assertEquals(expected, number(answer), entry + " ordinary");
                     }
                     var checkpoint = new BytecodeCheckpoint(); var program = new BytecodeProgram(language, linked, checkpoint);
-                    var parent = (Thunk) program.entryValue(entry); var target = parent.getTarget();
+                    var parent = (Thunk) program.entryValue("main:CoreContinuationAudit." + entry); var target = parent.getTarget();
                     var warm = (DataValue) Calls.target(target, new Object[]{0L}); assertEquals(expected, number(warm));
                     compile(target);
                     var compiled = (DataValue) Calls.target(target, new Object[]{0L}); assertEquals(expected, number(compiled));
                     checkpoint.setArmed(true);
                     assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk());
                     var suspended = (CallSegmentSuspended) ((ContinuationResult) parent.getValue()).getResult();
-                    var segment = suspended.getSegment(); var calleeTarget = program.entryTarget(row.callee());
+                    var segment = suspended.getSegment(); var calleeTarget = program.entryTarget("main:CoreContinuationAudit." + row.callee());
                     assertTrue(((BytecodeRoot) ((ContinuationResult) segment.getValue()).getContinuationRootNode().getSourceRootNode())
                         .isSelf(calleeTarget), entry + " must capture its actual typed/compact callee");
                     assertEquals(1, checkpoint.getVisits().get(), entry + " input/callee prefix runs once");
@@ -415,8 +415,8 @@ class CoreContinuationNativeTest {
 
     private record Checked(BytecodeProgram program, Thunk thunk) {}
     private Checked checked(Language language, Map<String, Object> module, String entry) {
-        var program = new BytecodeProgram(language, CoreModules.reachable(module, entry), armedCheckpoint());
-        return new Checked(program, (Thunk) program.entryValue(entry));
+        var program = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit." + entry), armedCheckpoint());
+        return new Checked(program, (Thunk) program.entryValue("main:CoreContinuationAudit." + entry));
     }
     @Test void nestedExactTailRootForwardsYieldAndPreservesMaskedCarrier() throws Exception {
         var module = module();
@@ -676,9 +676,9 @@ class CoreContinuationNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = language(); var checkpoint = new BytecodeCheckpoint();
-                var program = new BytecodeProgram(language, CoreModules.reachable(module, "sharedAnswer"), checkpoint);
-                var thunk = (Thunk) program.entryValue("sharedAnswer"); var target = thunk.getTarget();
-                var child = (Thunk) program.entryValue("checkpointValue"); var childTarget = child.getTarget();
+                var program = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit.sharedAnswer"), checkpoint);
+                var thunk = (Thunk) program.entryValue("main:CoreContinuationAudit.sharedAnswer"); var target = thunk.getTarget();
+                var child = (Thunk) program.entryValue("main:CoreContinuationAudit.checkpointValue"); var childTarget = child.getTarget();
                 assertTrue(Calls.target(childTarget, new Object[]{0L}) instanceof DataValue); compile(childTarget);
                 assertTrue(Calls.target(childTarget, new Object[]{0L}) instanceof DataValue);
                 assertTrue(checkpoint.getCompiledVisits().get() > 0, "Ordinary checkpoint path runs installed code");
@@ -717,14 +717,14 @@ class CoreContinuationNativeTest {
     @SuppressWarnings("unchecked") private void checkLazyCallbacks(List<NamedAnswer> entries, boolean compiled) throws Exception {
         var oracle = Files.readAllLines(new File(root, "build/core-continuation/lazy-native-output.txt").toPath());
         assertEquals(List.of("42", "77", "43", "44"), oracle);
-        var module = (Map<String, Object>) Json.parse(Files.readString(new File(root,
-            "build/core-continuation/core/LazyIOCallbackAudit.json").toPath()));
+        var module = thc.CoreCbdFixtures.read(new File(root,
+            "build/core-continuation/core/LazyIOCallbackAudit.cbd").toPath());
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
             for (var row : entries) {
-                var name = row.name(); long expected = row.expected(); var linked = CoreModules.reachable(module, name, true);
+                var name = row.name(); long expected = row.expected(); var linked = CoreModules.reachable(module, "main:LazyIOCallbackAudit." + name, true);
                 var checkpoint = new BytecodeCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
-                var parent = entered(context, () -> (Thunk) program.entryValue(name));
+                var parent = entered(context, () -> (Thunk) program.entryValue("main:LazyIOCallbackAudit." + name));
                 entered(context, () -> {
                     if (compiled) {
                         var target = parent.getTarget(); var warm = (DataValue) Calls.target(target, new Object[]{0L});
@@ -757,14 +757,14 @@ class CoreContinuationNativeTest {
             record Case(String name, long expected, int visits) {}
             for (var row : List.of(new Case("catchActionAnswer", 42L, 2), new Case("catchActionFailure", 77L, 1))) {
                 var name = row.name(); long expected = row.expected(); int visits = row.visits();
-                var linked = CoreModules.reachable(module, name);
+                var linked = CoreModules.reachable(module, "main:CoreContinuationAudit." + name);
                 entered(context, () -> {
                     for (var program : List.of(new Program(language, linked), new BytecodeProgram(language, linked)))
-                        assertEquals(expected, number((DataValue) driver.force((Thunk) program.entryValue(name))), name + " ordinary");
+                        assertEquals(expected, number((DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit." + name))), name + " ordinary");
                     return null;
                 });
                 var checkpoint = new BytecodeCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
-                var thunk = entered(context, () -> (Thunk) program.entryValue(name)); var target = thunk.getTarget();
+                var thunk = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit." + name)); var target = thunk.getTarget();
                 entered(context, () -> {
                     assertEquals(expected, number((DataValue) Calls.target(target, new Object[]{0L}))); compile(target);
                     assertEquals(expected, number((DataValue) Calls.target(target, new Object[]{0L})));
@@ -830,19 +830,19 @@ class CoreContinuationNativeTest {
         assertEquals("79", oracle().get(7)); var module = module();
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
-            var linked = CoreModules.reachable(module, "catchHandlerAnswer", true);
+            var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.catchHandlerAnswer", true);
             entered(context, () -> {
                 for (var program : List.of(new Program(language, linked), new BytecodeProgram(language, linked)))
-                    assertEquals(79L, number((DataValue) driver.force((Thunk) program.entryValue("catchHandlerAnswer")))); return null;
+                    assertEquals(79L, number((DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.catchHandlerAnswer")))); return null;
             });
             var checkpoint = new BytecodeCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
             entered(context, () -> {
-                var target = program.entryTarget("catchHandlerAnswer");
+                var target = program.entryTarget("main:CoreContinuationAudit.catchHandlerAnswer");
                 assertEquals(79L, number((DataValue) Calls.target(target, new Object[]{0L}))); compile(target);
                 assertEquals(79L, number((DataValue) Calls.target(target, new Object[]{0L})));
                 assertTrue(checkpoint.getCompiledVisits().get() > 0); return null;
             });
-            checkpoint.setArmed(true); var parent = entered(context, () -> (Thunk) program.entryValue("catchHandlerAnswer"));
+            checkpoint.setArmed(true); var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.catchHandlerAnswer"));
             long compiledBefore = ((Number) program.diagnostics().get("compiledEntries")).longValue();
             entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk());
@@ -893,19 +893,19 @@ class CoreContinuationNativeTest {
                 new Case("unmaskedCheckpointAnswer", 0L, MaskingState.UNMASKED),
                 new Case("uninterruptibleCheckpointAnswer", 1L, MaskingState.MASKED_UNINTERRUPTIBLE))) {
                 var entry = row.entry(); long expected = row.expected(); var active = row.active();
-                var linked = CoreModules.reachable(module, entry, true);
+                var linked = CoreModules.reachable(module, "main:CoreContinuationAudit." + entry, true);
                 entered(context, () -> {
                     for (var ordinary : List.of(new Program(language, linked), new BytecodeProgram(language, linked)))
-                        assertEquals(expected, number((DataValue) driver.force((Thunk) ordinary.entryValue(entry))), entry); return null;
+                        assertEquals(expected, number((DataValue) driver.force((Thunk) ordinary.entryValue("main:CoreContinuationAudit." + entry))), entry); return null;
                 });
                 var checkpoint = new BytecodeCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
                 entered(context, () -> {
-                    var target = program.entryTarget(entry);
+                    var target = program.entryTarget("main:CoreContinuationAudit." + entry);
                     assertEquals(expected, number((DataValue) Calls.target(target, new Object[]{0L}))); compile(target);
                     assertEquals(expected, number((DataValue) Calls.target(target, new Object[]{0L})));
                     assertTrue(checkpoint.getCompiledVisits().get() > 0); return null;
                 });
-                checkpoint.setArmed(true); var parent = entered(context, () -> (Thunk) program.entryValue(entry));
+                checkpoint.setArmed(true); var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit." + entry));
                 // Enter unmask# from a masked caller so its lexical prior is observable.
                 var initialMask = entry.equals("unmaskedCheckpointAnswer") ? MaskingState.MASKED_INTERRUPTIBLE : MaskingState.UNMASKED;
                 long resumedExpected = entry.equals("unmaskedCheckpointAnswer") ? 200L : expected;
@@ -948,23 +948,23 @@ class CoreContinuationNativeTest {
         assertEquals("208", oracle().get(11)); var module = module();
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
-            var linked = CoreModules.reachable(module, "forceNonlocalAnswer", true);
+            var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.forceNonlocalAnswer", true);
             entered(context, () -> {
                 for (var ordinary : List.of(new Program(language, linked), new BytecodeProgram(language, linked)))
-                    assertEquals(208L, number((DataValue) driver.force((Thunk) ordinary.entryValue("forceNonlocalAnswer")))); return null;
+                    assertEquals(208L, number((DataValue) driver.force((Thunk) ordinary.entryValue("main:CoreContinuationAudit.forceNonlocalAnswer")))); return null;
             });
             var checkpoint = new BytecodeCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
             entered(context, () -> {
-                var target = program.entryTarget("forceNonlocalAnswer");
+                var target = program.entryTarget("main:CoreContinuationAudit.forceNonlocalAnswer");
                 // Warm only the masked branch's distinct global; the unmasked application remains unevaluated.
                 SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE);
                 try { assertEquals(210L, number((DataValue) Calls.target(target, new Object[]{0L}))); }
                 finally { SynchronousMasking.set(driver, MaskingState.UNMASKED); }
-                compile(target); var delayed = program.entryTarget("delayedTwice");
+                compile(target); var delayed = program.entryTarget("main:CoreContinuationAudit.delayedTwice");
                 assertTrue(Calls.target(delayed, new Object[]{0L, 7L}) instanceof DataValue); compile(delayed); return null;
             });
-            checkpoint.setArmed(true); var parent = entered(context, () -> (Thunk) program.entryValue("forceNonlocalAnswer"));
-            var global = entered(context, () -> (Thunk) program.entryValue("delayedTwiceGlobal"));
+            checkpoint.setArmed(true); var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.forceNonlocalAnswer"));
+            var global = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.delayedTwiceGlobal"));
             long compiledBefore = ((Number) program.diagnostics().get("compiledEntries")).longValue();
             entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk());
@@ -1045,8 +1045,8 @@ class CoreContinuationNativeTest {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var state = entered(context, Language::currentState);
             var driver = entered(context, Driver::new); var checkpoint = armedCheckpoint();
             var program = entered(context, () -> new BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint));
-            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("asyncPayload")));
-            var parent = entered(context, () -> (Thunk) program.entryValue("catchActionAnswer"));
+            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.asyncPayload")));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.catchActionAnswer"));
             var child = entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk()); return segment(parent);
             });
@@ -1099,8 +1099,8 @@ class CoreContinuationNativeTest {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var state = entered(context, Language::currentState);
             var driver = entered(context, Driver::new); var checkpoint = armedCheckpoint();
             var program = entered(context, () -> new BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint));
-            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("asyncPayload")));
-            var parent = entered(context, () -> (Thunk) program.entryValue("catchActionAnswer"));
+            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.asyncPayload")));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.catchActionAnswer"));
             var child = entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk()); return segment(parent);
             });
@@ -1112,7 +1112,7 @@ class CoreContinuationNativeTest {
             assertEquals(CapturedRequestState.FAILED, entered(context, () -> request.await(driver)));
             assertEquals(4, parent.getState(), "An unacknowledged host unwind cannot replay the thunk"); assertEquals(5, child.getState());
             var second = entered(context, () -> new BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint));
-            var pendingParent = entered(context, () -> (Thunk) second.entryValue("catchActionAnswer"));
+            var pendingParent = entered(context, () -> (Thunk) second.entryValue("main:CoreContinuationAudit.catchActionAnswer"));
             var pendingChild = entered(context, () -> {
                 assertSame(pendingParent, assertThrows(ThunkSuspended.class, () -> driver.force(pendingParent)).getThunk()); return segment(pendingParent);
             });
@@ -1135,8 +1135,8 @@ class CoreContinuationNativeTest {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var state = entered(context, Language::currentState);
             var driver = entered(context, Driver::new); var checkpoint = armedCheckpoint();
             var program = entered(context, () -> new BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint));
-            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("asyncPayload")));
-            var parent = entered(context, () -> (Thunk) program.entryValue("catchActionAnswer"));
+            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.asyncPayload")));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.catchActionAnswer"));
             var child = entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk()); return segment(parent);
             });
@@ -1162,14 +1162,14 @@ class CoreContinuationNativeTest {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
             var checkpoint = new BytecodeCheckpoint();
             var program = entered(context, () -> new BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint));
-            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("asyncPayload")));
+            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.asyncPayload")));
             assertEquals(7L, number(payload));
             entered(context, () -> {
-                var target = program.entryTarget("catchActionAnswer");
+                var target = program.entryTarget("main:CoreContinuationAudit.catchActionAnswer");
                 assertEquals(42L, number((DataValue) Calls.target(target, new Object[]{0L}))); compile(target);
                 assertEquals(42L, number((DataValue) Calls.target(target, new Object[]{0L}))); return null;
             });
-            checkpoint.setArmed(true); var parent = entered(context, () -> (Thunk) program.entryValue("catchActionAnswer"));
+            checkpoint.setArmed(true); var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.catchActionAnswer"));
             long compiledBefore = ((Number) program.diagnostics().get("compiledEntries")).longValue();
             var child = entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk()); return segment(parent);
@@ -1206,8 +1206,8 @@ class CoreContinuationNativeTest {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
             var checkpoint = armedCheckpoint();
             var program = entered(context, () -> new BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint));
-            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("asyncPayload")));
-            var parent = entered(context, () -> (Thunk) program.entryValue("catchActionAnswer"));
+            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.asyncPayload")));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.catchActionAnswer"));
             var child = entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk()); return segment(parent);
             });
@@ -1239,22 +1239,22 @@ class CoreContinuationNativeTest {
         assertEquals("114", oracle().get(5)); var module = module();
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
-            var linked = CoreModules.reachable(module, "tupleApplicationAnswer", true);
+            var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.tupleApplicationAnswer", true);
             entered(context, () -> {
                 for (var program : List.of(new Program(language, linked), new BytecodeProgram(language, linked))) {
-                    var answer = (DataValue) driver.force((Thunk) program.entryValue("tupleApplicationAnswer")); assertEquals(114L, number(answer));
+                    var answer = (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.tupleApplicationAnswer")); assertEquals(114L, number(answer));
                 }
                 return null;
             });
             var checkpoint = new BytecodeCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
             entered(context, () -> {
-                var target = program.entryTarget("tupleApplicationAnswer");
+                var target = program.entryTarget("main:CoreContinuationAudit.tupleApplicationAnswer");
                 assertEquals(114L, number((DataValue) Calls.target(target, new Object[]{0L}))); compile(target);
                 assertEquals(114L, number((DataValue) Calls.target(target, new Object[]{0L})));
-                compile(((Closure) program.entryValue("tupleDelayed")).target); return null;
+                compile(((Closure) program.entryValue("main:CoreContinuationAudit.tupleDelayed")).target); return null;
             });
             int compiledVisitsBefore = checkpoint.getCompiledVisits().get(); checkpoint.setArmed(true);
-            var parent = entered(context, () -> (Thunk) program.entryValue("tupleApplicationAnswer"));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.tupleApplicationAnswer"));
             entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk());
                 assertEquals(5, parent.getState(), "The caller's prefix checkpoint is itself resumable");
@@ -1293,17 +1293,17 @@ class CoreContinuationNativeTest {
         assertTrue(hasOverapplication(binding.get("expr"), ".tupleStage"), "GHC must retain a two-argument tuple call");
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
-            var linked = CoreModules.reachable(module, "tupleOverapplicationThunk", true);
+            var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.tupleOverapplicationThunk", true);
             entered(context, () -> {
                 for (var program : List.of(new Program(language, linked), new BytecodeProgram(language, linked))) {
-                    var result = (DataValue) driver.force((Thunk) program.entryValue("tupleOverapplicationThunk")); assertEquals(114L, number(result));
+                    var result = (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.tupleOverapplicationThunk")); assertEquals(114L, number(result));
                 }
                 return null;
             });
             var checkpoint = new BytecodeCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
-            var parent = entered(context, () -> (Thunk) program.entryValue("tupleOverapplicationThunk"));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.tupleOverapplicationThunk"));
             entered(context, () -> {
-                var target = parent.getTarget(); var firstStage = (Closure) program.entryValue("tupleStage");
+                var target = parent.getTarget(); var firstStage = (Closure) program.entryValue("main:CoreContinuationAudit.tupleStage");
                 assertEquals(1, firstStage.arity); assertTrue(Calls.target(firstStage.target, new Object[]{0L, 6L}) instanceof Closure); compile(firstStage.target);
                 var ordinary = (DataValue) Calls.target(target, new Object[]{0L}); assertEquals(114L, number(ordinary)); compile(target); return null;
             });
@@ -1334,15 +1334,15 @@ class CoreContinuationNativeTest {
         assertEquals("app", body.get(0)); assertEquals(2, ((List<?>) body.get(2)).size(), "GHC retained a tuple tail overapplication");
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
-            var linked = CoreModules.reachable(module, "tupleTailOverapplicationThunk", true);
+            var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.tupleTailOverapplicationThunk", true);
             entered(context, () -> {
                 for (var ordinary : List.of(new Program(language, linked), new BytecodeProgram(language, linked))) {
-                    var answer = (DataValue) driver.force((Thunk) ordinary.entryValue("tupleTailOverapplicationThunk")); assertEquals(114L, number(answer));
+                    var answer = (DataValue) driver.force((Thunk) ordinary.entryValue("main:CoreContinuationAudit.tupleTailOverapplicationThunk")); assertEquals(114L, number(answer));
                 }
                 return null;
             });
             var checkpoint = new BytecodeCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
-            var parent = entered(context, () -> (Thunk) program.entryValue("tupleTailOverapplicationThunk"));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.tupleTailOverapplicationThunk"));
             entered(context, () -> {
                 var target = parent.getTarget(); var ordinary = (DataValue) Calls.target(target, new Object[]{0L}); assertEquals(114L, number(ordinary));
                 compile(target); checkpoint.setArmed(true);
@@ -1368,9 +1368,9 @@ class CoreContinuationNativeTest {
         var module = module();
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
-            var linked = CoreModules.reachable(module, "tupleApplicationFailure", true); var checkpoint = armedCheckpoint();
+            var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.tupleApplicationFailure", true); var checkpoint = armedCheckpoint();
             var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
-            var parent = entered(context, () -> (Thunk) program.entryValue("tupleApplicationFailure"));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.tupleApplicationFailure"));
             var child = entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk()); return segment(parent);
             });
@@ -1398,15 +1398,15 @@ class CoreContinuationNativeTest {
         assertEquals("114", oracle().get(6)); var module = module();
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
-            var linked = CoreModules.reachable(module, "tupleCompactAnswer", true);
+            var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.tupleCompactAnswer", true);
             entered(context, () -> {
                 for (var program : List.of(new Program(language, linked), new BytecodeProgram(language, linked))) {
-                    var answer = (DataValue) driver.force((Thunk) program.entryValue("tupleCompactAnswer")); assertEquals(114L, number(answer));
+                    var answer = (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.tupleCompactAnswer")); assertEquals(114L, number(answer));
                 }
                 return null;
             });
             var checkpoint = armedCheckpoint(); var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
-            var parent = entered(context, () -> (Thunk) program.entryValue("tupleCompactAnswer"));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.tupleCompactAnswer"));
             var child = entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk()); return segment(parent);
             });
@@ -1424,9 +1424,9 @@ class CoreContinuationNativeTest {
         var module = module();
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
-            var linked = CoreModules.reachable(module, "tupleRaiseAnswer", true); var checkpoint = armedCheckpoint();
+            var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.tupleRaiseAnswer", true); var checkpoint = armedCheckpoint();
             var program = entered(context, () -> new BytecodeProgram(language, linked, checkpoint));
-            var parent = entered(context, () -> (Thunk) program.entryValue("tupleRaiseAnswer"));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.tupleRaiseAnswer"));
             var child = entered(context, () -> {
                 assertSame(parent, assertThrows(ThunkSuspended.class, () -> driver.force(parent)).getThunk()); return segment(parent);
             });
@@ -1455,17 +1455,17 @@ class CoreContinuationNativeTest {
         try (var context = executionContext()) {
             context.initialize("thc"); var language = entered(context, CoreContinuationNativeTest::language); var driver = entered(context, Driver::new);
             entered(context, () -> {
-                var linked = CoreModules.reachable(module, "nestedCatchAction");
+                var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.nestedCatchAction");
                 for (var program : List.of(new Program(language, linked), new BytecodeProgram(language, linked))) {
-                    var answer = (DataValue) driver.force((Thunk) program.entryValue("nestedCatchAction"));
+                    var answer = (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.nestedCatchAction"));
                     assertEquals(43L, number(answer), "Native and ordinary guest catch agree");
                 }
                 return null;
             });
             var checkpoint = armedCheckpoint();
             var program = entered(context, () -> new BytecodeProgram(language, linkedWithPayload(module, "nestedCatchAction"), checkpoint));
-            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("asyncPayload")));
-            var parent = entered(context, () -> (Thunk) program.entryValue("nestedCatchAction"));
+            var payload = entered(context, () -> (DataValue) driver.force((Thunk) program.entryValue("main:CoreContinuationAudit.asyncPayload")));
+            var parent = entered(context, () -> (Thunk) program.entryValue("main:CoreContinuationAudit.nestedCatchAction"));
             record Segments(CallSegment outer, CallSegment inner) {}
             var pair = entered(context, () -> {
                 SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE);
@@ -1515,7 +1515,7 @@ class CoreContinuationNativeTest {
         try (var context = executionContext()) {
             context.initialize("thc");
             entered(context, () -> {
-                var language = language(); var linked = CoreModules.reachable(module, "nestedCatchAction");
+                var language = language(); var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.nestedCatchAction");
                 var ordinary = new BytecodeProgram(language, linked).bytecodeDump();
                 var privateDump = new BytecodeProgram(language, linked, new BytecodeCheckpoint()).bytecodeDump();
                 assertTrue(ordinary.contains("RequireGuestFailure")); assertFalse(ordinary.contains("RequireCaughtIOFailure"));
@@ -1555,8 +1555,8 @@ class CoreContinuationNativeTest {
     }
 
     private void malformed(Language language, Map<String, Object> module, Object resume) {
-        var checkpoint = armedCheckpoint(); var program = new BytecodeProgram(language, CoreModules.reachable(module, "sharedAnswer"), checkpoint);
-        var parent = (Thunk) program.entryValue("sharedAnswer");
+        var checkpoint = armedCheckpoint(); var program = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit.sharedAnswer"), checkpoint);
+        var parent = (Thunk) program.entryValue("main:CoreContinuationAudit.sharedAnswer");
         assertThrows(ThunkSuspended.class, () -> Calls.target(program.hostEntryTarget(0), new Object[]{parent}));
         var saved = (ContinuationResult) parent.getValue(); assertThrows(IllegalStateException.class, () -> saved.continueWith(resume));
     }
@@ -1566,8 +1566,8 @@ class CoreContinuationNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = language(); malformed(language, module, Unit.INSTANCE); malformed(language, module, new ChildResume(new Object(), null));
-                var other = new BytecodeProgram(language, CoreModules.reachable(module, "uncaptured"), armedCheckpoint());
-                var uncaptured = (Thunk) other.entryValue("uncaptured");
+                var other = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit.uncaptured"), armedCheckpoint());
+                var uncaptured = (Thunk) other.entryValue("main:CoreContinuationAudit.uncaptured");
                 assertSame(uncaptured, assertThrows(ThunkSuspended.class, () -> Calls.target(other.hostEntryTarget(0), new Object[]{uncaptured})).getThunk());
                 var answer = (DataValue) Calls.target(other.hostEntryTarget(0), new Object[]{uncaptured});
                 assertEquals(8L, number(answer)); assertEquals(2, uncaptured.getState());
@@ -1580,25 +1580,25 @@ class CoreContinuationNativeTest {
         try (var context = executionContext()) {
             context.initialize("thc"); context.enter();
             try {
-                var language = language(); var linked = CoreModules.reachable(module, "sharedAnswer"); var ast = new Program(language, linked);
-                var astAnswer = (DataValue) Calls.target(ast.hostEntryTarget(0), new Object[]{ast.entryValue("sharedAnswer")}); assertEquals(108L, number(astAnswer));
+                var language = language(); var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.sharedAnswer"); var ast = new Program(language, linked);
+                var astAnswer = (DataValue) Calls.target(ast.hostEntryTarget(0), new Object[]{ast.entryValue("main:CoreContinuationAudit.sharedAnswer")}); assertEquals(108L, number(astAnswer));
                 var ordinary = new BytecodeProgram(language, linked); assertFalse(ordinary.bytecodeDump().contains("yield"));
-                var answer = (DataValue) Calls.target(ordinary.hostEntryTarget(0), new Object[]{ordinary.entryValue("sharedAnswer")}); assertEquals(108L, number(answer));
-                var normalCall = new BytecodeProgram(language, CoreModules.reachable(module, "applicationAnswer"));
+                var answer = (DataValue) Calls.target(ordinary.hostEntryTarget(0), new Object[]{ordinary.entryValue("main:CoreContinuationAudit.sharedAnswer")}); assertEquals(108L, number(answer));
+                var normalCall = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit.applicationAnswer"));
                 var normalDump = normalCall.bytecodeDump(); assertFalse(normalDump.contains("yield")); assertFalse(normalDump.contains("CaptureApplicationResult"));
-                var callAnswer = (DataValue) Calls.target(normalCall.hostEntryTarget(0), new Object[]{normalCall.entryValue("applicationAnswer")}); assertEquals(208L, number(callAnswer));
+                var callAnswer = (DataValue) Calls.target(normalCall.hostEntryTarget(0), new Object[]{normalCall.entryValue("main:CoreContinuationAudit.applicationAnswer")}); assertEquals(208L, number(callAnswer));
                 for (var row : List.of(new NamedAnswer("catchActionAnswer", 42L), new NamedAnswer("catchActionFailure", 77L))) {
-                    var name = row.name(); long expected = row.expected(); var action = new BytecodeProgram(language, CoreModules.reachable(module, name));
+                    var name = row.name(); long expected = row.expected(); var action = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit." + name));
                     var dump = action.bytecodeDump(); assertFalse(dump.contains("yield"), name + " ordinary bytecode has no Yield");
                     assertFalse(dump.contains("InvokeIOActionCheckpoint"), name + " ordinary bytecode has no private checkpoint");
-                    var caught = (DataValue) Calls.target(action.hostEntryTarget(0), new Object[]{action.entryValue(name)}); assertEquals(expected, number(caught));
+                    var caught = (DataValue) Calls.target(action.hostEntryTarget(0), new Object[]{action.entryValue("main:CoreContinuationAudit." + name)}); assertEquals(expected, number(caught));
                 }
             } finally { context.leave(); }
         }
     }
 
     private long result(BytecodeProgram program, String entry) {
-        var target = program.entryTarget(entry); var answer = (DataValue) Calls.target(target, new Object[]{0L}); return number(answer);
+        var target = program.entryTarget("main:CoreContinuationAudit." + entry); var answer = (DataValue) Calls.target(target, new Object[]{0L}); return number(answer);
     }
     @Test void asyncEnabledOrdinaryCoreKeepsTypedTuplesAndStagedCalls() throws Exception {
         var module = module(); var oracle = oracle();
@@ -1613,11 +1613,11 @@ class CoreContinuationNativeTest {
                 for (var row : cases) {
                     var entry = row.entry(); long expected = row.expected();
                     assertEquals(Long.toString(expected), oracle.get(row.oracleLine()), entry + " native result");
-                    var linked = CoreModules.reachable(module, entry, true);
+                    var linked = CoreModules.reachable(module, "main:CoreContinuationAudit." + entry, true);
                     var ordinary = new BytecodeProgram(language, linked); var async = new BytecodeProgram(language, linked, true);
                     assertEquals(expected, result(ordinary, entry), entry + " ordinary interpreted");
                     assertEquals(expected, result(async, entry), entry + " async interpreted");
-                    var target = async.entryTarget(entry);
+                    var target = async.entryTarget("main:CoreContinuationAudit." + entry);
                     assertTrue(((BytecodeRoot) target.getRootNode()).isAsyncEnabled(), entry + " uses public parser mode"); compile(target);
                     long before = ((Number) async.diagnostics().get("compiledEntries")).longValue();
                     assertEquals(expected, result(async, entry), entry + " async compiled");

@@ -30,63 +30,63 @@ prepareCoreContinuation root = do
   _ <- run root [("THC_CORE_OUT", base </> "core"), ("THC_GHC_OUT", base </> "ghc")]
        "bin/export-core.sh" [source, lazySource, literalSource] ""
   mapM_ (\entry -> run root [] "python3"
-      ["bin/audit-core.py", base </> "core/LargeLiteralCaseAudit.json",
-       "--entry", entry, "--output", base </> ("literal-" ++ entry ++ "-audit.json")] "")
+      ["bin/audit-core.py", base </> "core/LargeLiteralCaseAudit.cbd",
+       "--entry", "main:LargeLiteralCaseAudit." ++ entry, "--output", base </> ("literal-" ++ entry ++ "-audit.json")] "")
       ["largeInt", "largeWordCheck", "largeLazy", "boxInt"]
   mapM_ (\(entry, report) -> run root [] "python3"
-      ["bin/audit-core.py", base </> "core/LazyIOCallbackAudit.json",
-       "--entry", entry, "--output", base </> report] "")
+      ["bin/audit-core.py", base </> "core/LazyIOCallbackAudit.cbd",
+       "--entry", "main:LazyIOCallbackAudit." ++ entry, "--output", base </> report] "")
       [("catchLazyActionHead", "lazy-action-audit.json"),
        ("catchLazyHandlerHead", "lazy-handler-audit.json"),
        ("keepAliveScalar", "keep-alive-scalar-audit.json"),
        ("keepAliveTuple", "keep-alive-tuple-audit.json")]
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "sharedAnswer", "--output", base </> "audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "applicationAnswer", "--output", base </> "application-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "overapplicationThunk", "--output", base </> "overapplication-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "overapplicationTail", "--output", base </> "overapplication-tail-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "directOverapplicationTailThunk", "--output", base </> "direct-overapplication-tail-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.sharedAnswer", "--output", base </> "audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.applicationAnswer", "--output", base </> "application-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.overapplicationThunk", "--output", base </> "overapplication-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.overapplicationTail", "--output", base </> "overapplication-tail-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.directOverapplicationTailThunk", "--output", base </> "direct-overapplication-tail-audit.json"] ""
   mapM_ (\(entry, report) -> run root [] "python3"
-      ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", entry, "--output", base </> report] "")
+      ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit." ++ entry, "--output", base </> report] "")
       [("compactScalarAnswer", "compact-scalar-audit.json"),
        ("typedScalarAnswer", "typed-scalar-audit.json")]
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "nestedApplication", "--output", base </> "nested-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "catchActionAnswer", "--output", base </> "catch-action-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "catchActionFailure", "--output", base </> "catch-failure-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "nestedCatchAction", "--output", base </> "nested-catch-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "asyncPayload", "--output", base </> "async-payload-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "tupleApplicationAnswer", "--output", base </> "tuple-application-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "tupleOverapplicationThunk", "--output", base </> "tuple-overapplication-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "tupleTailOverapplicationThunk", "--output", base </> "tuple-tail-overapplication-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "tupleApplicationFailure", "--output", base </> "tuple-application-failure-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "tupleCompactAnswer", "--output", base </> "tuple-compact-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "tupleRaiseAnswer", "--output", base </> "tuple-raise-audit.json"] ""
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "catchHandlerAnswer", "--output", base </> "handler-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.nestedApplication", "--output", base </> "nested-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.catchActionAnswer", "--output", base </> "catch-action-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.catchActionFailure", "--output", base </> "catch-failure-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.nestedCatchAction", "--output", base </> "nested-catch-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.asyncPayload", "--output", base </> "async-payload-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.tupleApplicationAnswer", "--output", base </> "tuple-application-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.tupleOverapplicationThunk", "--output", base </> "tuple-overapplication-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.tupleTailOverapplicationThunk", "--output", base </> "tuple-tail-overapplication-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.tupleApplicationFailure", "--output", base </> "tuple-application-failure-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.tupleCompactAnswer", "--output", base </> "tuple-compact-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.tupleRaiseAnswer", "--output", base </> "tuple-raise-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.catchHandlerAnswer", "--output", base </> "handler-audit.json"] ""
   mapM_ (\(entry, report) -> run root [] "python3"
-      ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", entry, "--output", base </> report] "")
+      ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit." ++ entry, "--output", base </> report] "")
       [("maskedCheckpointAnswer", "masked-audit.json"),
        ("unmaskedCheckpointAnswer", "unmasked-audit.json"),
        ("uninterruptibleCheckpointAnswer", "uninterruptible-audit.json")]
-  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.json",
-       "--entry", "forceNonlocalAnswer", "--output", base </> "force-value-audit.json"] ""
+  _ <- run root [] "python3" ["bin/audit-core.py", base </> "core/CoreContinuationAudit.cbd",
+       "--entry", "main:CoreContinuationAudit.forceNonlocalAnswer", "--output", base </> "force-value-audit.json"] ""
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- run root [] ghc ["--numeric-version"] ""
   unless (takeWhile (/= '\n') version == "9.14.1") (die "core-continuation requires GHC 9.14.1")
@@ -109,6 +109,6 @@ prepareCoreContinuation root = do
   unless (length (lines literalNative) == 52) (die "large literal case oracle row count differs")
   writeFile (base </> "literal-native-output.txt") literalNative
   literalHashes <- hashes root [literalSource, "t/haskell-fixtures/ContinuationFixtures.hs",
-    "build/core-continuation/core/LargeLiteralCaseAudit.json",
+    "build/core-continuation/core/LargeLiteralCaseAudit.cbd",
     "build/core-continuation/literal-native-output.txt"]
   writeJson (base </> "literal-manifest.json") (toJSON literalHashes)

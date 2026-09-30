@@ -15,9 +15,13 @@ import java.nio.ByteOrder;
 import java.security.MessageDigest;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ThreadInventoryCoreEvidence.interpretedCalls;
 
 @SuppressWarnings("unchecked")
 public class DoubleArrayNativeTest {
+    private static String coreEntry(String name) {
+        return "main:" + (name.startsWith("unboxed") ? "UnboxedDoubleArrays" : "DoubleArrayAudit") + "." + name;
+    }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
 
     private final List<String> names =
@@ -29,7 +33,7 @@ public class DoubleArrayNativeTest {
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var path : paths) modules.add((Map<String, Object>) Json.parse(Files.readString(root.resolve(path))));
+        for (var path : paths) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -245,7 +249,7 @@ public class DoubleArrayNativeTest {
         boolean read = name.equals("moveDoubleBits");
         var helpers = evidence.getBindings()
                           .stream()
-                          .filter(b -> Objects.equals(b.get("name"), read ? "readDoubleSlot" : "indexDoubleSlot"))
+                          .filter(b -> Objects.equals(b.get("id"), coreEntry(read ? "readDoubleSlot" : "indexDoubleSlot")))
                           .toList();
         require(helpers.size() == 1, name + " lost its residual helper");
         var helper = single(helpers);
@@ -290,22 +294,22 @@ public class DoubleArrayNativeTest {
             var paths = stage.getValue();
             for (var name : names)
                 assertEquals(movementPrimitives.containsKey(name) ? 2L : 1L,
-                    checkCore(new ArrayCoreEvidence(merged(paths), name), name), stage.getKey() + "/" + name);
+                    checkCore(new ArrayCoreEvidence(merged(paths), coreEntry(name)), name), stage.getKey() + "/" + name);
             for (var name : names.subList(0, 2))
                 for (var primitive : requiredPrimitives) {
                     var module = merged(paths);
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     for (var binding : evidence.getBindings())
                         for (var node : evidence.nodes(binding.get("expr")))
                             if (prefix(node).equals(List.of("prim", primitive)))
                                 node.set(1, "missing#");
                     assertThrows(
-                        IllegalArgumentException.class, () -> checkCore(new ArrayCoreEvidence(module, name), name));
+                        IllegalArgumentException.class, () -> checkCore(new ArrayCoreEvidence(module, coreEntry(name)), name));
                 }
             for (var name : movementPrimitives.keySet())
                 for (var mutation : List.of("missing", "extra", "count")) {
                     var module = merged(paths);
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     var node = evidence.getBindings()
                                    .stream()
                                    .flatMap(b -> evidence.nodes(b.get("expr")).stream())
@@ -320,7 +324,7 @@ public class DoubleArrayNativeTest {
                         default -> List.of("app", original, List.of(original));
                     });
                     var failure = assertThrows(
-                        IllegalArgumentException.class, () -> checkCore(new ArrayCoreEvidence(module, name), name));
+                        IllegalArgumentException.class, () -> checkCore(new ArrayCoreEvidence(module, coreEntry(name)), name));
                     assertTrue(Objects.toString(failure.getMessage(), "").contains("primitive movement"),
                         stage.getKey() + "/" + name + "/" + mutation + ": " + failure);
                 }
@@ -332,7 +336,7 @@ public class DoubleArrayNativeTest {
             for (var name : movementPrimitives.keySet())
                 for (int mutation = 0; mutation <= 10; mutation++) {
                     var module = merged(stage.getValue());
-                    var evidence = new ArrayCoreEvidence(module, name);
+                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                     var root = (List<Object>) evidence.getRoot().get("expr");
                     var state = evidence.stateLambda(root);
                     var helper = single(evidence.getBindings()
@@ -348,7 +352,10 @@ public class DoubleArrayNativeTest {
                             .toList());
                     boolean read = name.equals("moveDoubleBits");
                     switch (mutation) {
-                        case 0 -> helper.put("name", "wrongHelper");
+                        case 0 -> {
+                            helper.put("id", coreEntry("wrongHelper"));
+                            ((List<Object>) call.get(1)).set(1, helper.get("id"));
+                        }
                         case 1 -> helper.put("arity", (Long) helper.get("arity") + 1);
                         case 2 -> ((List<Object>) call.get(2)).removeLast();
                         case 3 ->
@@ -393,7 +400,7 @@ public class DoubleArrayNativeTest {
                     }
                     assertThrows(IllegalArgumentException.class,
                         ()
-                            -> checkCore(new ArrayCoreEvidence(module, name), name),
+                            -> checkCore(new ArrayCoreEvidence(module, coreEntry(name)), name),
                         stage.getKey() + "/" + name + "/mutation" + mutation);
                 }
     }
@@ -423,7 +430,8 @@ public class DoubleArrayNativeTest {
         for (var stage : stages.entrySet()) {
             var module = merged(stage.getValue());
             for (var name : names) {
-                long expectedCalls = checkCore(new ArrayCoreEvidence(module, name), name);
+                var evidence = new ArrayCoreEvidence(module, coreEntry(name));
+                long expectedCalls = checkCore(evidence, name);
                 var cases = rows.get(name);
                 assertEquals(cases.size(), new HashSet<>(cases.stream().map(Row::input).toList()).size());
                 assertEquals(inputs(), cases.stream().map(Row::input).toList());
@@ -438,25 +446,41 @@ public class DoubleArrayNativeTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var linked = CoreModules.reachable(module, name);
+                            var linked = CoreModules.reachable(module, coreEntry(name));
                             var bindings = (List<Map<String, Object>>) linked.get("bindings");
                             var p = program(language, changed(linked, "instrument", true), backend);
                             var entry = p.entryTarget(
-                                (String) single(bindings.stream().filter(b -> name.equals(b.get("name"))).toList())
+                                (String) single(bindings.stream().filter(b -> coreEntry(name).equals(b.get("id"))).toList())
                                     .get("id"));
                             // The checked immediate runRW State# lambda is beta-reduced.
                             var expectedLabels = new HashSet<String>();
                             for (var binding : bindings) expectedLabels.add(lambdaLabel((List<?>) binding.get("expr")));
+                            var expectedPrepared = backend.equals("bytecode") ? preparedJoinLabels(evidence) : Set.of();
                             List<RootCallTarget> targets = List.of();
                             checkCases(cases, stage.getKey(), backend, name, inlining, p, entry, expectedCalls, targets,
                                 false, language);
                             targets = activeTargets(entry);
-                            assertEquals((int) expectedCalls, targets.size(),
+                            var prepared = targets.stream()
+                                .filter(t -> t.getRootNode() instanceof BytecodeRoot r && r.entryMask() == 0L).toList();
+                            assertEquals(expectedPrepared,
+                                new HashSet<>(prepared.stream().map(t -> t.getRootNode().getName()).toList()),
+                                stage.getKey() + "/" + backend + "/" + name + " prepared join labels");
+                            assertEquals(expectedPrepared.size(), prepared.size());
+                            for (var target : prepared)
+                                assertEquals(0, target.getClass().getMethod("getCallCount").invoke(target),
+                                    "Prepared join bodies have executed no guest work");
+                            assertEquals((int) expectedCalls, targets.size() - prepared.size(),
                                 stage.getKey() + "/" + backend + "/" + name + " active guest roots");
                             assertEquals(expectedLabels,
-                                new HashSet<>(targets.stream().map(t -> t.getRootNode().getName()).toList()),
+                                new HashSet<>(targets.stream().filter(t -> !prepared.contains(t))
+                                    .map(t -> t.getRootNode().getName()).toList()),
                                 stage.getKey() + "/" + backend + "/" + name + " guest root labels");
+                            // Install and retain every physical target, including dormant recovery plans.
+                            long beforeInstallation = count(p, "compiledEntries");
+                            var interpretedBefore = interpretedCalls(targets);
                             for (var target : targets) compile(target);
+                            assertEquals(beforeInstallation, count(p, "compiledEntries"));
+                            assertEquals(interpretedBefore, interpretedCalls(targets), "Installation executes no guest calls");
                             long allocations = language.getHandoffState().get().getResults().getAllocations();
                             checkCases(cases, stage.getKey(), backend, name, inlining, p, entry, expectedCalls, targets,
                                 true, language);
@@ -476,9 +500,35 @@ public class DoubleArrayNativeTest {
         var formals = (List<Map<String, Object>>) expression.get(1);
         return "lambda " + String.join(", ", formals.stream().map(f -> String.valueOf(f.get("name"))).toList());
     }
+    private Set<String> preparedJoinLabels(ArrayCoreEvidence evidence) {
+        var labels = new HashSet<String>();
+        for (var binding : evidence.getBindings())
+            for (var node : evidence.nodes(binding.get("expr")))
+                if (!node.isEmpty() && "let".equals(node.getFirst()) && Boolean.FALSE.equals(node.get(1)))
+                    for (var join : (List<Map<String, Object>>) node.get(2))
+                        if (join.get("joinValueArity") instanceof Number arity) {
+                            var lambda = (List<?>) join.get("expr");
+                            assertEquals("lam", lambda.getFirst());
+                            assertEquals(arity.longValue(), (long) ((List<?>) lambda.get(1)).size());
+                            assertTrue(evidence.nodes(lambda.get(2)).stream().noneMatch(n -> !n.isEmpty()
+                                && ("let".equals(n.getFirst()) || "lam".equals(n.getFirst()))),
+                                "The source join body has no nested join groups or guest closures");
+                            if (joinBodyWork(lambda.get(2)) >= 64)
+                                labels.add("join body " + join.get("id"));
+                        }
+        return labels;
+    }
+    // These source bodies contain no nested join groups; metadata is not guest work.
+    private int joinBodyWork(Object value) {
+        if (!(value instanceof List<?> list) || list.isEmpty() || "lam".equals(list.getFirst())) return 0;
+        int work = 1;
+        for (var child : list) work += joinBodyWork(child);
+        return work;
+    }
     private void checkCases(List<Row> cases, String stage, String backend, String name, boolean inlining,
         ExecutableProgram program, RootCallTarget entry, long expectedCalls, List<RootCallTarget> targets,
         boolean compiled, Language language) throws Exception {
+        var interpretedBefore = interpretedCalls(targets);
         for (var row : cases) {
             var label = stage + "/" + backend + "/" + name + "/" + row.input + "/inlining=" + inlining;
             long before = count(program, "compiledEntries");
@@ -491,6 +541,7 @@ public class DoubleArrayNativeTest {
                 assertTrue(active.stream().allMatch(t -> targets.stream().anyMatch(old -> old == t)),
                     label + " active target identities");
                 for (var target : targets) valid(target, label);
+                assertEquals(interpretedBefore, interpretedCalls(targets), label + " no interpreted guest calls");
             }
             released(language);
         }
@@ -539,7 +590,7 @@ public class DoubleArrayNativeTest {
                     for (var operation : operations)
                         for (int mutation = 0; mutation <= 9; mutation++)
                             for (boolean diagnostic : List.of(false, true)) {
-                                var module = CoreModules.reachable(merged(paths), owner(operation));
+                                var module = CoreModules.reachable(merged(paths), coreEntry(owner(operation)));
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -594,7 +645,7 @@ public class DoubleArrayNativeTest {
                                     for (long seed : List.of(5L, 0L, Long.MIN_VALUE)) {
                                         assertEquals(model(name, seed),
                                             Calls.target(p.hostEntryTarget(1),
-                                                new Object[] {p.entryValue(name), new Object[] {seed}}),
+                                                new Object[] {p.entryValue(coreEntry(name)), new Object[] {seed}}),
                                             backend + "/" + operation + "/mutation" + mutation + "/" + diagnostic + "/"
                                                 + seed);
                                         released(language);
@@ -607,7 +658,7 @@ public class DoubleArrayNativeTest {
                                         backend + "/" + operation + "/mutation" + mutation + "/" + diagnostic);
                             }
                     for (var operation : operations) {
-                        var module = CoreModules.reachable(merged(paths), owner(operation));
+                        var module = CoreModules.reachable(merged(paths), coreEntry(owner(operation)));
                         var app = application(module, operation);
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();
@@ -636,12 +687,12 @@ public class DoubleArrayNativeTest {
                             long index = invalid[i];
                             var guard = guards[i];
                             var name = owner(operation);
-                            var module = CoreModules.reachable(merged(paths), name);
+                            var module = CoreModules.reachable(merged(paths), coreEntry(name));
                             var app = application(module, operation);
                             var args = (List<Object>) app.get(2);
                             args.set(1, Arrays.asList("lit", "int", Long.toString(index), metadata(args.get(1))));
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var function = context.asValue(new EntryValue(p, coreEntry(name), 1));
                             var failure = assertThrows(PolyglotException.class, () -> function.execute(5L));
                             assertEquals(RuntimeFault.class.getName() + ": Managed allocation " + guard
                                     + " outside its backing storage",
@@ -650,8 +701,8 @@ public class DoubleArrayNativeTest {
                             assertEquals(0L, count(p, "unsupportedTraps"));
                         }
                     for (var name : List.of("moveDoubleBits", "indexDoubleBits")) {
-                        var good = program(language, CoreModules.reachable(merged(paths), name), backend);
-                        assertEquals(5L, context.asValue(new EntryValue(good, name, 1)).execute(5L).asLong());
+                        var good = program(language, CoreModules.reachable(merged(paths), coreEntry(name)), backend);
+                        assertEquals(5L, context.asValue(new EntryValue(good, coreEntry(name), 1)).execute(5L).asLong());
                         released(language);
                     }
                 } finally {

@@ -38,7 +38,7 @@ class RecordFieldNativeTest {
         for (String stage : List.of("pre", "post", "installed")) {
             var sources = new ArrayList<Map<String, Object>>();
             for (String name : List.of("RecordFieldLibrary", "RecordFieldClient"))
-                sources.add(json(directory.resolve(stage + "/" + name + ".json")));
+                sources.add(thc.CoreCbdFixtures.read(directory.resolve(stage + "/" + name + ".cbd")));
             var bindings = sources.stream()
                                .flatMap(source -> ((List<Map<String, Object>>) source.get("bindings")).stream())
                                .toList();
@@ -53,7 +53,7 @@ class RecordFieldNativeTest {
                 var audit = json(directory.resolve(stage + "/" + entry + "-audit.json"));
                 assertEquals(true, audit.get("accepted"));
                 assertEquals(List.of(), audit.get("issues"));
-                var linked = new LinkedHashMap<>(CoreModules.reachable(CoreModules.merge(sources), entry, true));
+                var linked = new LinkedHashMap<>(CoreModules.reachable(CoreModules.merge(sources), "main:RecordFieldClient." + entry, true));
                 linked.put("instrument", true);
                 for (String backend : List.of("ast", "bytecode"))
                     try (var context = Context.newBuilder("thc")
@@ -69,7 +69,7 @@ class RecordFieldNativeTest {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             ExecutableProgram program = backend.equals("ast") ? new Program(language, linked)
                                                                               : new BytecodeProgram(language, linked);
-                            var function = context.asValue(new EntryValue(program, entry, 1));
+                            var function = context.asValue(new EntryValue(program, "main:RecordFieldClient." + entry, 1));
                             for (var row : rows)
                                 assertEquals(row.get(column + 1), function.execute(row.getFirst()).asLong());
                             assertTrue(function.invokeMember("compile").asBoolean());

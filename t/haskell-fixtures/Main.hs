@@ -156,7 +156,7 @@ import BoxedCasFixtures (prepareBoxedCas)
 import WideCharAddressFixtures (prepareWideCharAddress)
 import ManagedAddressReadFixtures (prepareManagedAddressReads)
 import Control.Monad (forM, forM_, unless, when)
-import Data.Aeson (Value (..), decodeStrict', object, (.=))
+import Data.Aeson (Value (..), object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR)
 import qualified Data.ByteString as BS
@@ -175,6 +175,7 @@ import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 import qualified System.Info as Host
 import GHC.ResponseFile (escapeArgs)
+import THC.Compact.Module (readModuleValue)
 
 data Family = Bit | IntegerWord | SignedNarrow | Explicit64 deriving (Eq, Show)
 
@@ -802,8 +803,8 @@ prepareArray root spec = do
     paths <- fmap concat $ forM (zip [0 :: Int ..] groups) $ \(index,group) -> do
       let folder = directory </> stage </> show index
           core = folder </> "core"
-          modulePath = core </> arrayModule group ++ ".json"
-          closurePath = core </> "THC.InterfaceClosure.json"
+          modulePath = core </> arrayModule group ++ ".cbd"
+          closurePath = core </> "THC.InterfaceClosure.cbd"
           options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
           roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- arrayEntries group]
           arguments = options ++ roots ++ [arraySource group]
@@ -819,8 +820,9 @@ prepareArray root spec = do
           run root environment powershell ["-NoProfile", "-File", root </> "bin/export-core.ps1", "@" ++ response] ""
         else run root environment "bin/export-core.sh" arguments ""
       content <- BS.readFile (root </> modulePath)
-      let exportedBoundary = case decodeStrict' content of
-            Just (Object value) -> KeyMap.lookup "boundary" value
+      exported <- either die pure (readModuleValue content)
+      let exportedBoundary = case exported of
+            Object value -> KeyMap.lookup "boundary" value
             _ -> Nothing
       unless (exportedBoundary == Just (String (fromString boundary)))
         (die ("Wrong GHC Core boundary: " ++ modulePath))
@@ -943,14 +945,14 @@ preparePinnedPointers root = do
         "-fplugin-opt=THC.Plugin:closure=touchLazyPayload",
         "-fplugin-opt=THC.Plugin:closure=nonOverlappingCopy",
         "-fplugin-opt=THC.Plugin:closure=wideReadSelector", source]) ""
-    _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "pointerRoundtrip",
-      "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder", "--entry", "char8Roundtrip",
-      "--entry", "byte8Roundtrip", "--entry", "halfwordReadRoundtrip", "--entry", "halfwordWriteRoundtrip",
-      "--entry", "wideStoreByte", "--entry", "mutableContentsRoundtrip", "--entry", "touchLazyPayload",
-      "--entry", "nonOverlappingCopy",
-      "--entry", "wideReadSelector",
+    _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:PinnedPointerCellsAudit.pointerRoundtrip",
+      "--entry", "main:PinnedPointerCellsAudit.pointerArrayRoundtrip", "--entry", "main:PinnedPointerCellsAudit.pointerOrder", "--entry", "main:PinnedPointerCellsAudit.char8Roundtrip",
+      "--entry", "main:PinnedPointerCellsAudit.byte8Roundtrip", "--entry", "main:PinnedPointerCellsAudit.halfwordReadRoundtrip", "--entry", "main:PinnedPointerCellsAudit.halfwordWriteRoundtrip",
+      "--entry", "main:PinnedPointerCellsAudit.wideStoreByte", "--entry", "main:PinnedPointerCellsAudit.mutableContentsRoundtrip", "--entry", "main:PinnedPointerCellsAudit.touchLazyPayload",
+      "--entry", "main:PinnedPointerCellsAudit.nonOverlappingCopy",
+      "--entry", "main:PinnedPointerCellsAudit.wideReadSelector",
       "--output", directory </> stage </> "audit.json",
-      core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
+      core </> "PinnedPointerCellsAudit.cbd", core </> "THC.InterfaceClosure.cbd"] ""
     pure ()
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
@@ -961,7 +963,7 @@ preparePinnedPointers root = do
         ["bin" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
       artifacts = (directory </> "oracle.tsv") :
         [directory </> stage </> file | stage <- ["pre", "post"],
-          file <- ["audit.json", "core/PinnedPointerCellsAudit.json", "core/THC.InterfaceClosure.json"]]
+          file <- ["audit.json", "core/PinnedPointerCellsAudit.cbd", "core/THC.InterfaceClosure.cbd"]]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= version,

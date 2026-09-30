@@ -35,7 +35,7 @@ class ByteArrayTest {
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
         for (var path : paths)
-            modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -114,15 +114,15 @@ class ByteArrayTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var label = stage.getKey() + "/" + backend + "/" + name;
-                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, name));
+                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:ByteArrayAudit." + name));
                             linked.put("instrument", true);
                             var p = program(language, linked, backend);
                             var host = p.hostEntryTarget(1);
-                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var function = context.asValue(new EntryValue(p, "main:ByteArrayAudit." + name, 1));
                             for (var row : cases)
                                 assertEquals(row[1], function.execute(row[0]).asLong(), label + "(" + row[0] + ")");
                             assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
-                            var original = p.entryTarget(name);
+                            var original = p.entryTarget("main:ByteArrayAudit." + name);
                             var active = new ArrayList<RootCallTarget>();
                             for (var call : NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class))
                                 if (call.getCallTarget() == original)
@@ -400,20 +400,20 @@ class ByteArrayTest {
                              {3, Long.MAX_VALUE}, {4, -1}, {4, 5}, {4, Long.MAX_VALUE}}) {
                         int argument = (int) mutation[0];
                         long value = mutation[1];
-                        var module = CoreModules.reachable(merged(paths), "copiedBytes");
+                        var module = CoreModules.reachable(merged(paths), "main:ByteArrayAudit.copiedBytes");
                         var args = (List<Object>) application(module, "copyByteArray#").get(2);
                         args.set(argument,
                             List.of("lit", "int", Long.toString(value),
                                 CoreRepresentations.metadata((List<Object>) args.get(argument))));
                         var function =
-                            context.asValue(new EntryValue(program(language, module, backend), "copiedBytes", 1));
+                            context.asValue(new EntryValue(program(language, module, backend), "main:ByteArrayAudit.copiedBytes", 1));
                         var failure = assertThrows(PolyglotException.class, () -> function.execute(0L));
                         assertTrue(Objects.toString(failure.getMessage(), "").contains("ByteArray# copy range"),
                             backend + "/" + argument + "/" + value + ": " + failure);
                     }
                     for (long count : new long[] {0, 1})
                         for (boolean alias : new boolean[] {false, true}) {
-                            var module = CoreModules.reachable(merged(paths), "copiedBytes");
+                            var module = CoreModules.reachable(merged(paths), "main:ByteArrayAudit.copiedBytes");
                             var args = (List<Object>) application(module, "copyByteArray#").get(2);
                             // Either copy in the fixture may be visited first. Keep both
                             // ranges within the four-byte source when aliasing its destination.
@@ -426,7 +426,7 @@ class ByteArrayTest {
                             if (alias)
                                 args.set(2, args.getFirst());
                             var function =
-                                context.asValue(new EntryValue(program(language, module, backend), "copiedBytes", 1));
+                                context.asValue(new EntryValue(program(language, module, backend), "main:ByteArrayAudit.copiedBytes", 1));
                             if (alias) {
                                 var failure = assertThrows(PolyglotException.class, () -> function.execute(0L));
                                 assertTrue(Objects.toString(failure.getMessage(), "")
@@ -442,7 +442,7 @@ class ByteArrayTest {
                             }
                         }
                     for (boolean diagnostic : new boolean[] {false, true}) {
-                        var module = CoreModules.reachable(merged(paths), "copiedBytes");
+                        var module = CoreModules.reachable(merged(paths), "main:ByteArrayAudit.copiedBytes");
                         var proof =
                             (Map<String, Object>) CoreRepresentations.metadata(application(module, "copyByteArray#"))
                                 .get("rep");
@@ -454,7 +454,7 @@ class ByteArrayTest {
                     }
                     for (int argument = 0; argument <= 5; argument++)
                         for (boolean diagnostic : new boolean[] {false, true}) {
-                            var module = CoreModules.reachable(merged(paths), "copiedBytes");
+                            var module = CoreModules.reachable(merged(paths), "main:ByteArrayAudit.copiedBytes");
                             var args = (List<Object>) application(module, "copyByteArray#").get(2);
                             var proof =
                                 (Map<String, Object>) CoreRepresentations.metadata((List<Object>) args.get(argument))
@@ -487,14 +487,14 @@ class ByteArrayTest {
                              new Mutation("writeWord8Array#", 1, new long[] {-1, 3, Long.MAX_VALUE}),
                              new Mutation("indexWord8Array#", 1, new long[] {-1, 3, Long.MAX_VALUE})))
                         for (long value : mutation.values()) {
-                            var module = CoreModules.reachable(merged(paths), "orderedBytes");
+                            var module = CoreModules.reachable(merged(paths), "main:ByteArrayAudit.orderedBytes");
                             var app = application(module, mutation.primitive());
                             var args = (List<Object>) app.get(2);
                             var old = (List<Object>) args.get(mutation.operand());
                             args.set(mutation.operand(),
                                 List.of("lit", "int", Long.toString(value), CoreRepresentations.metadata(old)));
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, "orderedBytes", 1));
+                            var function = context.asValue(new EntryValue(p, "main:ByteArrayAudit.orderedBytes", 1));
                             var failure = assertThrows(PolyglotException.class, () -> function.execute(5L));
                             var guard = mutation.primitive().equals("newByteArray#")
                                 ? "Managed allocation size outside JVM domain"
@@ -505,8 +505,8 @@ class ByteArrayTest {
                             assertEquals(0L, ((Number) p.diagnostics().get("unsupportedTraps")).longValue());
                         }
                     var good = context.asValue(
-                        new EntryValue(program(language, CoreModules.reachable(merged(paths), "orderedBytes"), backend),
-                            "orderedBytes", 1));
+                        new EntryValue(program(language, CoreModules.reachable(merged(paths), "main:ByteArrayAudit.orderedBytes"), backend),
+                            "main:ByteArrayAudit.orderedBytes", 1));
                     assertEquals(mathematical("orderedBytes", 5), good.execute(5L).asLong());
                 } finally {
                     context.leave();
@@ -525,7 +525,7 @@ class ByteArrayTest {
                         for (int mutation = 0; mutation <= 6; mutation++)
                             for (boolean diagnostic : new boolean[] {false, true}) {
                                 var module = CoreModules.reachable(
-                                    merged(paths), operation == ByteArrayOp.COPY ? "copiedBytes" : "orderedBytes");
+                                    merged(paths), operation == ByteArrayOp.COPY ? "main:ByteArrayAudit.copiedBytes" : "main:ByteArrayAudit.orderedBytes");
                                 var app = application(module, operation.getPrimitive());
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -577,7 +577,7 @@ class ByteArrayTest {
                             }
                     for (var operation : byteOperations) {
                         var module = CoreModules.reachable(
-                            merged(paths), operation == ByteArrayOp.COPY ? "copiedBytes" : "orderedBytes");
+                            merged(paths), operation == ByteArrayOp.COPY ? "main:ByteArrayAudit.copiedBytes" : "main:ByteArrayAudit.orderedBytes");
                         var app = application(module, operation.getPrimitive());
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();

@@ -43,7 +43,7 @@ class MutableByteArrayTest {
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
         for (var path : paths)
-            modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -297,12 +297,12 @@ class MutableByteArrayTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var module = new LinkedHashMap<>(CoreModules.reachable(merged(stage.getValue()), name));
+                            var module = new LinkedHashMap<>(CoreModules.reachable(merged(stage.getValue()), "main:MutableByteArrayAudit." + name));
                             module.put("instrument", true);
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, name, 2));
+                            var function = context.asValue(new EntryValue(p, "main:MutableByteArrayAudit." + name, 2));
                             var host = p.hostEntryTarget(2);
-                            var original = p.entryTarget(name);
+                            var original = p.entryTarget("main:MutableByteArrayAudit." + name);
                             var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
                             for (var row : cases) check(row, function, label, language);
                             var targets = activeTargets(host);
@@ -615,7 +615,7 @@ class MutableByteArrayTest {
                                                                     : "disjointBytes";
                         for (int mutation = 0; mutation <= 12; mutation++)
                             for (boolean diagnostic : new boolean[] {false, true}) {
-                                var module = CoreModules.reachable(merged(paths), name);
+                                var module = CoreModules.reachable(merged(paths), "main:MutableByteArrayAudit." + name);
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -681,7 +681,7 @@ class MutableByteArrayTest {
                                     assertThrows(
                                         RuntimeFault.class, () -> program(language, configured, backend), label);
                             }
-                        var module = CoreModules.reachable(merged(paths), name);
+                        var module = CoreModules.reachable(merged(paths), "main:MutableByteArrayAudit." + name);
                         var app = application(module, operation);
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();

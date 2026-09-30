@@ -42,7 +42,7 @@ class ResizeByteArrayTest {
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
         for (var path : paths)
-            modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -303,12 +303,12 @@ class ResizeByteArrayTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var module = new LinkedHashMap<>(CoreModules.reachable(merged(stage.getValue()), name));
+                            var module = new LinkedHashMap<>(CoreModules.reachable(merged(stage.getValue()), "main:ResizeByteArrayAudit." + name));
                             module.put("instrument", true);
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, name, 2));
+                            var function = context.asValue(new EntryValue(p, "main:ResizeByteArrayAudit." + name, 2));
                             var host = p.hostEntryTarget(2);
-                            var original = p.entryTarget(name);
+                            var original = p.entryTarget("main:ResizeByteArrayAudit." + name);
                             var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
                             for (var row : cases) check(row, function, label, language);
                             var targets = activeTargets(host);
@@ -514,7 +514,7 @@ class ResizeByteArrayTest {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (int mutation = 0; mutation <= 10; mutation++)
                         for (boolean diagnostic : new boolean[] {false, true}) {
-                            var module = CoreModules.reachable(merged(paths), "resizedBytes");
+                            var module = CoreModules.reachable(merged(paths), "main:ResizeByteArrayAudit.resizedBytes");
                             var app = resizeApplication(module);
                             var args = (List<Object>) app.get(2);
                             var flags = (List<Object>) app.get(3);
@@ -563,7 +563,7 @@ class ResizeByteArrayTest {
                             else
                                 assertThrows(RuntimeFault.class, () -> program(language, configured, backend), label);
                         }
-                    var module = CoreModules.reachable(merged(paths), "resizedBytes");
+                    var module = CoreModules.reachable(merged(paths), "main:ResizeByteArrayAudit.resizedBytes");
                     var app = resizeApplication(module);
                     var bare = new ArrayList<>((List<?>) app.get(1));
                     app.clear();
