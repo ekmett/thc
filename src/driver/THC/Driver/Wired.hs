@@ -45,8 +45,7 @@ import THC.Driver.Installed (InstalledContext(..), InstalledUnit(..), InterfaceW
   boundedInterfaceProcess, packageGlobalArguments, installedViewIdentity)
 import THC.Compact.Module (readModuleMetadata)
 import THC.Driver.InstalledForeign (createView, viewContext)
-import THC.Driver.GhcProxy (directPlugin)
-import THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions)
+import THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions, pinnedPluginOptions)
 import THC.Driver.PinnedSetup (configurePinnedCustom)
 import THC.Driver.Lock (withLock)
 import Distribution.Package (pkgName, pkgVersion)
@@ -421,9 +420,9 @@ pinnedDependencyOrder units
 -- | Rebuild the selected boot-library closure from the exact GHC release,
 -- retaining Cabal identities and native registrations in a private interface
 -- view, leaving the selected compiler and its package database untouched.
-preparePinnedInterfaces :: FilePath -> FilePath -> String -> FilePath ->
+preparePinnedInterfaces :: FilePath -> FilePath -> FilePath -> String -> FilePath ->
                            InstalledContext -> [InstalledUnit] -> IO InstalledContext
-preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units = do
+preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary original units = do
   ordered <- either fail pure (pinnedDependencyOrder units)
   settings <- either fail pure . readEither =<< readProcess (installedGhc original) ["--info"] ""
   source <- pinnedRelease cache
@@ -452,7 +451,7 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
               dynamic = installedInterfaceWay context == DynamicInterfaces
               suffixes = if dynamic then ["hi", "dyn_hi"] else ["hi"]
               key = digest (BL.toStrict (encode
-                ("pinned-library-core-v4" :: String, pinnedReleaseIdentity, driverHash, pluginUnit, pluginHash, helperHash,
+                ("pinned-library-core-v5" :: String, pinnedReleaseIdentity, driverHash, pluginDb, pluginUnit, pluginHash, helperHash,
                  installedCompiler original, settings, selectedFlags, cppFlags, installedViewIdentity context, registration unit)))
               destination = cache </> "pinned-libraries/v1" </> key
               receipt = destination </> "complete"
@@ -473,7 +472,7 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
               BL.writeFile (destination </> "inputs.json") (encode (object
                 ["source" .= pinnedReleaseIdentity, "compiler" .= installedCompiler original,
                  "registration" .= registration unit, "dependencyView" .= installedViewIdentity context,
-                 "driverHash" .= driverHash, "pluginHash" .= pluginHash, "helperHash" .= helperHash,
+                 "driverHash" .= driverHash, "pluginDb" .= pluginDb, "pluginHash" .= pluginHash, "helperHash" .= helperHash,
                  "flags" .= selectedFlags, "cppFlags" .= cppFlags, "settings" .= settings]))
               let package = destination </> "source"
                   dist = destination </> "dist"
@@ -579,9 +578,9 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                     rendered = renderGhcOptions (compiler configured) (hostPlatform configured) options'
                     graphArguments = filter (`notElem` ["--make", "-no-link"]) rendered
                     request = destination </> "source-graph-request.json"
-                    exportFlags = ["-fplugin-trustworthy", directPlugin pluginLibrary pluginUnit
+                    exportFlags = ["-fplugin-trustworthy"] ++ pinnedPluginOptions Host.os pluginDb pluginUnit pluginLibrary
                          [core,"post-tidy","unit-qualified","source-notes","foreign-import-provenance",
-                          "foreign-export-associations","foreign-export-registration"] []]
+                          "foreign-export-associations","foreign-export-registration"]
                 createDirectoryIfMissing True core
                 BL.writeFile request (encode graphArguments)
                 graphText <- readProcess (installedHelper context)
