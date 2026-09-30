@@ -30,6 +30,41 @@ class WideCharAddressTest {
             modules.add(thc.CoreCbdFixtures.read(new File(root, "build/wide-char-address/" + stage + "/core/" + file).toPath()));
         return CoreModules.merge(modules);
     }
+    private int inlinedStateApplications(Object value) {
+        int count = 0;
+        if (value instanceof Map<?, ?> map) {
+            for (var child : map.values()) count += inlinedStateApplications(child);
+        } else if (value instanceof List<?> node) {
+            var inline = CoreStateApplications.inline(node);
+            if (inline != null) {
+                var function = (List<?>) node.get(1);
+                var formals = (List<Map<String, Object>>) function.get(1);
+                assertEquals(1, formals.size());
+                var formal = formals.getFirst();
+                assertEquals("State# RealWorld", formal.get("type"));
+                assertEquals(false, formal.get("lifted"));
+                assertFalse(Boolean.TRUE.equals(formal.get("coercion")));
+                var proof = CoreRepresentations.binder(formal);
+                assertEquals(CoreKind.VOID, proof.getKind()); assertFalse(proof.isAggregate());
+                assertEquals(List.of(), proof.getPrimReps());
+                var arguments = (List<?>) node.get(2); assertEquals(1, arguments.size());
+                var state = (List<?>) arguments.getFirst(); assertEquals("void", state.getFirst());
+                var actual = CoreRepresentations.expression(state);
+                assertEquals(CoreKind.VOID, actual.getKind()); assertFalse(actual.isAggregate());
+                assertEquals(List.of(), actual.getPrimReps()); assertEquals(List.of(false), node.get(3));
+                assertEquals("case", inline.getFirst()); assertSame(state, inline.get(1));
+                assertEquals(formal.get("id"), inline.get(2));
+                var metadata = CoreRepresentations.metadata(inline);
+                assertSame(formal, metadata.get("binder"));
+                CoreRepresentations.metadata(node).forEach((key, original) -> assertSame(original, metadata.get(key), key));
+                var alternative = (List<?>) ((List<?>) inline.get(3)).getFirst();
+                assertEquals("default", alternative.getFirst()); assertSame(function.get(2), alternative.get(3));
+                count++;
+            }
+            for (var child : node) count += inlinedStateApplications(child);
+        }
+        return count;
+    }
     private List<List<Object>> calls(Object value) {
         var result = new ArrayList<List<Object>>();
         if (value instanceof Map<?, ?> map)
@@ -169,6 +204,11 @@ class WideCharAddressTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var module = new LinkedHashMap<>(CoreModules.reachable(source(stage), "main:WideCharAddressAudit.wideCharRoundtrip"));
+                            var binding = ((List<Map<String, Object>>) module.get("bindings")).stream()
+                                .filter(value -> "main:WideCharAddressAudit.wideCharRoundtrip".equals(value.get("id"))).findFirst().orElseThrow();
+                            var body = (List<?>) ((List<?>) binding.get("expr")).get(2);
+                            assertNotNull(CoreStateApplications.inline(body), "The real runRW action is reduced in its owning scope");
+                            assertEquals(1, inlinedStateApplications(module.get("bindings")), "Exactly the immediate State# action is inlined");
                             module.put("instrument", true);
                             ExecutableProgram program = backend.equals("ast") ? new Program(language, module)
                                                                               : new BytecodeProgram(language, module);
@@ -177,7 +217,8 @@ class WideCharAddressTest {
                             for (int i = 0; i < 3; i++)
                                 for (var row : oracle) check(row, entry, language, label);
                             var active = targets(entry);
-                            assertTrue(active.size() >= 2, "Retain the real runRW action");
+                            assertSame(entry, active.getLast(), "Retain the physical entry for the reduced State# action");
+                            assertSame(entry, program.entryTarget("main:WideCharAddressAudit.wideCharRoundtrip"));
                             for (var target : active) {
                                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                                 valid(target);

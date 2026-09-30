@@ -704,7 +704,7 @@ class FastInputTests(unittest.TestCase):
         artifacts = cache.MEMORY_FIXTURE_OUTPUTS[directory] - {manifest_path}
         for name in artifacts:
             self.put(name, b'{}\n' if name.endswith('.json') else b'\x00\x80\xff\n')
-        binary = 'build/address-array-copy/native/oracle'
+        binary = f'build/{directory}/native/oracle'
         if binary in artifacts:
             (self.root / binary).chmod(0o755)
         manifest = {'schema': 1, 'ghc': '9.14.1', 'inputHashes': self.manifest['inputHashes'],
@@ -714,14 +714,15 @@ class FastInputTests(unittest.TestCase):
 
     def test_memory_fixtures_admit_exact_recorded_outputs_only(self):
         expected_counts = {'address-array-copy': 42, 'atomic-int-arrays': 116,
-                           'atomic-address': 28, 'unaligned-scalar-memory': 31}
+                           'atomic-address': 28, 'unaligned-scalar-memory': 31,
+                           'pinned-pointer-cells': 8, 'wide-char-address': 32}
         for directory, outputs in cache.MEMORY_FIXTURE_OUTPUTS.items():
             with self.subTest(directory=directory):
                 self.assertEqual(expected_counts[directory], len(outputs))
                 self.assertIn(f'build/{directory}/manifest.json', DECLARED_REQUIRED)
                 for name in outputs:
                     self.assertTrue(cache.allowed_payload(name), name)
-                    if name == 'build/address-array-copy/native/oracle':
+                    if name in ('build/address-array-copy/native/oracle', 'build/wide-char-address/native/oracle'):
                         self.assertEqual(0o755, cache.safe_mode(0o755, name))
                     else:
                         with self.assertRaises(cache.CacheMiss, msg=name):
@@ -798,10 +799,12 @@ class FastInputTests(unittest.TestCase):
                 self.assertEqual(original, (self.root / path).read_bytes())
             for path, expected in restored['payload'].items():
                 self.assertEqual(expected, cache.digest(self.root / path))
-            self.assertEqual(0o755, (self.root / 'build/address-array-copy/native/oracle').stat().st_mode & 0o7777)
+            for binary in ('build/address-array-copy/native/oracle', 'build/wide-char-address/native/oracle'):
+                self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
             self.remove_payload(packed)
             for directory in cache.MEMORY_FIXTURE_OUTPUTS:
-                artifact = f'build/{directory}/oracle.tsv'
+                artifact = (f'build/{directory}/logs/native-oracle.stdout' if directory == 'wide-char-address'
+                            else f'build/{directory}/oracle.tsv')
                 with self.subTest(directory=directory, failure='missing'):
                     changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
                         if member.name != 'files/' + artifact])
@@ -819,7 +822,8 @@ class FastInputTests(unittest.TestCase):
             for directory in cache.MEMORY_FIXTURE_OUTPUTS:
                 with self.subTest(directory=directory):
                     path = f'build/{directory}/manifest.json'
-                    omitted = f'build/{directory}/oracle.tsv'
+                    omitted = (f'build/{directory}/logs/native-oracle.stdout' if directory == 'wide-char-address'
+                               else f'build/{directory}/oracle.tsv')
 
                     def omit_evidence(entries):
                         # This is a forged synthetic archive, never resealed real evidence.
@@ -995,7 +999,7 @@ class FastInputTests(unittest.TestCase):
     def test_pinned_address_closed_artifacts_and_byte_preserving_restore(self):
         name = 'build/pinned-addresses/manifest.json'
         artifacts = cache.PINNED_ADDRESS_OUTPUTS - {name}
-        self.assertEqual(227, len(artifacts))
+        self.assertEqual(231, len(artifacts))
         self.assertIn(name, DECLARED_REQUIRED)
         binary = 'build/pinned-addresses/native/pinned-address-oracle'
         for path in artifacts:
@@ -1005,7 +1009,7 @@ class FastInputTests(unittest.TestCase):
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         (self.root / binary).chmod(0o755)
-        for suffix in ('commands/extra.stdout', 'previous-manifests/old.json', 'pre/ghc/Unknown.hi', 'native/extra.o', 'pre/negative/extra.json'):
+        for suffix in ('commands/extra.stdout', 'previous-manifests/old.json', 'pre/ghc/Unknown.hi', 'native/extra.o', 'pre/negative/extra.json', 'pre/negative/extra.cbd', 'pre/negative/read-state-is-int-0.json', 'pre/core/Other.cbd'):
             self.assertFalse(cache.allowed_payload('build/pinned-addresses/' + suffix), suffix)
         records = {path: cache.digest(self.root / path) for path in artifacts}
         manifest = dict(schema=1, mode='full', strictAccepted=True, inputHashes=self.manifest['inputHashes'], artifactHashes=records)
@@ -1021,7 +1025,7 @@ class FastInputTests(unittest.TestCase):
             self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
             self.remove_payload(packed)
             missing = self.rewrite(lambda items: [(member, data) for member, data in items
-                if member.name != 'files/build/pinned-addresses/pre/negative/read-state-is-int-0.json'])
+                if member.name != 'files/build/pinned-addresses/pre/negative/read-state-is-int-0.cbd'])
             self.rejected_without_writes(missing)
 
     def test_bignat_closed_artifacts_preserve_receipt_and_reject_missing_records(self):

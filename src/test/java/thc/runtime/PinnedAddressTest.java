@@ -250,7 +250,7 @@ public class PinnedAddressTest {
         assertEquals(stages.keySet(), negativeProofs.keySet());
         assertEquals(stages.keySet(), keepSites.keySet());
         for (String stage : stages.keySet()) {
-            var core = report(stages.get(stage).getFirst());
+            var core = thc.CoreCbdFixtures.read(root.resolve(stages.get(stage).getFirst()));
             assertEquals("9.14.1", core.get("ghc"));
             assertEquals(
                 stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep",
@@ -404,6 +404,50 @@ public class PinnedAddressTest {
         for (String path : paths) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
         return CoreModules.merge(modules);
     }
+    private int inlinedStateApplications(Object value) {
+        int count = 0;
+        if (value instanceof Map<?, ?> map) {
+            for (var child : map.values()) count += inlinedStateApplications(child);
+        } else if (value instanceof List<?> node) {
+            var inline = CoreStateApplications.inline(node);
+            if (inline != null) {
+                var function = (List<?>) node.get(1);
+                var formals = (List<Map<String, Object>>) function.get(1);
+                assertEquals(1, formals.size());
+                var formal = formals.getFirst();
+                assertEquals("State# RealWorld", formal.get("type"));
+                assertEquals(false, formal.get("lifted"));
+                assertFalse(Boolean.TRUE.equals(formal.get("coercion")));
+                var proof = CoreRepresentations.binder(formal);
+                assertEquals(CoreKind.VOID, proof.getKind()); assertFalse(proof.isAggregate());
+                assertEquals(List.of(), proof.getPrimReps());
+                var arguments = (List<?>) node.get(2); assertEquals(1, arguments.size());
+                var state = (List<?>) arguments.getFirst(); assertEquals("void", state.getFirst());
+                var actual = CoreRepresentations.expression(state);
+                assertEquals(CoreKind.VOID, actual.getKind()); assertFalse(actual.isAggregate());
+                assertEquals(List.of(), actual.getPrimReps()); assertEquals(List.of(false), node.get(3));
+                assertEquals("case", inline.getFirst()); assertSame(state, inline.get(1));
+                assertEquals(formal.get("id"), inline.get(2));
+                var metadata = CoreRepresentations.metadata(inline);
+                assertSame(formal, metadata.get("binder"));
+                CoreRepresentations.metadata(node).forEach((key, original) -> assertSame(original, metadata.get(key), key));
+                var alternative = (List<?>) ((List<?>) inline.get(3)).getFirst();
+                assertEquals("default", alternative.getFirst()); assertSame(function.get(2), alternative.get(3));
+                count++;
+            }
+            for (var child : node) count += inlinedStateApplications(child);
+        }
+        return count;
+    }
+    private void joinIds(Object value, Set<String> ids) {
+        if (value instanceof Map<?, ?> map) {
+            if (map.get("joinValueArity") instanceof Number arity && arity.longValue() > 0) {
+                assertEquals("lam", ((List<?>) map.get("expr")).getFirst());
+                assertTrue(ids.add((String) map.get("id")), "Duplicate source join binder");
+            }
+            for (var child : map.values()) joinIds(child, ids);
+        } else if (value instanceof List<?> list) for (var child : list) joinIds(child, ids);
+    }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
@@ -479,9 +523,19 @@ public class PinnedAddressTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var program = program(language,
-                                plus(CoreModules.reachable(merged(stage.getValue()), "main:PinnedAddressAudit." + name), "instrument", true),
-                                backend);
+                            var linked = CoreModules.reachable(merged(stage.getValue()), "main:PinnedAddressAudit." + name);
+                            var binding = ((List<Map<String, Object>>) linked.get("bindings")).stream()
+                                .filter(value -> ("main:PinnedAddressAudit." + name).equals(value.get("id"))).findFirst().orElseThrow();
+                            var body = (List<?>) ((List<?>) binding.get("expr")).get(2);
+                            assertNotNull(CoreStateApplications.inline(body), "The immediate State# action is reduced in its owning scope");
+                            int reductions = inlinedStateApplications(linked.get("bindings"));
+                            assertEquals(1, reductions, "Exactly the immediate State# action is inlined");
+                            long guestEntries = guestCalls.get(name) - reductions;
+                            var joinIds = new HashSet<String>(); joinIds(linked.get("bindings"), joinIds);
+                            var structures = (Map<String, Map<String, Object>>) manifest.get("checkedGuestStructureByStage");
+                            assertEquals(((Number) structures.get(stage.getKey() + "/" + name).get("localJoinPrefixes")).intValue(),
+                                joinIds.size(), "Original source join prefix inventory");
+                            var program = program(language, plus(linked, "instrument", true), backend);
                             var function = context.asValue(new EntryValue(program, "main:PinnedAddressAudit." + name, (int) arity));
                             var host = program.hostEntryTarget((int) arity);
                             var original = program.entryTarget("main:PinnedAddressAudit." + name);
@@ -494,18 +548,45 @@ public class PinnedAddressTest {
                             };
                             cases.forEach(check);
                             var targets = activeTargets(host);
-                            assertEquals(guestCalls.get(name).intValue() + 1, targets.size(),
-                                label + " concrete guest roots plus host");
+                            var regionAnchors = new HashSet<String>();
+                            var regionOwners = new HashSet<BytecodeRoot>();
+                            for (var target : targets) {
+                                var root = target.getRootNode(); var rootName = root.getName();
+                                if (rootName.startsWith("join region ")) {
+                                    assertEquals("bytecode", backend); assertInstanceOf(BytecodeRoot.class, root);
+                                    var anchor = rootName.substring("join region ".length());
+                                    assertTrue(joinIds.contains(anchor), "Region must own a genuine source join");
+                                    assertTrue(regionAnchors.add(anchor), "Duplicate physical join region");
+                                    assertEquals(0L, ((BytecodeRoot) root).entryMask(), "Prepared region passes through its logical entry");
+                                    var owners = new ArrayList<BytecodeRoot>();
+                                    for (var candidate : targets)
+                                        for (var region : NodeUtil.findAllNodeInstances(candidate.getRootNode(), BytecodeCaseRegion.class))
+                                            for (var call : NodeUtil.findAllNodeInstances(region, DirectCallNode.class))
+                                                if (call.getCurrentCallTarget() == target)
+                                                    owners.add(assertInstanceOf(BytecodeRoot.class, region.getRootNode()));
+                                    assertEquals(1, owners.size(), "Each prepared join region has one original inline owner");
+                                    var owner = owners.getFirst(); assertTrue(targets.contains(owner.getCallTarget()));
+                                    assertTrue(owner.useInlineCaseRegions(), "Original join body remains on its inline path");
+                                    regionOwners.add(owner);
+                                }
+                            }
+                            long physicalGuestEntries = guestEntries + regionAnchors.size();
+                            assertSame(host, targets.getLast()); assertTrue(targets.contains(original));
+                            assertSame(original, program.entryTarget("main:PinnedAddressAudit." + name));
+                            assertEquals(physicalGuestEntries + 1, targets.size(),
+                                label + " concrete guest roots plus host " + targets.stream().map(target -> target.getRootNode().getName()).toList());
                             for (var target : targets)
                                 if (target != host)
                                     compile(target);
                             assertTrue(function.invokeMember("compile").asBoolean());
                             for (var row : cases.reversed()) {
+                                for (var owner : regionOwners) assertTrue(owner.useInlineCaseRegions(), label + " inline region assumption");
                                 long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                                 check.accept(row);
-                                assertEquals(before + guestCalls.get(name),
+                                assertEquals(before + guestEntries,
                                     ((Number) program.diagnostics().get("compiledEntries")).longValue(),
-                                    label + " exact compiled guest entries");
+                                    label + " exact executed compiled guest entries");
+                                for (var owner : regionOwners) assertTrue(owner.useInlineCaseRegions(), label + " retained inline region assumption");
                                 assertEquals(targets, activeTargets(host), label + " active identities");
                                 valid(original, label);
                                 for (var target : targets) valid(target, label);

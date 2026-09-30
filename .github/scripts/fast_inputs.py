@@ -63,7 +63,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/VectorMemory.java",
                   "src/test/java/thc/runtime/IntegerSimdModelTest.java",
                   "src/test/java/thc/runtime/IntegerSimdModel.java")
-MANIFEST_DIRS = """mask-functions bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -281,7 +281,23 @@ UNALIGNED_SCALAR_MEMORY_OUTPUTS = frozenset("build/unaligned-scalar-memory/" + n
         *(f"{stage}-{step}" for stage in ("pre", "post") for step in ("export", "audit")))
       for suffix in ("stdout", "stderr", "command.json")),
 ))
+PINNED_POINTER_CELL_OUTPUTS = frozenset("build/pinned-pointer-cells/" + name for name in (
+    "manifest.json", "oracle.tsv",
+    *(f"{stage}/{name}" for stage in ("pre", "post")
+      for name in ("audit.json", "core/PinnedPointerCellsAudit.cbd", "core/THC.InterfaceClosure.cbd")),
+))
+WIDE_CHAR_ADDRESS_OUTPUTS = frozenset("build/wide-char-address/" + name for name in (
+    "manifest.json", "native/oracle",
+    *(f"{stage}/{name}" for stage in ("pre", "post")
+      for name in ("audit.json", "core/WideCharAddressAudit.cbd", "core/THC.InterfaceClosure.cbd")),
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "native-compile", "native-oracle",
+        *(f"{stage}-{step}" for stage in ("pre", "post") for step in ("export", "audit")))
+      for suffix in ("stdout", "stderr", "command.json")),
+))
 MEMORY_FIXTURE_OUTPUTS = {
+    "pinned-pointer-cells": PINNED_POINTER_CELL_OUTPUTS,
+    "wide-char-address": WIDE_CHAR_ADDRESS_OUTPUTS,
     "address-array-copy": ADDRESS_ARRAY_COPY_OUTPUTS,
     "atomic-int-arrays": ATOMIC_INT_ARRAY_OUTPUTS,
     "atomic-address": ATOMIC_ADDRESS_OUTPUTS,
@@ -475,11 +491,12 @@ PINNED_ADDRESS_COMMANDS = ("native-build", "native-oracle", *(f"{stage}-export" 
 PINNED_ADDRESS_OUTPUTS = frozenset("build/pinned-addresses/" + path for path in (
     "manifest.json", "requests.tsv", "expected.tsv", "oracle.tsv", "structure-controls.json",
     *(f"native/{name}" for name in ("pinned-address-oracle", "Main.hi", "Main.o", "PinnedAddressAudit.hi", "PinnedAddressAudit.o")),
-    *(f"{stage}/core/{name}.json" for stage in ("pre", "post") for name in ("PinnedAddressAudit", "THC.InterfaceClosure")),
+    *(f"{stage}/core/{name}.{extension}" for stage in ("pre", "post")
+      for name in ("PinnedAddressAudit", "THC.InterfaceClosure") for extension in ("cbd", "json")),
     *(f"{stage}/negative-proofs.json" for stage in ("pre", "post")),
     *(f"{stage}/{name}.audit.json" for stage in ("pre", "post") for name in
       (*PINNED_ADDRESS_ENTRIES, *(f"negative-{label}" for label in PINNED_ADDRESS_NEGATIVES))),
-    *(f"{stage}/negative/{label}-{index}.json" for stage in ("pre", "post") for label in PINNED_ADDRESS_NEGATIVES for index in (0, 1)),
+    *(f"{stage}/negative/{label}-{index}.cbd" for stage in ("pre", "post") for label in PINNED_ADDRESS_NEGATIVES for index in (0, 1)),
     *(f"commands/{name}.{suffix}" for name in PINNED_ADDRESS_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 SIMD_WIDE_FMA_OUTPUTS = frozenset("build/simd-wide-floating-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdWideFloatFma.json", "pre-audit.json", "pre-double-audit.json"))
@@ -605,7 +622,7 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/io-main-pap/native/io-main-pap-oracle", "build/mask-functions/native/oracle", "build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
+NATIVE_EXECUTABLES = frozenset({"build/wide-char-address/native/oracle", "build/io-main-pap/native/io-main-pap-oracle", "build/mask-functions/native/oracle", "build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
     "build/floating-remainder/native/oracle",
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
