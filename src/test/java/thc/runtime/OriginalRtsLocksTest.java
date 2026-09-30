@@ -31,6 +31,8 @@ import static org.junit.jupiter.api.Assertions.*;
 public class OriginalRtsLocksTest {
     private final File root = new File(System.getProperty("thc.projectRoot")); private final String prefix = "build/original-rts-locks";
     private Map<String, Object> json(String file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(root, prefix + "/" + file).toPath())); }
+    private Map<String, Object> cbd(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, prefix + "/" + stage + ".cbd").toPath()); }
+    private static String entryId(String name) { return "main:OriginalRtsLocksAudit." + name; }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     @FunctionalInterface private interface Action { void run(Language language) throws Exception; }
     private void entered(Context context, Action action) throws Exception { context.initialize("thc"); context.enter(); try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); } finally { context.leave(); } }
@@ -53,7 +55,7 @@ public class OriginalRtsLocksTest {
     @Test public void genuineNativeClaimsMatchPrePostBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest = json("manifest.json"); assertEquals(true, manifest.get("strictAccepted")); assertEquals(true, manifest.get("originalIdsChecked")); assertEquals(true, manifest.get("typeEqualityChecked")); assertEquals(false, manifest.get("installedArtifactsHashed"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalRtsLocksAudit.hs", "t/haskell-fixtures/OriginalRtsLocksFixtures.hs", "bin/core-capabilities.json"), null);
-        var required = new LinkedHashSet<>(List.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/declarations.json", prefix + "/template-pre.json", prefix + "/oracle.json"));
+        var required = new LinkedHashSet<>(List.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/pre.cbd", prefix + "/post.cbd", prefix + "/declarations.json", prefix + "/template-pre.json", prefix + "/oracle.json"));
         for (var stage : List.of("pre", "post")) for (var entry : List.of("originalLock", "originalUnlock")) required.add(prefix + "/" + stage + "-" + entry + ".audit.json");
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");
         var declarations = json("declarations.json"); assertEquals(false, declarations.get("completeModule")); var originalCalls = OriginalStdioChecks.foreignCalls(declarations.get("projection"));
@@ -64,7 +66,7 @@ public class OriginalRtsLocksTest {
         for (var row : rows) { assertEquals(StdioHostAbi.load().error(4), row.get(5)); assertEquals(row.get(5), row.get(6)); }
         assertEquals(List.of(-1L, Long.MIN_VALUE, -1L), rows.get(1).get(2)); assertEquals((long) Integer.MIN_VALUE, rows.get(9).get(3));
         for (var stage : List.of("pre", "post")) {
-            var module = json(stage + ".json"); var calls = OriginalStdioChecks.foreignCalls(module); var operations = new LinkedHashSet<OriginalStdioOp>(); for (var call : calls) operations.add(operation(call));
+            var module = cbd(stage); assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", module.get("boundary")); var calls = OriginalStdioChecks.foreignCalls(module); var operations = new LinkedHashSet<OriginalStdioOp>(); for (var call : calls) operations.add(operation(call));
             assertEquals(Set.of(OriginalStdioOp.LOCK, OriginalStdioOp.UNLOCK), operations); assertEquals(2, calls.size());
             for (var call : calls) {
                 // Private Names have no module: the serializer supplies its current
@@ -80,10 +82,10 @@ public class OriginalRtsLocksTest {
                 assertTrue(found, "exact original private FCallId occurrence, type, Unique and descriptor");
             }
             for (var entry : List.of("originalLock", "originalUnlock")) { var audit = json(stage + "-" + entry + ".audit.json"); assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("issues")); assertEquals(List.of(), audit.get("missingGlobals")); }
-            for (var name : List.of("originalLock", "originalUnlock")) { var evidence = new ArrayCoreEvidence(module, name); assertEquals(1, evidence.getBindings().size()); assertEquals(2, evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1, evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size(), "Exact State# redex"); }
+            for (var name : List.of("originalLock", "originalUnlock")) { var evidence = new ArrayCoreEvidence(module, entryId(name)); assertEquals(1, evidence.getBindings().size()); assertEquals(2, evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1, evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size(), "Exact State# redex"); }
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) { entered(context, language -> {
                 var instrumented = new LinkedHashMap<>(module); instrumented.put("instrument", true); var program = load(language, backend, instrumented);
-                var entries = new LinkedHashMap<String, RootCallTarget>(); for (var name : List.of("originalLock", "originalUnlock")) entries.put(name, program.entryTarget(name));
+                var entries = new LinkedHashMap<String, RootCallTarget>(); for (var name : List.of("originalLock", "originalUnlock")) entries.put(name, program.entryTarget(entryId(name)));
                 class Runner {
                     Map<String, List<RootCallTarget>> active = Map.of();
                     void exercise(boolean compiled) throws Exception {
@@ -102,7 +104,7 @@ public class OriginalRtsLocksTest {
                 var runner = new Runner(); runner.exercise(false); runner.active = new LinkedHashMap<>(); for (var entry : entries.entrySet()) runner.active.put(entry.getKey(), targets(entry.getValue()));
                 for (var group : runner.active.entrySet()) {
                     var name = group.getKey(); var targets = group.getValue(); assertEquals(1, targets.size(), "Public entry with in-frame runRW body: " + name);
-                    Map<String, Object> selected = null; for (var binding : (List<Map<String, Object>>) module.get("bindings")) if (name.equals(binding.get("name"))) { if (selected != null) throw new IllegalArgumentException("Multiple bindings"); selected = binding; }
+                    Map<String, Object> selected = null; for (var binding : (List<Map<String, Object>>) module.get("bindings")) if (entryId(name).equals(binding.get("id"))) { if (selected != null) throw new IllegalArgumentException("Multiple bindings"); selected = binding; }
                     if (selected == null) throw new java.util.NoSuchElementException(name); int lambdas = 0; for (var node : OriginalStdioChecks.nodes(selected.get("expr"))) if (!node.isEmpty() && "lam".equals(node.getFirst())) lambdas++; assertEquals(2, lambdas);
                     for (var target : targets) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }
                 }
@@ -116,7 +118,7 @@ public class OriginalRtsLocksTest {
     }
     private record Mutation(String key, Object value) {}
     @Test public void stateRawProofsAndMalformedHeadsRejectBeforeTableMutation() throws Exception {
-        var source = json("pre.json");
+        var source = cbd("pre");
         for (var call : OriginalStdioChecks.foreignCalls(source)) {
             var op = Objects.requireNonNull(operation(call)); int count = op.getArguments().size();
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) { entered(context, language -> {

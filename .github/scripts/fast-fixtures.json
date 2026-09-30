@@ -422,7 +422,8 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-rts-locks", "--require-supported"]}],
       "outputs": ["build/original-rts-locks"],
       "sources": ["t/fixtures/compiler/OriginalRtsLocksAudit.hs", "t/haskell-fixtures/OriginalRtsLocksFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/CompactModelFixtures.hs",
+        "src/cbd/THC/Compact/Module.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-strerror": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"],
@@ -545,6 +546,8 @@
         "t/fixtures/compiler/OriginalFdReadyAuditNative.hs",
         "t/haskell-fixtures/OriginalFdReadyFixtures.hs",
         "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/CompactModelFixtures.hs",
+        "src/cbd/THC/Compact/Module.hs",
         "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]

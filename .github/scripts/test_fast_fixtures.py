@@ -1718,11 +1718,65 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/original-fd-ready', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('"original-fd-ready/**/*.json"', (project / 'build.gradle').read_text())
+        self.assertIn('"original-fd-ready/**/*.cbd"', (project / 'build.gradle').read_text())
+        self.assertIn('t/haskell-fixtures/CompactModelFixtures.hs', group['sources'])
+        self.assertIn('src/cbd/THC/Compact/Module.hs', group['sources'])
+        self.assertIn('build/original-fd-ready/OriginalFdReadyAudit.cbd',
+                      fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
+        for label in fast_fixtures.fast_inputs.ORIGINAL_FD_READY_NEGATIVES:
+            if label in ('dynamic-target', 'boolean-schema'):
+                self.assertIn(f'build/original-fd-ready/negative/{label}.codec-rejection.json',
+                              fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
+                self.assertNotIn(f'build/original-fd-ready/negative/{label}.cbd',
+                                 fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
+            else:
+                self.assertIn(f'build/original-fd-ready/negative/{label}.cbd',
+                              fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
         for path in fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS:
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
         for name in ('OriginalFD.json', 'native/unreviewed', 'logs/extra.stdout',
                      'negative/extra.json', 'native/OriginalFdReadyAudit.hi', 'test-results/pass.xml'):
             self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/original-fd-ready/' + name))
+
+    def test_original_fd_ready_selected_receipt_preserves_rejection_stages_and_hashes(self):
+        self.assertTrue(hasattr(fast_fixtures.fast_inputs, 'fd_ready_artifact_hashes'))
+        project = Path(__file__).resolve().parents[2]
+        group = fast_fixtures._manifest(project)[0]['groups']['original-fd-ready']
+        name = 'build/original-fd-ready/manifest.json'
+        artifacts = {}
+        for artifact in fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS - {name}:
+            path = self.root / artifact
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('{}\n')
+            artifacts[artifact] = fast_fixtures._digest(path)
+        rejections = {label: f'build/original-fd-ready/negative/{label}.codec-rejection.json'
+                      for label in ('dynamic-target', 'boolean-schema')}
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_ENTRIES),
+                       nativeRows=168, negativeAudits=20, negativeEncodingRejections=2, negativeControls=12,
+                       negativeControlLabels=list(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_NEGATIVES),
+                       codecRejections=rejections, artifactHashes=artifacts)
+        path = self.root / name
+        path.write_text(json.dumps(receipt))
+        self.assertEqual(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS,
+                         fast_fixtures._output_hashes(self.root, group).keys())
+        for key, value in (('schema', True), ('nativeRows', 167), ('nativeRows', True),
+                           ('negativeAudits', 24), ('negativeAudits', True),
+                           ('negativeEncodingRejections', 0), ('negativeControls', 11),
+                           ('negativeControlLabels', list(reversed(receipt['negativeControlLabels']))),
+                           ('codecRejections', {'boolean-schema': rejections['boolean-schema']})):
+            path.write_text(json.dumps(dict(receipt, **{key: value})))
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+        for change in ('unknown', 'missing', 'changed', 'symlink'):
+            path.write_text(json.dumps(receipt))
+            artifact = self.root / 'build/original-fd-ready/OriginalFdReadyAudit.cbd'
+            if artifact.is_symlink(): artifact.unlink()
+            artifact.write_text('{}\n')
+            if change == 'unknown':
+                path.write_text(json.dumps(dict(receipt, artifactHashes=dict(artifacts, **{'build/original-fd-ready/extra.cbd': '0'*64}))))
+            elif change == 'missing': artifact.unlink()
+            elif change == 'changed': artifact.write_text('changed')
+            else: artifact.unlink(); artifact.symlink_to(path)
+            with self.assertRaises((RuntimeError, FileNotFoundError)): fast_fixtures._output_hashes(self.root, group)
 
     def test_rts_diagnostics_exact_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
@@ -1829,6 +1883,14 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/original-rts-locks', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('"original-rts-locks/**/*.json"', (project / 'build.gradle').read_text())
+        self.assertIn('"original-rts-locks/**/*.cbd"', (project / 'build.gradle').read_text())
+        self.assertIn('t/haskell-fixtures/CompactModelFixtures.hs', group['sources'])
+        self.assertIn('src/cbd/THC/Compact/Module.hs', group['sources'])
+        for stage in ('pre', 'post'):
+            name = f'build/original-rts-locks/{stage}.cbd'
+            self.assertIn(name, fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS)
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(name))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/original-rts-locks/extra.cbd'))
 
     def test_original_open_exact_registration_and_closed_manifest(self):
         project = Path(__file__).resolve().parents[2]
@@ -1893,7 +1955,7 @@ class FixturePreparationTest(unittest.TestCase):
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
         for change in ('unknown', 'missing', 'changed', 'symlink'):
             path.write_text(json.dumps(manifest))
-            artifact = self.root / 'build/original-rts-locks/pre.json'
+            artifact = self.root / 'build/original-rts-locks/pre.cbd'
             if artifact.is_symlink(): artifact.unlink()
             artifact.write_text('{}\n')
             if change == 'unknown':

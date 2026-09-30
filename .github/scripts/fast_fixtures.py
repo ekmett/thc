@@ -543,6 +543,10 @@ def _output_hashes(root, group):
         name = "build/original-rts-locks/manifest.json"
         expected = fast_inputs.rts_lock_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-fd-ready"]:
+        name = "build/original-fd-ready/manifest.json"
+        expected = fast_inputs.fd_ready_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-open"]:
         name = "build/original-open/manifest.json"
         expected = fast_inputs.original_open_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -702,7 +706,7 @@ def _full_output_hashes(root):
         if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams", "build/unix-wait-status"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
-        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES | fast_inputs.INTEGER_SIMD_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
+        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES | fast_inputs.INTEGER_SIMD_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-fd-ready", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

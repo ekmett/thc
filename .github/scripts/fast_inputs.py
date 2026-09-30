@@ -750,6 +750,7 @@ ORIGINAL_OPEN_OUTPUTS = frozenset("build/original-open/" + name for name in (
 ))
 ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for name in (
     "manifest.json", "oracle.json", "declarations.json", "template-pre.json", "pre.json", "post.json",
+    "pre.cbd", "post.cbd",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_RTS_LOCK_ENTRIES),
     *(f"logs/{label}.{suffix}" for label in ("version", "info", "libdir", "imports",
         *(f"{stage}-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_RTS_LOCK_ENTRIES))
@@ -950,16 +951,21 @@ ORIGINAL_FD_READY_NEGATIVES = (
     "wrong-arity", "wrong-supplied-arity", "boolean-schema", "signed-cbool",
     "machine-timeout", "scalar-state", "machine-result",
 )
+ORIGINAL_FD_READY_ENCODING_REJECTIONS = ("dynamic-target", "boolean-schema")
+ORIGINAL_FD_READY_AUDIT_NEGATIVES = tuple(
+    label for label in ORIGINAL_FD_READY_NEGATIVES if label not in ORIGINAL_FD_READY_ENCODING_REJECTIONS)
 ORIGINAL_FD_READY_LOGS = (
     "ghc-version", "ghc-info", "ghc-libdir", "ghc-internal-imports", "native-build", "native-observations",
 ) + tuple(f"audit-{entry}" for entry in ORIGINAL_FD_READY_ENTRIES) + tuple(
-    f"negative-{label}-{entry}" for label in ORIGINAL_FD_READY_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES)
+    f"negative-{label}-{entry}" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES)
 ORIGINAL_FD_READY_OUTPUTS = frozenset("build/original-fd-ready/" + name for name in (
     "manifest.json", "oracle.json", "OriginalFDDeclarations.json", "Template.json",
-    "OriginalFdReadyAudit.json", "facts.json", "native/oracle", "native/private-file",
+    "OriginalFdReadyAudit.json", "OriginalFdReadyAudit.cbd", "facts.json", "native/oracle", "native/private-file",
     *(f"{entry}.audit.json" for entry in ORIGINAL_FD_READY_ENTRIES),
     *(f"negative/{label}.json" for label in ORIGINAL_FD_READY_NEGATIVES),
-    *(f"negative/{label}-{entry}.audit.json" for label in ORIGINAL_FD_READY_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES),
+    *(f"negative/{label}.cbd" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES),
+    *(f"negative/{label}.codec-rejection.json" for label in ORIGINAL_FD_READY_ENCODING_REJECTIONS),
+    *(f"negative/{label}-{entry}.audit.json" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES),
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_FD_READY_LOGS for suffix in ("stdout", "stderr", "command.json")),
 ))
 
@@ -1193,6 +1199,28 @@ def rts_lock_artifact_hashes(manifest):
             "Incomplete/unreviewed RTS lock artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
             "Invalid RTS lock artifact hash")
+    return artifacts
+
+
+def fd_ready_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(ORIGINAL_FD_READY_ENTRIES),
+            "Invalid original fdReady manifest")
+    for field, expected in (("nativeRows", 168), ("negativeAudits", 20),
+                            ("negativeEncodingRejections", 2), ("negativeControls", 12)):
+        require(type(manifest.get(field)) is int and manifest[field] == expected,
+                "Invalid original fdReady proof count: " + field)
+    require(manifest.get("negativeControlLabels") == list(ORIGINAL_FD_READY_NEGATIVES) and
+            manifest.get("codecRejections") == {
+                label: f"build/original-fd-ready/negative/{label}.codec-rejection.json"
+                for label in ORIGINAL_FD_READY_ENCODING_REJECTIONS},
+            "Incomplete original fdReady rejection stages")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_FD_READY_OUTPUTS - {"build/original-fd-ready/manifest.json"},
+            "Incomplete/unreviewed original fdReady artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid original fdReady artifact hash")
     return artifacts
 
 
