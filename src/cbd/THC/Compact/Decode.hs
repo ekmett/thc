@@ -103,9 +103,17 @@ closureProvenance decoder = ClosureProvenance <$> present (list decoder (string 
   <*> list decoder (BindingOrigin <$> string decoder <*> present (string decoder) <*> present (string decoder))
 
 targetLayout :: Decoder -> Get TargetLayout
-targetLayout decoder = TargetLayout <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
-  <*> getUVar <*> boolean <*> getUVar <*> enumeration <*> string decoder <*> boolean
-  <*> replicateM (length targetNumberNames) getUVar
+targetLayout decoder = do
+  documentSchema <- getUVar
+  compilerId <- string decoder
+  abi <- string decoder
+  platform <- string decoder
+  way <- string decoder
+  schema <- getUVar
+  names <- either fail pure (targetNumberNamesFor schema)
+  TargetLayout documentSchema compilerId abi platform way schema
+    <$> boolean <*> getUVar <*> enumeration <*> string decoder <*> boolean
+    <*> replicateM (length names) getUVar
 
 foreignArtifacts :: Decoder -> Get ForeignArtifacts
 foreignArtifacts decoder = ForeignArtifacts <$> getUVar <*> string decoder <*> present stubs <*> list decoder file

@@ -63,11 +63,7 @@ public class ReturnedForeignPointerTest {
     }
 
     @Test public void rtsComparisonRejectsFreedReturnedAllocationInEitherOrder() throws Exception {
-        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Linux") && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")));
-        var document = new LinkedHashMap<String, Object>(StackInfoTestLayout.document(StackInfoTestLayout.fields()));
-        @SuppressWarnings("unchecked") var compiler = new LinkedHashMap<String, Object>((Map<String, Object>) document.get("compiler"));
-        compiler.put("abi", "inplace"); document.put("compiler", compiler);
-        var layout = TargetLayout.fromDocument(document);
+        var layout = RtsFlagsTest.layout();
         var proof = CoreRepresentations.parse(Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true));
         try (var context = context()) { entered(context, owner -> {
             var flags = CoreDataLabels.fromCore("RtsFlags", proof, layout); var allocation = owner.getNativeAllocations().malloc(32);

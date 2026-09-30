@@ -20,14 +20,15 @@ import thc.Json;
 /** Target-derived ABI of the original GHC stack and InfoProv sources. */
 public final class TargetLayout {
     private final String compilerId, compilerAbi, platform, way, endianness;
-    private final int wordBytes;
+    private final int wordBytes, schema;
     private final boolean tablesNextToCode;
     private final Map<String, Integer> values;
 
     private TargetLayout(String compilerId, String compilerAbi, String platform, String way,
-                         int wordBytes, String endianness, boolean tablesNextToCode, Map<String, Integer> values) {
+                         int wordBytes, String endianness, boolean tablesNextToCode, int schema, Map<String, Integer> values) {
         this.compilerId = compilerId; this.compilerAbi = compilerAbi; this.platform = platform; this.way = way;
         this.wordBytes = wordBytes; this.endianness = endianness; this.tablesNextToCode = tablesNextToCode;
+        this.schema = schema;
         this.values = Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
     public String getCompilerId() { return compilerId; }
@@ -37,6 +38,7 @@ public final class TargetLayout {
     public int getWordBytes() { return wordBytes; }
     public String getEndianness() { return endianness; }
     public boolean getTablesNextToCode() { return tablesNextToCode; }
+    boolean hasRtsFlags() { return schema == 2; }
     public int offset(String name) {
         Integer result = values.get(name);
         if (result == null) throw new IllegalStateException("Unknown GHC target layout field: " + name);
@@ -54,7 +56,7 @@ public final class TargetLayout {
         Map<String, Object> compiler = new LinkedHashMap<>();
         compiler.put("id", compilerId); compiler.put("abi", compilerAbi); compiler.put("platform", platform); compiler.put("way", way);
         Map<String, Object> layout = new LinkedHashMap<>(values);
-        layout.put("schema", 1); layout.put("profiled", false); layout.put("wordBytes", wordBytes);
+        layout.put("schema", schema); layout.put("profiled", false); layout.put("wordBytes", wordBytes);
         layout.put("endianness", endianness); layout.put("tablesNextToCode", tablesNextToCode); layout.put("targetPlatform", platform);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("format", "thc-target-layout"); result.put("schema", 1); result.put("compiler", compiler); result.put("layout", layout);
@@ -103,6 +105,8 @@ public final class TargetLayout {
         "stackCatchRetryFirstCodeBytes", "stackCatchRetryAltBytes", "stackCatchRetryFrameBytes", "stackRetFunSizeBytes",
         "stackRetFunFunBytes", "stackRetFunPayloadBytes", "stackRetFunFrameBytes", "stackAnnPayloadBytes",
         "stackAnnFrameBytes", "stackClosurePayloadBytes");
+    private static final List<String> RTS_NUMBERS = List.of(
+        "rtsFlagsBytes", "traceFlagsBytes", "rtsTraceFlagsOffset", "rtsTraceFlagsBytes", "traceUserOffset", "traceUserBytes");
     private static final Map<String, Integer> ORDINALS = Map.ofEntries(
         Map.entry("closureRetBco", 29), Map.entry("closureRetSmall", 30), Map.entry("closureRetBig", 31),
         Map.entry("closureRetFun", 32), Map.entry("closureUpdateFrame", 33), Map.entry("closureCatchFrame", 34),
@@ -144,9 +148,12 @@ public final class TargetLayout {
             Objects.equals(platform, hostPlatform()) &&
             Objects.equals(way, platform.endsWith("-windows") ? "vanilla-nonprofiling" : "dynamic-nonprofiling"),
             "GHC target identity or way differs from this runtime");
+        int schema = integer(layout.get("schema"), "schema");
+        require(schema == 1 || schema == 2, "Unsupported GHC target layout schema");
         Set<String> keys = new HashSet<>(NUMBERS);
+        if (schema == 2) keys.addAll(RTS_NUMBERS);
         keys.addAll(Set.of("schema", "profiled", "wordBytes", "endianness", "targetPlatform", "tablesNextToCode"));
-        require(layout.keySet().equals(keys) && integer(layout.get("schema"), "schema") == 1 &&
+        require(layout.keySet().equals(keys) &&
             Boolean.FALSE.equals(layout.get("profiled")) && Objects.equals(layout.get("targetPlatform"), platform),
             "Incomplete or profiled GHC target layout");
         if (!(layout.get("tablesNextToCode") instanceof Boolean tablesNextToCode))
@@ -157,6 +164,19 @@ public final class TargetLayout {
         require(word == Long.BYTES && nativeEndian.equals(endian), "GHC word width or endianness differs from this runtime");
         Map<String, Integer> values = new LinkedHashMap<>();
         for (String name : NUMBERS) values.put(name, integer(layout.get(name), name));
+        if (schema == 2) {
+            for (String name : RTS_NUMBERS) values.put(name, integer(layout.get(name), name));
+            String producer = id + "/" + abi + "/" + platform + "/" + way;
+            require(values.get("rtsFlagsBytes") > 0, "Invalid rtsFlagsBytes from " + producer);
+            require(values.get("traceFlagsBytes") > 0, "Invalid traceFlagsBytes from " + producer);
+            require(values.get("rtsTraceFlagsBytes").equals(values.get("traceFlagsBytes")),
+                "rtsTraceFlagsBytes differs from traceFlagsBytes from " + producer);
+            require(values.get("traceUserBytes") == 1, "Unsupported traceUserBytes from " + producer);
+            require(values.get("rtsTraceFlagsOffset") <= values.get("rtsFlagsBytes") - values.get("rtsTraceFlagsBytes"),
+                "rtsTraceFlagsOffset exceeds rtsFlagsBytes from " + producer);
+            require(values.get("traceUserOffset") <= values.get("traceFlagsBytes") - values.get("traceUserBytes"),
+                "traceUserOffset exceeds traceFlagsBytes from " + producer);
+        }
         for (String name : List.of("Ptrs", "Nptrs", "Type", "Srt"))
             field(values, "infoTableBytes", "infoTable" + name + "Offset", values.get("infoTable" + name + "Bytes"));
         field(values, "infoProvEntBytes", "infoProvEntInfoOffset", word);
@@ -178,8 +198,10 @@ public final class TargetLayout {
         }
         require(values.get("stackRetFunPayloadBytes") <= values.get("stackRetFunFrameBytes") &&
             values.get("stackClosurePayloadBytes") >= values.get("stackHeaderBytes"), "Invalid GHC stack payload offset");
-        for (var entry : ORDINALS.entrySet()) require(values.get(entry.getKey()).equals(entry.getValue()), "GHC closure ordinals differ from 9.14.1");
-        return new TargetLayout(id, abi, platform, way, word, endian, tablesNextToCode, values);
+        // These are decoder semantic tags, not target-specific byte offsets.
+        for (var entry : ORDINALS.entrySet()) require(values.get(entry.getKey()).equals(entry.getValue()),
+            "GHC " + entry.getKey() + " differs from the 9.14.1 decoder contract for " + id + "/" + abi + "/" + platform + "/" + way);
+        return new TargetLayout(id, abi, platform, way, word, endian, tablesNextToCode, schema, values);
     }
     public static TargetLayout fromDocument(Object value) {
         if (!(value instanceof Map<?, ?> record)) throw new IllegalStateException("Invalid target layout document");

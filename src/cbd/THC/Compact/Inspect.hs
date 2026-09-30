@@ -483,7 +483,9 @@ targetLayout value = object ["format" .= String "thc-target-layout","schema" .= 
   "layout" .= object (["schema" .= targetLayoutSchema value,"profiled" .= targetProfiled value,
     "wordBytes" .= targetWordBytes value,"endianness" .= tagName ["little","big"] (targetEndianness value),
     "targetPlatform" .= str (targetPlatform value),"tablesNextToCode" .= targetTablesNextToCode value]
-    ++ zipWith (\key n -> (Key.fromText (Text.decodeUtf8 key),toJSON n)) targetNumberNames (targetNumbers value))]
+    ++ zipWith (\key n -> (Key.fromText (Text.decodeUtf8 key),toJSON n)) names (targetNumbers value))]
+  where
+    names = either (const targetNumberNames) id (targetNumberNamesFor (targetLayoutSchema value))
 
 foreignArtifacts :: ForeignArtifacts -> Value
 foreignArtifacts (ForeignArtifacts schema execution stubs files) = object $

@@ -302,7 +302,8 @@ semantics. Native instruction bit parity is not guaranteed for NaNs or signed ze
 
 Details: [hints and tracing](hints-and-tracing.md).
 
-The pinned Linux GHC 9.14.1 `RtsFlags.TraceFlags.user` getter reports true for
+The selected GHC 9.14.1 `RtsFlags.TraceFlags.user` getter with header-derived
+schema-2 RTS layout metadata reports true for
 THC's always-enabled context stderr trace sink, independently of diagnostic
 counters. This single read-only CBool mapping does not implement a native RTS
 image or GHC event-selection flags; unknown fields/widths and writes reject.

@@ -101,6 +101,8 @@ encodeFacts (Encoder streams strings shapes _ found observer) facts = do
 
 targetLayout :: Encoder -> TargetLayout -> IO ()
 targetLayout encoder value = do
+  names <- either fail pure (targetNumberNamesFor (targetLayoutSchema value))
+  unless (length (targetNumbers value) == length names) (fail "Incomplete compact target-layout numbers")
   number encoder (targetDocumentSchema value)
   mapM_ (string encoder) [targetCompilerId value,targetCompilerAbi value,targetCompilerPlatform value,targetCompilerWay value]
   number encoder (targetLayoutSchema value)
@@ -109,7 +111,6 @@ targetLayout encoder value = do
   enumeration encoder (targetEndianness value)
   string encoder (targetPlatform value)
   boolean encoder (targetTablesNextToCode value)
-  unless (length (targetNumbers value) == length targetNumberNames) (fail "Incomplete compact target-layout numbers")
   mapM_ (number encoder) (targetNumbers value)
 
 foreignArtifacts :: Encoder -> ForeignArtifacts -> IO ()

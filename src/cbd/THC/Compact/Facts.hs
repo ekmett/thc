@@ -193,3 +193,11 @@ targetNumberNames =
   , "stackRetFunPayloadBytes", "stackRetFunFrameBytes", "stackAnnPayloadBytes"
   , "stackAnnFrameBytes", "stackClosurePayloadBytes"
   ]
+
+-- | The numeric vector is unframed: its schema fixes the exact field count.
+targetNumberNamesFor :: Word64 -> Either String [BS.ByteString]
+targetNumberNamesFor schema = case schema of
+  1 -> Right targetNumberNames
+  2 -> Right (targetNumberNames ++
+    ["rtsFlagsBytes", "traceFlagsBytes", "rtsTraceFlagsOffset", "rtsTraceFlagsBytes", "traceUserOffset", "traceUserBytes"])
+  _ -> Left "Unsupported GHC target layout schema"

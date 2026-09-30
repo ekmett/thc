@@ -11,7 +11,7 @@ import java.util.Set;
 public final class StackInfoTestLayout {
     private StackInfoTestLayout() {}
     private static final String platform = (Set.of("arm64", "aarch64").contains(System.getProperty("os.arch").toLowerCase(Locale.ROOT)) ? "aarch64" : "x86_64") +
-        (System.getProperty("os.name").startsWith("Mac") ? "-osx" : "-linux");
+        (System.getProperty("os.name").startsWith("Mac") ? "-osx" : System.getProperty("os.name").startsWith("Windows") ? "-windows" : "-linux");
     public static final String endian = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? "little" : "big";
     // Complete synthetic typed-layout construction for stack-layout controls.
     public static Map<String, Object> fields() {
@@ -39,7 +39,8 @@ public final class StackInfoTestLayout {
     public static Map<String, Object> document() { return document(fields()); }
     public static Map<String, Object> document(Map<String, Object> fields) {
         return Map.of("format", "thc-target-layout", "schema", 1,
-            "compiler", Map.of("id", "ghc-9.14.1", "abi", "info-image-test", "platform", platform, "way", "dynamic-nonprofiling"), "layout", fields);
+            "compiler", Map.of("id", "ghc-9.14.1", "abi", "info-image-test", "platform", platform,
+                "way", platform.endsWith("-windows") ? "vanilla-nonprofiling" : "dynamic-nonprofiling"), "layout", fields);
     }
     public static TargetLayout layout() { return layout(Map.of()); }
     public static TargetLayout layout(Map<String, ?> changes) {

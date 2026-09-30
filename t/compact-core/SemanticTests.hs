@@ -45,7 +45,37 @@ import THC.Compact.Writer
 
 semanticTests :: Test
 semanticTests = TestList
-  [ TestLabel "optional backend policy and header extension rejection" $ TestCase $ do
+  [ TestLabel "target layout schema selects exact unframed numeric vector" $ TestCase $ do
+      let legacyLayout = TargetLayout 1 "same" "same" "same" "same" 1 False 8 LittleEndian "same" True [1..57]
+          legacy = Facts 1 "same" "same" "same" "same" Missing (Known legacyLayout) []
+            Missing Missing Missing (replicate 8 Missing) Nothing (Just (BackendPolicy (Just AstBackend) []))
+          spanBytes = [0,4]
+          manual = BS.pack ([1] ++ concat (replicate 4 spanBytes) ++ [0,2,1] ++
+            concat (replicate 4 spanBytes) ++ [1,0,8,0] ++ spanBytes ++ [1] ++ [1..57] ++ replicate 12 0 ++ [2,1,0])
+      withEncoded (\_ encoder -> encodeFacts encoder legacy) $ \_ strings bytes -> do
+        assertEqual "v1 exact original unframed bytes" manual bytes
+        assertEqual "v1 original bytes decode independently" (Right legacy) (decodeFacts manual strings)
+      forM_ [(1,57),(2,63)] $ \(schema,count) -> do
+        let layout = TargetLayout 1 "ghc-9.14.1" "selected-abi" "selected-platform" "selected-way"
+              schema False 8 LittleEndian "selected-platform" True [1..count]
+            facts = completeFacts {factsTargetLayout=Known layout,
+              factsBackendPolicy=Just (BackendPolicy (Just AstBackend) [])}
+            document = moduleJSON facts []
+        assertEqual "JSON keeps exact field names and next metadata" (Right (facts,[]))
+          (parseModuleWithoutDebug document)
+        withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings bytes -> do
+          assertEqual "wire count leaves following policy intact" (Right facts) (decodeFacts bytes strings)
+          assertBool "truncated wire rejected" (isLeft (decodeFacts (BS.init bytes) strings))
+        forM_ [count-1,count+1] $ \badCount -> do
+          let bad = facts {factsTargetLayout=Known layout {targetNumbers=[1..badCount]}}
+          failure <- try (withEncoded (\_ encoder -> encodeFacts encoder bad) (\_ _ _ -> pure ())) :: IO (Either IOException ())
+          assertBool "encoder rejects wrong count before publication" (isLeft failure)
+      let unknown = completeFacts {factsTargetLayout=Known
+            (TargetLayout 1 "ghc-9.14.1" "abi" "platform" "way" 3 False 8 LittleEndian "platform" True [1..57])}
+      assertBool "JSON rejects unknown layout schema" (isLeft (parseModuleWithoutDebug (moduleJSON unknown [])))
+      failure <- try (withEncoded (\_ encoder -> encodeFacts encoder unknown) (\_ _ _ -> pure ())) :: IO (Either IOException ())
+      assertBool "wire encoder rejects unknown layout schema" (isLeft failure)
+  , TestLabel "optional backend policy and header extension rejection" $ TestCase $ do
       let policy = BackendPolicy (Just AstBackend) [("main:Typed.answer",BytecodeBackend)]
           both = completeFacts {factsBackendPolicy=Just policy,
             factsClosureProvenance=Just (ClosureProvenance Missing Missing Missing [])}

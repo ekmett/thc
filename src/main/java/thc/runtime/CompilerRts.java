@@ -13,6 +13,8 @@ public final class CompilerRts {
     private final ManagedAddress increment = ManagedAddress.compilerCell(
         ByteBuffer.allocate(8).order(ByteOrder.nativeOrder()).putLong(1L).array(), this);
     private ManagedAddress flags;
+    private TargetLayout flagsLayout;
+    private long userFlagOffset;
     private volatile boolean closed;
 
     public void requireCurrent() {
@@ -30,25 +32,33 @@ public final class CompilerRts {
     }
 
     /** Preserve lazy, synchronized publication and retry after initialization failure. */
-    private synchronized ManagedAddress flags() {
-        if (flags == null) flags = ManagedAddress.rtsFlags(this);
+    private synchronized ManagedAddress flags(TargetLayout layout) {
+        if (flags == null) {
+            var address = ManagedAddress.rtsFlags(this);
+            userFlagOffset = (long) layout.offset("rtsTraceFlagsOffset") + layout.offset("traceUserOffset");
+            flagsLayout = layout;
+            flags = address;
+        } else if (!flagsLayout.equals(layout)) {
+            throw RuntimeFault.fault("RtsFlags producing layout differs from this context's RTS view: " +
+                flagsLayout.getCompilerId() + "/" + flagsLayout.getCompilerAbi() + "/" + flagsLayout.getPlatform() + "/" + flagsLayout.getWay() +
+                " user byte " + userFlagOffset + "; received " + layout.getCompilerId() + "/" + layout.getCompilerAbi() +
+                "/" + layout.getPlatform() + "/" + layout.getWay() + " user byte " +
+                ((long) layout.offset("rtsTraceFlagsOffset") + layout.offset("traceUserOffset")));
+        }
         return flags;
     }
 
-    /** Pinned GHC 9.14.1 Flags/Test.hs reads TraceFlags +392 and user +11. */
+    /** The selected GHC headers prove the original TraceFlags.user byte getter. */
     public ManagedAddress flagsAddress(TargetLayout layout) {
         requireCurrent();
-        if (layout == null || !layout.getCompilerId().equals("ghc-9.14.1") ||
-            !layout.getCompilerAbi().equals("inplace") || !layout.getPlatform().equals("x86_64-linux") ||
-            !layout.getWay().equals("dynamic-nonprofiling") || layout.getWordBytes() != 8 ||
-            !layout.getEndianness().equals("little"))
-            throw RuntimeFault.fault("RtsFlags requires the supported GHC 9.14.1 Linux producing layout");
-        return flags();
+        if (layout == null || !layout.hasRtsFlags())
+            throw RuntimeFault.fault("RtsFlags requires selected-GHC RTS flag layout metadata");
+        return flags(layout);
     }
 
     public long readFlagByte(long byteOffset) {
         requireCurrent();
-        if (byteOffset != 403L) {
+        if (flagsLayout == null || byteOffset != userFlagOffset) {
             CompilerDirectives.transferToInterpreter();
             throw RuntimeFault.fault("Unsupported RtsFlags byte field at offset " + byteOffset);
         }
