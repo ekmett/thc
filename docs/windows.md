@@ -14,6 +14,11 @@ The bootstrap verifies pinned upstream SHA256 values, reuses existing archives
 and installations, and sets environment variables only in the current shell.
 It does not install services, change execution policy, or modify the machine PATH.
 Install a real Python interpreter first; the Microsoft Store alias does not work.
+Pinned libraries also need `sh.exe`, `sed` and the other Unix utilities used by
+their original configure scripts. Bootstrap reuses Git for Windows' `usr/bin`
+when no shell is already on PATH. This shell runs configure; GHC, Clang, Cabal
+and the resulting binaries remain native Windows tools. With manually selected
+tools, add the installed shell's utility directory to the current process PATH.
 
 Pinned source hashes require unmodified upstream bytes. Initialize submodules
 with line-ending conversion disabled; the root attributes do not apply inside them.
