@@ -1275,7 +1275,9 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             if path.suffix != ".java":
                 continue
             source = path.read_text()
-            if "StackInfoTestLayout" in source:
+            # Returned pointer controls share the measured RTS layout through
+            # RtsFlagsTest, so retain this indirect fixture consumer too.
+            if "StackInfoTestLayout" in source or "RtsFlagsTest.layout(" in source:
                 consumers.update(select.junit_info(source)[0])
         self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest",
                           "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest",
