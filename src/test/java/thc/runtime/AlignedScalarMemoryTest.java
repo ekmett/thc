@@ -99,6 +99,16 @@ public class AlignedScalarMemoryTest {
         assertEquals(0, state.getResults().retainedReferences(), label + " retained results");
         assertNull(state.getPending(), label + " pending argument loan");
     }
+    private Object call(RootCallTarget target, Object[] arguments) {
+        var typed = ((GuestRoot) target.getRootNode()).getTypedInput();
+        if (typed == null) return Calls.target(target, arguments);
+        var input = typed.state().getArguments().acquire(typed.getPacket());
+        input.setInputMode(1);
+        try {
+            typed.getPacket().copyIn(input, arguments);
+            return Calls.target(target, new Object[]{input});
+        } finally { typed.releaseChecked(input); }
+    }
     private static <T> T single(List<T> list) {
         if (list.size() != 1)
             throw new IllegalArgumentException("Expected one element");
@@ -215,7 +225,7 @@ public class AlignedScalarMemoryTest {
                                             default -> new Object[] {0L, row.raw, row.offset, (long) selector};
                                         };
                                         try {
-                                            return Calls.target(target, arguments);
+                                            return AlignedScalarMemoryTest.this.call(target, arguments);
                                         } finally {
                                             released(language, entryLabel + "/" + row + "/" + selector);
                                         }

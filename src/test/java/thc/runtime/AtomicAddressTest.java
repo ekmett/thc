@@ -55,7 +55,7 @@ public class AtomicAddressTest {
         assertEquals(false, formal.get("lifted"));
     }
     /** Derive executed roots from the original Core and its checked State# redex. */
-    private long originalGuestEntries(Map<String, Object> module, String name) {
+    private Set<String> originalGuestLabels(Map<String, Object> module, String name) {
         var evidence = new ArrayCoreEvidence(module, "main:AtomicAddressAudit." + name);
         assertEquals(1, evidence.getBindings().size(), name + " closed original binding");
         assertEquals(List.of(), evidence.globalReferences(evidence.getRoot().get("expr")));
@@ -111,7 +111,9 @@ public class AtomicAddressTest {
         assertEquals(2, lowered.size(), name + " lowered guest-root inventory");
         assertSame(outer, lowered.get(0));
         assertSame(action, lowered.get(1));
-        return lowered.size();
+        return lowered.stream().map(lambda -> "lambda " + ((List<Map<String, Object>>) lambda.get(1))
+            .stream().map(formal -> String.valueOf(formal.get("name"))).collect(Collectors.joining(", ")))
+            .collect(Collectors.toSet());
     }
     private List<RootCallTarget> activeTargets(RootCallTarget entry) {
         Set<RootCallTarget> seen = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -219,6 +221,16 @@ public class AtomicAddressTest {
         for (var target : targets) result.add(target.getClass().getMethod("getCallCount").invoke(target));
         return result;
     }
+    private Object call(RootCallTarget target, Object[] arguments) {
+        var typed = ((GuestRoot) target.getRootNode()).getTypedInput();
+        if (typed == null) return Calls.target(target, arguments);
+        var input = typed.state().getArguments().acquire(typed.getPacket());
+        input.setInputMode(1);
+        try {
+            typed.getPacket().copyIn(input, arguments);
+            return Calls.target(target, new Object[]{input});
+        } finally { typed.releaseChecked(input); }
+    }
     @Test
     public void nativeOracleMatchesIndependentModelAndBothFirstCompiledEntries() throws Exception {
         var directory = root.resolve("build/atomic-address");
@@ -253,9 +265,9 @@ public class AtomicAddressTest {
                     Set.of("main:AtomicAddressAudit." + name, "main:AtomicAddressAudit." + name + "At"), owners);
             }
             var module = thc.CoreCbdFixtures.read(directory.resolve(stage + "/core/AtomicAddressAudit.cbd"));
-            var expectedEntries = new LinkedHashMap<String, Long>();
+            var expectedLabels = new LinkedHashMap<String, Set<String>>();
             for (String name : List.of("atomicAddressNumeric", "atomicAddressPointer"))
-                expectedEntries.put(name, originalGuestEntries(module, name));
+                expectedLabels.put(name, originalGuestLabels(module, name));
             for (String backend : List.of("ast", "bytecode"))
                 for (boolean inline : new boolean[] {false, true}) try (var context = context(false, inline)) {
                         context.initialize("thc");
@@ -292,7 +304,7 @@ public class AtomicAddressTest {
                                                     row.desired, (long) selector});
                                             assertEquals(row.answers.get(selector), actual, label + "/" + row);
                                             if (compiled) {
-                                                assertEquals(expectedEntries.get(entry).longValue(), count() - before,
+                                                assertEquals((long) expectedLabels.get(entry).size(), count() - before,
                                                     "Exact original guest entries, including first installed call: "
                                                         + label);
                                                 assertEquals(compiledTargets.get(entry), activeTargets(target),
@@ -321,8 +333,18 @@ public class AtomicAddressTest {
                             var compiledTargets = new LinkedHashMap<String, List<RootCallTarget>>();
                             for (var entry : targets.entrySet()) {
                                 var active = activeTargets(entry.getValue());
-                                assertEquals(expectedEntries.get(entry.getKey()).longValue(), (long) active.size(),
+                                // A prepublished join-body recovery target is not an
+                                // additional Core lambda on the original inline path.
+                                var originals = active.stream().map(t -> t.getRootNode().getName())
+                                    .filter(name -> name.startsWith("lambda ")).toList();
+                                assertEquals(expectedLabels.get(entry.getKey()), new HashSet<>(originals),
                                     stage + "/" + backend + "/" + entry.getKey() + " original guest roots");
+                                assertEquals(expectedLabels.get(entry.getKey()).size(), originals.size());
+                                for (var target : active)
+                                    if (!target.getRootNode().getName().startsWith("lambda ")) {
+                                        assertEquals("bytecode", backend);
+                                        assertTrue(target.getRootNode().getName().startsWith("join body "));
+                                    }
                                 compiledTargets.put(entry.getKey(), active);
                             }
                             check.compiledTargets = compiledTargets;
@@ -415,7 +437,16 @@ public class AtomicAddressTest {
                                 var args = new Object[arguments.length + 1];
                                 args[0] = 0L;
                                 System.arraycopy(arguments, 0, args, 1, arguments.length);
-                                var answer = Calls.target(target, args);
+                                Object answer;
+                                try { answer = AtomicAddressTest.this.call(target, args); }
+                                finally {
+                                    var handoff = language.getHandoffState().get();
+                                    assertEquals(0, handoff.getArguments().getDepth());
+                                    assertEquals(0, handoff.getResults().getDepth());
+                                    assertEquals(0, handoff.getArguments().retainedReferences());
+                                    assertEquals(0, handoff.getResults().retainedReferences());
+                                    assertNull(handoff.getPending());
+                                }
                                 if (compiled) {
                                     assertEquals(before + 1,
                                         ((Number) program.diagnostics().get("compiledEntries")).longValue(),
