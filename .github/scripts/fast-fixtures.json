@@ -1387,7 +1387,7 @@
       ],
       "outputs": [
         "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json",
-        "build/explicit64-primops/core/Explicit64PrimopsAudit.json",
+        "build/explicit64-primops/core/Explicit64PrimopsAudit.cbd",
         "build/core/CBVAudit.json",
         "build/core/CBVJoinAudit.json",
         "build/core/CBVCoercionAudit.json",

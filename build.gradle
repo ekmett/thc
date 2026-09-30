@@ -272,7 +272,7 @@ tasks.withType(Test).configureEach {
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
             "integer-completion/native/**", "integer-completion/commands/**",
-            "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
+            "integer-primops/core/**/*.cbd", "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
             "stm/**/*.json", "stm/*.tsv", "stm/installed/bundles/*.zip", "stm/native/**",
             "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
@@ -414,11 +414,11 @@ tasks.withType(Test).configureEach {
             "int8-arrays/**/*.json", "int8-arrays/*.tsv", "int8-arrays/NativeInt8Array.hs", "int8-arrays/native/**",
             "int16-arrays/**/*.json", "int16-arrays/oracle.tsv", "int16-arrays/expected.tsv", "int16-arrays/literal-oracle.tsv",
             "int16-arrays/NativeInt16Array.hs", "int16-arrays/native/int16-array-oracle", "int16-arrays/native/int16-array-oracle.exe",
-            "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
+            "bit-primops/**/*.cbd", "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**",
             "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "simd-capability-smoke/native/**", "generated/simd/fixtures/*.hs",
-            "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
+            "explicit64-primops/core/**/*.cbd", "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
             "simd-floatx4-fma/**/*.json", "simd-floatx4-fma/oracle.txt",
@@ -450,7 +450,7 @@ tasks.withType(Test).configureEach {
             "simd-int32x4-bytearray/prepare-run-*/commands/*", "simd-int32x4-bytearray/prepare-run-*/retained-original-source.hs",
             "simd-word32x4-bytearray/prepare-run-*/commands/*", "simd-word32x4-bytearray/prepare-run-*/retained-original-source.hs",
             "simd-floatx4-bytearray/prepare-run-*/commands/*", "simd-doublex2-bytearray/prepare-run-*/commands/*",
-            "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
+            "signed-narrow-primops/core/**/*.cbd", "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv"])
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })

@@ -491,8 +491,8 @@ hostWrapper e =
 relativeCore :: Family -> String -> [FilePath]
 relativeCore family stage =
   let dir = "build" </> familyName family </> stage
-  in if family == Explicit64 then [dir </> fixtureModule family ++ ".json"] else
-       [dir </> fixtureModule family ++ ".json", dir </> "THC.InterfaceClosure.json"]
+  in if family == Explicit64 then [dir </> fixtureModule family ++ ".cbd"] else
+       [dir </> fixtureModule family ++ ".cbd", dir </> "THC.InterfaceClosure.cbd"]
 
 inputPaths :: FilePath -> Family -> IO [FilePath]
 inputPaths root family = do

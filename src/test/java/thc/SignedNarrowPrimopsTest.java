@@ -19,6 +19,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -68,9 +69,9 @@ public final class SignedNarrowPrimopsTest {
             entries.stream().map(e -> ((Number) e.get("selector")).intValue()).toList());
         List<Map<String, Object>> modules = new ArrayList<>();
         for (String path : (List<String>) manifest.get("modules"))
-            modules.add((Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.resolve(path))));
+            modules.add(CoreCbdFixtures.read(root.resolve(path)));
         var merged = CoreModules.INSTANCE.merge(modules);
-        var compositeCalls = NumericPrimopCoreEvidence.calls(merged, (String) manifest.get("compositeEntry"), true);
+        var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:SignedNarrowPrimopsAudit." + manifest.get("compositeEntry"), true);
         for (var entry : entries) {
             String name = (String) entry.get("name");
             String rep = "Int" + ((Number) entry.get("width")).intValue() + "Rep";
@@ -82,7 +83,7 @@ public final class SignedNarrowPrimopsTest {
             String result = name.startsWith("int") && name.contains("ToWord") ? wordRep
                 : Set.of("eq", "ne", "lt", "le", "gt", "ge").contains(operation(name)) ? "IntRep" : rep;
             String primitive = (String) entry.get("primitive");
-            NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, name);
+            NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(merged, "main:SignedNarrowPrimopsAudit." + name), primitive, arguments, result, name);
             NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, "signedNarrowDispatch/" + name);
         }
         Map<String, List<long[]>> cases = new LinkedHashMap<>();
@@ -104,9 +105,9 @@ public final class SignedNarrowPrimopsTest {
         long total = cases.values().stream().mapToLong(List::size).sum();
         assertEquals(((Number) manifest.get("nativeRows")).longValue(), total);
         for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContext.primopTestContext()) {
-            NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged, entries.stream().map(e -> (String) e.get("name")).toList(), backend);
-            Value function = context.eval("thc", Json.INSTANCE.stringify(Map.of("modules", modules,
-                "entry", manifest.get("compositeEntry"), "backend", backend, "instrument", true)));
+            NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged, entries.stream().map(e -> "main:SignedNarrowPrimopsAudit." + e.get("name")).toList(), backend);
+            Value function = context.eval("thc", CoreModules.request((List<String>) manifest.get("modules"),
+                "main:SignedNarrowPrimopsAudit." + manifest.get("compositeEntry"), true, false, backend));
             for (var entry : entries) for (long[] row : cases.get(entry.get("name"))) check(function, backend, entry, row);
             assertEquals(0L, count(function, "compiledEntries"), backend + " must remain interpreted before explicit compile");
             assertTrue(function.invokeMember("compile").asBoolean(), backend + " composite installation");
@@ -120,23 +121,24 @@ public final class SignedNarrowPrimopsTest {
 
     private Map<String, Object> rawModule(String primitive, int width, int supplied) {
         List<Map<String, Object>> parameters = new ArrayList<>();
-        List<List<String>> operands = new ArrayList<>();
+        List<List<Object>> operands = new ArrayList<>();
         for (int i = 0; i < supplied; i++) {
             String family = primitive.startsWith("word") && primitive.contains("ToInt") ? "Word" + width
                 : primitive.startsWith("uncheckedShift") && i == 1 ? "Int" : "Int" + width;
             parameters.add(Map.of("id", "x" + i, "name", "x" + i, "lifted", false, "type", family + "#",
                 "rep", Map.of("kind", "long", "primReps", List.of(family + "Rep"), "evaluated", true), "coercion", false));
-            operands.add(List.of("var", "x" + i));
+            operands.add(List.of("var", "x" + i, Map.of("rep", parameters.getLast().get("rep"))));
         }
-        var body = List.of("app", List.of("prim", primitive), operands, Collections.nCopies(supplied, false));
         String resultRep = Set.of("eq", "ne", "lt", "le", "gt", "ge").contains(operation(primitive)) ? "IntRep"
             : primitive.startsWith("int") && primitive.contains("ToWord") ? "Word" + width + "Rep" : "Int" + width + "Rep";
-        return Map.of("schema", 1, "ghc", "9.14.1", "module", "SignedNarrowCarrierControl", "constructors", List.of(),
-            "bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "arity", supplied,
+        var body = List.of("app", List.of("prim", primitive, Map.of()), operands, Collections.nCopies(supplied, false), false, false,
+            Map.of("rep", Map.of("kind", "long", "primReps", List.of(resultRep), "evaluated", true)));
+        return Map.of("schema", 1, "ghc", "9.14.1", "unit", "main", "module", "SignedNarrowCarrierControl", "boundary", "test-model", "constructors", List.of(),
+            "bindings", List.of(Map.of("id", "main:SignedNarrowCarrierControl.entry", "name", "entry", "lifted", true, "arity", supplied,
                 "expr", List.of("lam", parameters, body, Map.of("resultRep", Map.of("kind", "long", "primReps", List.of(resultRep), "evaluated", true))))));
     }
 
-    @Test void directResultsAreCanonicalWithoutAnIntNToIntConversionMaskingTheResult() throws Exception {
+    @Test void directResultsAreCanonicalWithoutAnIntNToIntConversionMaskingTheResult(@TempDir Path temporary) throws Exception {
         for (var entry : entries()) {
             String name = (String) entry.get("name");
             int width = ((Number) entry.get("width")).intValue();
@@ -154,8 +156,9 @@ public final class SignedNarrowPrimopsTest {
                 }
             }
             for (String backend : List.of("ast", "bytecode")) try (Context context = Main.executionContext(false)) {
-                Value function = context.eval("thc", Json.INSTANCE.stringify(Map.of("modules", List.of(rawModule((String) entry.get("primitive"), width, arity)),
-                    "entry", "entry", "backend", backend, "instrument", true)));
+                var source = CoreCbdFixtures.write(Files.createTempFile(temporary, "canonical-", ".cbd"), rawModule((String) entry.get("primitive"), width, arity));
+                Value function = context.eval("thc", CoreModules.request(List.of(source.toString()),
+                    "main:SignedNarrowCarrierControl.entry", true, false, backend));
                 for (int pass = 0; pass < 2; pass++) {
                     if (pass == 1) assertTrue(function.invokeMember("compile").asBoolean());
                     long before = count(function, "compiledEntries");
@@ -172,15 +175,16 @@ public final class SignedNarrowPrimopsTest {
         }
     }
 
-    @Test void everyAddedPrimitiveRejectsWrongAritiesEvenInDiagnosticMode() throws Exception {
+    @Test void everyAddedPrimitiveRejectsWrongAritiesEvenInDiagnosticMode(@TempDir Path temporary) throws Exception {
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
             try (Context context = Main.executionContext(false)) {
                 for (var entry : entries()) {
                     String name = (String) entry.get("primitive");
                     int arity = ((Number) entry.get("arity")).intValue(), width = ((Number) entry.get("width")).intValue();
                     for (int supplied : new int[] {arity - 1, arity + 1}) {
-                        var error = assertThrows(PolyglotException.class, () -> context.eval("thc", Json.INSTANCE.stringify(Map.of(
-                            "entry", "entry", "backend", backend, "diagnosticUnsupported", diagnostic, "modules", List.of(rawModule(name, width, supplied))))));
+                        var source = CoreCbdFixtures.write(Files.createTempFile(temporary, "arity-", ".cbd"), rawModule(name, width, supplied));
+                        var error = assertThrows(PolyglotException.class, () -> context.eval("thc", CoreModules.request(
+                            List.of(source.toString()), "main:SignedNarrowCarrierControl.entry", false, diagnostic, backend)));
                         assertTrue(error.getMessage() != null && error.getMessage().contains("Primitive arity mismatch: " + name), error.getMessage());
                     }
                 }

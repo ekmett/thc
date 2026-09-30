@@ -2888,6 +2888,19 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(len(group["sources"]) + 3, len(prepared))
         self.assertNotIn("fixtures-full", [name for name, _, _ in self.calls])
 
+    def test_numeric_family_exports_and_consumers_use_cbd(self):
+        project = Path(__file__).resolve().parents[2]
+        producer = (project / 't/haskell-fixtures/Main.hs').read_text()
+        paths = producer.split('relativeCore family stage =', 1)[1].split('inputPaths ::', 1)[0]
+        self.assertIn('fixtureModule family ++ ".cbd"', paths)
+        self.assertIn('"THC.InterfaceClosure.cbd"', paths)
+        self.assertNotIn('.json', paths)
+        for name in ('IntegerPrimopsTest', 'SignedNarrowPrimopsTest',
+                     'runtime/BitPrimopsTest', 'runtime/Explicit64PrimopsTest'):
+            consumer = (project / f'src/test/java/thc/{name}.java').read_text()
+            self.assertIn('CoreCbdFixtures.read', consumer)
+            self.assertNotIn('Json.INSTANCE.stringify(Map.of("modules",', consumer)
+
     def test_pr80_affected_classes_have_focused_preparation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -2907,7 +2920,7 @@ class FixturePreparationTest(unittest.TestCase):
         cbv = manifest["groups"]["cbv-coercion"]
         self.assertIn("build/cbv-post-core/CBVCoercionAudit.json", cbv["outputs"])
         self.assertIn("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json", cbv["outputs"])
-        self.assertIn("build/explicit64-primops/core/Explicit64PrimopsAudit.json", cbv["outputs"])
+        self.assertIn("build/explicit64-primops/core/Explicit64PrimopsAudit.cbd", cbv["outputs"])
         self.assertTrue(any("bin/check-cbv-metadata.py" in command["argv"]
                             for command in cbv["commands"]))
 
