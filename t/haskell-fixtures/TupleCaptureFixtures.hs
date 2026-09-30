@@ -21,6 +21,7 @@ import qualified Data.ByteString.Char8 as BSC
 import Data.Foldable (toList)
 import Data.List (sort)
 import FixtureSupport
+import THC.Compact.Module (readModuleValue)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -34,6 +35,9 @@ walk value = value : case value of
 
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
+
+readCore :: FilePath -> IO Value
+readCore path = BS.readFile path >>= either die pure . readModuleValue
 
 prepareTupleCaptures :: FilePath -> IO ()
 prepareTupleCaptures root = do
@@ -65,8 +69,8 @@ prepareTupleCaptures root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ [source])
-    let path = core </> "TupleCaptureAudit.json"
-    nodes <- walk <$> readJson (root </> path)
+    let path = core </> "TupleCaptureAudit.cbd"
+    nodes <- walk <$> readCore (root </> path)
     let captures = [() | Array parts <- nodes, String "lam" : Array parameters : body : _ <- [toList parts],
           let ids = [identifier | Object parameter <- toList parameters,
                 Just identifier <- [KeyMap.lookup "id" parameter]],

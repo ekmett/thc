@@ -21,6 +21,7 @@ import qualified Data.Map.Strict as Map
 import Data.List (sort)
 import Data.Foldable (toList)
 import FixtureSupport
+import THC.Compact.Module (readModuleValue)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -38,6 +39,9 @@ field key (Object value) = KM.lookup key value
 field _ _ = Nothing
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
+
+readCore :: FilePath -> IO Value
+readCore path = BS.readFile path >>= either die pure . readModuleValue
 walk :: Value -> [Value]
 walk value@(Object fields) = value : concatMap walk (KM.elems fields)
 walk (Array values) = concatMap walk (toList values)
@@ -78,7 +82,7 @@ prepareGenericSumTransport root = do
       [("THC_CORE_OUT", root </> core),("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-dstg-lint",source])
-    original <- readJson (root </> core </> "GenericSumTransport.json")
+    original <- readCore (root </> core </> "GenericSumTransport.cbd")
     let sums = [value | value <- walk original, field "aggregate" value == Just (String "unboxed-sum")]
         exact reps projections = any (\value -> field "primReps" value == Just reps &&
           field "alternativeSlots" value == Just projections) sums
@@ -89,7 +93,7 @@ prepareGenericSumTransport root = do
     check (exact (toJSON (["WordRep","BoxedRep (Just Lifted)","WordRep","WordRep","WordRep",
       "VecRep 2 Int64ElemRep","VecRep 4 FloatElemRep"] :: [String]))
       (toJSON ([[2],[2,3,4],[2,5,6],[2,1,3]] :: [[Int]]))) "missing exact nested original slot/projection tree"
-    modules <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
+    modules <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
     let paths = map (core </>) modules
     audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
       (["bin/audit-core.py","--output",reportPath] ++

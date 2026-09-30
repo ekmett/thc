@@ -9,8 +9,6 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.*;
 import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,8 +17,8 @@ public class FourWayAggregateStorageTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private Map<String, Map<String, Object>> constructors() throws Exception {
         FourWayEvidence.verify(root);
-        var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/fourway-aggregate/pre/core/FourWayAggregateFields.json").toPath(), StandardCharsets.UTF_8));
-        var result = new LinkedHashMap<String, Map<String, Object>>(); for (var info : (List<Map<String, Object>>) module.get("constructors")) result.put((String) info.get("name"), info); return result;
+        var module = CoreCbdFixtures.read(new File(root, "build/fourway-aggregate/pre/core/FourWayAggregateFields.cbd").toPath());
+        var result = new LinkedHashMap<String, Map<String, Object>>(); for (var info : (List<Map<String, Object>>) module.get("constructors")) result.put((String) info.get("id"), info); return result;
     }
     @FunctionalInterface private interface Action { void run(Language language, Map<String, Map<String, Object>> constructors) throws Exception; }
     private void eachLayout(Action action) throws Exception {
@@ -30,10 +28,10 @@ public class FourWayAggregateStorageTest {
         }
     }
     @Test public void originalWorkerHasTwoLogicalFieldsAndThreePhysicalFields() throws Exception { eachLayout((language, constructors) -> {
-        var info = constructors.get("VirtualRegWithFormat"); var fields = new CoreFields(info);
+        var info = constructors.get("ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat"); var fields = new CoreFields(info);
         var layout = DataLayout.fromFields(language, (String) info.get("id"), "VirtualRegWithFormat", fields);
         assertEquals(2, layout.getLogicalArity()); assertEquals(3, layout.getArity()); assertArrayEquals(new int[] {0, 2, 3}, fields.getOffsets());
-        assertTrue(layout.isLong(0)); assertTrue(layout.isLong(1)); assertFalse(layout.isLong(2)); var formatInfo = constructors.get("II64");
+        assertTrue(layout.isLong(0)); assertTrue(layout.isLong(1)); assertFalse(layout.isLong(2)); var formatInfo = constructors.get("ghc-9.14.1-inplace:GHC.CmmToAsm.Format.II64");
         var format = DataLayout.fromFields(language, (String) formatInfo.get("id"), "II64", new CoreFields(formatInfo)).allocate();
         for (long tag = 1; tag <= 4; tag++) for (long bits : new long[] {0L, 1L, 0xffffffffL, 0x100000000L, Long.MIN_VALUE, -1L}) {
             var value = layout.create(new Object[] {tag, bits, format}); assertEquals(tag, layout.readLong(value, 0)); assertEquals(bits, layout.readLong(value, 1)); assertSame(format, layout.read(value, 2));
@@ -46,7 +44,7 @@ public class FourWayAggregateStorageTest {
         return proof.copy(proof.getKind(), proof.getEvaluated(), proof.getPresent(), proof.getPrimReps(), components, proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots());
     }
     @Test public void nestedPhysicalOffsetsDoNotEraseLogicalStateOrEmptyTupleIdentity() throws Exception { eachLayout((language, constructors) -> {
-        var fields = new CoreFields(constructors.get("NestedBox")); assertArrayEquals(new int[] {0, 1, 6, 7}, fields.getOffsets());
+        var fields = new CoreFields(constructors.get("main:FourWayAggregateFields.NestedBox")); assertArrayEquals(new int[] {0, 1, 6, 7}, fields.getOffsets());
         var nested = fields.getLogicalProofs()[1]; var shape = new TupleShape(nested, language); assertEquals(5, shape.getWidth()); assertArrayEquals(new int[] {0, 1, 4}, shape.getOffsets());
         var inner = Objects.requireNonNull(nested.getComponents()).get(1); var innerComponents = Objects.requireNonNull(inner.getComponents());
         assertEquals(CoreKind.VOID, innerComponents.getFirst().getKind()); assertTrue(innerComponents.get(1).isEmptyTuple());
@@ -72,7 +70,7 @@ public class FourWayAggregateStorageTest {
         @Override public Object execute(VirtualFrame frame) { return copy.execute(frame, (ManagedCompact) frame.getArguments()[0], frame.getArguments()[1], true); }
     }
     @Test public void nestedInactiveReferencesArePaddingNotRoots() throws Exception { eachLayout((language, constructors) -> {
-        var info = constructors.get("MixedBox"); var fields = new CoreFields(info); assertArrayEquals(new int[] {0, 6, 7}, fields.getOffsets());
+        var info = constructors.get("main:FourWayAggregateFields.MixedBox"); var fields = new CoreFields(info); assertArrayEquals(new int[] {0, 6, 7}, fields.getOffsets());
         var layout = DataLayout.fromFields(language, (String) info.get("id"), "MixedBox", fields);
         var child = new DataLayout(language, "test:Leaf", "Leaf", new String[] {"IntRep"}).create(new Object[] {91L});
         var lazy = new Thunk(new RootNode(language) { @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("Nested lazy neighbour was forced"); } }.getCallTarget(), null);

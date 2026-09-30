@@ -32,7 +32,7 @@ public class GenericSumTransportTest {
     }
     private List<Map<String, Object>> modules(String stage) throws Exception {
         var files = new File(directory, stage + "/core").listFiles(); assertNotNull(files); var result = new ArrayList<Map<String, Object>>();
-        for (File file : files) if (file.getName().endsWith(".json")) result.add(json(file)); return result;
+        for (File file : files) if (file.getName().endsWith(".cbd")) result.add(CoreCbdFixtures.read(file.toPath())); return result;
     }
     @FunctionalInterface private interface Action { void run(Context context, Language language) throws Exception; }
     private void entered(boolean inline, Action action) throws Exception {
@@ -53,8 +53,8 @@ public class GenericSumTransportTest {
         assertEquals(0, state.getResults().retainedReferences()); assertEquals(0, state.getArguments().retainedReferences());
     }
     private CoreRepresentation result(String name) throws Exception {
-        var module = json(new File(directory, "pre/core/GenericSumTransport.json")); Map<String, Object> binding = null;
-        for (var candidate : (List<Map<String, Object>>) module.get("bindings")) if (name.equals(candidate.get("name"))) { assertNull(binding); binding = candidate; }
+        var module = CoreCbdFixtures.read(new File(directory, "pre/core/GenericSumTransport.cbd").toPath()); Map<String, Object> binding = null;
+        for (var candidate : (List<Map<String, Object>>) module.get("bindings")) if (("main:GenericSumTransport." + name).equals(candidate.get("id"))) { assertNull(binding); binding = candidate; }
         assertNotNull(binding); return CoreRepresentations.lambdaResult((List<?>) binding.get("expr"));
     }
     private List<List<?>> walk(Object value) {
@@ -96,7 +96,8 @@ public class GenericSumTransportTest {
         for (var storage : SumShape.storage(address)) kinds.add(storage.getKind()); assertEquals(List.of(CoreKind.LONG, CoreKind.LONG, CoreKind.ADDRESS), kinds);
         assertEquals(List.of(List.of(2), List.of(1)), SumShape.transport(address).getProjections()); var nested = result("nestedMake");
         assertEquals(7, Objects.requireNonNull(nested.getPrimReps()).size()); assertEquals(8, SumShape.storage(nested).size());
-        assertEquals(List.of(List.of(2), List.of(2, 3, 4, 5), List.of(2, 6, 7), List.of(2, 1, 3)), SumShape.transport(nested).getProjections());
+        // Canonical storage puts the managed address after every word slot, including the neighbour.
+        assertEquals(List.of(List.of(2), List.of(2, 3, 5, 4), List.of(2, 6, 7), List.of(2, 1, 3)), SumShape.transport(nested).getProjections());
         var around = result("aroundMake"); TupleShape.validate(around); assertEquals(9, Objects.requireNonNull(around.getPrimReps()).size()); assertEquals(10, TupleShape.flatten(around).size());
         var inner = Objects.requireNonNull(Objects.requireNonNull(around.getComponents()).get(1).getComponents());
         assertEquals(CoreKind.VOID, inner.getFirst().getKind()); assertEquals(List.of(), inner.get(1).getComponents());
@@ -107,7 +108,7 @@ public class GenericSumTransportTest {
         for (long tag : new long[] {Long.MIN_VALUE, 0, 5, 0x100000001L, Long.MAX_VALUE}) assertThrows(RuntimeFault.class, () -> SumShape.checkedTag(tag, 4));
     }
     private void observeAddress(long selector, long bits, TupleShape shape, VirtualFrame frame, RootCallTarget target, ManagedAddress address, int[] slots, Language language) throws Exception {
-        shape.consume(frame, Calls.target(target, new Object[] {0L, selector, address, bits}), slots, 0); assertEquals(selector + 1, frame.getLong(slots[0]));
+        shape.consume(frame, ScalarTestCalls.callScalarTestTarget(target, new Object[] {0L, selector, address, bits}), slots, 0); assertEquals(selector + 1, frame.getLong(slots[0]));
         if (selector == 0L) { assertSame(address, frame.getObject(slots[2])); assertEquals(0L, frame.getLong(slots[1])); }
         else { assertSame(ManagedAddress.nullAddress(), frame.getObject(slots[2])); assertEquals(bits, frame.getLong(slots[1])); }
         released(language);
@@ -142,7 +143,7 @@ public class GenericSumTransportTest {
         for (String backend : List.of("ast", "bytecode")) for (Object flag : List.of(true, "false")) {
             var source = modules("pre"); Map<String, Object> module = null;
             for (var candidate : source) if ("GenericSumTransport".equals(candidate.get("module"))) { assertNull(module); module = candidate; } assertNotNull(module);
-            Map<String, Object> maker = null; for (var candidate : (List<Map<String, Object>>) module.get("bindings")) if ("vectorMake".equals(candidate.get("name"))) { assertNull(maker); maker = candidate; } assertNotNull(maker);
+            Map<String, Object> maker = null; for (var candidate : (List<Map<String, Object>>) module.get("bindings")) if ("main:GenericSumTransport.vectorMake".equals(candidate.get("id"))) { assertNull(maker); maker = candidate; } assertNotNull(maker);
             List<Object> constructor = null;
             for (var expression : walk(maker.get("expr"))) {
                 if (expression.isEmpty() || !"app".equals(expression.getFirst()) || !(expression.get(1) instanceof List<?> head) || head.isEmpty() || !"con".equals(head.getFirst()) || !CoreRepresentations.expression(expression).isSum()) continue;
