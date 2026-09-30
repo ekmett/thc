@@ -14,10 +14,10 @@ import static thc.runtime.CoreCallDemands.CALL_DEMANDS_PROPERTY;
 /** Original GHC demand signatures license individual calls without upgrading ordinary function entries. */
 class RealCoreCallDemandTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private Map<String, Object> exported() throws Exception { return CoreCbdFixtures.pairedDiagnostic(root.resolve("build/core/DemandAudit.cbd")); }
+    private Map<String, Object> exported() throws Exception { return CoreCbdFixtures.read(root.resolve("build/core/DemandAudit.cbd")); }
     private Map<String, Map<String, Object>> definitions(Map<String, Object> module) {
         var result = new LinkedHashMap<String, Map<String, Object>>();
-        for (var binding : objects(module.get("bindings"))) result.put((String) binding.get("name"), binding); return result;
+        for (var binding : objects(module.get("bindings"))) result.put((String) binding.get("id"), binding); return result;
     }
     private List<List<?>> applications(Object value) {
         var result = new ArrayList<List<?>>();
@@ -39,17 +39,17 @@ class RealCoreCallDemandTest {
     private long count(Value function, String name) { return ((Number) object(Json.parse(function.getMember("diagnostics").asString())).get(name)).longValue(); }
     private long treeResult(long n) { return n <= 0 ? 0 : n + 7; }
     @Test void exportedCallDemandIsSeparateFromWhnfEntryContractsAndSpeculation() throws Exception {
-        var bindings = definitions(exported()); var strict = bindings.get("strictTree");
+        var bindings = definitions(exported()); var strict = bindings.get("main:DemandAudit.strictTree");
         assertEquals(list(false), strict.get("entryStrict"));
         var formals = objects(((List<?>) strict.get("expr")).get(1)); assertEquals(1, formals.size());
         assertEquals(false, object(formals.getFirst().get("rep")).get("evaluated"));
-        var ordinary = call(bindings.get("ordinaryEntry"), "strictTree");
+        var ordinary = call(bindings.get("main:DemandAudit.ordinaryEntry"), "strictTree");
         assertEquals(1, ((Number) demand(ordinary).get("arity")).intValue()); assertEquals(list(true), marks(ordinary));
-        var producer = call(bindings.get("ordinaryEntry"), "makeTree");
+        var producer = call(bindings.get("main:DemandAudit.ordinaryEntry"), "makeTree");
         assertEquals(false, producer.get(5), "Caller demand must work for an operand that cannot be speculated");
-        assertEquals(list(false), marks(call(bindings.get("lazyBarrier"), "strictTree")));
-        assertEquals(list(false), marks(call(bindings.get("absentEntry"), "ignore")));
-        var partial = call(bindings.get("polyFunctionEntry"), "strictPair");
+        assertEquals(list(false), marks(call(bindings.get("main:DemandAudit.lazyBarrier"), "strictTree")));
+        assertEquals(list(false), marks(call(bindings.get("main:DemandAudit.absentEntry"), "ignore")));
+        var partial = call(bindings.get("main:DemandAudit.polyFunctionEntry"), "strictPair");
         assertEquals(2, ((Number) demand(partial).get("arity")).intValue()); assertEquals(list(false), marks(partial), "The signature's arity must survive an undersaturated application");
     }
     @Test void genuineOrdinaryPolymorphicLazyAndPartialCallsSurviveCompilation() throws Exception {

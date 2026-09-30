@@ -13,7 +13,7 @@ import static thc.CoreBackendTestSupport.*;
 /** Genuine GHC worker/join CBV marks must survive export, execution and compilation. */
 class RealCoreEntryContractTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private Map<String, Object> exported(String name) throws Exception { return CoreCbdFixtures.pairedDiagnostic(root.resolve("build/core/" + name + ".cbd")); }
+    private Map<String, Object> exported(String name) throws Exception { return CoreCbdFixtures.read(root.resolve("build/core/" + name + ".cbd")); }
     private List<Map<String, Object>> definitions(Object value) {
         var result = new ArrayList<Map<String, Object>>();
         if (value instanceof Map<?, ?> map) {
@@ -23,7 +23,11 @@ class RealCoreEntryContractTest {
         return result;
     }
     private Map<String, Object> named(Map<String, Object> module, String name) {
-        var matches = definitions(module).stream().filter(d -> name.equals(d.get("name"))).toList(); assertEquals(1, matches.size()); return matches.getFirst();
+        var matches = definitions(module).stream().filter(d -> ("main:" + module.get("module") + "." + name).equals(d.get("id"))).toList(); assertEquals(1, matches.size()); return matches.getFirst();
+    }
+    private Map<String, Object> localJoin(Map<String, Object> module, String owner) {
+        var matches = definitions(named(module, owner)).stream().filter(d -> d.containsKey("joinValueArity")).toList();
+        assertEquals(1, matches.size()); return matches.getFirst();
     }
     private long count(Value function, String name) { return ((Number) object(Json.parse(function.getMember("diagnostics").asString())).get(name)).longValue(); }
     private void checkEntry(Map<String, Object> module, String entry, boolean joins, LongUnaryOperator expected) {
@@ -52,17 +56,21 @@ class RealCoreEntryContractTest {
         checkEntry(module, "workerEntry", false, n -> n <= 0 ? n + 7 : n - 1);
     }
     @Test void genuinePolymorphicJoinUsesItsErasedValuePrefix() throws Exception {
-        var module = exported("CBVJoinAudit"); var join = named(module, "done");
+        var module = exported("CBVJoinAudit"); var join = localJoin(module, "polyJoin");
         assertEquals(2, ((Number) join.get("joinValueArity")).intValue()); assertEquals(list(false, true), join.get("entryStrict"));
         checkEntry(module, "joinEntry", true, n -> n + 7);
     }
     @Test void genuineFunctionReturningJoinKeepsTheReturnedArgumentOutsideItsContract() throws Exception {
-        var module = exported("CBVJoinAudit"); var join = named(module, "doneFunction");
+        var module = exported("CBVJoinAudit"); var join = localJoin(module, "functionJoin");
         assertEquals(1, ((Number) join.get("joinValueArity")).intValue()); assertEquals(list(false, false), join.get("entryStrict"));
         checkEntry(module, "functionJoinEntry", true, n -> n + 7);
     }
     @Test void genuineWorkerRetainsTheCoercionSlotBeforeItsMarkedBoxedArgument() throws Exception {
-        var module = exported("CBVCoercionAudit"); var worker = named(module, "$wwitnessed"); var parameters = objects(((List<?>) worker.get("expr")).get(1));
+        var module = exported("CBVCoercionAudit");
+        var reachable = CoreModules.reachable(module, "main:CBVCoercionAudit.witnessed", true);
+        var workers = definitions(reachable).stream().filter(d -> ((List<?>) d.get("entryStrict")).contains(true)).toList();
+        assertEquals(1, workers.size(), "The actual witness wrapper reaches exactly one marked worker");
+        var worker = workers.getFirst(); var parameters = objects(((List<?>) worker.get("expr")).get(1));
         assertEquals(list(false, false, true), worker.get("entryStrict")); assertEquals(true, parameters.get(0).get("coercion")); assertEquals(true, parameters.get(2).get("lifted"));
         assertEquals(false, object(parameters.get(2).get("rep")).get("evaluated"), "The CBV obligation must not rewrite GHC's pre-entry WHNF fact");
         checkEntry(module, "coercionEntry", false, n -> n + 7);
