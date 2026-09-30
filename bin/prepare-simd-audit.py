@@ -11,6 +11,7 @@ import platform
 import shutil
 from pathlib import Path
 import subprocess
+from core_package_manifest import inspect_cbd
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/simd'
 FIXTURE = ROOT / 't/fixtures/compiler/SimdInt64X2.hs'
@@ -62,11 +63,11 @@ def main():
     run(['bin/build-compiler.sh'])
     stages = ['pre'] if args.export_only else ['pre', 'post']
     for stage in stages:
-        (OUT / f'{stage}-core/{module_name}.json').unlink(missing_ok=True)
+        (OUT / f'{stage}-core/{module_name}.cbd').unlink(missing_ok=True)
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else list(args.ghc_option)
         if stage == 'post': options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['bin/export-core.sh', *options, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc')))
-        module = json.loads((OUT / f'{stage}-core/{module_name}.json').read_text())
+        module = inspect_cbd((OUT / f'{stage}-core/{module_name}.cbd').read_bytes())
         assert module['boundary'] == ('optimized-Core-before-Tidy' if stage == 'pre' else 'optimized-Core-after-Tidy-before-CorePrep')
         vectors = [v for v in walk(module) if isinstance(v, dict) and v.get('kind') == 'vector']
         assert vectors and all(v['vector'] == {'lanes': lanes, 'element': element} and v['primReps'] == [f'VecRep {lanes} {element}'] and 'aggregate' not in v for v in vectors)
@@ -89,7 +90,7 @@ def main():
             wanted = {(n,a,b): expected(n,a,b) for n in ('vectorCase','subtractCase','branchCase') for a in INPUTS for b in INPUTS}
         assert actual == wanted
         (OUT / 'oracle.tsv').write_text(output); rows = len(actual)
-    artifacts = [OUT / f'{s}-core/{module_name}.json' for s in stages]
+    artifacts = [OUT / f'{s}-core/{module_name}.cbd' for s in stages]
     if rows is not None: artifacts += [OUT / 'oracle.tsv', OUT / 'native/simd']
     (OUT / 'provenance.json').write_text(json.dumps(dict(schema=1, vector=args.vector, commands=commands, nativeRows=rows, stages=stages, toolchain=toolchain,
         sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()), *[record(p) for p in sorted((ROOT / 'src/compiler/THC').glob('*.hs'))]], artifacts=[record(p) for p in artifacts]), indent=2)+'\n')

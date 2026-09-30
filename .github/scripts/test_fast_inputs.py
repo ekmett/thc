@@ -21,6 +21,19 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_simd_audit_cbd_and_native_paths_are_closed(self):
+        for family, module in (("simd", "SimdInt64X2"), ("simd-int32x4", "SimdInt32X4")):
+            self.assertIn(f"build/{family}/provenance.json", DECLARED_REQUIRED)
+            for stage in ("pre", "post"):
+                self.assertTrue(cache.allowed_payload(f"build/{family}/{stage}-core/{module}.cbd"))
+                self.assertFalse(cache.allowed_payload(f"build/{family}/{stage}-core/Other.cbd"))
+            self.assertFalse(cache.allowed_payload(f"build/{family}/unreviewed/{module}.cbd"))
+            native = f"build/{family}/native/simd"
+            self.assertTrue(cache.allowed_payload(native))
+            self.assertTrue(cache.native_executable(native))
+            self.assertEqual(0o755, cache.safe_mode(0o755, native))
+            self.assertFalse(cache.allowed_payload(native + "-unknown"))
+
     def test_heap_exception_corpus_cbd_paths_are_closed(self):
         self.assertIn("build/managed-mvars/manifest.json", DECLARED_REQUIRED)
         for name in cache.MANAGED_MVAR_OUTPUTS | cache.SYNCHRONOUS_EXCEPTION_OUTPUTS | cache.HEAP_CORPUS_CBD_OUTPUTS:

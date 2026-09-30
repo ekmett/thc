@@ -630,7 +630,7 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/wide-char-address/native/oracle", "build/io-main-pap/native/io-main-pap-oracle", "build/mask-functions/native/oracle", "build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
+NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/native/simd", "build/wide-char-address/native/oracle", "build/io-main-pap/native/io-main-pap-oracle", "build/mask-functions/native/oracle", "build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
     "build/floating-remainder/native/oracle",
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
@@ -2017,6 +2017,10 @@ def allowed_payload(name):
     if parts[1] == "managed-mvars":
         return name in MANAGED_MVAR_OUTPUTS
     if parts[1] == "synchronous-exceptions" and name in SYNCHRONOUS_EXCEPTION_OUTPUTS:
+        return True
+    if name in {f"build/{family}/{stage}-core/{module}.cbd"
+                for family, module in (("simd", "SimdInt64X2"), ("simd-int32x4", "SimdInt32X4"))
+                for stage in ("pre", "post")}:
         return True
     if name in AGGREGATE_HOST_CBD_OUTPUTS:
         return True
