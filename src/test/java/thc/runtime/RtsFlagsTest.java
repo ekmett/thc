@@ -13,7 +13,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.io.UncheckedIOException;
+import java.io.IOException;
 import thc.runtime.Unit;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
@@ -21,7 +24,6 @@ import thc.ContextProfile;
 import thc.Language;
 import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class RtsFlagsTest {
     private final Map<String, Object> address = Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true);
@@ -31,16 +33,31 @@ class RtsFlagsTest {
     private final Map<String, Object> closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
     private CoreRepresentation proof() { return CoreRepresentations.parse(address); }
 
-    private static TargetLayout layout() { return layout("inplace"); }
+    static TargetLayout layout() {
+        var receipt = System.getenv("THC_TEST_RTS_LAYOUT");
+        if (receipt == null) return layout("selected-test-abi");
+        try { return TargetLayout.fromDocument(thc.Json.parse(Files.readString(Path.of(receipt)))); }
+        catch (IOException failure) { throw new UncheckedIOException(failure); }
+    }
     @SuppressWarnings("unchecked")
     private static TargetLayout layout(String abi) {
-        assumeTrue(System.getProperty("os.name").startsWith("Linux") &&
-            Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")), "Only the evidenced Linux producing layout is supported");
-        var document = new LinkedHashMap<>(StackInfoTestLayout.document(StackInfoTestLayout.fields()));
+        var document = new LinkedHashMap<>(StackInfoTestLayout.document(flagFields()));
         var compiler = new LinkedHashMap<>((Map<String, Object>) document.get("compiler"));
         compiler.put("abi", abi);
         document.put("compiler", compiler);
         return TargetLayout.fromDocument(document);
+    }
+
+    private static Map<String, Object> flagFields() {
+        // Synthetic controls deliberately differ from the old Linux offset403.
+        var fields = StackInfoTestLayout.fields();
+        fields.put("schema", 2); fields.put("rtsFlagsBytes", 256); fields.put("traceFlagsBytes", 24);
+        fields.put("rtsTraceFlagsOffset", 101); fields.put("rtsTraceFlagsBytes", 24);
+        fields.put("traceUserOffset", 7); fields.put("traceUserBytes", 1);
+        return fields;
+    }
+    private static long userOffset(TargetLayout layout) {
+        return (long) layout.offset("rtsTraceFlagsOffset") + layout.offset("traceUserOffset");
     }
 
     private static Context context() { return context(new ByteArrayOutputStream()); }
@@ -59,8 +76,57 @@ class RtsFlagsTest {
         valid(target);
     }
 
+    @SuppressWarnings("unchecked")
+    @Test void selectedProducerLayoutDeterminesTheOnlyReadableFlagByte() {
+        var fields = StackInfoTestLayout.fields();
+        fields.put("schema", 2);
+        fields.put("rtsFlagsBytes", 256);
+        fields.put("traceFlagsBytes", 24);
+        fields.put("rtsTraceFlagsOffset", 101);
+        fields.put("rtsTraceFlagsBytes", 24);
+        fields.put("traceUserOffset", 7);
+        fields.put("traceUserBytes", 1);
+        var document = new LinkedHashMap<>(StackInfoTestLayout.document(fields));
+        var compiler = new LinkedHashMap<>((Map<String, Object>) document.get("compiler"));
+        compiler.put("abi", "7e95");
+        document.put("compiler", compiler);
+        var layout = TargetLayout.fromDocument(document);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var base = CoreDataLabels.fromCore("RtsFlags", proof(), layout);
+                assertEquals(1L, base.plus(101).plus(7).readWord8(0));
+                assertEquals(1L, base.readWord8(108));
+                assertThrows(RuntimeFault.class, () -> base.readWord8(403));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void invalidWidthsBoundsSchemasAndProducerReplacementReject() {
+        for (var change : List.of(Map.of("rtsFlagsBytes", 0), Map.of("traceFlagsBytes", 0),
+                Map.of("rtsTraceFlagsBytes", 23), Map.of("traceUserBytes", 0), Map.of("traceUserBytes", 2),
+                Map.of("rtsTraceFlagsOffset", 233), Map.of("traceUserOffset", 24), Map.of("schema", 3))) {
+            var fields = flagFields(); fields.putAll(change);
+            assertThrows(IllegalArgumentException.class, () -> TargetLayout.fromDocument(StackInfoTestLayout.document(fields)));
+        }
+        var first = layout("selected-test-abi");
+        var fields = flagFields(); fields.put("traceUserOffset", 8);
+        var differentOffset = TargetLayout.fromDocument(StackInfoTestLayout.document(fields));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var address = CoreDataLabels.fromCore("RtsFlags", proof(), first);
+                assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", proof(), layout("another-build")));
+                assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", proof(), differentOffset));
+                assertSame(address, CoreDataLabels.fromCore("RtsFlags", proof(), first));
+                assertEquals(1L, address.readWord8(108));
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void composedFieldViewsAreReadOnlyAndContextBound() {
         var layout = layout();
+        long user = userOffset(layout);
         var first = context(); var second = context();
         ManagedAddress base;
         ManagedAddress field;
@@ -68,13 +134,13 @@ class RtsFlagsTest {
         try {
             base = CoreDataLabels.fromCore("RtsFlags", proof(), layout);
             assertSame(base, CoreDataLabels.fromCore("RtsFlags", proof(), layout));
-            field = base.plus(392).plus(11);
+            field = base.plus(layout.offset("rtsTraceFlagsOffset")).plus(layout.offset("traceUserOffset"));
             assertEquals(1L, field.readWord8(0));
-            assertEquals(1L, base.readWord8(403));
-            assertEquals(1L, base.plus(404).readWord8(-1));
-            assertTrue(field.sameLocation(base.plus(403)));
+            assertEquals(1L, base.readWord8(user));
+            assertEquals(1L, base.plus(user + 1).readWord8(-1));
+            assertTrue(field.sameLocation(base.plus(user)));
             assertFalse(field.sameLocation(base));
-            for (long offset : new long[]{0L, 392L, 402L, 404L, -1L, Long.MAX_VALUE}) {
+            for (long offset : new long[]{0L, layout.offset("rtsTraceFlagsOffset"), user - 1, user + 1, -1L, Long.MAX_VALUE}) {
                 assertEquals("Unsupported RtsFlags byte field at offset " + offset,
                     assertThrows(RuntimeFault.class, () -> base.readWord8(offset)).getMessage());
                 assertEquals("Unsupported RtsFlags byte field at offset " + offset,
@@ -94,7 +160,7 @@ class RtsFlagsTest {
         } finally { first.leave(); }
         second.enter();
         try {
-            assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof(), layout).readWord8(403));
+            assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof(), layout).readWord8(user));
             assertThrows(RuntimeFault.class, () -> field.readWord8(0));
             assertEquals("Compiler RTS cell belongs to another or closed THC context",
                 assertThrows(RuntimeFault.class, () -> base.readWord8Int(402)).getMessage());
@@ -114,6 +180,8 @@ class RtsFlagsTest {
             context.initialize("thc"); context.enter();
             try {
                 assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", proof()));
+                assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", proof(), StackInfoTestLayout.layout()));
+                CoreDataLabels.fromCore("RtsFlags", proof(), valid);
                 assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", proof(), wrongAbi));
                 assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", null, valid));
                 assertThrows(RuntimeFault.class, () -> {
@@ -137,7 +205,7 @@ class RtsFlagsTest {
         var tuple = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", true,
             "primReps", List.of("Word8Rep"), "components", List.of(state, byteRep));
         var call = List.of("app", List.of("prim", "readWord8OffAddr#"),
-            List.of(plus(plus(label, 392), 11), List.of("lit", "int", "0", Map.of("rep", integer)),
+            List.of(plus(plus(label, layout.offset("rtsTraceFlagsOffset")), layout.offset("traceUserOffset")), List.of("lit", "int", "0", Map.of("rep", integer)),
                 List.of("var", "s", Map.of("rep", state))), List.of(false, false, false), false, false, Map.of("rep", tuple));
         var fields = List.of(Map.of("id", "next", "lifted", false, "rep", state),
             Map.of("id", "value", "lifted", false, "rep", byteRep));
@@ -177,6 +245,7 @@ class RtsFlagsTest {
 
     @Test void unsupportedOffsetFirstInstalledCallKeepsTheTargetAndValidRead() throws ReflectiveOperationException {
         var layout = layout();
+        long user = userOffset(layout);
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -190,15 +259,15 @@ class RtsFlagsTest {
                     }
                 };
                 var target = root.getCallTarget();
-                assertEquals(1, target.call(403L));
+                assertEquals(1, target.call(user));
                 long before = root.compiledEntries;
                 compile(target);
                 assertEquals(before, root.compiledEntries);
-                var failure = assertThrows(RuntimeFault.class, () -> target.call(402L));
-                assertEquals("Unsupported RtsFlags byte field at offset 402", failure.getMessage());
+                var failure = assertThrows(RuntimeFault.class, () -> target.call(user - 1));
+                assertEquals("Unsupported RtsFlags byte field at offset " + (user - 1), failure.getMessage());
                 assertEquals(before + 1, root.compiledEntries, "First installed call is the invalid offset");
                 valid(target);
-                assertEquals(1, target.call(403L));
+                assertEquals(1, target.call(user));
                 assertEquals(before + 2, root.compiledEntries);
                 valid(target);
             } finally { context.leave(); }
@@ -217,7 +286,7 @@ class RtsFlagsTest {
                     var threads = Language.currentState(null).getThreads();
                     threads.enterCurrent(null, false, true, null);
                     try {
-                        assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof(), layout).readWord8(403));
+                        assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof(), layout).readWord8(userOffset(layout)));
                         var text = ManagedAddress.fromByteArray(new byte[]{65, 0});
                         for (var operation : TraceOp.values()) RtsDiagnostics.trace(null, operation, text, 1);
                     } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }

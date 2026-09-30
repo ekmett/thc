@@ -51,6 +51,40 @@ class CoreCompactRecordsTest {
     }
     private byte[] literal(int kind, byte[] payload) { return concat(bytes(2), new byte[10], bytes(kind), payload); }
     private byte[] binding(byte[] expression) { return concat(bytes(0, 0, id.length, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0), expression); }
+
+    private byte[] layoutFacts(int schema, int numberCount) {
+        byte[] text = bytes(0, id.length);
+        var numbers = new byte[numberCount];
+        for (int i = 0; i < numberCount; i++) numbers[i] = (byte) (i + 1);
+        // Independent unframed wire vector; the policy following the layout
+        // proves that the exact schema-selected number count was consumed.
+        return concat(bytes(1), text, text, text, text, bytes(0, 2, 1),
+            text, text, text, text, bytes(schema, 0, 8, 0), text, bytes(1), numbers,
+            new byte[12], bytes(2, 1, 0));
+    }
+
+    @Test void targetLayoutSchemaSelectsItsExactUnframedNumberCount() throws Exception {
+        for (int schema : List.of(1, 2)) {
+            module(new byte[0], id, layoutFacts(schema, schema == 1 ? 57 : 63), (records, file) -> {
+                var header = records.header();
+                var layout = (Map<?, ?>) ((Map<?, ?>) header.get("targetLayout")).get("layout");
+                assertEquals(57L, layout.get("stackClosurePayloadBytes"));
+                assertEquals(schema == 2, layout.containsKey("rtsFlagsBytes"));
+                if (schema == 2) {
+                    assertEquals(58L, layout.get("rtsFlagsBytes"));
+                    assertEquals(63L, layout.get("traceUserBytes"));
+                }
+                assertEquals(Map.of("default", "ast", "bindings", Map.of()), header.get("backendPolicy"));
+                assertEquals(0L, file.getCounters().statistics().dataBytesRead());
+            });
+        }
+        for (int schema : List.of(0, 3))
+            module(new byte[0], id, layoutFacts(schema, 57), (records, file) ->
+                assertThrows(IllegalArgumentException.class, records::header));
+        for (int count : List.of(62, 64))
+            module(new byte[0], id, layoutFacts(2, count), (records, file) ->
+                assertThrows(RuntimeException.class, records::header));
+    }
     private record LiteralCase(int kind, byte[] payload, String tag, Object expected) {}
     @Test void finalizedHeaderStringsAreIndependentAndDoNotInflateExecutableMembers() throws Exception {
         byte[] metadata = "metadata".getBytes(StandardCharsets.UTF_8);

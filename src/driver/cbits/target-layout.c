@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-// A receipt for the layout used by GHC 9.14.1's unmodified stack decoder.
+// Selected-header layouts for GHC 9.14.1's unmodified stack decoder and RTS getters.
 // It is compiled against the same installed headers as the pinned .hsc files.
 #include <stddef.h>
 #include <stdint.h>
@@ -37,7 +37,7 @@
 int main(void) {
     const uint16_t endian_probe = 1;
     putchar('{');
-    NUMBER("schema", 1);
+    NUMBER("schema", 2);
     NUMBER("wordBytes", sizeof(void *));
     printf("\"targetPlatform\":\"%s-%s\",", THC_ARCH, THC_OS);
     printf("\"endianness\":\"%s\",", *(const unsigned char *) &endian_probe == 1 ? "little" : "big");
@@ -103,6 +103,12 @@ int main(void) {
     NUMBER("stackAnnPayloadBytes", OFFSET_StgAnnFrame_ann + sizeof(StgHeader));
     NUMBER("stackAnnFrameBytes", SIZEOF_StgAnnFrame_NoHdr + sizeof(StgHeader));
     NUMBER("stackClosurePayloadBytes", OFFSET_StgClosure_payload + sizeof(StgHeader));
+    NUMBER("rtsFlagsBytes", sizeof(RTS_FLAGS));
+    NUMBER("traceFlagsBytes", sizeof(TRACE_FLAGS));
+    NUMBER("rtsTraceFlagsOffset", offsetof(RTS_FLAGS, TraceFlags));
+    NUMBER("rtsTraceFlagsBytes", MEMBER_BYTES(RTS_FLAGS, TraceFlags));
+    NUMBER("traceUserOffset", offsetof(TRACE_FLAGS, user));
+    NUMBER("traceUserBytes", MEMBER_BYTES(TRACE_FLAGS, user));
     printf("\"profiled\":false}\n");
     return 0;
 }

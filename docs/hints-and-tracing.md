@@ -16,14 +16,20 @@ exactly the supplied nonnegative byte count, including embedded NUL bytes.
 Zero-length binary events do not read their address.
 
 The original `GHC.Internal.RTS.Flags.Test.getUserEventTracingEnabled` getter is
-supported for the pinned GHC 9.14.1 `inplace`, x86_64 Linux, non-profiling dynamic
-layout. Its `RtsFlags.TraceFlags.user` CBool at byte offset 403 reports true,
+supported when the selected GHC 9.14.1 producer supplies schema-2 RTS layout
+metadata from its headers. Its `RtsFlags.TraceFlags.user` one-byte CBool reports true,
 reflecting the always-enabled JVM trace sink above, not native GHC eventlog
 status. It does not follow the separate `thc.diagnostics` counter-report switch.
 The context-owned address supports composed pointer offsets and only this
 one-byte field read; other fields, widths, writes and numeric pointer projection
-are rejected. It is not a zero-filled native RTS structure. Other producing
-platform/configuration layouts remain unsupported until checked independently.
+are rejected. It is not a zero-filled native RTS structure. The automatically
+extracted struct sizes, nested offsets and widths are bound to the selected
+compiler version, ABI, target and way; one context cannot replace that producer
+layout after publishing its RTS view. Legacy schema-1 layouts explicitly lack
+RTS flag support, with no guessed offset fallback. Supported compiler/decoder
+contracts still apply; compatible sizes alone do not admit another GHC version.
+Native macOS and Windows getter qualification remains separate from Linux
+header measurements and synthetic codec controls.
 
 ```text
 [thc trace event] starting

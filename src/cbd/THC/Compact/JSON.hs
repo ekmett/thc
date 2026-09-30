@@ -775,13 +775,15 @@ targetLayout = withObject "target layout document" $ \fields -> do
   compiler <- fields .: "compiler" >>= object
   checked compiler ["id","abi","platform","way"]
   layout <- fields .: "layout" >>= object
-  checked layout (["schema","profiled","wordBytes","endianness","targetPlatform","tablesNextToCode"] ++ map bytesKey targetNumberNames)
+  schema <- layout .: "schema"
+  names <- either fail pure (targetNumberNamesFor schema)
+  checked layout (["schema","profiled","wordBytes","endianness","targetPlatform","tablesNextToCode"] ++ map bytesKey names)
   TargetLayout <$> fields .: "schema" <*> bytesAt compiler "id" <*> bytesAt compiler "abi"
-    <*> bytesAt compiler "platform" <*> bytesAt compiler "way" <*> layout .: "schema"
+    <*> bytesAt compiler "platform" <*> bytesAt compiler "way" <*> pure schema
     <*> layout .: "profiled" <*> layout .: "wordBytes"
     <*> (layout .: "endianness" >>= choice [("little",LittleEndian),("big",BigEndian)])
     <*> bytesAt layout "targetPlatform" <*> layout .: "tablesNextToCode"
-    <*> mapM (\key -> layout .: bytesKey key) targetNumberNames
+    <*> mapM (\key -> layout .: bytesKey key) names
 
 foreignArtifacts :: Value -> Parser ForeignArtifacts
 foreignArtifacts = withObject "foreign artifacts" $ \fields -> do

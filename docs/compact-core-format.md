@@ -303,7 +303,7 @@ are emitted when absent, preserving existing headers. Unknown tags reject.
 `abi`, `platform`, `way`), then `u layoutSchema, b profiled, u wordBytes,
 Endianness, str targetPlatform, b tablesNextToCode`. Endianness tags 0/1 mean
 little/big. The document format is the fixed typed identity `thc-target-layout`.
-The following numeric fields then appear as ULEB64 values, in this exact order:
+Layout schema 1 has exactly 57 unframed ULEB64 fields, in this exact order:
 
 ```text
 infoTableBytes infoTablePtrsOffset infoTablePtrsBytes
@@ -327,6 +327,21 @@ stackCatchRetryFrameBytes stackRetFunSizeBytes stackRetFunFunBytes
 stackRetFunPayloadBytes stackRetFunFrameBytes stackAnnPayloadBytes
 stackAnnFrameBytes stackClosurePayloadBytes
 ```
+
+Layout schema 2 retains that exact prefix and appends six fields, for exactly
+63 values:
+
+```text
+rtsFlagsBytes traceFlagsBytes rtsTraceFlagsOffset rtsTraceFlagsBytes
+traceUserOffset traceUserBytes
+```
+
+The selected GHC headers supply `sizeof(RTS_FLAGS)`, `sizeof(TRACE_FLAGS)`,
+`offsetof(RTS_FLAGS, TraceFlags)` and its member width, and
+`offsetof(TRACE_FLAGS, user)` and its member width. The layout schema selects
+the exact count; unknown schemas reject. Schema-1 bytes remain unchanged and
+do not supply RTS flag offsets. The outer document and container schemas
+are unchanged.
 
 These are original target/compiler facts, never reconstructed from the producer
 or reader host. Existing ABI checks still apply when admitting the selected module.

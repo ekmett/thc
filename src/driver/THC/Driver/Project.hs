@@ -2262,7 +2262,16 @@ readBundleCold receipt path unit buildKey exportKey buildInputs expected = do
 
 validTargetLayout :: Value -> Bool
 validTargetLayout layout =
-  jsonField layout "schema" == Just (1 :: Int) &&
+  (jsonField layout "schema" :: Maybe Int) `elem` [Just 1, Just 2] &&
+  (jsonField layout "schema" /= Just (2 :: Int) ||
+    case mapM (jsonField layout :: String -> Maybe Int)
+      ["rtsFlagsBytes", "traceFlagsBytes", "rtsTraceFlagsOffset",
+       "rtsTraceFlagsBytes", "traceUserOffset", "traceUserBytes"] of
+      Just [rtsBytes, traceBytes, traceOffset, traceMemberBytes, userOffset, userBytes] ->
+        rtsBytes > 0 && traceBytes > 0 && traceMemberBytes == traceBytes && userBytes == 1 &&
+        traceOffset >= 0 && traceOffset <= rtsBytes - traceMemberBytes &&
+        userOffset >= 0 && userOffset <= traceBytes - userBytes
+      _ -> False) &&
   jsonField layout "profiled" == Just False &&
   maybe False (const True) (jsonField layout "tablesNextToCode" :: Maybe Bool) &&
   maybe False (not . null) (jsonField layout "targetPlatform" :: Maybe String) &&

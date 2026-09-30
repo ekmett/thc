@@ -415,7 +415,11 @@ public final class CoreCompactRecords {
         result.put("compiler", strings(cursor, "id", "abi", "platform", "way"));
         var layout = map("schema", cursor.unsigned(), "profiled", cursor.readBoolean(), "wordBytes", cursor.unsigned(),
                 "endianness", enumeration(cursor, List.of("little", "big")), "targetPlatform", text(cursor), "tablesNextToCode", cursor.readBoolean());
+        long schema = (Long) layout.get("schema");
+        require(schema == 1 || schema == 2, "Unsupported GHC target layout schema");
         for (String key : LAYOUT_NUMBERS) layout.put(key, cursor.unsigned());
+        if (schema == 2) for (String key : List.of("rtsFlagsBytes", "traceFlagsBytes", "rtsTraceFlagsOffset",
+                "rtsTraceFlagsBytes", "traceUserOffset", "traceUserBytes")) layout.put(key, cursor.unsigned());
         result.put("layout", layout);
         return result;
     }
