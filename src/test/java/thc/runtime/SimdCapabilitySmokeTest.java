@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Finite scalar entries exercise promoted local vectors without a vector call ABI. */
 @SuppressWarnings("unchecked")
 class SimdCapabilitySmokeTest {
+    private static final String PREFIX = "main:GeneratedSimdSmoke.";
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/simd-capability-smoke");
     private record Pair(long a, long b) {}
@@ -85,9 +86,25 @@ class SimdCapabilitySmokeTest {
                     if (cached != null) nodes.add(cached);
                 }
         for (var node : nodes) for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
-            if (call.getCurrentCallTarget() instanceof RootCallTarget child && child.getRootNode() instanceof GuestRoot)
+            if (call.getCurrentCallTarget() instanceof RootCallTarget child && child.getRootNode() instanceof GuestRoot) {
                 visit(child, seen, result);
+            }
         result.add(target);
+    }
+    private Map<String, RootCallTarget> originalTargets(List<RootCallTarget> physical, Set<String> audited, RootCallTarget host) {
+        var originals = new LinkedHashMap<String, RootCallTarget>();
+        for (var target : physical) if (target != host) {
+            assertInstanceOf(GuestRoot.class, target.getRootNode());
+            var identity = ((GuestRoot) target.getRootNode()).getCoreIdentity();
+            if (identity == null) {
+                assertTrue(target.getRootNode() instanceof BytecodeRoot root && root.entryMask() == 0, "Unclassified physical guest root");
+            } else {
+                assertTrue(audited.contains(identity.bindingId()), "Unexpected original binding: " + identity.bindingId());
+                assertNull(originals.put(identity.bindingId(), target), "Duplicate original binding: " + identity.bindingId());
+            }
+        }
+        assertEquals(audited, originals.keySet(), "Exact audited original target inventory");
+        return originals;
     }
     private boolean compiled(RootCallTarget target) throws Exception {
         return Boolean.TRUE.equals(target.getClass().getMethod("isValidLastTier").invoke(target));
@@ -119,7 +136,7 @@ class SimdCapabilitySmokeTest {
             var digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file.toPath())));
             assertEquals(item.get("sha256"), digest, "Stale SIMD smoke input/artifact: " + item.get("path"));
         }
-        var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, "pre-core/GeneratedSimdSmoke.json").toPath()));
+        var module = thc.CoreCbdFixtures.read(new File(directory, "pre-core/GeneratedSimdSmoke.cbd").toPath());
         var audits = (Map<String, Map<String, Object>>) Json.parse(Files.readString(new File(directory, "audits.json").toPath()));
         assertEquals(GeneratedVectors.operations, new LinkedHashSet<>((List<String>) manifest.get("operations")));
         var rows = new LinkedHashMap<String, List<List<String>>>();
@@ -150,16 +167,23 @@ class SimdCapabilitySmokeTest {
                     // A single wide unary operation can make GHC introduce an
                     // argument-dropping worker. Both guest entries must compile.
                     int guestEntries = ((List<?>) audits.get(name).get("reachableBindings")).size();
-                    var input = new LinkedHashMap<>(CoreModules.reachable(module, name)); input.put("instrument", true);
+                    var audited = new LinkedHashSet<String>();
+                    for (var binding : (List<Map<String, Object>>) audits.get(name).get("reachableBindings"))
+                        assertTrue(audited.add((String) binding.get("id")), "Duplicate audited binding");
+                    var input = new LinkedHashMap<>(CoreModules.reachable(module, PREFIX + name)); input.put("instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input);
-                    var entry = program.entryTarget(name);
+                    var entry = program.entryTarget(PREFIX + name);
                     var host = program.hostEntryTarget(3);
-                    var function = context.asValue(new EntryValue(program, name, 3));
+                    var function = context.asValue(new EntryValue(program, PREFIX + name, 3));
                     for (var row : cases) check(function, row, backend, name);
                     assertEquals(0L, ((Number) program.diagnostics().get("compiledEntries")).longValue(), backend + "/" + name + " interpreted cases");
                     var active = targets(host);
-                    assertEquals(guestEntries + 1, active.size(), backend + "/" + name + " target graph");
-                    var toCompile = new LinkedHashSet<>(active); toCompile.add(entry);
+                    assertEquals(1, Collections.frequency(active, host), backend + "/" + name + " host target");
+                    var originals = originalTargets(active, audited, host);
+                    assertEquals(guestEntries, originals.size(), backend + "/" + name + " original targets");
+                    assertSame(entry, originals.get(PREFIX + name), backend + "/" + name + " original entry");
+                    // Planned region roots remain in the physical snapshot, not the audited guest-call count.
+                    var toCompile = new LinkedHashSet<>(originals.values());
                     for (var target : toCompile) if (target != host) {
                         try { target.getClass().getMethod("compile", boolean.class).invoke(target, true); }
                         catch (Exception failure) { throw new AssertionError(backend + "/" + name + " guest compilation", failure); }
@@ -173,7 +197,8 @@ class SimdCapabilitySmokeTest {
                             backend + "/" + name + " exact compiled guest entries");
                         assertEquals(active, targets(host), backend + "/" + name + " active target identity");
                         assertTrue(compiled(entry), backend + "/" + name + " entry retained");
-                        for (var target : active) assertTrue(compiled(target), backend + "/" + name + " call retained");
+                        assertTrue(compiled(host), backend + "/" + name + " host retained");
+                        for (var target : originals.values()) assertTrue(compiled(target), backend + "/" + name + " original call retained");
                         var state = language.getHandoffState().get();
                         assertEquals(0, state.getArguments().getDepth());
                         assertEquals(0, state.getArguments().retainedReferences());

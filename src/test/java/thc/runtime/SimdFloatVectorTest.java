@@ -24,11 +24,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class SimdFloatVectorTest {
+    private static final String PREFIX = "main:SimdFloatX4.";
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/simd-floatx4");
     private Map<String, Object> module() throws Exception { return module("pre"); }
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdFloatX4.json").toPath()));
+        return thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdFloatX4.cbd").toPath());
     }
     private Map<String, Object> metadata() {
         return Map.of("kind", "vector", "evaluated", true, "primReps", List.of("VecRep 4 FloatElemRep"),
@@ -49,7 +50,7 @@ class SimdFloatVectorTest {
         return program(language, backend, input, entry, false);
     }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> input, String entry, boolean diagnostic) {
-        var linked = new LinkedHashMap<>(CoreModules.reachable(input, entry));
+        var linked = new LinkedHashMap<>(CoreModules.reachable(input, entry.equals("root") ? entry : PREFIX + entry));
         linked.put("instrument", true); linked.put("diagnosticUnsupported", diagnostic);
         return backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
     }
@@ -227,7 +228,7 @@ class SimdFloatVectorTest {
                 boolean correctArity = true; for (var input : cases) if (input.size() != arity) { correctArity = false; break; }
                 assertTrue(correctArity);
                 var program = program(language, backend, module(stage), name);
-                var host = program.hostEntryTarget(arity); var closure = program.entryValue(name); var target = program.entryTarget(name);
+                var host = program.hostEntryTarget(arity); var closure = program.entryValue(PREFIX + name); var target = program.entryTarget(PREFIX + name);
                 var handoff = language.getHandoffState().get();
                 checkRows(false, cases, expected, program, host, closure, target, handoff, 0, 0, stage, backend, name);
                 checkRows(false, cases, expected, program, host, closure, target, handoff, 0, 0, stage, backend, name);

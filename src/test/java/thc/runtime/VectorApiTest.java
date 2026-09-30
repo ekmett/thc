@@ -30,8 +30,8 @@ class VectorApiTest {
     }
     private static Map<String, Object> module() throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (String file : List.of("THC.Prim.json", "VectorLoops.json"))
-            modules.add((Map<String, Object>) Json.parse(Files.readString(DATA.resolve("core").resolve(file))));
+        for (String file : List.of("THC.Prim.cbd", "VectorLoops.cbd"))
+            modules.add(thc.CoreCbdFixtures.read(DATA.resolve("core").resolve(file)));
         return CoreModules.merge(modules);
     }
     private static ExecutableProgram program(String backend, String entry) throws Exception {

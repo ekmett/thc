@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import platform
@@ -71,7 +72,7 @@ def compiled_entry_counts(module):
         check(target[0] == 'lam' and len(target[1]) == len(expr[2]), 'Nonexact fixture call')
         check(function[1] not in active, 'Recursive fixture call count')
         return count + 1 + body(target[2], active | {function[1]})
-    names = {b['name']: b for b in module['bindings']}
+    names = {b['id'].removeprefix('main:SimdDoubleX2.'): b for b in module['bindings']}
     return {e['name']: 1 + body(names[e['name']]['expr'][2], {names[e['name']]['id']}) for e in entries()}
 
 
@@ -90,7 +91,7 @@ def inventory(module, stage):
         check(double_tuple(rep(call[2][0])), 'Pack must retain two Double# tuple leaves')
     unpacked = [v for v in applications if v[1][1] == 'unpackDoubleX2#']
     check(all(double_tuple(rep(v)) for v in unpacked), 'Unpack result is not two Double# leaves')
-    bindings = {b['name']: b for b in module['bindings']}
+    bindings = {b['id'].removeprefix('main:SimdDoubleX2.'): b for b in module['bindings']}
     for entry in entries():
         lam = bindings[entry['name']]['expr']
         check(lam[0] == 'lam' and len(lam[1]) == entry['arity']
@@ -132,16 +133,16 @@ def main():
     audits, structure = {}, {}
     artifacts = [OUT / 'expected.tsv']
     for stage in stages:
-        module_path = OUT / f'{stage}-core/SimdDoubleX2.json'
+        module_path = OUT / f'{stage}-core/SimdDoubleX2.cbd'
         module_path.unlink(missing_ok=True)
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else list(args.ghc_option)
         if stage == 'post':
             options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['bin/export-core.sh', *options, str(FIXTURE)],
             dict(THC_CORE_OUT=str(module_path.parent), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
-        module = json.loads(module_path.read_text())
+        module = inspect_cbd(module_path.read_bytes())
         structure[stage] = inventory(module, stage)
-        audits[stage] = {name: auditor.Audit([(str(module_path), module)], capabilities).run([name])
+        audits[stage] = {name: auditor.Audit([(str(module_path), module)], capabilities).run(['main:SimdDoubleX2.' + name])
                          for name in [e['name'] for e in entries()] + ['vectorArgument']}
         host = audits[stage]['vectorArgument']
         check(host['accepted'] and not host['issues'] and not host['missingGlobals'],

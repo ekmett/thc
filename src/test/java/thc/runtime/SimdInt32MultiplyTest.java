@@ -23,11 +23,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class SimdInt32MultiplyTest {
+    private static final String PREFIX = "main:SimdInt32X4Multiply.";
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/simd-int32x4-multiply");
     private Map<String, Object> module() throws Exception { return module("pre"); }
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdInt32X4Multiply.json").toPath()));
+        return thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdInt32X4Multiply.cbd").toPath());
     }
     private Map<String, Object> metadata() {
         return Map.of("kind", "vector", "evaluated", true, "primReps", List.of("VecRep 4 Int32ElemRep"),
@@ -48,7 +49,7 @@ class SimdInt32MultiplyTest {
         return program(language, backend, input, entry, false);
     }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> input, String entry, boolean diagnostic) {
-        var linked = new LinkedHashMap<>(CoreModules.reachable(input, entry));
+        var linked = new LinkedHashMap<>(CoreModules.reachable(input, entry.equals("root") ? entry : PREFIX + entry));
         linked.put("instrument", true); linked.put("diagnosticUnsupported", diagnostic);
         return backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
     }
@@ -326,7 +327,7 @@ class SimdInt32MultiplyTest {
                 boolean correctArity = true; for (var input : cases) if (input.size() != arity) { correctArity = false; break; }
                 assertTrue(correctArity);
                 var p = program(language, backend, module(stage), name);
-                var host = p.hostEntryTarget(arity); var closure = p.entryValue(name); var target = p.entryTarget(name);
+                var host = p.hostEntryTarget(arity); var closure = p.entryValue(PREFIX + name); var target = p.entryTarget(PREFIX + name);
                 long callCount = counts.get(name).longValue();
                 assertEquals(List.of("scalarHelperCase", "tupleHelperCase").contains(name) ? 2L : 1L, callCount);
                 assertEquals(callCount, ((Map<String, Number>) provenance.get("checkedGuestCallsByStage")).get(stage + "/" + name).longValue());
