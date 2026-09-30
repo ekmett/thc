@@ -40,8 +40,8 @@ public final class WindowsCodePages {
         Abi.requireLayout();
     }
     @FunctionalInterface private interface ForeignAction<T> { T run() throws Throwable; }
-    private <T> T foreign(ForeignAction<T> action) {
-        var previous = context.getThreads().enterForeign(ForeignSafety.UNSAFE);
+    private <T> T foreign(ForeignSafety safety, ForeignAction<T> action) {
+        var previous = context.getThreads().enterForeign(safety);
         try { return action.run(); }
         catch (Throwable failure) { throw propagate(failure); }
         finally { context.getThreads().leaveForeign(previous); }
@@ -53,10 +53,10 @@ public final class WindowsCodePages {
     @TruffleBoundary public long error() { current(); return lastError.get(); }
     @TruffleBoundary public long codePage(boolean console) {
         current();
-        if (!console) return foreign(() -> Integer.toUnsignedLong((int) Api.ansi.invokeExact()));
+        if (!console) return foreign(ForeignSafety.UNSAFE, () -> Integer.toUnsignedLong((int) Api.ansi.invokeExact()));
         try (var arena = Arena.ofConfined()) {
             var error = arena.allocate(Api.capture);
-            int result = foreign(() -> (int) Api.console.invokeExact(error));
+            int result = foreign(ForeignSafety.UNSAFE, () -> (int) Api.console.invokeExact(error));
             lastError.set(Api.error(error));
             return Integer.toUnsignedLong(result);
         }
@@ -65,7 +65,7 @@ public final class WindowsCodePages {
         current();
         try (var arena = Arena.ofConfined()) {
             var error = arena.allocate(Api.capture);
-            int result = foreign(() -> (int) Api.lead.invokeExact(error, (int) codePage, (byte) value));
+            int result = foreign(ForeignSafety.UNSAFE, () -> (int) Api.lead.invokeExact(error, (int) codePage, (byte) value));
             lastError.set(Api.error(error));
             return result;
         }
@@ -170,7 +170,7 @@ public final class WindowsCodePages {
             var data = arena.allocate(Abi.getInfoBytes(), Abi.getInfoAlignment());
             data.asSlice(0, Abi.getFieldBytes()).copyFrom(pointers.get(0));
             var error = arena.allocate(Api.capture);
-            int result = foreign(() -> (int) Api.info.invokeExact(error, (int) codePage, data));
+            int result = foreign(ForeignSafety.UNSAFE, () -> (int) Api.info.invokeExact(error, (int) codePage, data));
             lastError.set(Api.error(error));
             if (result != 0) pointers.get(0).asSlice(0, Abi.getFieldBytes()).copyFrom(data.asSlice(0, Abi.getFieldBytes()));
             return (long) result;
@@ -185,14 +185,14 @@ public final class WindowsCodePages {
             return List.of(new Region(input, sourceBytes, false), new Region(output, Math.max(0L, (int) capacity) * 2, true));
         }, (arena, pointers) -> {
             var error = arena.allocate(Api.capture);
-            int result = foreign(() -> (int) Api.multi.invokeExact(error, (int) codePage, (int) flags, pointers.get(0),
+            int result = foreign(ForeignSafety.UNSAFE, () -> (int) Api.multi.invokeExact(error, (int) codePage, (int) flags, pointers.get(0),
                 (int) count, pointers.get(1), (int) capacity));
             lastError.set(Api.error(error));
             return (long) result;
         });
     }
     @TruffleBoundary public long wideChar(long codePage, long flags, ManagedAddress input, long count,
-            ManagedAddress output, long capacity, ManagedAddress defaultChar, ManagedAddress usedDefault) {
+            ManagedAddress output, long capacity, ManagedAddress defaultChar, ManagedAddress usedDefault, ForeignSafety safety) {
         current();
         return buffers(List.of(input, output, defaultChar, usedDefault), () -> {
             if ((int) capacity < 0) throw RuntimeFault.fault("Windows conversion output capacity must be nonnegative");
@@ -206,7 +206,7 @@ public final class WindowsCodePages {
                 new Region(defaultChar, defaultBytes, false), new Region(usedDefault, 4, true));
         }, (arena, pointers) -> {
             var error = arena.allocate(Api.capture);
-            int result = foreign(() -> (int) Api.wide.invokeExact(error, (int) codePage, (int) flags, pointers.get(0),
+            int result = foreign(safety, () -> (int) Api.wide.invokeExact(error, (int) codePage, (int) flags, pointers.get(0),
                 (int) count, pointers.get(1), (int) capacity, pointers.get(2), pointers.get(3)));
             lastError.set(Api.error(error));
             return (long) result;
@@ -245,7 +245,7 @@ public final class WindowsCodePages {
         try (var arena = Arena.ofConfined()) {
             var resultPointer = arena.allocate(ADDRESS);
             var error = arena.allocate(Api.capture);
-            int count = foreign(() -> (int) Api.message.invokeExact(error, (int) Abi.getMessageFlags(), MemorySegment.NULL,
+            int count = foreign(ForeignSafety.UNSAFE, () -> (int) Api.message.invokeExact(error, (int) Abi.getMessageFlags(), MemorySegment.NULL,
                 (int) errorCode, (int) Abi.getLanguage(), resultPointer, 0, MemorySegment.NULL));
             lastError.set(Api.error(error));
             if (count == 0) return ManagedAddress.nullAddress();

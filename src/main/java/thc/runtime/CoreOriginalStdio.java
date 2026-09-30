@@ -104,6 +104,12 @@ public final class CoreOriginalStdio {
         }
         return true;
     }
+    private static boolean declaredArgumentsMatch(Object raw, List<String> expected) {
+        if (!(raw instanceof List<?> declared) || declared.size() != expected.size()) return false;
+        for (int index = 0; index < expected.size(); index++)
+            if (!scalar(declared.get(index), expected.get(index), true)) return false;
+        return true;
+    }
 
     /** Caller binding names are irrelevant; raw FCallId proof must match exactly.
      * Unrecognized symbols retain ordinary unsupported-foreign handling. */
@@ -116,8 +122,11 @@ public final class CoreOriginalStdio {
             if (candidate.matchesSymbol(symbol)) {
                 recognized = true;
                 if (candidate.getConvention().equals(descriptor.get("convention")) && candidate.getSafety().equals(descriptor.get("safety"))) {
-                    operation = candidate;
-                    break;
+                    if (operation == null) operation = candidate;
+                    if (declaredArgumentsMatch(descriptor.get("argumentReps"), candidate.getArguments())) {
+                        operation = candidate;
+                        break;
+                    }
                 }
             }
         }
@@ -134,11 +143,8 @@ public final class CoreOriginalStdio {
         requireProof(operation.getConvention().equals(descriptor.get("convention")) && operation.getSafety().equals(descriptor.get("safety")), "calling convention/safety");
         var expected = operation.getArguments();
         requireProof(exactInteger(descriptor.get("arity"), expected.size()) && exactInteger(descriptor.get("suppliedArity"), expected.size()), "saturated arity");
-        var declared = descriptor.get("argumentReps") instanceof List<?> list ? list : null;
-        boolean valid = declared != null && declared.size() == expected.size();
-        for (int index = 0; valid && index < expected.size(); index++) valid = scalar(declared.get(index), expected.get(index), true);
-        requireProof(valid, "declared argument representations");
-        valid = argumentReps.size() == expected.size();
+        requireProof(declaredArgumentsMatch(descriptor.get("argumentReps"), expected), "declared argument representations");
+        boolean valid = argumentReps.size() == expected.size();
         for (int index = 0; valid && index < expected.size(); index++) valid = scalar(argumentReps.get(index), expected.get(index), false);
         requireProof(valid, "actual argument representations");
         valid = flags.size() == expected.size();

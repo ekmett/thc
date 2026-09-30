@@ -162,6 +162,24 @@ Win32 supplies the actual code pages, conversion flags, fallback characters and
 localized error text; ANSI conversion is not replaced with UTF-8. Buffers retain
 their capacity and mutability checks, including native partial-failure writes.
 
+Both original safe and unsafe `WideCharToMultiByte` declarations retain their
+exact argument widths. The safe call releases guest scheduling admission during
+native execution and polls after publishing its result; resuming that poll does
+not repeat the conversion. `CodePageTest` compares both declarations with native
+GHC before and on the first compiled call in each backend and handoff mode.
+
+The original `__hscore_open` declaration accepts the unsigned 16-bit Windows
+`CMode` carrier as well as the existing unsigned 32-bit carrier. This declaration
+validation does not provide Windows file/Handle opening: the Windows host ABI
+still rejects the POSIX open operation.
+
+The full code-page fixture currently reaches an ordinary `GetACP` import without
+its package native artifact. Its full-declaration test fails there; the separate
+wide-conversion test still exercises both real declarations and their compiled
+results. The existing stdio model suite has the same artifact boundary for its
+ordinary `SEEK_SET` wrapper. Keep those failures separate from managed conversion
+or declaration validation, and supply ordinary native linkage at acquisition.
+
 Messages allocated by `base_getErrorMessage` must be released with `LocalFree`.
 Aliases become invalid after release, and context disposal frees remaining
 messages. Interior, stale, cross-context and wrong-allocator frees are rejected.

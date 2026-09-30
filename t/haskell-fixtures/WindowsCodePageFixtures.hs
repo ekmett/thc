@@ -61,7 +61,7 @@ import Unsafe.Coerce (unsafeCoerce)
 operations :: [(String,String)]
 operations = [("ansiPage","GetACP"),("consolePage","GetConsoleCP"),("windowsError","GetLastError"),
   ("pageInfo","GetCPInfo"),("leadByte","IsDBCSLeadByteEx"),("multiByte","MultiByteToWideChar"),
-  ("wideChar","WideCharToMultiByte"),("mapError","maperrno_func"),("mapCurrentError","maperrno"),
+  ("wideChar","WideCharToMultiByte"),("wideCharSafe","WideCharToMultiByte"),("mapError","maperrno_func"),("mapCurrentError","maperrno"),
   ("errorMessage","base_getErrorMessage"),("localFree","LocalFree")]
 
 field :: FromJSON a => Key -> Value -> IO a
@@ -81,10 +81,11 @@ variables expression = case expression of
   Tick _ body -> variables body
   _ -> []
 
-originalSymbol :: Id -> Maybe String
-originalSymbol value = case isFCallId_maybe value of
-  Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just owner) True) F.CCallConv F.PlayRisky))
-    | unitString owner == "ghc-internal", unpackFS name `elem` map snd operations -> Just (unpackFS name)
+originalCall :: Id -> Maybe (String,F.Safety)
+originalCall value = case isFCallId_maybe value of
+  Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just owner) True) F.CCallConv safety))
+    | unitString owner == "ghc-internal", unpackFS name `elem` map snd operations,
+      safety == F.PlayRisky || (safety == F.PlaySafe && unpackFS name == "WideCharToMultiByte") -> Just (unpackFS name,safety)
   _ -> Nothing
 
 filesUnder :: FilePath -> IO [FilePath]
@@ -107,7 +108,8 @@ prepareWindowsCodePages root = do
       execute = runLogged 180 root logs
       pkg = takeDirectory ghc </> "ghc-pkg.exe"
       oneLine = BS.unpack . BS.takeWhile (/= '\r') . BS.takeWhile (/= '\n') . commandStdout
-      modules = ["GHC.Internal.Windows","GHC.Internal.IO.Encoding.CodePage","GHC.Internal.IO.Encoding.CodePage.API"]
+      modules = ["GHC.Internal.Windows","GHC.Internal.IO.Encoding.CodePage","GHC.Internal.IO.Encoding.CodePage.API",
+        "GHC.Internal.IO.Windows.Encoding"]
       relative name = map (\c -> if c == '.' then '/' else c) name
       sources = ["src/" ++ relative name ++ ".hs" | name <- modules]
       upstream = root </> "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
@@ -170,8 +172,8 @@ prepareWindowsCodePages root = do
       let expected = mkModule (stringToUnit "ghc-internal") (mkModuleName name)
       core <- Interface.loadInterfaceCore environment expected (overlay </> relative name ++ ".hi") >>= maybe
         (die "Original Windows declaration interface lacks full Core") pure
-      pure [value | (_,body) <- flattenBinds (Interface.interfaceBindings core), value <- variables body, originalSymbol value /= Nothing]
-    let distinct = nubBy (\a b -> originalSymbol a == originalSymbol b && eqType (idType a) (idType b)) values
+      pure [value | (_,body) <- flattenBinds (Interface.interfaceBindings core), value <- variables body, originalCall value /= Nothing]
+    let distinct = nubBy (\a b -> originalCall a == originalCall b && eqType (idType a) (idType b)) values
     liftIO $ unless (length distinct == length operations) (die "Missing original Windows FCallIds")
     pure distinct
   oracle <- runGhc (Just (oneLine library)) $ do
@@ -198,7 +200,8 @@ prepareWindowsCodePages root = do
           _ -> expression
         specialize name symbol = case ([(value,body) | (value,body) <- bindings,
                  getOccString value == name, isExternalName (varName value)],
-                 [value | value <- originals, originalSymbol value == Just symbol]) of
+                 [value | value <- originals, originalCall value == Just (symbol,
+                   if name `elem` ["wideCharSafe","nativeWideCharSafe"] then F.PlaySafe else F.PlayRisky)]) of
           ([(value,body)],[original]) | Just (_,_,formal,_) <- splitFunTy_maybe (idType value), eqType formal (idType original) ->
             let applied = simpleOptExpr (initSimpleOpts flagsNow) (App (resolve body) (Var original))
             in (setIdArity (setIdType (setIdInfo value vanillaIdInfo) (exprType applied)) (exprArity applied),applied)
@@ -227,7 +230,9 @@ prepareWindowsCodePages root = do
       inputs = [source,"etc/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/WindowsCodePageFixtures.hs",
         "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
-        "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java","src/main/c/windows-directory-abi.c"]
+        "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
+        "src/main/java/thc/runtime/OriginalStdioExpression.java","src/main/java/thc/runtime/BytecodeProgram.java",
+        "src/main/java/thc/runtime/BytecodeRoot.java","src/main/java/thc/runtime/WindowsCodePages.java","src/main/c/windows-directory-abi.c"]
   inputHashes <- hashes root inputs
   rawArtifacts <- hashes root ([logs </> file | file <- ["pre.cbd","post.cbd","oracle.json"]] ++
     [makeRelative root (overlay </> relative name ++ ".hi") | name <- modules] ++ concatMap commandArtifacts commands ++
@@ -238,7 +243,7 @@ prepareWindowsCodePages root = do
      "originalFCallIds" .= True,"upstream" .= upstreamIdentity,"sourceHashes" .= sourceHashes,
      "inheritedInterfaceHashes" .= inheritedHashes,"inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
-  putStrLn "windows-codepages: eleven genuine GHC FCallIds, native encoding/error oracle and 22 strict audits"
+  putStrLn "windows-codepages: twelve genuine GHC FCallIds, native encoding/error oracle and 24 strict audits"
 
 -- Each value was compiled by GHC from the typed consumer and its actual
 -- original FCallId, as in the existing native directory oracle.
@@ -251,6 +256,7 @@ observe natives = do
       lead = unsafeCoerce (natives Map.! "leadByte") :: Word -> Word -> IO Int
       multi = unsafeCoerce (natives Map.! "multiByte") :: Word -> Word -> Ptr () -> Int -> Ptr () -> Int -> IO Int
       wide = unsafeCoerce (natives Map.! "wideChar") :: Word -> Word -> Ptr () -> Int -> Ptr () -> Int -> Ptr () -> Ptr () -> IO Int
+      wideSafe = unsafeCoerce (natives Map.! "wideCharSafe") :: Word -> Word -> Ptr () -> Int -> Ptr () -> Int -> Ptr () -> Ptr () -> IO Int
       mapping = unsafeCoerce (natives Map.! "mapError") :: Word -> IO Int
       mapCurrent = unsafeCoerce (natives Map.! "mapCurrentError") :: IO ()
       message = unsafeCoerce (natives Map.! "errorMessage") :: Word -> IO (Ptr ())
@@ -293,21 +299,23 @@ observe natives = do
       pure (object ["case" .= label,"page" .= page,"flags" .= flags,"input" .= input,
         "count" .= count,"capacity" .= capacity,"alias" .= alias,"sizing" .= sizing,
         "result" .= result,"error" .= err,"bytes" .= content])
-  wideRows <- forM wideCases $ \(label,page,flags,input,count,capacity,def,used,sizing) ->
-    allocaBytes 64 $ \source -> allocaBytes 64 $ \output ->
-    allocaBytes 4 $ \defaultBytes -> allocaBytes 4 $ \usedBytes -> do
-      fillBytes source 165 64; fillBytes output 165 64
-      fillBytes defaultBytes 0 4; fillBytes usedBytes 90 4
-      pokeArray (castPtr source) input
-      pokeArray (castPtr defaultBytes) def
-      result <- wide page flags source count (if sizing then nullPtr else output) capacity
-        (if null def then nullPtr else defaultBytes) (if used then usedBytes else nullPtr)
-      err <- errorFor result
-      content <- bytes output
-      usedValue <- peek (castPtr usedBytes :: Ptr Word32)
-      pure (object ["case" .= label,"page" .= page,"flags" .= flags,"input" .= input,
-        "count" .= count,"capacity" .= capacity,"default" .= def,"used" .= used,"sizing" .= sizing,
-        "result" .= result,"error" .= err,"bytes" .= content,"usedValue" .= usedValue])
+  let observeWide wideCall = forM wideCases $ \(label,page,flags,input,count,capacity,def,used,sizing) ->
+        allocaBytes 64 $ \source -> allocaBytes 64 $ \output ->
+        allocaBytes 4 $ \defaultBytes -> allocaBytes 4 $ \usedBytes -> do
+          fillBytes source 165 64; fillBytes output 165 64
+          fillBytes defaultBytes 0 4; fillBytes usedBytes 90 4
+          pokeArray (castPtr source) input
+          pokeArray (castPtr defaultBytes) def
+          result <- wideCall page flags source count (if sizing then nullPtr else output) capacity
+            (if null def then nullPtr else defaultBytes) (if used then usedBytes else nullPtr)
+          err <- errorFor result
+          content <- bytes output
+          usedValue <- peek (castPtr usedBytes :: Ptr Word32)
+          pure (object ["case" .= label,"page" .= page,"flags" .= flags,"input" .= input,
+            "count" .= count,"capacity" .= capacity,"default" .= def,"used" .= used,"sizing" .= sizing,
+            "result" .= result,"error" .= err,"bytes" .= content,"usedValue" .= usedValue])
+  wideRows <- observeWide wide
+  wideSafeRows <- observeWide wideSafe
   messages <- forM [2,5,87,1113,0xffffffff] $ \err -> do
     pointer <- message err
     if pointer == nullPtr then pure (object ["error" .= err,"null" .= True,"units" .= ([] :: [Word16])])
@@ -319,7 +327,7 @@ observe natives = do
   nullReleased <- release nullPtr
   unless (nullReleased == nullPtr) (die "Native LocalFree(NULL) failed")
   pure (object ["ansi" .= acp,"console" .= ccp,"consoleError" .= consoleError,"info" .= infos,"lead" .= leads,"mapping" .= mapped,
-    "mappedCurrent" .= mappedCurrent,"multi" .= multiRows,"wide" .= wideRows,"messages" .= messages])
+    "mappedCurrent" .= mappedCurrent,"multi" .= multiRows,"wide" .= wideRows,"wideSafe" .= wideSafeRows,"messages" .= messages])
 
 multiCases :: [(String,Word,Word,[Word8],Int,Int,Bool,Bool)]
 multiCases =

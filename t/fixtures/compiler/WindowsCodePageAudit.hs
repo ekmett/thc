@@ -41,10 +41,11 @@ multiByte :: MultiCall -> Word# -> Word# -> Addr# -> Int# -> Addr# -> Int# -> In
 multiByte call page flags input count output capacity =
   case call (wordToWord32# page) (wordToWord32# flags) input (intToInt32# count) output (intToInt32# capacity) realWorld# of
     (# _, value #) -> int32ToInt# value
-wideChar :: WideCall -> Word# -> Word# -> Addr# -> Int# -> Addr# -> Int# -> Addr# -> Addr# -> Int#
+wideChar, wideCharSafe :: WideCall -> Word# -> Word# -> Addr# -> Int# -> Addr# -> Int# -> Addr# -> Addr# -> Int#
 wideChar call page flags input count output capacity def used =
   case call (wordToWord32# page) (wordToWord32# flags) input (intToInt32# count) output (intToInt32# capacity) def used realWorld# of
     (# _, value #) -> int32ToInt# value
+wideCharSafe = wideChar
 mapError :: MapCall -> Word# -> Int#
 mapError call value = case call (wordToWord32# value) realWorld# of (# _, result #) -> int32ToInt# result
 mapCurrentError :: MapStateCall -> Int# -> Int#
@@ -68,10 +69,11 @@ nativeMultiByte :: MultiCall -> Word -> Word -> Ptr () -> Int -> Ptr () -> Int -
 nativeMultiByte call (W# page) (W# flags) (Ptr input) (I# count) (Ptr output) (I# capacity) = IO (\state ->
   case call (wordToWord32# page) (wordToWord32# flags) input (intToInt32# count) output (intToInt32# capacity) state of
     (# next, value #) -> (# next, I# (int32ToInt# value) #))
-nativeWideChar :: WideCall -> Word -> Word -> Ptr () -> Int -> Ptr () -> Int -> Ptr () -> Ptr () -> IO Int
+nativeWideChar, nativeWideCharSafe :: WideCall -> Word -> Word -> Ptr () -> Int -> Ptr () -> Int -> Ptr () -> Ptr () -> IO Int
 nativeWideChar call (W# page) (W# flags) (Ptr input) (I# count) (Ptr output) (I# capacity) (Ptr def) (Ptr used) = IO (\state ->
   case call (wordToWord32# page) (wordToWord32# flags) input (intToInt32# count) output (intToInt32# capacity) def used state of
     (# next, value #) -> (# next, I# (int32ToInt# value) #))
+nativeWideCharSafe = nativeWideChar
 nativeMapError :: MapCall -> Word -> IO Int
 nativeMapError call (W# value) = IO (\state ->
   case call (wordToWord32# value) state of (# next, result #) -> (# next, I# (int32ToInt# result) #))

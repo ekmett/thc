@@ -2495,14 +2495,15 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
         self.assertEqual(('BoxedRep (Just Unlifted)', 'BoxedRep (Just Unlifted)', 'Word64Rep', None),
                          core_original_foreign.operation(target)[2])
 
-    def test_windows_encoding_declarations_keep_exact_owners_and_unsafe_abi(self):
+    def test_windows_encoding_declarations_keep_exact_owners_and_safety(self):
         fixture = LibdwUnavailableAuditTest()
         for declaration in self.declarations():
             symbol = declaration['target']['symbol']
             if symbol not in core_original_foreign.WINDOWS_ENCODING_OPERATIONS and symbol != 'GetLastError':
                 continue
+            rejected_safety = 'interruptible' if symbol == 'WideCharToMultiByte' else 'safe'
             for changes in (dict(target=dict(declaration['target'], unit='main')),
-                            dict(safety='safe'), dict(convention='stdcall'), dict(arity=99)):
+                            dict(safety=rejected_safety), dict(convention='stdcall'), dict(arity=99)):
                 with self.subTest(symbol=symbol, changes=changes):
                     report = fixture.audit(fixture.fixture(dict(declaration, **changes)))
                     self.assertFalse(report['accepted'])
@@ -3667,11 +3668,17 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.assertFalse(self.audit(module)['accepted'], symbol)
 
     def test_original_open_three_exact_safety_contracts(self):
-        for safety in ('unsafe', 'safe', 'interruptible'):
-            module = self.fixture('__hscore_open')
-            self.call(module)[6]['foreignCall']['safety'] = safety
-            self.assertTrue(self.audit(module)['accepted'])
-            self.assertFalse(self.audit(module, dict(CAP, managedForeignCalls=[]))['accepted'])
+        for mode in ('Word16Rep', 'Word32Rep', 'Word8Rep', 'Int16Rep', 'Int32Rep', 'Word64Rep'):
+            for safety in ('unsafe', 'safe', 'interruptible'):
+                with self.subTest(mode=mode, safety=safety):
+                    module = self.fixture('__hscore_open')
+                    call = self.call(module)
+                    call[6]['foreignCall']['safety'] = safety
+                    for proof in (call[6]['foreignCall']['argumentReps'][2], call[2][2][2]['rep'],
+                                  module['bindings'][0]['expr'][1][2]['rep']):
+                        proof['primReps'] = [mode]
+                    self.assertEqual(mode in ('Word16Rep', 'Word32Rep'), self.audit(module)['accepted'])
+                    self.assertFalse(self.audit(module, dict(CAP, managedForeignCalls=[]))['accepted'])
 
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
         for symbol in self.symbols:

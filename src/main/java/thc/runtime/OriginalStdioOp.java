@@ -63,6 +63,7 @@ public enum OriginalStdioOp {
     DBCS_LEAD_BYTE("IsDBCSLeadByteEx", "ccall", "unsafe", Arrays.asList("Word32Rep", "Word8Rep", null), "IntRep"),
     MULTI_BYTE_TO_WIDE("MultiByteToWideChar", "ccall", "unsafe", Arrays.asList("Word32Rep", "Word32Rep", "AddrRep", "Int32Rep", "AddrRep", "Int32Rep", null), "Int32Rep"),
     WIDE_TO_MULTI_BYTE("WideCharToMultiByte", "ccall", "unsafe", Arrays.asList("Word32Rep", "Word32Rep", "AddrRep", "Int32Rep", "AddrRep", "Int32Rep", "AddrRep", "AddrRep", null), "Int32Rep"),
+    WIDE_TO_MULTI_BYTE_SAFE("WideCharToMultiByte", "ccall", "safe", Arrays.asList("Word32Rep", "Word32Rep", "AddrRep", "Int32Rep", "AddrRep", "Int32Rep", "AddrRep", "AddrRep", null), "Int32Rep"),
     MAP_ERRNO("maperrno", "ccall", "unsafe", Arrays.asList((String) null), null),
     MAP_ERRNO_VALUE("maperrno_func", "ccall", "unsafe", Arrays.asList("Word32Rep", null), "Int32Rep"),
     WINDOWS_ERROR_MESSAGE("base_getErrorMessage", "ccall", "unsafe", Arrays.asList("Word32Rep", null), "AddrRep"),
@@ -170,6 +171,10 @@ public enum OriginalStdioOp {
     OPEN("__hscore_open", "ccall", "unsafe", Arrays.asList("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     OPEN_SAFE("__hscore_open", "ccall", "safe", Arrays.asList("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     OPEN_INTERRUPTIBLE("__hscore_open", "ccall", "interruptible", Arrays.asList("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
+    // Windows CMode uses an unsigned 16-bit carrier.
+    OPEN_WORD16("__hscore_open", "ccall", "unsafe", Arrays.asList("AddrRep", "Int32Rep", "Word16Rep", null), "Int32Rep"),
+    OPEN_WORD16_SAFE("__hscore_open", "ccall", "safe", Arrays.asList("AddrRep", "Int32Rep", "Word16Rep", null), "Int32Rep"),
+    OPEN_WORD16_INTERRUPTIBLE("__hscore_open", "ccall", "interruptible", Arrays.asList("AddrRep", "Int32Rep", "Word16Rep", null), "Int32Rep"),
     DUP("dup", "ccall", "unsafe", Arrays.asList("Int32Rep", null), "Int32Rep"),
     DUP2("dup2", "ccall", "unsafe", Arrays.asList("Int32Rep", "Int32Rep", null), "Int32Rep"),
     SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
@@ -298,7 +303,7 @@ public enum OriginalStdioOp {
     public boolean getCurrentDirectory() { return this == CHDIR || this == GETCWD; }
     public boolean getWindowsDirectory() { return this == FIND_FIRST || this == FIND_NEXT || this == FIND_CLOSE; }
     public boolean getWindowsEncoding() { return this == LAST_ERROR || this == ANSI_CODE_PAGE || this == CONSOLE_CODE_PAGE ||
-        this == CODE_PAGE_INFO || this == DBCS_LEAD_BYTE || this == MULTI_BYTE_TO_WIDE || this == WIDE_TO_MULTI_BYTE ||
+        this == CODE_PAGE_INFO || this == DBCS_LEAD_BYTE || this == MULTI_BYTE_TO_WIDE || this == WIDE_TO_MULTI_BYTE || this == WIDE_TO_MULTI_BYTE_SAFE ||
         this == MAP_ERRNO || this == MAP_ERRNO_VALUE || this == WINDOWS_ERROR_MESSAGE || this == LOCAL_FREE; }
     public boolean getDirectoryStream() { return getWindowsDirectory() || this == OPENDIR || this == FDOPENDIR || this == CLOSEDIR ||
         this == READDIR || this == DIRENT_NAME || this == FREE_DIRENT; }
@@ -317,5 +322,6 @@ public enum OriginalStdioOp {
     public boolean getTermiosAddress() { return this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC; }
     public boolean getSigset() { return this == SIGEMPTYSET || this == SIGADDSET; }
     public boolean getSavedTermios() { return this == GET_SAVED_TERMIOS || this == SET_SAVED_TERMIOS; }
-    public boolean getOpening() { return this == OPEN || this == OPEN_SAFE || this == OPEN_INTERRUPTIBLE; }
+    public boolean getOpening() { return this == OPEN || this == OPEN_SAFE || this == OPEN_INTERRUPTIBLE ||
+        this == OPEN_WORD16 || this == OPEN_WORD16_SAFE || this == OPEN_WORD16_INTERRUPTIBLE; }
 }

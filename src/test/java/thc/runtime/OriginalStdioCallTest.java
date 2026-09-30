@@ -82,6 +82,12 @@ class OriginalStdioCallTest {
         }
     }
     @Test void normalAndFirstInstalledCompiledCallsPreserveBytesErrnoAndState() throws Exception {
+        exerciseTransfers(true);
+    }
+    @Test void transfersPreserveBytesErrnoAndStateOnEveryFirstCompiledCall() throws Exception {
+        exerciseTransfers(false);
+    }
+    private void exerciseTransfers(boolean seekConstants) throws Exception {
         for (var backend : List.of("ast","bytecode")) {
             boolean[] safeTransfer = {false};
             var out = new ByteArrayOutputStream() {
@@ -114,7 +120,7 @@ class OriginalStdioCallTest {
                         }
                         void run(int pass) throws Exception {
                             var constants = new LinkedHashMap<String,OriginalStdioOp>(); constants.put("seek_set",OriginalStdioOp.SEEK_SET); constants.put("seek_cur",OriginalStdioOp.SEEK_CUR); constants.put("seek_end",OriginalStdioOp.SEEK_END);
-                            for (var constant : constants.entrySet()) { long errno = Language.currentState().getStdio().errno(); assertEquals(StdioHostAbi.load().seekConstant(constant.getValue()),call(constant.getKey())); assertEquals(errno,Language.currentState().getStdio().errno(),"constant preserves sticky errno"); }
+                            if (seekConstants) for (var constant : constants.entrySet()) { long errno = Language.currentState().getStdio().errno(); assertEquals(StdioHostAbi.load().seekConstant(constant.getValue()),call(constant.getKey())); assertEquals(errno,Language.currentState().getStdio().errno(),"constant preserves sticky errno"); }
                             for (var name : List.of("safe_write","unsafe_write")) {
                                 byte[] bytes = {0x55,(byte) pass,0,-1,10,0x66}; var address = ManagedAddress.fromByteArray(bytes).plus(1L); int beforeOut = out.size(), beforeErr = err.size();
                                 assertEquals(4L,call(name,1L,address,4L)); assertArrayEquals(Arrays.copyOfRange(bytes,1,5),Arrays.copyOfRange(out.toByteArray(),beforeOut,out.size()));
@@ -134,7 +140,7 @@ class OriginalStdioCallTest {
                         assertThrows(RuntimeFault.class,() -> exercise.call(name,1L,address,-1L)); assertThrows(RuntimeFault.class,() -> exercise.call(name,1L,address,3L)); assertThrows(RuntimeFault.class,() -> exercise.call(name,1L << 32,address,2L));
                         assertArrayEquals(before,out.toByteArray()); assertEquals(ebadf,exercise.call("errno")); released(language);
                     }
-                    for (var name : List.of("errno","seek_set","seek_cur","seek_end")) assertThrows(RuntimeFault.class,() -> callScalarTestTarget(targets.get(name),new Object[]{0L,9L})); released(language);
+                    for (var name : seekConstants ? List.of("errno","seek_set","seek_cur","seek_end") : List.of("errno")) assertThrows(RuntimeFault.class,() -> callScalarTestTarget(targets.get(name),new Object[]{0L,9L})); released(language);
                 } finally { context.leave(); }
             }
         }
