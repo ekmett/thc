@@ -50,7 +50,7 @@ import System.Directory (doesFileExist, doesDirectoryExist, listDirectory, canon
   createDirectoryIfMissing, removeFile, renameFile)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeFileName, isAbsolute, takeExtension,
+import System.FilePath ((</>), takeDirectory, takeFileName, isAbsolute, takeExtension,
   replaceExtension, splitDirectories)
 import System.IO (hClose, openTempFile)
 import System.Process (CreateProcess(..), StdStream(..), proc, readProcessWithExitCode,
