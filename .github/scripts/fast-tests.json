@@ -2283,6 +2283,10 @@
     },
     "src/test/java/thc/runtime/ArrayCoreEvidence.java": {
       "junit": [
+        "thc.runtime.FloatingAddressTest",
+        "thc.runtime.FloatingByteOffsetTest",
+        "thc.runtime.NarrowByteOffsetTest",
+        "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.ManagedWeakTest","thc.runtime.AddressIdentityNativeTest",
         "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",

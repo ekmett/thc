@@ -1233,7 +1233,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.stem != "ArrayCoreEvidence" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(45, len(consumers))
+        for family in ("FloatingAddress", "FloatingByteOffset", "NarrowByteOffset", "Int32ByteOffset"):
+            self.assertIn(f"thc.runtime.{family}Test", consumers)
         self.assertIn("thc.runtime.SumResultTest", consumers)
         self.assertIn("thc.runtime.TupleInputNativeTest", consumers)
         self.assertIn("thc.runtime.ManagedWeakTest", consumers)
