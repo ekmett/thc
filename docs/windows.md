@@ -81,12 +81,14 @@ dependency-mutation checks against the selected native installation. Set `GHC`,
 selects test evidence storage; `TEMP`, `TMP`, GHC's `-tmpdir`, and Cabal's
 `--builddir` must also be redirected when using a separate build drive.
 `THC_CABAL_BUILD_DIR` selects the Cabal build directory for the driver's interface
-helper and the `windows-driver` fixture's driver lookup. It does not redirect
-the Windows plugin registry, which currently reads the checkout's
+helper, the Windows CString fixture's helper, and the `windows-driver` fixture's
+driver lookup. It does not redirect the Windows plugin registry, which reads the checkout's
 `dist-newstyle` plan. Keep that plan built with the same pinned compiler.
 When running JVM tests against a separate Cabal build, set `THC_FIXTURES` to
 that build's `thc-fixtures.exe`. The CBD model tests use the real Haskell encoder;
 an older executable from another build directory is not a valid substitute.
+Set `THC_COMPACT` to the matching build's `thc-compact.exe` for strict CBD audits.
+Build that executable too; the ordinary Windows `Build` action builds all components.
 
 ~~~powershell
 ./bin/export-core.ps1 t/fixtures/core/Fixtures.hs
