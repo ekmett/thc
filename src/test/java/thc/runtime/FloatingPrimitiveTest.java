@@ -10,11 +10,14 @@ import com.oracle.truffle.api.nodes.RootNode;
 import java.io.File;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.*;
-import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import thc.CoreCbdFixtures;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,8 +25,9 @@ import static thc.Main.*;
 import static thc.runtime.ScalarValueTestSupport.*;
 
 class FloatingPrimitiveTest {
+    @TempDir Path temporary;
     private final File root = new File(System.getProperty("thc.projectRoot"));
-    private final File module = new File(root, "build/floating/core/FloatingAudit.json");
+    private final File module = new File(root, "build/floating/core/FloatingAudit.cbd");
     private record Row(String entry, long input, long expected) {}
     private List<Row> rows() throws Exception {
         var result = new ArrayList<Row>();
@@ -61,7 +65,7 @@ class FloatingPrimitiveTest {
             for (var entryRows : entries.entrySet()) {
                 var entry = entryRows.getKey();
                 var rows = entryRows.getValue();
-                var fn = loadEntry(context, list(module.getPath()), entry, true, backend);
+                var fn = loadEntry(context, list(module.getPath()), "main:FloatingAudit." + entry, true, backend);
                 checkRows(fn, rows, backend, entry, "before");
                 for (int i = 0; i < 40; i++) {
                     var row = rows.get(i % rows.size());
@@ -79,7 +83,7 @@ class FloatingPrimitiveTest {
     @Test void previouslyColdNaNsInfinitiesSubnormalsAndSignedZerosRemainCorrectAfterCompilation() throws Exception {
         for (var backend : list("ast", "bytecode")) try (var context = executionContext()) {
             for (var entry : list("floatComparisons", "doubleComparisons", "floatSignedZero", "doubleSignedZero")) {
-                var fn = loadEntry(context, list(module.getPath()), entry, true, backend);
+                var fn = loadEntry(context, list(module.getPath()), "main:FloatingAudit." + entry, true, backend);
                 var selected = rows().stream().filter(row -> row.entry.equals(entry)).toList();
                 var warmRows = selected.stream().filter(row -> row.input == 7L).toList();
                 assertEquals(1, warmRows.size());
@@ -175,9 +179,21 @@ class FloatingPrimitiveTest {
             } finally { context.leave(); }
         }
     }
-    private static String request(String module, String backend, Map<String, Object> binding) {
-        return Json.stringify(map("entry", "entry", "backend", backend, "modules", list(map("schema", 1,
-            "ghc", "9.14.1", "module", module, "bindings", list(binding), "constructors", list()))));
+    // Malformed representation models exercise lowering directly; serialized execution uses CBD above.
+    private static void rejectedModel(String module, String backend, Map<String, Object> binding, String message) {
+        try (var context = executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var source = map("schema", 1, "ghc", "9.14.1", "module", module,
+                    "bindings", list(binding), "constructors", list());
+                var error = assertThrows(RuntimeFault.class, () -> {
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source);
+                    program.entryTarget("entry");
+                });
+                assertTrue(Objects.toString(error.getMessage(), "").contains(message), error.getMessage());
+            } finally { context.leave(); }
+        }
     }
     @Test void exactFloatingTupleProofsDoNotEnableFloatingLiteralAlternatives() {
         for (var kind : list("float", "double")) {
@@ -191,10 +207,8 @@ class FloatingPrimitiveTest {
                 list("lit", list(kind, "-0.0"), list(), list("lit", "int", "1")),
                 list("default", null, list(), list("lit", "int", "0"))));
             var binding = map("id", "entry", "name", "entry", "arity", 0, "lifted", true, "expr", body);
-            for (var backend : list("ast", "bytecode")) try (var context = executionContext()) {
-                var error = assertThrows(PolyglotException.class, () -> context.eval("thc", request("Floating.Invalid", backend, binding)));
-                assertTrue(Objects.toString(error.getMessage(), "").contains("Floating literal alternatives"), error.getMessage());
-            }
+            for (var backend : list("ast", "bytecode"))
+                rejectedModel("Floating.Invalid", backend, binding, "Floating literal alternatives");
             var opposite = kind.equals("float") ? "double" : "float";
             record Carrier(String kind, List<String> registers, List<Object> literal) {}
             var carriers = list(new Carrier(opposite, list(opposite.equals("float") ? "FloatRep" : "DoubleRep"), list("lit", opposite, "1.0")),
@@ -211,11 +225,8 @@ class FloatingPrimitiveTest {
                         list(list("default", null, list(), literal)), map("rep", declared)));
                 }
             }
-            for (var expr : malformed) for (var backend : list("ast", "bytecode")) try (var context = executionContext()) {
-                var error = assertThrows(PolyglotException.class,
-                    () -> context.eval("thc", request("Floating.Invalid", backend, with(binding, "expr", expr))));
-                assertTrue(Objects.toString(error.getMessage(), "").contains("Conflicting Core representation proofs"), error.getMessage());
-            }
+            for (var expr : malformed) for (var backend : list("ast", "bytecode"))
+                rejectedModel("Floating.Invalid", backend, with(binding, "expr", expr), "Conflicting Core representation proofs");
         }
     }
     @Test void floatingCaseValidationChecksEveryKnownAlternativeWithoutOrderDependence() {
@@ -225,13 +236,12 @@ class FloatingPrimitiveTest {
             var others = list(list("lit", kind.equals("float") ? "double" : "float", "1.0"),
                 list("lit", "int", "1"), list("lit", "string-bytes", "41"), list("void"));
             for (var other : others) for (var arms : list(list(floating, other), list(other, floating)))
-                for (var declared : list(null, proof)) for (var backend : list("ast", "bytecode")) try (var context = executionContext()) {
+                for (var declared : list(null, proof)) for (var backend : list("ast", "bytecode")) {
                     var expr = new ArrayList<Object>(list("case", list("lit", "int", "0"), "s", list(
                         list("default", null, list(), arms.get(0)), list("lit", list("int", "0"), list(), arms.get(1)))));
                     if (declared != null) expr.add(map("rep", declared));
                     var binding = map("id", "entry", "name", "entry", "arity", 0, "lifted", true, "expr", expr);
-                    var error = assertThrows(PolyglotException.class, () -> context.eval("thc", request("Floating.MixedCase", backend, binding)));
-                    assertTrue(Objects.toString(error.getMessage(), "").contains("Conflicting Core representation proofs"), error.getMessage());
+                    rejectedModel("Floating.MixedCase", backend, binding, "Conflicting Core representation proofs");
                 }
         }
     }
@@ -246,6 +256,26 @@ class FloatingPrimitiveTest {
             var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build());
             FrameAccess.writeLong(frame, temporary, 1L);
             assertThrows(RuntimeFault.class, () -> self.transfer(frame, closure, new int[]{temporary}));
+        }
+    }
+    @Test void serializedFloatingRejectionsSurviveCbdEncodingAndDecoding() throws Exception {
+        for (var kind : list("float", "double")) {
+            var alternative = list("case", list("lit", kind, "0.0", map()), "scrutinee", list(
+                list("lit", list(kind, "-0.0"), list(), list("lit", "int", "1", map()), map("binders", list())),
+                list("default", null, list(), list("lit", "int", "0", map()), map("binders", list()))), map());
+            var conflicting = list("lit", kind, "1.0", map("rep", map("kind", "long", "primReps", list("IntRep"), "evaluated", true)));
+            for (var control : list(map("expr", alternative, "error", "Floating literal alternatives"),
+                                    map("expr", conflicting, "error", "Conflicting Core representation proofs"))) {
+                var entry = "main:Floating.Invalid.entry";
+                var binding = map("id", entry, "name", "entry", "arity", 0, "lifted", true, "expr", control.get("expr"));
+                var artifact = CoreCbdFixtures.write(temporary.resolve(kind + "-" + (control.get("expr") == alternative ? "alternative" : "conflict") + ".cbd"),
+                    map("schema", 1, "ghc", "9.14.1", "unit", "main", "module", "Floating.Invalid",
+                        "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", list(binding), "constructors", list()));
+                for (var backend : list("ast", "bytecode")) try (var context = executionContext()) {
+                    var error = assertThrows(PolyglotException.class, () -> loadEntry(context, list(artifact.toString()), entry, true, backend));
+                    assertTrue(Objects.toString(error.getMessage(), "").contains((String) control.get("error")), error.getMessage());
+                }
+            }
         }
     }
 }
