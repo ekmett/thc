@@ -949,7 +949,7 @@ class FastInputTests(unittest.TestCase):
     def test_bignat_closed_artifacts_preserve_receipt_and_reject_missing_records(self):
         name = 'build/bignat-literals/manifest.json'
         artifacts = cache.BIGNAT_OUTPUTS - {name}
-        self.assertEqual(121, len(artifacts))
+        self.assertEqual(124, len(artifacts))
         self.assertIn(name, DECLARED_REQUIRED)
         for path in artifacts:
             self.assertTrue(cache.allowed_payload(path), path)

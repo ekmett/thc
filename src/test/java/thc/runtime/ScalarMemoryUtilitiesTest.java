@@ -122,7 +122,7 @@ class ScalarMemoryUtilitiesTest {
     private Map<String, Object> binding(List<Map<String, Object>> bindings, String name) {
         var found = new ArrayList<Map<String, Object>>();
         for (var binding : bindings)
-            if (name.equals(binding.get("name")))
+            if (("main:ScalarMemoryUtilities." + name).equals(binding.get("id")))
                 found.add(binding);
         return single(found);
     }
@@ -177,7 +177,7 @@ class ScalarMemoryUtilitiesTest {
             var actualPrimitives = new ArrayList<Object>();
             for (var p : (List<Map<String, Object>>) audit.get("primitives")) actualPrimitives.add(p.get("name"));
             assertTrue(actualPrimitives.containsAll(primitives));
-            var module = json(new File(directory, stage + "/core/ScalarMemoryUtilities.json"));
+            var module = thc.CoreCbdFixtures.read(new File(directory, stage + "/core/ScalarMemoryUtilities.cbd").toPath());
             // Native pointer remainder observes the actual aligned allocation address; all other cases retain the
             // native-access-denied context.
             for (var backend : List.of("ast", "bytecode"))
@@ -199,11 +199,11 @@ class ScalarMemoryUtilitiesTest {
                                     "The string doesn't represent a boolean value: " + configured);
                             assertEquals(requestedMode, Boolean.getBoolean(Handoff.HANDOFF_PROPERTY));
                             assertEquals(requestedMode, language.getHandoffLayouts().getEnabled());
-                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, name));
+                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:ScalarMemoryUtilities." + name));
                             linked.put("instrument", true);
                             ExecutableProgram program = backend.equals("ast") ? new Program(language, linked)
                                                                               : new BytecodeProgram(language, linked);
-                            var entry = program.entryTarget(name);
+                            var entry = program.entryTarget("main:ScalarMemoryUtilities." + name);
                             var corpus = new ArrayList<Row>();
                             for (var row : expected)
                                 if (row.entry().equals(name))
@@ -242,7 +242,7 @@ class ScalarMemoryUtilitiesTest {
                             // the original Core inventory.
                             long expectedEntries = sourceEntries - (name.startsWith("numeric") ? 0L : 1L);
                             if (name.equals("pinCase")) {
-                                var helper = binding(bindings, "$j");
+                                var helper = single(bindings.stream().filter(candidate -> candidate != binding).toList());
                                 int uses = 0;
                                 for (var node : nodes(binding))
                                     if (!node.isEmpty() && "var".equals(node.getFirst())
@@ -250,7 +250,7 @@ class ScalarMemoryUtilitiesTest {
                                         uses++;
                                 assertEquals(3, uses);
                             } else if (name.equals("shrinkCase")) {
-                                var constant = binding(bindings, "lvl");
+                                var constant = single(bindings.stream().filter(candidate -> candidate != binding).toList());
                                 var expression = (List<?>) constant.get("expr");
                                 assertEquals("app", expression.get(0));
                                 assertEquals("con", ((List<?>) expression.get(1)).get(0));

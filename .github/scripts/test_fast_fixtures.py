@@ -2347,9 +2347,24 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/explicit64-arrays", fast_fixtures.FULL_OUTPUT_ROOTS)
         for name in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
-                     "pre/core/Explicit64ArrayAudit.json", "post/core/Explicit64ArrayAudit.json"):
+                     "pre/core/Explicit64ArrayAudit.cbd", "post/core/Explicit64ArrayAudit.cbd"):
             self.assertIn("build/explicit64-arrays/" + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"explicit64-arrays/*.tsv"', (project / "build.gradle").read_text())
+
+    def test_remaining_scalar_memory_audits_use_cbd_inputs(self):
+        project = Path(__file__).resolve().parents[2]
+        families = ("FloatingAddress", "FloatingByteOffset", "NarrowByteOffset", "Int32ByteOffset",
+                    "Explicit64Array", "AtomicAddress", "AlignedScalarMemory", "UnalignedScalarMemory",
+                    "ScalarMemoryUtilities")
+        for family in families:
+            module = family + ("" if family == "ScalarMemoryUtilities" else "Audit")
+            producer = (project / f"t/haskell-fixtures/{family}Fixtures.hs").read_text()
+            consumer = (project / f"src/test/java/thc/runtime/{family}Test.java").read_text()
+            self.assertIn(module + ".cbd", producer)
+            self.assertNotIn(module + ".json", producer)
+            self.assertIn(module + ".cbd", consumer)
+            self.assertNotIn(module + ".json", consumer)
+            self.assertIn("CoreCbdFixtures.read", consumer)
 
     def test_floatx4_fma_has_focused_full_and_closed_native_inputs(self):
         project = Path(__file__).resolve().parents[2]
@@ -2401,7 +2416,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/floating-address", fast_fixtures.FULL_OUTPUT_ROOTS)
         for name in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
-                     "pre/core/FloatingAddressAudit.json", "post/core/FloatingAddressAudit.json"):
+                     "pre/core/FloatingAddressAudit.cbd", "post/core/FloatingAddressAudit.cbd"):
             self.assertIn("build/floating-address/" + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"floating-address/*.tsv"', (project / "build.gradle").read_text())
 
@@ -2416,7 +2431,7 @@ class FixturePreparationTest(unittest.TestCase):
                       (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn("build/atomic-address", fast_fixtures.FULL_OUTPUT_ROOTS)
         for suffix in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
-                       "pre/core/AtomicAddressAudit.json", "post/core/AtomicAddressAudit.json"):
+                       "pre/core/AtomicAddressAudit.cbd", "post/core/AtomicAddressAudit.cbd"):
             self.assertIn("build/atomic-address/" + suffix, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"atomic-address/*.tsv"', (project / "build.gradle").read_text())
         self.assertIn("build/atomic-address/", (project / ".github/workflows/build.yml").read_text())

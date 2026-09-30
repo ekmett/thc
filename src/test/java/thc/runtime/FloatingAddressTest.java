@@ -165,19 +165,18 @@ class FloatingAddressTest {
                 for (var use : (List<Map<String, Object>>) evidence.get("uses")) owners.add(use.get("owner"));
                 assertEquals(Set.of("main:FloatingAddressAudit.floatingAddressBits"), owners, stage + "/" + primitive);
             }
-            var module = (Map<String, Object>) Json.parse(
-                Files.readString(new File(directory, "core/FloatingAddressAudit.json").toPath()));
+            var module = thc.CoreCbdFixtures.read(new File(directory, "core/FloatingAddressAudit.cbd").toPath());
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         var entry = "floatingAddressBits";
-                        var source = new LinkedHashMap<>(CoreModules.reachable(module, entry));
+                        var source = new LinkedHashMap<>(CoreModules.reachable(module, "main:FloatingAddressAudit." + entry));
                         source.put("instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, source)
                                                                           : new BytecodeProgram(language, source);
-                        var function = context.asValue(new EntryValue(program, entry, 3));
+                        var function = context.asValue(new EntryValue(program, "main:FloatingAddressAudit." + entry, 3));
                         var label = stage + "/" + backend;
                         for (var row : rows) check(row, false, function, program, label);
                         assertTrue(function.invokeMember("compile").asBoolean(), label);

@@ -53,9 +53,9 @@ prepareFloatingByteOffset root = do
     _ <- run root [("THC_CORE_OUT",root </> core),
       ("THC_GHC_OUT",output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [source]) ""
-    _ <- run root [] "python3" ["bin/audit-core.py","--entry",entry,
+    _ <- run root [] "python3" ["bin/audit-core.py","--entry","main:FloatingByteOffsetAudit." ++ entry,
       "--output",directory </> stage </> "audit.json",
-      core </> "FloatingByteOffsetAudit.json"] ""
+      core </> "FloatingByteOffsetAudit.cbd"] ""
     pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
@@ -85,7 +85,7 @@ prepareFloatingByteOffset root = do
         ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = (directory </> "oracle.tsv") : [directory </> stage </> suffix |
-        stage <- ["pre","post"], suffix <- ["core/FloatingByteOffsetAudit.json","audit.json"]]
+        stage <- ["pre","post"], suffix <- ["core/FloatingByteOffsetAudit.cbd","audit.json"]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),
