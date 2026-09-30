@@ -51,12 +51,26 @@ selected interface bytes into a private package database while retaining the
 original compiler libdir and `ghc-pkg.exe`. They do not manufacture dynamic
 interfaces or grant thin stock interfaces complete-Core status.
 
+Pinned dependency builds follow that same selected way: Windows builds vanilla
+libraries with shared libraries disabled and preserves the installed unit IDs,
+dependency graph and module inventory. The selected compiler libdir and ordered
+private package databases travel together through probes, compiler replay and
+native linking. Cache identities include that view; a different private database
+does not reuse a bundle from the original global database.
+
 After building `driver-tests`, use `--installed-hydration-only` for helper
 protocol/ownership controls and `--installed-view-only` for package-view and
 dependency-mutation checks against the selected native installation. Set `GHC`,
 `GHC_PKG` and `THC_TEST_DRIVER` to the matching native tools. `THC_TEST_SCRATCH`
 selects test evidence storage; `TEMP`, `TMP`, GHC's `-tmpdir`, and Cabal's
 `--builddir` must also be redirected when using a separate build drive.
+`THC_CABAL_BUILD_DIR` selects the Cabal build directory for the driver's interface
+helper and the `windows-driver` fixture's driver lookup. It does not redirect
+the Windows plugin registry, which currently reads the checkout's
+`dist-newstyle` plan. Keep that plan built with the same pinned compiler.
+When running JVM tests against a separate Cabal build, set `THC_FIXTURES` to
+that build's `thc-fixtures.exe`. The CBD model tests use the real Haskell encoder;
+an older executable from another build directory is not a valid substitute.
 
 ~~~powershell
 ./bin/export-core.ps1 t/fixtures/core/Fixtures.hs
