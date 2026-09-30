@@ -721,10 +721,12 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  buildDirectory <- lookupEnv "THC_CABAL_BUILD_DIR"
   let ghc = contextGhc context
       pkg = maybe (takeDirectory ghc </> "ghc-pkg") id (contextGhcPkg context)
       selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
-        ["--disable-shared" | Host.os == "mingw32"]
+        ["--disable-shared" | Host.os == "mingw32"] ++
+        ["--builddir=" ++ directory | Just directory <- [buildDirectory]]
   runCommand True cabal ("build" : selection) root
   (status, output, diagnostic) <- readCreateProcessWithExitCode
     (proc cabal ("list-bin" : selection)) {cwd = Just root} ""

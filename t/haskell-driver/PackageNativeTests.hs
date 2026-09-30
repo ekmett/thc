@@ -89,8 +89,9 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
           assertBool "invalid compiler does not fall back" (isLeft badCompiler)
           assertBool "invalid package tool does not fall back" (isLeft badPackage)
   , TestCase $ withScratch $ \root -> do
-      let adjacent = root </> "clang/llvm-objcopy"
-          onPath = root </> "path/llvm-objcopy"
+      let executableName = if Host.os == "mingw32" then "llvm-objcopy.exe" else "llvm-objcopy"
+          adjacent = root </> "clang" </> executableName
+          onPath = root </> "path" </> executableName
       createDirectory (root </> "clang")
       createDirectory (root </> "path")
       writeExecutable onPath "PATH objcopy"

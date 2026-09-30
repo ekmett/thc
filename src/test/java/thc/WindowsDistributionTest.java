@@ -210,14 +210,14 @@ class WindowsDistributionTest {
                          var compactInput = Files.newInputStream(Path.of(compact.get("path")))) {
                         var left = new byte[64 * 1024];
                         var right = new byte[left.length];
-                        var published = new byte[left.length];
+                        var publishedBytes = new byte[left.length];
                         while (true) {
                             int count = expected.readNBytes(left, 0, left.length);
                             assertEquals(count, actual.readNBytes(right, 0, right.length), member);
-                            assertEquals(count, compactInput.readNBytes(published, 0, published.length), member);
+                            assertEquals(count, compactInput.readNBytes(publishedBytes, 0, publishedBytes.length), member);
                             if (count == 0) break;
                             assertEquals(-1, Arrays.mismatch(left, 0, count, right, 0, count), member);
-                            assertEquals(-1, Arrays.mismatch(left, 0, count, published, 0, count), member);
+                            assertEquals(-1, Arrays.mismatch(left, 0, count, publishedBytes, 0, count), member);
                             hash.update(right, 0, count);
                         }
                     }

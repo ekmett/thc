@@ -31,6 +31,7 @@ import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
 import THC.Compact.Module (encodeModuleValue)
 import THC.Driver.Installed
+import THC.Driver.GhcProxy (coreReplayArguments)
 
 -- Subprocess orchestration controls, not executable Core evidence. The real
 -- InterfaceFixtures separately compare original serial/parallel Core bytes and
@@ -142,6 +143,10 @@ tests = TestLabel "bounded installed-interface hydration" $ TestList
       assertBool "way changes provenance" (installedProvenance context dynamic /= installedProvenance vanilla selected)
       assertBool "same libdir with private database changes replay identity"
         (installedViewIdentity vanilla /= installedViewIdentity private)
+      assertEqual "private stack survives replay without an interface overlay or component options"
+        (["-B" ++ installedLibdir private] ++ concatMap (\db -> ["-package-db", db]) (helperDatabases private))
+        =<< coreReplayArguments (installedPackageTool private) (installedLibdir private)
+          (helperDatabases private) directory [] []
       assertBool "helper uses vanilla" (["--way", "vanilla"] `isInfixOf` helperCommand vanilla selected ("A", vanillaPath))
       assertBool "helper receives private database before additional databases"
         (["--package-db", installedGlobalDb private, "--package-db", directory] `isInfixOf`
