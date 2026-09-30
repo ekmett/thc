@@ -2282,7 +2282,7 @@
       "python": []
     },
     "src/test/java/thc/runtime/ArrayCoreEvidence.java": {
-      "junit": [
+      "junit": ["thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FloatingByteOffsetTest",
         "thc.runtime.NarrowByteOffsetTest",
