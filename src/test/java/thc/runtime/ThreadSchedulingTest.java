@@ -65,16 +65,16 @@ public class ThreadSchedulingTest {
         for (var stage : List.of("pre", "post")) for (var backend : List.of("ast", "bytecode")) for (var entry : entries) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "/core/ThreadScheduling.json").toPath()));
-                var linked = new LinkedHashMap<>(CoreModules.reachable(module, entry)); linked.put("instrument", true);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var module = (Map<String, Object>) thc.CoreCbdFixtures.read(new File(directory, stage + "/core/ThreadScheduling.cbd").toPath());
+                var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:ThreadScheduling." + entry)); linked.put("instrument", true);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, Set.of("pinnedFork", "otherCounter").contains(entry));
-                var function = context.asValue(new EntryValue(program, entry, 1)); long argument = switch (entry) { case "currentCounter" -> 4096L; case "timedDelay" -> 2000L; default -> 0L; };
+                var function = context.asValue(new EntryValue(program, "main:ThreadScheduling." + entry, 1)); long argument = switch (entry) { case "currentCounter" -> 4096L; case "timedDelay" -> 2000L; default -> 0L; };
                 long expected = switch (entry) { case "pinnedFork", "otherCounter" -> 11L; case "timedDelay" -> 2000L; default -> 1L; };
                 var threads = Language.currentState().getThreads(); threads.enterCurrent();
                 try {
                     assertEquals(expected, function.execute(argument).asLong(), stage + "/" + backend + "/" + entry);
                     if (!Set.of("pinnedFork", "otherCounter").contains(entry) && stage.equals("pre")) {
-                        var target = program.entryTarget(entry); compile(target); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        var target = program.entryTarget("main:ThreadScheduling." + entry); compile(target); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                         assertEquals(expected, function.execute(argument).asLong(), backend + "/" + entry + " first installed call"); assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue()); assertTrue(valid(target), backend + "/" + entry + " retained its first installation");
                     }
                     for (var value : threads.snapshot()) if (value instanceof GuestThreadId identity && identity.getForked()) {
@@ -91,8 +91,8 @@ public class ThreadSchedulingTest {
     void nativePinnedForkOnBothBackends() throws Exception {
         provenance();
         for (var stage : List.of("pre", "post")) for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
-            var core = new File(directory, stage + "/core/ThreadScheduling.json");
-            var entry = context.eval("thc", CoreModules.request(List.of(core.getPath()), "pinnedFork", true, false, backend, true, false, null, true));
+            var core = new File(directory, stage + "/core/ThreadScheduling.cbd");
+            var entry = context.eval("thc", CoreModules.request(List.of(core.getPath()), "main:ThreadScheduling.pinnedFork", true, false, backend, true, false, null, true));
             assertEquals(11L, entry.execute(0L).asLong(), stage + "/" + backend + " native forkOn");
             assertTrue(entry.invokeMember("compile").asBoolean());
             long before = ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("compiledEntries")).longValue();

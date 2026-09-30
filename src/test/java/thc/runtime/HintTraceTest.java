@@ -40,9 +40,9 @@ class HintTraceTest {
         }
         return receipt;
     }
-    private Map<String, Object> module(String stage) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/hint-trace/" + stage + "/core/HintTraceAudit.json").toPath())); }
+    private Map<String, Object> module(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, "build/hint-trace/" + stage + "/core/HintTraceAudit.cbd").toPath()); }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
-    private Object call(ExecutableProgram program, String name, Object... args) { var input = new Object[args.length + 1]; input[0] = 0L; System.arraycopy(args, 0, input, 1, args.length); return Calls.target(program.entryTarget(name), input); }
+    private Object call(ExecutableProgram program, String name, Object... args) { var input = new Object[args.length + 1]; input[0] = 0L; System.arraycopy(args, 0, input, 1, args.length); return Calls.target(program.entryTarget("main:HintTraceAudit." + name), input); }
     private List<RootCallTarget> targets(RootCallTarget entry) {
         var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>()); var result = new ArrayList<RootCallTarget>();
         class Visit {
@@ -71,7 +71,7 @@ class HintTraceTest {
         for (String stage : (List<String>) receipt.get("stages")) {
             var module = module(stage);
             for (String name : List.of("hints", "traces")) {
-                var proof = new ArrayCoreEvidence(module, name); proof.stateLambda(proof.getRoot().get("expr")); assertEquals(2, proof.guestLambdas(proof.getRoot().get("expr")).size(), "Original entry and state lambda");
+                var proof = new ArrayCoreEvidence(module, "main:HintTraceAudit." + name); proof.stateLambda(proof.getRoot().get("expr")); assertEquals(2, proof.guestLambdas(proof.getRoot().get("expr")).size(), "Original entry and state lambda");
                 assertEquals(1, proof.loweredStateLambdas(proof.getRoot().get("expr")).size(), "Exact runRW redex lowers in-frame");
                 // Floating string/bottom CAFs remain supplied; none contains a guest lambda.
                 for (var binding : proof.getBindings()) if (binding != proof.getRoot()) assertTrue(proof.guestLambdas(binding.get("expr")).isEmpty());
@@ -82,7 +82,7 @@ class HintTraceTest {
                 try (var context = context(output)) {
                     context.initialize("thc"); context.enter();
                     try {
-                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = new LinkedHashMap<>(CoreModules.reachable(module, List.of("hints", "traces"), true)); linked.put("instrument", true); var program = program(language, linked, backend);
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = new LinkedHashMap<>(CoreModules.reachable(module, List.of("main:HintTraceAudit.hints", "main:HintTraceAudit.traces"), true)); linked.put("instrument", true); var program = program(language, linked, backend);
                         java.util.function.Consumer<List<String>> check = row -> {
                             String name = row.get(0), input = row.get(1), result = row.get(2);
                             assertEquals(Long.parseLong(input) + (name.equals("hints") ? 1L : 19L), Long.parseLong(result)); output.reset();
@@ -90,7 +90,7 @@ class HintTraceTest {
                             var handoff = language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
                         };
                         for (var row : rows) check.accept(row);
-                        var distinct = new LinkedHashSet<RootCallTarget>(); for (String name : List.of("hints", "traces")) distinct.addAll(targets(program.entryTarget(name))); var active = new ArrayList<>(distinct);
+                        var distinct = new LinkedHashSet<RootCallTarget>(); for (String name : List.of("hints", "traces")) distinct.addAll(targets(program.entryTarget("main:HintTraceAudit." + name))); var active = new ArrayList<>(distinct);
                         assertEquals(2, active.size(), "One lowered public root for hints and traces"); for (var target : active) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }
                         for (var row : rows) {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); check.accept(row);
@@ -109,7 +109,7 @@ class HintTraceTest {
             try (var context = context(output)) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(language, CoreModules.reachable(module("pre"), List.of("event", "marker", "binary", "addressHints"), true), backend);
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(language, CoreModules.reachable(module("pre"), List.of("main:HintTraceAudit.event", "main:HintTraceAudit.marker", "main:HintTraceAudit.binary", "main:HintTraceAudit.addressHints"), true), backend);
                     var address = ManagedAddress.fromByteArray("λ\n\\\u0000ignored".getBytes(StandardCharsets.UTF_8));
                     assertEquals(23L, call(program, "event", address, 23L)); assertEquals("[thc trace event] λ\\x0a\\\\\n", output.toString(StandardCharsets.UTF_8)); output.reset();
                     assertEquals(3L, call(program, "binary", ManagedAddress.fromByteArray(new byte[]{0, -1, 10, 88}), 3L)); assertEquals("[thc trace binary] 00ff0a\n", output.toString(StandardCharsets.UTF_8)); output.reset();

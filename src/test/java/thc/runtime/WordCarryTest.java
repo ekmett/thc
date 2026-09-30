@@ -32,7 +32,7 @@ class WordCarryTest {
         assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().retainedReferences());
     }
     private record Row(String name, long x, long y, long first, long flag) {}
-    private Map<String, Object> module(String stage) throws Exception { return object(Json.parse(Files.readString(root.resolve("build/tuple-arithmetic/" + stage + "-core/TupleArithmeticAudit.json")))); }
+    private Map<String, Object> module(String stage) throws Exception { return object(thc.CoreCbdFixtures.read(root.resolve("build/tuple-arithmetic/" + stage + "-core/TupleArithmeticAudit.cbd"))); }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
@@ -70,8 +70,8 @@ class WordCarryTest {
                 var primitive = (name.endsWith("Call") ? name.replace("Call", "C") : name) + "#";
                 assertTrue(objects(audit.get("primitives")).stream().anyMatch(item -> primitive.equals(item.get("name"))), stage + "/" + name + " primitive audited");
                 if (name.endsWith("Call")) assertTrue(objects(audit.get("reachableBindings")).stream().anyMatch(item -> ("main:TupleArithmeticAudit." + name.replace("Call", "Result")).equals(item.get("id"))));
-                var program = program(language, with(CoreModules.reachable(module(stage), name), "instrument", true), backend);
-                var function = context.asValue(new EntryValue(program, name, 3)); var host = program.hostEntryTarget(3); var original = program.entryTarget(name);
+                var program = program(language, with(CoreModules.reachable(module(stage), "main:TupleArithmeticAudit." + name), "instrument", true), backend);
+                var function = context.asValue(new EntryValue(program, "main:TupleArithmeticAudit." + name, 3)); var host = program.hostEntryTarget(3); var original = program.entryTarget("main:TupleArithmeticAudit." + name);
                 var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                 CheckedBiConsumer<Row, Long> check = (row, field) -> {
                     assertEquals(field == 0L ? row.first() : row.flag(), function.execute(row.x(), row.y(), field).asLong(), label + "/" + row + "/" + field); released(language);
@@ -112,7 +112,7 @@ class WordCarryTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var name : list("addWordC", "subWordC")) for (var shape : shapes) for (boolean diagnostic : list(false, true)) {
-                    var module = CoreModules.reachable(module(stage), name); var app = application(module, name);
+                    var module = CoreModules.reachable(module(stage), "main:TupleArithmeticAudit." + name); var app = application(module, name);
                     var rep = object(Objects.requireNonNull(CoreRepresentations.metadata(app)).get("rep")); rep.put("primReps", shape);
                     var components = objects(rep.get("components")); for (int i = 0; i < components.size(); i++) components.get(i).put("primReps", list(shape.get(i)));
                     var error = assertThrows(RuntimeFault.class, () -> program(language, with(module, "diagnosticUnsupported", diagnostic), backend));
@@ -123,7 +123,7 @@ class WordCarryTest {
                     assertTrue(Objects.toString(error.getMessage(), "").contains("Conflicting logical aggregate representation proofs"), error.getMessage());
                 }
                 for (var name : list("addWordC", "subWordC")) for (var variant : list("nested", "state", "unknown")) {
-                    var module = CoreModules.reachable(module(stage), name); var app = application(module, name);
+                    var module = CoreModules.reachable(module(stage), "main:TupleArithmeticAudit." + name); var app = application(module, name);
                     var rep = object(Objects.requireNonNull(CoreRepresentations.metadata(app)).get("rep")); var components = objects(rep.get("components")); var flag = components.get(1);
                     components.set(1, switch (variant) {
                         case "nested" -> map("kind", "unknown", "evaluated", true, "aggregate", "unboxed-tuple", "primReps", list("IntRep"), "components", list(flag));

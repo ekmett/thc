@@ -30,7 +30,7 @@ class IntegerCompletionTest {
     private static BigInteger unsigned(long value) { return BigInteger.valueOf(value).mod(MODULUS); }
     private Map<String, Object> json(String path) throws Exception { return object(Json.parse(Files.readString(new File(root, path).toPath()))); }
     private Map<String, Object> module() throws Exception { return module("pre"); }
-    private Map<String, Object> module(String stage) throws Exception { return json(DIRECTORY + "/" + stage + "-core/IntegerCompletionAudit.json"); }
+    private Map<String, Object> module(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, DIRECTORY + "/" + stage + "-core/IntegerCompletionAudit.cbd").toPath()); }
     private static Context context(boolean inlining) {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
@@ -95,7 +95,7 @@ class IntegerCompletionTest {
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add("bin/" + file.getName());
         var commands = list("ghc-version", "ghc-info", "pre-export", "pre-audit", "post-export", "post-audit", "native-build", "native-oracle");
         var artifacts = new HashSet<>(list("requests.tsv", "NativeIntegerCompletion.hs", "native/integer-completion-oracle", "oracle.tsv"));
-        for (var stage : list("pre", "post")) { artifacts.add(stage + "-audit.json"); artifacts.add(stage + "-core/IntegerCompletionAudit.json"); }
+        for (var stage : list("pre", "post")) { artifacts.add(stage + "-audit.json"); artifacts.add(stage + "-core/IntegerCompletionAudit.cbd"); }
         for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) artifacts.add("commands/" + command + "." + suffix);
         for (var kind : list("inputHashes", "artifactHashes")) {
             Set<String> paths = kind.equals("inputHashes") ? inputs : artifacts.stream().map(path -> DIRECTORY + "/" + path).collect(Collectors.toSet());
@@ -124,13 +124,13 @@ class IntegerCompletionTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var original = module(stage);
                 for (var name : NAMES) {
-                    var evidence = new ArrayCoreEvidence(original, name);
+                    var evidence = new ArrayCoreEvidence(original, "main:IntegerCompletionAudit." + name);
                     assertEquals(1, evidence.getBindings().size()); assertTrue(evidence.globalReferences(evidence.getRoot().get("expr")).isEmpty());
                     assertEquals(1, evidence.guestLambdas(evidence.getRoot().get("expr")).size(), "One genuine scalar root");
                     assertEquals(1, evidence.getPrimitiveCounts().get(primitive(name)), stage + "/" + name + " genuine primitive");
                     var lambda = evidence.guestLambdas(evidence.getRoot().get("expr")).getFirst();
                     var expectedLabel = "lambda " + objects(lambda.get(1)).stream().map(arg -> String.valueOf(arg.get("name"))).collect(Collectors.joining(", "));
-                    var p = program(language, with(CoreModules.reachable(original, name), "instrument", true), backend); var entry = p.entryTarget(name);
+                    var p = program(language, with(CoreModules.reachable(original, "main:IntegerCompletionAudit." + name), "instrument", true), backend); var entry = p.entryTarget("main:IntegerCompletionAudit." + name);
                     assertEquals(expectedLabel, entry.getRootNode().getName());
                     CheckedBiConsumer<Row, Boolean> check = (row, compiled) -> {
                         for (int field = 0; field <= 1; field++) {
@@ -146,7 +146,7 @@ class IntegerCompletionTest {
                     var allocations = allocations(language); long before = count(p); var interpreterCalls = calls(entry);
                     compile(entry); assertEquals(before, count(p)); assertEquals(interpreterCalls, calls(entry), "Compilation setup cannot enter guest code");
                     for (var row : corpus.reversed()) {
-                        check.accept(row, true); assertSame(entry, p.entryTarget(name)); assertEquals(interpreterCalls, calls(entry)); assertEquals(allocations, allocations(language));
+                        check.accept(row, true); assertSame(entry, p.entryTarget("main:IntegerCompletionAudit." + name)); assertEquals(interpreterCalls, calls(entry)); assertEquals(allocations, allocations(language));
                     }
                     for (var key : list("unsupportedTraps", "papAllocations", "thunkEvaluations", "blackholes")) assertEquals(0L, ((Number) p.diagnostics().get(key)).longValue(), key);
                 }
@@ -193,9 +193,9 @@ class IntegerCompletionTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var rep : list("IntRep", "Word64Rep")) for (var name : NAMES) {
-                    var p = program(language, object(project(CoreModules.reachable(module(), name), rep)), backend);
+                    var p = program(language, object(project(CoreModules.reachable(module(), "main:IntegerCompletionAudit." + name), rep)), backend);
                     var row = name.equals("quotRemWord2") ? new Row(name, 3L, -13L, 5L, list()) : name.equals("mulMay") ? new Row(name, Long.MIN_VALUE, -1L, 0L, list()) : new Row(name, -13L, 5L, 0L, list());
-                    for (int field = 0; field <= 1; field++) assertEquals(model(row).get(field), Calls.target(p.entryTarget(name), new Object[]{0L, row.x, row.y, row.z, (long) field}), backend + "/" + rep + "/" + name);
+                    for (int field = 0; field <= 1; field++) assertEquals(model(row).get(field), Calls.target(p.entryTarget("main:IntegerCompletionAudit." + name), new Object[]{0L, row.x, row.y, row.z, (long) field}), backend + "/" + rep + "/" + name);
                     released(language);
                 }
             } finally { context.leave(); }
@@ -219,11 +219,11 @@ class IntegerCompletionTest {
                     // Ordinary scalar lowering takes physical result from the instruction;
                     // tuple lowering additionally validates its explicit protocol.
                     if ((i == 1 || i == 3) && !name.startsWith("quotRem")) continue;
-                    var input = CoreModules.reachable(module(), name); mutations.get(i).accept(application(input, name));
+                    var input = CoreModules.reachable(module(), "main:IntegerCompletionAudit." + name); mutations.get(i).accept(application(input, name));
                     assertThrows(RuntimeFault.class, () -> program(language, with(input, "diagnosticUnsupported", diagnostic), backend), backend + "/" + name + "/mutation" + i);
                 }
                 for (var name : NAMES) {
-                    var input = CoreModules.reachable(module(), name); var app = application(input, name); var prim = new ArrayList<>(expression(app.get(1))); app.clear(); app.addAll(prim);
+                    var input = CoreModules.reachable(module(), "main:IntegerCompletionAudit." + name); var app = application(input, name); var prim = new ArrayList<>(expression(app.get(1))); app.clear(); app.addAll(prim);
                     assertThrows(UnsupportedCore.class, () -> program(language, input, backend), backend + "/" + name + " first-class");
                 }
             } finally { context.leave(); }
@@ -235,7 +235,7 @@ class IntegerCompletionTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var name : NAMES) if (name.startsWith("quotRem")) {
-                    var p = program(language, CoreModules.reachable(module(), name), backend); var target = p.entryTarget(name);
+                    var p = program(language, CoreModules.reachable(module(), "main:IntegerCompletionAudit." + name), backend); var target = p.entryTarget("main:IntegerCompletionAudit." + name);
                     var bad = name.equals("quotRemWord2") ? list(new long[]{0L, 1L, 0L}, new long[]{3L, 1L, 3L}, new long[]{-1L, 1L, Long.MIN_VALUE})
                         : list(new long[]{1L, 0L, 0L}, new long[]{1L, 1L << Integer.parseInt(name.replaceFirst("^.*?(\\d+)$", "$1")), 0L});
                     for (var xyz : bad) try { assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, xyz[0], xyz[1], xyz[2], 0L})); } finally { released(language); }

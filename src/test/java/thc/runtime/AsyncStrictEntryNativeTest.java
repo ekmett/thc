@@ -44,13 +44,13 @@ public class AsyncStrictEntryNativeTest {
             var audit = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/live-async/" + stage + "/" + entry + "-audit.json").toPath()));
             assertEquals(true, audit.get("accepted"), entry); assertEquals(List.of(), audit.get("missingGlobals"), entry);
         }
-        var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/live-async/" + stage + "/core/LiveAsyncAudit.json").toPath()));
+        var module = thc.CoreCbdFixtures.read(new File(root, "build/live-async/" + stage + "/core/LiveAsyncAudit.cbd").toPath());
         var byId = new LinkedHashMap<Object, Map<String, Object>>();
-        for (var entry : entries) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(module, entry).get("bindings"))
+        for (var entry : entries) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(module, "main:LiveAsyncAudit." + entry).get("bindings"))
             byId.putIfAbsent(binding.get("id"), binding);
         var reachable = new ArrayList<>(byId.values());
         Map<String, Object> worker = null;
-        for (var binding : reachable) if ("strictWorker".equals(binding.get("name"))) {
+        for (var binding : reachable) if ("main:LiveAsyncAudit.strictWorker".equals(binding.get("id"))) {
             if (worker != null) throw new IllegalArgumentException("Collection contains more than one matching element.");
             worker = binding;
         }
@@ -100,11 +100,11 @@ public class AsyncStrictEntryNativeTest {
                     // One graph for the dynamic PAP and synchronizing public entries.
                     program = backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module, true);
                     assertEquals(backend, program.diagnostics().get("backend"));
-                    assertEquals(true, ((GuestRoot) program.entryTarget("strictWorker").getRootNode()).getEntryStrict()[0]);
+                    assertEquals(true, ((GuestRoot) program.entryTarget("main:LiveAsyncAudit." + "strictWorker").getRootNode()).getEntryStrict()[0]);
                     for (var entry : entries) if (Set.of("strictEntry", "takeReady", "takeRunning", "releaseGate", "forceShared", "prefixCount", "warmLoop").contains(entry))
-                        functions.put(entry, context.asValue(new EntryValue(program, entry, 1)));
+                        functions.put(entry, context.asValue(new EntryValue(program, "main:LiveAsyncAudit." + entry, 1)));
                 } finally { context.leave(); }
-                var shared = (Thunk) program.entryValue("shared");
+                var shared = (Thunk) program.entryValue("main:LiveAsyncAudit." + "shared");
                 assertEquals(1L, call(functions, "releaseGate"));
                 assertEquals(9999007L, call(functions, "warmLoop", 9999000L));
                 assertEquals(7L, call(functions, "takeReady")); assertEquals(7L, call(functions, "takeRunning"));
@@ -114,7 +114,7 @@ public class AsyncStrictEntryNativeTest {
                     context.enter();
                     try {
                         for (var name : List.of("strictWorker", "strictEntry", "longLoop")) {
-                            var entry = program.entryTarget(name); installed.put(name, entry);
+                            var entry = program.entryTarget("main:LiveAsyncAudit." + name); installed.put(name, entry);
                             assertEquals(true, entry.getClass().getMethod("compile", boolean.class).invoke(entry, true));
                             assertEquals(true, entry.getClass().getMethod("isValidLastTier").invoke(entry), name);
                             var runtime = Truffle.getRuntime();
@@ -146,7 +146,7 @@ public class AsyncStrictEntryNativeTest {
                         assertEquals(1007L, CompletableFuture.supplyAsync(() -> call(functions, "takeRunning")).get(10, TimeUnit.SECONDS));
                         assertTargetIdentity(program, installed, "before delivery");
                     }
-                    var request = state.getThreads().send(Objects.requireNonNull(state.getThreads().pollState(target).getCurrent()).getIdentity(), program.entryValue("asyncPayload"));
+                    var request = state.getThreads().send(Objects.requireNonNull(state.getThreads().pollState(target).getCurrent()).getIdentity(), program.entryValue("main:LiveAsyncAudit." + "asyncPayload"));
                     assertEquals(-1L, result.get(15, TimeUnit.SECONDS), "The original catch# handles delivery");
                     assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
                     if (compiled) {
@@ -170,7 +170,7 @@ public class AsyncStrictEntryNativeTest {
     }
     private void assertTargetIdentity(ExecutableProgram program, Map<String, RootCallTarget> installed, String phase) throws Exception {
         for (var entry : installed.entrySet()) {
-            assertSame(entry.getValue(), program.entryTarget(entry.getKey()), phase + ": " + entry.getKey());
+            assertSame(entry.getValue(), program.entryTarget("main:LiveAsyncAudit." + entry.getKey()), phase + ": " + entry.getKey());
         }
     }
     private long call(Map<String, Value> functions, String name) { return call(functions, name, 0); }

@@ -60,8 +60,8 @@ prepareWideCharAddress root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "bin/export-core.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=wideCharRoundtrip", source])
     audited <- run (stage ++ "-audit") [] "python3"
-      ["bin/audit-core.py", "--entry", "wideCharRoundtrip", "--output", directory </> stage </> "audit.json",
-       core </> "WideCharAddressAudit.json", core </> "THC.InterfaceClosure.json"]
+      ["bin/audit-core.py", "--entry", "main:WideCharAddressAudit.wideCharRoundtrip", "--output", directory </> stage </> "audit.json",
+       core </> "WideCharAddressAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
     pure (stage, exported, audited)
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
@@ -74,7 +74,7 @@ prepareWideCharAddress root = do
       commands = [version, info, compiled, observed] ++ concat [[exported,audited] | (_,exported,audited) <- stages]
       artifacts = [binary] ++ concatMap commandArtifacts commands ++
         [directory </> stage </> file | stage <- ["pre","post"],
-          file <- ["audit.json", "core/WideCharAddressAudit.json", "core/THC.InterfaceClosure.json"]]
+          file <- ["audit.json", "core/WideCharAddressAudit.cbd", "core/THC.InterfaceClosure.cbd"]]
   inputs <- hashes root sources
   outputs <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object

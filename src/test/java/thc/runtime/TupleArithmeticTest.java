@@ -26,7 +26,7 @@ class TupleArithmeticTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final List<String> names = List.of("quotRemInt", "quotRemWord", "addIntC", "subIntC", "plusWord2", "timesWord2", "addWordC", "subWordC", "timesInt2");
     private Map<String, Object> module() throws Exception { return module("pre"); }
-    private Map<String, Object> module(String stage) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/tuple-arithmetic/" + stage + "-core/TupleArithmeticAudit.json").toPath())); }
+    private Map<String, Object> module(String stage) throws Exception { return (Map<String, Object>) thc.CoreCbdFixtures.read(new File(root, "build/tuple-arithmetic/" + stage + "-core/TupleArithmeticAudit.cbd").toPath()); }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
     private void valid(RootCallTarget target) throws ReflectiveOperationException { assertEquals(true, Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target)); }
@@ -63,9 +63,9 @@ class TupleArithmeticTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var module = module(stage); var reached = new LinkedHashSet<Object>();
-                for (String name : names) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(module, name).get("bindings")) reached.add(binding.get("id"));
+                for (String name : names) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(module, "main:TupleArithmeticAudit." + name).get("bindings")) reached.add(binding.get("id"));
                 var bindings = new ArrayList<Map<String, Object>>(); for (var binding : (List<Map<String, Object>>) module.get("bindings")) if (reached.contains(binding.get("id"))) bindings.add(binding);
-                var input = new LinkedHashMap<>(module); input.put("bindings", bindings); var program = program(language, input, backend); var host = program.hostEntryTarget(3); var entries = new LinkedHashMap<String, Object>(); for (String name : names) entries.put(name, program.entryValue(name));
+                var input = new LinkedHashMap<>(module); input.put("bindings", bindings); var program = program(language, input, backend); var host = program.hostEntryTarget(3); var entries = new LinkedHashMap<String, Object>(); for (String name : names) entries.put(name, program.entryValue("main:TupleArithmeticAudit." + name));
                 Consumer<Row> check = row -> { for (int field = 0; field < row.fields.size(); field++) assertEquals(row.fields.get(field), Calls.target(host, new Object[]{entries.get(row.name), new Object[]{row.x, row.y, (long) field}}), stage + "/" + backend + "/" + row + "/" + field); };
                 // Establish the final host dispatch before warming individual roots. Nine
                 // targets replace its three-entry direct cache with indirect calls; with
@@ -102,8 +102,8 @@ class TupleArithmeticTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (String rep : List.of("IntRep", "WordRep", "Int64Rep", "Word64Rep")) for (String name : names) {
                     // Project annotations consistently; logical tuple shape and order stay intact.
-                    var input = (Map<String, Object>) project.apply(CoreModules.reachable(module(), name), rep); var p = program(language, input, backend); var expected = mathematical(new Row(name, -13L, 5L, List.of()));
-                    for (int field = 0; field < expected.size(); field++) assertEquals(expected.get(field), Calls.target(p.hostEntryTarget(3), new Object[]{p.entryValue(name), new Object[]{-13L, 5L, (long) field}}), backend + "/" + rep + "/" + name + "/" + field);
+                    var input = (Map<String, Object>) project.apply(CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name), rep); var p = program(language, input, backend); var expected = mathematical(new Row(name, -13L, 5L, List.of()));
+                    for (int field = 0; field < expected.size(); field++) assertEquals(expected.get(field), Calls.target(p.hostEntryTarget(3), new Object[]{p.entryValue("main:TupleArithmeticAudit." + name), new Object[]{-13L, 5L, (long) field}}), backend + "/" + rep + "/" + name + "/" + field);
                 }
             } finally { context.leave(); }
         }
@@ -130,10 +130,10 @@ class TupleArithmeticTest {
             context.initialize("thc"); context.enter(); try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (String name : names) for (int index = 0; index < mutations.size(); index++) for (boolean diagnostic : new boolean[]{false, true}) {
-                    var module = CoreModules.reachable(module(), name); var app = primitiveApplication(module, name); mutations.get(index).accept(app); var input = new LinkedHashMap<>(module); input.put("diagnosticUnsupported", diagnostic);
+                    var module = CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name); var app = primitiveApplication(module, name); mutations.get(index).accept(app); var input = new LinkedHashMap<>(module); input.put("diagnosticUnsupported", diagnostic);
                     assertThrows(RuntimeFault.class, () -> program(language, input, backend), backend + "/" + name + "/mutation" + index);
                 }
-                for (String name : names) { var module = CoreModules.reachable(module(), name); var app = primitiveApplication(module, name); var primitive = new ArrayList<>((List<?>) app.get(1)); app.clear(); app.addAll(primitive); assertThrows(UnsupportedCore.class, () -> program(language, module, backend), backend + "/" + name + " first-class"); }
+                for (String name : names) { var module = CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name); var app = primitiveApplication(module, name); var primitive = new ArrayList<>((List<?>) app.get(1)); app.clear(); app.addAll(primitive); assertThrows(UnsupportedCore.class, () -> program(language, module, backend), backend + "/" + name + " first-class"); }
             } finally { context.leave(); }
         }
     }
@@ -142,7 +142,7 @@ class TupleArithmeticTest {
             context.initialize("thc"); context.enter(); try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (String name : List.of("quotRemInt", "quotRemWord")) {
-                    var input = new LinkedHashMap<>(CoreModules.reachable(module(), name)); input.put("instrument", true); var program = program(language, input, backend); var entry = program.entryTarget(name);
+                    var input = new LinkedHashMap<>(CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name)); input.put("instrument", true); var program = program(language, input, backend); var entry = program.entryTarget("main:TupleArithmeticAudit." + name);
                     java.util.function.LongSupplier count = () -> ((Number) program.diagnostics().get("compiledEntries")).longValue(); var invalid = new ArrayList<long[]>(); invalid.add(new long[]{1L, 0L}); if (name.equals("quotRemInt")) invalid.add(new long[]{Long.MIN_VALUE, -1L});
                     // Prepare only valid arithmetic before the first installed failure.
                     assertEquals(2L, Calls.target(entry, new Object[]{0L, 7L, 3L, 0L})); assertEquals(1L, Calls.target(entry, new Object[]{0L, 7L, 3L, 1L})); long beforeCompile = count.getAsLong(); compile(entry); assertEquals(beforeCompile, count.getAsLong(), "Compilation must not enter guest code");

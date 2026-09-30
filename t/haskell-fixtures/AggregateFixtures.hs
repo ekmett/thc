@@ -122,12 +122,12 @@ prepareTupleArithmetic root = do
         options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
     _ <- run root [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> ghcOut)]
       "bin/export-core.sh" (options ++ [source]) ""
-    let modulePath = root </> core </> "TupleArithmeticAudit.json"
+    let modulePath = root </> core </> "TupleArithmeticAudit.cbd"
     exists <- doesFileExist modulePath
     unless exists (die ("Missing GHC Core export: " ++ modulePath))
     let audit = directory </> stage ++ "-audit.json"
-        auditArgs = concatMap (\name -> ["--entry",name]) (directNames ++ callNames) ++
-          ["--output",audit,core </> "TupleArithmeticAudit.json"]
+        auditArgs = concatMap (\name -> ["--entry", "main:TupleArithmeticAudit." ++ name]) (directNames ++ callNames) ++
+          ["--output",audit,core </> "TupleArithmeticAudit.cbd"]
     _ <- run root [] "python3" ("bin/audit-core.py" : auditArgs) ""
     pure ()
   let driver = directory </> "NativeTupleArithmetic.hs"
@@ -154,7 +154,7 @@ prepareTupleArithmetic root = do
         ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> stage ++ suffix | stage <- ["pre","post"],
-        suffix <- ["-core/TupleArithmeticAudit.json","-audit.json"]] ++
+        suffix <- ["-core/TupleArithmeticAudit.cbd","-audit.json"]] ++
         [directory </> file | file <- ["oracle.tsv","call-oracle.tsv","NativeTupleArithmetic.hs",
           "native/tuple-arithmetic-oracle"]]
   inputHashes <- hashes root inputs
