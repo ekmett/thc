@@ -524,8 +524,50 @@ class FastInputTests(unittest.TestCase):
                 if member.name != 'files/' + binary])
             self.rejected_without_writes(changed)
 
+    def test_io_and_mask_cbd_archive_roundtrip_requires_executable_core(self):
+        for family, outputs, receipt, binary, compact in (
+                ("io-main-pap", cache.IO_MAIN_PAP_OUTPUTS, "provenance.json", "native/io-main-pap-oracle", "pre/core/IoMainPapAudit.cbd"),
+                ("mask-functions", cache.MASK_FUNCTION_OUTPUTS, "manifest.json", "native/oracle", "post/core/MaskFunctionAudit.cbd")):
+            name = f"build/{family}/{receipt}"
+            artifacts = outputs - {name}
+            for path in artifacts:
+                self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
+            native = f"build/{family}/{binary}"
+            (self.root / native).chmod(0o755)
+            hashes = {path: cache.digest(self.root / path) for path in artifacts}
+            doc = dict(inputHashes=self.manifest['inputHashes'])
+            if family == "io-main-pap":
+                doc['artifacts'] = [dict(path=path, sha256=digest) for path, digest in hashes.items()]
+            else:
+                doc['artifactHashes'] = hashes
+            self.put(name, json.dumps(doc))
+            with patch.object(cache, 'REQUIRED', (name,)):
+                packed = self.pack(); self.remove_payload(packed)
+                cache.restore(self.root, self.current, self.bundle)
+                self.assertEqual(0o755, (self.root / native).stat().st_mode & 0o7777)
+                self.remove_payload(packed)
+                changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                    if member.name != f'files/build/{family}/{compact}'])
+                self.rejected_without_writes(changed)
+            self.bundle.unlink()
+
+    def test_coroutine_cbd_receipts_admit_only_recorded_products(self):
+        for family, outputs, receipt in (("io-main-pap", cache.IO_MAIN_PAP_OUTPUTS, "provenance.json"),
+                                         ("mask-functions", cache.MASK_FUNCTION_OUTPUTS, "manifest.json"),
+                                         ("proxy-void", cache.PROXY_VOID_OUTPUTS, "manifest.json")):
+            name = f"build/{family}/{receipt}"
+            self.assertIn(name, DECLARED_REQUIRED)
+            for path in outputs:
+                self.assertTrue(cache.allowed_payload(path), path)
+            for suffix in ("extra.cbd", "pre/core/Extra.cbd", "unreviewed/core/MaskFunctionAudit.cbd", "logs/extra.stdout"):
+                self.assertFalse(cache.allowed_payload(f"build/{family}/{suffix}"))
+        for stage in ("pre", "post"):
+            self.assertTrue(cache.allowed_payload(f"build/state-tuple/{stage}-core/StateTupleAudit.cbd"))
+            self.assertFalse(cache.allowed_payload(f"build/state-tuple/{stage}-core/Extra.cbd"))
+        self.assertFalse(cache.allowed_payload("build/state-tuple/other-core/StateTupleAudit.cbd"))
+
     def test_delimited_continuation_closed_outputs_exclude_native_binaries_and_extras(self):
-        self.assertEqual(154, len(cache.DELIMITED_OUTPUTS))
+        self.assertEqual(171, len(cache.DELIMITED_OUTPUTS))
         self.assertIn('build/delimited-continuations/manifest.json', DECLARED_REQUIRED)
         for path in cache.DELIMITED_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path), path)
@@ -561,7 +603,7 @@ class FastInputTests(unittest.TestCase):
             self.rejected_without_writes(changed)
 
     def test_thread_inventory_exact_closed_archive_roundtrip_and_missing_member(self):
-        self.assertEqual(23, len(cache.THREAD_INVENTORY_OUTPUTS))
+        self.assertEqual(25, len(cache.THREAD_INVENTORY_OUTPUTS))
         self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)
         for path in cache.THREAD_INVENTORY_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path), path)
@@ -582,7 +624,7 @@ class FastInputTests(unittest.TestCase):
             self.assertEqual(original, (self.root / name).read_text())
             self.remove_payload(packed)
             changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
-                if member.name != 'files/build/thread-inventory/post/core/ThreadInventory.json'])
+                if member.name != 'files/build/thread-inventory/post/core/ThreadInventory.cbd'])
             self.rejected_without_writes(changed)
 
     def test_bytearray_family_closed_receipts_and_native_permissions(self):

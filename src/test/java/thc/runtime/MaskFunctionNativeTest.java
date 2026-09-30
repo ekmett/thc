@@ -11,6 +11,7 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.Json;
 import thc.Language;
 import thc.Main;
@@ -43,7 +44,14 @@ class MaskFunctionNativeTest {
         for (var name : primitives.keySet()) offsets.put(name, values[i++]);
         offsets.put("lazyFunctions", 0L); offsets.put("bareMasks", 10L);
     }
-    private Map<String, Object> source(String stage) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(directory.resolve(stage + "/core/MaskFunctionAudit.json"))); }
+    private Map<String, Object> source(String stage) throws Exception { return CoreCbdFixtures.read(directory.resolve(stage + "/core/MaskFunctionAudit.cbd")); }
+    private Map<String, Object> inspection(String stage, Map<String, Object> compact) throws Exception {
+        var inspection = (Map<String, Object>) Json.parse(Files.readString(directory.resolve(stage + "/core/MaskFunctionAudit.json")));
+        for (var key : List.of("unit", "module", "boundary")) assertEquals(compact.get(key), inspection.get(key), stage + "/" + key);
+        assertEquals(((List<Map<String, Object>>) compact.get("bindings")).stream().map(binding -> (String) binding.get("id")).sorted().toList(),
+            ((List<Map<String, Object>>) inspection.get("bindings")).stream().map(binding -> (String) binding.get("id")).sorted().toList(), stage + "/paired bindings");
+        return inspection;
+    }
     private static List<List<Object>> nodes(Object value) {
         var result = new ArrayList<List<Object>>();
         if (value instanceof Map<?, ?> map) for (var child : map.values()) result.addAll(nodes(child));
@@ -95,10 +103,10 @@ class MaskFunctionNativeTest {
     @Test void genuinePartialMasksBecomeTypedLambdasWithSaturatedBodies() throws Exception {
         rows();
         for (var stage : List.of("pre", "post")) {
-            var module = source(stage);
+            var module = source(stage); var inspection = inspection(stage, module);
             for (var entry : primitives.entrySet()) {
                 var name = entry.getKey(); var primitive = entry.getValue();
-                var linked = CoreModules.reachable(module, name, true); var opaque = single(calls(linked, "var", "main:MaskFunctionAudit.applyLater"));
+                var linked = CoreModules.reachable(module, "main:MaskFunctionAudit." + name, true); var opaque = single(calls(linked, "var", "main:MaskFunctionAudit.applyLater"));
                 var lambda = ((List<List<Object>>) opaque.get(2)).get(0);
                 assertEquals("lam", lambda.get(0), stage + "/" + name + " passes the mask as a function");
                 var binder = single((List<Map<String, Object>>) lambda.get(1));
@@ -113,9 +121,9 @@ class MaskFunctionNativeTest {
                 // This is only evidence about the retained GHC dump; execution
                 // and proofs above consume the structural export exclusively.
                 assertTrue(Pattern.compile("applyLater\\s+\\(" + Pattern.quote(primitive) + "\\s+@LiftedRep\\s+@Payload")
-                    .matcher((String) module.get("sourceCore")).find(), stage + "/" + name + " original one-action Core");
+                    .matcher((String) inspection.get("sourceCore")).find(), stage + "/" + name + " original one-action Core");
             }
-            var bare = CoreModules.reachable(module, "bareMasks", true); var wrappers = new ArrayList<List<Object>>();
+            var bare = CoreModules.reachable(module, "main:MaskFunctionAudit.bareMasks", true); var wrappers = new ArrayList<List<Object>>();
             for (var call : calls(bare, "var", "main:MaskFunctionAudit.applyMask")) wrappers.add(((List<List<Object>>) call.get(2)).get(0));
             assertEquals(3, wrappers.size()); var actual = new LinkedHashSet<Object>();
             for (var wrapper : wrappers) {
@@ -163,8 +171,8 @@ class MaskFunctionNativeTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var linked = new LinkedHashMap<>(CoreModules.reachable(source(stage), entry, true)); linked.put("instrument", true);
-                    var program = program(language, linked, backend); var target = program.entryTarget(entry); var label = stage + "/" + backend + "/" + entry;
+                    var linked = new LinkedHashMap<>(CoreModules.reachable(source(stage), "main:MaskFunctionAudit." + entry, true)); linked.put("instrument", true);
+                    var program = program(language, linked, backend); var target = program.entryTarget("main:MaskFunctionAudit." + entry); var label = stage + "/" + backend + "/" + entry;
                     for (int i = 0; i < 3; i++) for (var row : selected) check(row, target, language, label);
                     var active = targets(target); assertTrue(active.size() >= 2, label + " retains opaque guest calls");
                     for (var current : active) { current.getClass().getMethod("compile", boolean.class).invoke(current, true); valid(current); }
@@ -195,7 +203,7 @@ class MaskFunctionNativeTest {
     @Test void malformedMaskArityAndProofsStillFailInBothPolicies() throws Exception {
         for (var stage : List.of("pre", "post")) for (var entryPrimitive : primitives.entrySet()) {
             var entry = entryPrimitive.getKey(); var primitive = entryPrimitive.getValue();
-            var linked = CoreModules.reachable(source(stage), entry, true); var app = single(calls(linked, "prim", primitive));
+            var linked = CoreModules.reachable(source(stage), "main:MaskFunctionAudit." + entry, true); var app = single(calls(linked, "prim", primitive));
             var arguments = proofs((List<List<Object>>) app.get(2)); var flags = (List<?>) app.get(3); var result = CoreRepresentations.expression(app);
             assertThrows(RuntimeFault.class, () -> CoreSynchronousExceptions.validate(primitive, arguments.subList(0, Math.min(1, arguments.size())), List.of(true), result));
             assertThrows(RuntimeFault.class, () -> {
@@ -231,7 +239,7 @@ class MaskFunctionNativeTest {
                     else {
                         var deferred = program(language, missing, backend); assertTrue(!((List<?>) deferred.diagnostics().get("deferredUnsupported")).isEmpty());
                         assertEquals(0L, deferred.diagnostics().get("unsupportedTraps"));
-                        assertThrows(RuntimeFault.class, () -> Calls.target(deferred.entryTarget(entry), new Object[]{0L, 0L}));
+                        assertThrows(RuntimeFault.class, () -> Calls.target(deferred.entryTarget("main:MaskFunctionAudit." + entry), new Object[]{0L, 0L}));
                         assertEquals(1L, deferred.diagnostics().get("unsupportedTraps"));
                     }
                 } finally { context.leave(); }
