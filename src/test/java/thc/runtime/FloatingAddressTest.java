@@ -4,6 +4,11 @@ package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.bytecode.Instruction;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -12,6 +17,7 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 import thc.*;
 import java.io.File;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -41,6 +47,31 @@ class FloatingAddressTest {
     }
     private FloatingAddressExpression node(FloatingAddressOp op, Expr... operands) {
         return new FloatingAddressExpression(op, CoreRepresentation.UNKNOWN, operands, false);
+    }
+    private List<RootCallTarget> activeTargets(RootCallTarget entry) {
+        var targets = new ArrayList<RootCallTarget>();
+        visit(entry, Collections.newSetFromMap(new IdentityHashMap<>()), targets);
+        return targets;
+    }
+    private void visit(RootCallTarget target, Set<RootCallTarget> seen, List<RootCallTarget> targets) {
+        if (!seen.add(target)) return;
+        var root = target.getRootNode();
+        var nodes = new ArrayList<Node>(); nodes.add(root);
+        if (root instanceof BytecodeRoot bytecode)
+            for (var instruction : bytecode.getBytecodeNode().getInstructions())
+                for (var argument : instruction.getArguments())
+                    if (argument.getKind() == Instruction.Argument.Kind.NODE_PROFILE
+                            && argument.asCachedNode() != null) nodes.add(argument.asCachedNode());
+        for (var node : nodes)
+            for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
+                if (call.getCurrentCallTarget() instanceof RootCallTarget active
+                        && active.getRootNode() instanceof GuestRoot) visit(active, seen, targets);
+        targets.add(target);
+    }
+    private List<Object> callCounts(List<RootCallTarget> targets) throws Exception {
+        var counts = new ArrayList<Object>();
+        for (var target : targets) counts.add(target.getClass().getMethod("getCallCount").invoke(target));
+        return counts;
     }
 
     @Test
@@ -104,11 +135,18 @@ class FloatingAddressTest {
         assertThrows(RuntimeFault.class, () -> FloatingAddresses.readDouble(base, 1));
         assertSame(target, base.readAddressElementIndex(1));
     }
-    private void check(Row row, boolean reverse, Value function, ExecutableProgram program, String label) {
+    private void check(Row row, boolean reverse, int expectedEntries, Value function,
+            ExecutableProgram program, String label) {
         for (int i = 0; i < 4; i++) {
             int selector = reverse ? 3 - i : i;
-            assertEquals(row.actual().get(selector).longValue(),
-                function.execute(row.floatBits(), row.doubleBits(), selector).asLong(), label + "/" + selector);
+            long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+            assertEquals(new BigInteger(Long.toUnsignedString(row.actual().get(selector))),
+                function.execute(new BigInteger(Long.toUnsignedString(row.floatBits())),
+                    new BigInteger(Long.toUnsignedString(row.doubleBits())), selector).asBigInteger(),
+                label + "/" + selector);
+            if (expectedEntries != 0) assertEquals(before + expectedEntries,
+                ((Number) program.diagnostics().get("compiledEntries")).longValue(),
+                label + "/" + selector + " exact first-installed Core entries");
         }
         assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
     }
@@ -166,6 +204,27 @@ class FloatingAddressTest {
                 assertEquals(Set.of("main:FloatingAddressAudit.floatingAddressBits"), owners, stage + "/" + primitive);
             }
             var module = thc.CoreCbdFixtures.read(new File(directory, "core/FloatingAddressAudit.cbd").toPath());
+            var evidence = new ArrayCoreEvidence(module, "main:FloatingAddressAudit.floatingAddressBits");
+            assertEquals(1, evidence.getBindings().size());
+            var outer = (List<Object>) evidence.getRoot().get("expr");
+            var state = evidence.immediateStateLambda(outer.get(2));
+            var keepAlive = evidence.nodes(outer).stream().filter(node -> node.size() > 2
+                && "app".equals(node.getFirst()) && node.get(1) instanceof List<?> head
+                && head.size() > 1 && "prim".equals(head.getFirst()) && "keepAlive#".equals(head.get(1))).toList();
+            assertEquals(1, keepAlive.size());
+            var action = (List<Object>) ((List<?>) keepAlive.getFirst().get(2)).get(2);
+            assertEquals("lam", action.getFirst());
+            var formals = (List<Map<String, Object>>) action.get(1);
+            assertEquals(1, formals.size());
+            assertEquals("State# RealWorld", formals.getFirst().get("type"));
+            assertEquals("void", ((Map<?, ?>) formals.getFirst().get("rep")).get("kind"));
+            assertEquals(List.of(outer, state, action), evidence.guestLambdas(outer));
+            var originals = evidence.loweredGuestLambdas(outer);
+            assertEquals(List.of(outer, action), originals,
+                "runRW stays in-frame, but the keepAlive callback is a real guest entry");
+            var originalLabels = originals.stream().map(lambda -> "lambda " +
+                ((List<Map<String, Object>>) lambda.get(1)).stream().map(formal -> String.valueOf(formal.get("name")))
+                    .collect(java.util.stream.Collectors.joining(", "))).collect(java.util.stream.Collectors.toSet());
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
@@ -177,25 +236,42 @@ class FloatingAddressTest {
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, source)
                                                                           : new BytecodeProgram(language, source);
                         var function = context.asValue(new EntryValue(program, "main:FloatingAddressAudit." + entry, 3));
+                        var guest = program.entryTarget("main:FloatingAddressAudit." + entry);
+                        var host = program.hostEntryTarget(3);
                         var label = stage + "/" + backend;
-                        for (var row : rows) check(row, false, function, program, label);
+                        for (var row : rows) check(row, false, 0, function, program, label);
+                        var targets = activeTargets(host);
+                        assertSame(host, targets.getLast());
+                        assertEquals(originalLabels, targets.stream().map(t -> t.getRootNode().getName())
+                            .filter(name -> name.startsWith("lambda ")).collect(java.util.stream.Collectors.toSet()));
+                        long beforeSetup = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        var beforeCalls = callCounts(targets);
+                        var runtime = Truffle.getRuntime();
+                        var targetType = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+                        for (var target : targets) {
+                            target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                            assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                            runtime.getClass().getMethod("bypassedInstalledCode", targetType).invoke(runtime, target);
+                        }
                         assertTrue(function.invokeMember("compile").asBoolean(), label);
-                        assertEquals(true,
-                            program.hostEntryTarget(3)
-                                .getClass()
-                                .getMethod("isValidLastTier")
-                                .invoke(program.hostEntryTarget(3)));
+                        assertEquals(beforeSetup, ((Number) program.diagnostics().get("compiledEntries")).longValue(),
+                            label + " installation must not execute guest code");
+                        assertEquals(beforeCalls, callCounts(targets),
+                            label + " installation must not execute interpreted code");
+                        assertEquals(true, guest.getClass().getMethod("isValidLastTier").invoke(guest));
+                        assertEquals(true, host.getClass().getMethod("isValidLastTier").invoke(host));
                         for (int i = rows.size() - 1; i >= 0; i--) {
                             var row = rows.get(i);
-                            long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            check(row, true, function, program, label);
-                            long after = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            if (after == before) {
-                                assertTrue(function.invokeMember("compile").asBoolean());
-                                check(row, true, function, program, label);
-                                after = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            }
-                            assertTrue(after > before, label + ": " + before + "->" + after);
+                            check(row, true, originals.size(), function, program, label);
+                            assertEquals(beforeCalls, callCounts(targets),
+                                label + " no interpreted entries after installation");
+                            assertSame(guest, program.entryTarget("main:FloatingAddressAudit." + entry));
+                            assertSame(host, program.hostEntryTarget(3));
+                            assertEquals(true, guest.getClass().getMethod("isValidLastTier").invoke(guest));
+                            assertEquals(true, host.getClass().getMethod("isValidLastTier").invoke(host));
+                            assertEquals(targets, activeTargets(host), label + " active target identities");
+                            for (var target : targets)
+                                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                         }
                     } finally {
                         context.leave();

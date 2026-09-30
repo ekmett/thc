@@ -17,6 +17,7 @@ import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 import thc.*;
 import java.io.File;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -141,8 +142,10 @@ class FloatingByteOffsetTest {
     private void check(Row row, boolean reverse, Value function, ExecutableProgram program, String label) {
         for (int i = 0; i < 4; i++) {
             int selector = reverse ? 3 - i : i;
-            assertEquals(row.actual().get(selector).longValue(),
-                function.execute(row.floatBits(), row.doubleBits(), selector).asLong(), label + "/" + selector);
+            assertEquals(new BigInteger(Long.toUnsignedString(row.actual().get(selector))),
+                function.execute(new BigInteger(Long.toUnsignedString(row.floatBits())),
+                    new BigInteger(Long.toUnsignedString(row.doubleBits())), selector).asBigInteger(),
+                label + "/" + selector);
         }
         assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
     }
@@ -201,6 +204,15 @@ class FloatingByteOffsetTest {
                     Set.of("main:FloatingByteOffsetAudit.floatingByteOffsetBits"), owners, stage + "/" + primitive);
             }
             var module = thc.CoreCbdFixtures.read(new File(directory, "core/FloatingByteOffsetAudit.cbd").toPath());
+            var evidence = new ArrayCoreEvidence(module, "main:FloatingByteOffsetAudit.floatingByteOffsetBits");
+            assertEquals(1, evidence.getBindings().size());
+            var outer = (List<Object>) evidence.getRoot().get("expr");
+            var state = evidence.immediateStateLambda(outer.get(2));
+            assertEquals(List.of(outer, state), evidence.guestLambdas(outer));
+            var originals = evidence.loweredGuestLambdas(outer);
+            assertEquals(List.of(outer), originals, "Only the public Core root executes; runRW stays in-frame");
+            var originalLabel = "lambda " + ((List<Map<String, Object>>) outer.get(1)).stream()
+                .map(formal -> String.valueOf(formal.get("name"))).collect(java.util.stream.Collectors.joining(", "));
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
@@ -219,7 +231,8 @@ class FloatingByteOffsetTest {
                         var targets = activeTargets(host);
                         assertSame(host, targets.getLast(), stageBackend + " host root");
                         assertTrue(targets.size() > 1, stageBackend + " reachable guest roots");
-                        int guestCount = targets.size() - 1;
+                        assertEquals(List.of(originalLabel), targets.stream().map(t -> t.getRootNode().getName())
+                            .filter(name -> name.startsWith("lambda ")).toList(), stageBackend + " original Core roots");
                         for (int i = 0; i < targets.size() - 1; i++) {
                             var target = targets.get(i);
                             target.getClass().getMethod("compile", boolean.class).invoke(target, true);
@@ -233,10 +246,11 @@ class FloatingByteOffsetTest {
                                 var label =
                                     stageBackend + "/" + selector + "/" + row.floatBits() + "/" + row.doubleBits();
                                 long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                                assertEquals(row.actual().get(selector).longValue(),
-                                    function.execute(row.floatBits(), row.doubleBits(), selector).asLong(), label);
+                                assertEquals(new BigInteger(Long.toUnsignedString(row.actual().get(selector))),
+                                    function.execute(new BigInteger(Long.toUnsignedString(row.floatBits())),
+                                        new BigInteger(Long.toUnsignedString(row.doubleBits())), selector).asBigInteger(), label);
                                 long after = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                                assertEquals(before + guestCount, after, label + " exact compiled guest entries");
+                                assertEquals(before + originals.size(), after, label + " exact compiled guest entries");
                                 assertSame(guest, program.entryTarget("main:FloatingByteOffsetAudit." + entry), label + " guest identity");
                                 assertSame(host, program.hostEntryTarget(3), label + " host identity");
                                 var active = activeTargets(host);

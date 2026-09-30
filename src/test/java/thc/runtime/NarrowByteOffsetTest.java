@@ -194,6 +194,15 @@ class NarrowByteOffsetTest {
                     Set.of("main:NarrowByteOffsetAudit.narrowByteOffsetValues"), owners, stage + "/" + primitive);
             }
             var module = thc.CoreCbdFixtures.read(new File(directory, "core/NarrowByteOffsetAudit.cbd").toPath());
+            var evidence = new ArrayCoreEvidence(module, "main:NarrowByteOffsetAudit.narrowByteOffsetValues");
+            assertEquals(1, evidence.getBindings().size());
+            var outer = (List<Object>) evidence.getRoot().get("expr");
+            var state = evidence.immediateStateLambda(outer.get(2));
+            assertEquals(List.of(outer, state), evidence.guestLambdas(outer));
+            var originals = evidence.loweredGuestLambdas(outer);
+            assertEquals(List.of(outer), originals, "Only the public Core root executes; runRW stays in-frame");
+            var originalLabel = "lambda " + ((List<Map<String, Object>>) outer.get(1)).stream()
+                .map(formal -> String.valueOf(formal.get("name"))).collect(java.util.stream.Collectors.joining(", "));
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
@@ -212,7 +221,8 @@ class NarrowByteOffsetTest {
                         var targets = activeTargets(host);
                         assertSame(host, targets.getLast(), stageBackend + " host root");
                         assertTrue(targets.size() > 1, stageBackend + " reachable guest roots");
-                        int guestCount = targets.size() - 1;
+                        assertEquals(List.of(originalLabel), targets.stream().map(t -> t.getRootNode().getName())
+                            .filter(name -> name.startsWith("lambda ")).toList(), stageBackend + " original Core roots");
                         for (int i = 0; i < targets.size() - 1; i++) {
                             var target = targets.get(i);
                             target.getClass().getMethod("compile", boolean.class).invoke(target, true);
@@ -228,7 +238,10 @@ class NarrowByteOffsetTest {
                                 assertEquals(row.actual().get(selector).longValue(),
                                     function.execute(row.signed(), row.unsigned(), selector).asLong(), label);
                                 long after = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                                assertEquals(before + guestCount, after, label + " exact compiled guest entries");
+                                // Private case-recovery targets are installed but not
+                                // executed while the original case remains inline.
+                                assertEquals(before + originals.size(), after, label + " exact compiled guest entries: "
+                                    + targets.stream().map(t -> t.getRootNode().getName()).toList());
                                 assertSame(guest, program.entryTarget("main:NarrowByteOffsetAudit." + entry), label + " guest identity");
                                 assertSame(host, program.hostEntryTarget(3), label + " host identity");
                                 var active = activeTargets(host);
