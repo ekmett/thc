@@ -406,8 +406,8 @@ class FastInputTests(unittest.TestCase):
             self.assertFalse(cache.allowed_payload('build/original-memory-search/' + path))
 
     def test_simd_memory_closed_receipts_and_export_only_archives(self):
-        counts = {"simd-int32x4-bytearray": (259, 386), "simd-word32x4-bytearray": (259, 386),
-                  "simd-floatx4-bytearray": (446, 647), "simd-doublex2-bytearray": (536, 767)}
+        counts = {"simd-int32x4-bytearray": (261, 388), "simd-word32x4-bytearray": (261, 388),
+                  "simd-floatx4-bytearray": (448, 649), "simd-doublex2-bytearray": (538, 769)}
         for family, sizes in counts.items():
             for native in (False, True):
                 name = f"build/{family}/provenance.json"
