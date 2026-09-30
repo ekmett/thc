@@ -25,7 +25,7 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
 # Includes raw vector/string Core exports and their native scalar oracles.
-FULL_PREPARATION_PLAN = "b2c7ffce07f5c6589fe5329ce1e06f1ada7cab816cf1db11c597ed3f858b268a"
+FULL_PREPARATION_PLAN = "d4f33b229cc37aa07b461788174607a329d08ddf5fb86584460985e1b2d5d993"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.cbd", "post.cbd", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in

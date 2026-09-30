@@ -106,21 +106,24 @@ class FixturePreparationTest(unittest.TestCase):
             for stage in ("pre", "post"):
                 self.assertIn(f"build/thread-async/{stage}/{entry}-audit.json", fast_fixtures.FULL_REQUIRED)
 
-    def test_pretty_metadata_export_keeps_required_outputs_and_changes_receipt_plan(self):
+    def test_cbd_metadata_exports_keep_required_outputs_and_reviewed_tidy_plan(self):
         project = Path(__file__).resolve().parents[2]
         source = (project / "bin/prepare-tests.sh").read_text()
-        option = "-fplugin-opt=THC.Plugin:pretty-diagnostics"
-        commands = [line.split() for line in source.splitlines() if option in line]
+        option = "-fplugin-opt=THC.Plugin:post-tidy"
+        self.assertNotIn("-fplugin-opt=THC.Plugin:pretty-diagnostics", source)
+        commands = [line.split() for line in source.splitlines()
+                    if line.strip().startswith("bin/export-core.sh") and
+                    ("t/fixtures/compiler/CBV" in line or "t/fixtures/compiler/SourceNotes.hs" in line)]
         inputs = ["t/fixtures/core/Fixtures.hs"] + [
             "t/fixtures/compiler/" + name + ".hs" for name in (
                 "StrictFields", "SpeculationAudit", "RepresentationAudit", "SourceNotes",
                 "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")]
         self.assertEqual([
-            ["bin/export-core.sh", option, *inputs],
-            ["bin/export-core.sh", option, "-fplugin-opt=THC.Plugin:post-tidy",
+            ["bin/export-core.sh", *inputs],
+            ["bin/export-core.sh", option,
              *["t/fixtures/compiler/" + name + ".hs" for name in
                ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")]],
-            ["bin/export-core.sh", option, "t/fixtures/compiler/SourceNotes.hs",
+            ["bin/export-core.sh", "t/fixtures/compiler/SourceNotes.hs",
              "t/fixtures/compiler/RepresentationAudit.hs"],
         ], commands)
         self.assertIn("build/core", fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -128,8 +131,8 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue((project / path).is_file(), path)
             module = "Fixtures" if path == inputs[0] else Path(path).stem
             self.assertIn("build/core/" + module + ".cbd", fast_fixtures.FULL_REQUIRED)
-        # The inspection option does not change the required executable CBD inventory.
-        # Removing it still invalidates the reviewed plan before any cache hit.
+        # The real post-Tidy comparison must remain in the reviewed producer plan.
+        # Removing it invalidates that plan before any cache hit.
         script = self.root / "bin/prepare-tests.sh"
         script.parent.mkdir(parents=True, exist_ok=True)
         script.write_text(source)
@@ -3063,7 +3066,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertNotIn("build/cbv-post-core/CBVCoercionAudit.json", cbv["outputs"])
         exports = [command["argv"] for command in cbv["commands"] if "t/fixtures/compiler/CBVAudit.hs" in command["argv"]]
         self.assertEqual(2, len(exports))
-        self.assertTrue(all("-fplugin-opt=THC.Plugin:pretty-diagnostics" in command for command in exports))
+        self.assertTrue(all("-fplugin-opt=THC.Plugin:pretty-diagnostics" not in command for command in exports))
+        self.assertEqual(1, sum("-fplugin-opt=THC.Plugin:post-tidy" in command for command in exports))
         self.assertIn("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd", cbv["outputs"])
         self.assertIn("build/explicit64-primops/core/Explicit64PrimopsAudit.cbd", cbv["outputs"])
         self.assertTrue(any("bin/check-cbv-metadata.py" in command["argv"]

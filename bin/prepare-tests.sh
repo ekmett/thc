@@ -213,19 +213,19 @@ case "$(uname -m)" in
   *) "$fixture_bin" doublex2-bytearray ;;
 esac
 "$fixture_bin" explicit64
-bin/export-core.sh -fplugin-opt=THC.Plugin:pretty-diagnostics t/fixtures/core/Fixtures.hs t/fixtures/compiler/StrictFields.hs t/fixtures/compiler/SpeculationAudit.hs t/fixtures/compiler/RepresentationAudit.hs t/fixtures/compiler/SourceNotes.hs t/fixtures/compiler/CBVAudit.hs t/fixtures/compiler/CBVJoinAudit.hs t/fixtures/compiler/CBVCoercionAudit.hs t/fixtures/compiler/ConstructorFieldAudit.hs t/fixtures/compiler/DemandAudit.hs
+bin/export-core.sh t/fixtures/core/Fixtures.hs t/fixtures/compiler/StrictFields.hs t/fixtures/compiler/SpeculationAudit.hs t/fixtures/compiler/RepresentationAudit.hs t/fixtures/compiler/SourceNotes.hs t/fixtures/compiler/CBVAudit.hs t/fixtures/compiler/CBVJoinAudit.hs t/fixtures/compiler/CBVCoercionAudit.hs t/fixtures/compiler/ConstructorFieldAudit.hs t/fixtures/compiler/DemandAudit.hs
 python3 bin/check-speculation-metadata.py
 python3 bin/check-representation-metadata.py
 python3 bin/check-demand-metadata.py --ghc-api
 # Compare pre-Tidy contract proposals with the real native Tidy result.
 THC_CORE_OUT="$PWD/build/cbv-post-core" THC_GHC_OUT="$PWD/build/cbv-post-ghc" \
-  bin/export-core.sh -fplugin-opt=THC.Plugin:pretty-diagnostics -fplugin-opt=THC.Plugin:post-tidy t/fixtures/compiler/CBVAudit.hs t/fixtures/compiler/CBVJoinAudit.hs t/fixtures/compiler/CBVCoercionAudit.hs
+  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy t/fixtures/compiler/CBVAudit.hs t/fixtures/compiler/CBVJoinAudit.hs t/fixtures/compiler/CBVCoercionAudit.hs
 python3 bin/check-cbv-metadata.py
 python3 bin/check-constructor-field-metadata.py
 # Exercise genuine GHC notes in CI even when ordinary workload exports opt out.
 THC_SOURCE_NOTES=true THC_CORE_OUT="$PWD/build/source-core" THC_GHC_OUT="$PWD/build/source-ghc" \
-  bin/export-core.sh -fplugin-opt=THC.Plugin:pretty-diagnostics t/fixtures/compiler/SourceNotes.hs t/fixtures/compiler/RepresentationAudit.hs
-python3 bin/check-source-metadata.py --fixture build/source-core/SourceNotes.json build/source-core/RepresentationAudit.json
+  bin/export-core.sh t/fixtures/compiler/SourceNotes.hs t/fixtures/compiler/RepresentationAudit.hs
+python3 bin/check-source-metadata.py --fixture build/source-core/SourceNotes.cbd build/source-core/RepresentationAudit.cbd
 python3 bin/export-boot.py
 mkdir -p build/native
 bin/native-oracle.sh > build/native/oracle.tsv

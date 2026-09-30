@@ -1383,10 +1383,10 @@
       "commands": [
         {"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "bin/export-core.sh", "t/fixtures/compiler/TupleArithmeticAudit.hs"]},
         {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "bin/export-core.sh", "t/fixtures/compiler/Explicit64PrimopsAudit.hs"]},
-        {"argv": ["bin/export-core.sh", "-fplugin-opt=THC.Plugin:pretty-diagnostics",
+        {"argv": ["bin/export-core.sh",
             "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs"]},
         {"argv": ["python3", "bin/check-demand-metadata.py", "--ghc-api"]},
-        {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:pretty-diagnostics",
+        {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy",
             "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs"]},
         {"argv": ["python3", "bin/check-cbv-metadata.py"]}
       ],

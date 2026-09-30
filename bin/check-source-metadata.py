@@ -5,13 +5,14 @@
 """Validate source tables independently of the runtime's section resolver."""
 import argparse
 import json
+from core_package_manifest import inspect_cbd
 from pathlib import Path
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('paths', nargs='*', type=Path)
 parser.add_argument('--fixture', action='store_true', help='require Unicode, tabs, absent content and nested notes')
 args = parser.parse_args()
-paths = args.paths or [Path('build/core/SourceNotes.json'), Path('build/core/RepresentationAudit.json')]
+paths = args.paths or [Path('build/source-core/SourceNotes.cbd'), Path('build/source-core/RepresentationAudit.cbd')]
 counts = {'files': 0, 'spans': 0, 'references': 0, 'nestedNotes': 0, 'missingContent': 0, 'unicode': 0, 'tabs': 0}
 
 
@@ -33,7 +34,7 @@ def boundaries(text):
 
 
 for path in paths:
-    data = json.loads(path.read_text())
+    data = inspect_cbd(path.read_bytes(), sources=True)
     files = {f['id']: f for f in data['sourceFiles']}
     spans = {s['id']: s for s in data['sourceSpans']}
     assert len(files) == len(data['sourceFiles']), path
@@ -68,7 +69,14 @@ for path in paths:
         elif isinstance(node, list):
             for child in node:
                 check(child)
-    check(data['bindings'])
+    previous = 0
+    for location in data['locations']:
+        assert previous <= location['start'] < location['end'] <= data['dataSize'], (path, location)
+        previous = location['end']
+        notes = location['sourceNotes']
+        assert 0 <= location['primaryIndex'] < len(notes), (path, location)
+        assert location['source'] == notes[location['primaryIndex']], (path, location)
+    check(data['locations'])
 if args.fixture:
     assert all(counts[k] for k in ['nestedNotes', 'missingContent', 'unicode', 'tabs']), counts
 print('PASS source metadata:', json.dumps(counts, sort_keys=True))
