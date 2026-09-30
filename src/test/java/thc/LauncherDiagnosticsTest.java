@@ -110,6 +110,30 @@ public class LauncherDiagnosticsTest {
                 Json.stringify(List.of("--run-executable", "modules", "entry", "", "--", "ghc"))))
             assertThrows(IllegalArgumentException.class, () -> NativeExecutable.launcherArguments(invalid, guest));
     }
+    @Test public void nativeExecutableRetainsBoundArtifactVerificationAndOpaqueGuestArguments() {
+        var guest = new String[] {"--verify-artifacts", "", "--", "a b.hs"};
+        for (var binding : List.of(
+                List.of("--verify-artifacts", "--run-executable", "@packages.json", "u:Main.main", "base:Top.flush", "--", "ghc"),
+                List.of("--run-executable", "--verify-artifacts", "@packages.json", "u:Main.main", "base:Top.flush", "--", "ghc"),
+                List.of("--run-executable", "@packages.json", "u:Main.main", "base:Top.flush", "--verify-artifacts", "--", "ghc"))) {
+            var actual = NativeExecutable.launcherArguments(Json.stringify(binding), guest);
+            assertArrayEquals(concat(binding.toArray(String[]::new), guest), actual);
+            var selected = launcherArtifactVerification(actual);
+            assertTrue(selected.verifyArtifacts());
+            assertArrayEquals(new String[] {"--run-executable", "@packages.json", "u:Main.main", "base:Top.flush", "--", "ghc",
+                "--verify-artifacts", "", "--", "a b.hs"}, selected.arguments());
+            assertEquals("ghc", Main.launcherArguments(selected.arguments(), 4).programName());
+        }
+        assertArrayEquals(new String[] {"--verify-artifacts", "", "--", "a b.hs"}, guest);
+    }
+    @Test public void nativeExecutableRejectsInvalidVerifiedBindingsBeforeGuestArguments() {
+        for (var binding : List.of(
+                List.of("--verify-artifacts", "--run-executable", "@packages.json", "u:Main.main", "base:Top.flush", "--verify-artifacts", "--", "ghc"),
+                List.of("--verify-artifacts", "--run-executable", "@packages.json", "u:Main.main", "", "--", "ghc"),
+                List.of("--verify-artifacts", "--run-executable", "@packages.json", "u:Main.main", "base:Top.flush", "--", ""),
+                List.of("--verify-artifacts", "--run-executable", "@packages.json", "u:Main.main", "base:Top.flush", "--", "ghc\0")))
+            assertThrows(IllegalArgumentException.class, () -> NativeExecutable.launcherArguments(Json.stringify(binding), new String[] {"--verify-artifacts"}));
+    }
     @Test
     @org.junit.jupiter.api.condition.EnabledOnOs({org.junit.jupiter.api.condition.OS.LINUX, org.junit.jupiter.api.condition.OS.MAC})
     public void shellWrapperPreservesExplicitModulesAndEveryArgument() throws Exception {

@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -111,7 +112,7 @@ public final class AstTailApplication extends Expr {
     private static final class Cleanup implements AstResumeStep, DelimitedStep {
         private final AstTailApplication owner;
         private final List<AstResumeStep> steps;
-        Cleanup(AstTailApplication owner) { this(owner, List.of()); }
+        @TruffleBoundary Cleanup(AstTailApplication owner) { this(owner, List.of()); }
         Cleanup(AstTailApplication owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             boolean suspended = false;
