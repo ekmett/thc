@@ -17,6 +17,7 @@ module THC.Driver.Project
   , prepareInstalledBundle, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
   , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
+  , selectedPackageTool
   ) where
 
 import Control.Exception (bracket, evaluate, finally, onException)
@@ -369,9 +370,16 @@ selectedPackageTool ghc requested = do
       findExecutable requestedPkg >>= maybe (fail "selected ghc-pkg executable not found") pure
     Nothing -> do
       let suffix = if Host.os == "mingw32" then ".exe" else ""
-          candidates = [takeDirectory ghc </> name ++ suffix | name <- ["ghc-pkg-9.14.1", "ghc-pkg"]]
+          names = [name ++ suffix | name <- ["ghc-pkg-9.14.1", "ghc-pkg"]]
+          candidates = map (takeDirectory ghc </>) names
       available <- filterM doesFileExist candidates
-      case available of value:_ -> pure value; [] -> fail "no ghc-pkg beside selected GHC"
+      case available of
+        value:_ -> pure value
+        [] -> do
+          onPath <- mapM findExecutable names
+          case [value | Just value <- onPath] of
+            value:_ -> pure value
+            [] -> fail "selected ghc-pkg executable not found beside GHC or on PATH"
   packageTool <- makeAbsolute path
   compilerVersion <- output ghc ["--numeric-version"]
   packageVersion <- output packageTool ["--version"]
