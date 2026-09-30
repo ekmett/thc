@@ -276,7 +276,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         required = fast_fixtures.fast_inputs.PROXY_VOID_OUTPUTS
-        self.assertEqual(41, len(required))
+        self.assertEqual(37, len(required))
         self.assertEqual({f"build/proxy-void/{stage}/core/{module}.cbd"
                           for stage in ("pre", "post")
                           for module in ("ProxyVoidAudit", "THC.InterfaceClosure")},
@@ -872,14 +872,17 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/weak-explicit', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn('build/weak-explicit/manifest.json', fast_fixtures.FULL_REQUIRED)
         gradle = (project / 'build.gradle').read_text()
-        for pattern in ('**/*.json', 'oracle.tsv', 'NativeWeak.hs'):
+        for pattern in ('**/*.cbd', '**/*.json', 'oracle.tsv', 'NativeWeak.hs'):
             self.assertIn('"weak-explicit/' + pattern + '"', gradle)
         for suffix in ('manifest.json', 'oracle.tsv', 'NativeWeak.hs',
                        'pre/audit.json', 'post/audit.json',
-                       'pre/core/WeakAudit.json', 'post/core/WeakAudit.json',
-                       'pre/core/THC.InterfaceClosure.json', 'post/core/THC.InterfaceClosure.json'):
+                       'pre/core/WeakAudit.cbd', 'post/core/WeakAudit.cbd',
+                       'pre/core/THC.InterfaceClosure.cbd', 'post/core/THC.InterfaceClosure.cbd'):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/' + suffix))
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/result.xml'))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/pre/core/WeakAudit.json'))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/pre/core/Unreviewed.cbd'))
+        self.assertTrue(fast_fixtures.fast_inputs.WEAK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
 
     def test_libdw_unavailable_native_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]

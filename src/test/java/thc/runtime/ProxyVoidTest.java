@@ -109,8 +109,6 @@ class ProxyVoidTest {
         for (var stage : list("pre", "post")) {
             var module = module(stage);
             assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", module.get("boundary"));
-            var inspection = object(Json.parse(Files.readString(root.resolve("build/proxy-void/" + stage + "/core/ProxyVoidAudit.json"))));
-            assertTrue(((String) inspection.get("sourceCore")).contains("proxy#"));
             var token = lambda(module, "token"); var arguments = objects(token.get(1));
             assertEquals(1, arguments.size()); assertEquals(empty, arguments.getFirst().get("rep"));
             assertEquals(voidProof, object(token.get(3)).get("resultRep")); assertEquals("void", expression(token.get(2)).getFirst());

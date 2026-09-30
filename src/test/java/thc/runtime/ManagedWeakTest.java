@@ -600,19 +600,26 @@ class ManagedWeakTest {
             assertTrue(primitives.containsAll(names));
             assertFalse(primitives.contains("addCFinalizerToWeak#"));
             var merged = merge(stageEntry.getValue());
-            var diagnostic = CoreModules.merge(List.of(
-                json(new File(directory, stage + "/core/WeakAudit.json")),
-                json(new File(directory, stage + "/core/THC.InterfaceClosure.json"))));
-            var proof = new ArrayCoreEvidence(diagnostic, "main:WeakAudit.weakComposite");
+            var proof = new ArrayCoreEvidence(merged, "main:WeakAudit.weakComposite");
             var lambda = (List<?>) proof.getRoot().get("expr");
             var exported = proof.guestLambdas(lambda);
-            var types = new ArrayList<List<Object>>();
-            for (var expr : exported) {
-                var parameters = new ArrayList<Object>();
-                for (var formal : (List<Map<?, ?>>) expr.get(1)) parameters.add(formal.get("type"));
-                types.add(parameters);
+            assertEquals(3, exported.size());
+            for (int index = 0; index < exported.size(); index++) {
+                var formals = (List<Map<String, Object>>) exported.get(index).get(1);
+                assertEquals(1, formals.size());
+                var formal = formals.getFirst();
+                var representation = CoreRepresentations.binder(formal);
+                assertEquals(false, formal.get("lifted"));
+                assertEquals(false, formal.get("coercion"));
+                if (index == 0) {
+                    assertEquals(CoreKind.LONG, representation.getKind());
+                    assertEquals(List.of("IntRep"), representation.getPrimReps());
+                } else {
+                    assertEquals("State# RealWorld", formal.get("type"));
+                    assertEquals(CoreKind.VOID, representation.getKind());
+                    assertEquals(List.of(), representation.getPrimReps());
+                }
             }
-            assertEquals(List.of(List.of("Int#"), List.of("State# RealWorld"), List.of("State# RealWorld")), types);
             assertSame(exported.get(1), proof.immediateStateLambda(lambda.get(2)),
                 "Only the exact void State# application executes in-frame");
             List<Object> registration = null;

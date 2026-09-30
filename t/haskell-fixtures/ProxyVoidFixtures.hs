@@ -67,11 +67,10 @@ prepareProxyVoid root = do
         report = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         map ("-fplugin-opt=THC.Plugin:closure=" ++) entries ++ [source])
     modules <- sort <$> listDirectory (root </> core)
     let paths = [core </> name | name <- modules, takeExtension name == ".cbd"]
-        diagnostics = [core </> name | name <- modules, takeExtension name == ".json"]
     audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
       (["bin/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", "main:ProxyVoidAudit." ++ entry]) entries ++ paths)
     result <- json report
@@ -81,7 +80,7 @@ prepareProxyVoid root = do
         KeyMap.lookup "missingGlobals" fields == Just (Array mempty),
         KeyMap.lookup "runtimeExternals" fields == Just (Array mempty) -> pure ()
       _ -> die ("Proxy# strict audit rejected " ++ stage)
-    pure (report : paths ++ diagnostics ++ commandArtifacts exported ++ commandArtifacts audited)
+    pure (report : paths ++ commandArtifacts exported ++ commandArtifacts audited)
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source, driver, predicate, "thc.cabal",
