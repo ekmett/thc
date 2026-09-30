@@ -27,7 +27,7 @@ class SimdWord16VectorTest {
     private final File directory = new File(root, "build/simd-word16x8");
     private Map<String, Object> module() throws Exception { return module("pre"); }
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdWord16X8.json").toPath()));
+        return thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdWord16X8.cbd").toPath());
     }
     private Map<String, Object> metadata() {
         return Map.of("kind", "vector", "evaluated", true, "primReps", List.of("VecRep 8 Word16ElemRep"),
@@ -271,18 +271,18 @@ class SimdWord16VectorTest {
     @Test void bothLoadersRetainVectorBoundaryAndRejectForgedShapes() throws Exception {
         withLanguage(language -> {
             for (var backend : List.of("ast", "bytecode")) {
-                assertNotNull(program(language, backend, module(), "vectorArgument"));
+                assertNotNull(program(language, backend, module(), "main:SimdWord16X8.vectorArgument"));
                 for (boolean diagnostic : List.of(false, true)) {
                     var modified = (Map<String, Object>) rewrite(module(), original -> {
                         var result = new LinkedHashMap<>(original); result.remove("vector"); return result;
                     });
-                    assertThrows(RuntimeFault.class, () -> program(language, backend, modified, "plusCase", diagnostic));
+                    assertThrows(RuntimeFault.class, () -> program(language, backend, modified, "main:SimdWord16X8.plusCase", diagnostic));
                     var wrong = (Map<String, Object>) rewrite(module(), original -> with(original, "primReps", List.of("VecRep 4 Int32ElemRep"),
                         "vector", Map.of("lanes", 4L, "element", "Int32ElemRep")));
-                    assertThrows(RuntimeFault.class, () -> program(language, backend, wrong, "plusCase", diagnostic));
+                    assertThrows(RuntimeFault.class, () -> program(language, backend, wrong, "main:SimdWord16X8.plusCase", diagnostic));
                     var signed = (Map<String, Object>) rewrite(module(), original -> with(original, "primReps", List.of("VecRep 8 Int16ElemRep"),
                         "vector", Map.of("lanes", 8L, "element", "Int16ElemRep")));
-                    assertThrows(RuntimeFault.class, () -> program(language, backend, signed, "plusCase", diagnostic));
+                    assertThrows(RuntimeFault.class, () -> program(language, backend, signed, "main:SimdWord16X8.plusCase", diagnostic));
                 }
             }
         });
@@ -382,8 +382,8 @@ class SimdWord16VectorTest {
                 assertTrue(!cases.isEmpty());
                 boolean correctArity = true; for (var input : cases) if (input.size() != arity) { correctArity = false; break; }
                 assertTrue(correctArity);
-                var p = program(language, backend, module(stage), name);
-                var host = p.hostEntryTarget(arity); var closure = p.entryValue(name); var target = p.entryTarget(name);
+                var entryId = "main:SimdWord16X8." + name; var p = program(language, backend, module(stage), entryId);
+                var host = p.hostEntryTarget(arity); var closure = p.entryValue(entryId); var target = p.entryTarget(entryId);
                 long callCount = counts.get(name).longValue();
                 assertEquals(List.of("scalarHelperCase", "tupleHelperCase").contains(name) ? 2L : 1L, callCount);
                 assertEquals(callCount, ((Map<String, Number>) provenance.get("checkedGuestCallsByStage")).get(stage + "/" + name).longValue());
