@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.ScalarValueTestSupport.*;
 
 class TagToEnumTest {
+    private static String id(String name) { return "main:TagToEnumAudit." + name; }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private Context context() { return context(true); }
     private Context context(boolean inlining) {
@@ -27,7 +28,7 @@ class TagToEnumTest {
     private Map<String, Object> module(String stage) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
         for (var name : list("TagToEnumAudit", "TagToEnumExternal"))
-            modules.add(object(Json.parse(Files.readString(root.resolve("build/tag-to-enum/" + stage + "-core/" + name + ".json")))));
+            modules.add(CoreCbdFixtures.read(root.resolve("build/tag-to-enum/" + stage + "-core/" + name + ".cbd")));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -67,8 +68,8 @@ class TagToEnumTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var name = entry.getKey(); var selected = entry.getValue();
-                    var program = program(language, with(CoreModules.reachable(module(stage), name), "instrument", true), backend);
-                    var function = context.asValue(new EntryValue(program, name, 1)); var host = program.hostEntryTarget(1); var original = program.entryTarget(name);
+                    var program = program(language, with(CoreModules.reachable(module(stage), id(name)), "instrument", true), backend);
+                    var function = context.asValue(new EntryValue(program, id(name), 1)); var host = program.hostEntryTarget(1); var original = program.entryTarget(id(name));
                     var label = stage + "/" + backend + "/" + name + "/inline=" + inlining;
                     for (var row : selected) check(function, row, label);
                     var targets = activeTargets(host); assertTrue(targets.size() > 1, label + " actual adopted guest target");
@@ -98,7 +99,7 @@ class TagToEnumTest {
         var applications = applications(module); assertEquals(1, applications.size()); return applications.getFirst();
     }
     private DataValue call(ExecutableProgram program, RootCallTarget host, String name, long tag) {
-        return (DataValue) Calls.target(host, new Object[]{program.entryValue(name), new Object[]{tag}});
+        return (DataValue) Calls.target(host, new Object[]{program.entryValue(id(name)), new Object[]{tag}});
     }
     @Test void directEnumRootsUseTypedNullaryValuesAndEveryCompiledCallEntersExactlyOnce() throws Exception {
         verifyEvidence();
@@ -107,9 +108,9 @@ class TagToEnumTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var name : list("chooseBool", "chooseOrdering", "chooseColour", "chooseExternal")) {
-                    var linked = CoreModules.reachable(module(stage), name);
+                    var linked = CoreModules.reachable(module(stage), id(name));
                     var ids = expression(object(object(application(linked).get(6)).get("enumFamily")).get("constructors"));
-                    var program = program(language, with(linked, "instrument", true), backend); var host = program.hostEntryTarget(1); var target = program.entryTarget(name);
+                    var program = program(language, with(linked, "instrument", true), backend); var host = program.hostEntryTarget(1); var target = program.entryTarget(id(name));
                     var values = new ArrayList<DataValue>();
                     for (int tag = 0; tag < ids.size(); tag++) {
                         var value = call(program, host, name, tag); assertEquals(ids.get(tag), value.getLayout().getId()); assertEquals(0, value.getLayout().getArity()); values.add(value);
@@ -133,13 +134,13 @@ class TagToEnumTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var linked = CoreModules.reachable(module(stage), "wrappedColourCase");
+                var linked = CoreModules.reachable(module(stage), id("wrappedColourCase"));
                 var metadata = object(application(linked).get(6));
                 assertEquals("object", object(metadata.get("rep")).get("kind"));
                 assertEquals(list("BoxedRep (Just Lifted)"), object(metadata.get("rep")).get("primReps"));
                 assertTrue(((String) object(metadata.get("enumFamily")).get("typeConstructor")).endsWith(":TagToEnumAudit.Colour"));
                 var program = program(language, linked, backend);
-                var function = context.asValue(new EntryValue(program, "wrappedColourCase", 1));
+                var function = context.asValue(new EntryValue(program, id("wrappedColourCase"), 1));
                 assertEquals(17L, function.execute(0L).asLong());
                 assertEquals(-31L, function.execute(1L).asLong());
                 assertEquals(83L, function.execute(2L).asLong());
@@ -153,7 +154,7 @@ class TagToEnumTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var linked = CoreModules.reachable(module("pre"), "chooseBool"); var app = application(linked); var metadata = object(app.get(6));
+                    var linked = CoreModules.reachable(module("pre"), id("chooseBool")); var app = application(linked); var metadata = object(app.get(6));
                     var family = object(metadata.get("enumFamily")); var ids = expression(family.get("constructors")); var cons = objects(linked.get("constructors"));
                     var matches = cons.stream().filter(c -> Objects.equals(c.get("id"), ids.getFirst())).toList(); assertEquals(1, matches.size()); var con = matches.getFirst();
                     switch (variant) {
@@ -193,11 +194,11 @@ class TagToEnumTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var proof : list(null, map("kind", "unknown", "primReps", null, "evaluated", false), map("kind", "unknown", "primReps", list("IntRep"), "evaluated", false))) {
-                    var linked = CoreModules.reachable(module("pre"), "chooseBool"); var app = application(linked); var args = expression(app.get(2)); assertEquals(1, args.size());
+                    var linked = CoreModules.reachable(module("pre"), id("chooseBool")); var app = application(linked); var args = expression(app.get(2)); assertEquals(1, args.size());
                     var old = expression(args.getFirst()); var replacement = new ArrayList<>(old.subList(0, 2)); if (proof != null) replacement.add(map("rep", proof)); app.set(2, list(replacement));
                     var program = program(language, linked, backend);
-                    var value = (DataValue) Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("chooseBool"), new Object[]{1L}});
-                    assertEquals("True", value.getLayout().getName());
+                    var value = (DataValue) Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(id("chooseBool")), new Object[]{1L}});
+                    assertEquals("ghc-internal:GHC.Internal.Types.True", value.getLayout().getId());
                 }
             } finally { context.leave(); }
         }
@@ -207,9 +208,9 @@ class TagToEnumTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var module = object(Json.parse(Files.readString(root.resolve("build/tag-to-enum/" + stage + "-core/TagToEnumFrontier.json"))));
+                var module = CoreCbdFixtures.read(root.resolve("build/tag-to-enum/" + stage + "-core/TagToEnumFrontier.cbd"));
                 for (var entry : list("parameterized", "family")) {
-                    var failure = assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, entry), backend));
+                    var failure = assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, "main:TagToEnumFrontier." + entry), backend));
                     assertTrue(Objects.requireNonNull(failure.getMessage()).contains("tagToEnum#"));
                 }
             } finally { context.leave(); }

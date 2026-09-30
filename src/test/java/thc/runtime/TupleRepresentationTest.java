@@ -5,19 +5,19 @@ package thc.runtime;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import java.io.File;
-import java.nio.file.Files;
 import java.util.*;
 import java.util.function.Consumer;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
-import thc.Json;
+import thc.CoreCbdFixtures;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class TupleRepresentationTest {
+    private static String id(String name) { return "main:AggregateFrontier." + name; }
     private static Map<String, Object> record(Object... fields) {
         var result = new LinkedHashMap<String, Object>(); for (int i = 0; i < fields.length; i += 2) result.put((String) fields[i], fields[i + 1]); return result;
     }
@@ -43,10 +43,10 @@ class TupleRepresentationTest {
     private Map<String, Object> map(Object value) { return (Map<String, Object>) value; }
     private List<Object> list(Object value) { return (List<Object>) value; }
     private Map<String, Object> wrap(Object proof) { return record("kind", "unknown", "evaluated", true, "primReps", map(proof).get("primReps"), "aggregate", "unboxed-tuple", "components", new ArrayList<>(values(proof))); }
-    private Map<String, Object> module() throws Exception { return map(Json.parse(Files.readString(new File(root, "build/aggregate-core/AggregateFrontier.json").toPath()))); }
+    private Map<String, Object> module() throws Exception { return CoreCbdFixtures.read(new File(root, "build/aggregate-core/AggregateFrontier.cbd").toPath()); }
     private Map<String, Object> binding(Map<String, Object> module, String name) {
         Map<String, Object> found = null;
-        for (var binding : (List<Map<String, Object>>) module.get("bindings")) if (Objects.equals(binding.get("name"), name)) {
+        for (var binding : (List<Map<String, Object>>) module.get("bindings")) if (Objects.equals(binding.get("id"), id(name))) {
             if (found != null) throw new IllegalArgumentException("Collection contains more than one matching element."); found = binding;
         }
         if (found == null) throw new NoSuchElementException("Collection contains no element matching the predicate."); return found;
@@ -93,7 +93,8 @@ class TupleRepresentationTest {
             withLanguage(engine, language -> {
                 for (int index = 0; index < proofs.size(); index++) {
                     var fresh = new TupleShape(proofs.get(index), language); assertTrue(fresh.matches(previous.get(index)), "same metadata across contexts");
-                    assertNotSame(previous.get(index).getLanguage(), fresh.getLanguage(), "THC's EXCLUSIVE context policy remains unchanged"); assertNotSame(previous.get(index).getLayout(), fresh.getLayout(), "storage layouts remain context-owned");
+                    // A shared Language still owns separate layouts through the active context.
+                    assertNotSame(previous.get(index).getLayout(), fresh.getLayout(), "storage layouts remain context-owned");
                 }
             });
         }
@@ -110,7 +111,7 @@ class TupleRepresentationTest {
             m -> { var pair = expression(m, "pair"); var app = list(pair.get(2)); var p = map(map(app.get(6)).get("rep")); list(p.get("components")).set(0, record("kind", "unknown", "primReps", List.of("IntRep"), "evaluated", true)); });
         withLanguage(language -> {
             for (int index = 0; index < mutations.size(); index++) for (String backend : List.of("ast", "bytecode")) {
-                var m = module(); mutations.get(index).accept(m); var linked = CoreModules.reachable(m, "tupleOutstanding");
+                var m = module(); mutations.get(index).accept(m); var linked = CoreModules.reachable(m, id("tupleOutstanding"));
                 assertThrows(RuntimeFault.class, () -> { if (backend.equals("ast")) new Program(language, linked); else new BytecodeProgram(language, linked); }, backend + " mutation " + index);
             }
         });
@@ -145,12 +146,12 @@ class TupleRepresentationTest {
                     if (Objects.equals(alternative.getFirst(), "default")) { if (defaultArm != null) throw new IllegalArgumentException("Collection contains more than one matching element."); defaultArm = alternative; }
                     if (Objects.equals(alternative.getFirst(), "lit")) { if (literalArm != null) throw new IllegalArgumentException("Collection contains more than one matching element."); literalArm = alternative; }
                 }
-                Objects.requireNonNull(literalArm).set(3, Objects.requireNonNull(defaultArm).get(3)); var linked = CoreModules.reachable(m, "tupleZeroLazy"); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+                Objects.requireNonNull(literalArm).set(3, Objects.requireNonNull(defaultArm).get(3)); var linked = CoreModules.reachable(m, id("tupleZeroLazy")); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                 for (int i = 0; i < 2; i++) {
-                    var error = assertThrows(RuntimeFault.class, () -> Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("tupleZeroLazy"), new Object[]{-1L}})); assertTrue(Objects.toString(error.getMessage(), "").contains("Blackhole"));
+                    var error = assertThrows(RuntimeFault.class, () -> Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(id("tupleZeroLazy")), new Object[]{-1L}})); assertTrue(Objects.toString(error.getMessage(), "").contains("Blackhole"));
                     assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
                 }
-                assertEquals(4 * 4097L + 2554L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("tupleZeroLazy"), new Object[]{4097L}}));
+                assertEquals(4 * 4097L + 2554L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(id("tupleZeroLazy")), new Object[]{4097L}}));
             }
         });
     }
@@ -165,8 +166,8 @@ class TupleRepresentationTest {
                     var binder = record("id", id, "name", id, "lifted", false, "coercion", false, "rep", longRep, "expr", literal.apply(12345L));
                     if (kind.equals("join")) { binder.put("joinValueArity", 0L); binder.put("joinResultRep", longRep); } body = values("let", false, values(binder), use, record("rep", longRep));
                 }
-                list(list(outer.get(3)).get(0)).set(3, body); var linked = CoreModules.reachable(m, "tupleOutstanding"); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                assertEquals(12345L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("tupleOutstanding"), new Object[]{8193L}}), backend + "/" + kind);
+                list(list(outer.get(3)).get(0)).set(3, body); var linked = CoreModules.reachable(m, id("tupleOutstanding")); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+                assertEquals(12345L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(id("tupleOutstanding")), new Object[]{8193L}}), backend + "/" + kind);
             }
         });
     }

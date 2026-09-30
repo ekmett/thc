@@ -21,7 +21,7 @@ class AggregateLayoutTest {
         "abstractFixedTupleIdentity", "unboxed-tuple", "abstractEmptyIdentity", "unboxed-tuple",
         "abstractSumIdentity", "unboxed-sum", "familyTupleIdentity", "unboxed-tuple",
         "abstractSumRep", "unboxed-sum", "abstractComponentIdentity", "unboxed-tuple");
-    private Object module(String stage) throws Exception { return CoreCbdFixtures.pairedDiagnostic(root.resolve("build/aggregate-layout/" + stage + "-core/AggregateLayoutAudit.cbd")); }
+    private Object module(String stage) throws Exception { return CoreCbdFixtures.read(root.resolve("build/aggregate-layout/" + stage + "-core/AggregateLayoutAudit.cbd")); }
     private String request(String stage, String entry, String backend) {
         return CoreModules.request(list(root.resolve("build/aggregate-layout/" + stage + "-core/AggregateLayoutAudit.cbd").toString()), "main:AggregateLayoutAudit." + entry, true, false, backend);
     }
@@ -30,7 +30,7 @@ class AggregateLayoutTest {
             var module = (Map<?, ?>) module(stage);
             for (String name : list("levityPolymorphic", "boxedTupleThrough", "boxedThrough")) {
                 var binding = ((List<?>) module.get("bindings")).stream().map(value -> (Map<?, ?>) value)
-                    .filter(value -> name.equals(value.get("name"))).findFirst().orElseThrow();
+                    .filter(value -> ("main:AggregateLayoutAudit." + name).equals(value.get("id"))).findFirst().orElseThrow();
                 var expression = (List<?>) binding.get("expr");
                 var proof = (Map<?, ?>) ((Map<?, ?>) expression.get(3)).get("resultRep");
                 assertEquals(name.equals("boxedThrough") ? list("BoxedRep Nothing") : list("BoxedRep Nothing", "IntRep"), proof.get("primReps"));

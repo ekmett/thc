@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import subprocess
@@ -46,9 +47,9 @@ def walk(value):
 
 
 def inventory(stage):
-    module = json.loads((OUT / f'{stage}-core/StateTupleAudit.json').read_text())
+    module = inspect_cbd((OUT / f'{stage}-core/StateTupleAudit.cbd').read_bytes())
     check(module['ghc'] == '9.14.1' and module['boundary'] == STAGES[stage], 'Wrong Core boundary')
-    bindings = {b['name']: b for b in module['bindings']}
+    bindings = {b['id'].removeprefix('main:StateTupleAudit.'): b for b in module['bindings']}
     tuple_ids = {c['id'] for c in module['constructors'] if c['kind'] == 'unboxed-tuple'}
     layouts = {name: bindings[name]['expr'][3]['resultRep'] for name in ('pair', 'zero', 'lazyPair', 'effectPair', 'byteShape')}
     void = dict(kind='void', primReps=[], evaluated=True)
@@ -96,13 +97,13 @@ def main():
         commands.append(dict(argv=[str(OUT / 'native/state-tuple')], stdout=str(OUT / 'oracle.tsv')))
         (OUT / 'oracle.tsv').write_text(subprocess.check_output([str(OUT / 'native/state-tuple')], text=True))
         for stage in STAGES:
-            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+            run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
             run([sys.executable, 'bin/audit-core.py', str(OUT / f'{stage}-core/StateTupleAudit.cbd'),
                  *[part for entry in ENTRIES for part in ('--entry', f'main:StateTupleAudit.{entry}')], '--output', str(OUT / f'{stage}-audit.json')])
         sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh', ROOT / 'bin/export-core.sh',
                    ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')), *audit_inputs()]
-        artifacts = [p for folder in ('native', 'pre-core', 'post-core') for p in sorted((OUT / folder).rglob('*')) if p.is_file()]
+        artifacts = [p for folder in ('native', 'pre-core', 'post-core') for p in sorted((OUT / folder).rglob('*')) if p.is_file() and p.suffix != '.json']
         artifacts += [OUT / 'oracle.tsv', *[OUT / f'{stage}-audit.json' for stage in STAGES]]
         provenance.write_text(json.dumps(dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(),
             commands=commands, ghcInfo=subprocess.check_output([ghc, '--info'], text=True),

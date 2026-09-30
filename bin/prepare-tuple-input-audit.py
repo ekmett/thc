@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import shutil
@@ -79,10 +80,10 @@ def tuple_rep(rep):
 
 
 def inventory(stage):
-    module = json.loads((OUT / f'{stage}-core/TupleInputAudit.json').read_text())
+    module = inspect_cbd((OUT / f'{stage}-core/TupleInputAudit.cbd').read_bytes())
     check(module['ghc'] == '9.14.1' and module['boundary'] == STAGES[stage], 'Wrong native export boundary')
-    bindings = {b['name']: b for b in module['bindings']}
-    global_names = {b['id']: b['name'] for b in module['bindings']}
+    bindings = {b['id'].removeprefix('main:TupleInputAudit.'): b for b in module['bindings']}
+    global_names = {b['id']: b['id'].removeprefix('main:TupleInputAudit.') for b in module['bindings']}
     retained_calls = {}
     for name, expected_calls in CALLS.items():
         expr = bindings[name]['expr']
@@ -190,7 +191,7 @@ def prepare():
         (OUT / file).write_text(output(argv) + '\n')
     entries = list(dict.fromkeys(name for name, _ in expected_rows())) + ['pairInputs']
     for stage in STAGES:
-        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+        run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
             dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         run(['python3', 'bin/audit-core.py', str(OUT / f'{stage}-core/TupleInputAudit.cbd'),
              *[part for entry in entries for part in ['--entry', f'main:TupleInputAudit.{entry}']], '--output', str(OUT / f'{stage}-audit.json')])
@@ -199,7 +200,7 @@ def prepare():
                ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')),
                ROOT / 'bin/audit-core.py', ROOT / 'bin/core-capabilities.json', *sorted((ROOT / 'bin').glob('core_*.py')),
                ROOT / 'src/main/resources/thc/scalar-primop-signatures.json']
-    artifacts = [p for directory in ('native', 'pre-core', 'post-core') for p in sorted((OUT / directory).rglob('*')) if p.is_file()]
+    artifacts = [p for directory in ('native', 'pre-core', 'post-core') for p in sorted((OUT / directory).rglob('*')) if p.is_file() and p.suffix != '.json']
     artifacts += [OUT / name for name in ['oracle.tsv', 'oracle-pairs.tsv', 'pre-audit.json', 'post-audit.json']]
     return dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(), commands=commands,
                 sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts],

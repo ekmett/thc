@@ -9,7 +9,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
-import thc.Json;
+import thc.CoreCbdFixtures;
 import thc.Language;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,9 +25,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class TupleJoinResultTest {
+    private static String id(String name) { return "main:TupleJoinAudit." + name; }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private Map<String, Object> module(String stage) throws Exception {
-        return (Map<String, Object>) Json.parse(Files.readString(root.resolve("build/tuple-join/" + stage + "-core/TupleJoinAudit.json")));
+        return CoreCbdFixtures.read(root.resolve("build/tuple-join/" + stage + "-core/TupleJoinAudit.cbd"));
     }
     private static Context context(boolean inlining) {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
@@ -49,7 +50,7 @@ class TupleJoinResultTest {
     private static List<Map<String, Object>> bindings(Map<String, Object> module) { return (List<Map<String, Object>>) module.get("bindings"); }
     private static Map<String, Object> named(List<Map<String, Object>> bindings, String name) {
         Map<String, Object> found = null;
-        for (var binding : bindings) if (name.equals(binding.get("name"))) {
+        for (var binding : bindings) if (id(name).equals(binding.get("id"))) {
             if (found != null) throw new IllegalArgumentException("Collection contains more than one matching element.");
             found = binding;
         }
@@ -64,7 +65,7 @@ class TupleJoinResultTest {
     @Test void genuineTupleJoinsRunWithInlining() throws Exception { checkNative(true); }
     private static void checkRows(List<String[]> rows, ExecutableProgram program, Language language, String stage, String backend) {
         for (var row : rows) {
-            var result = Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(row[0]), new Object[]{Long.parseLong(row[1])}});
+            var result = Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(id(row[0])), new Object[]{Long.parseLong(row[1])}});
             assertEquals(Long.parseLong(row[2]), result, stage + "/" + backend + "/" + row[0] + "/" + row[1]); released(language);
         }
     }
@@ -79,7 +80,7 @@ class TupleJoinResultTest {
                 var names = new LinkedHashSet<String>();
                 for (var row : rows) names.add(row[0]);
                 var reached = new LinkedHashSet<Object>();
-                for (var name : names) for (var binding : bindings(CoreModules.reachable(module, name))) reached.add(binding.get("id"));
+                for (var name : names) for (var binding : bindings(CoreModules.reachable(module, id(name)))) reached.add(binding.get("id"));
                 var bindings = new ArrayList<Map<String, Object>>();
                 for (var binding : bindings(module)) if (reached.contains(binding.get("id"))) bindings.add(binding);
                 var program = program(language, plus(module, "bindings", bindings), backend);
@@ -144,7 +145,7 @@ class TupleJoinResultTest {
                 for (int index = 0; index < mutations.size(); index++) {
                     var module = module("pre"); var forward = named(bindings(module), "forward");
                     mutations.get(index).accept(firstJoin(forward));
-                    assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, "forwardCase"), backend), backend + " mutation " + index);
+                    assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, id("forwardCase")), backend), backend + " mutation " + index);
                 }
             } finally { context.leave(); }
         }
@@ -170,8 +171,8 @@ class TupleJoinResultTest {
                     }
                     rhs.set(2, List.of("case", scrutinee, tupleId, List.of(Arrays.asList("default", null, List.of(), body, Map.of("binders", List.of()))),
                         Map.of("rep", result, "binder", Map.of("id", tupleId, "lifted", false, "rep", plus(result, "evaluated", true)))));
-                    var linked = CoreModules.reachable(module, "recursiveCase"); var program = program(language, linked, backend);
-                    assertEquals(capture ? 4168L : 4123L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("recursiveCase"), new Object[]{4097L}}));
+                    var linked = CoreModules.reachable(module, id("recursiveCase")); var program = program(language, linked, backend);
+                    assertEquals(capture ? 4168L : 4123L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(id("recursiveCase")), new Object[]{4097L}}));
                     released(language);
                 }
             } finally { context.leave(); }

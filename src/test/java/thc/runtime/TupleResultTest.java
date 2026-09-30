@@ -7,7 +7,7 @@ import com.oracle.truffle.api.TruffleLanguage;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
-import thc.Json;
+import thc.CoreCbdFixtures;
 import thc.Language;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,7 +48,7 @@ class TupleResultTest {
     private static List<Map<String, Object>> bindings(Map<String, Object> module) { return (List<Map<String, Object>>) module.get("bindings"); }
     private static String entryId(List<Map<String, Object>> bindings, String name) {
         Map<String, Object> found = null;
-        for (var binding : bindings) if (name.equals(binding.get("name"))) {
+        for (var binding : bindings) if (("main:AggregateFrontier." + name).equals(binding.get("id")) || ("main:TupleReturnAudit." + name).equals(binding.get("id"))) {
             if (found != null) throw new IllegalArgumentException("Collection contains more than one matching element.");
             found = binding;
         }
@@ -60,7 +60,7 @@ class TupleResultTest {
         for (var row : rows) {
             if (entry != null && !row[0].equals(entry)) continue;
             var name = entry == null ? row[0] : entry;
-            var result = Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(name), new Object[]{Long.parseLong(row[1])}});
+            var result = Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue((entry == null ? "main:TupleReturnAudit." : "main:AggregateFrontier.") + name), new Object[]{Long.parseLong(row[1])}});
             assertEquals(Long.parseLong(row[2]), result, stage + "/" + backend + "/" + name + "/" + row[1]);
             released(language);
         }
@@ -72,16 +72,16 @@ class TupleResultTest {
     private void checkNative(boolean inlining) throws Exception {
         var rows = rows("build/aggregate-native/oracle.tsv");
         for (var stage : List.of("aggregate-core", "aggregate-post-core")) {
-            var module = (Map<String, Object>) Json.parse(Files.readString(root.resolve("build/" + stage + "/AggregateFrontier.json")));
+            var module = CoreCbdFixtures.read(root.resolve("build/" + stage + "/AggregateFrontier.cbd"));
             for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (var entry : List.of("tupleOutstanding", "tupleZeroLazy", "coldTuple")) {
-                        var linked = CoreModules.reachable(module, entry);
+                        var linked = CoreModules.reachable(module, "main:AggregateFrontier." + entry);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                         checkRows(rows, program, language, stage, backend, entry);
-                        if (entry.equals("coldTuple")) assertEquals(540820L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue(entry), new Object[]{31337L}}));
+                        if (entry.equals("coldTuple")) assertEquals(540820L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:AggregateFrontier." + entry), new Object[]{31337L}}));
                         var functions = new ArrayList<Map<String, Object>>();
                         for (var binding : bindings(linked)) if (((List<?>) binding.get("expr")).get(0).equals("lam")) functions.add(binding);
                         for (var function : functions) compile(program.entryTarget((String) function.get("id")), stage + "/" + backend + "/" + entry + "/" + function.get("id"));
@@ -100,7 +100,7 @@ class TupleResultTest {
     private void checkReturnAudit(boolean inlining) throws Exception {
         var rows = rows("build/tuple-return/oracle.tsv");
         for (var stage : List.of("pre-core", "post-core")) {
-            var module = (Map<String, Object>) Json.parse(Files.readString(root.resolve("build/tuple-return/" + stage + "/TupleReturnAudit.json")));
+            var module = CoreCbdFixtures.read(root.resolve("build/tuple-return/" + stage + "/TupleReturnAudit.cbd"));
             for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -108,7 +108,7 @@ class TupleResultTest {
                     var names = new LinkedHashSet<String>();
                     for (var row : rows) names.add(row[0]);
                     var reached = new LinkedHashSet<Object>();
-                    for (var name : names) for (var binding : bindings(CoreModules.reachable(module, name))) reached.add(binding.get("id"));
+                    for (var name : names) for (var binding : bindings(CoreModules.reachable(module, "main:TupleReturnAudit." + name))) reached.add(binding.get("id"));
                     var bindings = new ArrayList<Map<String, Object>>();
                     for (var binding : bindings(module)) if (reached.contains(binding.get("id"))) bindings.add(binding);
                     var linked = new LinkedHashMap<>(module); linked.put("bindings", bindings);

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import thc.CoreModules;
 import thc.CoreCbdFixtures;
 import java.nio.file.Path;
-import thc.Json;
 import thc.Language;
 import java.io.File;
 import java.nio.file.Files;
@@ -88,11 +87,11 @@ class SumResultTest {
                     var id = entry(name, extended, frontier);
                     var linked = CoreModules.reachable(source, id); var bindings = (List<Map<String, Object>>) linked.get("bindings");
                     List<String> retainedPath = switch (name) {
-                        case "zeroCase" -> new ArrayCoreEvidence(CoreCbdFixtures.pairedDiagnostic(artifact), name).loweredStateFunctionPath("zeroSum", name, List.of(2));
-                        case "mixedCase" -> new ArrayCoreEvidence(CoreCbdFixtures.pairedDiagnostic(artifact), name).loweredStateFunctionPath("mixed", name, List.of(2));
+                        case "zeroCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("zeroSum", extended, frontier), id, List.of(2));
+                        case "mixedCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("mixed", extended, frontier), id, List.of(2));
                         // Only the nonnegative source arm contains runRW, but its
                         // exact State# lambda is in-frame on both lowered paths.
-                        case "boxedKindsCase" -> new ArrayCoreEvidence(CoreCbdFixtures.pairedDiagnostic(artifact), name).loweredStateFunctionPath("boxedKindsSum", "boxedKindsSum", List.of(2, 3, 0, 3));
+                        case "boxedKindsCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("boxedKindsSum", extended, frontier), entry("boxedKindsSum", extended, frontier), List.of(2, 3, 0, 3));
                         default -> null;
                     };
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);

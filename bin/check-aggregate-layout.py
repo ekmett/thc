@@ -15,7 +15,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
+from core_package_manifest import inspect_cbd
 import shutil
 import subprocess
 from sum_layout_model import alternative_slots
@@ -113,11 +113,11 @@ SUPPORTED = {'nestedIdentity', 'lazyIdentity', 'alternativesIdentity',
 
 def inventory(stage):
     path = OUT / f'{stage}-core/AggregateLayoutAudit.cbd'
-    module = paired_diagnostic_cbd(path)
-    executable = inspect_cbd(path.read_bytes())
+    module = inspect_cbd(path.read_bytes())
+    executable = module
     check(module['schema'] == 1 and module['ghc'] == '9.14.1', 'Pinned schema/compiler mismatch')
     check(module['boundary'] == STAGES[stage], f'{stage}: wrong real export boundary')
-    bindings = {b['name']: b for b in module['bindings']}
+    bindings = {b['id'].removeprefix('main:AggregateLayoutAudit.'): b for b in module['bindings']}
     check(bindings['boxedThrough']['expr'][3]['resultRep'] == leaf('object', ['BoxedRep Nothing'], False),
           f'{stage}: polymorphic tail result lost its known pointer representation')
     records = 0
@@ -181,9 +181,11 @@ def inventory(stage):
               f'{stage}/{name}: enclosing WHNF must not evaluate the bottom payload')
         check(audit_core.Audit([(str(path), executable)], CAP).run(['main:AggregateLayoutAudit.' + name + 'Use'])['accepted'],
               f'{stage}/{name}: lazy payload observer must remain accepted')
-    constructors = {c['name']: c for c in module['constructors']}
+    constructors = {c['id']: c for c in module['constructors']}
     for name in ('UnliftedProduct', '(,)'):
-        con = constructors[name]
+        matches = [c for key, c in constructors.items() if key == 'main:AggregateLayoutAudit.' + name or key.endswith(':GHC.Internal.Tuple.' + name)]
+        check(len(matches) == 1, f'{stage}/{name}: ambiguous or missing qualified constructor')
+        con = matches[0]
         check(con['kind'] == 'boxed' and con['fieldReps'] == [[LIFTED], [LIFTED]],
               f'{stage}/{name}: boxed product lost its lazy reference fields')
         check(con['strictFields'] == [False, False] and
@@ -227,7 +229,7 @@ def prepare():
          '-odir', str(native), '-hidir', str(native), str(FIXTURE)])
     for stage in STAGES:
         flags = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
-        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *flags, str(FIXTURE)], dict(
+        run(['bin/export-core.sh', *flags, str(FIXTURE)], dict(
             THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'),
             THC_SOURCE_NOTES='true'))
     sources = [FIXTURE, Path(__file__).resolve(), ROOT / 'bin/audit-core.py',
@@ -236,7 +238,7 @@ def prepare():
                *sorted((ROOT / 'src/compiler/THC').glob('*.hs')),
                ROOT / 'thc.cabal', ROOT / 'cabal.project']
     artifacts = [p for directory in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
-                 for p in sorted((OUT / directory).rglob('*')) if p.is_file()]
+                 for p in sorted((OUT / directory).rglob('*')) if p.is_file() and p.suffix != '.json']
     plugin_manifest = ROOT / 'build/compiler/plugin.json'
     plugin = json.loads(plugin_manifest.read_text())
     check(plugin['schema'] == 1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')

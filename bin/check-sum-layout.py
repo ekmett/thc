@@ -9,7 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
+from core_package_manifest import inspect_cbd
 import shutil
 import subprocess
 from sum_layout_model import alternative_slots
@@ -106,10 +106,10 @@ def validate_layout(record):
 
 def inventory(stage):
     path = OUT / f'{stage}-core/SumLayoutAudit.cbd'
-    module = paired_diagnostic_cbd(path)
-    executable = inspect_cbd(path.read_bytes())
+    module = inspect_cbd(path.read_bytes())
+    executable = module
     check(module['ghc'] == '9.14.1' and module['schema'] == 1 and module['boundary'] == STAGES[stage], 'Wrong export provenance')
-    bindings = {b['name']: b for b in module['bindings']}
+    bindings = {b['id'].removeprefix('main:SumLayoutAudit.'): b for b in module['bindings']}
     for name, expected in EXPECTED.items():
         expression = bindings[name]['expr']
         check(expression[0] == 'lam' and expression[3]['resultRep'] == expected, stage+'/'+name+': result layout changed')
@@ -167,7 +167,7 @@ def prepare():
     run(['bin/build-compiler.sh'])
     for stage in STAGES:
         flags = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
-        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *flags, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
+        run(['bin/export-core.sh', *flags, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
     native = OUT/'native'; native.mkdir(exist_ok=True)
     binary = native/'sum-layout-oracle'
     run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-it/fixtures/compiler',
@@ -182,7 +182,7 @@ def prepare():
                *[ROOT / 'bin' / n for n in ('build-compiler.sh', 'export-core.sh', 'toolchain.sh')],
                ROOT/'thc.cabal', ROOT/'cabal.project']
     artifacts = [OUT/'oracle.tsv', *[p for directory in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
-                 for p in sorted((OUT/directory).rglob('*')) if p.is_file()]]
+                 for p in sorted((OUT/directory).rglob('*')) if p.is_file() and p.suffix != '.json']]
     plugin_manifest = ROOT/'build/compiler/plugin.json'
     plugin = json.loads(plugin_manifest.read_text())
     check(plugin['schema'] == 1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')

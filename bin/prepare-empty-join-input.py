@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import subprocess
@@ -53,9 +54,9 @@ def verify():
     cap = json.loads((ROOT/'bin/core-capabilities.json').read_text())
     stages = []
     for stage, boundary in [('pre', 'optimized-Core-before-Tidy'), ('post', 'optimized-Core-after-Tidy-before-CorePrep')]:
-        module = json.loads((OUT/f'{stage}-core/EmptyJoinInputAudit.json').read_text())
+        module = inspect_cbd((OUT/f'{stage}-core/EmptyJoinInputAudit.cbd').read_bytes())
         assert module['ghc'] == '9.14.1' and module['boundary'] == boundary
-        bindings = {b['name']: b for b in module['bindings']}
+        bindings = {b['id'].removeprefix('main:EmptyJoinInputAudit.'): b for b in module['bindings']}
         joins = {}
         for name in PRODUCERS:
             definitions = [v for v in walk(bindings[name]['expr']) if isinstance(v, dict) and 'joinValueArity' in v]
@@ -85,7 +86,7 @@ def verify():
         assert run_rw[0][1][1][0]['rep']['kind'] == 'void', 'Expected one retained State lambda guest entry'
         lazy = [p['rep'] for j in joins['tupleResult'] for p in j['parameters'] if p['rep']['kind'] == 'data']
         assert lazy and all(p['evaluated'] is False for p in lazy), 'Lifted neighbor must remain lazy'
-        report = auditor.Audit([(stage, module)], cap).run(sorted({name for name, _ in expected}))
+        report = auditor.Audit([(stage, module)], cap).run(sorted({'main:EmptyJoinInputAudit.' + name for name, _ in expected}))
         assert report['accepted'], report['issues']
         (OUT/f'{stage}-audit.json').write_text(json.dumps(report, indent=2)+'\n')
         stages.append(dict(stage=stage, joins=joins, reachableBindings=report['summary']['reachableBindings']))
@@ -110,7 +111,7 @@ def main():
         commands = [['bin/build-compiler.sh']]
         subprocess.run(commands[0], cwd=ROOT, check=True)
         for stage in ('pre', 'post'):
-            command = ['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics'] + (['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []) + [str(SOURCE.relative_to(ROOT))]
+            command = ['bin/export-core.sh'] + (['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []) + [str(SOURCE.relative_to(ROOT))]
             env = dict(os.environ, THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'))
             subprocess.run(command, cwd=ROOT, env=env, check=True); commands.append(command)
         native = OUT/'native'; native.mkdir(exist_ok=True)
@@ -123,7 +124,7 @@ def main():
                   *sorted((ROOT/'bin').glob('core_*.py')), ROOT/'bin/core-capabilities.json',
                   ROOT/'src/main/resources/thc/scalar-primop-signatures.json']
         verify()
-        artifacts = [OUT/'checks.json', OUT/'pre-audit.json', OUT/'post-audit.json', OUT/'oracle.tsv', native/'oracle'] + [OUT/f'{s}-core/EmptyJoinInputAudit.{ext}' for s in ('pre','post') for ext in ('cbd','json')]
+        artifacts = [OUT/'checks.json', OUT/'pre-audit.json', OUT/'post-audit.json', OUT/'oracle.tsv', native/'oracle'] + [OUT/f'{s}-core/EmptyJoinInputAudit.{ext}' for s in ('pre','post') for ext in ('cbd',)]
         provenance = dict(ghc=version, ghcInfo=subprocess.check_output([ghc, '--info'], text=True), commands=commands,
                           inputs=list(map(record, inputs)), artifacts=list(map(record, artifacts)))
         (OUT/'provenance.json').write_text(json.dumps(provenance, indent=2)+'\n')

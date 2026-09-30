@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import shutil
@@ -49,9 +50,9 @@ def nodes(value, tag):
 
 
 def inventory(stage):
-    module = json.loads((OUT / f'{stage}-core/TupleReturnAudit.json').read_text())
+    module = inspect_cbd((OUT / f'{stage}-core/TupleReturnAudit.cbd').read_bytes())
     check(module['ghc'] == '9.14.1' and module['boundary'] == STAGES[stage], 'Wrong GHC/export boundary')
-    bindings = {b['name']: b for b in module['bindings']}
+    bindings = {b['id'].removeprefix('main:TupleReturnAudit.'): b for b in module['bindings']}
     layouts = {}
     for name in PRODUCERS:
         expr = bindings[name]['expr']
@@ -74,7 +75,7 @@ def inventory(stage):
     boxed = layouts['unliftedBoxedLeaf']['components'][0]
     check(boxed == dict(kind='data', evaluated=True, primReps=['BoxedRep (Just Unlifted)']),
           'Unlifted boxed product leaf became an unboxed aggregate')
-    product = next(c for c in module['constructors'] if c['name'] == 'UnliftedProduct')
+    product = next(c for c in module['constructors'] if c['id'] == 'main:TupleReturnAudit.UnliftedProduct')
     check(product['kind'] == 'boxed' and product['fieldTypes'][1]['evaluated'] is False,
           'Unlifted boxed outer WHNF must not force its lifted Box payload')
 
@@ -167,13 +168,13 @@ def prepare():
     commands.append(dict(argv=[str(native / 'tuple-return')], stdout=str(OUT / 'oracle.tsv')))
     (OUT / 'oracle.tsv').write_text(output([str(native / 'tuple-return')]) + '\n')
     for stage in STAGES:
-        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+        run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
             dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh',
                ROOT / 'bin/export-core.sh', ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')),
                ROOT / 'thc.cabal', ROOT / 'cabal.project']
     artifacts = [p for d in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
-                 for p in sorted((OUT / d).rglob('*')) if p.is_file()]
+                 for p in sorted((OUT / d).rglob('*')) if p.is_file() and p.suffix != '.json']
     plugin_manifest = ROOT / 'build/compiler/plugin.json'
     plugin = json.loads(plugin_manifest.read_text())
     check(plugin['schema'] == 1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')
