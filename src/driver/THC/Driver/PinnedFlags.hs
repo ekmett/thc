@@ -10,7 +10,18 @@
 -- Portability : Haskell 2010
 --
 -- Select source-package flags from the selected stock compiler's evidence.
-module THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions) where
+module THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions, pinnedPluginOptions) where
+
+import THC.Driver.GhcProxy (directPlugin)
+
+-- | Load the real registered vanilla archive on Windows. External plugin
+-- libraries use GHC's DLL loader and cannot load that archive. Unix retains
+-- its direct shared-library boundary and exact plugin options.
+pinnedPluginOptions :: String -> FilePath -> String -> FilePath -> [String] -> [String]
+pinnedPluginOptions "mingw32" database unit _ options =
+  ["-package-db", database, "-plugin-package-id", unit, "-fplugin=THC.Plugin"] ++
+  map ("-fplugin-opt=THC.Plugin:" ++) options
+pinnedPluginOptions _ _ unit library options = [directPlugin library unit options []]
 
 -- | Select the original configure script's Windows branches from the actual
 -- compiler host triplet. Cabal's native build otherwise omits @--host@, leaving

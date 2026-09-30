@@ -511,7 +511,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
       require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
         ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
     helperContext <- if installedPolicy == "pinned"
-      then preparePinnedInterfaces cacheRoot driverHash pluginUnit pluginLibrary originalContext originalRegistrations
+      then preparePinnedInterfaces cacheRoot driverHash pluginDb pluginUnit pluginLibrary originalContext originalRegistrations
       else case ghcSource of
         Nothing -> pure originalContext
         Just source -> prepareForeignInterfaces
@@ -700,7 +700,7 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
           registrations <- mapM (discoverInstalled original . unitId) missing
           helper <- if installedPolicy == "pinned" then
             preparePinnedInterfaces (contextCache context) (contextDriverHash context)
-              (contextPluginUnit context) (contextPluginLibrary context) original registrations
+              (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context) original registrations
             else case ghcSource of
               Nothing -> pure original
               Just source -> prepareForeignInterfaces

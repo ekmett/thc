@@ -13,14 +13,25 @@
 module PinnedFlagsTests (tests) where
 
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
-import THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions)
+import THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions, pinnedPluginOptions)
 import Data.List (elemIndex, sort)
 import THC.Driver.Installed (InstalledUnit(..))
 import THC.Driver.Wired (pinnedDependencyOrder)
 
 tests :: Test
 tests = TestLabel "pinned library configuration evidence" $ TestList $
-  [ TestCase $ assertEqual "native Windows configure selects upstream Windows branches"
+  [ TestCase $ assertEqual "Windows loads the actual registered vanilla plugin"
+      ["-package-db", "registry with spaces", "-plugin-package-id", "plugin-unit",
+       "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:core with spaces", "-fplugin-opt=THC.Plugin:post-tidy"]
+      (pinnedPluginOptions "mingw32" "registry with spaces" "plugin-unit" "vanilla.a"
+        ["core with spaces", "post-tidy"])
+  , TestCase $ assertEqual "Unix retains direct shared plugin options"
+      ["-fplugin-library=shared.so;plugin-unit;THC.Plugin;[\"core\",\"post-tidy\"]"]
+      (pinnedPluginOptions "linux" "registry" "plugin-unit" "shared.so" ["core", "post-tidy"])
+  , TestCase $ assertEqual "macOS retains direct shared plugin options"
+      ["-fplugin-library=shared.dylib;plugin-unit;THC.Plugin;[\"core\",\"post-tidy\"]"]
+      (pinnedPluginOptions "darwin" "registry" "plugin-unit" "shared.dylib" ["core", "post-tidy"])
+  , TestCase $ assertEqual "native Windows configure selects upstream Windows branches"
       (Right ["--configure-option=--host=x86_64-unknown-mingw32"])
       (pinnedConfigureOptions "mingw32" [("Host platform", "x86_64-unknown-mingw32")])
   , TestCase $ rejects (pinnedConfigureOptions "mingw32" [])

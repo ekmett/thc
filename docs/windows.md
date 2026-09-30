@@ -49,6 +49,9 @@ still stop the workflow.
 The official Windows GHC is a vanilla/static compiler. The exporter loads the
 real Cabal-registered plugin archive; it does not invent a Unix shared-library
 manifest or request an unavailable dynamic library way.
+Pinned dependency exports use that same registered plugin unit and private
+registry database. GHC's external plugin-library flag loads a DLL and cannot
+load the vanilla archive; Unix keeps its direct shared-library loading path.
 
 Installed-package discovery and helper probes select real `.hi` interfaces on
 Windows and `.dyn_hi` interfaces on Unix. Acquisition views on Windows copy the

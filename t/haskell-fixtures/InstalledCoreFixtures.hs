@@ -141,9 +141,10 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
         needed <- missing originalUnits
         if not needed then pure initialContext else do
           plugin <- readJson (root </> "build/compiler/plugin.json")
+          pluginDb <- field plugin "packageDb"
           pluginUnit <- field plugin "unitId"
           pluginLibrary <- field plugin "sharedLibrary"
-          Wired.preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary initialContext originalUnits
+          Wired.preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary initialContext originalUnits
     Just source -> do
       plugin <- readJson (root </> "build/compiler/plugin.json")
       pluginDb <- field plugin "packageDb"
