@@ -9,7 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
+from core_package_manifest import inspect_cbd
 import shutil
 import subprocess
 
@@ -73,13 +73,13 @@ def main():
     inventories=[]
     for stage in ('pre','post'):
         flags=['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []
-        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics',*flags,'t/fixtures/compiler/SumResultAudit.hs'],
+        run(['bin/export-core.sh',*flags,'t/fixtures/compiler/SumResultAudit.hs'],
             dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
-        path=OUT/f'{stage}-core/SumResultAudit.cbd'; module=paired_diagnostic_cbd(path)
-        executable=inspect_cbd(path.read_bytes())
+        path=OUT/f'{stage}-core/SumResultAudit.cbd'; module=inspect_cbd(path.read_bytes())
+        executable=module
         require(module['ghc']=='9.14.1' and module['schema']==1 and module['boundary']==
                 ('optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep'),'Wrong export boundary')
-        bindings={b['name']:b for b in module['bindings']}
+        bindings={b['id'].removeprefix('main:SumResultAudit.'):b for b in module['bindings']}
         producers=['produce','forward','paired','lazyLeaf','mixed','selfSum','mutualA','mutualB','effectState','effectEmpty','singletonBox','throwSum']
         shapes={name:bindings[name]['expr'][3]['resultRep'] for name in producers}
         require(all(p.get('aggregate')=='unboxed-sum' and len(p['alternatives'])==2 for p in shapes.values()),'Real sum producers disappeared')
@@ -111,7 +111,7 @@ def main():
     plugin_manifest=ROOT/'build/compiler/plugin.json'
     plugin=json.loads(plugin_manifest.read_text())
     require(plugin['schema']==1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')
-    artifacts=[p for p in sorted(OUT.rglob('*')) if p.is_file() and p.name!='provenance.json']
+    artifacts=[p for p in sorted(OUT.rglob('*')) if p.is_file() and p.name!='provenance.json' and not (p.suffix=='.json' and p.parent.name.endswith('-core'))]
     artifacts += [plugin_manifest, Path(plugin['sharedLibrary'])]
     provenance=dict(schema=1,nativeRows=110,independentPairRows=7,sources=[record(p) for p in sources],artifacts=[record(p) for p in artifacts],commands=commands,
         toolchain=dict(ghc=record(Path(shutil.which(ghc) or ghc).resolve()),ghcPkg=record(Path(shutil.which(pkg) or pkg).resolve()),

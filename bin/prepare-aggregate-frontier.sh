@@ -11,9 +11,9 @@ root=$(pwd)
 THC_FIXTURES=$("${CABAL:-cabal}" list-bin exe:thc-fixtures --offline --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG")
 export THC_FIXTURES
 THC_CORE_OUT="$root/build/aggregate-core" THC_GHC_OUT="$root/build/aggregate-ghc" \
-  bin/export-core.sh -fplugin-opt=THC.Plugin:pretty-diagnostics t/fixtures/compiler/AggregateFrontier.hs
+  bin/export-core.sh t/fixtures/compiler/AggregateFrontier.hs
 THC_CORE_OUT="$root/build/aggregate-post-core" THC_GHC_OUT="$root/build/aggregate-post-ghc" \
-  bin/export-core.sh -fplugin-opt=THC.Plugin:pretty-diagnostics -fplugin-opt=THC.Plugin:post-tidy t/fixtures/compiler/AggregateFrontier.hs
+  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy t/fixtures/compiler/AggregateFrontier.hs
 mkdir -p build/aggregate-native
 "$GHC" --make -v0 -O2 -fforce-recomp -dcore-lint -it/fixtures/compiler \
   -odir build/aggregate-native -hidir build/aggregate-native \

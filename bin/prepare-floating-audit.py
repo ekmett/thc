@@ -6,6 +6,7 @@
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import struct
@@ -88,18 +89,18 @@ def main():
         entries.add(name)
     assert len(entries) == 15 and len(rows.splitlines()) == 441
     (OUT / 'oracle.tsv').write_text(rows)
-    subprocess.run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', str(FIXTURE)], cwd=ROOT, check=True,
+    subprocess.run(['bin/export-core.sh', str(FIXTURE)], cwd=ROOT, check=True,
                    env=dict(os.environ, THC_CORE_OUT=str(OUT / 'core'), THC_GHC_OUT=str(OUT / 'ghc')))
     module_path = OUT / 'core/FloatingAudit.cbd'
-    module = json.loads(module_path.with_suffix('.json').read_text())
+    module = inspect_cbd(module_path.read_bytes())
     primitives = {node[1] for node in walk(module['bindings']) if isinstance(node, list) and node and node[0] == 'prim'}
     assert set(PRIMITIVES) <= primitives, sorted(set(PRIMITIVES) - primitives)
-    bindings = {b['name']: b for b in module['bindings']}
+    bindings = {b['id'].removeprefix('main:FloatingAudit.'): b for b in module['bindings']}
     for name, kind in [('floatWorker', 'float'), ('doubleWorker', 'double')]:
         lam = bindings[name]['expr']
         assert lam[0] == 'lam' and all(arg['rep']['kind'] == kind for arg in lam[1])
         assert lam[3]['resultRep']['kind'] == kind
-    constructor = next(c for c in module['constructors'] if c['name'] == 'FloatingBox')
+    constructor = next(c for c in module['constructors'] if c['id'] == 'main:FloatingAudit.FloatingBox')
     assert constructor['fieldReps'] == [['FloatRep'], ['DoubleRep']]
     nested = [n for n in walk(bindings['floatingCaptures']['expr'][2])
               if isinstance(n, list) and n and n[0] == 'lam']
@@ -119,7 +120,7 @@ def main():
     capabilities = json.loads((ROOT / 'bin/core-capabilities.json').read_text())
     audits = {}
     for entry in sorted(entries):
-        report = auditor.Audit([(str(module_path), module)], capabilities).run([entry])
+        report = auditor.Audit([(str(module_path), module)], capabilities).run(['main:FloatingAudit.' + entry])
         assert report['accepted'], (entry, report['issues'], report['missingGlobals'])
         audits[entry] = report['summary']
     (OUT / 'checks.json').write_text(json.dumps(dict(nativeRows=len(rows.splitlines()),
@@ -127,7 +128,7 @@ def main():
         floatingJoinFormals=join_formals,
         ordinaryCprResult=dict(entry='floatingTupleFrontier', summary=audits['floatingTupleFrontier']),
         conversionDomain='Finite representable Int results only; non-finite/out-of-range conversions excluded',
-        artifacts=[record(module_path), record(module_path.with_suffix('.json')), record(OUT / 'oracle.tsv'), record(native / 'floating-oracle')],
+        artifacts=[record(module_path), record(OUT / 'oracle.tsv'), record(native / 'floating-oracle')],
         toolchain=dict(ghc=GHC, version='9.14.1', nativeFlags=['-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint']),
         sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()),
                  record(ROOT / 'bin/audit-core.py'), record(ROOT / 'bin/core-capabilities.json'),

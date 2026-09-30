@@ -11,7 +11,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
-from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
+from core_package_manifest import inspect_cbd
 
 ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'bin/audit-core.py')
@@ -58,9 +58,9 @@ def variables(expr):
 
 
 def inventory(path, stage):
-    module = paired_diagnostic_cbd(path)
-    executable = inspect_cbd(path.read_bytes())
-    bindings = {b['name']: b for b in module['bindings']}
+    module = inspect_cbd(path.read_bytes())
+    executable = module
+    bindings = {b['id'].removeprefix('main:AggregateFrontier.'): b for b in module['bindings']}
     check(module['ghc'] == '9.14.1', 'Pinned compiler mismatch')
     first = bindings['tupleOutstanding']['expr'][2]
     check(first[0] == 'case' and first[1][0] == 'app' and first[1][1][1] == bindings['forward']['id'], 'Lost first opaque tuple call')

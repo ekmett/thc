@@ -6,6 +6,7 @@
 import copy
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import unittest
@@ -317,11 +318,11 @@ class TupleInputs(unittest.TestCase):
 
     def test_genuine_pre_post_exports_require_enabled_typed_ingress(self):
         directory=Path(os.environ.get('THC_TUPLE_INPUT_FIXTURE',ROOT.parent/'build/tuple-input'))
-        paths=[directory/f'{stage}-core/TupleInputAudit.json' for stage in ('pre','post')]
+        paths=[directory/f'{stage}-core/TupleInputAudit.cbd' for stage in ('pre','post')]
         if not all(path.is_file() for path in paths):self.skipTest('Run prepare-tuple-input-audit.py or point THC_TUPLE_INPUT_FIXTURE at genuine exports')
-        entries=list(dict.fromkeys(line.split('\t')[0] for line in (directory/'oracle.tsv').read_text().splitlines()))+['pairInputs']
+        entries=list(dict.fromkeys('main:TupleInputAudit.'+line.split('\t')[0] for line in (directory/'oracle.tsv').read_text().splitlines()))+['main:TupleInputAudit.pairInputs']
         for path in paths:
-            module=json.loads(path.read_text())
+            module=inspect_cbd(path.read_bytes())
             r=audit.Audit([(str(path),module)],ENABLED).run(entries);self.assertTrue(r['accepted'],r['issues'])
             r=audit.Audit([(str(path),module)],DISABLED).run(entries);self.assertFalse(r['accepted'])
             self.assertIn('unboxed-tuple formal argument',[i['detail'] for i in r['issues']])

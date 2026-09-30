@@ -6,6 +6,7 @@
 import argparse
 import hashlib
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import subprocess
@@ -47,7 +48,7 @@ def verify_native():
     return len(rows)
 
 def inventory(stage):
-    m = json.loads((OUT / f'{stage}-core/TagToEnumAudit.json').read_text())
+    m = inspect_cbd((OUT / f'{stage}-core/TagToEnumAudit.cbd').read_bytes())
     check(m['boundary'] == ('optimized-Core-before-Tidy' if stage == 'pre' else 'optimized-Core-after-Tidy-before-CorePrep'), 'Wrong boundary')
     cons = {c['id']: c for c in m['constructors']}
     uses = [x for x in walk(m['bindings']) if isinstance(x, list) and len(x) > 1 and x[0] == 'app'
@@ -62,7 +63,7 @@ def inventory(stage):
             c = cons[key]
             check(c['enumFamily'] == family and c['arity'] == 0 and c['tag'] == i + 1 and c['kind'] == 'boxed', 'Family order/completeness changed')
     check(sorted(sizes) == [2, 3, 3, 3, 4], 'Enum family inventory changed')
-    wrapped = next(b for b in m['bindings'] if b['name'] == 'chooseWrappedColour')
+    wrapped = next(b for b in m['bindings'] if b['id'] == 'main:TagToEnumAudit.chooseWrappedColour')
     cast_apps = [x for x in walk(wrapped['expr']) if isinstance(x, list) and len(x) > 1
                  and x[0] == 'app' and isinstance(x[1], list) and x[1][:2] == ['prim', 'tagToEnum#']]
     check(len(cast_apps) == 1 and cast_apps[0][6]['rep']['kind'] == 'object'
@@ -70,18 +71,18 @@ def inventory(stage):
           'Genuine newtype result cast must retain the original Colour family and outer object representation')
     check(len([k for k in cons if ':TagToEnumExternal.' in k]) == 4,
           'Imported family must be retained in the consumer module, independent of merging defining module')
-    prefix = next(b for b in m['bindings'] if b['name'] == 'prefix')
+    prefix = next(b for b in m['bindings'] if b['id'] == 'main:TagToEnumAudit.prefix')
     check(len(prefix['expr'][1]) == 2, 'Prefix must retain its two-argument function')
     check(any(isinstance(x, list) and len(x) > 2 and x[0] == 'app' and x[1][:2] == ['var', prefix['id']]
               and len(x[2]) == 1 for x in walk(m['bindings'])), 'Genuine ordinary PAP disappeared')
-    lazy = next(b for b in m['bindings'] if b['name'] == 'lazyTagCase')
-    choose = next(b for b in m['bindings'] if b['name'] == 'chooseBool')
+    lazy = next(b for b in m['bindings'] if b['id'] == 'main:TagToEnumAudit.lazyTagCase')
+    choose = next(b for b in m['bindings'] if b['id'] == 'main:TagToEnumAudit.chooseBool')
     check(any(isinstance(x, list) and len(x) > 2 and x[0] == 'app' and x[1][:2] == ['var', choose['id']]
               for x in walk(lazy['expr'])), 'Unused dynamic enum application was erased')
-    lazy_wrapped = next(b for b in m['bindings'] if b['name'] == 'lazyWrappedTagCase')
+    lazy_wrapped = next(b for b in m['bindings'] if b['id'] == 'main:TagToEnumAudit.lazyWrappedTagCase')
     check(any(isinstance(x, list) and len(x) > 2 and x[0] == 'app' and x[1][:2] == ['var', wrapped['id']]
               for x in walk(lazy_wrapped['expr'])), 'Unused newtype-cast enum application was erased')
-    frontier = json.loads((OUT / f'{stage}-core/TagToEnumFrontier.json').read_text())
+    frontier = inspect_cbd((OUT / f'{stage}-core/TagToEnumFrontier.cbd').read_bytes())
     unknown = [x for x in walk(frontier['bindings']) if isinstance(x, list) and len(x) > 1 and x[0] == 'app'
                and isinstance(x[1], list) and x[1][:2] == ['prim', 'tagToEnum#']]
     check(len(unknown) == 2 and all('enumFamily' not in app[6] for app in unknown),
@@ -107,14 +108,14 @@ def main():
         commands.append(dict(argv=argv, stdout=str(OUT / 'oracle.tsv')))
         (OUT / 'oracle.tsv').write_text(subprocess.check_output(argv, text=True)); verify_native()
         for stage in ['pre', 'post']:
-            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', '-it/fixtures/compiler', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(SOURCES[0]), str(SOURCES[3])],
+            run(['bin/export-core.sh', '-it/fixtures/compiler', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(SOURCES[0]), str(SOURCES[3])],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
             run([sys.executable, 'bin/audit-core.py', *[str(p) for p in sorted((OUT / f'{stage}-core').glob('*.cbd'))],
                  *[v for name in ENTRIES for v in ['--entry', f'main:TagToEnumAudit.{name}']], '--output', str(OUT / f'{stage}-audit.json')])
             inventory(stage)
         sources = SOURCES + [Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh', ROOT / 'bin/export-core.sh',
                              ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')), *audit_inputs()]
-        artifacts = [p for folder in ['native', 'pre-core', 'post-core'] for p in sorted((OUT / folder).rglob('*')) if p.is_file()]
+        artifacts = [p for folder in ['native', 'pre-core', 'post-core'] for p in sorted((OUT / folder).rglob('*')) if p.is_file() and p.suffix != '.json']
         artifacts += [OUT / name for name in ['inputs.tsv', 'oracle.tsv', 'pre-audit.json', 'post-audit.json']]
         provenance.write_text(json.dumps(dict(schema=1, ghcInfo=subprocess.check_output([ghc, '--info'], text=True),
             sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts], commands=commands,

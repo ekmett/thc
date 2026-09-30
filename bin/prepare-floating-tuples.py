@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import subprocess
@@ -44,9 +45,15 @@ def walk(value):
 
 
 def inventory(stage):
-    module = json.loads((OUT / f'{stage}-core/FloatingTupleAudit.json').read_text())
+    module = inspect_cbd((OUT / f'{stage}-core/FloatingTupleAudit.cbd').read_bytes())
     check(module['boundary'] == STAGES[stage], 'Wrong Core boundary')
-    bindings = {b['name']: b for b in module['bindings']}
+    bindings = {b['id'].removeprefix('main:FloatingTupleAudit.'): b for b in module['bindings']}
+    by_id = {b['id']: b for b in module['bindings']}
+    for name in ('complexFloat', 'complexDouble'):
+        case = bindings[name + 'Case']['expr'][2]
+        check(case[0] == 'case' and case[1][0] == 'app' and case[1][1][0] == 'var',
+              name + ': original CPR producer call disappeared')
+        bindings['$w' + name] = by_id[case[1][1][1]]
     layouts = {name: bindings[name]['expr'][3]['resultRep'] for name in
                ['$wcomplexFloat', '$wcomplexDouble', 'mixed', 'mixedForward', 'joined', 'ieeePair']}
     for name, rep in [('$wcomplexFloat', 'FloatRep'), ('$wcomplexDouble', 'DoubleRep')]:
@@ -62,7 +69,7 @@ def inventory(stage):
     check(layouts['mixedForward'] == mixed, 'Forwarder changed logical shape')
     joins = [n for n in walk(bindings['joined']) if isinstance(n, dict) and 'joinValueArity' in n]
     check(joins and all(j['joinResultRep']['primReps'] == ['FloatRep', 'DoubleRep'] for j in joins), 'Missing actual floating tuple join')
-    boxed = [c for c in module['constructors'] if c['name'] == ':+']
+    boxed = [c for c in module['constructors'] if c['id'].endswith(':Data.Complex.:+')]
     check(boxed and all(c['kind'] == 'boxed' for c in boxed), 'Complex is a boxed datatype')
     return dict(stage=stage, layouts=layouts, tupleJoins=len(joins), boxedComplex=True)
 
@@ -120,7 +127,7 @@ def main():
             (OUT / filename).write_text(subprocess.check_output(argv, text=True))
         check_native()
         for stage in STAGES:
-            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+            run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
             run([sys.executable, 'bin/audit-core.py', str(OUT / f'{stage}-core/FloatingTupleAudit.cbd'),
                  *[part for entry in ENTRIES for part in ('--entry', f'main:FloatingTupleAudit.{entry}')], '--output', str(OUT / f'{stage}-audit.json')])
@@ -128,7 +135,7 @@ def main():
         sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh', ROOT / 'bin/export-core.sh',
                    ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')), *audit_inputs(),
                    ROOT / 'thc.cabal', ROOT / 'cabal.project']
-        artifacts = [p for folder in ('native', 'pre-core', 'post-core') for p in sorted((OUT / folder).rglob('*')) if p.is_file()]
+        artifacts = [p for folder in ('native', 'pre-core', 'post-core') for p in sorted((OUT / folder).rglob('*')) if p.is_file() and p.suffix != '.json']
         artifacts += [OUT / 'oracle.tsv', OUT / 'bits.tsv', *[OUT / f'{stage}-audit.json' for stage in STAGES],
                       plugin_manifest, Path(plugin['sharedLibrary'])]
         provenance.write_text(json.dumps(dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(),
