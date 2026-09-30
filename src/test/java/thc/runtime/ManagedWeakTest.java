@@ -462,7 +462,7 @@ class ManagedWeakTest {
     }
     private Map<String, Object> merge(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var path : paths) modules.add(json(new File(root, path)));
+        for (var path : paths) modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram load(Language language, Map<String, Object> module, String backend) {
@@ -473,7 +473,7 @@ class ManagedWeakTest {
         var manifest = json(new File(directory, "manifest.json"));
         for (var stageEntry : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {
             var stage = stageEntry.getKey();
-            var original = CoreModules.reachable(merge(stageEntry.getValue()), "weakComposite", true);
+            var original = CoreModules.reachable(merge(stageEntry.getValue()), "main:WeakAudit.weakComposite", true);
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
@@ -528,7 +528,7 @@ class ManagedWeakTest {
         var zero = List.of("lit", "int", "0", Map.of("rep", integer));
         for (var stageEntry : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {
             var stage = stageEntry.getKey();
-            var original = CoreModules.reachable(merge(stageEntry.getValue()), "weakComposite", true);
+            var original = CoreModules.reachable(merge(stageEntry.getValue()), "main:WeakAudit.weakComposite", true);
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
@@ -558,7 +558,7 @@ class ManagedWeakTest {
                                     stage + "/" + backend + " contradictory delayed result");
                             else {
                                 var function = context.asValue(
-                                    new EntryValue(load(language, module, backend), "weakComposite", 1));
+                                    new EntryValue(load(language, module, backend), "main:WeakAudit.weakComposite", 1));
                                 for (var row : rows)
                                     assertEquals(row.expected(), function.execute(row.input()).asLong(),
                                         stage + "/" + backend + "/" + row.input());
@@ -600,7 +600,7 @@ class ManagedWeakTest {
             assertTrue(primitives.containsAll(names));
             assertFalse(primitives.contains("addCFinalizerToWeak#"));
             var merged = merge(stageEntry.getValue());
-            var proof = new ArrayCoreEvidence(merged, "weakComposite");
+            var proof = new ArrayCoreEvidence(merged, "main:WeakAudit.weakComposite");
             var lambda = (List<?>) proof.getRoot().get("expr");
             var exported = proof.guestLambdas(lambda);
             var types = new ArrayList<List<Object>>();
@@ -634,13 +634,13 @@ class ManagedWeakTest {
                     context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var module = new LinkedHashMap<>(CoreModules.reachable(merged, "weakComposite", true));
+                        var module = new LinkedHashMap<>(CoreModules.reachable(merged, "main:WeakAudit.weakComposite", true));
                         module.put("instrument", true);
                         var program = load(language, module, backend);
                         var host = program.hostEntryTarget(1);
-                        var original = program.entryTarget("weakComposite");
+                        var original = program.entryTarget("main:WeakAudit.weakComposite");
                         assertTrue(original.getRootNode() instanceof GuestRoot);
-                        var function = context.asValue(new EntryValue(program, "weakComposite", 1));
+                        var function = context.asValue(new EntryValue(program, "main:WeakAudit.weakComposite", 1));
                         for (var row : rows) assertEquals(row.expected(), function.execute(row.input()).asLong());
                         var active = activeTargets(host);
                         boolean linked = false;
@@ -670,7 +670,7 @@ class ManagedWeakTest {
                             // EntryRoot does not increment compiledEntries; this is guest entry evidence.
                             assertEquals(expectedEntries, delta,
                                 stage + "/" + backend + " compiled input/returned-action guest entries");
-                            assertSame(original, program.entryTarget("weakComposite"));
+                            assertSame(original, program.entryTarget("main:WeakAudit.weakComposite"));
                             assertEquals(active, activeTargets(host), stage + "/" + backend + " target graph changed");
                             for (var target : installed) valid(target);
                             assertEquals(0, Language.currentState().getWeaks().retainedCount());

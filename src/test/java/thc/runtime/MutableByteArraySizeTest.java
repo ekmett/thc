@@ -43,7 +43,7 @@ class MutableByteArraySizeTest {
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
         for (var path : paths)
-            modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -310,12 +310,12 @@ class MutableByteArraySizeTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var module = new LinkedHashMap<>(CoreModules.reachable(merged(stage.getValue()), name));
+                            var module = new LinkedHashMap<>(CoreModules.reachable(merged(stage.getValue()), "main:MutableByteArraySizeAudit." + name));
                             module.put("instrument", true);
                             var p = program(language, module, backend);
-                            var function = context.asValue(new EntryValue(p, name, 2));
+                            var function = context.asValue(new EntryValue(p, "main:MutableByteArraySizeAudit." + name, 2));
                             var host = p.hostEntryTarget(2);
-                            var original = p.entryTarget(name);
+                            var original = p.entryTarget("main:MutableByteArraySizeAudit." + name);
                             var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
                             for (var row : cases) check(row, function, label, language);
                             var targets = activeTargets(host);

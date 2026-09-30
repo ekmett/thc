@@ -45,7 +45,7 @@ class SmallArrayTest {
     }
     private long call(ExecutableProgram program, String entry, long input) {
         return (Long) Calls.target(
-            program.hostEntryTarget(1), new Object[] {program.entryValue(entry), new Object[] {input}});
+            program.hostEntryTarget(1), new Object[] {program.entryValue("main:SmallArrayAudit." + entry), new Object[] {input}});
     }
     private List<List<Object>> applications(Object value) {
         var result = new ArrayList<List<Object>>();
@@ -95,7 +95,7 @@ class SmallArrayTest {
             assertEquals(true, module(auditPath).get("accepted"));
             var entries = List.of("smallComposite", (String) manifest.get("safeEntry"));
             var linked = new LinkedHashMap<String, Map<String, Object>>();
-            for (String entry : entries) linked.put(entry, CoreModules.reachable(module(path), entry));
+            for (String entry : entries) linked.put(entry, CoreModules.reachable(thc.CoreCbdFixtures.read(root.resolve(path)), "main:SmallArrayAudit." + entry));
             var apps = linked.values()
                            .stream()
                            .flatMap(source -> applications(source).stream())
@@ -140,7 +140,7 @@ class SmallArrayTest {
                                 assertEquals(expected, call(guest, entry, row.input),
                                     stage + "/" + backend + "/" + entry + "/interpreted/" + row.input);
                             }
-                            var target = guest.entryTarget(entry);
+                            var target = guest.entryTarget("main:SmallArrayAudit." + entry);
                             compile(target);
                             for (var row : cases) {
                                 long expected = entry.equals("smallComposite") ? row.existing : row.safe;

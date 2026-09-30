@@ -52,14 +52,14 @@ prepareSmallArrays root = do
     let core = directory </> stage </> "core"
         ghcOut = directory </> stage </> "ghc"
         report = directory </> stage </> "audit.json"
-        modulePath = core </> "SmallArrayAudit.json"
+        modulePath = core </> "SmallArrayAudit.cbd"
         options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
     createDirectoryIfMissing True (root </> core)
     createDirectoryIfMissing True (root </> ghcOut)
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "bin/export-core.sh" (options ++ [source]) ""
     _ <- run root [] "python3" ["bin/audit-core.py", modulePath, "--entry",
-      "smallComposite", "--entry", "safeSliceComposite", "--output", report] ""
+      "main:SmallArrayAudit.smallComposite", "--entry", "main:SmallArrayAudit.safeSliceComposite", "--output", report] ""
     accepted <- BS.readFile (root </> report)
     unless (case decodeStrict' accepted of
       Just (Object fields) -> KeyMap.lookup "accepted" fields == Just (Bool True)

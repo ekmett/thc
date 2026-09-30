@@ -30,6 +30,7 @@ import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, list
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import THC.Compact.Module (readModuleValue)
 import Text.Read (readMaybe)
 
 -- One producer for the five existing byte-array proof contracts, not a general
@@ -229,12 +230,14 @@ prepareByteArrayFamily root command = do
         pure path
       pure ([commandResult],[provenance],paths)
       else pure ([],[],[])
-    paths <- map (core </>) . sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
-    boundary <- readJson (root </> core </> moduleName family ++ ".json") >>= field "boundary"
+    paths <- map (core </>) . sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
+    coreBytes <- BS.readFile (root </> core </> moduleName family ++ ".cbd")
+    coreValue <- either die pure (readModuleValue coreBytes)
+    boundary <- field "boundary" coreValue
     check (boundary == (if stage == "pre" then "optimized-Core-before-Tidy" else "optimized-Core-after-Tidy-before-CorePrep" :: String)) "Wrong byte-array Core stage"
     audited <- forM names $ \name -> do
       let reportPath = if originalList family then base </> name ++ ".audit.json" else directory </> stage ++ "-" ++ name ++ ".audit.json"
-      commandResult <- logRun (stage ++ "-" ++ name ++ "-audit") [] "python3" (["bin/audit-core.py","--entry",name,"--output",reportPath] ++ paths)
+      commandResult <- logRun (stage ++ "-" ++ name ++ "-audit") [] "python3" (["bin/audit-core.py","--entry", "main:" ++ moduleName family ++ "." ++ name,"--output",reportPath] ++ paths)
       report <- readJson (root </> reportPath)
       validateAudit family name report
       reachable <- field "reachableBindings" report :: IO [Value]

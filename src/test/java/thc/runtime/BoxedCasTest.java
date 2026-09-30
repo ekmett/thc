@@ -584,7 +584,7 @@ public class BoxedCasTest {
         assertEquals(stages.keySet(), audits.keySet());
         for (var stage : stages.keySet()) {
             var prefix = attempt + "/" + stage + "-core/";
-            assertEquals(Set.of("BoxedCasAudit.json", "BoxedCasCounter.json", "THC.InterfaceClosure.json"),
+            assertEquals(Set.of("BoxedCasAudit.cbd", "BoxedCasCounter.cbd", "THC.InterfaceClosure.cbd"),
                 new HashSet<>(stages.get(stage)
                         .stream()
                         .map(p -> p.startsWith(prefix) ? p.substring(prefix.length()) : p)
@@ -658,10 +658,10 @@ public class BoxedCasTest {
                 model(row.get(0), Long.parseLong(row.get(1))), Long.parseLong(row.get(2)), "native/model " + row);
         for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {
             var modules = new ArrayList<Map<String, Object>>();
-            for (var path : stage.getValue()) modules.add(read(path));
+            for (var path : stage.getValue()) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
             var merged = CoreModules.merge(modules);
             var primitives = new HashSet<String>();
-            for (var name : names) primitives.addAll(new ArrayCoreEvidence(merged, name).getPrimitiveCounts().keySet());
+            for (var name : names) primitives.addAll(new ArrayCoreEvidence(merged, (name.equals("boxedCasCounter") ? "main:BoxedCasCounter." : "main:BoxedCasAudit.") + name).getPrimitiveCounts().keySet());
             var required = new ArrayList<>(cases);
             required.add("atomicModifyMutVar_#");
             assertTrue(primitives.containsAll(required));
@@ -680,8 +680,8 @@ public class BoxedCasTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var p = program(language,
-                                changed(CoreModules.reachable(merged, name, true), "instrument", true), backend);
-                            var entry = context.asValue(new EntryValue(p, name, 1));
+                                changed(CoreModules.reachable(merged, (name.equals("boxedCasCounter") ? "main:BoxedCasCounter." : "main:BoxedCasAudit.") + name, true), "instrument", true), backend);
+                            var entry = context.asValue(new EntryValue(p, (name.equals("boxedCasCounter") ? "main:BoxedCasCounter." : "main:BoxedCasAudit.") + name, 1));
                             var host = p.hostEntryTarget(1);
                             var cases = rows.stream().filter(r -> name.equals(r.get(0))).toList();
                             for (var row : cases) check(row, entry, language, stage.getKey(), backend, name);
