@@ -9,6 +9,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import platform
@@ -65,7 +66,7 @@ def check_guest_structure(entry, report, module):
     root = bindings[report['roots'][0]]
     reachable = {b['id'] for b in report['reachableBindings']}
     helper_name = HELPERS.get(name)
-    helpers = [bindings[i] for i in reachable if bindings[i]['name'] == helper_name] if helper_name else []
+    helpers = [bindings[i] for i in reachable if bindings[i]['id'].removeprefix('main:SimdWord8X16.') == helper_name] if helper_name else []
     check(len(helpers) == (1 if helper_name else 0), name+': residual helper disappeared')
     check(reachable == {root['id'], *[b['id'] for b in helpers]}, name+': actual global closure changed')
     actual_roots = [root]+helpers
@@ -77,7 +78,7 @@ def check_guest_structure(entry, report, module):
               name+': function must have only machine Int formals')
         check(len(expressions(expr, 'lam')) == 1, name+': extra local guest lambda')
         result = expr[-1].get('resultRep')
-        check(lane_tuple(result) if binding['name'] == 'tupleWorker' else scalar(result, 'IntRep'),
+        check(lane_tuple(result) if binding['id'].removeprefix('main:SimdWord8X16.') == 'tupleWorker' else scalar(result, 'IntRep'),
               name+': scalar/tuple result boundary changed')
         refs = [node[1] for node in expressions(expr, 'var') if node[1] in bindings]
         check(refs == ([helpers[0]['id']] if helpers and binding is root else []),
@@ -95,7 +96,7 @@ def check_guest_structure(entry, report, module):
     check(len(actual_roots) == EXPECTED_CALLS[name], name+': actual guest count changed')
     counts = {p['name']: len(p['uses']) for p in report['primitives'] if p['name'] in PRIMITIVES}
     check(counts == VECTOR_COUNTS[name], name+': required local vector operations changed')
-    return dict(guestCalls=len(actual_roots), roots=[dict(id=b['id'], name=b['name']) for b in actual_roots],
+    return dict(guestCalls=len(actual_roots), roots=[dict(id=b['id'], name=b['id'].removeprefix('main:SimdWord8X16.')) for b in actual_roots],
                 vectorPrimitiveCounts=counts)
 
 
@@ -117,7 +118,7 @@ def inventory(module, stage):
     literals = [node for node in expressions(module['bindings'], 'lit') if node[1] == 'word8']
     check(literals and all(0 <= int(node[2]) <= 255 for node in literals),
           'Missing or noncanonical genuine Word8 literal')
-    frontier = next(b for b in module['bindings'] if b['name'] == 'vectorArgument')['expr']
+    frontier = next(b for b in module['bindings'] if b['id'].removeprefix('main:SimdWord8X16.') == 'vectorArgument')['expr']
     check(frontier[0] == 'lam' and len(frontier[1]) == 1
           and frontier[1][0]['rep'].get('kind') == 'vector', 'Missing exact vector formal control')
     return dict(vectorProofs=len(vectors), word8LiteralSites=len(literals), packSites=len(packs), unpackSites=len(unpacked), primitives=sorted(PRIMITIVES))
@@ -130,7 +131,7 @@ def record(path):
 def signed_control(module, variant):
     """Deliberately corrupted metadata, never a replacement native/Core input."""
     changed = copy.deepcopy(module)
-    root = next(b for b in changed['bindings'] if b['name'] == 'plusCase')
+    root = next(b for b in changed['bindings'] if b['id'].removeprefix('main:SimdWord8X16.') == 'plusCase')
     primitive = {'signedLaneTuple': 'packWord8X16#', 'signedVectorOperand': 'plusWord8X16#'}[variant]
     call = next(e for e in expressions(root['expr'], 'app') if e[1][:2] == ['prim', primitive])
     proof = representation(call[2][0])
@@ -158,7 +159,7 @@ def audit_signed_controls(module, module_path, auditor, capabilities):
     controls = {}
     for variant, issues in expected.items():
         changed = signed_control(module, variant)
-        report = auditor.Audit([(str(module_path)+' [MUTATED '+variant+']', changed)], capabilities).run(['plusCase'])
+        report = auditor.Audit([(str(module_path)+' [MUTATED '+variant+']', changed)], capabilities).run(['main:SimdWord8X16.plusCase'])
         check(not report['accepted'] and not report['missingGlobals']
               and Counter((i['code'], i['detail']) for i in report['issues']) == issues,
               variant+': signed/unsigned mutation must fail for its exact representation mismatches')
@@ -191,15 +192,15 @@ def main():
     audits, structure, guest_calls, signed_controls = {}, {}, {}, {}
     artifacts = [OUT/'expected.tsv']
     for stage in stages:
-        module_path = OUT/f'{stage}-core/SimdWord8X16.json'
+        module_path = OUT/f'{stage}-core/SimdWord8X16.cbd'
         module_path.unlink(missing_ok=True)
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else []
         if stage == 'post': options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['bin/export-core.sh', *options, FIXTURE],
             dict(THC_CORE_OUT=str(module_path.parent), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
-        module = json.loads(module_path.read_text())
+        module = inspect_cbd(module_path.read_bytes())
         structure[stage] = inventory(module, stage)
-        audits[stage] = {name: auditor.Audit([(str(module_path), module)], capabilities).run([name])
+        audits[stage] = {name: auditor.Audit([(str(module_path), module)], capabilities).run(['main:SimdWord8X16.' + name])
                          for name in [e['name'] for e in entries()]+['vectorArgument']}
         host = audits[stage]['vectorArgument']
         check(host['accepted'] and not host['issues'] and not host['missingGlobals'],

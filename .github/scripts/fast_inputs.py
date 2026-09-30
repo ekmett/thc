@@ -239,7 +239,7 @@ THREAD_SCHEDULING_OUTPUTS = frozenset("build/thread-scheduling/" + name for name
     "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
         for suffix in ("core/ThreadScheduling.cbd", *(f"{entry}-audit.json" for entry in THREAD_SCHEDULING_ENTRIES)))))
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
-    "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
+    "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.cbd", "post-core/SimdFloatFma.cbd",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
 INTEGER_COMPLETION_OUTPUTS = frozenset("build/integer-completion/" + name for name in (
     "manifest.json", "requests.tsv", "oracle.tsv", "NativeIntegerCompletion.hs", "native/integer-completion-oracle",
@@ -319,7 +319,7 @@ SIMD_ARITHMETIC_ENTRIES = tuple(op + shape + suffix for shape in SIMD_ARITHMETIC
 SIMD_ARITHMETIC_COMMANDS = ("ghc-version", "native-build", "native-oracle", "pre-export",
     *(name + "-audit" for name in SIMD_ARITHMETIC_ENTRIES))
 SIMD_ARITHMETIC_OUTPUTS = frozenset("build/simd-arithmetic/" + name for name in (
-    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle", "pre-core/SimdArithmeticAudit.json",
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle", "pre-core/SimdArithmeticAudit.cbd",
     "sources/SimdArithmeticAudit.hs", "sources/SimdArithmeticScalar.hs", "sources/Native.hs",
     *(name + "-audit.json" for name in SIMD_ARITHMETIC_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD_ARITHMETIC_COMMANDS
@@ -335,7 +335,7 @@ SIMD_WIDE_ARRAY_ENTRIES = tuple(shape + operation + mode
 SIMD_WIDE_ARRAY_COMMANDS = ("ghc-version", "native-build", "native-oracle", "pre-export",
     *("pre-" + name + "-audit" for name in SIMD_WIDE_ARRAY_ENTRIES))
 SIMD_WIDE_ARRAY_OUTPUTS = frozenset("build/simd-wide-arrays/" + name for name in (
-    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle", "pre-core/SimdWideArrayAudit.json",
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle", "pre-core/SimdWideArrayAudit.cbd",
     *("pre-" + name + "-audit.json" for name in SIMD_WIDE_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD_WIDE_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
@@ -354,7 +354,7 @@ SIMD_ADDRESS_OUTPUTS = frozenset("build/simd-address-families/" + path for path 
     "manifest.json", *("source/" + name + ".hs" for name in
       ("SimdAddressAudit", "SimdAddress128Audit", "SimdAddressScalar", "ScalarNative", "VectorNative")),
     *(path for mode in SIMD_ADDRESS_MODES for path in (mode + "-inputs.tsv", mode + "-oracle.tsv", mode + "/oracle")),
-    *(path for stage, module in SIMD_ADDRESS_STAGES for path in (stage + "-core/" + module + ".json", stage + "-audit.json")),
+    *(path for stage, module in SIMD_ADDRESS_STAGES for path in (stage + "-core/" + module + ".cbd", stage + "-audit.json")),
     *("commands/" + command + "." + suffix for command in SIMD_ADDRESS_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 SIMD128_ARRAY_ENTRIES = tuple(shape + operation + mode
     for shape in ("int8X16", "word8X16", "int16X8", "word16X8", "int64X2", "word64X2")
@@ -364,7 +364,7 @@ SIMD128_ARRAY_COMMANDS = ("ghc-version", "native-build", "native-oracle",
     *(stage + "-" + name + "-audit" for stage in ("pre", "post") for name in SIMD128_ARRAY_ENTRIES))
 SIMD128_ARRAY_OUTPUTS = frozenset("build/simd128-arrays/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
-    *(stage + "-core/Simd128ArrayAudit.json" for stage in ("pre", "post")),
+    *(stage + "-core/Simd128ArrayAudit.cbd" for stage in ("pre", "post")),
     *(stage + "-" + name + "-audit.json" for stage in ("pre", "post") for name in SIMD128_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD128_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
@@ -503,7 +503,7 @@ PINNED_ADDRESS_OUTPUTS = frozenset("build/pinned-addresses/" + path for path in 
     *(f"{stage}/negative/{label}-{index}.cbd" for stage in ("pre", "post") for label in PINNED_ADDRESS_NEGATIVES for index in (0, 1)),
     *(f"commands/{name}.{suffix}" for name in PINNED_ADDRESS_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 SIMD_WIDE_FMA_OUTPUTS = frozenset("build/simd-wide-floating-fma/" + name for name in (
-    "manifest.json", "oracle.txt", "pre-core/SimdWideFloatFma.json", "pre-audit.json", "pre-double-audit.json"))
+    "manifest.json", "oracle.txt", "pre-core/SimdWideFloatFma.cbd", "pre-audit.json", "pre-double-audit.json"))
 SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
     "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
@@ -527,9 +527,9 @@ def integer_simd_outputs(family, native):
                 *(("native-build", "native-oracle") if native else ()))
     return frozenset(f"build/{family}/{name}" for name in (
         "provenance.json", "expected.tsv", "requests.tsv",
-        *(f"{s}-core/Simd{shape}.json" for s in stages), *(f"{s}-audit.json" for s in stages),
+        *(f"{s}-core/Simd{shape}.cbd" for s in stages), *(f"{s}-audit.json" for s in stages),
         *(f"{s}-{e}-audit.json" for s in stages for e in entries),
-        *(f"{s}-MUTATED-{n}{suffix}.json" for s in stages for n in negatives for suffix in ("", "-audit")),
+        *(f"{s}-MUTATED-{n}{suffix}" for s in stages for n in negatives for suffix in (".cbd", "-audit.json")),
         *(f"commands/{c}.{suffix}" for c in commands for suffix in ("stdout", "stderr", "command.json")),
         *(("oracle.tsv", f"native/{family.removeprefix('simd-')}-oracle") if native else ())))
 

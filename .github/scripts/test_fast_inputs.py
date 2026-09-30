@@ -1143,7 +1143,7 @@ class FastInputTests(unittest.TestCase):
             self.assertTrue(cache.allowed_payload(path), path)
             with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         for suffix in ('native/scalar-lane-oracle', 'native/SimdWideFloatFmaNative.o',
-                       'post-core/SimdWideFloatFma.json', 'pre-core/Other.json', 'logs/extra.stdout'):
+                       'post-core/SimdWideFloatFma.cbd', 'pre-core/Other.json', 'logs/extra.stdout'):
             self.assertFalse(cache.allowed_payload('build/simd-wide-floating-fma/' + suffix), suffix)
 
     def test_arithmetic_installed_bundle_hashes_do_not_escape_into_zip_member_paths(self):
