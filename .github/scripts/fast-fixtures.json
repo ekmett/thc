@@ -1393,19 +1393,12 @@
       "outputs": [
         "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
         "build/explicit64-primops/core/Explicit64PrimopsAudit.cbd",
-        "build/core/CBVAudit.json",
         "build/core/CBVAudit.cbd",
-        "build/core/CBVJoinAudit.json",
         "build/core/CBVJoinAudit.cbd",
-        "build/core/CBVCoercionAudit.json",
         "build/core/CBVCoercionAudit.cbd",
-        "build/core/DemandAudit.json",
         "build/core/DemandAudit.cbd",
-        "build/cbv-post-core/CBVAudit.json",
         "build/cbv-post-core/CBVAudit.cbd",
-        "build/cbv-post-core/CBVJoinAudit.json",
         "build/cbv-post-core/CBVJoinAudit.cbd",
-        "build/cbv-post-core/CBVCoercionAudit.json",
         "build/cbv-post-core/CBVCoercionAudit.cbd"
       ],
       "sources": [

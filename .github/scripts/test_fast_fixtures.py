@@ -127,8 +127,8 @@ class FixturePreparationTest(unittest.TestCase):
         for path in inputs:
             self.assertTrue((project / path).is_file(), path)
             module = "Fixtures" if path == inputs[0] else Path(path).stem
-            self.assertIn("build/core/" + module + ".json", fast_fixtures.FULL_REQUIRED)
-        # The option changes existing JSON bytes, not the output inventory.
+            self.assertIn("build/core/" + module + ".cbd", fast_fixtures.FULL_REQUIRED)
+        # The inspection option does not change the required executable CBD inventory.
         # Removing it still invalidates the reviewed plan before any cache hit.
         script = self.root / "bin/prepare-tests.sh"
         script.parent.mkdir(parents=True, exist_ok=True)
@@ -3059,8 +3059,8 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue(all((project / path).is_file() for path in group["sources"]))
             self.assertTrue(group["commands"] and group["outputs"])
         cbv = manifest["groups"]["cbv-coercion"]
-        self.assertIn("build/cbv-post-core/CBVCoercionAudit.json", cbv["outputs"])
-        self.assertIn("build/cbv-post-core/CBVCoercionAudit.cbd", cbv["outputs"])
+        self.assertEqual(1, cbv["outputs"].count("build/cbv-post-core/CBVCoercionAudit.cbd"))
+        self.assertNotIn("build/cbv-post-core/CBVCoercionAudit.json", cbv["outputs"])
         exports = [command["argv"] for command in cbv["commands"] if "t/fixtures/compiler/CBVAudit.hs" in command["argv"]]
         self.assertEqual(2, len(exports))
         self.assertTrue(all("-fplugin-opt=THC.Plugin:pretty-diagnostics" in command for command in exports))
