@@ -266,8 +266,16 @@ class MixedBackendContinuationTest {
                 for (int i = 0; i < targets.length; i++) {
                     targets[i] = new BytecodeProgram(language, typedStrictModule(false, false, mode), false);
                     var root = (BytecodeRoot) targets[i].entryTarget("run").getRootNode();
-                    assertFalse(root.isAsyncEnabled()); assertNotNull(root.getTypedInput());
-                    assertArrayEquals(new int[]{0, 1}, TypedInputs.strictInputPositions(root, root.getTypedInput()));
+                    assertTrue(root.isAsyncEnabled()); assertFalse(root.getEagerAsyncPolls());
+                    var input = Objects.requireNonNull(root.getTypedInput());
+                    assertArrayEquals(new boolean[]{true, true, false, false, false}, root.getEntryStrict());
+                    for (int formal : new int[]{0, 1}) {
+                        assertEquals(CoreKind.OBJECT, input.getLogical().proof(formal).getKind());
+                        assertFalse(input.getLogical().isTyped(formal));
+                        assertTrue(input.getPacket().isObject(input.getHeader() + input.getLogical().offset(formal)));
+                    }
+                    // Capturable callees force both strict formals after ingress releases the loan.
+                    assertArrayEquals(new int[0], TypedInputs.strictInputPositions(root, input));
                     if (mode.equals("bounce")) {
                         int index = i;
                         leafPrefixes[i] = new ManagedMVar(); leafBlocked[i] = new ManagedMVar(); leafSuffixes[i] = new ManagedMVar();
