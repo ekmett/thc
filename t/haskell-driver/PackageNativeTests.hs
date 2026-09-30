@@ -39,7 +39,35 @@ import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestLabel "selected tools survive a package cwd" $ TestCase $ do
+  [ TestLabel "PE deferred services omit only the unused container" $ TestCase $ do
+      let services = ["hs_free_stable_ptr","rtsSupportsBoundThreads","peer_export"]
+      forM_ ["x86_64-w64-mingw32","x86_64-w64-windows-gnu","x86_64-pc-windows-msvc"] $ \target -> do
+        assertEqual "PE never receives ELF unresolved-symbol exclusions" Nothing
+          (nativeDeferredLinkArguments target services)
+        assertEqual "ordinary components retain their container step" (Just [])
+          (nativeDeferredLinkArguments target [])
+  , TestLabel "existing ELF and Mach-O deferred exclusions remain exact" $ TestCase $ do
+      let services = ["hs_free_stable_ptr","rtsSupportsBoundThreads","peer_export"]
+      assertEqual "ELF exclusions apply only to the actual deferred symbols"
+        (Just (concatMap (\symbol -> ["-Xlinker","--ignore-unresolved-symbol=" ++ symbol]) services))
+        (nativeDeferredLinkArguments "x86_64-unknown-linux-gnu" services)
+      forM_ ["aarch64-apple-darwin","aarch64-apple-macosx14.0.0"] $ \target ->
+        assertEqual "Mach-O keeps its exact per-symbol undefined allowances"
+          (Just (concatMap (\symbol -> ["-Xlinker","-U","-Xlinker",'_' : symbol]) services))
+          (nativeDeferredLinkArguments target services)
+  , TestLabel "PE companions require every ordinary native definition" $ TestCase $ do
+      let ordinarySymbols = ["ordinary_provider","missing_ordinary"]
+      forM_ ["x86_64-w64-mingw32","x86_64-w64-windows-gnu"] $ \target ->
+        assertEqual "extraction roots cannot hide an absent ordinary provider"
+          (concatMap (\symbol -> ["-Xlinker","--require-defined=" ++ symbol]) ordinarySymbols)
+          (nativeRootArguments target ordinarySymbols)
+      assertEqual "ELF roots are unchanged"
+        (concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",symbol]) ordinarySymbols)
+        (nativeRootArguments "x86_64-unknown-linux-gnu" ordinarySymbols)
+      assertEqual "Mach-O roots retain their original spelling"
+        (concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",'_' : symbol]) ordinarySymbols)
+        (nativeRootArguments "aarch64-apple-darwin" ordinarySymbols)
+  , TestLabel "selected tools survive a package cwd" $ TestCase $ do
       context <- installedContext "ghc" "ghc-pkg" "unused" [] Null
       identifier <- readProcess "ghc-pkg" ["field","ghc-internal","id","--simple-output"] ""
       unit <- case words identifier of [value] -> pure value; _ -> fail "expected one ghc-internal unit"
