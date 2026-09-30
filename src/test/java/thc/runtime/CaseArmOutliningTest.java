@@ -411,9 +411,9 @@ public class CaseArmOutliningTest {
         var entries = (List<?>) manifest.get("entries"); var inputs = new ArrayList<Long>(); for (var input : (List<?>) manifest.get("arguments")) inputs.add(((Number) input).longValue());
         var nativeRows = new ArrayList<Long>(); for (var value : (List<?>) manifest.get("native")) nativeRows.add(((Number) value).longValue());
         for (var stage : List.of("pre", "post")) for (boolean async : new boolean[] {false, true}) withLanguage(language -> {
-            var source = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/delimited-continuations/" + stage + "/core/DelimitedContinuations.json").toPath()));
+            var source = CoreCbdFixtures.read(new File(root, "build/delimited-continuations/" + stage + "/core/DelimitedContinuations.cbd").toPath());
             for (var entry : List.of("resumeTwice", "resumedTail", "resumedJoin", "resumedScalar", "capturedCatch", "capturedMask")) {
-                var p = new Program(language, CoreModules.reachable(source, entry), async, true); var function = org.graalvm.polyglot.Context.getCurrent().asValue(new EntryValue(p, entry, 1));
+                var p = new Program(language, CoreModules.reachable(source, "main:DelimitedContinuations." + entry), async, true); var function = org.graalvm.polyglot.Context.getCurrent().asValue(new EntryValue(p, "main:DelimitedContinuations." + entry, 1));
                 for (int index = 0; index < inputs.size(); index++) {
                     assertEquals(nativeRows.get(index * entries.size() + entries.indexOf(entry)).longValue(), function.execute(inputs.get(index)).asLong(), stage + "/" + async + "/" + entry);
                     assertEquals(MaskingState.UNMASKED, Language.currentState().getMaskingState().get()); released(language);
