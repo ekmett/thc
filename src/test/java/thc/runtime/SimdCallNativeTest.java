@@ -143,9 +143,10 @@ class SimdCallNativeTest {
         assertFalse(retainedLazyVectorArgument(exported(List.of(false, true), List.of(true, false), lazyBox, "unrelated"), "selectBox"));
     }
     private Map<String, Object> named(List<Map<String, Object>> values, String name) {
-        var matches = new ArrayList<Map<String, Object>>(); for (var value : values) if (Objects.equals(value.get("name"), name)) matches.add(value);
+        var matches = new ArrayList<Map<String, Object>>(); for (var value : values) if (Objects.equals(value.get("id"), entryId(name))) matches.add(value);
         assertEquals(1, matches.size()); return matches.getFirst();
     }
+    private static String entryId(String name) { return "main:SimdCallAudit." + name; }
     private boolean constructorPap(List<List<?>> expressions, Object partialId, Object heapId) {
         for (var call : expressions) if (Objects.equals(at(call, 0), "app") && Objects.equals(at(at(call, 1), 1), partialId)) {
             var arguments = list(at(call, 2)); var argument = arguments.size() == 1 ? arguments.getFirst() : null;
@@ -215,10 +216,10 @@ class SimdCallNativeTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var source = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdCallAudit.json").toPath())); retainedHeapCore(source);
+                    var source = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdCallAudit.cbd").toPath()); retainedHeapCore(source);
                     for (var name : entries) {
                         if (wantedEntries == null ? name.startsWith("keepAlive") : !wantedEntries.contains(name)) continue;
-                        var linked = CoreModules.reachable(source, name);
+                        var linked = CoreModules.reachable(source, entryId(name));
                         if (name.equals("keepAliveThrowSumCase")) assertTrue(nodes(linked).stream().anyMatch(node ->
                             Objects.equals(at(node, 0), "case") && Objects.equals(at(node, 3), List.of()) &&
                             Objects.equals(field(field(field(at(node, 4), "binder"), "rep"), "aggregate"), "unboxed-sum")),
@@ -228,9 +229,9 @@ class SimdCallNativeTest {
                             Objects.equals(at(at(node, 1), 1), "keepAlive#") &&
                             Objects.equals(field(field(at(node, 6), "rep"), "kind"), "vector")), "Genuine direct-vector keepAlive# must remain in exported Core");
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                        var function = context.asValue(new EntryValue(program, name, 1)); var selected = new ArrayList<Row>(); for (var row : rows) if (row.name.equals(name)) selected.add(row);
+                        var function = context.asValue(new EntryValue(program, entryId(name), 1)); var selected = new ArrayList<Row>(); for (var row : rows) if (row.name.equals(name)) selected.add(row);
                         for (var row : selected) assertEquals(row.want, function.execute(row.x).asLong(), stage + "/" + backend + "/" + name + "/" + row.x + " interpreted");
-                        assertTrue(function.invokeMember("compile").asBoolean(), stage + "/" + backend + "/" + name + " compile"); var target = program.entryTarget(name);
+                        assertTrue(function.invokeMember("compile").asBoolean(), stage + "/" + backend + "/" + name + " compile"); var target = program.entryTarget(entryId(name));
                         for (var row : selected) {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             assertEquals(row.want, function.execute(row.x).asLong(), stage + "/" + backend + "/" + name + "/" + row.x + " compiled");
