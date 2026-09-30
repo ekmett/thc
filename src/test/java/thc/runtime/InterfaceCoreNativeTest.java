@@ -41,6 +41,7 @@ class InterfaceCoreNativeTest {
     private final Path directory = root.resolve("build/interface-core");
     private final List<String> entries = List.of("opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry", "wrapperEntry");
     private Map<String, Object> read(String path) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(directory.resolve(path))); }
+    private static String entryId(String entry) { return "thc-interface-fixture-0.1:" + (entry.equals("coercionEntry") ? "CBVCoercionAudit." : "InterfaceLibrary.") + entry; }
     private static <T> T single(List<T> values) {
         if (values.isEmpty()) throw new NoSuchElementException("List is empty.");
         if (values.size() != 1) throw new IllegalArgumentException("List has more than one element.");
@@ -101,7 +102,7 @@ class InterfaceCoreNativeTest {
     }
     private static byte[] bytes() { var bytes = new byte[32]; Arrays.fill(bytes, (byte) 0x5a); return bytes; }
     @Test void originalCapiBitcodeCallsThroughManagedOffsetWithoutExposingHostPointers() throws Exception {
-        oracle(); var archived = read("clock-capi.json"); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(archived));
+        oracle(); var archived = CoreCbdFixtures.read(directory.resolve("clock-capi.cbd")); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(archived));
         assertEquals(Set.of("fixture_clock_id", "fixture_clock_time", "fixture_clock_resolution"), link.getSymbols());
         try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
             context.initialize("thc"); context.enter();
@@ -124,7 +125,7 @@ class InterfaceCoreNativeTest {
     }
     private static Map<String, Object> tuple(boolean evaluated) { return Map.of("kind", "unknown", "primReps", List.of("Int32Rep"), "aggregate", "unboxed-tuple", "components", List.of(scalar(null), scalar("Int32Rep")), "evaluated", evaluated); }
     @Test void linkedCapiStateAndAddressCallsRetainTypedCompiledAstAndBytecodeEntries() throws Exception {
-        oracle(); var archived = read("clock-capi.json"); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(archived));
+        oracle(); var archived = CoreCbdFixtures.read(directory.resolve("clock-capi.cbd")); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(archived));
         var reps = Arrays.asList("Word64Rep", "AddrRep", null); var formals = new ArrayList<Map<String, Object>>();
         for (int i = 0; i < reps.size(); i++) formals.add(Map.of("id", "p" + i, "lifted", false, "rep", scalar(reps.get(i))));
         var symbols = new ArrayList<String>(); for (var symbol : link.getSymbols()) if (symbol.endsWith("fixture_clock_time")) symbols.add(symbol); var symbol = single(symbols);
@@ -167,7 +168,7 @@ class InterfaceCoreNativeTest {
     @Test void helperPreservesGenuineInstalledWorkerCbvMarks() throws Exception {
         oracle(); var direct = read("direct/CBVCoercionAudit.json"); var loaded = source("coercionEntry");
         var original = select((List<Map<String, Object>>) direct.get("bindings"), "name", "$wwitnessed");
-        var hydrated = select((List<Map<String, Object>>) loaded.get("bindings"), "name", "$wwitnessed");
+        var hydrated = select((List<Map<String, Object>>) loaded.get("bindings"), "id", (String) original.get("id"));
         assertEquals(List.of(false, false, true), original.get("entryStrict")); assertEquals(original.get("entryStrict"), hydrated.get("entryStrict"));
         assertEquals("ghc-id", original.get("entryStrictSource")); assertEquals("ghc-id", hydrated.get("entryStrictSource"));
         assertEquals(((Map<?, ?>) original.get("info")).get("cbvMarks"), ((Map<?, ?>) hydrated.get("info")).get("cbvMarks"));
@@ -177,10 +178,10 @@ class InterfaceCoreNativeTest {
         var missing = read("logs/helper-thin.stdout"); assertEquals("unavailable", missing.get("status"));
         assertEquals("complete-interface-core", missing.get("capability")); assertFalse(missing.containsKey("core"));
         var command = read("logs/helper-thin.command.json"); assertEquals(3L, ((Number) command.get("exit")).longValue());
-        var wired = read("wired-unit.json"); var wiredResponse = read("logs/helper-wired-unit.stdout"); var wiredCommand = read("logs/helper-wired-unit.command.json");
+        var wired = read("wired-unit.json"); var wiredResponse = Boolean.TRUE.equals(wired.get("completeCore")) ? CoreCbdFixtures.read(directory.resolve("logs/helper-wired-unit.stdout")) : read("logs/helper-wired-unit.stdout"); var wiredCommand = read("logs/helper-wired-unit.command.json");
         assertEquals("ghc-internal", wired.get("interfaceUnit")); assertNotEquals(wired.get("registeredUnit"), wired.get("interfaceUnit")); assertEquals(wired.get("expectedExit"), wiredCommand.get("exit"));
         if (Boolean.TRUE.equals(wired.get("completeCore"))) {
-            assertEquals("loaded", wiredResponse.get("status")); assertEquals(wired.get("interfaceUnit"), ((Map<?, ?>) wiredResponse.get("core")).get("unit"));
+            assertEquals("GHC.Internal.Char", wiredResponse.get("module")); assertEquals(wired.get("interfaceUnit"), wiredResponse.get("unit"));
         } else {
             assertEquals("unavailable", wiredResponse.get("status")); assertEquals("complete-interface-core", wiredResponse.get("capability"));
             assertEquals(wired.get("registeredUnit"), wiredResponse.get("unit")); assertFalse(wiredResponse.containsKey("core"));
@@ -189,7 +190,7 @@ class InterfaceCoreNativeTest {
     @Test void completeInterfacePreservesMetadataAndPassesStrictAdmission() throws Exception {
         oracle(); var source = source("opaqueEntry"); assertEquals("optimized-Core-after-Tidy-before-CorePrep", source.get("boundary"));
         assertEquals("thc-interface-fixture-0.1", source.get("unit")); assertFalse(Files.exists(directory.resolve("source/InterfaceLibrary.hs")));
-        var bindings = (List<Map<String, Object>>) source.get("bindings"); var worker = select(bindings, "name", "privateWorker");
+        var bindings = (List<Map<String, Object>>) source.get("bindings"); var worker = single(bindings.stream().filter(binding -> ((String) binding.get("id")).startsWith("thc-interface-fixture-0.1:InterfaceLibrary.privateWorker_")).toList());
         assertTrue(((String) worker.get("id")).startsWith("thc-interface-fixture-0.1:InterfaceLibrary.privateWorker_"));
         boolean recursive = false;
         for (var group : (List<Map<String, Object>>) source.get("groups")) if (Boolean.TRUE.equals(group.get("recursive"))) { recursive = true; break; }
@@ -231,9 +232,9 @@ class InterfaceCoreNativeTest {
                 var entry = entries.get(index); context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var linked = new LinkedHashMap<>(CoreModules.reachable(source(entry), entry, true)); linked.put("instrument", true);
+                    var linked = new LinkedHashMap<>(CoreModules.reachable(source(entry), entryId(entry), true)); linked.put("instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                    var target = program.entryTarget(entry);
+                    var target = program.entryTarget(entryId(entry));
                     // Save the target before a CAF update clears it. A
                     // memoized constant is not a per-invocation function.
                     var constants = new ArrayList<Constant>();
