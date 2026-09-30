@@ -17,7 +17,7 @@ module THC.Driver.Wired
   , exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout, preparePinnedInterfaces, pinnedDependencyOrder ) where
 
 import Control.Monad (filterM, foldM, forM, forM_, unless, when)
-import Control.Exception (bracket)
+import Control.Exception (bracket, finally)
 import qualified Crypto.Hash.SHA256 as SHA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -38,7 +38,8 @@ import System.Environment (lookupEnv)
 import qualified System.Info as Host
 import System.FilePath ((</>), makeRelative, replaceExtension, takeDirectory, takeExtension, takeFileName)
 import System.Process (CreateProcess(..), StdStream(UseHandle), createProcess, proc, readProcess, rawSystem, waitForProcess)
-import System.IO (hClose, openTempFile, stderr)
+import System.IO (hClose, openTempFile, stderr, stdout)
+import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 import Text.Read (readEither)
 import THC.Driver.Installed (InstalledContext(..), InstalledUnit(..), boundedInterfaceProcess)
 import THC.Compact.Module (readModuleMetadata)
@@ -51,6 +52,7 @@ import Distribution.Package (pkgName, pkgVersion)
 import qualified Distribution.PackageDescription as PD
 import Distribution.Simple.PackageDescription (readGenericPackageDescription)
 import Distribution.Pretty (prettyShow)
+import Distribution.Simple (defaultMainArgs, defaultMainWithSetupHooksArgs, autoconfSetupHooks)
 import Distribution.Simple.Configure (getPersistBuildConfig)
 import Distribution.Simple.LocalBuildInfo (localPkgDescr, compiler, hostPlatform,
   allComponentsInBuildOrder, componentUnitId, componentPackageDeps, componentBuildDir, allLibModules)
@@ -502,7 +504,6 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                 (_, dependency) <- either (fail . show) pure
                   (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack text)))
                 pure ("--dependency=" ++ prettyShow (pkgName (Package.sourcePackageId dependency)) ++ "=" ++ identifier)
-              cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
               let includes = nub (package : Package.includeDirs registered)
                   options = ["configure",
                     "--builddir=" ++ dist, "--with-compiler=" ++ installedGhc original,
@@ -514,10 +515,18 @@ preparePinnedInterfaces cache driverHash pluginUnit pluginLibrary original units
                     -- Cabal runs Configure from dist/build; the genuine source
                     -- headers live beside dist. Keep paths with spaces out of CPPFLAGS.
                     ["--configure-option=CPPFLAGS=" ++ cppFlags ++ " -I../../source" | PD.buildType description == PD.Configure]
-              if PD.buildType description == PD.Custom
-                then configurePinnedCustom source package (destination </> "setup") (installedGhc original) options
-                else checkedIn package cabal
-                  (["act-as-setup", "--build-type=" ++ prettyShow (PD.buildType description), "--"] ++ options)
+              case PD.buildType description of
+                PD.Custom -> configurePinnedCustom source package (destination </> "setup") (installedGhc original) options
+                buildType -> do
+                  setup <- case buildType of
+                    PD.Simple -> pure defaultMainArgs
+                    PD.Configure -> pure (defaultMainWithSetupHooksArgs autoconfSetupHooks)
+                    _ -> fail ("Unsupported pinned package build type: " ++ prettyShow buildType)
+                  withCurrentDirectory package $
+                    bracket (hDuplicate stdout)
+                      (\saved -> hDuplicateTo saved stdout `finally` hClose saved) $ \_ -> do
+                        hDuplicateTo stderr stdout
+                        setup options
               configured <- getPersistBuildConfig Nothing (makeSymbolicPath dist)
               let configuredPackage = localPkgDescr configured
               lib <- maybe (fail "pinned installed unit is not a library") pure (PD.library configuredPackage)
