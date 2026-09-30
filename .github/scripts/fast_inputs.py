@@ -560,6 +560,29 @@ simd-floatx4-bytearray simd-doublex2-bytearray""".split()
 CHECK_DIRS = """aggregate-layout empty-join-input empty-tuple-input floating-tuple
 state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
 tuple-return unsafe-equality""".split()
+AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
+    "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
+    "build/floating/core/FloatingAudit.cbd",
+    *(f"build/{family}/{stage}-core/{module}.cbd" for family, module in (
+        ("empty-tuple-input", "EmptyTupleInputAudit"), ("tuple-input", "TupleInputAudit"),
+        ("tuple-join", "TupleJoinAudit"), ("tuple-return", "TupleReturnAudit"),
+        ("state-tuple", "StateTupleAudit"), ("empty-join-input", "EmptyJoinInputAudit"),
+        ("floating-tuple", "FloatingTupleAudit"), ("aggregate-layout", "AggregateLayoutAudit"),
+        ("sum-layout", "SumLayoutAudit"), ("sum-result", "SumResultAudit"))
+      for stage in ("pre", "post")),
+    *(f"build/tag-to-enum/{stage}-core/{module}.cbd" for stage in ("pre", "post")
+      for module in ("TagToEnumAudit", "TagToEnumExternal", "TagToEnumFrontier")),
+})
+
+BASE_CORE_CBD_OUTPUTS = frozenset({
+    *(f"build/core/{module}.cbd" for module in ("THC.Prim.Test", "Fixtures", "StrictFields", "SpeculationAudit",
+        "RepresentationAudit", "SourceNotes", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+    *(f"build/source-core/{module}.cbd" for module in ("SourceNotes", "RepresentationAudit")),
+    *(f"build/map/{folder}/GHC.Internal.{module}.cbd" for folder in ("core", "boot-core") for module in ("CString", "Err")),
+    "build/map/core/GHC.InterfaceClosure.cbd",
+})
+
 CORE_CONTRACT_CBD_REQUIRED = frozenset({
     *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
     *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
@@ -571,6 +594,8 @@ CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
              "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
     *CORE_CONTRACT_CBD_REQUIRED,
+    *BASE_CORE_CBD_OUTPUTS,
+    *AGGREGATE_HOST_CBD_OUTPUTS,
     *RUBBISH_OUTPUTS,
     *PROXY_VOID_OUTPUTS,
     *WEAK_OUTPUTS,
@@ -595,16 +620,7 @@ REQUIRED = tuple(sorted({
     "build/scalar-signatures/provenance.json", "build/aggregate-frontier.json",
     "build/aggregate-native/oracle.tsv", "build/native/oracle.tsv",
     "build/map/boot-provenance.json", "build/corpus/corpus.json",
-    "build/core/THC.Prim.Test.json", "build/core/Fixtures.json",
-    "build/aggregate-core/AggregateFrontier.json",
-    "build/aggregate-post-core/AggregateFrontier.json",
-    "build/map/core/GHC.InterfaceClosure.json",
-    "build/map/boot-core/GHC.Internal.CString.json",
-    *(f"build/core/{n}.json" for n in ("StrictFields", "SpeculationAudit",
-      "RepresentationAudit", "SourceNotes", "CBVAudit", "CBVJoinAudit",
-      "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
-    *(f"build/cbv-post-core/{n}.json" for n in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
-    "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
+
 }))
 BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-directory-paths", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
@@ -1902,12 +1918,6 @@ SYNCHRONOUS_EXCEPTION_OUTPUTS = frozenset("build/synchronous-exceptions/" + name
     *(f"logs/{label}{suffix}" for label in ("ghc-version", "python-version", "cabal-plugin-build", "plugin-metadata",
         "pre-export", "post-export", "native-build", "native-word-bits", "native-oracle")
       for suffix in (".stdout", ".stderr", ".command.json"))))
-AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
-    "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
-    *(f"build/{family}/{stage}-core/{module}.cbd" for family, module in (
-        ("aggregate-layout", "AggregateLayoutAudit"), ("sum-layout", "SumLayoutAudit"), ("sum-result", "SumResultAudit"))
-      for stage in ("pre", "post")),
-})
 
 CBV_CONTRACT_CBD_OUTPUTS = frozenset({
     *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
@@ -1936,6 +1946,10 @@ def allowed_payload(name):
     if name in SIMD_SMOKE_SOURCES:
         return True
     if len(parts) < 3 or parts[0] != "build":
+        return False
+    if str(PurePosixPath(name).parent) in CORE_DIRS:
+        return name in BASE_CORE_CBD_OUTPUTS or name in AGGREGATE_HOST_CBD_OUTPUTS
+    if name.endswith(".json") and name[:-5] + ".cbd" in AGGREGATE_HOST_CBD_OUTPUTS:
         return False
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
@@ -2037,10 +2051,6 @@ def allowed_payload(name):
         return True
     if parts[1] == "floating-remainder":
         return name in FLOATING_REMAINDER_OUTPUTS
-    if name in {f"build/state-tuple/{stage}-core/StateTupleAudit.cbd" for stage in ("pre", "post")}:
-        return True
-    if name == "build/floating/core/FloatingAudit.cbd":
-        return True
     if name in {f"build/{family}/{folder.format(stage=stage)}/{module}.cbd"
                 for family, folder, fixture in (("boxed-arrays", "{stage}/core", "BoxedArrayAudit"),
                                                 ("array-slices", "{stage}-core", "ArraySliceAudit"),
@@ -2205,7 +2215,7 @@ def inventory(root, current, read, core_files, verified=None):
     tracked = tracked_files(root)
     for name in core_files:
         p = PurePosixPath(relative(name))
-        require(str(p.parent) in CORE_DIRS and p.suffix == ".json", "Unknown extra Core file: " + name)
+        require(str(p.parent) in CORE_DIRS and p.suffix == ".cbd", "Unknown extra Core file: " + name)
     pending = list(dict.fromkeys((*REQUIRED, *core_files)))
     payload, external, expected, visited = {}, {}, {}, set()
     while pending:
@@ -2366,7 +2376,7 @@ def safe_mode(mode, name):
 def pack(root, current, output):
     require(not output.exists() and not output.is_symlink(), "Bundle already exists; preserve the prior attempt")
     core = sorted(p.relative_to(root).as_posix() for d in CORE_DIRS
-                  for p in file_path(root, d).glob("*.json"))
+                  for p in file_path(root, d).glob("*.cbd"))
     def read(name):
         path = file_path(root, name)
         require(path.is_file(), "Missing prepared input: " + name)

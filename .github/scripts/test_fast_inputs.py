@@ -1582,7 +1582,7 @@ class FastInputTests(unittest.TestCase):
         self.required_patch.start(); self.addCleanup(self.required_patch.stop)
         self.current = cache.identity(self.root)
         self.put("build/data-to-tag/oracle.tsv", "0\t17\n")
-        self.put("build/core/Fixture.json", json.dumps({"module": "Fixture", "bindings": []}))
+        self.put("build/core/Fixtures.cbd", json.dumps({"module": "Fixture", "bindings": []}))
         self.manifest = {"inputHashes": {"bin/prepare-tests.sh": self.current["sources"]["bin/prepare-tests.sh"],
                                          self.pinned_name: cache.sha(self.pinned_source)},
                          "artifactHashes": {"build/data-to-tag/oracle.tsv": cache.digest(self.root / "build/data-to-tag/oracle.tsv")}}
@@ -1750,12 +1750,18 @@ class FastInputTests(unittest.TestCase):
             cache.inventory(self.root, self.current, lambda name: (self.root / name).read_bytes(), [])
 
     def test_old_cbv_payload_cannot_satisfy_renamed_required_core(self):
-        self.put("build/core/CbvAudit.json", json.dumps({"module": "CbvAudit", "bindings": []}))
-        manifest = self.pack(); self.remove_payload(manifest)
-        self.assertIn("build/core/CbvAudit.json", manifest["payload"])
-        self.assertNotIn("build/core/CBVAudit.json", manifest["payload"])
+        self.put("build/core/CbvAudit.cbd", json.dumps({"module": "CbvAudit", "bindings": []}))
+        with self.assertRaisesRegex(cache.CacheMiss, "Unknown/tracked payload"):
+            self.pack()
+        allowed = cache.allowed_payload
+        with patch.object(cache, "allowed_payload", lambda name:
+                          name == "build/core/CbvAudit.cbd" or allowed(name)):
+            manifest = self.pack()
+        self.remove_payload(manifest)
+        self.assertIn("build/core/CbvAudit.cbd", manifest["payload"])
+        self.assertNotIn("build/core/CBVAudit.cbd", manifest["payload"])
         # Archive names remain exact even on a case-insensitive host filesystem.
-        with patch.object(cache, "REQUIRED", ("build/core/CBVAudit.json",)):
+        with patch.object(cache, "REQUIRED", ("build/core/CBVAudit.cbd",)):
             self.rejected_without_writes(self.bundle)
 
     def test_installed_interfaces_use_the_toolchain_version_gate(self):
@@ -1943,7 +1949,7 @@ class FastInputTests(unittest.TestCase):
                 self.pack()
 
     def test_aggregate_host_cbd_payloads_are_closed_to_exact_modules_and_stages(self):
-        self.assertEqual(8, len(cache.AGGREGATE_HOST_CBD_OUTPUTS))
+        self.assertEqual(29, len(cache.AGGREGATE_HOST_CBD_OUTPUTS))
         for name in ("build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd"):
             self.assertIn(name, DECLARED_REQUIRED)
         for name in cache.AGGREGATE_HOST_CBD_OUTPUTS:
@@ -2083,7 +2089,7 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(0o755,(self.root/name).stat().st_mode & 0o7777)
         with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o4755,name)
         with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o777,name)
-        with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o755,"build/core/Fixture.json")
+        with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o755,"build/core/Fixtures.cbd")
 
     def test_pack_sanitizes_write_permissions_without_overwriting_existing_modes(self):
         name = "build/data-to-tag/oracle.tsv"
@@ -2200,7 +2206,7 @@ class RenamedInputContractTests(unittest.TestCase):
     def test_required_cbv_modules_match_renamed_genuine_fixture_declarations(self):
         root = Path(__file__).resolve().parents[2]
         expected = {f"build/{folder}/{module}.{suffix}" for folder in ("core", "cbv-post-core")
-                    for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit") for suffix in ("json", "cbd")}
+                    for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit") for suffix in ("cbd",)}
         self.assertEqual(expected, {name for name in cache.REQUIRED if "CBV" in name})
         self.assertFalse(any("Cbv" in name for name in cache.REQUIRED))
         for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit"):
