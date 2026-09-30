@@ -3730,7 +3730,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         // The constant operation selects the carrier; execution does not need
         // a previously observed DSL specialization to establish that fact.
         @Specialization public static Object index(ManagedAddressRead operation, Object address, Object element) {
-            if (!(address instanceof ManagedAddress managed)) throw fail("Expected a managed Addr#");
+            if (!(address instanceof ManagedAddress managed)) throw fail("Expected a managed literal Addr#");
             if (!(element instanceof Long offset)) throw fail("Expected primitive Long");
             if (operation.isInt()) return operation.readInt(managed, offset);
             return operation.read(managed, offset);
