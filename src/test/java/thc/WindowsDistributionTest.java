@@ -80,6 +80,13 @@ class WindowsDistributionTest {
         assertEquals(19, ((List<?>) receipt.get("entries")).size());
         var commands = (List<Map<String, Object>>) receipt.get("commands");
         assertTrue(commands.stream().anyMatch(command -> ((Number) command.get("expectedExit")).longValue() == 1L));
+        var helperArguments = commands.stream().map(command -> (List<String>) command.get("argv"))
+            .filter(argv -> argv.contains("--interface") && argv.contains("GHC.Internal.CString")).toList();
+        assertEquals(1, helperArguments.size());
+        var selectedBuild = System.getenv("THC_CABAL_BUILD_DIR");
+        if (selectedBuild != null)
+            assertTrue(Path.of(helperArguments.getFirst().getFirst()).startsWith(root.resolve(selectedBuild).normalize()),
+                "CString must use the helper from the selected Cabal build");
         assertNotNull(getClass().getResource("/thc/cbits/md5.dll"));
         try (var input = getClass().getResourceAsStream("/thc/native/stdio-host-abi.json")) {
             assertNotNull(input);

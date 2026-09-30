@@ -222,8 +222,10 @@ prepareCString root logs ghc = do
   unit <- oneLine <$> run root [] pkg ["field", "ghc-internal", "id", "--simple-output"] ""
   libdir <- oneLine <$> run root [] ghc ["--print-libdir"] ""
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
-  helper <- oneLine <$> run root [] cabal ["list-bin", "exe:thc-interface", "--disable-shared",
-    "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ""
+  buildDirectory <- lookupEnv "THC_CABAL_BUILD_DIR"
+  helper <- oneLine <$> run root [] cabal (["list-bin", "exe:thc-interface", "--disable-shared",
+    "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
+    ["--builddir=" ++ directory | Just directory <- [buildDirectory]]) ""
   installed <- interfaceFiles imports ""
   let dependencies = filter (/= "GHC" </> "Internal" </> "CString.hi") installed
   copied <- forM dependencies $ \relative -> do
@@ -324,7 +326,8 @@ prepareWindowsDriver root = do
         verified = manifest `elem` auditedManifests
     audited <- doesFileExist (root </> audit)
     unless (audited == verified) (die ("driver audit presence differs from requested policy: " ++ manifest))
-    files <- filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
+    files <- filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
+    unless (not (null files)) (die ("driver exported no CBD Core: " ++ manifest))
     pure ([core </> file | file <- files] ++ [audit | verified] ++ [output </> "export.args"])
   artifactHashes <- hashes root (copied ++ supportManifests ++ exports ++ [native </> "completed.exe"] ++ concatMap commandArtifacts commands)
   writeJson (root </> "build/windows-driver/provenance.json") $ object
