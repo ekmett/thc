@@ -24,7 +24,7 @@ import FixtureSupport (hashes, readInteger, run, runWithTimeout, writeJson)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>), takeExtension)
+import System.FilePath ((</>), replaceExtension, takeExtension)
 
 entries :: [String]
 entries = ["stRef", "lazyRef", "closureRef", "orderedRef", "unliftedRef", "stLoop",
@@ -74,6 +74,7 @@ prepareMutVar root = do
     let stageDir = directory </> stage
         core = stageDir </> "core"
         modules = [core </> "MutVarAudit.json", core </> "THC.InterfaceClosure.json"]
+        compactModules = map (`replaceExtension` "cbd") modules
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries]
     _ <- run root [("THC_CORE_OUT", root </> core),
@@ -81,7 +82,7 @@ prepareMutVar root = do
       "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : postTidy ++ roots ++ [source]) ""
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
-      unless present (die ("Missing genuine MutVar Core export: " ++ path))) modules
+      unless present (die ("Missing genuine MutVar Core export: " ++ path))) (modules ++ compactModules)
     exportedModules <- sort . filter ((== ".json") . takeExtension) <$>
       listDirectory (root </> core)
     unless (exportedModules == ["MutVarAudit.json", "THC.InterfaceClosure.json"]) $
@@ -89,7 +90,7 @@ prepareMutVar root = do
     mapM_ (\name -> do
       let report = stageDir </> name ++ ".audit.json"
       _ <- run root [] "python3"
-        (["bin/audit-core.py", "--entry", name, "--output", report] ++ modules) ""
+        (["bin/audit-core.py", "--entry", "main:MutVarAudit." ++ name, "--output", report] ++ compactModules) ""
       pure ()) entries
     pure (stage,modules)
   let native = directory </> "native"
@@ -118,7 +119,8 @@ prepareMutVar root = do
         ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"] ++
         ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"]
       artifacts = [driver,oracle] ++ concat
-        [modules ++ [directory </> stage </> name ++ ".audit.json" | name <- entries]
+        [modules ++ map (`replaceExtension` "cbd") modules ++
+          [directory </> stage </> name ++ ".audit.json" | name <- entries]
           | (stage,modules) <- stages]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
