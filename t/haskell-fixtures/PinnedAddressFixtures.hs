@@ -35,6 +35,7 @@ import System.FilePath ((</>), takeExtension)
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import System.Timeout (timeout)
 import Text.Read (readMaybe)
+import THC.Compact.Module (encodeModuleValue, writeModuleValue)
 
 directory, prefix :: String
 directory = "build/pinned-addresses"
@@ -384,12 +385,19 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
       commandFiles ["native-build","native-oracle"])
   stages <- if nativeOnly then pure [] else forM ["pre","post"] $ \stage -> do
     let base = directory </> stage
-        paths = [base </> "core" </> name ++ ".json" | name <- ["PinnedAddressAudit","THC.InterfaceClosure"]]
+        paths = [base </> "core" </> name ++ ".cbd" | name <- ["PinnedAddressAudit","THC.InterfaceClosure"]]
+        diagnostics = [base </> "core" </> name ++ ".json" | name <- ["PinnedAddressAudit","THC.InterfaceClosure"]]
     _ <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",root </> base </> "core"),("THC_GHC_OUT",root </> base </> "ghc"),("THC_SOURCE_NOTES","true")]
-      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:pretty-diagnostics"] ++
+        ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_) <- entries ++ frontiers] ++ ["t/fixtures/compiler/PinnedAddressAudit.hs"])
-    modules <- toJSON <$> mapM (readJson . (root </>)) paths
+    originals <- mapM (readJson . (root </>)) diagnostics
+    forM_ (zip paths originals) $ \(path,value) -> do
+      encoded <- encodeModuleValue value
+      actual <- BS.readFile (root </> path)
+      check (encoded == actual) "Printed source proof differs from executable CBD"
+    let modules = toJSON originals
     boundary <- either die pure (at [Index 0,Key "boundary"] modules)
     check (boundary == String (if stage == "pre" then "optimized-Core-before-Tidy" else "optimized-Core-after-Tidy-before-CorePrep")) "Wrong actual Core stage"
     reports <- forM (entries ++ frontiers) $ \(name,_) -> do
@@ -421,9 +429,9 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
     negativesAndArtifacts <- if not accepted then pure [] else forM negatives $ \(label,name,primitive,argument,kind,rep) -> do
       baseline <- maybe (die "Missing negative baseline") pure (lookup name reports)
       changed <- either die pure (forge modules baseline primitive argument kind rep)
-      let mutatedPaths = [base </> "negative" </> label ++ "-" ++ show i ++ ".json" | i <- [0 :: Int,1]]
+      let mutatedPaths = [base </> "negative" </> label ++ "-" ++ show i ++ ".cbd" | i <- [0 :: Int,1]]
       createDirectoryIfMissing True (root </> base </> "negative")
-      forM_ (zip mutatedPaths (array changed)) (\(path,value) -> writeJson (root </> path) value)
+      forM_ (zip mutatedPaths (array changed)) (\(path,value) -> writeModuleValue (root </> path) value)
       report <- audit stage ("negative-" ++ label) mutatedPaths name (Just 1)
       rejected <- either die pure (field "accepted" report)
       issues <- either die pure (field "issues" report) :: IO [Value]
@@ -432,7 +440,7 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
       pure (label,object ["entry" .= name,"primitive" .= primitive,"summary" .= summary,"issues" .= issues],
         mutatedPaths ++ [base </> "negative-" ++ label ++ ".audit.json"] ++ commandFiles [stage ++ "-negative-" ++ label ++ "-audit"])
     let negativeReports = Map.fromList [(label,report) | (label,report,_) <- negativesAndArtifacts]
-        artifacts = paths ++ [base </> name ++ ".audit.json" | (name,_) <- entries ++ frontiers] ++
+        artifacts = paths ++ diagnostics ++ [base </> name ++ ".audit.json" | (name,_) <- entries ++ frontiers] ++
           commandFiles ((stage ++ "-export"):[stage ++ "-" ++ name ++ "-audit" | (name,_) <- entries ++ frontiers]) ++
           concat [files | (_,_,files) <- negativesAndArtifacts] ++ [base </> "negative-proofs.json" | accepted]
     when accepted (writeJson (root </> base </> "negative-proofs.json") (toJSON negativeReports))
