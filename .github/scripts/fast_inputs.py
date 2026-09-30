@@ -504,7 +504,7 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
     "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
-    "manifest.json", "pre-core/GeneratedSimdSmoke.json", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
+    "manifest.json", "pre-core/GeneratedSimdSmoke.cbd", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
 INTEGER_SIMD_FAMILIES = {
     "simd-int8x16": ("Int8X16", 9168), "simd-int16x8": ("Int16X8", 6032),
     "simd-word16x8": ("Word16X8", 5116), "simd-word32x4": ("Word32X4", 4882),

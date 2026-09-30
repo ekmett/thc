@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import subprocess
@@ -97,11 +98,11 @@ def main():
     subprocess.run(['bin/export-core.sh', '-fno-code', '-fwrite-if-simplified-core', str(FIXTURE)],
                    cwd=ROOT, check=True, env=dict(os.environ, THC_CORE_OUT=str(core_dir),
                                                   THC_GHC_OUT=str(OUT / 'ghc'), THC_SOURCE_NOTES='true'))
-    core = core_dir / 'GeneratedSimdSmoke.json'
-    exported = json.loads(core.read_text())
+    core = core_dir / 'GeneratedSimdSmoke.cbd'
+    exported = inspect_cbd(core.read_bytes())
     auditor = module(ROOT / 'bin/audit-core.py', 'simd_auditor')
     groups = generator.smoke_groups(generator.families())
-    audits = {name: auditor.Audit([(str(core), exported)], capabilities).run([name]) for name in groups}
+    audits = {name: auditor.Audit([(str(core), exported)], capabilities).run(['main:GeneratedSimdSmoke.' + name]) for name in groups}
     used = {p['name'] for audit in audits.values() for p in audit['primitives']}
     for name, audit in audits.items():
         if not audit['accepted'] or audit['missingGlobals'] or audit['issues']:

@@ -429,7 +429,7 @@ tasks.withType(Test).configureEach {
             "bit-primops/**/*.cbd", "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.cbd", "simd/pre-core/**/*.json", "simd/post-core/**/*.cbd", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**",
-            "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "simd-capability-smoke/native/**", "generated/simd/fixtures/*.hs",
+            "simd-capability-smoke/**/*.cbd", "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "simd-capability-smoke/native/**", "generated/simd/fixtures/*.hs",
             "explicit64-primops/core/**/*.cbd", "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.cbd", "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.cbd", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.cbd", "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
