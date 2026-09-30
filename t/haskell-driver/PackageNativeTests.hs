@@ -442,12 +442,15 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       (nativeCompilerArguments ["--make","-hide-all-packages","-Iinclude","-O2","-odir","/build",
         "-optc-DREAL=1","-package-db","/db","-package-id","base-unit","-main-is","Main","Main.hs"])
   , TestCase $ do
-      let roots = ["/package/dist/build"]
-          allRoots = roots ++ ["/package/dist/build/tool/tool-tmp"]
-      assertBool "own C object admitted" (nativeObjectOwned roots allRoots "/package/dist/build/cbits/a.o")
+      current <- getCurrentDirectory
+      let own = current </> "package/dist/build"
+          nested = own </> "tool/tool-tmp"
+          roots = [own]
+          allRoots = roots ++ [nested]
+      assertBool "own C object admitted" (nativeObjectOwned roots allRoots (own </> "cbits/a.o"))
       assertBool "nested component C objects excluded"
-        (not (nativeObjectOwned roots allRoots "/package/dist/build/tool/tool-tmp/cbits/a.o"))
-      assertBool "unrelated output excluded" (not (nativeObjectOwned roots allRoots "/other/a.o"))
+        (not (nativeObjectOwned roots allRoots (nested </> "cbits/a.o")))
+      assertBool "unrelated output excluded" (not (nativeObjectOwned roots allRoots (current </> "other/a.o")))
 
   , TestCase $ do
       let options = ["--make","-no-link","-package-db","/exact/db","-hide-all-packages",
