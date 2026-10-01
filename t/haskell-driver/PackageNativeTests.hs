@@ -15,18 +15,25 @@ module PackageNativeTests (tests) where
 
 import Control.Monad (forM_)
 import Control.Exception (bracket)
-import Data.Aeson (Value(..), object, toJSON, (.=))
+import qualified Crypto.Hash.SHA256 as SHA
+import Data.Aeson (Value(..), object, toJSON, encode, eitherDecodeStrict', (.=))
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import Numeric (showHex)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
-import System.Directory (findExecutable, getCurrentDirectory, createDirectory, removeFile,
-  makeAbsolute, withCurrentDirectory, createFileLink)
+import System.Directory (findExecutable, getCurrentDirectory, createDirectory, createDirectoryIfMissing, removeFile, getModificationTime,
+  makeAbsolute, withCurrentDirectory, createFileLink, renameFile)
 import System.Environment (getEnv, lookupEnv, setEnv, unsetEnv)
 import System.IO.Error (tryIOError)
 import System.FilePath ((</>), searchPathSeparator)
 import System.Process (readProcess, readProcessWithExitCode)
 import System.Exit (ExitCode(..))
+import System.IO (hClose, openTempFile)
 import qualified System.Info as Host
 import Test.HUnit
 import THC.Driver.PackageNative
@@ -36,11 +43,165 @@ import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (selectNativePieces, nativeSymbolArchives)
 import THC.Driver.Installed (installedContext, InstalledContext(..))
 import THC.Driver.Project (selectedPackageTool)
+import THC.Compact.Module (readModuleValue)
+import THC.Compact.Inspect (unpackContainer)
 import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestLabel "Core-owned exact calls do not manufacture native wrappers" $ TestCase $ do
+  [ TestLabel "normal captured GHC calls publish typed unlinked seeds and one C provider" $ TestCase $ do
+      scratch <- getEnv "THC_TEST_SCRATCH"
+      createDirectoryIfMissing True scratch
+      (root,handle) <- openTempFile scratch "demand-acquisition-"
+      hClose handle; removeFile root; createDirectory root
+      repository <- getEnv "THC_TEST_ROOT"
+      compiler <- tool "GHC" "ghc"
+      packageTool <- tool "GHC_PKG" "ghc-pkg"
+      helper <- tool "THC_TEST_INTERFACE" "thc-interface"
+      libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
+        [selectedLibdir] -> pure selectedLibdir
+        _ -> assertFailure "selected GHC must report one library directory"
+      let directory = root </> "acquired"
+          objects = directory </> "objects"
+          source = root </> "Demand.hs"
+          cSource = root </> "provider.c"
+          nativeObject = objects </> "provider.o"
+          arguments = ["-odir",objects,"-hidir",objects,"-dynamic","-this-unit-id","fixture-unit"]
+      createDirectoryIfMissing True objects
+      writeFile source $ unlines
+        ["{-# LANGUAGE MagicHash, UnboxedTuples, UnliftedFFITypes, ForeignFunctionInterface #-}",
+         "module Demand (next, nextSafe) where", "import GHC.Exts", "import GHC.IO (IO(..))",
+         "foreign import ccall unsafe \"next\" raw :: IO Int",
+         "foreign import ccall safe \"next\" rawSafe :: IO Int",
+         "next :: State# RealWorld -> Int#", "next s = case raw of IO action -> case action s of (# _, I# value #) -> value",
+         "nextSafe :: State# RealWorld -> Int#", "nextSafe s = case rawSafe of IO action -> case action s of (# _, I# value #) -> value"]
+      writeFile cSource $ unlines
+        ["static unsigned long state;",
+         "__attribute__((constructor)) static void initialize(void) { state = 40; }",
+         "__attribute__((noinline)) long next(void) { return ++state; }"]
+      let nativeArguments = ["-c",cSource,"-o",nativeObject]
+      (nativeStatus,_,nativeErrors) <- readProcessWithExitCode compiler nativeArguments ""
+      assertEqual nativeErrors ExitSuccess nativeStatus
+      withEnvironment [("THC_CORE_OUT",directory </> "core"),("THC_GHC_OUT",objects)] $ do
+        (status,_,diagnostic) <- readProcessWithExitCode (repository </> "bin/export-core.sh")
+          ["-this-unit-id=fixture-unit","-fwrite-if-simplified-core",
+           "-fplugin-opt=THC.Plugin:post-tidy","-fplugin-opt=THC.Plugin:unit-qualified",
+           "-fplugin-opt=THC.Plugin:foreign-import-provenance",source] ""
+        assertEqual diagnostic ExitSuccess status
+      captureNativeObject (root </> "pieces") compiler nativeArguments
+      capturePackageNative repository helper libdir compiler arguments "fixture-unit" directory
+      let cbd = directory </> "core/units/u-fixture-unit/Demand.cbd"
+      before <- BS.readFile cbd
+      original <- either assertFailure pure (readModuleValue before)
+      signatures <- either assertFailure pure (nativeSignatures "fixture-unit" [original])
+      assertEqual "both actual GHC emitted safety variants survive hydration" 2 (length signatures)
+      (_,descriptor) <- finishPackageNativeWithDependencies packageTool Nothing [] [] (root </> "pieces")
+        directory directory "fixture-unit" (Just [nativeObject]) [("Demand",cbd)]
+      assertBool "normal producer publishes a canonical actual C component" (descriptor /= Nothing)
+      after <- BS.readFile cbd
+      acquired <- either assertFailure pure (readModuleValue after)
+      (_,_,originalSegments) <- either assertFailure pure (unpackContainer before)
+      (_,_,acquiredSegments) <- either assertFailure pure (unpackContainer after)
+      assertEqual "native publication preserves all six original body/debug/source segments"
+        originalSegments acquiredSegments
+      let proof = maybe (error "normal producer native link") id (lookupField "packageNativeLink" acquired)
+      assertEqual "ordinary calls are typed unlinked acquisition seeds, not eager native roots"
+        (Just (toJSON (3::Int))) (lookupField "schema" proof)
+      case lookupField "callSeeds" proof of
+        Just (Array seeds) -> assertEqual "one immutable seed per actual emitted ABI" 2 (length seeds)
+        _ -> assertFailure "normal CBD lacks actual call seeds"
+      assertEqual "original typed foreign import inventory remains unchanged"
+        (lookupField "staticForeignImports" original) (lookupField "staticForeignImports" acquired)
+      let cache = directory </> "native/component-link.json"
+          forwarding = directory </> "native/demand/forwarding.bc"
+      cached <- BS.readFile cache
+      produced <- getModificationTime forwarding
+      -- A new staging copy of the same immutable original module has the same
+      -- normal acquisition identity, without blessing finalized metadata.
+      BS.writeFile cbd before
+      (_,again) <- finishPackageNativeWithDependencies packageTool Nothing [] [] (root </> "pieces")
+        directory directory "fixture-unit" (Just [nativeObject]) [("Demand",cbd)]
+      assertEqual "normal acquisition reuses the canonical component descriptor" descriptor again
+      assertEqual "hit leaves the verified canonical cache receipt unchanged" cached =<< BS.readFile cache
+      assertEqual "hit performs no forwarding/LLVM construction" produced =<< getModificationTime forwarding
+      assertEqual "identical immutable input produces identical qualified CBD" after =<< BS.readFile cbd
+      writeFile (root </> "qualified-cbd.path") cbd
+  , TestLabel "first use constructs a verified adapter without copying its provider" $ TestCase $ do
+      scratch <- getEnv "THC_TEST_SCRATCH"
+      createDirectoryIfMissing True scratch
+      (root,handle) <- openTempFile scratch "demand-provider-"
+      hClose handle; removeFile root; createDirectory root
+      driver <- getEnv "THC_TEST_DRIVER"
+      clang <- tool "THC_CLANG" "clang"
+      nm <- tool "THC_LLVM_NM" "llvm-nm"
+      let target = "x86_64-unknown-linux-gnu" :: String
+          unit = "demand-provider" :: String
+          source = "static unsigned long state = 40; __attribute__((noinline)) long next(void) { return ++state; }\n"
+          component = digest (Text.encodeUtf8 (Text.pack (unit ++ "\0" ++ target ++ "\0" ++ source)))
+          provider = "thc_provider_" ++ component ++ "_next"
+          entryName = "thc_native_" ++ component ++ "_0"
+          signature = (provider,"ccall","unsafe",[],"IntRep")
+          compile name body = do
+            let input = root </> name ++ ".c"; output = root </> name ++ ".bc"
+            writeFile input body
+            (status,_,compileErrors) <- readProcessWithExitCode clang
+              ["--target=" ++ target,"-O1","-emit-llvm","-c",input,"-o",output] ""
+            assertEqual compileErrors ExitSuccess status
+            BS.readFile output
+      providerBytes <- compile "provider" (source ++ "long " ++ provider ++ "(void) { return next(); }\n")
+      seedSource <- either assertFailure pure (nativeWrapperSource [(signature,entryName,Nothing)])
+      seed <- compile "seed" ("#include <stdint.h>\n" ++ seedSource)
+      let request = object ["schema" .= (1::Int),"profile" .= ("thc-package-native-adapter-request-v1"::String),
+            "unit" .= unit,"target" .= target,"abi" .= object ["symbol" .= ("next"::String),
+              "entry" .= entryName,"convention" .= ("ccall"::String),"safety" .= ("unsafe"::String),
+              "arguments" .= ([]::[String]),"result" .= ("IntRep"::String)],
+            "seedSha256" .= digest seed,"seedHex" .= bytesHex seed,"providerUnit" .= unit,
+            "providerComponentSha256" .= component,"providerSymbol" .= provider,
+            "providerBitcodeSha256" .= digest providerBytes,"providerBitcodeHex" .= bytesHex providerBytes]
+          invoke = readProcessWithExitCode driver ["native-adapter",root </> "products"]
+            (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode request))))
+          decode output = either assertFailure pure (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+      (first,output,producerErrors) <- invoke
+      assertEqual ("actual selected producer first-use construction: " ++ producerErrors) ExitSuccess first
+      acquired <- decode output
+      assertEqual "first use constructs the product" (Just (Bool False)) (lookupField "cacheHit" acquired)
+      (second,cached,cacheErrors) <- invoke
+      assertEqual cacheErrors ExitSuccess second
+      hit <- decode cached
+      assertEqual "second use validates the persistent product without rebuilding" (Just (Bool True)) (lookupField "cacheHit" hit)
+      assertEqual "identical immutable adapter bytes" (lookupField "bitcodeHex" acquired) (lookupField "bitcodeHex" hit)
+      let key = case lookupField "cacheKey" acquired of Just (String value) -> Text.unpack value; _ -> error "test product key"
+      externals <- readProcess nm ["--undefined-only","--format=posix",root </> "products" </> key </> "adapter.bc"] ""
+      assertEqual "the adapter retains only its exact real provider, not copied C state"
+        [provider] [name | line <- lines externals, name:_ <- [words line]]
+      let rejected label altered expectedMessage = do
+            (status,_,diagnostic) <- readProcessWithExitCode driver ["native-adapter",root </> "products"]
+              (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode altered))))
+            assertBool (label ++ ": actual producer must fail") (status /= ExitSuccess)
+            assertBool (label ++ ": " ++ diagnostic) (expectedMessage `isInfixOf` diagnostic)
+      rejected "changed captured seed" (set "seedSha256" (toJSON (replicate 64 '0')) request) "input digest differs"
+      rejected "unsupported target is never inferred" (set "target" "aarch64-unknown-linux-gnu" request) "target/unit is unsupported"
+      rejected "ordinary names do not identify a provider" (set "providerSymbol" "next" request) "provider identity differs"
+      rejected "actual result ABI cannot drift" (change "abi" "result" "FloatRep" request) "emitted ABI differs"
+      let productPath = root </> "products" </> key </> "adapter.bc"
+          receiptPath = root </> "products" </> key </> "product.json"
+      originalProduct <- BS.readFile productPath
+      BS.appendFile productPath "changed"
+      rejected "changed cached product is not rebuilt or blessed" request "cached product changed"
+      BS.writeFile productPath originalProduct
+      originalReceipt <- BS.readFile receiptPath
+      receipt <- either assertFailure pure (eitherDecodeStrict' originalReceipt)
+      BL.writeFile receiptPath (encode (set "unexpected" Null receipt))
+      rejected "unknown cache fields" request "provenance record fields differ"
+      BS.writeFile receiptPath originalReceipt
+      renameFile receiptPath (receiptPath ++ ".retained")
+      rejected "partial cache publication" request "product.json"
+      renameFile (receiptPath ++ ".retained") receiptPath
+      renameFile productPath (productPath ++ ".retained")
+      createFileLink (productPath ++ ".retained") productPath
+      rejected "symlinked products are not followed" request "cache path is a symlink"
+      removeFile productPath; renameFile (productPath ++ ".retained") productPath
+  , TestLabel "Core-owned exact calls do not manufacture native wrappers" $ TestCase $ do
       let rep kind prim evaluated = object ["kind" .= (kind::String),
             "primReps" .= (prim::[String]), "evaluated" .= (evaluated::Bool)]
           call = object ["schema" .= (1::Int), "target" .= object
@@ -684,6 +845,8 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (packageNativeLibraries ["/native/lib"] ["custom","m","custom"] ["-pthread"])
   ]
   where
+    bytesHex = concatMap (\byte -> let value = showHex byte "" in if length value == 1 then '0':value else value) . BS.unpack
+    digest = bytesHex . SHA.hash
     ordinary = entry "identity" "ccall" ["WordRep","void"] ["void","WordRep"]
 
 entry :: String -> String -> [String] -> [String] -> Value

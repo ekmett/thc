@@ -47,6 +47,30 @@ tests = TestLabel "actual native compiler receipts" $ TestList
   [ TestCase $ do
       let args = ["-c", "cbits/a café.c", "-I/a \"quoted\" path", "-DVALUE=\\x"]
       assertEqual "GHC response quoting preserves complete arguments" args (unescapeArgs (escapeArgs args))
+  , TestLabel "a selected compiler symlink preserves the exact physical native receipt owner" $ TestCase $
+      withScratch $ \root -> withCurrentDirectory root $ do
+        ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+        compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
+        let selected = root </> "selected-ghc"
+            different = root </> "different-ghc"
+            source = root </> "native.c"
+            output = root </> "native.o"
+            receipts = root </> "receipts"
+            arguments = ["-c", source, "-fPIC", "-o", output]
+        createFileLink compiler selected
+        copyFile compiler different
+        writeFile source "int native_receipt_owner(void) { return 42; }\n"
+        (status, _, diagnostic) <- readProcessWithExitCode compiler arguments ""
+        assertEqual diagnostic ExitSuccess status
+        captureNativeRecipe receipts selected arguments
+        direct <- readNativeRecipe receipts compiler output
+        assertBool "actual GHC receipt is valid for its canonical selected binary" $ case direct of
+          Just receipt -> recipeCompiler receipt == compiler
+          Nothing -> False
+        assertEqual "symlink selection names the same physical compiler, not a different producer"
+          direct =<< readNativeRecipe receipts selected output
+        assertEqual "equal compiler bytes at a distinct physical identity remain a different producer"
+          Nothing =<< readNativeRecipe receipts different output
   , TestLabel "mixed native providers stay separate and preserve strict unresolved checks" $ TestCase $
       withScratch $ \root -> withCurrentDirectory root $ do
         ghc <- maybe "ghc" id <$> lookupEnv "GHC"

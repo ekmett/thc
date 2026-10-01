@@ -11,7 +11,7 @@
 --
 -- Build a selected Cabal component and launch it with explicit guest runtime arguments.
 module THC.Driver.Run
-  ( RunOptions(..), resolveThcRoot, runtimeLaunchArguments, runtimeEntryArguments, runResolvedPackage
+  ( RunOptions(..), resolveThcRoot, runtimeLaunchArguments, runtimeEntryArguments, runtimeNativeEnvironment, runResolvedPackage
   ) where
 
 import Control.Monad (unless, when)
@@ -36,6 +36,7 @@ import System.FilePath
 import System.IO (stderr)
 import System.Process (createProcess, proc, waitForProcess, CreateProcess(..), StdStream(..))
 import THC.Driver.Cabal (PlanOptions(..), configurePackage)
+import THC.Driver.Cache (coreCacheDirectory)
 
 -- | Resolved driver inputs, runtime selection and arguments passed to the
 -- guest program. Compiler/package selection lives in 'runPlan'.
@@ -89,6 +90,16 @@ runtimeLaunchArguments verify entry program arguments =
 runtimeEntryArguments :: [FilePath] -> FilePath -> String -> [String]
 runtimeEntryArguments modules manifest entry =
   ["--run-io", intercalate "," (modules ++ ["@" ++ manifest]), entry]
+
+-- | Supply the current trusted driver and its existing product cache to the
+-- owning launcher. Preserve unrelated host configuration; inherited values
+-- cannot replace the selected producer or its disposable cache directory.
+runtimeNativeEnvironment :: [(String, String)] -> IO [(String, String)]
+runtimeNativeEnvironment inherited = do
+  driver <- canonicalizePath =<< getExecutablePath
+  cache <- (</> "native-adapters") <$> coreCacheDirectory
+  let selected = [("THC_PACKAGE_NATIVE_BUILDER", driver), ("THC_PACKAGE_NATIVE_CACHE", cache)]
+  pure (selected ++ filter (\(key, _) -> key `notElem` map fst selected) inherited)
 
 -- | Internal simple-package backend retained for Windows after Cabal resolves
 -- the public positional target. This is not a second command-line selector.
@@ -194,8 +205,9 @@ runResolvedPackage opts working target prepareRuntime = do
     checked True python ([thcRoot </> "bin/audit-core.py", "--entry", entry, "--io-main",
                       "--package-manifest", supportManifest,
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
+  runtimeEnvironment <- runtimeNativeEnvironment inherited
   checked False runtime (runtimeLaunchArguments (runVerifyArtifacts opts)
-    (runtimeEntryArguments modules supportManifest entry) selectedName (runArguments opts)) working inherited
+    (runtimeEntryArguments modules supportManifest entry) selectedName (runArguments opts)) working runtimeEnvironment
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]
 filterMFile predicate items = do

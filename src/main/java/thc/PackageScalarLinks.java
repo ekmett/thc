@@ -118,29 +118,31 @@ public final class PackageScalarLinks {
         if (nativeLink && (module.containsKey("staticForeignExports") || module.containsKey("staticForeignExportRegistration")))
             ManagedExportAdmission.declarations(module, completeBindings);
         boolean inputs = nativeLink && raw instanceof Map<?,?> m && m.containsKey("buildInputs");
+        boolean demand = nativeLink && raw instanceof Map<?,?> m && version(m.get("schema"), 3);
         boolean callbacks = nativeLink && raw instanceof Map<?,?> m && version(m.get("schema"), 2);
         boolean companion = nativeLink && raw instanceof Map<?,?> m && m.containsKey("nativeLibrary");
         boolean data = nativeLink && raw instanceof Map<?,?> m && m.containsKey("dataSymbols");
         boolean components = nativeLink && raw instanceof Map<?,?> m && m.containsKey("dependencies");
-        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (callbacks ? " finalizers" : "") + (companion ? " nativeLibrary" : "") + (data ? " dataSymbols" : "") + (components ? " exports dependencies" : ""));
+        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (callbacks ? " finalizers" : "") + (companion ? " nativeLibrary" : "") + (data ? " dataSymbols" : "") + (components ? " exports dependencies" : "") + (demand ? " callSeeds" : ""));
         if (inputs) check(fields.get("buildInputs") instanceof Map<?,?>, "build inputs record");
         String format = text(fields.get("format"));
-        check((version(fields.get("schema"), 1) || callbacks) && (format.equals("llvm-bitcode") || nativeLink &&
+        check((version(fields.get("schema"), 1) || callbacks || demand) && (format.equals("llvm-bitcode") || nativeLink &&
             (format.equals("llvm-embedded-elf") && System.getProperty("os.name").equals("Linux") ||
              format.equals("llvm-embedded-mach-o") && System.getProperty("os.name").startsWith("Mac"))) &&
-            Objects.equals(fields.get("profile"), nativeLink ? "thc-package-c-ffi-v1" : "thc-local-scalar-ccall-v1"), "link profile");
+            Objects.equals(fields.get("profile"), demand ? "thc-package-c-ffi-demand-v1" : nativeLink ? "thc-package-c-ffi-v1" : "thc-local-scalar-ccall-v1"), "link profile");
         String unit = text(fields.get("unit")); check(unit.equals(module.get("unit")), "component owner");
         String target = text(fields.get("target")); target(target);
         String componentHash = text(fields.get("componentSha256")), bitcodeHash = text(fields.get("bitcodeSha256"));
         check(HASH.matcher(componentHash).matches() && HASH.matcher(bitcodeHash).matches(), "digest");
-        String encoded = text(fields.get("bitcodeHex"));
+        check(fields.get("bitcodeHex") instanceof String, "bitcode encoding");
+        String encoded = (String) fields.get("bitcodeHex");
         boolean validEncoding = encoded.length() % 2 == 0;
         if (validEncoding) for (int i = 0; i < encoded.length(); i++) {
             char c = encoded.charAt(i);
             if (!(c >= '0' && c <= '9' || c >= 'a' && c <= 'f')) { validEncoding = false; break; }
         }
         check(validEncoding, "bitcode encoding");
-        byte[] bytes = HexFormat.of().parseHex(encoded); check(bytes.length != 0 && digest(bytes).equals(bitcodeHash), "bitcode digest");
+        byte[] bytes = HexFormat.of().parseHex(encoded); check((demand || bytes.length != 0) && digest(bytes).equals(bitcodeHash), "bitcode digest");
         byte[] nativeLibrary = new byte[0];
         if (companion) {
             var dependency = record(fields.get("nativeLibrary"), "sha256 hex");
@@ -215,7 +217,39 @@ public final class PackageScalarLinks {
         var exports = components ? nativeExports(fields.get("exports")) : Set.<String>of();
         var dependencies = components ? nativeDependencies(fields.get("dependencies"), target, new HashSet<>(Set.of(unit)),
             new HashMap<>(), new HashMap<>(Map.of(componentHash, unit))) : List.<PackageNativeComponent>of();
-        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary, dataSymbols, exports, dependencies);
+        var seeds = new LinkedHashMap<String, PackageScalarLink.CallSeed>();
+        if (demand) {
+            check(format.equals("llvm-bitcode") && components && !data && finalizers.isEmpty() &&
+                abi.stream().allMatch(signature -> signature.convention().equals("ccall")), "ordinary demand component profile");
+            var providers = new HashMap<String, PackageNativeComponent>();
+            if (bytes.length != 0) providers.put(unit, new PackageNativeComponent(unit, target, componentHash, bitcodeHash,
+                format, bytes, nativeLibrary, exports, dependencies));
+            for (var dependency : dependencies) collectProviders(dependency, providers);
+            for (Object item : list(fields.get("callSeeds"))) {
+                var seed = record(item, "entry bitcodeHex bitcodeSha256 providerUnit providerComponentSha256 providerSymbol");
+                String entry = text(seed.get("entry")), seedHash = text(seed.get("bitcodeSha256")), seedHex = text(seed.get("bitcodeHex"));
+                byte[] seedBytes = HexFormat.of().parseHex(seedHex);
+                check(HASH.matcher(seedHash).matches() && seedBytes.length != 0 &&
+                    HexFormat.of().formatHex(seedBytes).equals(seedHex) && digest(seedBytes).equals(seedHash), "call seed digest");
+                check(abi.stream().anyMatch(signature -> signature.entry().equals(entry) && signature.convention().equals("ccall")) &&
+                    !dataSymbols.contains(entry) && !finalizers.contains(entry), "ordinary call seed ABI");
+                String providerUnit = null, providerHash = null, providerSymbol = null;
+                if (seed.get("providerUnit") != null) {
+                    providerUnit = text(seed.get("providerUnit")); providerHash = text(seed.get("providerComponentSha256"));
+                    providerSymbol = text(seed.get("providerSymbol"));
+                    var provider = providers.get(providerUnit);
+                    check(provider != null && provider.componentSha256().equals(providerHash) &&
+                        providerSymbol.startsWith("thc_provider_" + providerHash + "_") && SYMBOL.matcher(providerSymbol).matches() &&
+                        provider.exports().contains(providerSymbol), "exact call seed provider owner");
+                } else check(seed.get("providerComponentSha256") == null && seed.get("providerSymbol") == null, "absent call provider");
+                check(seeds.putIfAbsent(entry, new PackageScalarLink.CallSeed(entry, seedHash, seedHex,
+                    providerUnit, providerHash, providerSymbol)) == null, "duplicate call seed");
+            }
+            check(!seeds.isEmpty(), "missing call seeds");
+            if (bytes.length == 0) check(nativeLibrary.length == 0 && exports.isEmpty() && dependencies.isEmpty() &&
+                dataSymbols.isEmpty() && finalizers.isEmpty() && seeds.size() == abi.size(), "absent component obligations");
+        }
+        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary, dataSymbols, exports, dependencies, seeds);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("staticForeignImportStubs"), "unproved retained import obligations");
             if (module.containsKey("foreign")) {
@@ -318,6 +352,11 @@ public final class PackageScalarLinks {
         var admittedEntries = new ArrayList<String>();
         for (var signature : link.getAbi()) admittedEntries.add(signature.entry());
         proved.retainAll(admittedEntries); return new PackageScalarAdmission(link, proved);
+    }
+    private static void collectProviders(PackageNativeComponent component, Map<String, PackageNativeComponent> providers) {
+        var old = providers.putIfAbsent(component.unit(), component);
+        check(old == null || old.same(component), "conflicting call provider");
+        if (old == null) for (var dependency : component.dependencies()) collectProviders(dependency, providers);
     }
     private static List<String> arguments(PackageScalarSignature signature) { var args = new ArrayList<>(signature.arguments()); args.add("void"); return args; }
     private static List<String> result(PackageScalarSignature signature) { return signature.result().equals("void") ? List.of("void") : List.of("void", signature.result()); }

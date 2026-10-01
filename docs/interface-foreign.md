@@ -73,6 +73,30 @@ references, public definitions, constructors, address imports and finalizers
 still need real native providers, including when they use the same symbol.
 Other RTS imports need their own implementation.
 
+On Linux x86_64, ordinary `ccall` imports whose exact ABI matches a captured
+package LLVM definition can retain separate, unlinked adapter seeds. Capture
+still builds and checks the shared native component; it does not finalize each
+call adapter. The first reached call uses the trusted THC driver to link,
+verify and trim its adapter, then caches that immutable product. Other unused
+seeds are not finalized. All adapters for a unit use the same context-owned
+component, including its globals and constructor state, rather than copying
+the provider into each adapter.
+
+The ordinary driver supplies its canonical executable and existing
+`native-adapters` cache directory to the owning launcher. Embedding contexts
+must explicitly configure `thc.PackageNativeBuilder` and
+`thc.PackageNativeCache`, and permit process and filesystem access; these
+options grant neither permission. A persistent cache hit still invokes the
+producer to validate its current tool and environment identity, without LLVM
+construction. This is not a process-free or sealed Native Image execution
+path. An admitted missing-provider seed fails when demanded, and a failed
+initialization is not retried in that context. This does not automatically
+catalogue unresolved imports whose providers cannot be acquired by this path.
+
+This narrow path does not defer native C references, public exports,
+constructors, addresses or finalizers, or admit unknown LLVM definitions and
+ABIs. Those products retain their existing strict linkage and validation.
+
 Concrete lifted or unlifted GC-boxed declarations can retain verified stock
 import provenance, including boxed results. That evidence is not a native ABI:
 GC-boxed imports remain excluded from package-native adapters, and are never

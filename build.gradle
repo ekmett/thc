@@ -1164,6 +1164,10 @@ def foreignExceptionTests = [["foreignExceptionTest", false],[ "foreignException
         maxParallelForks = 1
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Foreign exception evidence requires a fresh test process") { true }
+        inputs.files("build/package-native-demand/manifest.json", "build/package-native-demand/acquired/packages.json",
+            "build/package-native-demand/acquired/audit.json", "build/package-native-demand/logs/thc-run.stdout",
+            "build/package-native-demand/logs/native-run.stdout", fileTree("build/package-native-demand/project"),
+            fileTree("build/package-native-demand/library"))
         doFirst {
             checkBuild(file("build/foreign-exceptions/manifest.json").isFile()) {
                 "Select full-Core GHC 9.14.1/configured source and run cabal run exe:thc-fixtures -- foreign-exceptions"
