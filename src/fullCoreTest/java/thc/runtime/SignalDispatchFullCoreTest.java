@@ -39,8 +39,13 @@ public class SignalDispatchFullCoreTest {
     @Test public void loomAstOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("ast", true); }
     @Test public void loomBytecodeOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("bytecode", true); }
     private long call(ExecutableProgram program, String entry, long argument) {
-        var target = program.entryTarget(entry); var shape = Objects.requireNonNull(((GuestRoot) target.getRootNode()).getTupleResult());
-        var result = Calls.target(target, new Object[] {0L, argument, thc.runtime.Unit.INSTANCE}); return shape.getLayout().getLong(TupleResults.ownedTupleResult(result, shape), 0);
+        String id = "main:SignalDispatchAudit." + entry; var target = program.entryTarget(id);
+        var guest = (GuestRoot) target.getRootNode(); var shape = Objects.requireNonNull(guest.getTupleResult());
+        assertEquals(1, shape.getWidth()); assertTrue(shape.getLayout().isLong(0));
+        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+        var host = new EntryRoot(language, guest.getInputProofs(), shape.getProof(), new Metrics(false), shape).getCallTarget();
+        var result = (Object[]) Calls.target(host, new Object[] {program.entryValue(id), new Object[] {argument, Unit.INSTANCE}});
+        assertEquals(1, result.length); return (Long) result[0];
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable, T> T rethrow(Throwable failure) throws E { throw (E) failure; }
     private void dispatch(String backend, boolean loom) throws Exception {
@@ -49,9 +54,9 @@ public class SignalDispatchFullCoreTest {
         var lines = Files.readAllLines(new File(directory, "oracle.txt").toPath(), StandardCharsets.UTF_8); var nativeRows = new LinkedHashMap<Long, Long>();
         for (int i = 0; i < lines.size(); i += 2) nativeRows.put(Long.parseLong(lines.get(i)), Long.parseLong(lines.get(i + 1)));
         for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {
-            var modules = new ArrayList<>(originals); for (String path : stage.getValue()) modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath(), StandardCharsets.UTF_8)));
+            var modules = new ArrayList<>(originals); for (String path : stage.getValue()) modules.add(OriginalStdioChecks.module(new File(root, path)));
             var combined = new LinkedHashMap<>(CoreModules.merge(modules)); combined.put("targetLayout", layout);
-            var linked = new LinkedHashMap<>(CoreModules.reachable(combined, (List<String>) manifest.get("entries"), true)); linked.put("instrument", true);
+            var linked = new LinkedHashMap<>(CoreModules.reachable(combined, ((List<String>) manifest.get("entries")).stream().map(entry -> entry.contains(":") ? entry : "main:SignalDispatchAudit." + entry).toList(), true)); linked.put("instrument", true);
             try (Context context = Context.newBuilder("thc", "llvm").allowNativeAccess(true).allowIO(IOAccess.ALL).allowCreateThread(true).allowExperimentalOptions(true)
                 .option("thc.ThreadHosting", loom ? "loom" : "platform")
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
@@ -83,7 +88,7 @@ public class SignalDispatchFullCoreTest {
                             // The original forked Haskell handler decodes the actual info pointer,
                             // observes its mask and publishes through the original MVar action.
                             assertEquals(expected, call(program, "awaitHandler", signal), stage.getKey() + "/" + backend + "/" + signal);
-                            assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(program.entryTarget("awaitHandler").getRootNode()));
+                            assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(program.entryTarget("main:SignalDispatchAudit.awaitHandler").getRootNode()));
                             var handoff = language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
                             assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
                         }

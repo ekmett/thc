@@ -43,7 +43,7 @@ final class CompactLibraryFixture {
         }
         var targetLayout = Objects.requireNonNull(CoreCbdFixtures.visitModules(new File(root, directory + "/installed/packages.json").getPath(), (module, path) -> {}).getTargetLayout());
         for (var stage : stages.entrySet()) for (String backend : List.of("ast", "bytecode")) {
-            var modules = new ArrayList<Map<String, Object>>(); for (String path : stage.getValue()) modules.add(read(path));
+            var modules = new ArrayList<Map<String, Object>>(); for (String path : stage.getValue()) modules.add(OriginalStdioChecks.module(new File(root, path)));
             var module = new LinkedHashMap<>(CoreModules.merge(modules)); module.put("targetLayout", targetLayout);
             boolean retained = false; for (var binding : (List<Map<String, Object>>) module.get("bindings")) if (((String) binding.get("id")).contains(":GHC.Compact.")) retained = true;
             assertTrue(retained, "Original library retained");
@@ -54,10 +54,11 @@ final class CompactLibraryFixture {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (String entry : entries) {
-                        var linked = new LinkedHashMap<>(CoreModules.reachable(module, entry, true)); linked.put("instrument", true);
+                        String id = "main:" + (directory.endsWith("compact-regions") ? "CompactRegionsAudit." : "CompactSerializedAudit.") + entry;
+                        var linked = new LinkedHashMap<>(CoreModules.reachable(module, id, true)); linked.put("instrument", true);
                         boolean async = entry.equals("interruptedPlain") || entry.equals("interruptedSharing");
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, async) : new BytecodeProgram(language, linked, async);
-                        var function = context.asValue(new EntryValue(program, entry, 1));
+                        var function = context.asValue(new EntryValue(program, id, 1));
                         for (long input : new long[] {-31L, 0L, 17L, 4097L}) assertEquals(expected.applyAsLong(entry, input), function.execute(input).asLong(), stage.getKey() + "/" + backend + "/" + entry + "/" + input);
                         if (entry.equals(compiledEntry)) {
                             assertTrue(function.invokeMember("compile").asBoolean()); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();

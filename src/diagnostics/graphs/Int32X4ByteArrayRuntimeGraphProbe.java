@@ -137,7 +137,7 @@ public final class Int32X4ByteArrayRuntimeGraphProbe {
     @SuppressWarnings("unchecked") public static void main(String[] args) throws Exception {
         if (args.length != 7 || !ENTRIES.contains(args[3]) || !Set.of("ast", "bytecode").contains(args[4])
                 || !args[5].equals("inline") || !args[6].equals("native"))
-            throw new IllegalArgumentException("module.json graph-cases.json oracle.tsv entry ast|bytecode inline native");
+            throw new IllegalArgumentException("module.cbd graph-cases.json oracle.tsv entry ast|bytecode inline native");
         if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) throw new AssertionError("Native corpus is little endian");
         String entry = args[3], backend = args[4];
         int arity = entry.endsWith("StoreGraph") ? 7 : 2;
@@ -152,32 +152,38 @@ public final class Int32X4ByteArrayRuntimeGraphProbe {
         List<Map<String,Object>> chosen = definitions.stream().filter(e -> entry.equals(e.get("name"))).toList();
         if (chosen.size() != 1) throw new AssertionError("Missing/duplicate graph definition");
         List<Row> rows = rows(chosen.getFirst(), nativeRows);
-        Map<String,Object> module = (Map<String,Object>)Json.parse(Files.readString(Path.of(args[0])));
-        Map<String,Object> linked = new LinkedHashMap<>(CoreModules.reachable(module, entry));
-        linked.put("instrument", false); linked.put("diagnosticUnsupported", false);
-        List<Map<String,Object>> bindings = (List<Map<String,Object>>)linked.get("bindings");
-        if (bindings.size() != 1 || !entry.equals(bindings.getFirst().get("name"))
-                || integer(bindings.getFirst().get("arity")) != arity) throw new AssertionError("Expected exact one-root Core closure");
-        String id = (String)bindings.getFirst().get("id");
-        Context.Builder builder = Context.newBuilder("thc").allowExperimentalOptions(true)
-            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
-            .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000");
-        try (Context context = builder.build()) {
-            context.initialize("thc"); context.enter();
-            try {
-                Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                for (int i = 0; i < 40; i++) check(program, id, entry, rows, null);
-                RootCallTarget target = active(program, id, arity);
-                if (valid(target)) throw new AssertionError("Unexpected automatic compilation");
-                System.out.println("GRAPH_TARGET=" + Json.stringify(Map.of("entry", entry, "backend", backend, "root", target.getRootNode().getName())));
-                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
-                if (!valid(target)) throw new AssertionError("No installed last-tier code");
-                check(program, id, entry, rows, target); check(program, id, entry, rows, target);
-                System.out.println("PASS entry=" + entry + " backend=" + backend + " mode=inline oracleOrigin=native oracleRows=" + rows.size()
-                    + " arity=" + arity + " compiledPasses=2 backingBytes=64 freshArrayEveryCall=true validAfterExecution=true");
-                System.out.println("diagnostics=" + Json.stringify(program.diagnostics()));
-            } finally { context.leave(); }
+        var request = (Map<String,Object>) Json.parse(CoreModules.request(List.of(args[0]), entry, true, false, backend));
+        try (var sources = CoreModules.unitDirectory(request).open(true, false)) {
+            var modules = new ArrayList<Map<String,Object>>();
+            CoreModules.visitUnitConsumers(request, sources, modules::add);
+            Map<String,Object> module = modules.getFirst();
+            String selectedId = module.get("unit") + ":" + module.get("module") + "." + entry;
+            Map<String,Object> linked = new LinkedHashMap<>(CoreModules.reachable(module, selectedId));
+            linked.put("instrument", false); linked.put("diagnosticUnsupported", false);
+            List<Map<String,Object>> bindings = (List<Map<String,Object>>)linked.get("bindings");
+            if (bindings.size() != 1 || !selectedId.equals(bindings.getFirst().get("id"))
+                    || integer(bindings.getFirst().get("arity")) != arity) throw new AssertionError("Expected exact one-root Core closure");
+            String id = (String)bindings.getFirst().get("id");
+            Context.Builder builder = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000");
+            try (Context context = builder.build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+                    for (int i = 0; i < 40; i++) check(program, id, entry, rows, null);
+                    RootCallTarget target = active(program, id, arity);
+                    if (valid(target)) throw new AssertionError("Unexpected automatic compilation");
+                    System.out.println("GRAPH_TARGET=" + Json.stringify(Map.of("entry", entry, "backend", backend, "root", target.getRootNode().getName())));
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    if (!valid(target)) throw new AssertionError("No installed last-tier code");
+                    check(program, id, entry, rows, target); check(program, id, entry, rows, target);
+                    System.out.println("PASS entry=" + entry + " backend=" + backend + " mode=inline oracleOrigin=native oracleRows=" + rows.size()
+                        + " arity=" + arity + " compiledPasses=2 backingBytes=64 freshArrayEveryCall=true validAfterExecution=true");
+                    System.out.println("diagnostics=" + Json.stringify(program.diagnostics()));
+                } finally { context.leave(); }
+            }
         }
     }
 }

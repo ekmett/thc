@@ -45,15 +45,15 @@ public class OriginalStackDecoderTest {
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
         .option("engine.SingleTierCompilationThreshold", "10000000").build(); }
     private boolean valid(RootCallTarget target) throws Exception { return Boolean.TRUE.equals(target.getClass().getMethod("isValidLastTier").invoke(target)); }
-    private long observe(RootCallTarget target, Object snapshot, long probe) { return (Long) Calls.target(target, new Object[] {0L, snapshot, probe}); }
-    private Object capture(RootCallTarget target) { return Calls.target(target, new Object[] {0L, 1L}); }
-    private List<Long> inspect(RootCallTarget target, Object snapshot, List<Long> nativeRows, String label) {
-        long count = observe(target, snapshot, -1); assertTrue(count > 0, label);
-        assertEquals(nativeRows.get(1).longValue(), observe(target, snapshot, -2), label + " repeated decode");
-        assertEquals(count, observe(target, snapshot, -3), label + " provenance for each authentic guest frame");
-        assertEquals(count, observe(target, snapshot, -4), label + " original formatter renders each managed IPE");
-        long length = observe(target, snapshot, -5); assertTrue(length >= 1 && length <= 100000, label);
-        long namedSources = observe(target, snapshot, -6); assertTrue(namedSources >= 1 && namedSources <= count, label + " original formatter includes captureLeaf and its source in one frame");
+    private long observe(ExecutableProgram program, Object snapshot, long probe) { return (Long) OriginalStdioChecks.invoke(program, "main:OriginalStackDecoder.observeSnapshot", snapshot, probe); }
+    private Object capture(ExecutableProgram program) { return OriginalStdioChecks.invoke(program, "main:OriginalStackDecoder.captureNamed", 1L); }
+    private List<Long> inspect(ExecutableProgram program, Object snapshot, List<Long> nativeRows, String label) {
+        long count = observe(program, snapshot, -1); assertTrue(count > 0, label);
+        assertEquals(nativeRows.get(1).longValue(), observe(program, snapshot, -2), label + " repeated decode");
+        assertEquals(count, observe(program, snapshot, -3), label + " provenance for each authentic guest frame");
+        assertEquals(count, observe(program, snapshot, -4), label + " original formatter renders each managed IPE");
+        long length = observe(program, snapshot, -5); assertTrue(length >= 1 && length <= 100000, label);
+        long namedSources = observe(program, snapshot, -6); assertTrue(namedSources >= 1 && namedSources <= count, label + " original formatter includes captureLeaf and its source in one frame");
         return List.of(count, length, namedSources);
     }
     @Test public void originalDecoderAndFormatterConsumeCapturedFramesBeforeAndAfterCompilation() throws Exception {
@@ -61,31 +61,31 @@ public class OriginalStackDecoderTest {
         for (String token : Files.readString(new File(root, (String) manifest.get("nativeOutput")).toPath(), StandardCharsets.UTF_8).trim().split(" ", -1)) nativeRows.add(Long.parseLong(token));
         assertEquals(6, nativeRows.size()); assertTrue(nativeRows.getFirst() > 0); assertEquals(1L, nativeRows.get(1)); assertEquals(1L, nativeRows.get(5));
         assertTrue(nativeRows.get(2) >= 0 && nativeRows.get(2) <= nativeRows.getFirst()); assertTrue(nativeRows.get(3) >= 0 && nativeRows.get(3) <= nativeRows.getFirst()); assertTrue(nativeRows.get(4) >= 0);
-        var originalsText = new StringBuilder(); var targetLayout = CoreCbdFixtures.appendModules(originalsText, new File(root, (String) manifest.get("packageManifest")).getPath());
+        var originals = new ArrayList<Map<String, Object>>(); var targetLayout = CoreCbdFixtures.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout();
         assertNotNull(targetLayout, "Original selected-toolchain target layout required");
-        var originals = (List<Map<String, Object>>) Json.parse("[" + originalsText + "]"); var stages = (Map<String, String>) manifest.get("stages"); assertEquals(Set.of("pre", "post"), stages.keySet());
+        var stages = (Map<String, String>) manifest.get("stages"); assertEquals(Set.of("pre", "post"), stages.keySet());
         for (var stage : stages.entrySet()) for (String backend : List.of("ast", "bytecode")) for (boolean inlining : new boolean[] {false, true}) try (Context context = context(inlining)) {
-            var modules = new ArrayList<>(originals); modules.add(json(stage.getValue())); var combined = new LinkedHashMap<>(CoreModules.merge(modules)); combined.put("targetLayout", targetLayout);
+            var modules = new ArrayList<>(originals); modules.add(OriginalStdioChecks.module(new File(root, stage.getValue()))); var combined = new LinkedHashMap<>(CoreModules.merge(modules)); combined.put("targetLayout", targetLayout);
             // Link both real fixture roots without allowing unavailable
             // globals, replacing originals or discarding their cold branches.
             var distinctBindings = new LinkedHashMap<Object, Map<String, Object>>();
-            for (String entry : entries) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(combined, entry, true).get("bindings")) distinctBindings.putIfAbsent(binding.get("id"), binding);
+            for (String entry : entries) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(combined, "main:OriginalStackDecoder." + entry, true).get("bindings")) distinctBindings.putIfAbsent(binding.get("id"), binding);
             var bindings = new ArrayList<>(distinctBindings.values()); var module = new LinkedHashMap<>(combined); module.put("bindings", bindings); module.put("instrument", true);
             boolean original = false; for (var binding : bindings) if (((String) binding.get("id")).startsWith("ghc-internal:GHC.Internal.Stack.Decode.")) original = true; assertTrue(original);
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
-                var capture = program.entryTarget("captureNamed"); var observe = program.entryTarget("observeSnapshot"); String label = stage.getKey() + "/" + backend + "/inlining=" + inlining;
-                var snapshot = capture(capture); var observation = inspect(observe, snapshot, nativeRows, label);
+                var capture = program.entryTarget("main:OriginalStackDecoder.captureNamed"); var observe = program.entryTarget("main:OriginalStackDecoder.observeSnapshot"); String label = stage.getKey() + "/" + backend + "/inlining=" + inlining;
+                var snapshot = capture(program); var observation = inspect(program, snapshot, nativeRows, label);
                 // Warm each entry, then assert its very first installed entry;
                 // no settling loop after installation is allowed.
-                for (int i = 0; i < 3; i++) { observe(observe, snapshot, -2); capture(capture); }
+                for (int i = 0; i < 3; i++) { observe(program, snapshot, -2); capture(program); }
                 for (var target : List.of(capture, observe)) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertTrue(valid(target), label + " installed " + target.getRootNode().getName()); }
-                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var fresh = capture(capture); assertTrue(valid(capture), label + " first installed capture");
-                assertEquals(nativeRows.get(1).longValue(), observe(observe, snapshot, -2), label + " first installed original decode"); assertTrue(valid(observe), label + " first installed decode");
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var fresh = capture(program); assertTrue(valid(capture), label + " first installed capture");
+                assertEquals(nativeRows.get(1).longValue(), observe(program, snapshot, -2), label + " first installed original decode"); assertTrue(valid(observe), label + " first installed decode");
                 assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() >= before + 2, label);
-                assertEquals(observation, inspect(observe, snapshot, nativeRows, label), label + " retained detached snapshot"); inspect(observe, fresh, nativeRows, label);
+                assertEquals(observation, inspect(program, snapshot, nativeRows, label), label + " retained detached snapshot"); inspect(program, fresh, nativeRows, label);
                 assertEquals(0L, program.diagnostics().get("unsupportedTraps"), label); var loans = language.getHandoffState().get();
                 assertEquals(0, loans.getArguments().getDepth()); assertEquals(0, loans.getResults().getDepth()); assertEquals(0, loans.getArguments().retainedReferences()); assertEquals(0, loans.getResults().retainedReferences());
             } finally { context.leave(); }
