@@ -67,8 +67,8 @@ import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativ
   componentMainModule)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
-import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative,
-  finishPackageNativeWithDependencies, linkInstalledNative)
+import THC.Driver.PackageNative (captureNativeObject, captureConfiguredNativeObject, capturePackageNative, finishPackageNative,
+  finishPackageNativeWithDependencies, linkInstalledNativeWithProduct)
 import THC.Driver.NativeDependencies (readNativeProduct, configuredNativeArchive)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
@@ -978,17 +978,18 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
           "installed Core compiler or registered package-cache identity is invalid"
         configured <- case installedSource context of
           Nothing -> pure Nothing
-          Just source -> configuredNativeArchive source (nativeDirectory </> "configured")
-            (installedCompiler context) (registration registrationUnit)
-        let nativeArguments = maybe [] (\(archive,_) -> ["-optl" ++ archive]) configured ++ arguments
-            configuredInputs = maybe [] snd configured
+          Just source -> configuredNativeArchive (captureConfiguredNativeObject (nativeDirectory </> "pieces"))
+            source (nativeDirectory </> "configured") (installedCompiler context) unit (registration registrationUnit)
+        let nativeArguments = maybe [] (\(archive,_,_) -> ["-optl" ++ archive]) configured ++ arguments
+            configuredInputs = maybe [] (\(_,inputs,_) -> inputs) configured
+            configuredProduct = configured >>= (\(_,_,ownedProduct) -> ownedProduct)
         createDirectory (temporary </> "core")
         staged <- forM (zip [0 :: Int ..] modules) $ \(index, (name, bytes)) -> do
           let path = temporary </> "core" </> show index <.> "cbd"
           BS.writeFile path bytes
           pure (name, path)
-        linked <- linkInstalledNative (installedGhc context) (installedPackageTool context) (installedLibdir context)
-          nativeArguments nativeDirectory unit staged
+        linked <- linkInstalledNativeWithProduct (installedGhc context) (installedPackageTool context) (installedLibdir context)
+          nativeArguments nativeDirectory unit configuredProduct staged
         forM_ configuredInputs $ \input -> do
           path <- field input "path"
           expected <- field input "sha256"

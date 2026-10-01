@@ -217,8 +217,9 @@ nativeSymbolArchives ghcPkg libdir root owner arguments symbols
 -- The caller passes the returned archive as an ordinary -optl input and records
 -- the returned files in its existing cache observations. GHC registrations and
 -- the ordinary installed-package path remain unchanged.
-configuredNativeArchive :: FilePath -> FilePath -> Value -> String -> IO (Maybe (FilePath,[Value]))
-configuredNativeArchive source destination compilerIdentity registration = do
+configuredNativeArchive :: (FilePath -> FilePath -> [String] -> IO Value) ->
+  FilePath -> FilePath -> Value -> String -> String -> IO (Maybe (FilePath,[Value],Maybe NativeProduct))
+configuredNativeArchive capture source destination compilerIdentity owner registration = do
   (_,info) <- either (fail . show) pure (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
   root <- canonicalizePath source
   let package = prettyShow (pkgName (Package.sourcePackageId info))
@@ -287,13 +288,13 @@ configuredNativeArchive source destination compilerIdentity registration = do
       directory <- canonicalizePath destination
       let pic = directory </> "pic-objects"
           packageDirectory = takeDirectory configured </> "source"
-      objects <- forM declarations $ \(sourcePath, cxx) -> do
+      captured <- forM declarations $ \(sourcePath, cxx) -> do
         let path = getSymbolicPath sourcePath
         check (not (isAbsolute path) && ".." `notElem` splitDirectories path)
           "configured native source is outside its package"
         -- Hadrian's Context.objectPath places nongenerated foreign objects
         -- under their source extension, independently of Haskell objects.
-        if builtByHadrian then pure (built </> drop 1 (takeExtension path) </> replaceExtension path "dyn_o")
+        if builtByHadrian then pure (built </> drop 1 (takeExtension path) </> replaceExtension path "dyn_o", Nothing)
         else do
           ghc <- maybe (fail "pinned native provider has no configured GHC") (pure . programPath)
             (lookupProgram ghcProgram (Local.withPrograms lbi))
@@ -312,7 +313,10 @@ configuredNativeArchive source destination compilerIdentity registration = do
           (status,_,diagnostic) <- boundedInterfaceProcessIn packageDirectory ghc arguments
           check (status == ExitSuccess) ("Cannot compile pinned native PIC source: " ++
             Data.Text.unpack (T.decodeUtf8 diagnostic))
-          pure (pic </> replaceExtension path "dyn_o")
+          piece <- capture packageDirectory ghc arguments
+          pure (pic </> replaceExtension path "dyn_o", Just piece)
+      let objects = map fst captured
+          pieces = [piece | (_,Just piece) <- captured]
       check (length (nub (map takeFileName objects)) == length objects)
         "configured native PIC archive has duplicate member names"
       present <- filterM doesFileExist objects
@@ -346,7 +350,38 @@ configuredNativeArchive source destination compilerIdentity registration = do
         after <- observe
         check (before == after) "configured native products changed during archiving"
         renameFile temporary output
-        pure (Just (output,before))
+        ownedProduct <- if null pieces then pure Nothing else do
+          (listed,names,errors) <- readProcessWithExitCode ar ["t",output] ""
+          check (listed == ExitSuccess) ("Cannot read configured native archive: " ++ errors)
+          check (sort (lines names) == sort (map takeFileName objects))
+            "configured native archive differs from declared C/C++ objects"
+          members <- forM (lines names) $ \name -> do
+            contents <- withCreateProcess (proc ar ["p",output,name]) {std_out=CreatePipe} $ \_ stream _ process -> do
+              archiveStream <- maybe (fail "Missing configured archive output pipe") pure stream
+              bytes <- BS.hGetContents archiveStream
+              _ <- evaluate (BS.length bytes)
+              memberStatus <- waitForProcess process
+              check (memberStatus == ExitSuccess) "Cannot read configured native archive member"
+              pure bytes
+            pure (name,digest contents)
+          selectedPieces <- either fail pure (selectNativePieces True members pieces)
+          check (length selectedPieces == length declarations) "configured native archive lacks captured C/C++ products"
+          translationUnits <- forM selectedPieces $ \piece -> do
+            path <- get piece "bitcode"
+            hash <- digest <$> BS.readFile path
+            pure (object ["receipt" .= piece,"bitcodeSha256" .= hash])
+          archiveHash <- digest <$> BS.readFile output
+          let proof = object ["profile" .= ("resolved-native-archive-products-v1" :: String),
+                "unit" .= owner,"sourceIdentity" .= object
+                  ["id" .= prettyShow (Package.installedUnitId info),
+                   "depends" .= map prettyShow (Package.depends info),
+                   "pkg-src" .= object ["type" .= ("local" :: String),"path" .= packageDirectory]],
+                "registration" .= registration,"registrationSha256" .= digest (T.encodeUtf8 (Data.Text.pack registration)),
+                "archives" .= [object ["path" .= output,"sha256" .= archiveHash,
+                  "members" .= [object ["name" .= name,"sha256" .= hash] | (name,hash) <- members]]],
+                "translationUnits" .= translationUnits]
+          pure (Just (NativeProduct proof selectedPieces))
+        pure (Just (output,before,ownedProduct))
 
 -- The constructor stays private: only captured C/C++ products with exact
 -- membership in the resolved package archive may become native providers.

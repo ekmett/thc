@@ -14,9 +14,9 @@
 -- retained GHC wrappers while Cabal's headers exist; carry LLVM, not guesses
 -- about native object layouts, into the immutable Core bundle.
 module THC.Driver.PackageNative
-  ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
+  ( captureNativeObject, captureConfiguredNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
-  , linkInstalledNative, installedNativeSignatures, nativeCapiSource
+  , linkInstalledNative, linkInstalledNativeWithProduct, installedNativeSignatures, nativeCapiSource
   , nativeIrSymbol, nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, nativeDeferredLinkArguments, nativeRootArguments, tool
   , nativeCallSeedWitness
   ) where
@@ -131,7 +131,12 @@ installedNativeSignatures unit value
 -- be linked; foreign exports/registration remain owned by the managed runtime.
 linkInstalledNative :: FilePath -> FilePath -> FilePath -> [String] -> FilePath -> String ->
   [(String,FilePath)] -> IO [(String,FilePath)]
-linkInstalledNative compiler packageTool libdir arguments directory unit modules = do
+linkInstalledNative compiler packageTool libdir arguments directory unit modules =
+  linkInstalledNativeWithProduct compiler packageTool libdir arguments directory unit Nothing modules
+
+linkInstalledNativeWithProduct :: FilePath -> FilePath -> FilePath -> [String] -> FilePath -> String ->
+  Maybe NativeProduct -> [(String,FilePath)] -> IO [(String,FilePath)]
+linkInstalledNativeWithProduct compiler packageTool libdir arguments directory unit ownedProduct modules = do
   decoded <- mapM (\(_,path) -> BS.readFile path >>= either fail pure . readModuleValue) modules
   -- Do not splice a second component into an already acquired unit.
   let acquired = any (\value -> member value "packageNativeLink" /= Nothing) decoded
@@ -161,7 +166,8 @@ linkInstalledNative compiler packageTool libdir arguments directory unit modules
     writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
       unit root signatures [] sources perModule [] (const Nothing) addresses (map fst archives) True
     let original = [(name,bytes) | (name,bytes) <- modules, name `elem` map fst selected]
-    linked <- finishPackageNative packageTool (root </> "pieces") root unit (Just []) original
+    linked <- fst <$> finishPackageNativeWithDependencies packageTool ownedProduct [] []
+      (root </> "pieces") root root unit (Just []) original
     pure [(name,maybe bytes id (lookup name linked)) | (name,bytes) <- modules]
 
 nativeSignatures :: String -> [Value] -> Either String [Signature]
@@ -577,19 +583,34 @@ captureNativeObject pieces compiler arguments = when ("-c" `elem` arguments && a
     [source] -> do
       root <- getCurrentDirectory >>= canonicalizePath
       sourcePath <- canonicalizePath source
-      when (within root sourcePath) $ do
-        let output = maybe (maybe "" id (after "-odir" arguments) </> replaceExtension source "o") id (after "-o" arguments)
-        native <- canonicalizePath output
-        exists <- doesFileExist native
-        when exists $ do
-          nativeHash <- sha <$> BS.readFile native
-          let directory = pieces </> sha (T.encodeUtf8 (T.pack native))
-          createDirectoryIfMissing True directory
-          (bitcode,target,inputs) <- compileC compiler root arguments directory Nothing
-          writeJson (directory </> "piece.json") (object
-            ["root" .= root,"object" .= native,"objectSha256" .= nativeHash,
-             "bitcode" .= bitcode,"target" .= target,"inputs" .= inputs])
+      let output = maybe (maybe "" id (after "-odir" arguments) </> replaceExtension source "o") id (after "-o" arguments)
+      exists <- doesFileExist output
+      when (within root sourcePath && exists) $ do
+        _ <- captureConfiguredNativeObject pieces root compiler arguments
+        pure ()
     _ -> pure ()
+
+-- The installed provider has already compiled this exact configured PIC argv.
+-- Keep its declared object identity; replay only its C/C++ phase into LLVM.
+captureConfiguredNativeObject :: FilePath -> FilePath -> FilePath -> [String] -> IO Value
+captureConfiguredNativeObject pieces sourceRoot compiler arguments = do
+  root <- canonicalizePath sourceRoot
+  case [value | value <- arguments, takeExtension value `elem` [".c", ".cc", ".cpp", ".cxx"],
+                not ("-" `isPrefixOf` value)] of
+    [source] -> do
+      sourcePath <- canonicalizePath (root </> source)
+      check (within root sourcePath) "configured native source is outside its package"
+      let output = maybe (maybe "" id (after "-odir" arguments) </> replaceExtension source "o") id (after "-o" arguments)
+      native <- canonicalizePath (root </> output)
+      nativeHash <- sha <$> BS.readFile native
+      let directory = pieces </> sha (T.encodeUtf8 (T.pack native))
+      createDirectoryIfMissing True directory
+      (bitcode,target,inputs) <- compileC compiler root arguments directory Nothing
+      let piece = object ["root" .= root,"object" .= native,"objectSha256" .= nativeHash,
+            "bitcode" .= bitcode,"target" .= target,"inputs" .= inputs]
+      writeJson (directory </> "piece.json") piece
+      pure piece
+    _ -> fail "configured native capture requires one C/C++ source"
 
 -- Called while the package source and generated headers are still alive.
 -- The CBD written by the late Core pass does not contain retained annotations;
