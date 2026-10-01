@@ -47,7 +47,7 @@ final class ByteArrayFixtureEvidence {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file.toPath())));
     }
     public static void verify(File root, String group, Map<String, Object> manifest)
-        throws IOException, NoSuchAlgorithmException {
+        throws Exception {
         String directory = "build/" + group, module = Objects.requireNonNull(modules.get(group));
         var names = Objects.requireNonNull(entries.get(group));
         boolean original = List.of("bytearray", "compare-byte-arrays").contains(group),
@@ -72,7 +72,7 @@ final class ByteArrayFixtureEvidence {
             sorted.sort(String::compareTo);
             var paths = new ArrayList<String>();
             for (var name : sorted)
-                paths.add(directory + "/" + stage + (original ? "/core/" : "-core/") + name + ".json");
+                paths.add(directory + "/" + stage + (original ? "/core/" : "-core/") + name + ".cbd");
             stages.put(stage, paths);
         }
         var sourcePaths = new ArrayList<>(List.of("t/fixtures/compiler/" + module + ".hs",
@@ -137,14 +137,14 @@ final class ByteArrayFixtureEvidence {
         for (var stage : stages.entrySet()) {
             String modulePath = null;
             for (var path : stage.getValue())
-                if (path.endsWith("/" + module + ".json")) {
+                if (path.endsWith("/" + module + ".cbd")) {
                     if (modulePath != null)
                         throw new IllegalArgumentException("Collection contains more than one matching element.");
                     modulePath = path;
                 }
             if (modulePath == null)
                 throw new java.util.NoSuchElementException("Collection contains no element matching the predicate.");
-            var core = read(root, modulePath);
+            var core = thc.CoreCbdFixtures.read(new File(root, modulePath).toPath());
             assertEquals(stage.getKey().equals("pre") ? "optimized-Core-before-Tidy"
                                                       : "optimized-Core-after-Tidy-before-CorePrep",
                 core.get("boundary"));
@@ -173,7 +173,7 @@ final class ByteArrayFixtureEvidence {
             }
         }
     }
-    public static void rejectionControls(File root, String group) throws IOException, NoSuchAlgorithmException {
+    public static void rejectionControls(File root, String group) throws Exception {
         var good = read(root, "build/" + group + "/manifest.json");
         verify(root, group, good);
         for (var kind : List.of("inputHashes", "artifactHashes")) {

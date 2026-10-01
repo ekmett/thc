@@ -55,7 +55,7 @@ public class OriginalRtsLocksTest {
     @Test public void genuineNativeClaimsMatchPrePostBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest = json("manifest.json"); assertEquals(true, manifest.get("strictAccepted")); assertEquals(true, manifest.get("originalIdsChecked")); assertEquals(true, manifest.get("typeEqualityChecked")); assertEquals(false, manifest.get("installedArtifactsHashed"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalRtsLocksAudit.hs", "t/haskell-fixtures/OriginalRtsLocksFixtures.hs", "bin/core-capabilities.json"), null);
-        var required = new LinkedHashSet<>(List.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/pre.cbd", prefix + "/post.cbd", prefix + "/declarations.json", prefix + "/template-pre.json", prefix + "/oracle.json"));
+        var required = new LinkedHashSet<>(List.of(prefix + "/pre.cbd", prefix + "/post.cbd", prefix + "/declarations.json", prefix + "/oracle.json"));
         for (var stage : List.of("pre", "post")) for (var entry : List.of("originalLock", "originalUnlock")) required.add(prefix + "/" + stage + "-" + entry + ".audit.json");
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");
         var declarations = json("declarations.json"); assertEquals(false, declarations.get("completeModule")); var originalCalls = OriginalStdioChecks.foreignCalls(declarations.get("projection"));

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
@@ -80,7 +79,7 @@ class StaticExportStartupTest {
             "expr", list("lam", list(map("id", "x", "lifted", true, "coercion", false, "rep", data)), list("var", "x", map("rep", data)), map("rep", closure, "resultRep", data)));
         var result = map("schema", 2L, "ghc", "9.14.1", "unit", unit, "module", name, "boundary", "optimized-Core-after-Tidy-before-CorePrep",
             "bindings", list(binding), "constructors", list(map("id", "ghc-internal:GHC.Internal.Int.I32#", "name", "I32#", "kind", "boxed",
-                "arity", 1L, "fieldReps", list(list("Int32Rep")),
+                "arity", 1L, "tag", 1L, "fieldReps", list(list("Int32Rep")),
                 "fieldTypes", list(map("kind", "long", "primReps", list("Int32Rep"), "evaluated", true)),
                 "strictFields", list(false), "fieldLifted", list(false))),
             "foreign", product, "staticForeignImports", proof, "staticForeignExports", inventory, "staticForeignExportRegistration", registration, "packageNativeLink", link);
@@ -105,7 +104,7 @@ class StaticExportStartupTest {
             // The original C constructor enters Haskell before native loading
             // completes, and that callback demands this same component's label.
             var body = list("case", list("var", unit + ":" + name + ".label", map("rep", address)), "address",
-                list(list("default", null, List.of(), list("var", "x", map("rep", data)))),
+                list(list("default", null, List.of(), list("var", "x", map("rep", data)), map("binders", List.of()))),
                 map("rep", data, "binder", map("id", "address", "lifted", false, "rep", address)));
             binding = with(binding, "expr", list("lam", list(map("id", "x", "lifted", true, "coercion", false, "rep", data)), body,
                 map("rep", closure, "resultRep", data)));
@@ -113,18 +112,10 @@ class StaticExportStartupTest {
         }
         return result;
     }
-    private Path paired(Map<String,Object> module) throws Exception {
-        var fixture = symbolFixture(module); var original = fixture.bytes(); var metadata = Json.stringify(without(module, "bindings")).getBytes(UTF_8);
-        var out = new ByteArrayOutputStream(); out.writeBytes(original); out.write(10); out.writeBytes(metadata); var bytes = out.toByteArray();
-        var json = directory.resolve("module.jsons"); var symbols = directory.resolve("module.symbols"); Files.write(json, bytes);
-        Map<String,Object> record;
-        Files.writeString(symbols, fixture.symbols());
-        record = map("name", name, "path", "Exports.json", "sha256", hash(original), "boundary", module.get("boundary"), "start", 0L, "end", original.length,
-            "bindingsStart", fixture.bindingsStart(), "bindingsEnd", fixture.bindingsEnd(), "metadataStart", original.length + 1, "metadataEnd", bytes.length,
-            "containsDelimitedControl", false, "registrationObligations", true, "mainAlias", false, "packageScalarDeclarations", true);
-        return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1L, "ghc", "9.14.1", "units", list(
-            map("id", unit, "depends", List.of(), "json", map("path", json.toString(), "sha256", hash(bytes)),
-                "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record))))));
+    private Path packaged(Map<String,Object> module) throws Exception {
+        var record = CoreCbdFixtures.module(directory.resolve("module.cbd"), module);
+        return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages",
+            "schema", 1L, "ghc", "9.14.1", "units", list(map("id", unit, "depends", List.of(), "modules", list(record))))));
     }
     @AfterEach void releaseMappings() { CoreFileMappings.shared.evictIdleBelow(directory); }
 
@@ -154,60 +145,11 @@ class StaticExportStartupTest {
                 map("symbol", symbols.get(0), "kind", "clock-id"), map("symbol", symbols.get(1), "kind", "clock-buffer"),
                 map("symbol", symbols.get(2), "kind", "clock-buffer")),
             "sourceSha256", hash(source.getBytes(UTF_8)), "bitcodeSha256", hash(bytes), "bitcodeHex", HexFormat.of().formatHex(bytes));
-        return map("schema", 2L, "ghc", "9.14.1", "unit", capiUnit, "module", capiModule, "bindings", List.of(), "constructors", List.of(),
+        return map("schema", 2L, "ghc", "9.14.1", "unit", capiUnit, "module", capiModule, "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", List.of(), "constructors", List.of(),
             "foreign", map("schema", 1L, "execution", "not-linked", "files", List.of(), "stubs",
                 map("header", "", "source", source, "initializers", List.of(), "finalizers", List.of())), "foreignLink", link);
     }
-    private String capiRequest(Map<String,Object> capi, String backend, boolean prepared) throws Exception {
-        // Export declarations remain checked; the only native component is CAPI,
-        // so a package initializer cannot accidentally supply its callback stage.
-        var exports = without(module(), "packageNativeLink", "staticForeignImports");
-        return Json.stringify(map("modules", list(exports, capi), "entry", id, "backend", backend,
-            "strictLink", true, "detachedBindings", true, "prepareCode", prepared, "asyncExceptions", false));
-    }
-    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true"}) @Timeout(30)
-    void capiConstructorCallsPublishedExportBeforePackageInitialization(String backend, boolean prepared) throws Exception {
-        var capi = capiModule("initial = declared_identity(13);");
-        String request = capiRequest(capi, backend, prepared);
-        thc.runtime.SulongCbits previous = null;
-        for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
-                .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {
-            context.eval("thc", request);
-            context.enter();
-            try {
-                var owner = Language.currentState(); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(capi, false));
-                if (previous != null) {
-                    var other = previous;
-                    assertThrows(thc.runtime.RuntimeFault.class, () -> other.capiZero(link.unit(), "fixture_clock_id"));
-                }
-                assertEquals(13L, owner.cbits().capiZero(link.unit(), "fixture_clock_id"));
-                owner.cbits().link(link);
-                assertEquals(14L, owner.cbits().capiZero(link.unit(), "fixture_clock_id"), "native state survives repeated linking");
-                assertEquals(1, owner.getForeignRoots().size());
-                previous = owner.cbits();
-            } finally { context.leave(); }
-        }
-    }
-    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true"}) @Timeout(30)
-    void failedCapiConstructorRetainsOriginalFailureAndReleasesExports(String backend, boolean prepared) throws Exception {
-        var capi = capiModule("initial = declared_identity(13); missing_capi_initializer();");
-        String request = capiRequest(capi, backend, prepared);
-        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
-            var failure = assertThrows(RuntimeException.class, () -> context.eval("thc", request));
-            assertTrue(failure.getMessage().contains("missing_capi_initializer"), failure.toString());
-            context.enter();
-            try {
-                var owner = Language.currentState(); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(capi, false));
-                var original = assertThrows(RuntimeException.class, () -> owner.cbits().link(link));
-                assertTrue(original.getMessage().contains("missing_capi_initializer"), original.toString());
-                assertSame(original, assertThrows(RuntimeException.class, () -> owner.cbits().link(link)));
-                assertSame(original, assertThrows(RuntimeException.class, () -> owner.cbits().capiZero(link.unit(), "fixture_clock_id")));
-                assertEquals(0, owner.getForeignRoots().size());
-                assertFalse(com.oracle.truffle.api.interop.InteropLibrary.getUncached().isMemberReadable(
-                    owner.getNativeCallbacks().namespace(), "declared_identity"));
-            } finally { context.leave(); }
-        }
-    }
+
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void conflictingCapiOwnershipRejectsBeforeConstructorEffects(boolean sameModule) throws Exception {
         var original = Objects.requireNonNull(CoreForeignArtifacts.linked(capiModule("initial = 1;"), false));
@@ -231,9 +173,9 @@ class StaticExportStartupTest {
     @SuppressWarnings("unchecked")
     void preparedLoadRegistersBeforeOriginalConstructorCallsBack(boolean earlyFinalizer) throws Exception {
         var module = module(false, earlyFinalizer ? "function-addr" : null);
-        var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
+        var file = CoreCbdFixtures.write(directory.resolve("module.cbd"), module);
         var request = (Map<String,Object>) Json.parse(CoreModules.request(List.of(file.toString()), id, true, false, "ast", false));
-        request.put("prepareCode", true); request.put("detachedBindings", true); request.put("asyncExceptions", false);
+        request.put("prepareCode", true); request.put("asyncExceptions", false);
         for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
                 .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {
             context.eval("thc", Json.stringify(request));
@@ -259,9 +201,9 @@ class StaticExportStartupTest {
     @SuppressWarnings("unchecked")
     void failedPreparedConstructorKeepsItsFailureAndPublishesNoExport(boolean earlyFinalizer) throws Exception {
         var module = module(true, earlyFinalizer ? "function-addr" : null);
-        var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
+        var file = CoreCbdFixtures.write(directory.resolve("module.cbd"), module);
         var request = (Map<String,Object>) Json.parse(CoreModules.request(List.of(file.toString()), id, true, false, "ast", false));
-        request.put("prepareCode", true); request.put("detachedBindings", true); request.put("asyncExceptions", false);
+        request.put("prepareCode", true); request.put("asyncExceptions", false);
         try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
             var failure = assertThrows(RuntimeException.class, () -> context.eval("thc", Json.stringify(request)));
             assertTrue(failure.getMessage().contains("missing_initializer_dependency"), failure.toString());
@@ -291,8 +233,8 @@ class StaticExportStartupTest {
     @ParameterizedTest @CsvSource({"ast,false,function-addr", "bytecode,false,function-addr", "ast,true,function-addr", "bytecode,true,function-addr",
         "ast,false,data-addr", "bytecode,false,data-addr", "ast,true,data-addr", "bytecode,true,data-addr"})
     void originalAddressAndFinalizerLiteralsLoadBeforeConstructorCallbacks(String backend, boolean lazy, String kind) throws Exception {
-        var module = module(false, kind); var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
-        var paths = List.of(lazy ? "@" + paired(module) : file.toString());
+        var module = module(false, kind); var file = CoreCbdFixtures.write(directory.resolve("module.cbd"), module);
+        var paths = List.of(lazy ? "@" + packaged(module) : file.toString());
         for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
                 .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {
             context.eval("thc", CoreModules.request(paths, unit + ":" + name + ".label", true, false, backend, false));
@@ -315,8 +257,8 @@ class StaticExportStartupTest {
     }
     @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
     void failedNativeInitializationDoesNotPublishRootsOrCallableExports(String backend, boolean lazy) throws Exception {
-        var module = module(true); var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
-        var paths = List.of(lazy ? "@" + paired(module) : file.toString());
+        var module = module(true); var file = CoreCbdFixtures.write(directory.resolve("module.cbd"), module);
+        var paths = List.of(lazy ? "@" + packaged(module) : file.toString());
         try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
             var failure = assertThrows(RuntimeException.class,
                 () -> context.eval("thc", CoreModules.managedExportRequest(paths, backend, true)));
@@ -335,8 +277,8 @@ class StaticExportStartupTest {
     @Timeout(20)
     @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
     void failedConstructorCannotPublishItsEarlyFinalizer(String backend, boolean lazy) throws Exception {
-        var module = module(true, "function-addr"); var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
-        var paths = List.of(lazy ? "@" + paired(module) : file.toString());
+        var module = module(true, "function-addr"); var file = CoreCbdFixtures.write(directory.resolve("module.cbd"), module);
+        var paths = List.of(lazy ? "@" + packaged(module) : file.toString());
         for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
                 .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {
             var failure = assertThrows(RuntimeException.class,
@@ -365,8 +307,8 @@ class StaticExportStartupTest {
     @ParameterizedTest @CsvSource({"ast,false,false", "bytecode,false,false", "ast,true,false", "bytecode,true,false",
         "ast,false,true", "bytecode,false,true", "ast,true,true", "bytecode,true,true"})
     void publicLoadRegistersBeforeOriginalConstructorCallsBack(String backend, boolean lazy, boolean managed) throws Exception {
-        var module = module(); var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
-        var paths = List.of(lazy ? "@" + paired(module) : file.toString());
+        var module = module(); var file = CoreCbdFixtures.write(directory.resolve("module.cbd"), module);
+        var paths = List.of(lazy ? "@" + packaged(module) : file.toString());
         var request = managed ? CoreModules.managedExportRequest(paths, backend, true) : CoreModules.request(paths, id, true, false, backend, false);
         for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
                 .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {

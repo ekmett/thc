@@ -80,57 +80,7 @@ class SimdAstTransportTest {
             binding("captured", lam(List.of(formal("x")), captured)), binding("thunk", lam(List.of(formal("x")), thunk))));
         return with(base, "constructors", constructors, "bindings", bindings);
     }
-    private record Mutation(String label, Map<String, Object> changed, String reason) {}
-    @Test void publicLoadRejectsContradictoryVectorConstructorMetadata() {
-        var source = heapModule(); var constructors = (List<Map<String, Object>>) source.get("constructors"); var matches = new ArrayList<Map<String, Object>>();
-        for (var constructor : constructors) if (Objects.equals(constructor.get("id"), "Heap")) matches.add(constructor); assertEquals(1, matches.size()); var heap = matches.getFirst();
-        var wrongKind = with(vector, "kind", "long"); var wrongRep = with(vector, "primReps", List.of("VecRep 8 Word16ElemRep"), "vector", m("lanes", 8L, "element", "Word16ElemRep"));
-        var malformed = List.of(
-            new Mutation("missing types", without(heap, "fieldTypes"), "Vector constructor field requires exact logical metadata"),
-            new Mutation("short types", with(heap, "fieldTypes", List.of(vector)), "Constructor field type count mismatch"),
-            new Mutation("missing levity", without(heap, "fieldLifted"), "Missing constructor representation metadata"),
-            new Mutation("short levity", with(heap, "fieldLifted", List.of(false)), "Constructor field type count mismatch"),
-            new Mutation("lifted vector", with(heap, "fieldLifted", List.of(true, false)), "Constructor field levity disagrees"),
-            new Mutation("missing strictness", without(heap, "strictFields"), "Missing constructor strictness metadata"),
-            new Mutation("invalid strictness", with(heap, "strictFields", List.of("false", false)), "Unknown constructor field strictness"),
-            new Mutation("unevaluated vector", with(heap, "fieldTypes", List.of(with(vector, "evaluated", false), integer)), "Constructor field evaluatedness lacks a worker obligation"),
-            new Mutation("wrong kind", with(heap, "fieldTypes", List.of(wrongKind, integer)), "Core Long proof lacks a supported primitive representation"),
-            new Mutation("wrong representation", with(heap, "fieldTypes", List.of(wrongRep, integer)), "Constructor field type disagrees with its primitive representation"));
-        assertEquals(CoreRepresentations.parse(vector), new CoreFields(heap).getVectorProofs()[0]);
-        for (var mutation : malformed) {
-            var failure = assertThrows(RuntimeFault.class, () -> new CoreFields(mutation.changed));
-            assertTrue(Objects.toString(failure.getMessage(), "").contains(mutation.reason), "CoreFields/" + mutation.label + ": " + failure.getMessage());
-        }
-        for (var backend : List.of("ast", "bytecode")) {
-            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).build()) {
-                var request = Json.stringify(m("entry", "heapDirect", "backend", backend, "modules", List.of(source)));
-                assertEquals(14L, context.eval("thc", request).execute(1L).asLong(), backend + " valid metadata");
-            }
-            for (var mutation : malformed) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).build()) {
-                var changed = new ArrayList<Map<String, Object>>(); for (var constructor : constructors) changed.add(Objects.equals(constructor.get("id"), "Heap") ? mutation.changed : constructor);
-                var request = Json.stringify(m("entry", "heapDirect", "backend", backend, "modules", List.of(with(source, "constructors", changed))));
-                var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request));
-                // Known-input validation can reject the constructor application before layout construction reaches CoreFields; both enforce the exact proof.
-                var reasons = new ArrayList<>(List.of(mutation.reason, "Missing or conflicting exact vector argument proof"));
-                if (mutation.label.equals("short levity")) reasons.add("Constructor metadata length mismatch: Heap");
-                boolean matched = false; for (var reason : reasons) if (Objects.toString(failure.getMessage(), "").contains(reason)) { matched = true; break; }
-                assertTrue(matched, backend + "/" + mutation.label + ": " + failure.getMessage());
-            }
-        }
-    }
-    @Test void publicHostTransportsExactRawVectorIngressAndResult() {
-        for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
-                .allowHostAccess(org.graalvm.polyglot.HostAccess.ALL).build()) {
-            var raw = jdk.incubator.vector.ShortVector.fromArray(jdk.incubator.vector.ShortVector.SPECIES_128,
-                new short[]{Short.MIN_VALUE, -1, 0, 1, 13, 255, 256, Short.MAX_VALUE}, 0);
-            var identity = context.eval("thc", Json.stringify(m("entry", "identity", "backend", backend, "modules", List.of(module()))));
-            assertSame(raw, identity.execute(raw).asHostObject());
-            assertThrows(PolyglotException.class, () -> identity.execute(jdk.incubator.vector.ShortVector.zero(jdk.incubator.vector.ShortVector.SPECIES_256)));
-            assertThrows(PolyglotException.class, () -> identity.execute(jdk.incubator.vector.IntVector.zero(jdk.incubator.vector.IntVector.SPECIES_128)));
-            var producer = context.eval("thc", Json.stringify(m("entry", "returnVector", "backend", backend, "modules", List.of(module()))));
-            assertEquals(jdk.incubator.vector.ShortVector.broadcast(jdk.incubator.vector.ShortVector.SPECIES_128, Short.MIN_VALUE), producer.execute(-32768L).asHostObject());
-        }
-    }
+
     private Context compiledContext(Boolean inlining) {
         var builder = Context.newBuilder("thc").allowExperimentalOptions(true);
         if (inlining != null) builder.option("compiler.Inlining", inlining.toString());

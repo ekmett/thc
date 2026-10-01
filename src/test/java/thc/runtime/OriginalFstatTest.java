@@ -31,7 +31,7 @@ class OriginalFstatTest {
     private final String prefix = "build/original-posix-stat";
     private final List<String> entries = List.of("originalFstat","originalFstatErrno");
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) modules.add(json(prefix + "/" + stage + "/core/" + part + ".json")); return CoreModules.merge(modules); }
+    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) modules.add(thc.CoreCbdFixtures.read(new File(root, prefix + "/" + stage + "/core/" + part + ".cbd").toPath())); return CoreModules.merge(modules); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private ManagedAddress path(Path value) { return ManagedAddress.fromByteArray((value + "\0").getBytes(StandardCharsets.UTF_8)); }
     private long field(ManagedAddress address,OriginalStdioOp operation) { return PosixStat.execute(operation,address,0); }
@@ -41,17 +41,17 @@ class OriginalFstatTest {
     private static List<Long> longs(Object values) { var result = new ArrayList<Long>(); for (var value : (List<Number>) values) result.add(value.longValue()); return result; }
     @Test void nativeOriginalObservationsMatchBothBackendsAndEveryFirstInstalledCall() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(true,manifest.get("supported")); hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalPosixStatAudit.hs","t/fixtures/compiler/OriginalPosixStatNative.hs","t/haskell-fixtures/OriginalPosixStatFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { for (var name : entries) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { for (var name : entries) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".cbd"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var oracle = json(prefix + "/oracle.json"); int size = ((Number) oracle.get("size")).intValue(); var rows = (List<List<Object>>) oracle.get("fstats"); var names = new ArrayList<Object>(); for (var row : rows) names.add(row.get(0)); assertEquals(List.of("initial","resized","chmod","renamed","unlinked","invalid","closed"),names);
         for (var row : rows) { boolean success = !List.of("invalid","closed").contains(row.get(0)); assertEquals(success ? 0L : -1L,((Number) row.get(1)).longValue()); assertEquals(StdioHostAbi.load().error(4),((Number) row.get(2)).longValue());
             assertEquals(success ? List.of(Objects.equals(row.get(0),"initial") ? 256L : 17L,1L,1L,1L,List.of("initial","resized").contains(row.get(0)) ? 384L : 256L) : List.of(),longs(row.get(3))); assertEquals(true,row.get(4)); }
         for (var stage : List.of("pre","post")) for (var name : entries) {
             var audit = json(prefix + "/" + stage + "/" + name + ".audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals"));
-            var linked = with(CoreModules.reachable(module(stage),name),"instrument",true); var evidence = new ArrayCoreEvidence(linked,name); assertEquals(1,evidence.getBindings().size());
+            var linked = with(CoreModules.reachable(module(stage),"main:OriginalPosixStatAudit." + name),"instrument",true); var evidence = new ArrayCoreEvidence(linked,"main:OriginalPosixStatAudit." + name); assertEquals(1,evidence.getBindings().size());
             assertEquals(2,evidence.guestLambdas(evidence.getRoot().get("expr")).size(),"Original Core retains the state lambda"); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size(),"Exact State# redex executes in-frame");
             var fstats = new ArrayList<List<Object>>(); for (var call : foreignCalls(linked)) if (Objects.equals(((Map<?,?>) ((Map<?,?>) ((Map<?,?>) call.get(6)).get("foreignCall")).get("target")).get("symbol"),"__hscore_fstat")) fstats.add(call); assertEquals(1,fstats.size()); assertEquals(OriginalStdioOp.FSTAT,validate(fstats.getFirst()));
             for (var backend : List.of("ast","bytecode")) try (var context = NativeFileProvider.createContext(Set.of(),ContextProfile.SYNCHRONOUS_TEST)) { entered(context,() -> {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); var files = state.getFiles(); var stdio = state.getStdio(); var program = load(language,backend,linked); var entry = program.entryTarget(name);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); var files = state.getFiles(); var stdio = state.getStdio(); var program = load(language,backend,linked); var entry = program.entryTarget("main:OriginalPosixStatAudit." + name);
                 class Exercise {
                     List<RootCallTarget> active = List.of();
                     void run(boolean compiled) throws Exception {

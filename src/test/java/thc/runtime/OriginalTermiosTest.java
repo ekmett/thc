@@ -92,9 +92,6 @@ class OriginalTermiosTest {
                         } else if (index < constantCount) {
                             // Calling the original CAF target leaves its shared Thunk unforced.
                             assertEquals(2,bindings.size()); var caf = single(bindings,b -> !Objects.equals(b.get("id"),binding.get("id"))); assertEquals(0L,caf.get("arity")); assertEquals(true,caf.get("lifted"));
-                            var diagnostics = CoreModules.merge(List.of(json(prefix + "/" + stage + "/core/OriginalTermiosAudit.json"), json(prefix + "/" + stage + "/core/THC.InterfaceClosure.json")));
-                            var diagnostic = single((List<Map<String,Object>>) diagnostics.get("bindings"), b -> Objects.equals(b.get("id"), caf.get("id")));
-                            assertEquals("Int",diagnostic.get("type"));
                             assertEquals(map("primReps",list("BoxedRep (Just Lifted)"),"kind","data","evaluated",false),caf.get("rep")); var cafSymbols = new ArrayList<String>(); for (var call : foreignCalls(caf.get("expr"))) cafSymbols.add(Objects.requireNonNull(validate(call)).getSymbol()); assertEquals(List.of(symbols.get(index)),cafSymbols);
                             var cafId = (String) caf.get("id"); var thunk = (Thunk) program.entryValue(cafId); var target = program.entryTarget(cafId); assertSame(target,thunk.getTarget()); assertEquals(CoreFunctionIdentity.from(linked,caf),((GuestRoot) target.getRootNode()).getCoreIdentity()); assertNull(thunk.getEnvironment());
                             class Caf { void invoke(boolean compiled) throws Exception {

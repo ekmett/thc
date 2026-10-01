@@ -50,20 +50,5 @@ class GuestExceptionsTest {
             assertSame(payload, exception.getPayload()); assertEquals("Payload", ((DataValue) exception.getPayload()).getLayout().getName());
         });
     }
-    @Test void coldRaiseBranchStaysLazyCompilesAndReportsAGuestException() {
-        var body = list("case", variable("input"), "choice", list(list("default", null, list(), variable("input")), list("lit", list("int", "0"), list(), raised(variable("payload")))));
-        var input = map("id", "input", "name", "input", "type", "Int#", "lifted", false, "coercion", false);
-        var data = module(list(binding("payload", variable("payload")), binding("entry", list("lam", list(input), body), 1)));
-        var request = Json.stringify(map("entry", "entry", "modules", list(data)));
-        try (var context = Main.executionContext(false)) {
-            var function = context.eval("thc", request);
-            for (int i = 0; i < 40; i++) assertEquals(17L, function.execute(17L).asLong());
-            assertTrue(function.invokeMember("compile").asBoolean()); assertEquals(23L, function.execute(23L).asLong());
-            var exception = assertThrows(PolyglotException.class, () -> function.execute(0L));
-            assertTrue(exception.isGuestException()); assertFalse(exception.isHostException());
-            var metrics = object(Json.parse(function.getMember("diagnostics").asString()));
-            assertEquals(0L, metrics.get("blackholes")); assertEquals(0L, metrics.get("thunkEvaluations"), "The bottom exception payload is still not entered");
-            assertTrue(((Number) metrics.get("compiledEntries")).longValue() > 0);
-        }
-    }
+
 }

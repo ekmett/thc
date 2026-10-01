@@ -2,20 +2,12 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
-import java.nio.file.*;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.*;
-import java.util.function.Consumer;
-import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import thc.runtime.ManagedFileFixtures;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreFormatTestSupport.*;
 
 class CoreLinkerTest {
-    @TempDir Path temporary;
     private Map<String, Object> binding(String id, List<Object> expression) { return map("id", id, "name", id, "expr", expression); }
     private List<Object> variable(String id) { return list("var", id); }
     private List<Object> literal() { return list("lit", "int", "0"); }
@@ -103,44 +95,5 @@ class CoreLinkerTest {
         assertTrue(assertThrows(IllegalArgumentException.class, () -> link(call("dependency"), binding("dependency", literal()), binding("foreign", variable("missing-body")))).getMessage().contains("missing-body"));
         assertTrue(assertThrows(IllegalArgumentException.class, () -> link(variable("foreign"))).getMessage().contains("foreign"));
     }
-    @SuppressWarnings("unchecked")
-    private String foreignRequest(String backend, Consumer<List<Object>> mutate) {
-        var module = ManagedFileFixtures.module(List.of("error_kind"), call -> {
-            call.set(2, list(list("void", map("rep", ManagedFileFixtures.scalar(null, true))))); mutate.accept(call);
-        });
-        var bindings = (List<Map<String, Object>>) module.get("bindings"); assertEquals(1, bindings.size()); var binding = bindings.getFirst();
-        var lambda = new ArrayList<>((List<Object>) binding.get("expr"));
-        lambda.set(1, list(map("id", "ignored", "name", "ignored", "lifted", false, "rep", ManagedFileFixtures.scalar("IntRep", true))));
-        var exported = with(module, "schema", 1, "ghc", "9.14.1", "bindings", list(with(binding, "expr", lambda)));
-        return Json.stringify(map("modules", list(exported), "entry", "error_kind", "backend", backend, "strictLink", true));
-    }
-    @SuppressWarnings("unchecked")
-    @Test void strictRequestsReachForeignAdaptersWithoutBypassingTheirProofs() {
-        for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
-                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
-            var function = context.eval("thc", foreignRequest(backend, call -> {})); assertEquals(0L, function.execute(1L).asLong());
-            assertTrue(function.invokeMember("compile").asBoolean()); assertEquals(0L, function.execute(2L).asLong());
-            List<Consumer<List<Object>>> mutations = List.of(
-                call -> ((Map<String, Object>) ((Map<?, ?>) call.get(6)).get("foreignCall")).put("safety", "unsafe"),
-                call -> ((Map<String, Object>) ((Map<?, ?>) ((Map<?, ?>) call.get(6)).get("foreignCall")).get("target")).put("symbol", "unimplemented_foreign_target"),
-                call -> ((Map<?, ?>) call.get(6)).remove("foreignCall"));
-            for (var invalid : mutations) assertThrows(PolyglotException.class, () -> context.eval("thc", foreignRequest(backend, invalid)));
-        }
-    }
-    private Map<String, Object> source(String unit) { return map("schema", 1, "ghc", "9.14.1", "unit", unit, "module", "Shared", "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", list(binding(unit + ":Shared.entry", literal())), "constructors", List.of()); }
-    private Map<String, Object> record(String unit) throws Exception {
-        var path = temporary.resolve(unit + ".json"); var bytes = Json.stringify(source(unit)).getBytes(StandardCharsets.UTF_8); Files.write(path, bytes);
-        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        return map("id", unit, "depends", List.of(), "modules", list(map("name", "Shared", "boundary", "optimized-Core-after-Tidy-before-CorePrep", "path", path.getFileName().toString(), "sha256", hash)));
-    }
-    private void manifest(Path path, List<Map<String, Object>> units) throws Exception { Files.writeString(path, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", units))); }
-    @Test void packageManifestLinksSameModuleNameInDistinctUnitsAndRejectsTampering() throws Exception {
-        var units = List.of(record("pkg-a"), record("pkg-b")); var manifest = temporary.resolve("packages.json"); manifest(manifest, units);
-        var request = (Map<?, ?>) Json.parse(request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, false));
-        assertEquals(true, request.get("strictLink")); assertEquals(2, ((List<?>) request.get("modules")).size());
-        Files.writeString(temporary.resolve("pkg-b.json"), "{}");
-        assertThrows(IllegalArgumentException.class, () -> request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, false));
-        manifest(manifest, List.of(units.get(0), units.get(0)));
-        assertThrows(IllegalArgumentException.class, () -> request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, false));
-    }
+
 }

@@ -72,7 +72,7 @@ public class ProcessLifecycleCoreTest {
     }
     private static long call(ExecutableProgram program, String name, Object... arguments) {
         var packet = new Object[arguments.length + 1]; packet[0] = 0L; System.arraycopy(arguments, 0, packet, 1, arguments.length);
-        return (Long) callScalarTestTarget(program.entryTarget(name), packet);
+        return (Long) callScalarTestTarget(program.entryTarget("main:ProcessLifecycleAudit." + name), packet);
     }
     @ParameterizedTest @CsvSource({"pre, ast", "post, ast", "pre, bytecode", "post, bytecode"})
     void originalInterruptibleWaitSavesErrnoAndNeverReplays(String stage, String backend) throws Throwable {
@@ -80,10 +80,10 @@ public class ProcessLifecycleCoreTest {
             context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState();
-                var module = new LinkedHashMap<>(json(stage)); module.put("instrument", true);
+                var module = new LinkedHashMap<>(thc.CoreCbdFixtures.read(root.resolve(prefix + "/" + stage + ".cbd"))); module.put("instrument", true);
                 ExecutableProgram plain = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
                 ExecutableProgram async = backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module, true);
-                var wait = async.entryTarget("processWait");
+                var wait = async.entryTarget("main:ProcessLifecycleAudit.processWait");
                 for (boolean installed : new boolean[]{false, true}) {
                     if (installed) {
                         wait.getClass().getMethod("compile", boolean.class).invoke(wait, true); assertEquals(true, wait.getClass().getMethod("isValidLastTier").invoke(wait));
@@ -162,14 +162,14 @@ public class ProcessLifecycleCoreTest {
     void originalProcessCoreMatchesNativeBeforeAndAfterInstallation(String stage, String backend) throws Exception {
         var manifest = json("manifest"); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(List.of("processCreate", "processPoll", "processWait", "processTerminate"), manifest.get("entries"));
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs"), null);
-        OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), Set.of(prefix + "/pre.json", prefix + "/post.json"), prefix + "/");
+        OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), Set.of(prefix + "/pre.cbd", prefix + "/post.cbd"), prefix + "/");
         var expected = nativeRows("oracle"); var creation = nativeRows("creation-oracle"); assertEquals(10, expected.size()); assertEquals(3, creation.size());
         try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, true)) {
             context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); var module = new LinkedHashMap<>(json(stage)); module.put("instrument", true);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); var module = new LinkedHashMap<>(thc.CoreCbdFixtures.read(root.resolve(prefix + "/" + stage + ".cbd"))); module.put("instrument", true);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
-                var targets = new LinkedHashMap<String, RootCallTarget>(); for (var name : List.of("processCreate", "processPoll", "processWait", "processTerminate")) targets.put(name, program.entryTarget(name));
+                var targets = new LinkedHashMap<String, RootCallTarget>(); for (var name : List.of("processCreate", "processPoll", "processWait", "processTerminate")) targets.put(name, program.entryTarget("main:ProcessLifecycleAudit." + name));
                 record Child(long pid, long input, long output, long error) {}
                 class Exercise {
                     boolean installed;
