@@ -12,15 +12,21 @@
 -- Command-line entry point for Cabal planning, Core acquisition and guest execution.
 module Main (main) where
 
-import Control.Monad (when)
+import Control.Monad (filterM, when)
+import Data.List (isPrefixOf, nub, sort)
 import Data.Maybe (catMaybes, isNothing)
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
-import System.Directory (getCurrentDirectory)
-import System.Environment (getArgs)
-import System.Exit (die)
+import System.Directory (doesFileExist, executable, findExecutable, getCurrentDirectory, getPermissions, listDirectory)
+import System.Environment (getArgs, lookupEnv)
+import System.Exit (ExitCode(..), die, exitWith)
+import System.FilePath ((</>), dropExtension, splitSearchPath, takeExtension)
 import System.IO (hSetEncoding, stderr, stdout, utf8)
+import System.IO.Error (tryIOError)
+import qualified System.Info as Host
+import System.Process (rawSystem, readProcessWithExitCode)
+import Text.Read (readMaybe)
 import THC.Driver.Cabal
 import THC.Driver.GhcProxy (runGhcProxy)
 import THC.Driver.Json (renderJson)
@@ -33,6 +39,9 @@ main = topHandler $ do
   hSetEncoding stderr utf8
   args <- getArgs
   case args of
+    ["--bash-completion-script"] -> putStr bashCompletionScript
+    "--bash-completion" : index : words' -> bashCompletion index words'
+    ["--bash-completion"] -> pure ()
     "ghc-proxy" : rest -> runGhcProxy rest
     ["--help"] -> putStr usage
     ["plan-package", "--help"] -> putStr usage
@@ -58,7 +67,82 @@ main = topHandler $ do
           current <- getCurrentDirectory
           if acquire then acquireProject selected current else runProject selected current
         (_, _, errors) -> die (concat errors ++ commandUsage)
+    command@(first : _) : rest | first /= '-' && '/' `notElem` command && '\\' `notElem` command -> do
+      extension <- findExecutable ("thc-" ++ command)
+      maybe (die usage) (\path -> rawSystem path rest >>= exitWith) extension
     _ -> die usage
+
+-- | Bash passes the zero-based cursor and its word array, including argv[0].
+-- Candidates are raw lines, never shell code. Extensions receive their own argv[0].
+bashCompletion :: String -> [String] -> IO ()
+bashCompletion cursor words' = case readMaybe cursor of
+  Just index | index > 0 && index < length words' -> do
+    let current = words' !! index
+        before = take index words'
+        previous = words' !! (index - 1)
+    candidates <- if index == 1 then do
+        extensions <- completionExtensions
+        pure (map fst completionCommands ++ ["--help", "--bash-completion-script"] ++ extensions)
+      else case lookup (words' !! 1) completionCommands of
+        Just descriptors
+          | "--" `elem` drop 2 before -> pure []
+          | previous == "--installed-core" && any (takesValue previous) descriptors -> pure ["required", "pinned"]
+          | "--installed-core=" `isPrefixOf` current -> pure ["--installed-core=required", "--installed-core=pinned"]
+          | any (takesValue previous) descriptors -> pure []
+          | otherwise -> pure (concatMap optionNames descriptors)
+        Nothing -> do
+          let command = "thc-" ++ words' !! 1
+          extension <- findExecutable command
+          case extension of
+            Nothing -> pure []
+            Just path -> do
+              response <- tryIOError $ readProcessWithExitCode path
+                ("--bash-completion" : show (index - 1) : command : drop 2 words') ""
+              pure $ case response of
+                Right (ExitSuccess, output, _) -> lines output
+                _ -> []
+    mapM_ putStrLn $ sort $ nub $ filter (current `isPrefixOf`) candidates
+  _ -> pure ()
+  where
+    optionNames (Option shorts longs _ _) = map (\c -> ['-', c]) shorts ++ map ("--" ++) longs
+    takesValue name option@(Option _ _ argument _) = name `elem` optionNames option && case argument of
+      NoArg _ -> False
+      _ -> True
+
+-- Derive option completions from the same descriptors used to parse commands.
+completionCommands :: [(String, [OptDescr ()])]
+completionCommands =
+  [("plan-package", map (fmap (const ())) (withHelp options)),
+   ("run", map (fmap (const ())) (withHelp runOptions)),
+   ("acquire", map (fmap (const ())) (withHelp acquireOptions))]
+
+completionExtensions :: IO [String]
+completionExtensions = do
+  path <- maybe "" id <$> lookupEnv "PATH"
+  names <- mapM entries (if null path then [""] else splitSearchPath path)
+  pure (concat names)
+  where
+    entries directory = do
+      let base = if null directory then "." else directory
+      listed <- tryIOError (listDirectory base)
+      let names = either (const []) id listed
+      installed <- filterM (runnable base) [name | name <- names, "thc-" `isPrefixOf` name, length name > 4]
+      pure [drop 4 (if Host.os == "mingw32" && takeExtension name == ".exe" then dropExtension name else name)
+           | name <- installed, '\n' `notElem` name, '\r' `notElem` name]
+    runnable directory name = do
+      result <- tryIOError $ do
+        let file = directory </> name
+        exists <- doesFileExist file
+        if exists then executable <$> getPermissions file else pure False
+      pure (either (const False) id result)
+
+bashCompletionScript :: String
+bashCompletionScript = unlines
+  ["# Bash completion for thc. Source this file or install it as a bash-completion entry.",
+   "_thc() {", "    local candidate", "    COMPREPLY=()",
+   "    while IFS= read -r candidate; do", "        COMPREPLY+=(\"$candidate\")",
+   "    done < <(\"${COMP_WORDS[0]}\" --bash-completion \"$COMP_CWORD\" \"${COMP_WORDS[@]}\" 2>/dev/null)",
+   "}", "complete -o bashdefault -o default -F _thc thc"]
 
 -- Parse help as an option, so an option value literally named --help is not
 -- mistaken for a request. The guest suffix has already been split off.

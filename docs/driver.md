@@ -20,6 +20,31 @@ The included example returns `()` without printing. It works with the limited
 installed-library provider. Ordinary console and file applications need the
 complete-Core setup below.
 
+## Bash completion and external commands
+
+Enable completion in the current Bash session:
+
+```bash
+source <(thc --bash-completion-script)
+```
+
+For automatic loading with `bash-completion`, install the generated script:
+
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+thc --bash-completion-script > ~/.local/share/bash-completion/completions/thc
+```
+
+The script queries the executable for commands, options and option values.
+An executable `thc-foo` on `PATH` provides `thc foo`; arguments are passed
+unchanged. Its completion hook is `thc-foo --bash-completion INDEX WORD...`,
+where `INDEX` is the zero-based cursor in `WORD...`, including the executable
+name and the current word (which may be empty). The hook prints one raw
+candidate per line, without shell quoting, and must not start the application.
+THC removes its own command word and adjusts the cursor before delegating.
+Built-in commands take precedence. Bash supplies filename completion when a
+hook returns no candidates.
+
 ## Choose a target and pass arguments
 
 ```sh
