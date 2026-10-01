@@ -11,7 +11,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Fixture acquisition support for installed core.
-module InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreUnits, prepareInstalledCoreWithForeign, prepareInstalledCoreWithForeignUnits, field, readJson) where
+module InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreUnits, prepareInstalledCoreWithForeign, prepareInstalledCoreWithForeignUnits, installedCoreSource, field, readJson) where
 
 import Control.Monad (forM, unless)
 import Data.Aeson (Value, FromJSON, decodeStrict', fromJSON, Result(..), object, (.=))
@@ -69,8 +69,15 @@ prepareInstalledCoreWithForeignUnits root directory source =
 
 prepareInstalledCoreUnits = prepareInstalledCoreProfile Nothing
 
+-- | Select the configured source for this fixture profile. An explicit foreign
+-- profile remains authoritative over the ordinary acquisition environment.
+installedCoreSource :: Maybe FilePath -> IO (Maybe FilePath)
+installedCoreSource Nothing = lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
+installedCoreSource source = pure source
+
 prepareInstalledCoreProfile :: Maybe FilePath -> FilePath -> FilePath -> [String] -> IO InstalledFixture
-prepareInstalledCoreProfile foreignSource root directory libraries = do
+prepareInstalledCoreProfile requestedSource root directory libraries = do
+  foreignSource <- installedCoreSource requestedSource
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
