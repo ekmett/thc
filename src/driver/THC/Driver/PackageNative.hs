@@ -1178,8 +1178,13 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     -- are "private external", unlike default/protected exports. Inspect the
     -- linked component, since other translation units can narrow visibility.
     symbols <- command directory nm ["--defined-only","--extern-only","--format=darwin",linked]
-    let public = sort . nub $ [symbol | line <- lines symbols, name:attributes <- [reverse (words line)],
+    let visiblePublic = sort . nub $ [symbol | line <- lines symbols, name:attributes <- [reverse (words line)],
           let symbol = nativeIrSymbol target name, symbol `elem` defined, "external" `elem` attributes, "private" `notElem` attributes]
+        -- Installed units are closed executables rooted by their whole-unit
+        -- FFI/address entries. Source-store components remain reusable C
+        -- providers and retain every public definition for declared consumers.
+        public = if member record "installed" == Just (Bool True)
+          then filter (`elem` entries) visiblePublic else visiblePublic
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     linkedSource <- readFile linkedIR
     -- A typed Haskell address is not a C definition proof. Require the actual
