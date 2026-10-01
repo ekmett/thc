@@ -98,9 +98,9 @@ public final class GuestThreads {
         synchronized (this) {
             if (stoppingPlatform || closed) throw fault("Guest context is stopping");
             try (var ignored = cpuAffinity.resetCurrent()) {
-                platformCarriers.put(thread, Boolean.TRUE);
+                var previous = platformCarriers.put(thread, Boolean.TRUE);
                 try { thread.start(); }
-                catch (Throwable failure) { if (!thread.isAlive()) platformCarriers.remove(thread); throw failure; }
+                catch (Throwable failure) { if (previous == null) platformCarriers.remove(thread); throw failure; }
             } catch (Throwable failure) { throw propagate(failure); }
         }
     }
