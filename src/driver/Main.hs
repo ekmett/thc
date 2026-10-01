@@ -12,9 +12,10 @@
 -- Command-line entry point for Cabal planning, Core acquisition and guest execution.
 module Main (main) where
 
-import Control.Monad (filterM, when)
+import Control.Monad (filterM, void, when)
+import Data.Either (fromRight)
 import Data.List (isPrefixOf, nub, sort)
-import Data.Maybe (catMaybes, isNothing)
+import Data.Maybe (catMaybes, fromMaybe, isNothing)
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
@@ -87,7 +88,7 @@ bashCompletion cursor words' = case readMaybe cursor of
         Just descriptors
           | "--" `elem` drop 2 before -> pure []
           | previous == "--installed-core" && any (takesValue previous) descriptors -> pure ["required", "pinned"]
-          | "--installed-core=" `isPrefixOf` current -> pure ["--installed-core=required", "--installed-core=pinned"]
+          | "--installed-core=" `isPrefixOf` current && any (takesValue "--installed-core") descriptors -> pure ["--installed-core=required", "--installed-core=pinned"]
           | any (takesValue previous) descriptors -> pure []
           | otherwise -> pure (concatMap optionNames descriptors)
         Nothing -> do
@@ -112,20 +113,20 @@ bashCompletion cursor words' = case readMaybe cursor of
 -- Derive option completions from the same descriptors used to parse commands.
 completionCommands :: [(String, [OptDescr ()])]
 completionCommands =
-  [("plan-package", map (fmap (const ())) (withHelp options)),
-   ("run", map (fmap (const ())) (withHelp runOptions)),
-   ("acquire", map (fmap (const ())) (withHelp acquireOptions))]
+  [("plan-package", map void (withHelp options)),
+   ("run", map void (withHelp runOptions)),
+   ("acquire", map void (withHelp acquireOptions))]
 
 completionExtensions :: IO [String]
 completionExtensions = do
-  path <- maybe "" id <$> lookupEnv "PATH"
+  path <- fromMaybe "" <$> lookupEnv "PATH"
   names <- mapM entries (if null path then [""] else splitSearchPath path)
   pure (concat names)
   where
     entries directory = do
       let base = if null directory then "." else directory
       listed <- tryIOError (listDirectory base)
-      let names = either (const []) id listed
+      let names = fromRight [] listed
       installed <- filterM (runnable base) [name | name <- names, "thc-" `isPrefixOf` name, length name > 4]
       pure [drop 4 (if Host.os == "mingw32" && takeExtension name == ".exe" then dropExtension name else name)
            | name <- installed, '\n' `notElem` name, '\r' `notElem` name]
@@ -134,7 +135,7 @@ completionExtensions = do
         let file = directory </> name
         exists <- doesFileExist file
         if exists then executable <$> getPermissions file else pure False
-      pure (either (const False) id result)
+      pure (fromRight False result)
 
 bashCompletionScript :: String
 bashCompletionScript = unlines
@@ -181,8 +182,8 @@ runOptions =
 liftPlanOption :: OptDescr (PlanOptions -> PlanOptions) -> OptDescr (RunOptions -> RunOptions)
 liftPlanOption (Option shorts longs argument description) = Option shorts longs (case argument of
   NoArg update -> NoArg (liftUpdate update)
-  ReqArg update name -> ReqArg (\value -> liftUpdate (update value)) name
-  OptArg update name -> OptArg (\value -> liftUpdate (update value)) name) description
+  ReqArg update name -> ReqArg (liftUpdate . update) name
+  OptArg update name -> OptArg (liftUpdate . update) name) description
   where liftUpdate update run = run {runPlan = update (runPlan run)}
 
 runUsage :: String
