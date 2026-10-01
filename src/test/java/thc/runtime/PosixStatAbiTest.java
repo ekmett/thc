@@ -14,6 +14,32 @@ import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs(value = OS.LINUX, disabledReason = "Only original Linux stat scalar declarations have native/Core proof")
 class PosixStatAbiTest {
+    @Test void selectedNarrowStatModelPreservesNativeSignednessAndRejectsBadMembers() throws Exception {
+        // A checked parser model, not a receipt for any actual Darwin structure.
+        var fields = Map.of(
+            "st_dev", Map.of("offset", 0L, "width", 4L, "signed", true),
+            "st_ino", Map.of("offset", 8L, "width", 8L, "signed", false),
+            "st_mode", Map.of("offset", 16L, "width", 2L, "signed", false),
+            "st_size", Map.of("offset", 24L, "width", 8L, "signed", true));
+        var stat = with((Map<?, ?>) document().get("stat"), "fields", fields);
+        stat = with(stat, "size", 32L);
+        var model = with(with(with(document(), "system", "Darwin"), "architecture", "aarch64"), "target", "arm64-apple-darwin25.0.0");
+        model = with(model, "stat", stat);
+        var abi = PosixStat.parse(model, "Darwin", "arm64");
+        var bytes = new byte[32]; Arrays.fill(bytes, (byte) -1);
+        var address = ManagedAddress.fromByteArray(bytes);
+        assertEquals(-1L, abi.field("st_dev", address));
+        assertEquals(-1L, abi.field("st_ino", address));
+        assertEquals(65535L, abi.field("st_mode", address));
+        assertEquals(-1L, abi.field("st_size", address));
+        var valid = model;
+        for (var wrong : List.of(list("signed", 1L), list("width", 1L), list("offset", 9L))) {
+            var changed = with(fields, "st_dev", with(fields.get("st_dev"), wrong.get(0), wrong.get(1)));
+            assertThrows(RuntimeFault.class, () -> PosixStat.parse(with(valid, "stat", with((Map<?, ?>) valid.get("stat"), "fields", changed)), "Darwin", "arm64"));
+        }
+        assertThrows(RuntimeFault.class, () -> PosixStat.parse(with(valid, "stat", with((Map<?, ?>) valid.get("stat"), "fields",
+            with(fields, "st_mode", without(fields.get("st_mode"), "signed")))), "Darwin", "arm64"));
+    }
     private Map<?, ?> document() throws Exception {
         try (var input = Objects.requireNonNull(PosixStat.class.getResourceAsStream("/thc/native/posix-stat-abi.json"))) {
             return (Map<?, ?>) Json.parse(new String(input.readAllBytes(), StandardCharsets.UTF_8));

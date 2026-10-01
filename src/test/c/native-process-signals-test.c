@@ -13,10 +13,18 @@ static void capture_and_restore(void) {
     signal(selected_signal, SIG_IGN);
     void *session = thc_signal_open(); assert(session != NULL);
     assert(thc_signal_open() == NULL && errno == EBUSY);
+    struct signal_session *native = session;
+    assert((fcntl(native->read_fd, F_GETFL) & O_NONBLOCK) && (fcntl(native->write_fd, F_GETFL) & O_NONBLOCK));
+    assert((fcntl(native->wake_fd, F_GETFL) & O_NONBLOCK) && (fcntl(native->wake_write_fd, F_GETFL) & O_NONBLOCK));
+    assert((fcntl(native->read_fd, F_GETFD) & FD_CLOEXEC) && (fcntl(native->write_fd, F_GETFD) & FD_CLOEXEC));
+    assert((fcntl(native->wake_fd, F_GETFD) & FD_CLOEXEC) && (fcntl(native->wake_write_fd, F_GETFD) & FD_CLOEXEC));
     assert(thc_signal_install(session, selected_signal, -4) == -1);
     union sigval value = {.sival_int = 731};
     assert(sigqueue(getpid(), selected_signal, value) == 0);
     siginfo_t info;
+    thc_signal_wake(session);
+    assert(thc_signal_take(session, &info) == 0);
+    thc_signal_reset_wake(session);
     assert(thc_signal_take(session, &info) == 1);
     assert(thc_signal_number(&info) == selected_signal && info.si_code == SI_QUEUE);
     assert(info.si_pid == getpid() && info.si_uid == getuid() && info.si_value.sival_int == 731);

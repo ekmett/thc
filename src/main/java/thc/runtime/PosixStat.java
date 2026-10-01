@@ -14,14 +14,14 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import thc.Json;
 
-/** The supported original Linux GNU LP64 stat image ABI, not a host pointer or
+/** The selected native LP64 stat image ABI, not a host pointer or
  * a simulated fstat. Images are supplied by the caller; descriptor metadata is
  * deliberately not synthesized from paths or stale open-time permissions. */
 public final class PosixStat {
     private final long size;
     private final Map<String, Field> fields;
     private final Map<String, Long> types;
-    private record Field(long offset, int width) {}
+    private record Field(long offset, int width, boolean signed) {}
     private PosixStat(long size, Map<String, Field> fields, Map<String, Long> types) {
         this.size = size; this.fields = fields; this.types = types;
     }
@@ -38,7 +38,7 @@ public final class PosixStat {
                 int shift = (little ? index : field.width - 1 - index) * 8;
                 value |= address.readWord8(field.offset + index) << shift;
             }
-            return value;
+            return field.signed && field.width < 8 ? value << (64 - field.width * 8) >> (64 - field.width * 8) : value;
         }
     }
     public long isType(String name, long mode) {
@@ -60,10 +60,15 @@ public final class PosixStat {
     public static PosixStat parse(Object raw, String system, String arch) {
         if (!(raw instanceof Map<?, ?> document)) throw new RuntimeFault("Unsupported original stat ABI: manifest");
         String architecture = arch.equals("amd64") ? "x86_64" : arch.equals("arm64") ? "aarch64" : arch;
-        requireAbi(integer(document.get("schema")) == 1 && system.equals("Linux") &&
+        boolean linux = system.equals("Linux"), darwin = system.equals("Darwin");
+        String target = document.get("target") instanceof String text ? text : "";
+        var targetParts = List.of(target.split("-", -1));
+        requireAbi(integer(document.get("schema")) == 1 && (linux || darwin) &&
             (architecture.equals("x86_64") || architecture.equals("aarch64")) && system.equals(document.get("system")) &&
-            architecture.equals(document.get("architecture")) && (architecture + "-unknown-linux-gnu").equals(document.get("target")),
-            "native Linux GNU LP64 target required");
+            architecture.equals(document.get("architecture")) && (linux ? (architecture + "-unknown-linux-gnu").equals(target) :
+                targetParts.size() == 3 && (targetParts.get(0).equals(architecture) ||
+                    architecture.equals("aarch64") && targetParts.get(0).equals("arm64")) &&
+                targetParts.get(1).equals("apple") && targetParts.get(2).startsWith("darwin")), "native LP64 target required");
         if (!(document.get("stat") instanceof Map<?, ?> probe)) throw new RuntimeFault("Unsupported original stat ABI: stat layout");
         requireAbi(probe.keySet().equals(Set.of("size", "alignment", "fields", "types")), "layout fields");
         long size = integer(probe.get("size")), alignment = integer(probe.get("alignment"));
@@ -73,12 +78,20 @@ public final class PosixStat {
         requireAbi(rawFields.keySet().equals(Set.copyOf(names)), "exact member set");
         var fields = new LinkedHashMap<String, Field>();
         for (String name : names) {
-            int width = name.equals("st_mode") ? 4 : 8;
             if (!(rawFields.get(name) instanceof Map<?, ?> field)) throw new RuntimeFault("Unsupported original stat ABI: member");
-            requireAbi(field.keySet().equals(Set.of("offset", "width")) && integer(field.get("width")) == width, "member width");
+            boolean legacy = linux && field.keySet().equals(Set.of("offset", "width"));
+            requireAbi(legacy || field.keySet().equals(Set.of("offset", "width", "signed")) && field.get("signed") instanceof Boolean,
+                "member signedness");
+            long rawWidth = integer(field.get("width"));
+            requireAbi(linux ? rawWidth == (name.equals("st_mode") ? 4 : 8) :
+                name.equals("st_mode") ? rawWidth == 2 || rawWidth == 4 :
+                name.equals("st_dev") ? rawWidth == 4 || rawWidth == 8 : rawWidth == 8, "member width");
+            int width = (int) rawWidth;
+            boolean signed = legacy ? name.equals("st_size") : (boolean) field.get("signed");
+            requireAbi(!linux && name.equals("st_dev") || signed == name.equals("st_size"), "member scalar kind");
             long offset = integer(field.get("offset"));
             requireAbi(offset >= 0 && offset <= size - width && offset % width == 0, "member offset");
-            fields.put(name, new Field(offset, width));
+            fields.put(name, new Field(offset, width, signed));
         }
         var bytes = new HashSet<Long>();
         for (var field : fields.values()) for (long index = field.offset; index < field.offset + field.width; index++)
@@ -105,7 +118,9 @@ public final class PosixStat {
             if (result == null) {
                 try (var resource = PosixStat.class.getResourceAsStream("/thc/native/posix-stat-abi.json")) {
                     if (resource == null) throw new RuntimeFault("Missing native stat ABI probe");
-                    result = parse(Json.INSTANCE.parse(new String(resource.readAllBytes(), StandardCharsets.UTF_8)), System.getProperty("os.name"), System.getProperty("os.arch"));
+                    String system = System.getProperty("os.name");
+                    result = parse(Json.INSTANCE.parse(new String(resource.readAllBytes(), StandardCharsets.UTF_8)),
+                        system.startsWith("Mac") ? "Darwin" : system, System.getProperty("os.arch"));
                 } catch (IOException failure) { throw propagate(failure); }
                 host = result;
             }

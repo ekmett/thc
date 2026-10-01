@@ -80,7 +80,7 @@ public final class NativeOpenOperation implements AutoCloseable, TruffleSafepoin
         private static final Linker LINKER = Linker.nativeLinker();
         private static final SymbolLookup LIBRARY = library();
         private static SymbolLookup library() {
-            if (!NativeIO.supportedHost())
+            if (!NativeIO.supportedPosixHost())
                 throw new IllegalStateException("Interruptible open requires Linux x86_64");
             try {
                 var file = Files.createTempFile("thc-open-", ".so");

@@ -59,6 +59,8 @@ public final class NativeDirectoryOwner implements Closeable {
         public int getDescriptor() { return descriptor; }
         public Path resolve(Path path) {
             lease.requireOpen();
+            if (!path.isAbsolute() && !thc.NativeIO.supportedPosixHost())
+                throw new UnsupportedOperationException("Relative FileSystem callbacks require an fd-authoritative transport");
             return path.isAbsolute() ? path : Path.of("/proc/self/fd/" + descriptor)
                 .resolve(path.equals(Path.of("")) ? Path.of(".") : path);
         }
@@ -72,7 +74,7 @@ public final class NativeDirectoryOwner implements Closeable {
                 try { return bytesPath(name(capacity)); }
                 catch (Throwable failure) {
                     if (!(failure instanceof NativeFileException nativeFailure)
-                        || nativeFailure.getErrno() != 34 || capacity > Integer.MAX_VALUE / 2)
+                        || nativeFailure.getErrno() != NativeDirectoryApi.rangeError() || capacity > Integer.MAX_VALUE / 2)
                         throw propagate(failure);
                     capacity *= 2;
                 }

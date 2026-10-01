@@ -14,6 +14,28 @@ public final class ProcessSignalJvmProbe {
             check(!ManagedSignals.hasReducedVmSignals()); System.out.println("Later VM option disables reduced signal usage"); return;
         }
         check(ManagedSignals.hasReducedVmSignals());
+        if (Arrays.equals(args, new String[] {"posix-safe"})) {
+            var abi = StdioHostAbi.load();
+            check(!NativeSignalTransport.userSignalAvailable());
+            var raise = Linker.nativeLinker().downcallHandle(Linker.nativeLinker().defaultLookup().find("raise").orElseThrow(),
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+            try (var transport = new NativeSignalTransport()) {
+                for (var name : StdioHostAbi.SIGNAL_NAMES) {
+                    if (name.equals("SIGUSR2")) continue; // Explicitly unavailable JVM relocation, checked below.
+                    int signal = (int) abi.signal(name);
+                    check(transport.install(signal, -4).action() == -1);
+                    check((int) raise.invokeExact(signal) == 0);
+                    var event = java.util.Objects.requireNonNull(transport.take());
+                    check(event.signal() == signal && event.info().length == abi.getSiginfoBytes());
+                    transport.wake(); check(transport.take() == null); transport.resetWake();
+                }
+                Throwable failure = null;
+                try { transport.install((int) abi.signal("SIGUSR2"), -4); } catch (Throwable observed) { failure = observed; }
+                check(failure instanceof RuntimeFault && failure.getMessage().contains("verified standalone JVM"));
+            }
+            check(!NativeSignalTransport.userSignalAvailable());
+            System.out.println("JVM received seven selected-header signals; unverified USR2 denied"); return;
+        }
         if (Arrays.equals(args, new String[] {"unrelocated"})) {
             check(!NativeSignalTransport.userSignalAvailable());
             // Changing the environment after startup cannot release HotSpot's USR2 disposition.
@@ -34,7 +56,9 @@ public final class ProcessSignalJvmProbe {
         var raise = Linker.nativeLinker().downcallHandle(Linker.nativeLinker().defaultLookup().find("raise").orElseThrow(), FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         try (var transport = new NativeSignalTransport()) {
             for (int signal : new int[] {1, 2, 3, 10, 12, 15, 24, 25}) {
-                check(transport.install(signal, -4).action() == -1); check((int) raise.invokeExact(signal) == 0);
+                var installed = transport.install(signal, -4);
+                if (installed.action() != -1) throw new IllegalStateException("Signal " + signal + " initial action " + installed.action() + " errno " + installed.errno());
+                check((int) raise.invokeExact(signal) == 0);
                 var event = java.util.Objects.requireNonNull(transport.take()); check(event.signal() == signal && event.info().length > 0);
             }
         }

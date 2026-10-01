@@ -17,9 +17,12 @@ import thc.NativeIO;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Storage/lifetime extension only: no new foreign-call or descriptor admission. */
-@EnabledOnOs(OS.LINUX)
-@EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
+@EnabledIf("supportedFileTarget")
 class NativeFileBuffersTest {
+    private static boolean supportedFileTarget() {
+        return NativeIO.supportedPosixHost() || "Mac OS X".equals(System.getProperty("os.name")) &&
+            Set.of("amd64", "x86_64", "aarch64", "arm64").contains(System.getProperty("os.arch"));
+    }
     @TempDir Path directory;
     private <T> T entered(Context context, Callable<T> body) throws Exception {
         context.initialize("thc"); context.enter(); try { return body.call(); } finally { context.leave(); }

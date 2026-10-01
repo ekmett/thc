@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 /* Private context-directory transport. No process chdir or fchdir. */
 #define _GNU_SOURCE
+#define _DARWIN_C_SOURCE 1
 #include <sys/stat.h>
+#if defined(__linux__)
 #include <sys/syscall.h>
+#endif
+#include <limits.h>
 #include <stdint.h>
 #include <fcntl.h>
 #include <dirent.h>
@@ -13,6 +17,10 @@
 #include <string.h>
 #include <unistd.h>
 
+int thc_directory_dup_command(void) { return F_DUPFD_CLOEXEC; }
+int thc_directory_range_error(void) { return ERANGE; }
+
+#if defined(__linux__)
 static int identity(int fd, struct statx *st) {
     if (statx(fd, "", AT_EMPTY_PATH, STATX_BASIC_STATS | STATX_MNT_ID, st)) return -1;
     if (!(st->stx_mask & STATX_MNT_ID)) { errno = ENOTSUP; return -1; }
@@ -142,12 +150,65 @@ int64_t thc_directory_name(int fd, char *output, uint64_t capacity) {
     close(root);
     return result;
 }
+#elif defined(__APPLE__) && defined(__MACH__)
+static int identity(int fd, struct stat *st) {
+    if (fstat(fd, st)) return -1;
+    if (!S_ISDIR(st->st_mode)) { errno = ENOTDIR; return -1; }
+    return 0;
+}
+static int same(const struct stat *a, const struct stat *b) {
+    return a->st_ino == b->st_ino && a->st_dev == b->st_dev;
+}
+
+/* O_SEARCH validates directory search authority without requiring read access.
+   The descriptor, not its observed pathname, owns all subsequent openat calls. */
+int thc_directory_open(int at, const char *path, int *slot) {
+    int fd = openat(at, path, O_SEARCH | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) return errno;
+    struct stat value;
+    if (identity(fd, &value)) { int error = errno; close(fd); return error; }
+    *slot = fd;
+    return 0;
+}
+
+/* F_GETPATH is only a name observation. Verify its complete physical path and
+   opened identity before publishing bytes; never use it as lookup authority. */
+int64_t thc_directory_name(int fd, char *output, uint64_t capacity) {
+    if (!capacity) return -EINVAL;
+    struct stat wanted, actual;
+    if (identity(fd, &wanted)) return -errno;
+    if (!wanted.st_nlink) return -ENOENT;
+    char path[PATH_MAX];
+    if (fcntl(fd, F_GETPATH, path)) return -errno;
+    if (path[0] != '/') return -ENOENT;
+    size_t length = strnlen(path, sizeof(path));
+    if (length == sizeof(path)) return -EOVERFLOW;
+    char *copy = strdup(path);
+    if (!copy) return -ENOMEM;
+    int current = open("/", O_SEARCH | O_DIRECTORY | O_CLOEXEC), error = 0;
+    if (current < 0) { error = errno; free(copy); return -error; }
+    char *save = NULL;
+    for (char *part = strtok_r(copy, "/", &save); part; part = strtok_r(NULL, "/", &save)) {
+        if (!strcmp(part, ".") || !strcmp(part, "..")) { error = ENOENT; break; }
+        int next = openat(current, part, O_SEARCH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        if (next < 0) { error = errno; break; }
+        close(current); current = next;
+    }
+    if (!error && identity(current, &actual)) error = errno;
+    if (!error && !same(&wanted, &actual)) error = ENOENT;
+    close(current); free(copy);
+    if (error) return -error;
+    if (length >= capacity) return -ERANGE;
+    memcpy(output, path, length + 1);
+    return (int64_t) length;
+}
+#else
+#error "Directory anchors require an implemented descriptor-relative transport"
+#endif
 
 /* The admitted Unix 2.8.8.0 helpers select readdir (and a no-op free_dirent)
    on glibc >= 2.23. Keep the same EOF/errno protocol, not readdir_r semantics. */
-#if !defined(__GLIBC__) || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 23)
-#error "Directory streams require the verified glibc readdir contract"
-#endif
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 23)
 
 int thc_directory_stream_open(int at, const char *name, DIR **slot) {
     int fd = openat(at, name, O_RDONLY | O_DIRECTORY | O_NONBLOCK | O_CLOEXEC);
@@ -183,3 +244,4 @@ int thc_directory_stream_close(DIR **slot) {
     if (!stream) return 0;
     return closedir(stream) ? errno : 0;
 }
+#endif

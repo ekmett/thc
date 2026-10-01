@@ -5,6 +5,15 @@ grants stdin, stdout and stderr. Reads, writes and metadata come from the same
 opened resource, including after a path is renamed, replaced or unlinked.
 Guest descriptors belong to the context and never directly name host fds.
 
+Darwin LP64 builds also produce selected-ABI regular-file and descriptor-directory
+resources. Admission requires those resources and the generated host metadata,
+not a blanket POSIX permission. Darwin uses an opened search-capable directory
+and descriptor-relative acquisition; `F_GETPATH` is only an identity-verified name
+observation. Relative generic FileSystem callbacks without a descriptor-authority
+transport fail explicitly. Linux subprocesses, poll/eventfd/epoll, original raw
+open, terminal images and glibc directory streams remain separate capabilities;
+the Darwin file provider does not admit them.
+
 ## Embedding authority
 
 `NativeIO.createContext` constructs a context with the fixed native filesystem
@@ -77,8 +86,10 @@ operation to a stale pathname. Path operations preserve raw bytes.
 `getcwd` requires a non-null caller-owned buffer. It writes a trailing NUL on
 success and leaves the buffer unchanged on failure. Zero capacity reports EINVAL,
 insufficient capacity ERANGE, and a removed current directory ENOENT. GNU
-NULL-buffer allocation is unsupported. Physical name lookup requires Linux statx,
-faccessat2 and procfs; inaccessible ancestors may conservatively report EACCES.
+NULL-buffer allocation is unsupported. Linux physical name lookup requires
+statx, faccessat2 and procfs. Darwin verifies the name observed by `F_GETPATH`
+against the opened directory's native identity. Inaccessible ancestors may
+conservatively report EACCES.
 Relative IO does not need to recover that physical name first.
 
 Supported original access checks use libc's real-ID permissions, not Java
