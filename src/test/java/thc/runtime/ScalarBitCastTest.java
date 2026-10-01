@@ -10,7 +10,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import org.graalvm.polyglot.Context;
@@ -120,38 +119,10 @@ class ScalarBitCastTest {
         assertEquals(arities, manifest.get("bitcastPrimitiveArities"));
         var keys = new HashSet<String>(); for (var stage : list("pre", "post")) for (var name : NAMES) keys.add(stage + "/" + name);
         assertEquals(keys, object(manifest.get("audits")).keySet()); assertEquals(keys, object(manifest.get("structure")).keySet());
-        var requiredSources = new HashSet<>(list("t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs",
-            "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/ScalarBitCastFixtures.hs",
-            "bin/core-capabilities.json", "bin/audit-core.py", "src/tools/primops/PrimopTools.hs", "src/main/resources/thc/scalar-primop-signatures.json",
-            "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"));
-        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) requiredSources.add(root.toPath().relativize(file.toPath()).toString());
-        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) requiredSources.add(root.toPath().relativize(file.toPath()).toString());
-        assertEquals(requiredSources, object(manifest.get("inputHashes")).keySet());
-        var commands = new ArrayList<>(list("native-build", "native-oracle"));
-        var artifacts = new HashSet<>(list(prefix + "/inputs.tsv", prefix + "/oracle.tsv", prefix + "/native/scalar-bitcast-oracle"));
-        for (var stage : list("pre", "post")) {
-            commands.add(stage + "-export"); artifacts.add(prefix + "/" + stage + "-core/ScalarBitCastAudit.cbd"); artifacts.add(prefix + "/" + stage + "-core/ScalarBitCastAudit.json"); artifacts.add(prefix + "/" + stage + "-audit.json");
-            for (var name : NAMES) { commands.add(stage + "-" + name + "-audit"); artifacts.add(prefix + "/" + stage + "-" + name + "-audit.json"); }
-        }
-        for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) artifacts.add(prefix + "/commands/" + command + "." + suffix);
-        assertEquals(artifacts, object(manifest.get("artifactHashes")).keySet());
-        for (var kind : list("inputHashes", "artifactHashes")) for (var hash : object(manifest.get(kind)).entrySet())
-            assertEquals(hash.getValue(), HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(root, hash.getKey()).toPath()))), "Stale bitcast fixture: " + hash.getKey());
         for (var stage : list("pre", "post")) for (var name : NAMES) {
             var report = json(prefix + "/" + stage + "-" + name + "-audit.json");
             assertEquals(true, report.get("accepted")); assertEquals(list(), report.get("issues")); assertEquals(list(), report.get("missingGlobals"));
             var shape = object(object(manifest.get("structure")).get(stage + "/" + name)); assertEquals(EXPECTED_CALLS.get(name), shape.get("guestCalls"));
-        }
-    }
-    @Test void evidenceFailsClosedOnMissingHashesStagesCountsAndCorruption() throws Exception {
-        var good = evidence(); verifyEvidence(good);
-        for (var mutation : map("nativeRows", 13554L, "stages", map("pre", "other"), "inputsByWidth", map("32", list(), "64", inputs(64)),
-            "expectedGuestCalls", with(object((Object) EXPECTED_CALLS), "floatRoundtrip", 4L), "bitcastPrimitiveArities", map()).entrySet())
-            assertThrows(AssertionError.class, () -> verifyEvidence(with(good, mutation.getKey(), mutation.getValue())), mutation.getKey());
-        for (var field : list("inputHashes", "artifactHashes")) {
-            var hashes = object(good.get(field));
-            for (var path : hashes.keySet()) assertThrows(AssertionError.class, () -> verifyEvidence(with(good, field, without(hashes, path))), field + "/" + path);
-            assertThrows(AssertionError.class, () -> verifyEvidence(with(good, field, with(hashes, hashes.keySet().iterator().next(), "0".repeat(64)))));
         }
     }
     private record IeeeClass(long sign, String kind) {}

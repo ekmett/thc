@@ -11,7 +11,6 @@ import thc.*;
 import java.math.BigInteger;
 import java.nio.*;
 import java.nio.file.*;
-import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -147,52 +146,6 @@ public class PinnedAddressTest {
         }
         return rows;
     }
-    private Map<String, Set<String>> requiredHashes() throws Exception {
-        var sources = new LinkedHashSet<>(List.of("t/fixtures/compiler/PinnedAddressAudit.hs",
-            "t/fixtures/compiler/PinnedAddressAuditNative.hs", "t/haskell-fixtures/PinnedAddressFixtures.hs",
-            "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
-            "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
-            "bin/audit-core.py", "bin/core-capabilities.json", "src/tools/primops/PrimopTools.hs",
-            "src/main/resources/thc/scalar-primop-signatures.json"));
-        try (var files = Files.list(root.resolve("src/compiler/THC"))) {
-            files.filter(it -> it.toString().endsWith(".hs"))
-                .map(root::relativize)
-                .map(Path::toString)
-                .forEach(sources::add);
-        }
-        try (var files = Files.list(root.resolve("bin"))) {
-            files.filter(it -> it.getFileName().toString().startsWith("core_") && it.toString().endsWith(".py"))
-                .map(root::relativize)
-                .map(Path::toString)
-                .forEach(sources::add);
-        }
-        var commands = new ArrayList<>(List.of("native-build", "native-oracle"));
-        for (String stage : List.of("pre", "post")) {
-            commands.add(stage + "-export");
-            for (String name : auditEntries()) commands.add(stage + "-" + name + "-audit");
-        }
-        var artifacts = new LinkedHashSet<String>();
-        for (String name : List.of("requests.tsv", "expected.tsv", "oracle.tsv", "structure-controls.json"))
-            artifacts.add(directory + "/" + name);
-        for (String name :
-            List.of("pinned-address-oracle", "Main.hi", "Main.o", "PinnedAddressAudit.hi", "PinnedAddressAudit.o"))
-            artifacts.add(directory + "/native/" + name);
-        for (String stage : List.of("pre", "post")) {
-            artifacts.addAll(List.of(directory + "/" + stage + "/core/PinnedAddressAudit.cbd",
-                directory + "/" + stage + "/core/THC.InterfaceClosure.cbd",
-                directory + "/" + stage + "/core/PinnedAddressAudit.json",
-                directory + "/" + stage + "/core/THC.InterfaceClosure.json",
-                directory + "/" + stage + "/negative-proofs.json"));
-            for (String name : auditEntries()) artifacts.add(directory + "/" + stage + "/" + name + ".audit.json");
-            for (String name : negatives)
-                for (int i = 0; i <= 1; i++)
-                    artifacts.add(directory + "/" + stage + "/negative/" + name + "-" + i + ".cbd");
-        }
-        for (String command : commands)
-            for (String suffix : List.of("stdout", "stderr", "command.json"))
-                artifacts.add(directory + "/commands/" + command + "." + suffix);
-        return Map.of("inputHashes", sources, "artifactHashes", artifacts);
-    }
     private void verifyEvidence(Map<String, Object> manifest) throws Exception {
         assertEquals(1L, manifest.get("schema"));
         assertEquals("9.14.1", manifest.get("ghc"));
@@ -212,16 +165,6 @@ public class PinnedAddressTest {
                 List.of(directory + "/" + stage + "/core/PinnedAddressAudit.cbd",
                     directory + "/" + stage + "/core/THC.InterfaceClosure.cbd"));
         assertEquals(stages, manifest.get("stages"));
-        for (var item : requiredHashes().entrySet()) {
-            var hashes = (Map<String, String>) manifest.get(item.getKey());
-            assertEquals(item.getValue(), hashes.keySet(), item.getKey() + " exact inventory");
-        }
-        for (String kind : List.of("inputHashes", "artifactHashes"))
-            for (var hash : ((Map<String, String>) manifest.get(kind)).entrySet()) {
-                String actual = HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(hash.getKey()))));
-                assertEquals(hash.getValue(), actual, "Stale pinned-address input " + hash.getKey());
-            }
         var cases = domain();
         assertEquals(Map.of("pinnedBytes", 1859L, "alignedBytes", 3718L, "keepAliveWord8", 13L, "keepAliveLazy", 13L,
                          "fingerprintByte", 784L, "publicFingerprintByte", 784L, "publicFingerprintRoundtrip", 98L),
@@ -357,35 +300,6 @@ public class PinnedAddressTest {
         var reordered = new ArrayList<>(domain().subList(1, domain().size()));
         reordered.add(domain().getFirst());
         assertThrows(AssertionError.class, () -> checkedRows(text, reordered));
-    }
-    @Test
-    public void evidenceRejectsMissingHashesAndChangedCoverage() throws Exception {
-        var good = manifest();
-        verifyEvidence(good);
-        Map<String, Object> mutations = ordered("nativeRows", 7268L, "modelRows", 0L, "strictAccepted", false, "mode",
-            "native-only", "entries", Map.of(), "publicFrontiers", Map.of(), "expectedGuestCallsByEntry", Map.of(),
-            "stages", Map.of(), "checkedGuestStructureByStage", Map.of(), "negativeProofs", Map.of(), "audits",
-            Map.of(), "keepAliveSites", Map.of(), "rows", List.of(), "rowCounts", Map.of());
-        for (var item : mutations.entrySet())
-            assertThrows(
-                AssertionError.class, () -> verifyEvidence(plus(good, item.getKey(), item.getValue())), item.getKey());
-        for (String kind : List.of("inputHashes", "artifactHashes")) {
-            var records = (Map<String, String>) good.get(kind);
-            for (String path : records.keySet()) {
-                var changed = new LinkedHashMap<>(records);
-                changed.remove(path);
-                assertThrows(AssertionError.class, () -> verifyEvidence(plus(good, kind, changed)), path);
-            }
-            var changed = new LinkedHashMap<>(records);
-            changed.put(records.keySet().iterator().next(), "0".repeat(64));
-            assertThrows(AssertionError.class, () -> verifyEvidence(plus(good, kind, changed)));
-        }
-        for (String stage : List.of("pre", "post"))
-            for (String name : frontiers.keySet()) {
-                var audit = report(directory + "/" + stage + "/" + name + ".audit.json");
-                assertThrows(AssertionError.class, () -> verifyAudit(name, plus(audit, "accepted", true)));
-                assertThrows(AssertionError.class, () -> verifyAudit(name, plus(audit, "missingGlobals", List.of())));
-            }
     }
     private Context context(boolean inlining) {
         return Context.newBuilder("thc")

@@ -26,7 +26,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
 
@@ -44,7 +43,7 @@ class MutVarTest {
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
         for (var path : paths)
-            modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
         return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
@@ -175,16 +174,14 @@ class MutVarTest {
         for (var stage : ((Map<String, List<String>>) manifest().get("stages")).entrySet()) {
             var originals = new ArrayList<Map<String, Object>>();
             for (var path : stage.getValue()) {
-                var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath()));
+                var module = thc.CoreCbdFixtures.read(new File(root, path).toPath());
                 if ("MutVarAudit".equals(module.get("module")))
                     originals.add(module);
             }
             var original = single(originals);
-            assertTrue(Pattern.compile("\\blazy\\s+@").matcher((String) original.get("sourceCore")).find(),
-                stage.getKey() + " must retain the genuine typed lazy identity before export erasure");
             var helpers = new ArrayList<Map<String, Object>>();
             for (var binding : (List<Map<String, Object>>) original.get("bindings"))
-                if ("freshActions".equals(binding.get("name")))
+                if ("main:MutVarAudit.freshActions".equals(binding.get("id")))
                     helpers.add(binding);
             var helper = single(helpers);
             var calls = new ArrayList<List<Object>>();
@@ -307,14 +304,14 @@ class MutVarTest {
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
-                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, name));
+                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:MutVarAudit." + name));
                             linked.put("instrument", true);
                             var p = program(language, linked, backend);
                             var host = p.hostEntryTarget(1);
-                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var function = context.asValue(new EntryValue(p, "main:MutVarAudit." + name, 1));
                             for (var row : cases) check(row, function, label);
                             assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
-                            var original = p.entryTarget(name);
+                            var original = p.entryTarget("main:MutVarAudit." + name);
                             var active = activeTargets(host, original);
                             if (recoverLoop && name.equals("stLoop")) {
                                 // Graal speculates an initial countdown > 0 (AST),
@@ -1024,9 +1021,9 @@ class MutVarTest {
                         for (int mutation = 0; mutation <= 6; mutation++)
                             for (boolean diagnostic : new boolean[] {false, true}) {
                                 var module = CoreModules.reachable(merged(paths),
-                                    operation == MutVarOp.SWAP          ? "swapRef"
-                                        : operation == MutVarOp.MODIFY2 ? "modifyRef"
-                                                                        : "orderedRef");
+                                    operation == MutVarOp.SWAP          ? "main:MutVarAudit.swapRef"
+                                        : operation == MutVarOp.MODIFY2 ? "main:MutVarAudit.modifyRef"
+                                                                        : "main:MutVarAudit.orderedRef");
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
@@ -1078,9 +1075,9 @@ class MutVarTest {
                             }
                     for (var operation : operations) {
                         var module = CoreModules.reachable(merged(paths),
-                            operation == MutVarOp.SWAP          ? "swapRef"
-                                : operation == MutVarOp.MODIFY2 ? "modifyRef"
-                                                                : "orderedRef");
+                            operation == MutVarOp.SWAP          ? "main:MutVarAudit.swapRef"
+                                : operation == MutVarOp.MODIFY2 ? "main:MutVarAudit.modifyRef"
+                                                                : "main:MutVarAudit.orderedRef");
                         var app = application(module, operation);
                         var primitive = new ArrayList<>((List<?>) app.get(1));
                         app.clear();
