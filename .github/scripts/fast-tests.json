@@ -3262,12 +3262,12 @@
       "python": []
     },
     "src/driver/THC/Driver/Project.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalProcessIdentityTest"],
       "python": [],
       "haskell": ["driver-tests"]
     },
     "src/driver/THC/Driver/Installed.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalProcessIdentityTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "src/main/java/thc/runtime/TargetLayout.java": {
@@ -3275,11 +3275,11 @@
       "python": []
     },
     "src/driver/THC/Driver/Wired.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalProcessIdentityTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "src/driver/cbits/target-layout.c": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalProcessIdentityTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "t/fixtures/run-pure/run-pure.cabal": {
