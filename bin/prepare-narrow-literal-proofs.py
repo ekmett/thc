@@ -114,7 +114,7 @@ def main():
         if output: output.write_text(result.stdout)
     run(['bin/build-compiler.sh'])
     for stage in ('pre', 'post'):
-        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
+        run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
              't/fixtures/compiler/NarrowLiteralProofAudit.hs'],
             dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc')))
     native = OUT/'native'; native.mkdir(exist_ok=True)
@@ -128,7 +128,7 @@ def main():
         'bin/build-compiler.sh', 'bin/export-core.sh', 'bin/toolchain.sh', 'bin/audit-core.py',
         'bin/core-capabilities.json', 'src/tools/primops/PrimopTools.hs', 'thc.cabal', 'src/main/resources/thc/scalar-primop-signatures.json']]
     sources += sorted((ROOT/'src/compiler/THC').rglob('*.hs')) + sorted((ROOT/'bin').glob('core_*.py'))
-    artifacts = [OUT/'oracle.tsv', native/'narrow-literal-oracle'] + [OUT/f'{s}-core/NarrowLiteralProofAudit.{ext}' for s in ('pre','post') for ext in ('cbd','json')] + [OUT/f'{s}-audit.json' for s in ('pre','post')]
+    artifacts = [OUT/'oracle.tsv', native/'narrow-literal-oracle'] + [OUT/f'{s}-core/NarrowLiteralProofAudit.cbd' for s in ('pre','post')] + [OUT/f'{s}-audit.json' for s in ('pre','post')]
     manifest = dict(schema=1, ghc='9.14.1', commands=commands, **evidence,
                     sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts])
     (OUT/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
