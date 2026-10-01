@@ -20,7 +20,7 @@ public final class AstAsyncAdmission {
         Object tag = expression.isEmpty() ? null : expression.getFirst();
         if (!(tag instanceof String name)) throw new UnsupportedCore("AST async capture is not complete for " + tag);
         switch (name) {
-            case "var", "lit", "void", "con", "prim" -> {}
+            case "var", "lit", "void", "con", "prim", "unsupported" -> {}
             case "lam" -> expression((List<?>) expression.get(2));
             case "app" -> {
                 expression((List<?>) expression.get(1));
