@@ -19,6 +19,16 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_foreign_exception_preparation_installs_runtime_before_cli_consumers(self):
+        project = Path(__file__).resolve().parents[2]
+        planned = subprocess.run(
+            ["make", "--dry-run", "--no-print-directory", "foreign-exception-fixtures"],
+            cwd=project, check=True, capture_output=True, text=True).stdout
+        # Package-native-demand calls the installed CLI even on a fresh checkout.
+        self.assertIn("./gradlew installDist", planned)
+        self.assertLess(planned.index("./gradlew installDist"),
+                        planned.index(" -- foreign-exceptions"))
+
     def test_native_inspection_families_require_cbd_without_flat_core_json(self):
         for family, module, outputs in (
                 ("ghc-bco", "GhcBCO", fast_fixtures.fast_inputs.BCO_OUTPUTS),

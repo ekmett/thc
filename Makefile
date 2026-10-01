@@ -95,7 +95,7 @@ test-modes: fixtures
 
 # This lane needs complete installed Core plus matching configured GHC sources.
 # Missing prerequisites are errors; run it alongside the portable test targets.
-foreign-exception-fixtures: check-java
+foreign-exception-fixtures: runtime
 	@test -n "$${THC_FOREIGN_EXCEPTION_GHC_SOURCE:-}" && test -d "$$THC_FOREIGN_EXCEPTION_GHC_SOURCE" || { \
 		printf '%s\n' 'Set THC_FOREIGN_EXCEPTION_GHC_SOURCE to the matching configured GHC 9.14.1 source tree.' >&2; exit 1; \
 	}
