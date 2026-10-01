@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -24,8 +25,8 @@ public final class DirectCallerNode extends Node {
         this.target = target; this.metrics = metrics;
         entryArguments = new EntryArguments(target, metrics, knownEvaluated, prefixSize);
         GuestRoot root = target.getRootNode() instanceof GuestRoot guest ? guest : null;
-        if (root != null && !(root instanceof FunctionRoot ast && ast.getCapturesContinuations$org_intelligence_thc()) &&
-            root.getLeadingCaseReturn() != null) leadingCaseReturn = new LeadingCaseReturnNode(root.getLeadingCaseReturn(), metrics);
+        if (root != null && root.getLeadingCaseReturn() != null)
+            leadingCaseReturn = new LeadingCaseReturnNode(root, metrics, knownEvaluated, prefixSize);
         callNode = DirectCallNode.create(target);
         if (root instanceof FunctionRoot ast && ast.getHandoff$org_intelligence_thc() != null) handoff = new HandoffCaller(target, ast.getHandoff$org_intelligence_thc(), metrics);
         loop = new TailCallLoop(metrics); tailCheck = new TailCheck(metrics);
@@ -36,7 +37,10 @@ public final class DirectCallerNode extends Node {
         return call(frame, arguments, tailCall, null);
     }
     public Object call(VirtualFrame frame, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
-        if (AstControl.captures(this)) {
+        if (leadingCaseReturn != null && CompilerDirectives.inCompiledCode()) {
+            try { leadingCaseReturn.forceArguments(frame, arguments); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult)); }
+        } else if (AstControl.captures(this)) {
             try { entryArguments.executeCaptured(frame, arguments); }
             catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult)); }
         } else entryArguments.execute(frame, arguments);
