@@ -2639,7 +2639,7 @@ public final class Program implements ExecutableProgram {
         ArgumentLayout input = ArgumentLayout.fromProofs(loweredProofs(nodes));
         if (input != null && input.getRequiresTyped()) return new AstTypedApplication(function, nodes, scope.layout, tail, codeMetrics(),
             tupleProof.isTypedTransport() ? new TupleShape(tupleProof, (thc.Language) language) : null,
-            !reusableCode && tail && !capturesContinuations && scope.self != null &&
+            !reusableCode && tail && scope.self != null &&
                 TypedInputs.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);
