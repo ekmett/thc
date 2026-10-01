@@ -2188,6 +2188,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['interface-core']
         self.assertEqual('interface-core', owners['thc.runtime.InterfaceCoreNativeTest'])
         self.assertEqual('interface-core', owners['thc.ManagedImportStubsNativeTest'])
+        self.assertEqual('interface-core', owners['thc.CoreUnitManagedExportTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'interface-core']}], group['commands'])
         self.assertEqual(['build/interface-core'], group['outputs'])
