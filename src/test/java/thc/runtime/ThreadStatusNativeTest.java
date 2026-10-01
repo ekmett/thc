@@ -35,10 +35,10 @@ public class ThreadStatusNativeTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/thread-status");
     private boolean valid(RootCallTarget target) throws Exception { return Boolean.TRUE.equals(target.getClass().getMethod("isValidLastTier").invoke(target)); }
-    private List<RootCallTarget> targets(RootCallTarget entry) {
+    private List<RootCallTarget> targets(RootCallTarget... entries) {
         var found = new ArrayList<RootCallTarget>();
         var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
-        visit(entry, found, seen); return found;
+        for (var entry : entries) visit(entry, found, seen); return found;
     }
     private void visit(RootCallTarget target, List<RootCallTarget> found, Set<RootCallTarget> seen) {
         if (!seen.add(target)) return;
@@ -125,10 +125,14 @@ public class ThreadStatusNativeTest {
                     var function = context.asValue(loaded);
                     var field = EntryValue.class.getDeclaredField("guestTarget"); field.setAccessible(true);
                     var host = (RootCallTarget) field.get(loaded);
+                    var entryField = EntryValue.class.getDeclaredField("guestEntry"); entryField.setAccessible(true);
+                    var guestEntry = assertInstanceOf(Closure.class, entryField.get(loaded));
                     for (int i = 0; i < 3; i++) assertEquals(expected, function.execute(0L).asLong(), label);
                     context.enter(); List<RootCallTarget> active;
                     try {
-                        active = targets(host);
+                        // The typed host bridge invokes its stored closure indirectly. Inspect that
+                        // actual public entry edge without demanding another binding or executing it.
+                        active = targets(guestEntry.target, host);
                         for (var target : active) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertTrue(valid(target), label); }
                     } finally { context.leave(); }
                     var observations = new ArrayList<RootCallTarget>();

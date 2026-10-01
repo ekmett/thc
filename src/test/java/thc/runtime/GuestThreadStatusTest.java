@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.TruffleSafepoint;
+import thc.Language;
+import org.graalvm.polyglot.Context;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -121,6 +126,37 @@ class GuestThreadStatusTest {
         assertThrows(RuntimeFault.class, () -> threads.status(id));
         // Closing an active context must unwind its process-wide observation extent.
         try (var extent = GuestThreads.blocking(GuestThreadStatus.MVAR)) {}
+    }
+    @ParameterizedTest @CsvSource({"false,false", "true,false", "false,true", "true,true"})
+    @SuppressWarnings("removal")
+    void finalizationJoinsPlatformCarriersAfterGuestCompletionAndWhileBlocked(boolean completed, boolean cancelled) throws Exception {
+        var context = Context.newBuilder("thc").allowCreateThread(true).build();
+        var ready = new CountDownLatch(1); var gate = new ManagedMVar();
+        var identity = new AtomicReference<GuestThreadId>(); var failure = new AtomicReference<Throwable>();
+        context.initialize("thc"); context.enter();
+        Thread worker; GuestThreads threads;
+        try {
+            var state = Language.currentState(); threads = state.getThreads();
+            worker = threads.newThread(state.getEnv(), () -> {
+                threads.enterCurrent(null, true, true, null);
+                identity.set(threads.currentIdentity());
+                if (completed) threads.leaveCurrent(GuestThreadStatus.FINISHED);
+                try { ready.countDown(); gate.take(null); }
+                finally { if (!completed) threads.leaveCurrent(GuestThreadStatus.FINISHED); }
+            }, null, null);
+            worker.setUncaughtExceptionHandler((_, error) -> { if (!(error instanceof ThreadDeath)) failure.set(error); });
+            threads.startThread(worker);
+            TruffleSafepoint.setBlockedThreadInterruptible(null, waiting -> assertTrue(waiting.await(5, TimeUnit.SECONDS)), ready);
+            assertTrue(worker.isAlive());
+            assertThrows(IllegalThreadStateException.class, () -> threads.startThread(worker));
+            if (completed) assertEquals(GuestThreadStatus.FINISHED, threads.status(identity.get()));
+        } finally { context.leave(); }
+        boolean interrupted = completed && !cancelled;
+        try {
+            if (interrupted) Thread.currentThread().interrupt();
+            context.close(cancelled); assertFalse(worker.isAlive()); assertNull(failure.get());
+            if (interrupted) assertTrue(Thread.currentThread().isInterrupted());
+        } finally { Thread.interrupted(); gate.tryPut(Unit.INSTANCE); worker.join(5000); }
     }
     @Test void exactThreadStatusTupleRejectsWrongLanesFlagsAndRepresentations() {
         var state = new CoreRepresentation(CoreKind.VOID, false, false, List.of(), null, null, null, null, null);
