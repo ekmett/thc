@@ -81,6 +81,7 @@ class PackageFinalizerTest {
                 var owner = Language.currentState(); owner.getPackageCbits().declare(link);
                 var expression = new CFinalizerLabels("first", new CoreRepresentation(CoreKind.ADDRESS, true, true, List.of("AddrRep")));
                 var label = expression.resolve();
+                assertSame(label, expression.resolve(), "repeated demand reuses the context-owned address");
                 assertSame(label.finalizerFunction(), expression.resolve().finalizerFunction());
                 byte[] bytes = {3}; label.finalizerFunction().invoke(ManagedAddress.fromByteArray(bytes));
                 assertArrayEquals(new byte[]{31}, bytes);
