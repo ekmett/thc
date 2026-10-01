@@ -701,7 +701,7 @@ def package_native_archive(module):
 def native_archive_blocks(module, binding, archive):
     if archive['unclassifiedReason'] is not None or archive['unresolvedSymbols']: return True
     return any(isinstance(call, dict) and isinstance(call.get('target'), dict) and
-        not core_original_foreign.context_owned_rts_call(call) and
+        not context_owned_rts_call(call) and
         call['target'].get('unit') == module['unit'] and any(
             call['target'].get('symbol') == emitted['symbol'] and call.get('convention') == emitted['convention'] and
             call.get('safety') == emitted['safety'] for emitted in archive['unsupportedImports'])
@@ -721,6 +721,12 @@ def _core_native_overrides():
     if len(set(identities)) != len(identities):
         raise ValueError('Ambiguous Core native override capability profile')
     return profile['calls']
+
+
+def context_owned_rts_call(call):
+    """Select existing owned handlers; their full live validators still run."""
+    return core_original_foreign.context_owned_rts_call(call) or any(
+        _same_json_value(call, expected) for expected in _core_native_overrides())
 
 
 def _core_native_import(entry, calls):

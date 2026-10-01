@@ -1504,7 +1504,7 @@ class Audit:
         package_link = self.package_scalar_links.get(target.get('unit')) if isinstance(target, dict) else None
         # JavaScript in a mixed native unit uses its full descriptor check below.
         if (package_link is not None and call.get('convention') in ('ccall', 'capi') and
-                call.get('intrinsic') != 'javascript-v1' and not core_original_foreign.context_owned_rts_call(call)):
+                call.get('intrinsic') != 'javascript-v1' and not core_package_manifest.context_owned_rts_call(call)):
             try:
                 head = self.expression_rep(function)
                 if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or not function[1] or
