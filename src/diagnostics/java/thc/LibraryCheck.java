@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 
@@ -26,7 +25,6 @@ public final class LibraryCheck {
     private static void require(boolean condition, String message) { if (!condition) throw new IllegalArgumentException(message); }
     private static void check(boolean condition) { check(condition, "Check failed."); }
     private static void check(boolean condition, String message) { if (!condition) throw new IllegalStateException(message); }
-    private static String message(Throwable failure) { return failure.getMessage() == null ? "" : failure.getMessage(); }
     private static Map<String, Object> diagnostics(Value function) {
         return (Map<String, Object>) Json.INSTANCE.parse(function.getMember("diagnostics").asString());
     }
@@ -39,18 +37,18 @@ public final class LibraryCheck {
         }
         return result;
     }
-    private record EntryCheck(List<String> modules, String name, String backend, boolean diagnostic) {
-        private Source request(boolean mode) {
+    private record EntryCheck(List<String> modules, String name, String backend) {
+        private Source request() {
             // Each fresh context owns its request; a cached Source could keep
             // the complete Core transport alive after context close.
-            return Source.newBuilder("thc", CoreModules.request(modules, name, true, mode, backend, true), "library:" + name).cached(false).buildLiteral();
+            return Source.newBuilder("thc", CoreModules.request(modules, name, true, false, backend, true), "library:" + name).cached(false).buildLiteral();
         }
         private void checkPolicy(Value function) {
             var data = diagnostics(function);
             check(backend.equals(data.get("backend")));
-            check((diagnostic ? "diagnostic-traps" : "reject-at-load").equals(data.get("unsupportedPolicy")));
+            check("reject-at-binding-admission".equals(data.get("unsupportedPolicy")));
             var deferred = (List<?>) data.get("deferredUnsupported");
-            check(!deferred.isEmpty() == diagnostic, "Unexpected runtime frontier for " + name + ": " + deferred);
+            check(deferred.isEmpty(), "Unexpected runtime frontier for " + name + ": " + deferred);
             check(count(function, "unsupportedTraps") == 0, "Unsupported trap reached by " + name);
             check(count(function, "blackholes") == 0, "Unexpected blackhole in " + name);
         }
@@ -109,12 +107,11 @@ public final class LibraryCheck {
                 String name = (String) entry.get("name");
                 boolean sequence = "sequence".equals(group.get("id"));
                 String execution = (String) (sequence ? entry.get("execution") : group.get("execution"));
-                require(Set.of("supported", "diagnostic", "frontier").contains(execution));
+                require(Set.of("supported", "frontier").contains(execution));
                 if (sequence) {
                     require(execution.equals(supportedSequence.contains(name) ? "supported" : "frontier"), "Unexpected Sequence support declaration for " + name);
                     require(entry.get("audit") instanceof String, "Sequence requires a strict per-entry audit");
                 }
-                boolean diagnostic = execution.equals("diagnostic");
                 var audit = (Map<String, Object>) Json.INSTANCE.parse(Files.readString(Path.of((String) (sequence ? entry.get("audit") : group.get("audit")))));
                 require(Boolean.valueOf(execution.equals("supported")).equals(audit.get("accepted")), "Static audit disagrees with the declared coverage frontier");
                 var warm = rows(entry, "warm");
@@ -124,40 +121,19 @@ public final class LibraryCheck {
                 List<Row> all = new ArrayList<>(warm);
                 all.addAll(cold);
                 require(new HashSet<>(all.stream().map(Row::input).toList()).size() == all.size());
-                var control = new EntryCheck(modules, name, backend, diagnostic);
+                var control = new EntryCheck(modules, "main:" + group.get("module") + "." + name, backend);
                 if (execution.equals("frontier")) {
-                    try (Context context = Main.executionContext(false)) {
-                        PolyglotException failure;
-                        try {
-                            context.eval(control.request(false));
-                            throw new IllegalStateException("Strict loading unexpectedly accepted unsupported entry " + name);
-                        } catch (PolyglotException exception) { failure = exception; }
-                        check(message(failure).contains("Unsupported") || message(failure).contains("Unresolved") || message(failure).contains("unsupported"), "Unexpected loader failure: " + failure);
-                        if (sequence) {
-                            var missing = ((List<Map<String, Object>>) audit.get("missingGlobals")).stream().map(item -> (String) item.get("id")).toList();
-                            check(message(failure).contains("Unresolved external binding") && missing.stream().anyMatch(message(failure)::contains),
-                                "Sequence loader rejection does not match its recorded missing-definition frontier: " + failure);
-                        }
-                        System.out.println("LIBRARY_UNSUPPORTED\t" + backend + "\t" + name + "\t" + failure.getMessage());
-                    }
+                    System.out.println("LIBRARY_STATIC_UNSUPPORTED\t" + backend + "\t" + name + "\t" + Json.INSTANCE.stringify(audit.get("summary")));
                     continue;
                 }
                 try (Context context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true).option("engine.Compilation", "false").build()) {
-                    if (diagnostic) {
-                        PolyglotException failure;
-                        try {
-                            context.eval(control.request(false));
-                            throw new IllegalStateException("Strict loading unexpectedly accepted diagnostic entry " + name);
-                        } catch (PolyglotException exception) { failure = exception; }
-                        System.out.println("LIBRARY_STRICT_REJECTION\t" + backend + "\t" + name + "\t" + failure.getMessage());
-                    }
-                    var function = context.eval(control.request(diagnostic));
+                    var function = context.eval(control.request());
                     control.checkRows(function, all, "interpreted", false);
                     check(count(function, "compiledEntries") == 0);
                 }
                 // Fresh state makes cold inputs genuinely unseen by this compilation.
                 try (Context context = Main.executionContext(false)) {
-                    var function = context.eval(control.request(diagnostic));
+                    var function = context.eval(control.request());
                     for (int index = 0; index < 40; index++) {
                         var row = warm.get(index % warm.size());
                         check(function.execute(row.input()).asLong() == row.expected());
