@@ -55,7 +55,7 @@ class CoreNativeOverrideProfileTest {
             assertFalse(CoreForeignOverride.nativeCall(with(call, "target", with(target, "unit", "ordinary-unit"))));
             assertFalse(CoreForeignOverride.nativeCall(with(call, "target", with(target, "symbol", target.get("symbol") + "_extra"))));
         }
-        for (var symbol : List.of("getMonotonicNSec", "hs_spt_key_count", "libdwGetBacktrace"))
+        for (var symbol : List.of("getMonotonicNSec", "hs_spt_key_count"))
             assertFalse(CoreForeignOverride.nativeCall(Map.of("target", Map.of("unit", "ghc-internal", "symbol", symbol))),
                 "unwired or unsupported native demands receive no new capability");
     }

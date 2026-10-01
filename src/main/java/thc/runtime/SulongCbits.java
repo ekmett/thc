@@ -50,7 +50,6 @@ public final class SulongCbits {
     private final FutureTask<Object> textTask;
     private final FutureTask<Object> waitStatusTask;
     private final FutureTask<Object> utf8Task;
-    private final FutureTask<Map<String, CFinalizerFunction>> finalizerTask;
     private final CFinalizerFunction ownedFree = new CFinalizerFunction(this, "free", null);
     private final WeakHashMap<Object, WeakReference<CbitsBuffer>> buffers = new WeakHashMap<>();
     private final ConcurrentHashMap<Key, Object> foreign = new ConcurrentHashMap<>();
@@ -76,21 +75,6 @@ public final class SulongCbits {
         textTask = new FutureTask<>(() -> load("text"));
         waitStatusTask = new FutureTask<>(() -> load("wait-status"));
         utf8Task = new FutureTask<>(() -> load("bytestring-utf8"));
-        finalizerTask = new FutureTask<>(() -> {
-            Object original = windows ? null : load("libdw-unavailable");
-            var functions = new HashMap<String, CFinalizerFunction>();
-            for (String symbol : new String[]{"libdwPoolRelease", "backtraceFree"}) {
-                Object callable;
-                if (windows) callable = WindowsLibdwFinalizers.function(symbol);
-                else {
-                    if (!interop.isMemberReadable(original, symbol)) throw fault("Missing original RTS finalizer: " + symbol);
-                    callable = interop.readMember(original, symbol);
-                    if (!interop.isExecutable(callable)) throw fault("Original RTS finalizer is not callable: " + symbol);
-                }
-                functions.put(symbol, new CFinalizerFunction(this, symbol, callable));
-            }
-            return functions;
-        });
     }
     private static String architecture(String value) {
         return switch (value.toLowerCase(java.util.Locale.ROOT)) { case "arm64" -> "aarch64"; case "amd64" -> "x86_64"; default -> value; };
@@ -153,7 +137,6 @@ public final class SulongCbits {
     }
     public ManagedAddress finalizerLabel(String symbol) {
         var function = symbol.equals("free") ? ownedFree :
-            symbol.equals("libdwPoolRelease") || symbol.equals("backtraceFree") ? await(finalizerTask).get(symbol) :
             Language.currentState(null).getPackageCbits().finalizer(symbol);
         if (function == null) return Language.currentState(null).getPackageCbits().dataAddress(null, symbol);
         return ManagedAddress.fromCFinalizer(function);
@@ -167,23 +150,7 @@ public final class SulongCbits {
             return;
         }
         if (function.getSymbol().equals("free")) { Language.currentState(null).getNativeAllocations().free(address); return; }
-        if (windows) {
-            var threads = Language.currentState(null).getThreads();
-            var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-            try { WindowsLibdwFinalizers.invoke((java.lang.invoke.MethodHandle) function.getCallable(), address); }
-            finally { threads.leaveForeign(previous); Reference.reachabilityFence(address); }
-            return;
-        }
-        Object pointer;
-        if (address == ManagedAddress.nullAddress()) pointer = 0L;
-        else { address.requireByteRegion(0, false); pointer = pointerTransport(address); }
-        var threads = Language.currentState(null).getThreads();
-        var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-        try {
-            Object callable = function.getCallable();
-            if (callable == null) throw fault("Missing original C finalizer");
-            executeWithOwners(callable, pointer);
-        } finally { threads.leaveForeign(previous); Reference.reachabilityFence(address); }
+        throw fault("Unsupported C finalizer");
     }
     public Object strerrorLibrary() { return await(strerrorTask); }
     public Object strerrorLocaleLibrary() { return await(strerrorLocaleTask); }
