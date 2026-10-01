@@ -18,7 +18,7 @@ module THC.Driver.PackageNative
   , finishPackageNativeWithDependencies
   , linkInstalledNative, installedNativeSignatures, nativeCapiSource
   , nativeIrSymbol, nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, nativeDeferredLinkArguments, nativeRootArguments, tool
-  , nativeAdapterCommand
+  , nativeCallSeedWitness
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -33,156 +33,44 @@ import Data.List (groupBy, isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
-import Numeric (readHex)
 import System.Directory
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
-import System.IO (stdin, hClose, openBinaryTempFile)
-import System.IO.Error (tryIOError, isDoesNotExistError)
 import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
-import THC.Driver.Installed (boundedInterfaceProcess, boundedInterfaceProcessInput)
-import THC.Driver.NativeCache (nativeObjcopySelection, nativeToolIdentity)
-import THC.Driver.Lock (withLock)
+import THC.Driver.Installed (boundedInterfaceProcess)
+import THC.Driver.NativeCache (nativeObjcopySelection)
 import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
 import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
 
--- | Trusted producer entry: finalize a reached ordinary call, not its provider.
--- The immutable provider module is a type witness only; linking it here would
--- duplicate its globals, constructors and callback state in every adapter.
-nativeAdapterCommand :: FilePath -> IO ()
-nativeAdapterCommand cache = do
-  input <- BS.hGet stdin (64 * 1024 * 1024 + 1)
-  check (BS.length input <= 64 * 1024 * 1024) "native adapter request is too large"
-  request <- either fail pure (eitherDecodeStrict' input)
-  either fail pure $ requireKeys request ["schema","profile","unit","target","abi","seedSha256","seedHex",
-    "providerUnit","providerComponentSha256","providerSymbol","providerBitcodeSha256","providerBitcodeHex"]
-  check (member request "schema" == Just (toJSON (1::Int)) &&
-    member request "profile" == Just "thc-package-native-adapter-request-v1") "native adapter request profile differs"
-  unit <- get request "unit" :: IO String
-  target <- get request "target"
-  check (not (null unit) && target == "x86_64-unknown-linux-gnu") "native adapter target/unit is unsupported"
-  abi <- get request "abi"
-  either fail pure $ requireKeys abi ["symbol","entry","convention","safety","arguments","result"]
-  symbol <- get abi "symbol"; entry <- get abi "entry"
-  arguments <- get abi "arguments"; returned <- get abi "result"
-  check (identifier symbol && identifier entry && member abi "convention" == Just "ccall" &&
-    member abi "safety" `elem` [Just "safe",Just "unsafe"] && all inputCarrier arguments &&
-    (returned == "void" || scalarCarrier returned)) "native adapter ABI differs"
-  component <- get request "providerComponentSha256"
-  providerUnit <- get request "providerUnit" :: IO String
-  providerSymbol <- get request "providerSymbol"
-  check (not (null providerUnit) && hashString component && identifier providerSymbol &&
-    ("thc_provider_" ++ component ++ "_") `isPrefixOf` providerSymbol) "native adapter provider identity differs"
-  seed <- bytes request "seedHex" "seedSha256"
-  provider <- bytes request "providerBitcodeHex" "providerBitcodeSha256"
-  tools <- nativeToolIdentity
-  producer <- sha <$> (BS.readFile =<< getExecutablePath)
-  let identity = object ["schema" .= (1::Int),"request" .= request,"tools" .= tools,"producerSha256" .= producer]
-      key = sha (BL.toStrict (encode identity))
-      productValue payload hit = object ["schema" .= (1::Int),"profile" .= ("thc-package-native-adapter-v1"::String),
-        "unit" .= unit,"target" .= target,"entry" .= entry,"seedSha256" .= sha seed,
-        "providerComponentSha256" .= component,"providerSymbol" .= providerSymbol,
-        "bitcodeSha256" .= sha payload,"bitcodeHex" .= hex payload,"cacheKey" .= key,"cacheHit" .= hit]
-  noSymlink cache
-  createDirectoryIfMissing True cache
-  root <- canonicalizePath cache
-  let productDirectory = root </> key; lock = root </> key ++ ".lock"
-  noSymlink root; noSymlink lock; noSymlink productDirectory
-  response <- withLock lock $ do
-    exists <- doesDirectoryExist productDirectory
-    if exists then do
-      let receipt = productDirectory </> "product.json"; path = productDirectory </> "adapter.bc"
-      noSymlink receipt; noSymlink path
-      record <- readJson receipt
-      either fail pure $ requireKeys record ["identity","product"]
-      check (member record "identity" == Just identity) "native adapter cached input identity differs"
-      cached <- get record "product"
-      payload <- BS.readFile path
-      check (cached == productValue payload False) "native adapter cached product changed"
-      pure (productValue payload True)
-    else do
-      (stage,handle) <- openBinaryTempFile root (key ++ ".stage-")
-      hClose handle; removeFile stage; createDirectory stage
-      let seedPath = stage </> "seed.bc"; providerPath = stage </> "provider.bc"
-          seedIR = stage </> "seed.ll"; providerIR = stage </> "provider.ll"
-          linked = stage </> "linked.bc"; final = stage </> "adapter.bc"
-      BS.writeFile seedPath seed; BS.writeFile providerPath provider
-      link <- tool "THC_LLVM_LINK" "llvm-link"
-      opt <- tool "THC_LLVM_OPT" "opt"
-      nm <- tool "THC_LLVM_NM" "llvm-nm"
-      let execute program argv = do
-            (status,out,diagnostic) <- boundedInterfaceProcessInput program argv BS.empty
-            BS.appendFile (stage </> "commands.log") (T.encodeUtf8 (T.pack (show (program,argv,status) ++ "\n")))
-            BS.appendFile (stage </> "commands.log") diagnostic
-            check (status == ExitSuccess) ("native adapter command failed: " ++ show (program,argv) ++ "\n" ++ T.unpack (T.decodeUtf8 diagnostic))
-            pure (T.unpack (T.decodeUtf8 out))
-          names flags path = do
-            output <- execute nm (flags ++ ["--format=posix",path])
-            pure (sort [name | line <- lines output, name:_ <- [words line]])
-      _ <- execute opt ["-S","-passes=verify",seedPath,"-o",seedIR]
-      _ <- execute opt ["-S","-passes=verify",providerPath,"-o",providerIR]
-      seedSource <- readFile seedIR; providerSource <- readFile providerIR
-      forM_ [seedSource,providerSource] $ \source ->
-        check ([value | line <- lines source, Just value <- [quoted "target triple = " line]] == [target]) "native adapter LLVM target differs"
-      -- Both edges are actual verified definitions. The namespaced provider
-      -- forwards to its own original C definition with the same exact C ABI.
-      providerWitness <- maybe (fail "native adapter provider forwarding lacks an exact definition witness") pure
-        (nativeCallWitness target symbol providerSymbol providerSource providerSource)
-      (actualArguments,actualResult,seedWitness) <- maybe (fail "native adapter seed lacks an exact direct-call witness") pure
-        (nativeCallWitness target providerSymbol entry providerSource seedSource)
-      check (map llvmCarrier arguments == actualArguments && llvmCarrier returned == actualResult)
-        "native adapter emitted ABI differs from verified definitions"
-      seedDefinitions <- names ["--defined-only"] seedPath
-      seedExternals <- names ["--undefined-only"] seedPath
-      check (seedDefinitions == [entry] && seedExternals == [providerSymbol])
-        "native adapter seed contains additional state or provider obligations"
-      _ <- execute link [seedPath,"-o",linked]
-      _ <- execute opt ["-passes=verify,internalize,globaldce","-internalize-public-api-list=" ++ entry,linked,"-o",final]
-      _ <- execute opt ["-passes=verify",final,"-disable-output"]
-      definitions <- names ["--defined-only"] final
-      externals <- names ["--undefined-only"] final
-      check (definitions == [entry] && externals == [providerSymbol]) "native adapter final roots differ"
-      payload <- BS.readFile final
-      let acquired = productValue payload False
-      writeJson (stage </> "witness.json") (object ["provider" .= providerWitness,"seed" .= seedWitness])
-      writeJson (stage </> "product.json") (object ["identity" .= identity,"product" .= acquired])
-      renameDirectory stage productDirectory
-      pure acquired
-  BL.putStr (encode response); putStrLn ""
+-- | Validate an actual captured leaf adapter against its final canonical
+-- provider. Other roots, native obligations or ABI shapes retain strict linkage.
+nativeCallSeedWitness :: String -> Signature -> String -> String -> String -> String -> [String] -> [String] -> Bool
+nativeCallSeedWitness target (symbol,convention,safety,arguments,returned) entry providerSymbol providerSource seedSource definitions externals =
+  convention == "ccall" && safety `elem` ["safe","unsafe"] &&
+  all inputCarrier arguments && (returned == "void" || scalarCarrier returned) &&
+  definitions == [entry] && externals == [providerSymbol] &&
+  nativeCallWitness target symbol providerSymbol providerSource providerSource /= Nothing &&
+  case nativeCallWitness target providerSymbol entry providerSource seedSource of
+    Just (actualArguments,actualResult,_) ->
+      map llvmCarrier arguments == actualArguments && llvmCarrier returned == actualResult
+    Nothing -> False
   where
-    hashString value = length value == 64 && all (`elem` (['0'..'9'] ++ ['a'..'f'])) value
-    bytes record encodedField digestField = do
-      encoded <- get record encodedField
-      let decode [] = Just []; decode (a:b:rest) = do
-            value <- case readHex [a,b] of [(byte,"")] -> Just byte; _ -> Nothing
-            (value:) <$> decode rest
-          decode _ = Nothing
-      payload <- maybe (fail "invalid native adapter bitcode encoding") (pure . BS.pack) (decode encoded)
-      expected <- get record digestField
-      check (not (BS.null payload) && hex payload == encoded && sha payload == expected) "native adapter input digest differs"
-      pure payload
-    noSymlink path = do
-      observed <- tryIOError (pathIsSymbolicLink path)
-      case observed of
-        Right linked -> check (not linked) ("native adapter cache path is a symlink: " ++ path)
-        Left failure | isDoesNotExistError failure -> pure ()
-                     | otherwise -> ioError failure
     llvmCarrier "void" = "void"
     llvmCarrier value | value `elem` ["AddrRep","ByteArray#","MutableByteArray#"] = "ptr"
     llvmCarrier "FloatRep" = "float"
     llvmCarrier "DoubleRep" = "double"
-    llvmCarrier value | value `elem` ["IntRep","WordRep","Int64Rep","Word64Rep"] = "i64"
-    llvmCarrier value | value `elem` ["Int32Rep","Word32Rep"] = "i32"
+    llvmCarrier value | value `elem` ["Int8Rep","Word8Rep"] = "i8"
     llvmCarrier value | value `elem` ["Int16Rep","Word16Rep"] = "i16"
-    llvmCarrier _ = "i8"
+    llvmCarrier value | value `elem` ["Int32Rep","Word32Rep"] = "i32"
+    llvmCarrier _ = "i64"
 
 -- Installed interfaces often predate retained source-import annotations. Their
 -- FCallIds still carry the exact callable ABI. Unlifted heap pointers do not,
@@ -1182,23 +1070,45 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
                     setMember "componentSha256" (toJSON component) $ record
               -- Only this component contains its real C globals and lifecycle.
               -- The strict materializer retains public C/constructor/native
-              -- obligations; first-use products contain only their call seed.
+              -- obligations; first-use modules contain only their call seed.
               proof <- materializeStrict archived canonical native
               bytes <- BS.readFile (directory </> "native/package.bc")
-              exports <- get proof "exports" :: IO [String]
-              let buildInputs = maybe (object []) id (member proof "buildInputs")
-                  seedInputs = [metadata | (_,_,metadata,_) <- compiled]
-              translationUnits <- get buildInputs "translationUnits" :: IO [Value]
-              let
-                  result = setMember "schema" (toJSON (3::Int)) .
-                    setMember "profile" "thc-package-c-ffi-demand-v1" .
-                    setMember "format" "llvm-bitcode" . setMember "bitcodeSha256" (toJSON (sha bytes)) .
-                    setMember "bitcodeHex" (toJSON (hex bytes)) .
-                    setMember "abi" (toJSON [signature | (signature,_,_,_) <- compiled]) .
-                    setMember "callSeeds" (toJSON [seed | (_,seed,_,_) <- compiled]) .
-                    setMember "exports" (toJSON (sort (nub (map provider symbols ++ exports)))) .
-                    setMember "buildInputs" (setMember "translationUnits" (toJSON (translationUnits ++ seedInputs)) buildInputs) $ proof
-              pure result
+              let canonicalIR = demand </> "canonical.ll"
+              _ <- command directory opt ["-S","-passes=verify",directory </> "native/package.bc","-o",canonicalIR]
+              canonicalSource <- readFile canonicalIR
+              nm <- tool "THC_LLVM_NM" "llvm-nm"
+              let names flags path = do
+                    output <- command directory nm (flags ++ ["--format=posix",path])
+                    pure (sort [name | line <- lines output, name:_ <- [words line]])
+                  exactTarget ir = [value | line <- lines ir, Just value <- [quoted "target triple = " line]] == [target]
+              verified <- forM (zip [0::Int ..] compiled) $ \(index,(signature,_,_,_)) -> do
+                symbol <- get signature "symbol"; safety <- get signature "safety"
+                arguments <- get signature "arguments"; returned <- get signature "result"
+                let seedDirectory = demand </> "seeds" </> show index
+                    path = seedDirectory </> "target.bc"
+                    seedIR = seedDirectory </> "verified.ll"
+                _ <- command directory opt ["-S","-passes=verify",path,"-o",seedIR]
+                seedSource <- readFile seedIR
+                definitions <- names ["--defined-only"] path
+                externals <- names ["--undefined-only"] path
+                pure (exactTarget canonicalSource && exactTarget seedSource &&
+                  nativeCallSeedWitness target (symbol,"ccall",safety,arguments,returned)
+                    (entry index) (provider symbol) canonicalSource seedSource definitions externals)
+              if not (and verified) then materializeStrict archived record native else do
+                exports <- get proof "exports" :: IO [String]
+                let buildInputs = maybe (object []) id (member proof "buildInputs")
+                    seedInputs = [metadata | (_,_,metadata,_) <- compiled]
+                translationUnits <- get buildInputs "translationUnits" :: IO [Value]
+                let
+                    result = setMember "schema" (toJSON (3::Int)) .
+                      setMember "profile" "thc-package-c-ffi-demand-v1" .
+                      setMember "format" "llvm-bitcode" . setMember "bitcodeSha256" (toJSON (sha bytes)) .
+                      setMember "bitcodeHex" (toJSON (hex bytes)) .
+                      setMember "abi" (toJSON [signature | (signature,_,_,_) <- compiled]) .
+                      setMember "callSeeds" (toJSON [seed | (_,seed,_,_) <- compiled]) .
+                      setMember "exports" (toJSON (sort (nub (map provider symbols ++ exports)))) .
+                      setMember "buildInputs" (setMember "translationUnits" (toJSON (translationUnits ++ seedInputs)) buildInputs) $ proof
+                pure result
    nubBySymbol [] = []
    nubBySymbol (value@(symbol,_):rest) = value : nubBySymbol (filter ((/= symbol) . fst) rest)
    materializeStrict archived record native = do

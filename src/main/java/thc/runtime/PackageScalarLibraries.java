@@ -24,12 +24,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.lang.ref.Reference;
 import java.nio.file.Files;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.HashSet;
-import thc.Json;
 import static thc.runtime.RuntimeFault.fault;
 
 /** Component C globals and entrypoints belong to one Truffle context. */
@@ -40,9 +37,6 @@ public final class PackageScalarLibraries {
     private final HashMap<String, PackageScalarLink> declarations = new HashMap<>();
     private final HashMap<String, FutureTask<PackageScalarFunction>> adapters = new HashMap<>();
     private final ThreadLocal<HashSet<String>> initializingAdapters = ThreadLocal.withInitial(HashSet::new);
-    private final HashSet<Process> builderProcesses = new HashSet<>();
-    private final String productBuilder;
-    private final String productCache;
     private final PackageFinalizerRegistry finalizers = new PackageFinalizerRegistry();
     private final Assumption alive = Assumption.create("THC package C libraries are open");
     private boolean closed;
@@ -53,12 +47,7 @@ public final class PackageScalarLibraries {
     private final FutureTask<Map<String, Object>> pointerOperations;
     private final FutureTask<Object> floatingRuntime;
     public PackageScalarLibraries(TruffleLanguage.Env env) {
-        this(env, "", "");
-    }
-    public PackageScalarLibraries(TruffleLanguage.Env env, String productBuilder, String productCache) {
         this.env = env;
-        this.productBuilder = productBuilder;
-        this.productCache = productCache;
         floatingRuntime = new FutureTask<>(() -> {
             String system = System.getProperty("os.name");
             boolean windows = system.startsWith("Windows");
@@ -389,59 +378,13 @@ public final class PackageScalarLibraries {
                 !provider.component().exports().contains(seed.providerSymbol()))
             throw fault("Missing package C provider on use: " + link.getUnit() + ":" + signature.getSymbol());
         if (!initializing(seed.providerUnit())) load(provider.component());
-        if (productBuilder.isEmpty() || productCache.isEmpty() || !env.isCreateProcessAllowed())
-            throw fault("Package C adapter construction requires a trusted THC driver, cache and process access");
-        var request = new LinkedHashMap<String, Object>();
-        request.put("schema", 1L); request.put("profile", "thc-package-native-adapter-request-v1");
-        request.put("unit", link.getUnit()); request.put("target", link.getTarget());
-        request.put("abi", Map.of("symbol", signature.getSymbol(), "entry", signature.getEntry(),
-            "convention", signature.getConvention(), "safety", signature.getSafety(),
-            "arguments", signature.getArguments(), "result", signature.getResult()));
-        request.put("seedSha256", seed.bitcodeSha256()); request.put("seedHex", seed.bitcodeHex());
-        request.put("providerUnit", seed.providerUnit()); request.put("providerComponentSha256", seed.providerComponentSha256());
-        request.put("providerSymbol", seed.providerSymbol());
-        request.put("providerBitcodeSha256", provider.component().bitcodeSha256());
-        request.put("providerBitcodeHex", HexFormat.of().formatHex(provider.component().bytes()));
-        var builder = env.newProcessBuilder(productBuilder, "native-adapter", productCache);
-        builder.redirectError(builder.createRedirectToStream(env.err()));
-        Process process = builder.start();
-        synchronized (this) {
-            if (closed) { process.destroy(); throw fault("Package C library registry is closed"); }
-            builderProcesses.add(process);
-        }
-        byte[] response;
-        try {
-            response = TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
-                (TruffleSafepoint.InterruptibleFunction<Process, byte[]>) pending -> {
-                    try {
-                        try (var input = pending.getOutputStream()) { input.write(Json.stringify(request).getBytes(StandardCharsets.UTF_8)); }
-                        byte[] output = pending.getInputStream().readNBytes(16 * 1024 * 1024 + 1);
-                        if (output.length > 16 * 1024 * 1024) throw fault("Package C adapter response is too large");
-                        if (pending.waitFor() != 0) throw fault("Package C adapter producer failed: " + link.getUnit() + ":" + signature.getSymbol());
-                        return output;
-                    } catch (java.io.IOException failure) { throw rethrow(failure); }
-                }, process);
-        } finally {
-            synchronized (this) { builderProcesses.remove(process); }
-            if (process.isAlive()) process.destroy();
-        }
-        Object decoded = Json.parse(new String(response, StandardCharsets.UTF_8));
-        if (!(decoded instanceof Map<?, ?> fields) || !fields.keySet().equals(java.util.Set.of("schema", "profile", "unit", "target", "entry",
-                "seedSha256", "providerComponentSha256", "providerSymbol", "bitcodeSha256", "bitcodeHex", "cacheKey", "cacheHit")) ||
-                !Long.valueOf(1).equals(fields.get("schema")) || !"thc-package-native-adapter-v1".equals(fields.get("profile")) ||
-                !link.getUnit().equals(fields.get("unit")) || !link.getTarget().equals(fields.get("target")) ||
-                !signature.getEntry().equals(fields.get("entry")) || !seed.bitcodeSha256().equals(fields.get("seedSha256")) ||
-                !seed.providerComponentSha256().equals(fields.get("providerComponentSha256")) || !seed.providerSymbol().equals(fields.get("providerSymbol")) ||
-                !(fields.get("cacheHit") instanceof Boolean) || !(fields.get("cacheKey") instanceof String key) || !key.matches("[0-9a-f]{64}"))
-            throw fault("Package C adapter product identity differs");
-        if (!(fields.get("bitcodeHex") instanceof String encoded) || !encoded.matches("(?:[0-9a-f]{2})+") ||
-                !(fields.get("bitcodeSha256") instanceof String digest)) throw fault("Invalid package C adapter bytes");
-        byte[] bytes = HexFormat.of().parseHex(encoded);
-        if (!HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)).equals(digest))
-            throw fault("Package C adapter digest differs");
+        byte[] bytes = HexFormat.of().parseHex(seed.bitcodeHex());
+        if (!HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)).equals(seed.bitcodeSha256()))
+            throw fault("Package C call seed digest differs");
         // Only the adapter is loaded here. The provider remains the existing
         // context-owned LLVM module: no duplicate globals or constructors.
-        Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), key + ".bc").build()).call();
+        // Capture already verified its sole entry, external and exact ABI.
+        Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), seed.bitcodeSha256() + ".bc").build()).call();
         Object receiver = interop.readMember(library, signature.getEntry());
         if (!interop.isExecutable(receiver)) throw fault("Package C adapter entry is not executable");
         synchronized (this) { if (closed) throw fault("Package C library registry is closed"); }
@@ -511,7 +454,6 @@ public final class PackageScalarLibraries {
     }
     public synchronized void close() {
         closed = true; alive.invalidate(); finalizers.close();
-        for (var process : builderProcesses) process.destroy();
         libraries.clear(); declarations.clear(); adapters.clear();
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }

@@ -73,7 +73,7 @@ import THC.Driver.NativeDependencies (readNativeProduct, configuredNativeArchive
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
-import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeNativeEnvironment, runResolvedPackage)
+import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runResolvedPackage)
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Compact.Core (Presence(..))
 import THC.Compact.Debug (SourceFile(..))
@@ -608,9 +608,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
     -- Full-Core main and shutdown share one program and its Handle CAFs.
     -- Like cabal run, preserve the caller's cwd even with --project-dir.
     let programName = reverse (takeWhile (/= ':') (reverse (snd selection)))
-    runtimeEnvironment <- runtimeNativeEnvironment =<< getEnvironment
-    runCommandWithEnv False runtime (runtimeLaunchArguments verifyArtifacts
-      ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working (Just runtimeEnvironment)
+    runCommand False runtime (runtimeLaunchArguments verifyArtifacts
+      ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working
 
 -- | Select the two original exception bridge modules. The flag requests full
 -- artifact verification rather than replaying an unchanged successful read.
