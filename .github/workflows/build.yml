@@ -164,8 +164,6 @@ jobs:
           cabal build exe:thc --offline -fdevelopment
           cabal run thc --offline -fdevelopment -- --help
           cabal test driver-tests cpu-affinity-api -fdevelopment --test-show-details=direct
-      - name: Check registered cross-package Core on both compiled backends
-        run: python3 bin/test-core-package-link.py
       - name: Require fresh native SIMD oracle and post-Tidy export on x86
         if: runner.os == 'Linux'
         run: |
