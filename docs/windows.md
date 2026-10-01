@@ -227,6 +227,22 @@ Native authority does not grant the guest current-directory or file access.
 
 ## Current boundaries
 
+To preserve a failing native link's inputs before acquisition removes its
+temporary directories, enable the pinned linker's input reproducer:
+
+~~~powershell
+$env:LLD_REPRODUCE = Join-Path $PWD 'build/windows-native-link.tar'
+./bin/windows.ps1 -Action Test -Jobs 4
+~~~
+
+Each link overwrites the archive. When the command stops on a link failure,
+the archive retains that link's actual inputs and `response.txt`. Extract it
+into a separate directory and run `lld-link.exe '@response.txt' /verbose /errorlimit:0`
+from the extracted archive root to inspect archive-member
+selection and unresolved references. This only links; do not load the output
+DLL as a runtime provider. Windows CI preserves this archive with its logs.
+Remove the diagnostic setting afterward with `Remove-Item Env:LLD_REPRODUCE`.
+
 Native allocations preserve context ownership, bounds and allocator identity.
 `LocalFree` allocations use their own deallocator; C allocation failures use
 `errno`, not `GetLastError`. These services do not provide general file/Handle IO.
