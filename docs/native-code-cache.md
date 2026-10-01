@@ -45,7 +45,12 @@ lowering after the automatic-vectorization policy and installs the
 The stock pinned toolchain rejects deterministic shared arenas with Vector API
 support. The paired provider preserves session pins, original scalar scope
 optimization and deterministic close; its small native/IR gate is distinct from
-full application and persisted cache qualification, which remain pending.
+the separately qualified optimized application image and persisted pure scalar
+cache. Fresh-process loads retained `engine.Compilation=false`, installed-code
+checks and zero runtime lowering or compilation submissions. This does not
+qualify arbitrary guest programs or package-FFI caches. The normal `run` wrapper
+reserves auxiliary-image address space before `Engine.CacheLoad`; embedding
+launchers must retain that startup setup too.
 `THC_NATIVE_IMAGE_VECTOR_PROFILE=resource-copy` selects an experimental
 separate `thc-native-cache-resource-copy` image: shared arenas remain enabled,
 vector memory and bit reinterpretation use typed primitive-array bulk copies,
