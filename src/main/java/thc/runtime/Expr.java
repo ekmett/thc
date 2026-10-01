@@ -6,12 +6,34 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
+import com.oracle.truffle.api.instrumentation.ProbeNode;
+import com.oracle.truffle.api.instrumentation.StandardTags;
+import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
 
+@GenerateWrapper
 @TypeSystemReference(RuntimeTypes.class)
-public abstract class Expr extends Node {
+public abstract class Expr extends Node implements InstrumentableNode {
+    @Override public boolean isInstrumentable() { return coreSourceLocation != null && getSourceSection() != null; }
+    @Override public WrapperNode createWrapper(ProbeNode probe) {
+        var wrapper = new ExprWrapper(this, probe);
+        wrapper.setRepresentation(representation);
+        wrapper.setCoreSourceLocation(coreSourceLocation);
+        return wrapper;
+    }
+    @Override public boolean hasTag(Class<? extends Tag> tag) {
+        if (tag == StandardTags.StatementTag.class) return coreSourceLocation != null;
+        Node parent = getParent();
+        if (parent instanceof WrapperNode) parent = parent.getParent();
+        if (parent instanceof Evaluate) parent = parent.getParent();
+        if (parent instanceof FunctionBody) parent = parent.getParent();
+        return parent instanceof GuestRoot &&
+            (tag == StandardTags.RootTag.class || tag == StandardTags.RootBodyTag.class);
+    }
     // Assigned during lowering, before adoption.
     @CompilationFinal private CoreRepresentation representation = CoreRepresentation.UNKNOWN;
     @CompilationFinal private VectorLayout vectorLayout;

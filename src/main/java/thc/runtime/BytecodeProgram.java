@@ -5,6 +5,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.bytecode.BytecodeConfig;
+import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.bytecode.BytecodeEncodingException;
 import com.oracle.truffle.api.bytecode.BytecodeLabel;
 import com.oracle.truffle.api.bytecode.BytecodeLocal;
@@ -369,7 +370,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             emitSource(emission, () -> expression.emitTuple(emission, destination));
         }
         private void emitSource(Emission emission, Runnable action) {
-            if (!emission.builder.isParsingSources()) { action.run(); return; }
+            if (!emission.builder.isParsingSources()) {
+                emission.builder.beginTag(StandardTags.StatementTag.class);
+                action.run();
+                emission.builder.endTag(StandardTags.StatementTag.class);
+                return;
+            }
             var sections = new ArrayList<SourceSection>();
             for (var note : source.getNotes())
                 if (!sections.contains(note.getSection())) sections.add(note.getSection());
@@ -377,7 +383,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (primary != null && (sections.isEmpty() || !Objects.equals(sections.getLast(), primary)))
                 sections.add(primary);
             for (var section : sections) beginSource(emission.builder, section);
+            emission.builder.beginTag(StandardTags.StatementTag.class);
             action.run();
+            emission.builder.endTag(StandardTags.StatementTag.class);
             for (int i = sections.size() - 1; i >= 0; --i) endSource(emission.builder);
         }
     }

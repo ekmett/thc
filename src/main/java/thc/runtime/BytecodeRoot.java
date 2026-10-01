@@ -49,7 +49,7 @@ import thc.Language;
  */
 // Generate only the cached interpreter. The former uncached threshold of zero
 // transitioned before executing even the first guest instruction.
-@GenerateBytecode(languageClass = Language.class, enableYield = true,
+@GenerateBytecode(languageClass = Language.class, enableYield = true, enableTagInstrumentation = true,
         boxingEliminationTypes = {int.class, long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     // Optional overlay declarations; stock Truffle uses its ordinary policies.
