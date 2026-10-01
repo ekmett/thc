@@ -102,7 +102,7 @@ def original_path(root, name):
 
 def inventory(root, cases, jars, tools, cases_hash):
     require(cases.get("schema") == 1, "Unsupported library manifest schema")
-    tracked = set(git(root, "ls-files", "-z").split("\0"))
+    tracked = set(git(root, "ls-files", "--recurse-submodules", "-z").split("\0"))
     inputs, artifacts = cases["inputHashes"], cases["artifactHashes"]
     require(inputs and artifacts, "Library fingerprints must be nonempty")
     hashes = {}
