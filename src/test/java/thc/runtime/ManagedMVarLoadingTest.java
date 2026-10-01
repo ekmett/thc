@@ -177,7 +177,11 @@ class ManagedMVarLoadingTest {
             for (String kind : List.of("unknown", "object", "data", "closure")) for (boolean global : new boolean[]{false, true}) {
                 var fixture = new Fixture(contracts.getFirst());
                 fixture.stored(0, leaf(kind, "BoxedRep Nothing"), global);
-                rejects(language, backend, fixture, kind + "/global=" + global, "MVar argument contradicts its binding proof", false);
+                // Concrete local boxed kinds conflict during expression proof refinement;
+                // globals and unknown kinds reach the primitive's zero-width State# validation.
+                String reason = global || kind.equals("unknown") ? "MVar argument contradicts its binding proof" :
+                    "Conflicting Core representation proofs: " + kind.toUpperCase(Locale.ROOT) + " and VOID";
+                rejects(language, backend, fixture, kind + "/global=" + global, reason, false);
             }
         });
     }
