@@ -162,7 +162,7 @@ public class NativeAddressTest {
                     Long literalBits;
                     Object call(String name, Object argument) throws Exception {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var target = targets.get(name);
-                        var result = Calls.target(target, new Object[] {0L, argument});
+                        var result = thc.runtime.ScalarTestCalls.callScalarTestTarget(target, new Object[] {0L, argument});
                         if (compiled) {
                             var label = backend + "/inlining=" + inlining + "/" + name + "(" + argument + ")";
                             assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue(), () -> {
