@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "commands": [
+    {
+      "argv": [
+        "compiler/build.sh"
+      ],
+      "env": {}
+    },
+    {
+      "argv": [
+        "compiler/export.sh",
+        "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/compiler/test-fixtures/SimdInt64X2.hs"
+      ],
+      "env": {
+        "THC_CORE_OUT": "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/pre-core",
+        "THC_GHC_OUT": "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/pre-ghc"
+      }
+    },
+    {
+      "argv": [
+        "compiler/export.sh",
+        "-fplugin-opt=Thc.Plugin:post-tidy",
+        "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/compiler/test-fixtures/SimdInt64X2.hs"
+      ],
+      "env": {
+        "THC_CORE_OUT": "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/post-core",
+        "THC_GHC_OUT": "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/post-ghc"
+      }
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc",
+        "--make",
+        "-O2",
+        "-fforce-recomp",
+        "-dcore-lint",
+        "-icompiler/test-fixtures",
+        "-odir",
+        "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/native",
+        "-hidir",
+        "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/native",
+        "-o",
+        "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/native/simd",
+        "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/compiler/test-fixtures/SimdInt64X2Native.hs"
+      ],
+      "env": {}
+    }
+  ],
+  "nativeRows": 147,
+  "stages": [
+    "pre",
+    "post"
+  ],
+  "sources": [
+    {
+      "path": "compiler/test-fixtures/SimdInt64X2.hs",
+      "sha256": "f128b3a86a159f64b6eee201d82388d8930aa86d42d581975e58955775bb2d84"
+    },
+    {
+      "path": "compiler/test-fixtures/SimdInt64X2Native.hs",
+      "sha256": "2486b128fb0817b9c3e0390228e8873cca89b54d050549052e9a6eb55075bc97"
+    },
+    {
+      "path": "scripts/prepare-simd-audit.py",
+      "sha256": "872fc36557e96764272a2eddedc5f4168236f6c43e499fca57508bc9d84247b0"
+    },
+    {
+      "path": "compiler/Thc/Plugin.hs",
+      "sha256": "5126b716ff67abcc33e9d15d64709d1c9971bdb39832e36f31cf7285bb1d776b"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "build/simd/pre-core/SimdInt64X2.json",
+      "sha256": "c5a6334823e5b6ed86ada94330964914fd0c4d69abd01ea2e11f4d62521abefd"
+    },
+    {
+      "path": "build/simd/post-core/SimdInt64X2.json",
+      "sha256": "a1b605e7bfdd56b89941b690fbcad8bffed471784842fde2e9c932913bff4d2b"
+    },
+    {
+      "path": "build/simd/oracle.tsv",
+      "sha256": "fe17d56f0b61a6c20f45aa693c5fbc3c654c4db0061cb8fbc4d219da5f2f6c43"
+    }
+  ]
+}
