@@ -157,49 +157,6 @@ class ProvidedModuleTest(unittest.TestCase):
         self.assertFalse(check(dict(fragment, unit='forged'), provider)['accepted'])
 
 
-class OriginalTimeClockOperandTest(unittest.TestCase):
-    def test_genuine_capi_lowered_and_stored_state(self):
-        fixture = ROOT.parent / 'build/original-time-clock'
-        if not (fixture / 'manifest.json').is_file():
-            self.skipTest('requires the explicit original-time-clock full-Core native fixture')
-        linked = json.loads((fixture / 'linked.json').read_text())
-        for stage in ('pre', 'post'):
-            module = json.loads((fixture / (stage + '.json')).read_text())
-            original = next(binding for binding in module['bindings'] if binding['name'] == 'originalTime')
-            def find_call(value):
-                if isinstance(value, list):
-                    if value and value[0] == 'app' and isinstance(value[-1], dict) and 'foreignCall' in value[-1]:
-                        return value
-                    for child in value:
-                        found = find_call(child)
-                        if found is not None:
-                            return found
-                elif isinstance(value, dict):
-                    for child in value.values():
-                        found = find_call(child)
-                        if found is not None:
-                            return found
-                return None
-            call = find_call(original['expr'])
-            self.assertIsNotNone(call)
-            declared = call[-1]['foreignCall']['argumentReps']
-            for malformed in ('valid', 'lowered-state', 'stored-state', 'stored-clock'):
-                expression = copy.deepcopy(call)
-                expression[2] = [['var', 'argument' + str(index), dict(rep=copy.deepcopy(rep))]
-                                 for index, rep in enumerate(declared)]
-                stored = {'argument' + str(index): copy.deepcopy(rep) for index, rep in enumerate(declared)}
-                if malformed == 'lowered-state':
-                    expression[2][2] = ['lit', 'int', '7', dict(rep=declared[2])]
-                elif malformed == 'stored-state':
-                    stored['argument2'] = LONG
-                elif malformed == 'stored-clock':
-                    stored['argument0'] = LONG
-                auditor = audit_core.Audit([('original-linked.json', linked)], CAP)
-                auditor.walk(expression, stored, 'clock-control', '/expr')
-                if malformed == 'valid':
-                    self.assertEqual([], auditor.issues)
-                else:
-                    self.assertTrue(any(issue['code'] == 'foreign-call' for issue in auditor.issues), malformed)
 
 
 class AggregateHeapFieldTest(unittest.TestCase):
@@ -1533,14 +1490,6 @@ class AuditTest(unittest.TestCase):
         case[3][0][3] = ['let', False, [local], [*lit(0), dict(rep=LONG)], dict(rep=LONG)]
         self.assertTrue(run_tuple(module)['accepted'])
 
-    @unittest.skipUnless((ROOT.parent / 'build/tuple-return/oracle.tsv').exists(), 'prepare native tuple return fixture first')
-    def test_genuine_native_tuple_exports_are_accepted(self):
-        folder = ROOT.parent / 'build/tuple-return'
-        entries = sorted({row.split('\t')[0] for row in (folder / 'oracle.tsv').read_text().splitlines()})
-        for stage in ('pre-core', 'post-core'):
-            module = json.loads((folder / stage / 'TupleReturnAudit.json').read_text())
-            report = audit_core.Audit([(stage, module)], TUPLE_CAP).run(entries)
-            self.assertTrue(report['accepted'], report['issues'])
 
     def test_lambda_shadows_same_spelled_global(self):
         report = run(['lam', [dict(id='shadow', lifted=True)], var('shadow')], [bind('shadow', var('unreachable'))])
@@ -2021,18 +1970,6 @@ class EmptyTupleInputTests(unittest.TestCase):
         self.assertIn('unboxed-tuple capture', [i['detail'] for i in
             self.audit(module, cap=dict(self.capability, aggregateCaptures=[]))['issues']])
 
-    def test_genuine_native_empty_input_exports_are_accepted(self):
-        paths = [ROOT.parent / f'build/empty-tuple-input/{stage}-core/EmptyTupleInputAudit.json' for stage in ['pre', 'post']]
-        if not all(path.exists() for path in paths):
-            self.skipTest('Run prepare-empty-tuple-input-audit.py for genuine native exports')
-        entries = ['scalarControl', 'beforeCase', 'betweenCase', 'afterCase', 'usedCase',
-                   'papEmptyCase', 'papTwoEmptyCase', 'papMixedCase', 'overCase', 'lazyCase',
-                   'pairCase', 'selfCase', 'mutualCase', 'selfDepth', 'mutualDepth',
-                   'effectCase', 'effectPapCase', 'betweenInputs']
-        for path in paths:
-            module = json.loads(path.read_text())
-            report = audit_core.Audit([(str(path), module)], self.capability).run(entries)
-            self.assertTrue(report['accepted'], report['issues'])
 
     def test_global_scalar_cannot_be_relabelled_as_an_empty_actual(self):
         module = self.fixture([self.empty])

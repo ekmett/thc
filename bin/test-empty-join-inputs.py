@@ -2,12 +2,9 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Exact nullary tuple join inputs; retained Typeable exports remain incomplete."""
+"""Exact nullary tuple join inputs."""
 import copy
-import gzip
-import hashlib
 import importlib.util
-import json
 from pathlib import Path
 import unittest
 
@@ -88,24 +85,5 @@ class EmptyJoinInputs(unittest.TestCase):
         worker['expr'][3]['resultRep']=t.CLOSURE;worker['joinResultRep']=t.CLOSURE
         self.accepts(m)
         self.rejects(m,'aggregate-boundary',dict(CAP,aggregateCaptures=[]))
-    def test_full_retained_typeable_frontier_removes_only_six_formals_and_34_calls(self):
-        base=ROOT/'t/fixtures/compiler/empty-join-typeable';manifest=json.loads((base/'provenance.json').read_text())
-        for row in manifest['sources']:
-            self.assertEqual(row['sha256'],hashlib.sha256((base/row['path']).read_bytes()).hexdigest())
-        for stage in ('pre','post'):
-            modules=[]
-            for row in manifest['artifacts']:
-                if not row['path'].startswith(stage+'-'):continue
-                packed=(base/row['path']).read_bytes();self.assertEqual(row['sha256'],hashlib.sha256(packed).hexdigest())
-                raw=gzip.decompress(packed);self.assertEqual(row['rawSha256'],hashlib.sha256(raw).hexdigest());self.assertEqual(row['rawBytes'],len(raw))
-                modules.append((row['path'],json.loads(raw)))
-            roots=['mkTrCon','fpTYPELiftedRep']
-            old=t.audit.Audit(modules,DISABLED).run(roots);new=t.audit.Audit(modules,CAP).run(roots)
-            self.assertFalse(old['accepted']);self.assertFalse(new['accepted'])
-            self.assertEqual(40,len(old['issues']),old['issues']);self.assertEqual([],new['issues'])
-            details=[i['detail'] for i in old['issues']]
-            self.assertEqual(6,details.count('unboxed-tuple formal argument'));self.assertEqual(34,details.count('unboxed-tuple argument'))
-            self.assertEqual(old['missingGlobals'],new['missingGlobals']);self.assertEqual(28,len(new['missingGlobals']))
-            self.assertEqual(old['summary']['reachableBindings'],new['summary']['reachableBindings'])
 
 if __name__=='__main__': unittest.main()

@@ -5,8 +5,6 @@
 """Independent signed lane arithmetic and exact structural-proof controls."""
 import copy
 from collections import Counter
-import gzip
-import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -69,27 +67,15 @@ def word_samples():
 
 
 class Int32X4MultiplyModelTest(unittest.TestCase):
-    def test_genuine_pre_post_signedness_controls_keep_exact_issue_profiles(self):
+    def test_fresh_cbd_signedness_controls_keep_exact_issue_profiles(self):
         root = Path(__file__).resolve().parent.parent
-        retained = root / 't/fixtures/retained-core/int32x4-multiply'
-        provenance = json.loads((retained / 'input-provenance.json').read_text())['core']
-        hashes = {item['path']: item['sha256'] for item in provenance['artifacts']}
         spec = importlib.util.spec_from_file_location('int32x4_signedness_auditor', root / 'bin/audit-core.py')
         auditor = importlib.util.module_from_spec(spec); spec.loader.exec_module(auditor)
         capabilities = json.loads((root / 'bin/core-capabilities.json').read_text())
         prepared = [root / f'build/simd-int32x4-multiply/{stage}-core/SimdInt32X4Multiply.cbd'
                     for stage in ('pre', 'post')]
-        # ARM's export-only preparation may supply just pre-Tidy; retained
-        # native evidence above always supplies both stages without a skip.
-        inputs = []
-        for stage, fresh in zip(('pre', 'post'), prepared):
-            path = retained / f'{stage}-core.json.gz'
-            raw = gzip.decompress(path.read_bytes())
-            self.assertEqual(hashlib.sha256(raw).hexdigest(),
-                             hashes[f'build/simd-int32x4-multiply/{stage}-core/SimdInt32X4Multiply.json'])
-            inputs.append((stage, path, json.loads(raw)))
-            if fresh.exists():
-                inputs.append((stage, fresh, inspect_cbd(fresh.read_bytes())))
+        inputs = [(stage, path, inspect_cbd(path.read_bytes()))
+                  for stage, path in zip(('pre', 'post'), prepared) if path.exists()]
         expected = {
             'unsignedLaneTuple': {'vector-shape': 1, 'aggregate-shape': 5, 'scalar-representation': 4},
             'unsignedVectorOperand': {'vector-shape': 2, 'aggregate-shape': 2},

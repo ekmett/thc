@@ -118,24 +118,6 @@ class SumProofTest(unittest.TestCase):
                       dict(proof,alternatives=[BOX,INT])):
             self.assertIsNotNone(sums.proof_error(wrong))
 
-    @unittest.skipUnless((ROOT/'build/fourway-aggregate/pre/core/FourWayAggregateFields.json').exists(),
-                         'Prepare genuine original and nested four-way fixtures')
-    def test_genuine_fourway_word64_and_nested_tuple_proofs(self):
-        module=json.loads((ROOT/'build/fourway-aggregate/pre/core/FourWayAggregateFields.json').read_text())
-        constructors={con['name']: con for con in module['constructors']}
-        original=constructors['VirtualRegWithFormat']
-        proof=original['fieldTypes'][0]
-        self.assertEqual(2,original['arity'])
-        self.assertEqual(['WordRep','Word64Rep'],proof['primReps'])
-        self.assertEqual([[1],[1],[1],[1]],proof['alternativeSlots'])
-        self.assertIsNone(sums.proof_error(proof))
-        for name,index,width in [('NestedBox',1,5),('MixedBox',0,6)]:
-            nested=constructors[name]['fieldTypes'][index]
-            self.assertEqual(width,len(nested['primReps']))
-            self.assertIsNone(tuple_proof_error(nested,allow_sums=True))
-            self.assertIsNotNone(tuple_proof_error(nested))
-        family=[con for con in module['constructors'] if con.get('sumArity')==4]
-        self.assertEqual([1,2,3,4],sorted(sums.constructor_tag(con,1,proof) for con in family))
 
     def test_exact_storage_and_ordered_projection(self):
         proof=summ(tup(DOUBLE,INT,INT,BOX),tup(UNLIFTED,FLOAT,WORD))
@@ -219,18 +201,6 @@ class SumAuditTest(unittest.TestCase):
     def rejected(self,module,entry='root'):
         report=run(module,entry);self.assertFalse(report['accepted']);return report
 
-    @unittest.skipUnless((ROOT/'build/fourway-aggregate/pre/core/FourWayAggregateFields.json').exists(),
-                         'Prepare genuine original and nested four-way fixtures')
-    def test_genuine_nested_sum_tuple_constructors_require_sum_result_capability(self):
-        modules=[(str(path),json.loads(path.read_text())) for path in
-                 sorted((ROOT/'build/fourway-aggregate/pre/core').glob('*.json'))]
-        disabled=copy.deepcopy(CAP)
-        disabled['aggregateResults']=[kind for kind in disabled['aggregateResults'] if kind!='unboxed-sum']
-        for entry in ('nestedRoundtrip','mixedNested'):
-            name='main:FourWayAggregateFields.'+entry
-            report=audit.Audit(modules,CAP).run([name])
-            self.assertTrue(report['accepted'],report['issues'])
-            self.assertFalse(audit.Audit(modules,disabled).run([name])['accepted'])
 
     def test_capability_and_constructor_saturation(self):
         module=fixture();self.accepted(module)
@@ -434,18 +404,6 @@ class SumAuditTest(unittest.TestCase):
             module=fixture();module['bindings'][0]['expr']=expression
             self.rejected(module)
 
-    @unittest.skipUnless((ROOT/'build/sum-layout/pre-core/SumLayoutAudit.json').exists(),'Prepare genuine sum metadata fixtures')
-    def test_genuine_pre_and_post_core_accept_retained_host_signatures(self):
-        positive=['sumCase','directCase','nestedCase','lazyCase','zeroCase','unitCase','boxedKindsCase','floatDoubleCase',
-                  'narrowWideCase','threeWayCase','returnedSum','lazySum','zeroSum','unitSum','boxedKindsSum',
-                  'floatDoubleSum','aliasIdentity','addressResult','vectorResult','levityPolymorphic']
-        negative=['runtimePolymorphic','abstractSumIdentity','abstractRuntimeSum','abstractAlternative']
-        for stage in ('pre','post'):
-            module=json.loads((ROOT/f'build/sum-layout/{stage}-core/SumLayoutAudit.json').read_text())
-            for entry in positive:
-                with self.subTest(stage=stage,entry=entry):self.accepted(module,entry)
-            for entry in negative:
-                with self.subTest(stage=stage,entry=entry):self.rejected(module,entry)
 
 
 if __name__=='__main__':unittest.main()

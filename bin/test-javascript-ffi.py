@@ -4,12 +4,12 @@
 
 """Exercise the native GHC frontend rewrite without a JavaScript engine."""
 
-import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from core_package_manifest import inspect_cbd
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -49,8 +49,8 @@ class JavaScriptFrontendTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            core = path / "core/JavaScriptFixture.json"
-            return process, json.loads(core.read_text()) if core.exists() else None
+            core = path / "core/JavaScriptFixture.cbd"
+            return process, inspect_cbd(core.read_bytes()) if core.exists() else None
 
     def test_native_ghc_exports_typed_io_calls(self):
         declarations = (

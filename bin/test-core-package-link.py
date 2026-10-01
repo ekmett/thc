@@ -12,6 +12,7 @@ from pathlib import Path
 import subprocess
 import sys
 import zipfile
+from core_package_manifest import inspect_cbd
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,7 +49,7 @@ def export_flags(destination, post=True):
 
 
 def artifact(unit, name):
-    return OUT / 'core/units' / ('u-' + unit) / (name + '.json')
+    return OUT / 'core/units' / ('u-' + unit) / (name + '.cbd')
 
 
 def manifest_module(unit, name):
@@ -60,7 +61,7 @@ def manifest_module(unit, name):
 def bundled_unit(unit):
     name = unit['modules'][0]['name']
     core = artifact(unit['id'], name)
-    member = f'core/{name}.json'
+    member = f'core/{name}.cbd'
     module = dict(unit['modules'][0], path=member)
     index = dict(format='thc-core-bundle', schema=1, unit=unit['id'],
                  buildKey=hashlib.sha256(('build:' + unit['id']).encode()).hexdigest(),
@@ -114,7 +115,7 @@ def main():
     manifest.write_text(json.dumps(document, indent=2) + '\n')
     for unit, name, source in ((DEP, 'Dep', FIXTURE / 'dep/Dep.hs'),
                                (APP, 'Main', FIXTURE / 'app/Main.hs')):
-        exported = json.loads(artifact(unit, name).read_text())
+        exported = inspect_cbd(artifact(unit, name).read_bytes(), sources=True)
         files = exported.get('sourceFiles', [])
         spans = exported.get('sourceSpans', [])
         file_ids = {file['id'] for file in files}
@@ -165,9 +166,9 @@ def main():
     run([GHC, '--make', '-O2', '-dynamic', '-no-link', '-fforce-recomp', '-g0',
          '-this-unit-id', DEP, *export_flags(OUT / 'pre-core', post=False),
          '-odir', OUT / 'dep-pre', '-hidir', OUT / 'dep-pre', FIXTURE / 'dep/Dep.hs'])
-    pre = json.loads((OUT / 'pre-core/units' / ('u-' + DEP) / 'Dep.json').read_text())
-    post = json.loads(artifact(DEP, 'Dep').read_text())
-    app = json.loads(artifact(APP, 'Main').read_text())
+    pre = inspect_cbd((OUT / 'pre-core/units' / ('u-' + DEP) / 'Dep.cbd').read_bytes())
+    post = inspect_cbd(artifact(DEP, 'Dep').read_bytes())
+    app = inspect_cbd(artifact(APP, 'Main').read_bytes())
     pre_ids = {item['id'] for item in pre['bindings']}
     post_ids = {item['id'] for item in post['bindings']}
     def strings(value):
