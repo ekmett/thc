@@ -43,7 +43,7 @@ import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
 import THC.Driver.Installed (boundedInterfaceProcess)
-import THC.Driver.NativeCache (nativeObjcopySelection, nativeCompilerEnvironment)
+import THC.Driver.NativeCache (nativeObjcopySelection, nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
 import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
@@ -1248,6 +1248,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     dataLibraries <- maybe (pure []) (either fail pure . parseValue) (member record "dataLibraries") :: IO [FilePath]
     let linkArguments = dataLibraries ++ externalArguments
     clang <- tool "THC_CLANG" "clang"
+    sdkFlags <- nativeCompilerFlags
     (artifact,format,libraries,nativeLibrary) <- if null nativeExternals
       then pure (final,"llvm-bitcode",[],Nothing) else do
         let darwin = "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
@@ -1275,7 +1276,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
               Just _ -> ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
                 linkArguments ++ resolution ++ exclusions ++ ["-o",container]
         unless (null arguments) $ do
-          _ <- command directory clang arguments
+          _ <- command directory clang (sdkFlags ++ arguments)
           pure ()
         -- A container's machine code is not executed by Sulong. Materialize
         -- native dependencies separately, rooting archive extraction with the
@@ -1295,7 +1296,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
             nativeRoots = nativeRootArguments target rooted
             dependencyArguments = ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
               resolution ++ exclusions ++ ["-o",dependency]
-        _ <- command directory clang dependencyArguments
+        _ <- command directory clang (sdkFlags ++ dependencyArguments)
         -- Native archives can themselves carry compiler-embedded LLVM. Keep
         -- their companion native-only, and the ELF component's LLVM section
         -- exactly final.bc rather than concatenated archive-member payloads.
@@ -1366,6 +1367,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
 compileC :: FilePath -> FilePath -> [String] -> FilePath -> Maybe String -> IO (FilePath,String,Value)
 compileC compiler root original directory generated = do
   clang <- tool "THC_CLANG" "clang"
+  sdkFlags <- nativeCompilerFlags
   opt <- tool "THC_LLVM_OPT" "opt"
   let source = directory </> "wrappers.c"
       bitcode = directory </> "original.bc"
@@ -1383,7 +1385,7 @@ compileC compiler root original directory generated = do
                            not ("-" `isPrefixOf` value)) arguments
       compilerFlag = if cxx then "-pgmcxx" else "-pgmc"
       option = if cxx then "-optcxx" else "-optc"
-  _ <- command root compiler (arguments ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
+  _ <- command root compiler (arguments ++ map ("-optc" ++) sdkFlags ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
     map (option ++) ["-emit-llvm","-O1","-MD","-MF",dependency,
                     "-MT","thc_scalar_input","-Werror=date-time"])
   dependencies <- readDependencies dependency

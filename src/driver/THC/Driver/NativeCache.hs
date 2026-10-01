@@ -13,7 +13,7 @@
 -- Cache inputs for package C acquisition, independent of native object
 -- equivalence. A selected tool or freshly captured translation unit must not
 -- disappear behind an older Core bundle with the same Cabal object identity.
-module THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity, nativeObjcopySelection, nativeCompilerEnvironment) where
+module THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity, nativeObjcopySelection, nativeCompilerEnvironment, nativeCompilerFlags) where
 
 import Control.Exception (evaluate)
 import Control.Monad (forM, unless)
@@ -47,6 +47,15 @@ nativeCompilerEnvironment = do
       case (status, lines output) of
         (ExitSuccess, [sdk]) | isAbsolute sdk -> pure (("SDKROOT", sdk) : inherited)
         _ -> fail ("cannot discover selected macOS SDK: " ++ diagnostic)
+
+-- | LLVM's configured default sysroot can also override SDKROOT at link time.
+-- An explicit driver sysroot selects the same SDK for headers and libraries.
+nativeCompilerFlags :: IO [String]
+nativeCompilerFlags
+  | Host.os /= "darwin" = pure []
+  | otherwise = do
+      environment <- nativeCompilerEnvironment
+      pure ["--sysroot=" ++ sdk | Just sdk <- [lookup "SDKROOT" environment]]
 
 -- | Missing LLVM tools remain explicit inputs, not an error for pure-Haskell
 -- projects. Acquisition itself diagnoses a missing tool when C is needed.

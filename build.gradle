@@ -1265,12 +1265,16 @@ def macHost = System.getProperty("os.name").startsWith("Mac")
 def nativeSdkRoot = providers.environmentVariable("SDKROOT").orElse(
     macHost ? providers.exec { commandLine("xcrun", "--show-sdk-path") }.standardOutput.asText.map { it.trim() }
             : providers.provider { "" })
+def nativeClang = providers.environmentVariable("THC_CLANG").orElse("clang")
 def nativeExec = { Closure action ->
     providers.exec { spec ->
         if (macHost) spec.environment("SDKROOT", nativeSdkRoot.get())
         action.delegate = spec
         action.resolveStrategy = Closure.DELEGATE_FIRST
         action.call()
+        if (macHost && spec.commandLine[0] == nativeClang.get()) {
+            spec.commandLine([spec.commandLine[0], "--sysroot=${nativeSdkRoot.get()}"] + spec.commandLine.drop(1))
+        }
     }
 }
 def compileCbits = tasks.register("compileCbits", Exec) {

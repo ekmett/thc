@@ -32,7 +32,7 @@ import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import Distribution.Pretty (prettyShow)
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import qualified Data.Text.Encoding as Text
-import THC.Driver.NativeCache (nativeCompilerEnvironment)
+import THC.Driver.NativeCache (nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.NativeRecipe
 import Numeric (showHex)
 import System.Directory
@@ -102,6 +102,7 @@ withScalarBitcode nativeRoot dist roots ghc packageTool unit component action = 
       null (Package.frameworks registration))
       "scalar cbits requires a registration without extra native libraries, linker options, or frameworks"
     cc <- resolveTool configuredCc
+    sdkFlags <- nativeCompilerFlags
     ccVersion <- command root cc ["--version"]
     check ("clang version" `isInfixOf` ccVersion) "scalar cbits requires configured Clang; GCC is not substituted"
     link <- llvmTool "THC_LLVM_LINK" "llvm-link"
@@ -118,7 +119,7 @@ withScalarBitcode nativeRoot dist roots ghc packageTool unit component action = 
           disassembly = temporary </> "original.ll"
           native = temporary </> "certified.o"
       -- No compiler substitution, C macro rewriting, or guessed include path.
-      _ <- command root actualGhc (arguments ++ ["-o",bitcode,"-optc-emit-llvm",
+      _ <- command root actualGhc (arguments ++ map ("-optc" ++) sdkFlags ++ ["-o",bitcode,"-optc-emit-llvm",
         "-optc-MD","-optc-MF","-optc" ++ dependencies,"-optc-MT","-optcthc_scalar_input",
         "-optc-Werror=date-time"])
       paths <- readDependencies dependencies
@@ -143,7 +144,7 @@ withScalarBitcode nativeRoot dist roots ghc packageTool unit component action = 
         pure adjusted
       -- This deliberately conservative equality also rejects a stale native
       -- object, nondeterministic C expansion, or unsupported backend options.
-      _ <- command root cc (["-c",admitted,"-o",native,"-fPIC","--target=" ++ target] ++ ccOptions)
+      _ <- command root cc (sdkFlags ++ ["-c",admitted,"-o",native,"-fPIC","--target=" ++ target] ++ ccOptions)
       certified <- digest native
       check (certified == originalHash) "scalar cbits: bitcode does not reproduce Cabal's native object"
       verify inputs

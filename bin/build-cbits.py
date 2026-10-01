@@ -95,6 +95,8 @@ def main():
         os.environ["SDKROOT"] = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
     arch = platform.machine()
     compiler, target, default_target = compiler_target(clang, system, arch)
+    if system == "Darwin":
+        compiler.append("--sysroot=" + os.environ["SDKROOT"])
     ghc = shutil.which(os.environ.get("GHC", "ghc"))
     if not ghc or subprocess.check_output([ghc, "--numeric-version"], text=True).strip() != "9.14.1":
         raise SystemExit("Original cbits require the pinned GHC9.14.1 headers")
