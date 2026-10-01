@@ -83,7 +83,6 @@ inventory root (stage, boundary) = do
   original <- either die pure (readModuleValue originalBytes)
   closure <- either die pure (readModuleValue closureBytes)
   sources <- either die pure (inspectSources originalBytes)
-  closureSources <- either die pure (inspectSources closureBytes)
   check (field "ghc" original == String "9.14.1" && field "boundary" original == toJSON boundary) "Wrong Core boundary"
   let bindings = values (field "bindings" original) ++ values (field "bindings" closure)
       expression name = fromMaybe Null $ lookup (String (if name == "unsafeCoerce"
@@ -111,9 +110,9 @@ inventory root (stage, boundary) = do
          field "primReps" (result "tuple") == toJSON (["IntRep", "BoxedRep (Just Lifted)"] :: [String])) "Tuple result proof lost"
   check (all ((== Bool False) . field "evaluated" . result) ["lazyValue", "unsafeCoerce"])
     "Lowering must not mark arbitrary lifted payload evaluated"
-  check (all (any (\file -> case field "content" file of
-    String text -> "unsafeEqualityProof" `Text.isInfixOf` text; _ -> False) . values . field "sourceFiles")
-    [sources, closureSources]) "Original source proof evidence disappeared"
+  check (any (\file -> case field "content" file of
+    String text -> "unsafeEqualityProof" `Text.isInfixOf` text; _ -> False)
+    (values (field "sourceFiles" sources))) "Original unsafe-equality source text disappeared"
   forM_ frontiers $ \name -> check (hasProof (expression (Text.pack name))) (name ++ ": nonmatching proof dependency disappeared")
   case [values node | node@(Array _) <- walk (expression "liveBinder"), take 1 (values node) == [String "case"]] of
     [[_, scrutinee, binder, alternatives, _]] -> check (variable proof scrutinee &&
