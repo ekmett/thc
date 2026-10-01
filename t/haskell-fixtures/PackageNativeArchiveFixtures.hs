@@ -19,6 +19,7 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (sort, isSuffixOf)
+import qualified Distribution.InstalledPackageInfo as Package
 import FixtureSupport
 import InstalledCoreFixtures (field, readJson)
 import System.Directory
@@ -165,9 +166,10 @@ prepareOriginalGcCarriers root ghc helper libdir = do
     (Nothing,Nothing) -> do
       ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
       selected <- runLogged 180 root "build/package-native-gc-carriers/original-v2/logs"
-        "installed-interfaces" [] ghcPkg ["field","ghc-internal","import-dirs","--simple-output"]
-      home <- case BSC.lines (commandStdout selected) of
-        [value] | not (BS.null value) -> pure (BSC.unpack value)
+        "installed-interfaces" [] ghcPkg ["describe","ghc-internal","--expand-pkgroot"]
+      (_,registration) <- either (fail . show) pure (Package.parseInstalledPackageInfo (commandStdout selected))
+      home <- case Package.importDirs registration of
+        [path] | not (null path) -> pure path
         _ -> fail "expected one selected ghc-internal interface directory"
       prepareOriginal [stack] (root </> "nih/pinned/ghc-9.14.1") home
     (Just suppliedSource,Just suppliedHome) -> prepareOriginal
