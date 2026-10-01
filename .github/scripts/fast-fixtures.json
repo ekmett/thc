@@ -968,6 +968,22 @@
         "thc.cabal"
       ]
     },
+    "package-native-gc-carriers": {
+      "junit": ["thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "package-native-gc-carriers"]}],
+      "outputs": ["build/package-native-gc-carriers"],
+      "sources": [
+        "t/fixtures/compiler/PackageNativeGcCarriers.hs",
+        "t/fixtures/compiler/PackageNativePrimCarriers.hs",
+        "t/fixtures/compiler/PackageNativeUnknownPrim.hs",
+        "t/haskell-fixtures/PackageNativeArchiveFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+        "src/compiler/THC/ForeignImportProvenance.hs",
+        "src/driver/THC/Driver/PackageNative.hs"
+      ]
+    },
     "original-stack-formatter": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],

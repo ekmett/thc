@@ -222,10 +222,34 @@ tasks.withType(Test).configureEach {
     // Isolated native-signal controls need a child JVM with the actual test
     // classpath; modern Gradle workers need not use URLClassLoader.
     doFirst { systemProperty("thc.testRuntimeClasspath", classpath.asPath) }
+    doFirst {
+        def manifestFile = file("build/package-native-gc-carriers/manifest.json")
+        if (manifestFile.isFile()) {
+            def manifest = new JsonSlurper().parse(manifestFile)
+            def artifacts = [manifest.artifactHashes, manifest.primitiveModule.artifactHashes,
+                *manifest.originalModules.collect { it.artifactHashes }].collectEntries { it }
+            [GC_CARRIERS: "PackageNativeGcCarriers.cbd", PRIM_CARRIERS: "primitive/PackageNativePrimCarriers.cbd",
+             STACK_PRIM: "original-v2/GHC.Internal.Stack.Decode.cbd"].each { kind, name ->
+                def variable = "THC_TEST_${kind}_CBD"
+                if (environment[variable] == null) {
+                    def input = file("build/package-native-gc-carriers/$name")
+                    def matches = artifacts.findAll { path, hash -> file(path).canonicalFile == input.canonicalFile }
+                    checkBuild(matches.size() == 1 && input.isFile()) { "Missing original provenance fixture: $name" }
+                    def expected = matches.values().first()
+                    def actual = MessageDigest.getInstance("SHA-256").digest(input.bytes).encodeHex().toString()
+                    checkBuild(expected == actual) { "Stale original provenance fixture: $name" }
+                    environment(variable, input.absolutePath)
+                    environment("${variable}_SHA256", expected)
+                }
+            }
+        }
+    }
     // Exported Core and native expectations are test inputs even when JVM sources
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
         include("backend-annotations/**/*.cbd")
+        include(["package-native-gc-carriers/**/*.cbd", "package-native-gc-carriers/manifest.json",
+            "package-native-gc-carriers/oracle.txt"])
         include(["core/**/*.cbd", "source-core/**/*.cbd", "cbv-post-core/**/*.cbd",
             "vector-api/core/**/*.cbd", "vector-api/*.tsv", "java-arrays/core/**/*.cbd", "java-arrays/packages.json",
             "truffle-strings/core/**/*.cbd", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",
