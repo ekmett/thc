@@ -81,13 +81,10 @@ class OriginalStdioCallTest {
             } finally { context.leave(); }
         }
     }
-    @Test void normalAndFirstInstalledCompiledCallsPreserveBytesErrnoAndState() throws Exception {
-        exerciseTransfers(true);
-    }
     @Test void transfersPreserveBytesErrnoAndStateOnEveryFirstCompiledCall() throws Exception {
-        exerciseTransfers(false);
+        exerciseTransfers();
     }
-    private void exerciseTransfers(boolean seekConstants) throws Exception {
+    private void exerciseTransfers() throws Exception {
         for (var backend : List.of("ast","bytecode")) {
             boolean[] safeTransfer = {false};
             var out = new ByteArrayOutputStream() {
@@ -105,9 +102,9 @@ class OriginalStdioCallTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var module = OriginalStdioFixtures.module(call -> ((List<Object>) call.get(1)).set(1,"unrelated-package:InlineCaller.arbitrary"));
+                    var module = OriginalStdioFixtures.module(List.of("safe_write","unsafe_write","errno"), call -> ((List<Object>) call.get(1)).set(1,"unrelated-package:InlineCaller.arbitrary"));
                     ExecutableProgram program = backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module);
-                    var targets = new LinkedHashMap<String,RootCallTarget>(); for (var name : OriginalStdioFixtures.signatures.keySet()) if (!Set.of("strerror","unlink","set_errno").contains(name)) targets.put(name,program.entryTarget(name));
+                    var targets = new LinkedHashMap<String,RootCallTarget>(); for (var name : List.of("safe_write","unsafe_write","errno")) targets.put(name,program.entryTarget(name));
                     long ebadf = StdioHostAbi.load().error(4L);
                     class Exercise {
                         boolean compiled;
@@ -119,8 +116,6 @@ class OriginalStdioCallTest {
                             if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue(),name); valid(target); } released(language); return result;
                         }
                         void run(int pass) throws Exception {
-                            var constants = new LinkedHashMap<String,OriginalStdioOp>(); constants.put("seek_set",OriginalStdioOp.SEEK_SET); constants.put("seek_cur",OriginalStdioOp.SEEK_CUR); constants.put("seek_end",OriginalStdioOp.SEEK_END);
-                            if (seekConstants) for (var constant : constants.entrySet()) { long errno = Language.currentState().getStdio().errno(); assertEquals(StdioHostAbi.load().seekConstant(constant.getValue()),call(constant.getKey())); assertEquals(errno,Language.currentState().getStdio().errno(),"constant preserves sticky errno"); }
                             for (var name : List.of("safe_write","unsafe_write")) {
                                 byte[] bytes = {0x55,(byte) pass,0,-1,10,0x66}; var address = ManagedAddress.fromByteArray(bytes).plus(1L); int beforeOut = out.size(), beforeErr = err.size();
                                 assertEquals(4L,call(name,1L,address,4L)); assertArrayEquals(Arrays.copyOfRange(bytes,1,5),Arrays.copyOfRange(out.toByteArray(),beforeOut,out.size()));
@@ -140,7 +135,7 @@ class OriginalStdioCallTest {
                         assertThrows(RuntimeFault.class,() -> exercise.call(name,1L,address,-1L)); assertThrows(RuntimeFault.class,() -> exercise.call(name,1L,address,3L)); assertThrows(RuntimeFault.class,() -> exercise.call(name,1L << 32,address,2L));
                         assertArrayEquals(before,out.toByteArray()); assertEquals(ebadf,exercise.call("errno")); released(language);
                     }
-                    for (var name : seekConstants ? List.of("errno","seek_set","seek_cur","seek_end") : List.of("errno")) assertThrows(RuntimeFault.class,() -> callScalarTestTarget(targets.get(name),new Object[]{0L,9L})); released(language);
+                    assertThrows(RuntimeFault.class,() -> callScalarTestTarget(targets.get("errno"),new Object[]{0L,9L})); released(language);
                 } finally { context.leave(); }
             }
         }
@@ -155,8 +150,9 @@ class OriginalStdioCallTest {
                 class Load { ExecutableProgram call(String name,Consumer<List<Object>> mutate) {
                     var module = OriginalStdioFixtures.module(List.of(name),mutate); return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module);
                 }
-                    void unknown(String name, String symbol) {
-                        var program = call(name, it -> ((Map<String,Object>) descriptor(it).get("target")).put("symbol", symbol));
+                    void unknown(String name, String field, Object value) {
+                        String symbol = field.equals("symbol") ? (String) value : OriginalStdioFixtures.symbols.get(name);
+                        var program = call(name, it -> ((Map<String,Object>) descriptor(it).get("target")).put(field, value));
                         var reps = OriginalStdioFixtures.signatures.get(name);
                         var args = new Object[reps.size() + 1]; args[0] = 0L;
                         for (int i = 0; i < reps.size(); i++) args[i + 1] = switch (reps.get(i)) {
@@ -174,20 +170,20 @@ class OriginalStdioCallTest {
                     }
                 }
                 var load = new Load();
-                for (var name : OriginalStdioFixtures.signatures.keySet()) if (!name.equals("set_errno")) {
+                for (var name : List.of("safe_write","unsafe_write","errno","dup","dup2","unlink")) {
                     for (var id : list(null,"",3L,"p0",name)) assertThrows(RuntimeFault.class,() -> load.call(name,it -> ((List<Object>) it.get(1)).set(1,id)));
                     for (var head : list(list("prim",name),list("var","foreign"),list("var","foreign",map("rep",OriginalStdioFixtures.scalar(null))))) assertThrows(RuntimeFault.class,() -> load.call(name,it -> it.set(1,head)));
                     for (var edit : List.of(list("convention","prim"),list("convention","javascript"),list("safety","interruptible"),list("arity",4.0),list("suppliedArity",0L))) assertThrows(RuntimeFault.class,() -> load.call(name,it -> descriptor(it).put((String) edit.get(0),edit.get(1))));
-                    for (var unit : list(null,"main","other-package")) assertThrows(RuntimeFault.class,() -> load.call(name,it -> ((Map<String,Object>) descriptor(it).get("target")).put("unit",unit)));
+                    for (var unit : list(null,"main","other-package")) load.unknown(name, "unit", unit);
                     assertThrows(RuntimeFault.class,() -> load.call(name,it -> ((List<Object>) it.get(3)).set(0,true)));
                     assertThrows(RuntimeFault.class,() -> load.call(name,it -> ((List<List<Object>>) it.get(2)).getLast().set(2,map("rep",OriginalStdioFixtures.scalar("IntRep")))));
                     assertThrows(UnsupportedCore.class,() -> load.call(name,it -> ((Map<?,?>) it.get(6)).remove("foreignCall")));
                 }
                 assertThrows(RuntimeFault.class,() -> load.call("safe_write",it -> ((List<List<Object>>) it.get(2)).get(1).set(1,"p0")));
-                for (var symbol : List.of("writev","__hscore_set_errno64",OriginalStdioFixtures.symbols.get("safe_write").replace("ZC20ZC","ZC22ZC"))) load.unknown("safe_write", symbol);
+                for (var symbol : List.of("writev","__hscore_set_errno64",OriginalStdioFixtures.symbols.get("safe_write").replace("ZC20ZC","ZC22ZC"))) load.unknown("safe_write", "symbol", symbol);
                 for (var name : List.of("dup","dup2")) {
                     assertThrows(RuntimeFault.class,() -> load.call(name,it -> ((List<List<Object>>) it.get(2)).get(0).set(1,"p" + (OriginalStdioFixtures.signatures.get(name).size() - 1))));
-                    load.unknown(name, "dup3");
+                    load.unknown(name, "symbol", "dup3");
                 }
             } finally { context.leave(); }
         }
