@@ -1,0 +1,31 @@
+diff --git a/com/oracle/svm/core/SubstrateOptions.java b/com/oracle/svm/core/SubstrateOptions.java
+--- a/com/oracle/svm/core/SubstrateOptions.java
++++ b/com/oracle/svm/core/SubstrateOptions.java
+@@ -1613,8 +1613,10 @@ public class SubstrateOptions {
+     @Option(help = "Enable support for Arena.ofShared ", type = Expert)//
+     public static final HostedOptionKey<Boolean> SharedArenaSupport = new HostedOptionKey<>(true, key -> {
+         if (isSharedArenaSupportEnabled()) {
+-            // GR-65162: Shared arenas cannot be used together with Vector API support
+-            UserError.guarantee(!VectorAPIEnabled.getValue(), "Support for Arena.ofShared (which is part of the FFM API) is not available with Vector API support. " +
++            // GR-65162: Retain the upstream rejection unless the separately installed
++            // provider implements and verifies the direct vector lifetime boundary.
++            UserError.guarantee(!VectorAPIEnabled.getValue() || sharedArenaVectorProviderInstalled(),
++                            "Support for Arena.ofShared (which is part of the FFM API) is not available with Vector API support. " +
+                             "Either disable Vector API support using %s or replace usages of Arena.ofShared with Arena.ofAuto and disable shared arena support using %s.",
+                             SubstrateOptionsParser.commandArgument(VectorAPISupport, "-"),
+                             SubstrateOptionsParser.commandArgument(key, "-"));
+@@ -1624,3 +1626,14 @@ public class SubstrateOptions {
++    private static boolean sharedArenaVectorProviderInstalled() {
++        try {
++            Class<?> capability = java.lang.Class.forName("com.oracle.svm.core.foreign.SharedArenaVectorSupport", false,
++                            SubstrateOptions.class.getClassLoader());
++            return Boolean.TRUE.equals(capability.getMethod("verifyInstalled").invoke(null));
++        } catch (ReflectiveOperationException | LinkageError | SecurityException missingProvider) {
++            System.err.println("Shared vector provider unavailable: " + missingProvider);
++            return false;
++        }
++    }
++
+     @Fold
+     public static boolean isSharedArenaSupportEnabled() {
+         if (!isForeignAPIEnabled() || !SubstrateOptions.SharedArenaSupport.getValue()) {

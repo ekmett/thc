@@ -39,9 +39,14 @@ cache provider**, and the ordinary pinned GHC/exporter toolchain. The image uses
 the repository's experimental Truffle and Native Image preparation overlays;
 this is not a claim about stock Truffle. Start with the README's submodule setup.
 
-The default `intrinsics` image profile retains the vector-intrinsic configuration.
-The pinned toolchain cannot combine those intrinsics with deterministic shared
-arenas. `THC_NATIVE_IMAGE_VECTOR_PROFILE=resource-copy` selects an experimental
+The default `intrinsics` image profile explicitly restores direct Vector API
+lowering after the automatic-vectorization policy and installs the
+[hash-pinned shared-arena provider](../nih/native-image/shared-arena-vector/README.md).
+The stock pinned toolchain rejects deterministic shared arenas with Vector API
+support. The paired provider preserves session pins, original scalar scope
+optimization and deterministic close; its small native/IR gate is distinct from
+full application and persisted cache qualification, which remain pending.
+`THC_NATIVE_IMAGE_VECTOR_PROFILE=resource-copy` selects an experimental
 separate `thc-native-cache-resource-copy` image: shared arenas remain enabled,
 vector memory and bit reinterpretation use typed primitive-array bulk copies,
 and arithmetic uses the JDK Vector API's non-intrinsic fallback. Use the same
