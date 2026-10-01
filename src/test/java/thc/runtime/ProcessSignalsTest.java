@@ -215,6 +215,7 @@ public class ProcessSignalsTest {
         contextTransport(true);
     }
     private void contextTransport(boolean loom) throws Exception {
+        assumeTrue(NativeIO.supportedPosixHost() || System.getProperty("os.name").startsWith("Mac"));
         var abi = StdioHostAbi.load();
         onBackends(loom, (language, backend) -> {
             var owner = Language.currentState(); var events = new LinkedBlockingQueue<ProcessSignalTransport.Event>(); var delivered = new CountDownLatch(8); var closed = new AtomicInteger();
