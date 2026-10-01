@@ -35,11 +35,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $env:THC_PYTHON = (Get-Command python.exe).Source
           New-Item -ItemType Directory -Force build | Out-Null
           $env:LLD_REPRODUCE = Join-Path $PWD 'build/windows-native-link.tar'
           & {
             . ./bin/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
+            & ./bin/test-windows-python.ps1
             & ./bin/test-windows-cabal-config.ps1
             Invoke-ThcTool $env:CABAL @('update')
             & ./bin/windows.ps1 -Action Test -Jobs 4

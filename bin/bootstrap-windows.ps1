@@ -62,7 +62,7 @@ $cabalVersion = Invoke-ThcTool $env:CABAL @('--numeric-version')
 if ($cabalVersion -ne '3.16.0.0') { throw "Unexpected Cabal: $cabalVersion" }
 Initialize-ThcCabalConfig $env:CABAL_CONFIG
 if (!(Test-Path -LiteralPath $env:THC_CLANG)) { throw 'Missing GHC-bundled Clang' }
-if (!$env:THC_PYTHON) { $env:THC_PYTHON = (Get-Command python.exe -CommandType Application -ErrorAction Stop).Source }
+$env:THC_PYTHON = Get-ThcPython
 $pythonVersion = Invoke-ThcTool $env:THC_PYTHON @('--version')
 if ($pythonVersion -notmatch '^Python (\d+)\.(\d+)\.' -or [int]$Matches[1] -ne 3 -or [int]$Matches[2] -lt 12) {
     throw 'Select Python 3.12+ using THC_PYTHON; the Microsoft Store alias is not an interpreter'

@@ -14,6 +14,15 @@ function Invoke-ThcTool {
     if ($code -ne 0) { throw "$Program exited $code" }
 }
 
+function Get-ThcPython {
+    if ($env:THC_PYTHON) { return $env:THC_PYTHON }
+    $python = Get-Command python.exe -CommandType Application -ErrorAction SilentlyContinue |
+        Where-Object { $_.Source -notmatch '[\\/]Microsoft[\\/]WindowsApps[\\/]' } |
+        Select-Object -First 1
+    if (!$python) { throw 'Select Python 3.12+ using THC_PYTHON; the Microsoft Store alias is not an interpreter' }
+    return $python.Source
+}
+
 function Initialize-ThcCabalConfig([string]$ConfigFile) {
     if (!(Test-Path -LiteralPath $ConfigFile)) {
         $repository = "repository hackage.haskell.org`n  url: https://hackage.haskell.org/`n  secure: True"
