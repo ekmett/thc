@@ -80,8 +80,20 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
           "staticForeignExportRegistration" .= proof])))
       [Null, object [], object ["status" .= ("rejected" :: String)],
        object ["status" .= ("unclassified" :: String)]]
+  , TestCase $ forM_ ["GHC.Internal.TopHandler", "GHC.Internal.Conc.Sync"] $ \name -> do
+      assertEqual (name ++ " original nominal imports need their typed producer") (Right True)
+        (missingForeignProof name (object []))
+      assertEqual (name ++ " verified nominal imports are not regenerated") (Right False)
+        (missingForeignProof name (object ["staticForeignImports" .= verified]))
+  , TestCase $ forM_ ["GHC.Internal.TopHandler", "GHC.Internal.Conc.Sync"] $ \name -> do
+      forM_ [Null, object [], object ["status" .= ("rejected" :: String)],
+          object ["status" .= ("unclassified" :: String)]] $ \proof ->
+        rejected (name ++ " malformed nominal proof cannot be replaced")
+          (missingForeignProof name (object ["staticForeignImports" .= proof]))
+      rejected (name ++ " partial import evidence cannot be replaced")
+        (missingForeignProof name (object ["staticForeignImportStubs" .= verified]))
   , TestCase $ rejected "unlisted module cannot gain source regeneration"
-      (missingForeignProof "GHC.Internal.TopHandler" (object []))
+      (missingForeignProof "GHC.Internal.Base" (object []))
   , TestCase $ do
       let retained = unlines ["foreign source mentions addDependentFile", "Self-Recomp",
             "  src hash: 123", "  usages: [", "    addDependentFile \"build/header with spaces.h\" abcdef,",
@@ -92,6 +104,15 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
         (retainedUsageFiles retained)
       mapM_ (rejected "missing or malformed retained inputs cannot prove a source build" . retainedUsageFiles)
         ["", "Self-Recomp\n  orphan hash: 0", "Self-Recomp\naddDependentFile \"a.h\" nope]\n  orphan hash: 0"]
+  , TestCase $ do
+      let retained = unlines ["Self-Recomp", "  src hash: 999feb32988468f8fe569d95fc0f673f",
+            "  usages: [import  -/  ghc-internal:GHC.Internal.Base 4b58ca53cb277903ee756ff355143661]",
+            "  orphan hash: 0"]
+      assertEqual "a complete no-CPP interface has no retained header dependencies"
+        (Right []) (retainedUsageFiles retained)
+      assertBool "introducing a CPP dependency during regeneration must reject"
+        (not (matchUsageFiles ("/source/ghcversion.h", "/installed/ghcversion.h") [] []
+          [("/source/new-header.h", "changed")]))
   , TestCase $ do
       let original = [("/source/HsBaseConfig.h", "old"), ("/source/ghcversion.h", "version")]
           generated = [("/source/HsBaseConfig.h", "old"), ("/installed/ghcversion.h", "version")]
