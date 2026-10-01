@@ -73,20 +73,14 @@ references, public definitions, constructors, address imports and finalizers
 still need real native providers, including when they use the same symbol.
 Other RTS imports need their own implementation.
 
-On Linux x86_64, ordinary `ccall` imports whose exact ABI matches a captured
-package LLVM definition can retain separate compiled adapter seeds. Capture
-verifies each seed's sole entry and external symbol, emitted LLVM carriers and
-exact forwarding to the final canonical provider. The first reached call parses
-and binds that verified seed through Sulong on the current context thread;
-it needs no producer subprocess or adapter product cache. Unused seeds remain
-unparsed. All adapters for a unit share the same context-owned component,
-including its globals and constructor state, rather than copying the provider.
+On Linux x86_64, compatible ordinary `ccall` imports load their captured
+adapters on first use. Unused imports need no adapter loading. Calls share one
+native provider per context, preserving its C globals and constructor state.
+This path needs no compiler subprocess or writable adapter cache at runtime.
+A reached import without its declared provider fails at the call; that failure
+persists for the lifetime of the context.
 
-Adapter receivers and initialization failures are cached within that context.
-An admitted missing-provider seed fails when demanded, and failed initialization
-is not retried. This does not automatically catalogue unresolved imports whose
-providers cannot be acquired by this path, or establish Native Image or
-cross-platform qualification.
+Other targets and unsupported ABI shapes use the normal eager-linking path.
 
 This narrow path does not defer native C references, public exports,
 constructors, addresses or finalizers, or admit unknown LLVM definitions and
