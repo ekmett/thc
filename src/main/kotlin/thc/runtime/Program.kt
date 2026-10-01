@@ -42,6 +42,12 @@ internal fun narrowWordLiteral(kind: String, value: String): Long {
         throw RuntimeFault("Invalid $kind literal: $value")
     return number
 }
+/** Int64 literals are canonical decimal signed 64-bit carriers, including both endpoints. */
+internal fun int64Literal(value: String): Long {
+    val number = value.toLongOrNull()
+    if (number == null || number.toString() != value) throw RuntimeFault("Invalid int64 literal: $value")
+    return number
+}
 /** Cadenza's recursive indirection: captured by identity, initialized once. */
 internal class RecCell {
     var initialized = false
@@ -552,7 +558,7 @@ private class Primitive(private val name: String, @field:Children private var ar
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (name) {
             "negateInt#", "not#", "notI#", "clz#", "ctz#", "popCnt#", "int2Word#", "word2Int#", "ord#", "chr#",
-            "narrow8Int#", "narrow16Int#", "narrow32Int#",
+            "narrow8Int#", "narrow16Int#", "narrow32Int#", "intToInt64#", "int64ToInt#",
             "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#",
             "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
@@ -608,7 +614,7 @@ private class Primitive(private val name: String, @field:Children private var ar
             "narrow16Int#", "intToInt16#", "int16ToInt#" -> x.toShort().toLong()
             "narrow32Int#", "intToInt32#", "int32ToInt#" -> x.toInt().toLong()
             "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> x and wordMask
-            "int2Word#", "word2Int#", "ord#", "chr#" -> x
+            "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> x
             else -> fault("Unsupported primitive")
         }
     }
@@ -971,6 +977,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int64" -> int64Literal(value)
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
