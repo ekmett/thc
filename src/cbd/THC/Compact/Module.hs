@@ -15,7 +15,7 @@
 -- are written; the existing canonical MD5 encoder sorts only lookup records.
 module THC.Compact.Module
   ( writeModule, writeModuleWithDebug, writeModuleCompressed, writeModuleWithDebugCompressed
-  , writeModuleValue, encodeModuleValue, readModuleValue, readModuleMetadata, readModuleMetadataFile, readModuleSources, finalizeModuleMetadata
+  , writeModuleValue, encodeModuleValue, encodeModuleWithDebug, readModuleValue, readModuleMetadata, readModuleMetadataFile, readModuleSources, finalizeModuleMetadata
   ) where
 
 import Control.Exception (bracket)
@@ -42,8 +42,8 @@ import THC.Compact.Wire
 import THC.Compact.Writer
 import THC.Compact.Zip (readZipHeader, readZipHeaderFile, finalizeHeaderFile)
 
--- | The compiler's in-memory module value enters the existing typed encoder
--- directly. No JSON text, JSON file, or second binary codec is involved.
+-- | Import reference/golden values through the canonical typed encoder.
+-- Production compiler publication supplies typed records directly.
 writeModuleValue :: FilePath -> Value -> IO Container
 writeModuleValue path value = do
   (facts,bindings,annotations) <- either fail pure (parseModuleWithDebug value)
@@ -51,6 +51,10 @@ writeModuleValue path value = do
 
 encodeModuleValue :: Value -> IO BS.ByteString
 encodeModuleValue value = encoded (\path -> writeModuleValue path value)
+
+-- | Encode original typed records through the same writer and ZIP assembly.
+encodeModuleWithDebug :: Facts -> [(Binding,[Annotation])] -> ModuleAnnotations -> IO BS.ByteString
+encodeModuleWithDebug facts bindings annotations = encoded (\path -> writeModuleWithDebug path facts bindings annotations)
 
 -- | Build-time typed inspection. Serialized input is exclusively CBD.
 readModuleValue :: BS.ByteString -> Either String Value

@@ -344,7 +344,7 @@ public class ProcessSignalsTest {
     @Test public void standaloneScriptReservesSignalWithoutOverwritingUserSettings(@TempDir Path directory) throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux")); var java = directory.resolve("bin/java").toFile(); java.getParentFile().mkdirs();
         Files.writeString(java.toPath(), "#!/bin/sh\nprintf 'reserved=%s\\n' \"\u0024{_JAVA_SR_SIGNUM-unset}\"\n"); assertTrue(java.setExecutable(true));
-        var script = new File(System.getProperty("thc.projectRoot"), "build/bin/thc");
+        var script = new File(System.getProperty("thc.projectRoot"), "build/scripts/thc");
         for (var setting : Arrays.asList(null, "64", "12", "")) {
             var builder = new ProcessBuilder("sh", script.getPath()).redirectErrorStream(true); builder.environment().put("JAVA_HOME", directory.toString());
             if (setting == null) builder.environment().remove("_JAVA_SR_SIGNUM"); else builder.environment().put("_JAVA_SR_SIGNUM", setting);
