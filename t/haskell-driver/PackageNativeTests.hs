@@ -26,6 +26,7 @@ import GHC.ResponseFile (escapeArgs)
 import System.Directory (findExecutable, getCurrentDirectory, createDirectory, createDirectoryIfMissing, removeFile, getModificationTime, canonicalizePath,
   makeAbsolute, withCurrentDirectory, createFileLink)
 import System.Environment (getEnv, lookupEnv, setEnv, unsetEnv)
+import System.IO (openTempFile, hClose)
 import System.IO.Error (tryIOError)
 import System.FilePath ((</>), searchPathSeparator)
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode, readProcess, readProcessWithExitCode)
