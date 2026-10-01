@@ -84,7 +84,7 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
   helper <- case lines (BS.unpack (commandStdout located)) of
     [path] -> pure path
     _ -> die "Expected one selected-GHC thc-interface executable"
-  driverLocated <- run "driver-location" cabal ("list-bin" : "exe:thc" : tail selection)
+  driverLocated <- run "driver-location" cabal ("list-bin" : "exe:thc" : drop 1 selection)
   driver <- case lines (BS.unpack (commandStdout driverLocated)) of
     [path] -> pure path
     _ -> die "Expected one selected-GHC production thc executable"
