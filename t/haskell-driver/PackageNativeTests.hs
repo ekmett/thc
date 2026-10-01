@@ -83,8 +83,9 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
            "-fplugin-opt=THC.Plugin:post-tidy","-fplugin-opt=THC.Plugin:unit-qualified",
            "-fplugin-opt=THC.Plugin:foreign-import-provenance",source] ""
         assertEqual diagnostic ExitSuccess status
-      captureNativeObject (root </> "pieces") compiler nativeArguments
-      capturePackageNative repository helper libdir compiler arguments "fixture-unit" directory
+      withCurrentDirectory root $ do
+        captureNativeObject (root </> "pieces") compiler nativeArguments
+        capturePackageNative repository helper libdir compiler arguments "fixture-unit" directory
       let cbd = directory </> "core/units/u-fixture-unit/Demand.cbd"
       before <- BS.readFile cbd
       original <- either assertFailure pure (readModuleValue before)
