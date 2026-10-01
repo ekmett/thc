@@ -4,13 +4,14 @@
 
 """Compare executable Core after lexical alpha renaming, ignoring source/debug text.
 
-Accept module JSON, a directory of modules, or a modules.txt manifest. Runtime
+Accept module CBD, a directory of CBD modules, or a modules.txt manifest. Runtime
 representation/WHNF/speculation/strict-field/join/call-demand certificates remain included.
 This is a structural check, not a general proof of equivalence of different Core.
 """
 import argparse
 import hashlib
 import json
+from core_package_manifest import inspect_cbd
 import re
 from pathlib import Path
 
@@ -29,8 +30,8 @@ args = parser.parse_args()
 
 def load(path):
     if path.is_dir():
-        files = sorted(path.glob('*.json'))
-    elif path.suffix == '.json':
+        files = sorted(path.glob('*.cbd'))
+    elif path.suffix == '.cbd':
         files = [path]
     else:
         files = [Path(s) for s in path.read_text().splitlines() if s]
@@ -38,7 +39,7 @@ def load(path):
         return re.sub(r'^\d+-', '', file.name) if args.strip_snapshot_prefix else file.name
     included = [file for file in files if key(file) not in args.exclude]
     assert len({key(file) for file in included}) == len(included), 'ambiguous module filenames'
-    return {key(file): json.loads(file.read_text()) for file in included}
+    return {key(file): inspect_cbd(file.read_bytes()) for file in included}
 
 
 def canonical(modules):
@@ -99,13 +100,12 @@ def canonical(modules):
             'constructors': [{k: c[k] for k in ['id', 'name', 'arity', 'tag', 'kind', 'strictFields', 'fieldLifted', 'fieldReps'] +
                              ([] if args.ignore_field_types else ['fieldTypes']) if k in c}
                              for c in module['constructors']],
-            'groups': [[g['recursive'], [globals.get(key, key) for key in g['ids']]] for g in module['groups']],
         }
     return result
 
 def reachable(modules, entry):
     bindings = {tuple(key): value for module in modules.values() for key, value in module['bindings']}
-    roots = [key for key in bindings if key[2] == entry]
+    roots = [key for key in bindings if key[2] == entry or key[2].endswith('.'+entry)]
     if len(roots) != 1:
         raise ValueError('Entry occurrence must be unique: ' + entry)
     def references(value):
@@ -128,9 +128,7 @@ def reachable(modules, entry):
     result = {}
     for filename, module in modules.items():
         result[filename] = dict(module,
-            bindings=[b for b in module['bindings'] if tuple(b[0]) in seen],
-            groups=[[recursive, [key for key in keys if tuple(key) in seen]] for recursive, keys in module['groups']
-                    if any(tuple(key) in seen for key in keys)])
+            bindings=[b for b in module['bindings'] if tuple(b[0]) in seen])
     return result, len(seen)
 
 before, after = canonical(load(args.before)), canonical(load(args.after))

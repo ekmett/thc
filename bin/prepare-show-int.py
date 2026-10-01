@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import subprocess
@@ -37,7 +38,7 @@ def auditor():
     return module, json.loads((ROOT/'bin/core-capabilities.json').read_text())
 def inspection(path):
     check(path.is_file(), 'Missing executable CBD: '+str(path))
-    return json.loads(path.with_suffix('.json').read_text())
+    return inspect_cbd(path.read_bytes())
 def source_debug(path):
     with zipfile.ZipFile(path) as archive:
         check(archive.read('filenames') and archive.read('line-columns'),
@@ -90,9 +91,9 @@ def main():
             commands.append(dict(argv=argv, environment=extra_env or {}))
             subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(extra_env or {})), check=True)
         run(['bin/build-compiler.sh'])
-        run([sys.executable, 'bin/export-boot.py', '--pretty-diagnostics', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
+        run([sys.executable, 'bin/export-boot.py', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
         for stage in STAGES:
-            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics',
+            run(['bin/export-core.sh',
                  *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
                  *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], str(FIXTURES[0])],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
@@ -110,7 +111,7 @@ def main():
                    *sorted((ROOT/'src/compiler/THC').glob('*.hs')), *audit_inputs(),
                    ROOT/'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Show.hs', ROOT/'nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE']
         artifacts = [OUT/'requests.tsv', OUT/'oracle.tsv', OUT/'boot/boot-provenance.json', *sorted(OUT.glob('*.audit.json'))]
-        artifacts += [p for folder in ('pre-core', 'post-core', 'boot/core', 'native') for p in sorted((OUT/folder).rglob('*')) if p.is_file()]
+        artifacts += [p for folder in ('pre-core', 'post-core', 'boot/core', 'native') for p in sorted((OUT/folder).rglob('*')) if p.is_file() and (folder == 'native' or p.suffix == '.cbd')]
         installed = Path(subprocess.check_output([ghc_pkg, 'field', 'ghc-internal', 'import-dirs', '--simple-output'], text=True).strip())/'GHC/Internal/Show.dyn_hi'
         manifest_path.write_text(json.dumps(dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(), commands=commands,
             ghcInfo=subprocess.check_output([ghc, '--info'], text=True), installedShowInterface=dict(path=str(installed), sha256=digest(installed)),

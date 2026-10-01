@@ -8,6 +8,7 @@ import ast
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 import re
 from pathlib import Path
@@ -26,9 +27,12 @@ FIXTURES = [ROOT/'t/fixtures/compiler'/name for name in ('ShortByteStringSliceAu
 def check(ok, message):
     if not ok: raise AssertionError(message)
 
-def inspection(path):
+def inspection(path, *, sources=False):
     check(path.is_file(), 'Missing executable CBD: '+str(path))
-    return json.loads(path.with_suffix('.json').read_text())
+    module = inspect_cbd(path.read_bytes())
+    if sources:
+        module.update(inspect_cbd(path.read_bytes(), sources=True))
+    return module
 
 def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 def record(path): return dict(path=str(path.relative_to(ROOT)), sha256=digest(path))
@@ -55,9 +59,9 @@ def inventory(unit=None):
     audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
     caps = json.loads((ROOT/'bin/core-capabilities.json').read_text())
     originals = [OUT/'list/core/GHC.Internal.List.cbd', OUT/'cstring/core/GHC.Internal.CString.cbd']
-    original_modules = [(str(p), inspection(p)) for p in originals]
+    original_modules = [(str(p), inspection(p, sources=True)) for p in originals]
     for path, module in original_modules:
-        check(module['ghc'] == '9.14.1' and module['boundary'] == STAGES['post'] and module.get('sourceCore') and module.get('sourceSpans'),
+        check(module['ghc'] == '9.14.1' and module['boundary'] == STAGES['post'] and module.get('sourceFiles') and module.get('sourceSpans'),
               'Complete original post-Tidy source evidence required: '+path)
     stages, coverage = {}, {}
     for stage, boundary in STAGES.items():
@@ -71,15 +75,15 @@ def inventory(unit=None):
         check(len(ids) == len(set(ids)), 'Original whole-module composition must not duplicate or replace bindings')
         reports = {}
         for name in (*ENTRIES, *FRONTIERS):
-            report = audit.Audit([*modules, *original_modules], caps).run([name])
+            report = audit.Audit([*modules, *original_modules], caps).run(['main:ShortByteStringSliceAudit.'+name])
             if name in ENTRIES:
                 check(report['accepted'] and not report['issues'] and not report['missingGlobals'], stage+'/'+name+': strict slice closure rejected')
                 check(LENGTH in {b['id'] for b in report['reachableBindings']}, 'Actual installed pack/List length dependency disappeared')
                 check('copyByteArray#' in {p['name'] for p in report['primitives']}, 'Actual slice copy path disappeared')
-                public = next(b for b in fixture['bindings'] if b['name'] == name)
+                public = next(b for b in fixture['bindings'] if b['id'] == 'main:ShortByteStringSliceAudit.'+name)
                 check(public['arity'] == 4 and public['expr'][0] == 'lam' and len(public['expr'][1]) == 4, 'Changed scalar host ABI')
                 check(all(p['rep']['kind'] == 'long' and p['rep']['primReps'] == ['IntRep'] for p in public['expr'][1]), 'Inexact scalar input proof')
-                missing_list = audit.Audit([*modules, original_modules[1]], caps).run([name])
+                missing_list = audit.Audit([*modules, original_modules[1]], caps).run(['main:ShortByteStringSliceAudit.'+name])
                 check(not missing_list['accepted'] and not missing_list['issues'] and
                       [m['id'] for m in missing_list['missingGlobals']] == [LENGTH], 'Missing-source control changed')
                 (OUT/f'{stage}-{name}-missing-list.audit.json').write_text(json.dumps(missing_list, indent=2)+'\n')
@@ -109,9 +113,9 @@ def main():
             subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
         run(['bin/build-compiler.sh'])
         for frontier, directory in [('lists','list'),('exceptions','cstring')]:
-            run([sys.executable,'bin/export-boot.py','--pretty-diagnostics','--frontier',frontier,'--build-dir',OUT/directory])
+            run([sys.executable,'bin/export-boot.py','--frontier',frontier,'--build-dir',OUT/directory])
         for stage in STAGES:
-            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
+            run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
                  *['-fplugin-opt=THC.Plugin:closure='+n for n in (*ENTRIES,*FRONTIERS)],FIXTURES[0]],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         stages, coverage = inventory(unit)
@@ -128,7 +132,7 @@ def main():
             sources += [ROOT/r['path'] for r in json.loads((OUT/d/'boot-provenance.json').read_text())['sources']]
         artifacts=[OUT/'requests.tsv',OUT/'oracle.tsv',*sorted(OUT.glob('*.audit.json')),
                    *[OUT/d/'boot-provenance.json' for d in ('list','cstring')]]
-        artifacts += [p for d in ('pre-core','post-core','list/core','cstring/core','native') for p in sorted((OUT/d).rglob('*')) if p.is_file()]
+        artifacts += [p for d in ('pre-core','post-core','list/core','cstring/core','native') for p in sorted((OUT/d).rglob('*')) if p.is_file() and (d == 'native' or p.suffix == '.cbd')]
         installed=Path(subprocess.check_output([pkg,'field','bytestring','import-dirs','--simple-output'],text=True).strip())/'Data/ByteString/Short/Internal.dyn_hi'
         manifest_path.write_text(json.dumps(dict(schema=1,entries=ENTRIES,seeds=seeds(),nativeRows=count,wordBits=64,
             stages=stages,coverage=coverage,commands=commands,ghcInfo=ghc_info,

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import subprocess
@@ -27,9 +28,12 @@ FIXTURES = [ROOT / 't/fixtures/compiler' / name for name in ('ShowWordListAudit.
 def check(condition, message):
     if not condition:
         raise AssertionError(message)
-def inspection(path):
+def inspection(path, *, sources=False):
     check(path.is_file(), 'Missing executable CBD: '+str(path))
-    return json.loads(path.with_suffix('.json').read_text())
+    module = inspect_cbd(path.read_bytes())
+    if sources:
+        module.update(inspect_cbd(path.read_bytes(), sources=True))
+    return module
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 def record(path):
@@ -44,17 +48,17 @@ def auditor():
 def inventory():
     audit, caps = auditor()
     source_path = OUT/'boot/core/GHC.Internal.Show.cbd'
-    source = inspection(source_path)
+    source = inspection(source_path, sources=True)
     check(source['ghc'] == '9.14.1' and source['boundary'] == STAGES['post'], 'Show must be genuine post-Tidy GHC9.14.1 source')
     source_ids = {b['id'] for b in source['bindings']}
     cstring_path = OUT/'cstring/core/GHC.Internal.CString.cbd'
-    cstring = inspection(cstring_path)
-    check(cstring['ghc'] == '9.14.1' and cstring['boundary'] == STAGES['post'] and cstring.get('sourceCore'),
+    cstring = inspection(cstring_path, sources=True)
+    check(cstring['ghc'] == '9.14.1' and cstring['boundary'] == STAGES['post'] and cstring.get('sourceFiles') and cstring.get('sourceSpans'),
           'CString must be the complete original post-Tidy source module')
     for identity in WORKERS:
         worker = [b for b in source['bindings'] if b['id'] == identity]
         check(len(worker) == 1 and worker[0]['expr'][0] == 'lam', 'Missing exact original Show worker: '+identity)
-    check(source.get('sourceCore') and source.get('sourceSpans'), 'Complete original source evidence is required')
+    check(source.get('sourceFiles') and source.get('sourceSpans'), 'Complete original source evidence is required')
     stages = {}; coverage = {}
     for stage, boundary in STAGES.items():
         public_path = OUT/f'{stage}-core/ShowWordListAudit.cbd'
@@ -64,7 +68,7 @@ def inventory():
         interface_ids = {b['id'] for b in closure['bindings']}
         check(interface_ids and interface_ids <= source_ids, 'Whole interface closure must be supplied by the complete original Show module')
         check(all(b.get('origin') in ('interface-core-unfolding', 'interface-dfun-unfolding') for b in closure['bindings']), 'Expected genuine installed interface definitions')
-        original = audit.Audit([(str(public_path), public), (str(closure_path), closure)], caps).run(list(ENTRIES))
+        original = audit.Audit([(str(public_path), public), (str(closure_path), closure)], caps).run(['main:ShowWordListAudit.'+name for name in ENTRIES])
         check(not original['accepted'] and not original['issues'] and {m['id'] for m in original['missingGlobals']} == WORKERS | {CSTRING_WORKER} and len(original['missingGlobals']) == len(WORKERS)+1,
               f'{stage}: public-only frontier changed: {original["summary"]}')
         (OUT/f'{stage}-missing-worker.audit.json').write_text(json.dumps(original, indent=2)+'\n')
@@ -72,7 +76,7 @@ def inventory():
         stages[stage] = [str(p.relative_to(ROOT)) for p in paths]
         reports = {}
         for entry in ENTRIES:
-            report = audit.Audit([(str(public_path), public), (str(source_path), source), (str(cstring_path), cstring)], caps).run([entry])
+            report = audit.Audit([(str(public_path), public), (str(source_path), source), (str(cstring_path), cstring)], caps).run(['main:ShowWordListAudit.'+entry])
             check(report['accepted'], f'{stage}/{entry}: strict Show source closure rejected: {report["summary"]}')
             wanted = {WORD_WORKER} if entry.startswith('word') else {LIST_WORKER, DIGIT_WORKER, CSTRING_WORKER}
             check(wanted <= {b['id'] for b in report['reachableBindings']}, f'{entry}: actual Show worker disappeared')
@@ -97,10 +101,10 @@ def main():
             commands.append(dict(argv=argv, environment=extra_env or {}))
             subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(extra_env or {})), check=True)
         run(['bin/build-compiler.sh'])
-        run([sys.executable, 'bin/export-boot.py', '--pretty-diagnostics', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
-        run([sys.executable, 'bin/export-boot.py', '--pretty-diagnostics', '--frontier', 'exceptions', '--build-dir', str(OUT/'cstring')])
+        run([sys.executable, 'bin/export-boot.py', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
+        run([sys.executable, 'bin/export-boot.py', '--frontier', 'exceptions', '--build-dir', str(OUT/'cstring')])
         for stage in STAGES:
-            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
+            run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
                  *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], str(FIXTURES[0])],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         stages, coverage = inventory()
@@ -121,7 +125,7 @@ def main():
             sources += [ROOT/item['path'] for item in boot['sources']]
         sources = list(dict.fromkeys(sources))
         artifacts = [OUT/'cstring/boot-provenance.json', OUT/'requests.tsv', OUT/'oracle.tsv', OUT/'boot/boot-provenance.json', *sorted(OUT.glob('*.audit.json'))]
-        artifacts += [p for folder in ('pre-core', 'post-core', 'boot/core', 'cstring/core', 'native') for p in sorted((OUT/folder).rglob('*')) if p.is_file()]
+        artifacts += [p for folder in ('pre-core', 'post-core', 'boot/core', 'cstring/core', 'native') for p in sorted((OUT/folder).rglob('*')) if p.is_file() and (folder == 'native' or p.suffix == '.cbd')]
         installed = Path(subprocess.check_output([ghc_pkg, 'field', 'ghc-internal', 'import-dirs', '--simple-output'], text=True).strip())/'GHC/Internal/Show.dyn_hi'
         manifest_path.write_text(json.dumps(dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(), commands=commands,
             ghcInfo=subprocess.check_output([ghc, '--info'], text=True), installedShowInterface=dict(path=str(installed), sha256=digest(installed)),
