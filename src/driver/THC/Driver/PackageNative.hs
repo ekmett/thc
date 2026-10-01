@@ -1385,7 +1385,7 @@ compileC compiler root original directory generated = do
                            not ("-" `isPrefixOf` value)) arguments
       compilerFlag = if cxx then "-pgmcxx" else "-pgmc"
       option = if cxx then "-optcxx" else "-optc"
-  _ <- command root compiler (arguments ++ map ("-optc" ++) sdkFlags ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
+  _ <- command root compiler (arguments ++ map (option ++) sdkFlags ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
     map (option ++) ["-emit-llvm","-O1","-MD","-MF",dependency,
                     "-MT","thc_scalar_input","-Werror=date-time"])
   dependencies <- readDependencies dependency
