@@ -43,7 +43,7 @@ nativeCompilerEnvironment = do
   if Host.os /= "darwin" || lookup "SDKROOT" inherited /= Nothing
     then pure inherited
     else do
-      (status, output, diagnostic) <- readProcessWithExitCode "xcrun" ["--show-sdk-path"] ""
+      (status, output, diagnostic) <- readProcessWithExitCode "/usr/bin/xcrun" ["--show-sdk-path"] ""
       case (status, lines output) of
         (ExitSuccess, [sdk]) | isAbsolute sdk -> pure (("SDKROOT", sdk) : inherited)
         _ -> fail ("cannot discover selected macOS SDK: " ++ diagnostic)

@@ -92,7 +92,7 @@ def main():
         raise SystemExit("Original cbits require clang on PATH (or THC_CLANG); install a compatible LLVM compiler")
     system = platform.system()
     if system == "Darwin" and "SDKROOT" not in os.environ:
-        os.environ["SDKROOT"] = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
+        os.environ["SDKROOT"] = subprocess.check_output(["/usr/bin/xcrun", "--show-sdk-path"], text=True).strip()
     arch = platform.machine()
     compiler, target, default_target = compiler_target(clang, system, arch)
     if system == "Darwin":
