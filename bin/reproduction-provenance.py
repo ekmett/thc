@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import shutil
@@ -55,7 +56,7 @@ for item in original['modules']:
         raise SystemExit('Measured bundle differs from its provenance: ' + item['path'])
 if digest(root / 't/fixtures/core/MapWorkload.hs') != original['workloadSha256']:
     raise SystemExit('Workload differs from its recorded bundle provenance')
-module_data = [json.loads(p.read_text()) for p in modules]
+module_data = [inspect_cbd(p.read_bytes()) for p in modules]
 source_paths = {
     root / 't/fixtures/core/MapWorkload.hs',
     root / 't/fixtures/package-roots/InterfaceRoots.hs',
@@ -98,6 +99,7 @@ exporter_paths = sorted(set((root / 'src/compiler/THC').rglob('*.hs')) | {
     root / 'bin/build-compiler.sh', root / 'bin/export-core.sh', root / 'bin/toolchain.sh',
     root / 'bin/export-map.sh', root / 'bin/export-boot.py', root / 'bin/plugin.py',
     root / 'thc.cabal', root / 'cabal.project', Path(__file__).resolve(),
+    root / 'bin/core_package_manifest.py',
 })
 # The loader flags use the actual Cabal unit and package DB, rather than an
 # invented package record. Script hashes remain the executable specification.
@@ -106,7 +108,7 @@ shared_export = ['--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dc
                  '-fplugin=THC.Plugin', '-i$ROOT/src/examples', '-i$ROOT/t/fixtures/core', '-i$ROOT/src/runtime', '-i$ROOT/t/fixtures/compiler']
 # Existing-bundle supplements describe the actual files, even if today's driver
 # default differs from the setting used to produce them.
-source_notes_exported = any('sourceFiles' in m for m in module_data)
+source_notes_exported = any(inspect_cbd(p.read_bytes(), sources=True)['sourceFiles'] for p in modules)
 source_notes_requested = (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true'
 if args.fresh_export and source_notes_exported != source_notes_requested:
     raise SystemExit('Fresh export source-note metadata differs from its driver setting')

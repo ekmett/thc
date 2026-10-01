@@ -334,14 +334,15 @@ class SimdFamiliesTest {
         for (var line : lines) if (!line.isEmpty()) { var row = Arrays.asList(line.split("\t", -1)); rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row); }
         var names = earlyWideGate ? List.of("timesInt32X8", "timesInt32X16", "timesWord64X2", "timesWord32X8", "floatX8Composite", "doubleX4Composite") : new ArrayList<>(rows.keySet());
         for (var stage : (List<String>) manifest.get("stages")) {
-            var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/GeneratedSimdFamilies.json").toPath()));
+            var module = CoreCbdFixtures.read(new File(directory, stage + "-core/GeneratedSimdFamilies.cbd").toPath());
             var structures = (Map<String, Map<String, Object>>) manifest.get("structures"); var calls = (Map<String, Number>) structures.get(stage).get("expectedGuestCalls");
             for (var name : names) for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var input = new LinkedHashMap<>(CoreModules.reachable(module, name)); input.put("instrument", true);
+                    var identity = "main:GeneratedSimdFamilies." + name;
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var input = new LinkedHashMap<>(CoreModules.reachable(module, identity)); input.put("instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input);
-                    var entry = program.entryTarget(name); var host = program.hostEntryTarget(3); var function = context.asValue(new EntryValue(program, name, 3));
+                    var entry = program.entryTarget(identity); var host = program.hostEntryTarget(3); var function = context.asValue(new EntryValue(program, identity, 3));
                     List<List<String>> cases;
                     if (!earlyWideGate) cases = rows.get(name);
                     else if (name.endsWith("Composite")) {

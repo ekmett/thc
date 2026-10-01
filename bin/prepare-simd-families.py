@@ -15,6 +15,7 @@ from collections import Counter
 import hashlib
 import importlib.util
 import json
+from core_package_manifest import inspect_cbd
 import os
 from pathlib import Path
 import platform
@@ -56,15 +57,16 @@ def structure(module, audits, primitives):
     for name, family, operation in entries():
         report = audits[name]
         check(report['accepted'] and not report['missingGlobals'] and not report['issues'], f'{name}: strict local SIMD audit failed: {report["issues"][:3]}')
-        identities = {b['id']: b['name'] for b in module['bindings']}
+        prefix = module['unit'] + ':' + module['module'] + '.'
+        identities = {b['id']: b['id'].removeprefix(prefix) for b in module['bindings']}
         reachable = {identities[b['id']] for b in report['reachableBindings']}
         observer = {'FloatRep': 'bitsFloat', 'DoubleRep': 'bitsDouble'}.get(family['laneRep'])
         expected_reachable = {name, name + 'Worker'} | ({observer} if observer else set())
         check(reachable == expected_reachable, f'{name}: actual OPAQUE scalar worker closure changed: {reachable}')
-        selected = [b for b in module['bindings'] if b['name'] in reachable]
+        selected = [b for b in module['bindings'] if identities[b['id']] in reachable]
         for binding in selected:
             expression = binding['expr']
-            observer_binding = binding['name'] == observer
+            observer_binding = identities[binding['id']] == observer
             check(expression[0] == 'lam' and len(expression[1]) == (1 if observer_binding else 3), f'{name}: expected scalar arity')
             expected_rep = family['laneRep'] if observer_binding else 'IntRep'
             check(all(a['rep'].get('primReps') == [expected_rep] for a in expression[1]), f'{name}: scalar boundary changed')
@@ -124,14 +126,14 @@ def main():
     artifacts = [OUT / name for name in ('contracts.json', 'capabilities.json', 'expected.tsv', 'inputs.tsv')]
     structures = {}
     for stage in stages:
-        module_path = OUT / f'{stage}-core/GeneratedSimdFamilies.json'
+        module_path = OUT / f'{stage}-core/GeneratedSimdFamilies.cbd'
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else list(args.ghc_option)
         if stage == 'post':
             options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['bin/export-core.sh', *options, GENERATED / 'GeneratedSimdFamilies.hs'],
             env=dict(THC_CORE_OUT=str(module_path.parent), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
-        module = json.loads(module_path.read_text())
-        reports = {name: auditor.Audit([(str(module_path), module)], capabilities).run([name]) for name, _, _ in entries()}
+        module = inspect_cbd(module_path.read_bytes())
+        reports = {name: auditor.Audit([(str(module_path), module)], capabilities).run(['main:GeneratedSimdFamilies.'+name]) for name, _, _ in entries()}
         structures[stage] = structure(module, reports, set(contracts))
         audit_path = OUT / f'{stage}-audits.json'
         audit_path.write_text(json.dumps(reports, indent=2) + '\n')
