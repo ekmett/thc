@@ -304,6 +304,7 @@ NON_FIXTURE_BUILD_ROOTS = frozenset({
     "snapshot", "source-ghc", "test-results", "tmp",
 })
 COMMON_SOURCES = (
+    "src/driver/**/*.hs",
     "thc.cabal",
     "cabal.project",
     "Setup.hs",
@@ -366,7 +367,10 @@ def _manifest(root):
             owners[name] = group_id
         for path in [*group["outputs"], *group["sources"]]:
             _relative(path)
-        for command in group["commands"]:
+        checks = group.get("ciChecks", [])
+        if not isinstance(checks, list) or any(not isinstance(check, dict) or check.get("platform") != "Linux" for check in checks):
+            raise ValueError(f"Invalid CI checks: {group_id}")
+        for command in [*group["commands"], *checks]:
             argv = command.get("argv") if isinstance(command, dict) else None
             if not isinstance(argv, list) or not argv or not all(
                     isinstance(part, str) and part and "\x00" not in part for part in argv):
@@ -376,7 +380,31 @@ def _manifest(root):
                 if not any(destination == _relative(output) or
                            _relative(output) in destination.parents for output in group["outputs"]):
                     raise ValueError(f"Undeclared fixture stdout: {group_id}")
+    _group_order(data, data["groups"])
     return data, owners
+
+
+def _group_order(manifest, selected):
+    """Producer dependencies run first; ownership remains unique."""
+    result, active = [], set()
+    def visit(name):
+        if name not in manifest["groups"]:
+            raise ValueError(f"Unknown fixture dependency: {name}")
+        if name in active:
+            raise ValueError(f"Cyclic fixture dependency: {name}")
+        if name in result:
+            return
+        required = manifest["groups"][name].get("requires", [])
+        if not isinstance(required, list) or any(not isinstance(dep, str) for dep in required) or len(set(required)) != len(required):
+            raise ValueError(f"Invalid fixture dependencies: {name}")
+        active.add(name)
+        for dep in sorted(required):
+            visit(dep)
+        active.remove(name)
+        result.append(name)
+    for name in sorted(selected):
+        visit(name)
+    return result
 
 
 def _source_hashes(root, group):
@@ -790,7 +818,7 @@ def prepare(root, selection, run, toolchain):
     if selection.get("mode") != "narrow":
         raise ValueError("Invalid selected test mode")
 
-    groups = sorted({owners[name] for name in classes if owners[name] is not None
+    groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None
                      and (owners[name] != "original-gmp" or fast_inputs.GMP_NATIVE_HOST)})
     def classify():
         state = []

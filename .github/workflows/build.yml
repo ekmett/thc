@@ -45,6 +45,18 @@ jobs:
           tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
           # GitHub supports queue: max; the pinned linter does not yet know this key.
           "$RUNNER_TEMP/actionlint" -ignore '^unexpected key "queue" for "concurrency" section\.'
+  jvm-linux:
+    name: Linux ordinary tests
+    uses: ./.github/workflows/test-groups.yml
+    with:
+      os: ubuntu-latest
+      expected_sha: ${{ inputs.expected_sha }}
+  jvm-macos:
+    name: macOS ordinary tests
+    uses: ./.github/workflows/test-groups.yml
+    with:
+      os: macos-latest
+      expected_sha: ${{ inputs.expected_sha }}
   build:
     strategy:
       fail-fast: false
@@ -122,8 +134,10 @@ jobs:
           done
       - name: Check pinned guest protocol artifacts
         run: ./gradlew --no-daemon --max-workers=2 --continue testMaterializableApi testReturnPolicy testReturnContinuations
-      - name: Build and test both handoff modes from source
-        run: bin/try.sh --handoff-modes
+      - name: Build JVM distribution from source
+        run: |
+          bin/build-compiler.sh
+          ./gradlew --no-daemon installDist toolsJar
       - name: Check original aggregate constructor fields against native GHC
         run: |
           cabal run exe:thc-fixtures --offline -- aggregate-heap
@@ -165,41 +179,6 @@ jobs:
           cabal build exe:thc --offline -fdevelopment
           cabal run thc --offline -fdevelopment -- --help
           cabal test driver-tests cpu-affinity-api -fdevelopment --test-show-details=direct
-      - name: Require fresh native SIMD oracle and post-Tidy export on x86
-        if: runner.os == 'Linux'
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          proof = json.loads(Path('build/simd/provenance.json').read_text())
-          assert proof['nativeRows'] == 147 and proof['stages'] == ['pre', 'post'], proof
-          proof = json.loads(Path('build/simd-int32x4/provenance.json').read_text())
-          assert proof['nativeRows'] == 243 and proof['stages'] == ['pre', 'post'], proof
-          proof = json.loads(Path('build/simd-floatx4/provenance.json').read_text())
-          assert proof['nativeRows'] == 2196 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-doublex2/provenance.json').read_text())
-          assert proof['nativeRows'] == 3390 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-int16x8/provenance.json').read_text())
-          assert proof['nativeRows'] == 6032 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-int8x16/provenance.json').read_text())
-          assert proof['nativeRows'] == 9168 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-word8x16/provenance.json').read_text())
-          assert proof['nativeRows'] == 7712 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-word16x8/provenance.json').read_text())
-          assert proof['nativeRows'] == 5116 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-word32x4/provenance.json').read_text())
-          assert proof['nativeRows'] == 4882 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-int32x4-multiply/provenance.json').read_text())
-          assert proof['nativeRows'] == 1722 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-int32x4-bytearray/provenance.json').read_text())
-          assert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-word32x4-bytearray/provenance.json').read_text())
-          assert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-floatx4-bytearray/provenance.json').read_text())
-          assert proof['nativeRows'] == 6720 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          proof = json.loads(Path('build/simd-doublex2-bytearray/provenance.json').read_text())
-          assert proof['nativeRows'] == 4384 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
-          PY
       - name: Prepare fresh library source and native oracles
         run: python3 bin/prepare-library-tests.py
       - name: Package verified library inputs and installed runtime

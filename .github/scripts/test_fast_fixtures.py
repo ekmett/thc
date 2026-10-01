@@ -518,7 +518,7 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rubbish-literals/unowned.json'))
 
-    def test_recent_native_producers_remain_fail_closed_full_preparation_inputs(self):
+    def test_recent_native_producers_have_named_preparation_and_keep_full_receipts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         plan = (project / 'bin/prepare-tests.sh').read_text().splitlines()
@@ -527,7 +527,7 @@ class FixturePreparationTest(unittest.TestCase):
                 ('record-fields', 'thc.runtime.RecordFieldNativeTest', 60, 'logs/post-native.stdout')):
             with self.subTest(family=family):
                 self.assertIn('"$fixture_bin" ' + family, plan)
-                self.assertNotIn(junit, owners)
+                self.assertEqual(family, owners[junit])
                 self.assertNotIn(junit, manifest['fixtureFreeJunit'])
                 output = 'build/' + family
                 self.assertIn(output, fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -2412,6 +2412,20 @@ class FixturePreparationTest(unittest.TestCase):
         self.calls = []
         self.mutate_scalar_on_generator = False
         self.toolchain = {"ghcVersion": "9.14.1", "platform": "Linux-x86_64"}
+
+    def test_required_producers_are_ordered_once_and_cycles_fail_closed(self):
+        self.manifest["groups"]["alpha"]["requires"] = ["beta"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        manifest, _ = fast_fixtures._manifest(self.root)
+        self.assertEqual(["beta", "alpha"], fast_fixtures._group_order(manifest, ["alpha", "beta"]))
+        self.manifest["groups"]["beta"]["requires"] = ["alpha"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        with self.assertRaisesRegex(ValueError, "Cyclic"):
+            fast_fixtures._manifest(self.root)
+        self.manifest["groups"]["beta"]["requires"] = ["missing"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        with self.assertRaisesRegex(ValueError, "Unknown"):
+            fast_fixtures._manifest(self.root)
 
     def fake_run(self, name, argv, stdout=None):
         self.calls.append((name, argv, stdout))

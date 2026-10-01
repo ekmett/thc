@@ -34,6 +34,13 @@ class FastRunnerTest(unittest.TestCase):
                 "polyglot": {"required": False, "classes": []}, "junit": {
             "classes": ["example.Test"], "patterns": ["*"] if mode == "full" else ["example.Test"]}}
 
+    def test_group_execution_collects_both_modes_without_fail_fast(self):
+        command = ci.gradle_command(self.selection(), fail_fast=False)
+        self.assertIn("testDefault", command)
+        self.assertIn("testDense", command)
+        self.assertEqual(2, command.count("--rerun"))
+        self.assertNotIn("--fail-fast", command)
+
     def test_haskell_suite_is_selected_exactly(self):
         self.assertEqual([], ci.haskell_suites(self.selection()))
         self.assertEqual(["driver-tests"], ci.haskell_suites(self.selection() |

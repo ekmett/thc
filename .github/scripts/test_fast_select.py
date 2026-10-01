@@ -98,6 +98,24 @@ class FastSelectionTest(unittest.TestCase):
             self.assertIn(code, {r["code"] for r in result["reasons"]}, result)
         return result
 
+    def test_grouped_jobs_cover_every_class_and_share_required_providers(self):
+        import fast_fixtures
+        manifest = {"schema": 1, "fixtureFreeJunit": ["example.SmokeTest"], "groups": {
+            "provider": {"junit": ["example.LeafTest"], "commands": [{"argv": ["provider"]}],
+                         "outputs": ["build/provider"], "sources": ["README.md"]},
+            "consumer": {"junit": ["example.OtherTest"], "commands": [{"argv": ["consumer"]}],
+                         "outputs": ["build/consumer"], "sources": ["README.md"], "requires": ["provider"]}}}
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        groups = select.groups(self.repo)
+        self.assertEqual(["example.LeafTest", "example.OtherTest"], groups["consumer"])
+        self.assertEqual({"example.SmokeTest", "example.LeafTest", "example.OtherTest"},
+                         {name for classes in groups.values() for name in classes})
+        self.write("src/test/java/example/NewTest.java", java_fixture("NewTest"))
+        self.commit()
+        with self.assertRaisesRegex(select.SelectionError, "unmapped=.*NewTest"):
+            select.groups(self.repo)
+
     def test_no_diff_and_documentation_keep_nonempty_smoke(self):
         self.assertEqual("narrow", self.plan()["mode"])
         self.assertEqual([], self.plan()["haskell"]["suites"])
@@ -1123,7 +1141,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         for name, group in fixture["groups"].items():
             for path in group["sources"]:
                 with self.subTest(group=name, path=path):
-                    self.assertTrue((self.root / path).is_file(), path)
+                    matches = list(self.root.glob(path))
+                    self.assertTrue(matches and all(p.is_file() for p in matches), path)
                     if path not in owners:
                         # A transitive source without a narrow owner still widens
                         # to the complete suite when changed.

@@ -83,7 +83,182 @@
     "thc.runtime.SimdFamiliesTest",
     "thc.ScalarPrimopModelTest",
     "thc.runtime.ExecutableLifecycleTest",
-    "thc.runtime.TypedInputScalarSourceTest"
+    "thc.runtime.TypedInputScalarSourceTest",
+    "thc.BloomHeaderTest",
+    "thc.BytecodeLazySourceModeTest",
+    "thc.BytecodeSourceNotesTest",
+    "thc.BytecodeStaticEntryTest",
+    "thc.ColdFunctionFrameTest",
+    "thc.CoreBindingBodyTest",
+    "thc.CoreCompactCursorTest",
+    "thc.CoreCompactGoldenTest",
+    "thc.CoreFileMappingsTest",
+    "thc.CoreRequestWhitespaceTest",
+    "thc.FramesTest",
+    "thc.FullHostAbiTest",
+    "thc.HostReferenceProvenanceTest",
+    "thc.LazyBindingTest",
+    "thc.LoopSafepointTest",
+    "thc.ManagedExportAsyncPolicyTest",
+    "thc.NativeContextTest",
+    "thc.ReusableDataTest",
+    "thc.ReusableNumericTest",
+    "thc.ReusableSelfTailTest",
+    "thc.ReusableTypedTest",
+    "thc.ReusableWordControlTest",
+    "thc.TailCycleTest",
+    "thc.ThreadedThunkTest",
+    "thc.ThunkDiagnosticsTest",
+    "thc.ThunkDispatchTest",
+    "thc.ThunkRetentionTest",
+    "thc.WindowsDistributionTest",
+    "thc.runtime.AdaptiveAsyncTest",
+    "thc.runtime.AggregateHeapStorageTest",
+    "thc.runtime.AggregateLetContinuationTest",
+    "thc.runtime.AggregateLetTest",
+    "thc.runtime.ArithmeticExceptionLazinessTest",
+    "thc.runtime.ArrayCoreEvidenceTest",
+    "thc.runtime.AstKillThreadTest",
+    "thc.runtime.AstSelfCallTest",
+    "thc.runtime.AstSelfCaptureTest",
+    "thc.runtime.AstTailSpillTest",
+    "thc.runtime.AsyncCompactTest",
+    "thc.runtime.BindingCellMetadataTest",
+    "thc.runtime.BloomValueTest",
+    "thc.runtime.ByteStringDataLabelsTest",
+    "thc.runtime.BytecodeColdApplicationTest",
+    "thc.runtime.BytecodeColdBranchTest",
+    "thc.runtime.BytecodeGraphBudgetTest",
+    "thc.runtime.BytecodeLiveOperandResumeTest",
+    "thc.runtime.BytecodeMaskHostUnwindTest",
+    "thc.runtime.BytecodeMetadataLookupTest",
+    "thc.runtime.BytecodeProcessArgumentsTest",
+    "thc.runtime.BytecodeStaleFrameTest",
+    "thc.runtime.BytecodeUnifiedFrameTest",
+    "thc.runtime.BytecodeVectorTransportTest",
+    "thc.runtime.CallDemandTest",
+    "thc.runtime.CallerContinuationProofTest",
+    "thc.runtime.CarrierLocalTest",
+    "thc.runtime.CaseBinderLifetimeTest",
+    "thc.runtime.ClassOwnedLayoutTest",
+    "thc.runtime.CompilerCpuAffinityTest",
+    "thc.runtime.CompilerRtsTest",
+    "thc.runtime.ConstructorClassIdentityTest",
+    "thc.runtime.ConstructorLayoutInterningTest",
+    "thc.runtime.ContextOwnershipTest",
+    "thc.runtime.CoreBoundThreadForeignTest",
+    "thc.runtime.CoreFloatingLiteralTest",
+    "thc.runtime.CoreFunctionIdentityTest",
+    "thc.runtime.CoreKeepAliveTest",
+    "thc.runtime.CoreMd5ForeignTest",
+    "thc.runtime.CoreNativeOverrideProfileTest",
+    "thc.runtime.CoreProofJoinTest",
+    "thc.runtime.CoreStackInfoForeignTest",
+    "thc.runtime.CoreVectorCarrierTest",
+    "thc.runtime.CpuAffinityTest",
+    "thc.runtime.DataLayoutFirstFieldTest",
+    "thc.runtime.DeferredDefaultArmTest",
+    "thc.runtime.DemandPapTest",
+    "thc.runtime.DiagnosticTupleTest",
+    "thc.runtime.EmptyArgumentRuntimeTest",
+    "thc.runtime.EntryContractTest",
+    "thc.runtime.EntrySelfCallTest",
+    "thc.runtime.ForceLocalWritebackTest",
+    "thc.runtime.ForcedBindingTest",
+    "thc.runtime.ForeignExceptionPolicyTest",
+    "thc.runtime.FrameAccessThreadTest",
+    "thc.runtime.GenericInputCallInvariantTest",
+    "thc.runtime.GhcBCOContinuationTest",
+    "thc.runtime.GraphRecoverySizeFailureTest",
+    "thc.runtime.GuestArgumentsEncodingTest",
+    "thc.runtime.GuestArgumentsTest",
+    "thc.runtime.GuestEnvironmentTest",
+    "thc.runtime.HandoffReferenceTest",
+    "thc.runtime.HostBoundaryCompilationTest",
+    "thc.runtime.InputDispatchThreadTest",
+    "thc.runtime.Int16ArrayTest",
+    "thc.runtime.Int32ArrayTest",
+    "thc.runtime.Int32VectorMemoryProofTest",
+    "thc.runtime.Int32VectorStorageTest",
+    "thc.runtime.Int8ArrayTest",
+    "thc.runtime.IntArrayTest",
+    "thc.runtime.JoinWhnfProofTest",
+    "thc.runtime.LeadingCaseReturnTest",
+    "thc.runtime.LoomForeignTest",
+    "thc.runtime.LoomHostingTest",
+    "thc.runtime.ManagedAddressStorageTest",
+    "thc.runtime.ManagedAllocationTest",
+    "thc.runtime.ManagedByteArrayCompareTest",
+    "thc.runtime.ManagedExportScalarsTest",
+    "thc.runtime.ManagedMVarCellTest",
+    "thc.runtime.ManagedMVarContractTest",
+    "thc.runtime.ManagedMVarLoadingTest",
+    "thc.runtime.ManagedStackInfoImageTest",
+    "thc.runtime.ManagedStackRuntimeTest",
+    "thc.runtime.ManagedStackSnapshotTest",
+    "thc.runtime.MaskContinuationProofTest",
+    "thc.runtime.NativePinnedStorageTest",
+    "thc.runtime.OperandRetentionTest",
+    "thc.runtime.OriginalStackCloneTest",
+    "thc.runtime.OriginalStackFormatterCommandTest",
+    "thc.runtime.OriginalStackInfoCallTest",
+    "thc.runtime.OriginalStdioExpressionTest",
+    "thc.runtime.PackageNativeDemandTest",
+    "thc.runtime.PackageNativeLifecycleTest",
+    "thc.runtime.PackageSafeForeignTest",
+    "thc.runtime.PassThroughRootTest",
+    "thc.runtime.PointerEqualityTest",
+    "thc.runtime.PosixStdioHostAbiModelTest",
+    "thc.runtime.PreparedAdmissionCompatibilityTest",
+    "thc.runtime.ProcessForeignExpressionTest",
+    "thc.runtime.ReferenceCaptureTest",
+    "thc.runtime.ReferenceFieldTest",
+    "thc.runtime.ReferenceFormalTest",
+    "thc.runtime.ResumableThunkProofTest",
+    "thc.runtime.ReturnedForeignPointerTest",
+    "thc.runtime.ReturnedPointerCompilationTest",
+    "thc.runtime.RtsFlagsTest",
+    "thc.runtime.RuntimeGCServicesTest",
+    "thc.runtime.RuntimeJitServicesTest",
+    "thc.runtime.RuntimeMemoryServicesTest",
+    "thc.runtime.RuntimeServicesApiTest",
+    "thc.runtime.RuntimeThreadServicesTest",
+    "thc.runtime.RuntimeTraceServicesTest",
+    "thc.runtime.SavedGuestContinuationTest",
+    "thc.runtime.SourceCloneTest",
+    "thc.runtime.StablePointerForeignTest",
+    "thc.runtime.StackAnnotationsTest",
+    "thc.runtime.StateLambdaJoinTest",
+    "thc.runtime.StaticShapeSafetyTest",
+    "thc.runtime.StdioHostAbiFailureTest",
+    "thc.runtime.SulongCbitsTest",
+    "thc.runtime.SumInputLayoutTest",
+    "thc.runtime.TailCallFrameTest",
+    "thc.runtime.TruffleStringExceptionTest",
+    "thc.runtime.TupleCompletionTest",
+    "thc.runtime.TupleJoinLoweringTest",
+    "thc.runtime.TypedCaseTest",
+    "thc.runtime.TypedExecutionTest",
+    "thc.runtime.TypedInputOwnershipTest",
+    "thc.runtime.TypedInputProtocolTest",
+    "thc.runtime.TypedSelfCallTest",
+    "thc.runtime.TypedTupleFieldLevityTest",
+    "thc.runtime.UnitCarrierTest",
+    "thc.runtime.UnknownBoxedSumTest",
+    "thc.runtime.UnknownBoxedTransportTest",
+    "thc.runtime.UnsupportedForeignCallTest",
+    "thc.runtime.VectorHeapStorageTest",
+    "thc.runtime.VectorLayoutTest",
+    "thc.runtime.VectorMemoryValidationOrderTest",
+    "thc.runtime.WindowsAbiInitializationTest",
+    "thc.runtime.WindowsCodePagesTest",
+    "thc.runtime.WindowsCpuAffinityTest",
+    "thc.runtime.WindowsDirectoryStreamsTest",
+    "thc.runtime.WindowsStdioHostAbiTest",
+    "thc.runtime.WindowsSulongLibraryLookupTest",
+    "thc.runtime.Word32VectorMemoryProofTest",
+    "thc.runtime.Word32VectorStorageTest",
+    "thc.runtime.WordArrayTest"
   ],
   "groups": {
     "backend-annotations": {
@@ -93,32 +268,23 @@
       "sources": ["t/fixtures/compiler/BackendAnnotations.hs", "t/haskell-fixtures/BackendAnnotationFixtures.hs", "t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "src/compiler/THC/BackendAnnotations.hs", "src/compiler/THC/Plugin.hs", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/Encode.hs", "thc.cabal"]
     },
     "compact-model": {
-      "junit": ["thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest", "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest", "thc.LauncherDiagnosticsTest", "thc.CoreRequestTest", "thc.CoreUnitManagedExportTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactRecordsTest"],
+      "junit": ["thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.CoreUnitManagedExportTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnixBatchTest", "thc.runtime.OriginalUnlinkTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; cabal build exe:thc-fixtures --offline; mkdir -p build; cabal list-bin exe:thc-fixtures --offline > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
     },
     "process-lifecycle": {
-      "junit": ["thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest"],
+      "junit": ["thc.runtime.CoreProcessForeignTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.ManagedProcessesTest", "thc.runtime.ProcessLifecycleCoreTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -s)-$(uname -m)\" in Linux-x86_64) cabal run exe:thc-fixtures --offline -- process-lifecycle ;; esac"]}],
       "outputs": ["build/process-lifecycle/core"],
-      "sources": ["t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
-        "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c",
-        "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java",
-        "src/main/java/thc/runtime/ManagedProcessForeign.java", "src/main/java/thc/runtime/ManagedProcesses.java"]
+      "sources": ["t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c", "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java", "src/main/java/thc/runtime/ManagedProcessForeign.java", "src/main/java/thc/runtime/ManagedProcesses.java"]
     },
     "integer-simd": {
-      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
+      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; fixture_mode=; case \"$(uname -m)\" in arm64|aarch64) fixture_mode=--export-only ;; esac; cabal build exe:thc-fixtures --offline; fixture_bin=$(cabal list-bin exe:thc-fixtures --offline); for family in int8x16 int16x8 word16x8 word32x4; do \"$fixture_bin\" \"$family\" $fixture_mode; done"]}],
       "outputs": ["build/simd-int8x16", "build/simd-int16x8", "build/simd-word16x8", "build/simd-word32x4"],
-      "sources": ["t/fixtures/compiler/SimdInt8X16.hs", "t/fixtures/compiler/SimdInt8X16Native.hs",
-        "t/fixtures/compiler/SimdInt16X8.hs", "t/fixtures/compiler/SimdInt16X8Native.hs",
-        "t/fixtures/compiler/SimdWord16X8.hs", "t/fixtures/compiler/SimdWord16X8Native.hs",
-        "t/fixtures/compiler/SimdWord32X4.hs", "t/fixtures/compiler/SimdWord32X4Native.hs",
-        "t/haskell-fixtures/IntegerSimdFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal", "src/test/java/thc/runtime/IntegerSimdModelTest.java",
-        "src/test/java/thc/runtime/IntegerSimdModel.java"]
+      "sources": ["t/fixtures/compiler/SimdInt8X16.hs", "t/fixtures/compiler/SimdInt8X16Native.hs", "t/fixtures/compiler/SimdInt16X8.hs", "t/fixtures/compiler/SimdInt16X8Native.hs", "t/fixtures/compiler/SimdWord16X8.hs", "t/fixtures/compiler/SimdWord16X8Native.hs", "t/fixtures/compiler/SimdWord32X4.hs", "t/fixtures/compiler/SimdWord32X4Native.hs", "t/haskell-fixtures/IntegerSimdFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/test/java/thc/runtime/IntegerSimdModelTest.java", "src/test/java/thc/runtime/IntegerSimdModel.java"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int16x8/provenance.json').read_text())\nassert proof['nativeRows'] == 6032 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int8x16/provenance.json').read_text())\nassert proof['nativeRows'] == 9168 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word16x8/provenance.json').read_text())\nassert proof['nativeRows'] == 5116 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word32x4/provenance.json').read_text())\nassert proof['nativeRows'] == 4882 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "text-cbits": {
       "junit": ["thc.runtime.TextCbitsTest"],
@@ -141,56 +307,18 @@
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "simd-word32x4-bytearray": {
-      "junit": [
-        "thc.runtime.SimdWord32ByteArrayTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "sh",
-            "-c",
-            "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- word32x4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- word32x4-bytearray ;; esac"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/simd-word32x4-bytearray"
-      ],
-      "sources": [
-        "t/haskell-fixtures/SimdByteArrayFixtures.hs",
-        "t/haskell-fixtures/SimdByteArrayModel.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "t/fixtures/compiler/SimdWord32X4ByteArray.hs",
-        "t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs"
-      ]
+      "junit": ["thc.runtime.SimdWord32ByteArrayTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- word32x4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- word32x4-bytearray ;; esac"]}],
+      "outputs": ["build/simd-word32x4-bytearray"],
+      "sources": ["t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/SimdWord32X4ByteArray.hs", "t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word32x4-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-int32x4-bytearray": {
-      "junit": [
-        "thc.runtime.SimdInt32ByteArrayTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "sh",
-            "-c",
-            "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- int32x4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- int32x4-bytearray ;; esac"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/simd-int32x4-bytearray"
-      ],
-      "sources": [
-        "t/haskell-fixtures/SimdByteArrayFixtures.hs",
-        "t/haskell-fixtures/SimdByteArrayModel.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "t/fixtures/compiler/SimdInt32X4ByteArray.hs",
-        "t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs"
-      ]
+      "junit": ["thc.runtime.SimdInt32ByteArrayTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- int32x4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- int32x4-bytearray ;; esac"]}],
+      "outputs": ["build/simd-int32x4-bytearray"],
+      "sources": ["t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/SimdInt32X4ByteArray.hs", "t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int32x4-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "boxed-cas": {
       "junit": ["thc.runtime.BoxedCasTest"],
@@ -217,12 +345,10 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "delimited-continuations": {
-      "junit": ["thc.runtime.DelimitedContinuationsTest"],
+      "junit": ["thc.runtime.CaseArmOutliningTest", "thc.runtime.DelimitedContinuationsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "delimited-continuations"]}],
       "outputs": ["build/delimited-continuations"],
-      "sources": ["t/fixtures/core/DelimitedContinuations.hs", "t/fixtures/compiler/DelimitedContinuationsNative.hs",
-        "t/haskell-fixtures/DelimitedContinuationsFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/core/DelimitedContinuations.hs", "t/fixtures/compiler/DelimitedContinuationsNative.hs", "t/haskell-fixtures/DelimitedContinuationsFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-scheduling": {
       "junit": ["thc.runtime.ThreadSchedulingTest"],
@@ -357,21 +483,16 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-process-identity": {
-      "junit": ["thc.runtime.OriginalProcessIdentityTest"],
+      "junit": ["thc.runtime.OriginalProcessIdentityTest", "thc.runtime.Md5ForeignCallTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-process-identity"]}],
       "outputs": ["build/original-process-identity"],
-      "sources": ["t/fixtures/compiler/OriginalProcessIdentityAudit.hs", "t/fixtures/compiler/OriginalProcessIdentityNative.hs",
-        "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java"]
+      "sources": ["t/fixtures/compiler/OriginalProcessIdentityAudit.hs", "t/fixtures/compiler/OriginalProcessIdentityNative.hs", "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java", "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/cbits/target-layout.c"]
     },
     "original-termios": {
-      "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest"],
+      "junit": ["thc.runtime.OriginalSavedTermiosTest", "thc.runtime.OriginalTermiosTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],
       "outputs": ["build/original-termios"],
-      "sources": ["t/fixtures/compiler/OriginalTermiosAudit.hs", "t/fixtures/compiler/OriginalTermiosNative.hs",
-        "t/fixtures/compiler/OriginalSavedTermiosAudit.hs", "t/fixtures/compiler/OriginalSavedTermiosNative.hs",
-        "t/haskell-fixtures/OriginalTermiosFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalTermiosAudit.hs", "t/fixtures/compiler/OriginalTermiosNative.hs", "t/fixtures/compiler/OriginalSavedTermiosAudit.hs", "t/fixtures/compiler/OriginalSavedTermiosNative.hs", "t/haskell-fixtures/OriginalTermiosFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "native-addresses": {
       "junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"],
@@ -383,12 +504,10 @@
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-open": {
-      "junit": ["thc.runtime.OriginalOpenTest"],
+      "junit": ["thc.runtime.LoomOriginalOpenTest", "thc.runtime.OriginalOpenTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-open"]}],
       "outputs": ["build/original-open"],
-      "sources": ["t/fixtures/compiler/OriginalOpenAudit.hs", "t/fixtures/compiler/OriginalOpenNative.hs",
-        "t/haskell-fixtures/OriginalOpenFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalOpenAudit.hs", "t/fixtures/compiler/OriginalOpenNative.hs", "t/haskell-fixtures/OriginalOpenFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "rts-diagnostics": {
       "junit": ["thc.runtime.RtsDiagnosticsTest"],
@@ -422,12 +541,8 @@
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-strerror"]}],
       "outputs": ["build/original-strerror"],
-      "sources": [
-        "t/fixtures/compiler/OriginalStrerrorNative.hs",
-        "t/haskell-fixtures/OriginalStrerrorFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"
-      ]
+      "sources": ["t/fixtures/compiler/OriginalStrerrorNative.hs", "t/haskell-fixtures/OriginalStrerrorFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"],
+      "requires": ["original-process-identity"]
     },
     "bytestring-utf8": {
       "junit": ["thc.runtime.ByteStringUtf8Test"],
@@ -465,70 +580,10 @@
       ]
     },
     "original-posix-stat": {
-      "junit": [
-        "thc.runtime.OriginalPosixStatTest",
-        "thc.runtime.PosixStatAbiTest",
-        "thc.runtime.OriginalFstatTest",
-        "thc.runtime.OriginalPathStatTest",
-        "thc.runtime.OriginalPathModeTest",
-        "thc.runtime.OriginalPathLinkTest",
-        "thc.runtime.OriginalPathAccessTest",
-        "thc.runtime.OriginalUnlinkAtTest",
-        "thc.runtime.OriginalFstatAtTest",
-        "thc.runtime.OriginalCurrentDirectoryTest",
-        "thc.runtime.OriginalDirectoryStreamsTest",
-        "thc.runtime.OriginalDirectoryPathsTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "cabal",
-            "run",
-            "exe:thc-fixtures",
-            "--offline",
-            "--",
-            "original-posix-stat"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/original-posix-stat",
-        "build/original-path-stat",
-        "build/original-path-mode",
-        "build/original-path-link",
-        "build/original-path-access",
-        "build/original-unlinkat",
-        "build/original-fstatat",
-        "build/original-current-directory",
-        "build/original-directory-streams",
-        "build/original-directory-paths"
-      ],
-      "sources": [
-        "t/fixtures/compiler/OriginalPosixStatAudit.hs",
-        "t/fixtures/compiler/OriginalPosixStatNative.hs",
-        "t/fixtures/compiler/OriginalPathStatAudit.hs",
-        "t/haskell-fixtures/OriginalPathStatFixtures.hs",
-        "t/fixtures/compiler/OriginalPathModeAudit.hs",
-        "t/haskell-fixtures/OriginalPathModeFixtures.hs",
-        "t/fixtures/compiler/OriginalPathLinkAudit.hs",
-        "t/haskell-fixtures/OriginalPathLinkFixtures.hs",
-        "t/haskell-fixtures/OriginalPosixStatFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "t/fixtures/compiler/OriginalPathAccessAudit.hs",
-        "t/haskell-fixtures/OriginalPathAccessFixtures.hs",
-        "t/fixtures/compiler/OriginalUnlinkAtAudit.hs",
-        "t/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
-        "t/fixtures/compiler/OriginalFstatAtAudit.hs",
-        "t/haskell-fixtures/OriginalFstatAtFixtures.hs",
-        "t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs",
-        "t/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
-        "t/fixtures/compiler/OriginalDirectoryStreamsAudit.hs",
-        "t/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs",
-        "t/fixtures/compiler/OriginalDirectoryPathsAudit.hs",
-        "t/haskell-fixtures/OriginalDirectoryPathsFixtures.hs"
-      ]
+      "junit": ["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalDirectoryStreamsTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.PosixStatAbiTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-stat"]}],
+      "outputs": ["build/original-posix-stat", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams", "build/original-directory-paths"],
+      "sources": ["t/fixtures/compiler/OriginalPosixStatAudit.hs", "t/fixtures/compiler/OriginalPosixStatNative.hs", "t/fixtures/compiler/OriginalPathStatAudit.hs", "t/haskell-fixtures/OriginalPathStatFixtures.hs", "t/fixtures/compiler/OriginalPathModeAudit.hs", "t/haskell-fixtures/OriginalPathModeFixtures.hs", "t/fixtures/compiler/OriginalPathLinkAudit.hs", "t/haskell-fixtures/OriginalPathLinkFixtures.hs", "t/haskell-fixtures/OriginalPosixStatFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/OriginalPathAccessAudit.hs", "t/haskell-fixtures/OriginalPathAccessFixtures.hs", "t/fixtures/compiler/OriginalUnlinkAtAudit.hs", "t/haskell-fixtures/OriginalUnlinkAtFixtures.hs", "t/fixtures/compiler/OriginalFstatAtAudit.hs", "t/haskell-fixtures/OriginalFstatAtFixtures.hs", "t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs", "t/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs", "t/fixtures/compiler/OriginalDirectoryStreamsAudit.hs", "t/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs", "t/fixtures/compiler/OriginalDirectoryPathsAudit.hs", "t/haskell-fixtures/OriginalDirectoryPathsFixtures.hs"]
     },
     "original-fd-ready": {
       "junit": ["thc.runtime.OriginalFdReadyNativeTest"],
@@ -562,14 +617,8 @@
       "junit": ["thc.runtime.OriginalStdioSeekNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-seek"]}],
       "outputs": ["build/original-stdio-seek"],
-      "sources": [
-        "t/fixtures/compiler/OriginalStdioSeekAudit.hs",
-        "t/fixtures/compiler/OriginalStdioSeekAuditNative.hs",
-        "t/haskell-fixtures/OriginalStdioSeekFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal"
-      ]
+      "sources": ["t/fixtures/compiler/OriginalStdioSeekAudit.hs", "t/fixtures/compiler/OriginalStdioSeekAuditNative.hs", "t/haskell-fixtures/OriginalStdioSeekFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"],
+      "requires": ["original-process-identity"]
     },
     "original-posix-dup": {
       "junit": ["thc.runtime.OriginalPosixDupNativeTest"],
@@ -691,7 +740,7 @@
       ]
     },
     "interface-core": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"],
+      "junit": ["thc.ManagedExportsNativeTest", "thc.ManagedForeignRootsNativeTest", "thc.ManagedImportStubsNativeTest", "thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],
       "outputs": ["build/interface-core"],
       "sources": ["t/haskell-fixtures/InstalledCacheFixtures.hs", "t/fixtures/compiler/InterfaceCacheRoot.hs", "t/fixtures/compiler/InterfaceCacheDependency.hs", "t/haskell-fixtures/InterfaceFixtures.hs", "t/haskell-fixtures/InterfaceForeignFacts.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/InterfaceLibrary.hs", "t/fixtures/compiler/InterfaceNative.hs", "t/fixtures/compiler/InterfaceForeign.hs", "t/fixtures/compiler/InterfaceForeignAlias.hs", "t/fixtures/compiler/ForeignImportStubs.hs", "t/fixtures/compiler/ImportStubsNative.hs", "src/compiler/THC/ForeignImportProvenance.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "src/compiler/interface/Main.hs", "src/compiler/THC/Interface.hs", "src/driver/cbits/target-layout.c", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/Zip.hs", "thc.cabal"]
@@ -793,93 +842,38 @@
       "sources": ["t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs"]
     },
     "sum-results": {
-      "junit": ["thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"],
-      "commands": [
-        {"argv": ["sh", "bin/prepare-aggregate-frontier.sh"]},
-        {"argv": ["python3", "bin/check-sum-layout.py", "--prepare"]},
-        {"argv": ["python3", "bin/prepare-sum-result-audit.py"]}
-      ],
+      "junit": ["thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest", "thc.runtime.UnknownBoxedNativeTest"],
+      "commands": [{"argv": ["sh", "bin/prepare-aggregate-frontier.sh"]}, {"argv": ["python3", "bin/check-sum-layout.py", "--prepare"]}, {"argv": ["python3", "bin/prepare-sum-result-audit.py"]}],
       "outputs": ["build/aggregate-core", "build/aggregate-post-core", "build/aggregate-native", "build/aggregate-frontier.json", "build/aggregate-layout", "build/sum-layout", "build/sum-result"],
-      "sources": [
-        "bin/prepare-aggregate-frontier.sh",
-        "bin/check-aggregate-frontier.py",
-        "bin/check-aggregate-layout.py",
-        "bin/check-sum-layout.py",
-        "bin/sum_layout_model.py",
-        "bin/test-sum-layout.py",
-        "bin/prepare-sum-result-audit.py",
-        "t/fixtures/compiler/AggregateFrontier.hs",
-        "t/fixtures/compiler/AggregateFrontierNative.hs",
-        "t/fixtures/compiler/AggregateLayoutAudit.hs",
-        "t/fixtures/compiler/SumLayoutAudit.hs",
-        "t/fixtures/compiler/SumLayoutAuditNative.hs",
-        "t/fixtures/compiler/SumResultAudit.hs",
-        "t/fixtures/compiler/SumResultAuditNative.hs"
-      ]
+      "sources": ["bin/prepare-aggregate-frontier.sh", "bin/check-aggregate-frontier.py", "bin/check-aggregate-layout.py", "bin/check-sum-layout.py", "bin/sum_layout_model.py", "bin/test-sum-layout.py", "bin/prepare-sum-result-audit.py", "t/fixtures/compiler/AggregateFrontier.hs", "t/fixtures/compiler/AggregateFrontierNative.hs", "t/fixtures/compiler/AggregateLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAuditNative.hs", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs"]
     },
     "simd-floatx4": {
       "junit": ["thc.runtime.SimdFloatVectorTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-floatx4-audit.py --export-only ;; *) python3 bin/prepare-floatx4-audit.py ;; esac"]}],
       "outputs": ["build/simd-floatx4"],
-      "sources": ["bin/prepare-floatx4-audit.py", "bin/test-floatx4-model.py", "t/fixtures/compiler/SimdFloatX4.hs", "t/fixtures/compiler/SimdFloatX4Native.hs"]
+      "sources": ["bin/prepare-floatx4-audit.py", "bin/test-floatx4-model.py", "t/fixtures/compiler/SimdFloatX4.hs", "t/fixtures/compiler/SimdFloatX4Native.hs"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-floatx4/provenance.json').read_text())\nassert proof['nativeRows'] == 2196 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-doublex2": {
       "junit": ["thc.runtime.SimdDoubleVectorTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-doublex2-audit.py --export-only ;; *) python3 bin/prepare-doublex2-audit.py ;; esac"]}],
       "outputs": ["build/simd-doublex2"],
-      "sources": ["bin/prepare-doublex2-audit.py", "bin/doublex2_model.py", "bin/test-doublex2-model.py", "t/fixtures/compiler/SimdDoubleX2.hs", "t/fixtures/compiler/SimdDoubleX2Native.hs"]
+      "sources": ["bin/prepare-doublex2-audit.py", "bin/doublex2_model.py", "bin/test-doublex2-model.py", "t/fixtures/compiler/SimdDoubleX2.hs", "t/fixtures/compiler/SimdDoubleX2Native.hs"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-doublex2/provenance.json').read_text())\nassert proof['nativeRows'] == 3390 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-floatx4-bytearray": {
-      "junit": [
-        "thc.runtime.SimdFloatByteArrayTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "sh",
-            "-c",
-            "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- floatx4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- floatx4-bytearray ;; esac"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/simd-floatx4-bytearray"
-      ],
-      "sources": [
-        "t/haskell-fixtures/SimdByteArrayFixtures.hs",
-        "t/haskell-fixtures/SimdByteArrayModel.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "t/fixtures/compiler/SimdFloatX4ByteArray.hs",
-        "t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs"
-      ]
+      "junit": ["thc.runtime.SimdFloatByteArrayTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- floatx4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- floatx4-bytearray ;; esac"]}],
+      "outputs": ["build/simd-floatx4-bytearray"],
+      "sources": ["t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/SimdFloatX4ByteArray.hs", "t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-floatx4-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 6720 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-doublex2-bytearray": {
-      "junit": [
-        "thc.runtime.SimdDoubleByteArrayTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "sh",
-            "-c",
-            "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- doublex2-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- doublex2-bytearray ;; esac"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/simd-doublex2-bytearray"
-      ],
-      "sources": [
-        "t/haskell-fixtures/SimdByteArrayFixtures.hs",
-        "t/haskell-fixtures/SimdByteArrayModel.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "t/fixtures/compiler/SimdDoubleX2ByteArray.hs",
-        "t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs"
-      ]
+      "junit": ["thc.runtime.SimdDoubleByteArrayTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- doublex2-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- doublex2-bytearray ;; esac"]}],
+      "outputs": ["build/simd-doublex2-bytearray"],
+      "sources": ["t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/SimdDoubleX2ByteArray.hs", "t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-doublex2-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 4384 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "explicit64-arrays": {
       "junit": ["thc.runtime.Explicit64ArrayTest"],
@@ -1013,19 +1007,10 @@
       ]
     },
     "compiled-thunk-retention": {
-      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest", "thc.runtime.FloatingPrimitiveTest"],
-      "commands": [
-        {"argv": ["python3", "bin/prepare-boxed-arrays.py"]},
-        {"argv": ["python3", "bin/prepare-floating-audit.py"]}
-      ],
+      "junit": ["thc.runtime.BoxedArrayTest", "thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-boxed-arrays.py"]}, {"argv": ["python3", "bin/prepare-floating-audit.py"]}],
       "outputs": ["build/boxed-arrays", "build/floating"],
-      "sources": [
-        "bin/prepare-boxed-arrays.py",
-        "bin/prepare-floating-audit.py",
-        "t/fixtures/compiler/BoxedArrayAudit.hs",
-        "t/fixtures/compiler/FloatingAudit.hs",
-        "t/fixtures/compiler/FloatingAuditNative.hs"
-      ]
+      "sources": ["bin/prepare-boxed-arrays.py", "bin/prepare-floating-audit.py", "t/fixtures/compiler/BoxedArrayAudit.hs", "t/fixtures/compiler/FloatingAudit.hs", "t/fixtures/compiler/FloatingAuditNative.hs"]
     },
     "original-stack": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderCallTest"],
@@ -1252,19 +1237,11 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-async": {
-      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "junit": ["thc.runtime.LoomNativeTest", "thc.runtime.ThreadAsyncNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-async"]}],
       "outputs": ["build/thread-async"],
-      "sources": [
-        "t/haskell-fixtures/ThreadAsyncFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "t/fixtures/compiler/ThreadAsyncAudit.hs",
-        "t/fixtures/compiler/ThreadAsyncNative.hs",
-        "t/fixtures/compiler/LazyForkAudit.hs",
-        "t/fixtures/compiler/LazyForkNative.hs",
-        "thc.cabal"
-      ]
+      "sources": ["t/haskell-fixtures/ThreadAsyncFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/ThreadAsyncAudit.hs", "t/fixtures/compiler/ThreadAsyncNative.hs", "t/fixtures/compiler/LazyForkAudit.hs", "t/fixtures/compiler/LazyForkNative.hs", "thc.cabal"],
+      "requires": ["thread-scheduling"]
     },
     "uncaught-self": {
       "junit": ["thc.runtime.UncaughtSelfNativeTest"],
@@ -1290,29 +1267,10 @@
       ]
     },
     "runtime-core-native": {
-      "junit": [
-        "thc.FastSmokeTest",
-        "thc.RuntimeTest",
-        "thc.BytecodeBackendTest",
-        "thc.SelfTailProfileTest"
-      ],
-      "commands": [
-        {"argv": ["bin/export-core.sh", "t/fixtures/core/Fixtures.hs"]},
-        {"argv": ["bin/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}
-      ],
-      "outputs": [
-        "build/core/THC.Prim.Test.cbd",
-        "build/core/Fixtures.cbd",
-        "build/native/oracle.tsv"
-      ],
-      "sources": [
-        "t/fixtures/compiler/THC/Prim/Test.hs",
-        "t/fixtures/core/Fixtures.hs",
-        "t/fixtures/core/NativeOracle.hs",
-        "t/fixtures/core/NativeTiming.hs",
-        "t/fixtures/core/MapWorkload.hs",
-        "bin/native-oracle.sh"
-      ]
+      "junit": ["thc.BytecodeBackendTest", "thc.FastSmokeTest", "thc.RuntimeTest", "thc.SelfTailProfileTest"],
+      "commands": [{"argv": ["bin/export-core.sh", "t/fixtures/core/Fixtures.hs"]}, {"argv": ["bin/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}],
+      "outputs": ["build/core/THC.Prim.Test.cbd", "build/core/Fixtures.cbd", "build/native/oracle.tsv"],
+      "sources": ["t/fixtures/compiler/THC/Prim/Test.hs", "t/fixtures/core/Fixtures.hs", "t/fixtures/core/NativeOracle.hs", "t/fixtures/core/NativeTiming.hs", "t/fixtures/core/MapWorkload.hs", "bin/native-oracle.sh"]
     },
     "explicit64-primops": {
       "junit": ["thc.runtime.Explicit64PrimopsTest"],
@@ -1377,43 +1335,10 @@
       "sources": ["t/haskell-fixtures/Main.hs", "t/haskell-fixtures/IntegerCompletionFixtures.hs", "t/fixtures/compiler/IntegerCompletionAudit.hs"]
     },
     "cbv-coercion": {
-      "junit": [
-        "thc.RealCoreEntryContractTest",
-        "thc.runtime.ScalarLexicalProofTest",
-        "thc.runtime.BoxedLexicalProofTest",
-        "thc.runtime.ScalarPrimitiveSignatureTest"
-      ],
-      "commands": [
-        {"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "bin/export-core.sh", "t/fixtures/compiler/TupleArithmeticAudit.hs"]},
-        {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "bin/export-core.sh", "t/fixtures/compiler/Explicit64PrimopsAudit.hs"]},
-        {"argv": ["bin/export-core.sh",
-            "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs"]},
-        {"argv": ["python3", "bin/check-demand-metadata.py", "--ghc-api"]},
-        {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy",
-            "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs"]},
-        {"argv": ["python3", "bin/check-cbv-metadata.py"]}
-      ],
-      "outputs": [
-        "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
-        "build/explicit64-primops/core/Explicit64PrimopsAudit.cbd",
-        "build/core/CBVAudit.cbd",
-        "build/core/CBVJoinAudit.cbd",
-        "build/core/CBVCoercionAudit.cbd",
-        "build/core/DemandAudit.cbd",
-        "build/cbv-post-core/CBVAudit.cbd",
-        "build/cbv-post-core/CBVJoinAudit.cbd",
-        "build/cbv-post-core/CBVCoercionAudit.cbd"
-      ],
-      "sources": [
-        "t/fixtures/compiler/TupleArithmeticAudit.hs",
-        "t/fixtures/compiler/Explicit64PrimopsAudit.hs",
-        "t/fixtures/compiler/CBVAudit.hs",
-        "t/fixtures/compiler/CBVJoinAudit.hs",
-        "t/fixtures/compiler/CBVCoercionAudit.hs",
-        "t/fixtures/compiler/DemandAudit.hs",
-        "bin/check-demand-metadata.py",
-        "bin/check-cbv-metadata.py"
-      ]
+      "junit": ["thc.RealCoreCallDemandTest", "thc.RealCoreEntryContractTest", "thc.runtime.BoxedLexicalProofTest", "thc.runtime.BoxedValueCacheTest", "thc.runtime.ScalarLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest"],
+      "commands": [{"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "bin/export-core.sh", "t/fixtures/compiler/TupleArithmeticAudit.hs"]}, {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "bin/export-core.sh", "t/fixtures/compiler/Explicit64PrimopsAudit.hs"]}, {"argv": ["bin/export-core.sh", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs"]}, {"argv": ["python3", "bin/check-demand-metadata.py", "--ghc-api"]}, {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs"]}, {"argv": ["python3", "bin/check-cbv-metadata.py"]}],
+      "outputs": ["build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd", "build/explicit64-primops/core/Explicit64PrimopsAudit.cbd", "build/core/CBVAudit.cbd", "build/core/CBVJoinAudit.cbd", "build/core/CBVCoercionAudit.cbd", "build/core/DemandAudit.cbd", "build/cbv-post-core/CBVAudit.cbd", "build/cbv-post-core/CBVJoinAudit.cbd", "build/cbv-post-core/CBVCoercionAudit.cbd"],
+      "sources": ["t/fixtures/compiler/TupleArithmeticAudit.hs", "t/fixtures/compiler/Explicit64PrimopsAudit.hs", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs", "bin/check-demand-metadata.py", "bin/check-cbv-metadata.py"]
     },
     "data-to-tag": {
       "junit": ["thc.runtime.DataToTagTest"],
@@ -1504,17 +1429,10 @@
       "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatArrayAudit.hs", "t/fixtures/compiler/WordArrayAudit.hs", "t/fixtures/core/UnboxedFloatArrays.hs", "t/fixtures/core/UnboxedWordArrays.hs"]
     },
     "live-async": {
-      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "junit": ["thc.runtime.AsyncStrictEntryNativeTest", "thc.runtime.LiveAsyncNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "live-async"]}],
       "outputs": ["build/live-async"],
-      "sources": [
-        "t/haskell-fixtures/LiveAsyncFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "t/fixtures/compiler/LiveAsyncAudit.hs",
-        "t/fixtures/compiler/LiveAsyncNative.hs",
-        "thc.cabal"
-      ]
+      "sources": ["t/haskell-fixtures/LiveAsyncFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/LiveAsyncAudit.hs", "t/fixtures/compiler/LiveAsyncNative.hs", "thc.cabal"]
     },
     "simd-capability-smoke": {
       "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
@@ -1612,6 +1530,185 @@
         "thc.cabal",
         "src/test/resources/core/original-bytestring-decimal-descriptors.json"
       ]
+    },
+    "source-core": {
+      "junit": ["thc.RealCoreJoinTest", "thc.runtime.CoreSourceTest"],
+      "commands": [{"argv": ["env", "THC_SOURCE_NOTES=true", "THC_CORE_OUT=build/source-core", "THC_GHC_OUT=build/source-ghc", "bin/export-core.sh", "t/fixtures/compiler/SourceNotes.hs", "t/fixtures/compiler/RepresentationAudit.hs"]}, {"argv": ["python3", "bin/check-source-metadata.py", "--fixture", "build/source-core/SourceNotes.cbd", "build/source-core/RepresentationAudit.cbd"]}],
+      "outputs": ["build/source-core"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "corpus": {
+      "junit": ["thc.CoverageCorpusTest", "thc.Int64ConversionTest", "thc.NarrowWordPrimitiveTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-corpus.py"]}],
+      "outputs": ["build/corpus"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "strict-fields": {
+      "junit": ["thc.StrictFieldsTest"],
+      "commands": [{"argv": ["bin/export-core.sh", "t/fixtures/compiler/StrictFields.hs"]}],
+      "outputs": ["build/core/StrictFields.cbd"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "cstring": {
+      "junit": ["thc.CStringTest"],
+      "commands": [{"argv": ["python3", "bin/export-boot.py"]}],
+      "outputs": ["build/map/boot-core", "build/map/boot-provenance.json"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "empty-join-input": {
+      "junit": ["thc.runtime.EmptyJoinInputTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-empty-join-input.py"]}],
+      "outputs": ["build/empty-join-input"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "truffle-strings": {
+      "junit": ["thc.runtime.IntrinsicOperandContinuationTest", "thc.runtime.TruffleStringTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "truffle-strings"]}],
+      "outputs": ["build/truffle-strings"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "array-slices": {
+      "junit": ["thc.runtime.ArraySliceTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-array-slices.py"]}],
+      "outputs": ["build/array-slices"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "tuple-arithmetic": {
+      "junit": ["thc.runtime.TupleArithmeticTest", "thc.runtime.WordCarryTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "tuple-arithmetic"]}],
+      "outputs": ["build/tuple-arithmetic"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "tuple-join": {
+      "junit": ["thc.runtime.TupleJoinResultTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-tuple-join-audit.py"]}],
+      "outputs": ["build/tuple-join"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "vector-api": {
+      "junit": ["thc.runtime.VectorApiTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "vector-api"]}],
+      "outputs": ["build/vector-api"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "empty-tuple-input": {
+      "junit": ["thc.runtime.EmptyTupleInputNativeTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-empty-tuple-input-audit.py"]}],
+      "outputs": ["build/empty-tuple-input"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "show-word-list": {
+      "junit": ["thc.runtime.ShowWordListTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-show-word-list.py"]}],
+      "outputs": ["build/show-word-list"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "state-tuple": {
+      "junit": ["thc.runtime.StateTupleTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-state-tuple-audit.py"]}],
+      "outputs": ["build/state-tuple"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "short-bytes-slices": {
+      "junit": ["thc.runtime.ShortByteStringSliceTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-short-bytes-slices.py"]}],
+      "outputs": ["build/short-bytes-slices"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "tuple-return": {
+      "junit": ["thc.runtime.TupleResultTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-tuple-return-audit.py"]}],
+      "outputs": ["build/tuple-return"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
+      "requires": ["sum-results"]
+    },
+    "process-signals": {
+      "junit": ["thc.runtime.ForkHostFailureTest", "thc.runtime.LoomSignalProcessTest", "thc.runtime.ProcessSignalsTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "process-signals"]}],
+      "outputs": ["build/process-signals"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "record-fields": {
+      "junit": ["thc.runtime.RecordFieldNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "record-fields"]}],
+      "outputs": ["build/record-fields"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "managed-mvars": {
+      "junit": ["thc.runtime.ManagedMVarContextTest", "thc.runtime.ManagedMVarNativeTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-managed-mvars.py", "--refresh"]}],
+      "outputs": ["build/managed-mvars"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "unsafe-equality": {
+      "junit": ["thc.runtime.UnsafeEqualityTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "unsafe-equality"]}],
+      "outputs": ["build/unsafe-equality"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "show-int": {
+      "junit": ["thc.runtime.ShowIntTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-show-int.py"]}],
+      "outputs": ["build/show-int"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "tag-to-enum": {
+      "junit": ["thc.runtime.TagToEnumTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-tag-to-enum-audit.py"]}],
+      "outputs": ["build/tag-to-enum"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "address-fields": {
+      "junit": ["thc.runtime.AddressFieldTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-address-fields.py"]}],
+      "outputs": ["build/address-fields"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "sum-join": {
+      "junit": ["thc.runtime.SumJoinResultTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "sum-join"]}],
+      "outputs": ["build/sum-join"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "narrow-literal-proofs": {
+      "junit": ["thc.runtime.NarrowLiteralProofTest"],
+      "commands": [{"argv": ["python3", "bin/prepare-narrow-literal-proofs.py"]}],
+      "outputs": ["build/narrow-literal-proofs"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "managed-md5": {
+      "junit": ["thc.runtime.ManagedMd5Test"],
+      "commands": [{"argv": ["python3", "bin/prepare-managed-md5.py"]}],
+      "outputs": ["build/managed-md5-native"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+    },
+    "simd-int64x2": {
+      "junit": ["thc.runtime.SimdVectorTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-simd-audit.py --vector int64x2 --export-only ;; *) python3 bin/prepare-simd-audit.py --vector int64x2 ;; esac"]}],
+      "outputs": ["build/simd"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd/provenance.json').read_text())\nassert proof['nativeRows'] == 147 and proof['stages'] == ['pre', 'post'], proof\n"]}]
+    },
+    "simd-int32x4": {
+      "junit": ["thc.runtime.SimdInt32VectorTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-simd-audit.py --vector int32x4 --export-only ;; *) python3 bin/prepare-simd-audit.py --vector int32x4 ;; esac"]}],
+      "outputs": ["build/simd-int32x4"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int32x4/provenance.json').read_text())\nassert proof['nativeRows'] == 243 and proof['stages'] == ['pre', 'post'], proof\n"]}]
+    },
+    "simd-int32x4-multiply": {
+      "junit": ["thc.runtime.SimdInt32MultiplyTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-int32x4-multiply-audit.py  --export-only ;; *) python3 bin/prepare-int32x4-multiply-audit.py  ;; esac"]}],
+      "outputs": ["build/simd-int32x4-multiply"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int32x4-multiply/provenance.json').read_text())\nassert proof['nativeRows'] == 1722 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
+    },
+    "simd-word8x16": {
+      "junit": ["thc.runtime.SimdWord8VectorTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-word8x16-audit.py  --export-only ;; *) python3 bin/prepare-word8x16-audit.py  ;; esac"]}],
+      "outputs": ["build/simd-word8x16"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
+      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word8x16/provenance.json').read_text())\nassert proof['nativeRows'] == 7712 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     }
   }
 }
