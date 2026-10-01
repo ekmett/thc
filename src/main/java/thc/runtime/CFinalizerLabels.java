@@ -12,9 +12,17 @@ import static thc.runtime.RuntimeFault.fault;
 public final class CFinalizerLabels extends Expr {
     private final String symbol;
     CFinalizerLabels(String symbol, CoreRepresentation proof) {
-        requireProof(proof);
+        validate(symbol, proof);
         this.symbol = symbol;
         setRepresentation(proof);
+    }
+    static void validate(String symbol, CoreRepresentation proof) {
+        requireProof(proof);
+        requireSymbol(symbol);
+    }
+    private static void requireSymbol(String symbol) {
+        if (symbol == null || symbol.isEmpty() || symbol.indexOf('\0') >= 0)
+            throw fault("Original C function label requires a nonempty symbol without NUL");
     }
     private static void requireProof(CoreRepresentation proof) {
         if (proof == null || !proof.getPresent() || proof.getKind() != CoreKind.ADDRESS || proof.isAggregate()
@@ -22,7 +30,7 @@ public final class CFinalizerLabels extends Expr {
             throw fault("Original C function label requires exact AddrRep proof");
     }
     public static ManagedAddress fromCore(String symbol, CoreRepresentation proof) {
-        requireProof(proof);
+        validate(symbol, proof);
         return Language.currentState(null).cbits().finalizerLabel(symbol);
     }
     @TruffleBoundary ManagedAddress resolve() { return Language.currentState(null).cbits().finalizerLabel(symbol); }

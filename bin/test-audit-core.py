@@ -215,7 +215,7 @@ class ReportReachabilityTest(unittest.TestCase):
         self.assertFalse(report['accepted'])
         self.assertEqual(['root', 'second', 'root'], report['roots'])
         self.assertEqual(['retained'], report['retainedExports'])
-        self.assertEqual(dict(suppliedBindings=6, reachableBindings=6, missingGlobals=2, issues=2), report['summary'])
+        self.assertEqual(dict(suppliedBindings=6, reachableBindings=6, missingGlobals=2, issues=2, unresolvedNativeSymbols=0), report['summary'])
         self.assertEqual([dict(id=key, source='first.json', predecessor=parent) for key, parent in (
             ('root', None), ('second', None), ('retained', None),
             ('left', 'root'), ('right', 'root'), ('shared', 'second'))], report['reachableBindings'])
@@ -247,7 +247,7 @@ class ReportReachabilityTest(unittest.TestCase):
                 report = audit_core.Audit([('chain.json', module)], CAP).run([keys[0]])
                 self.assertFalse(report['accepted'])
                 self.assertEqual(dict(suppliedBindings=count, reachableBindings=count,
-                                      missingGlobals=1, issues=1), report['summary'])
+                                      missingGlobals=1, issues=1, unresolvedNativeSymbols=0), report['summary'])
                 self.assertEqual(keys, report['issues'][0]['reachableVia'])
                 self.assertEqual(keys + ['missing'], report['missingGlobals'][0]['reachableVia'])
                 self.assertEqual(count, len(report['dependencies']))
@@ -4363,8 +4363,10 @@ class ExplicitWeakContractTest(unittest.TestCase):
                     audit.package_scalar_links['other'] = copy.deepcopy(link)
                     audit.package_scalar_proofs['other'] = {'owned_entry'}
                 audit.literal('function-addr', 'package_cleanup', 'root', 'expr')
-                self.assertEqual([] if mode == 'proved' else ['unsupported-literal'],
+                self.assertEqual([] if mode in ('proved', 'other-symbol') else ['unsupported-literal'],
                                  [issue['code'] for issue in audit.issues])
+                self.assertEqual(['package_cleanup'] if mode == 'other-symbol' else [],
+                                 [item['symbol'] for item in audit.unresolved_native_symbols])
 
     def fixture(self, name):
         state = dict(kind='void', primReps=[], evaluated=True)
@@ -4416,13 +4418,15 @@ class ExplicitWeakContractTest(unittest.TestCase):
                 self.assertFalse(report['accepted'], (name, mutation))
                 self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
 
-    def test_only_source_certified_function_labels_are_admitted(self):
+    def test_native_function_labels_record_unresolved_demand_frontier(self):
         for symbol in ('free', 'enabled_capabilities', 'notACallback'):
             module = self.fixture('addCFinalizerToWeak#')
             self.call(module)[2][0] = ['lit', 'function-addr', symbol,
                 dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
             report = run_tuple(module)
-            self.assertEqual(symbol == 'free', report['accepted'], (symbol, report))
+            self.assertTrue(report['accepted'], (symbol, report))
+            self.assertEqual([] if symbol == 'free' else [symbol],
+                [item['symbol'] for item in report['unresolvedNativeSymbols']])
         module = self.fixture('addCFinalizerToWeak#')
         self.call(module)[2][0] = ['lit', 'data-addr', 'enabled_capabilities',
             dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
@@ -4442,6 +4446,24 @@ class ExplicitWeakContractTest(unittest.TestCase):
 
 
 class RTSDataLabelTest(unittest.TestCase):
+    def test_native_function_frontier_rejects_bad_symbols_and_ambiguous_authority(self):
+        label = ['lit', 'function-addr', 'missing_optional_native_function',
+                 dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
+        def audit(expr, ambiguous=False):
+            module = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expr)], constructors=[])
+            auditor = audit_core.Audit([('fixture.json', module)], CAP)
+            if ambiguous:
+                for unit in ('first-unit', 'second-unit'):
+                    auditor.package_scalar_links[unit] = dict(abi=[dict(symbol=label[2], entry='address')], dataSymbols=['address'])
+            return auditor.run(['root'])
+        report = audit(label)
+        self.assertTrue(report['accepted'])
+        self.assertEqual([label[2]], [item['symbol'] for item in report['unresolvedNativeSymbols']])
+        self.assertFalse(audit(label, True)['accepted'])
+        for value in ('', None, 3, 'bad\0symbol'):
+            wrong = copy.deepcopy(label); wrong[2] = value
+            self.assertFalse(audit(wrong)['accepted'], value)
+
     def test_native_data_requires_link_and_address_proof(self):
         label = ["lit", "data-addr", "hs_bytestring_lower_hex_table",
                  dict(rep=dict(kind="address", primReps=["AddrRep"], evaluated=True))]

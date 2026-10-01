@@ -1591,7 +1591,7 @@ public final class Program implements ExecutableProgram {
             }
             case "lit" -> {
                 String tag = (String) expr.get(1);
-                if (reusableCode && tag.equals("function-addr"))
+                if (tag.equals("function-addr") && !nativeCallbacks.containsKey(expr.get(2)))
                     yield new CFinalizerLabels((String) expr.get(2), CoreRepresentations.expression(expr));
                 if (tag.equals("rubbish")) yield rubbish(RubbishLiterals.proof(expr), scope);
                 Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.expression(expr)), reusableCode && tag.equals("bignat"));

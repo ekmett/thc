@@ -637,6 +637,7 @@ class Audit:
         self.primitives = _UseGroups(store, 'primitives') if store is not None else {}
         self.foreign_calls = _EventList(store, 'foreign', owner_field='owner') if store is not None else []
         self.literals = _Literals(store) if store is not None else {}
+        self.unresolved_native_symbols = _EventList(store, 'unresolved-native-symbols', owner_field='owner') if store is not None else []
         self.used_constructors = _UseGroups(store, 'constructors') if store is not None else {}
         self.reachable = _Reachable(store) if store is not None else []
         self.predecessors = _Predecessors(store) if store is not None else {}
@@ -989,13 +990,23 @@ class Audit:
             return
         if kind == 'rubbish' and value is not None:
             self.issue('invalid-literal-value', owner, path, 'Rubbish has no payload; its representation belongs in metadata')
+        if kind == 'function-addr' and (not isinstance(value, str) or not value or '\0' in value):
+            self.issue('invalid-literal-value', owner, path, 'C function label requires a nonempty symbol without NUL')
+            return
         if kind == 'function-addr' and value not in self.cap.get('functionLabels', []) and value not in self.native_callback_helpers:
             selected = [(unit, entry['entry']) for unit, link in self.package_scalar_links.items()
                 for entry in link['abi'] if entry['symbol'] == value and
                     (entry['entry'] in link.get('dataSymbols', []) or
                      entry['entry'] in link.get('finalizers', []) and entry['entry'] in self.package_scalar_proofs[unit])]
-            if len(selected) != 1:
-                self.issue('unsupported-literal', owner, path, f'uncertified or ambiguous C function label {value}')
+            candidates = [entry for link in self.package_scalar_links.values()
+                for entry in link['abi'] if entry['symbol'] == value]
+            if len(candidates) > 1:
+                self.issue('unsupported-literal', owner, path, f'ambiguous C function label {value}')
+            elif candidates and not selected:
+                self.issue('unsupported-literal', owner, path, f'uncertified C function label {value}')
+            elif not selected:
+                self.unresolved_native_symbols.append(dict(symbol=value, kind=kind, owner=owner, path=path,
+                    resolution='required-on-expression-evaluation'))
         if kind == 'data-addr' and value not in self.cap.get('dataLabels', []):
             selected = [(unit, entry['entry']) for unit, link in self.package_scalar_links.items()
                 for entry in link['abi'] if entry['symbol'] == value and entry['entry'] in link.get('dataSymbols', [])]
@@ -3027,7 +3038,7 @@ class Audit:
             del binding
         if self.store is not None:
             return self._stream_report(roots)
-        for issue in self.issues:
+        for issue in chain(self.issues, self.unresolved_native_symbols):
             if issue['owner'] in self.predecessors:
                 issue['reachableVia'] = self.reachable_via(issue['owner'])
         missing = [dict(id=key, reachableVia=self.reachable_via(uses[0]['owner']) + [key], references=uses)
@@ -3035,7 +3046,7 @@ class Audit:
         return dict(schema=2, audit='syntactic-reachable-core', roots=roots, retainedExports=self.retained_exports,
                     capabilityProfile=self.cap.get('name'), accepted=not self.issues and not missing,
                     summary=dict(suppliedBindings=len(self.bindings), reachableBindings=len(self.reachable),
-                                 missingGlobals=len(missing), issues=len(self.issues)),
+                                 missingGlobals=len(missing), issues=len(self.issues), unresolvedNativeSymbols=len(self.unresolved_native_symbols)),
                     reachableBindings=[dict(id=k, source=self.sources[k], predecessor=self.predecessors[k]) for k in self.reachable],
                     dependencies=self.edges, missingGlobals=missing,
                     runtimeExternals=[dict(id=key, uses=[edge for edge in self.edges if edge['dependency'] == key])
@@ -3044,8 +3055,10 @@ class Audit:
                     foreignCalls=self.foreign_calls,
                     constructors=[dict(id=k, metadata=self.constructors.get(k), uses=v) for k, v in sorted(self.used_constructors.items())],
                     literals=[v for _, v in sorted(self.literals.items())], issues=self.issues,
+                    unresolvedNativeSymbols=self.unresolved_native_symbols,
                     limits=['All syntactically reachable branches and local RHSs are audited, including lazy error paths.',
-                            'Acceptance checks the declared capability profile, not termination, branch feasibility, or runtime correctness.'])
+                            'Acceptance checks well-formed loadable Core; unresolvedNativeSymbols must resolve if their expressions execute.',
+                            'Acceptance does not establish termination, branch feasibility, native symbol availability, or runtime correctness.'])
 
     def _stream_report(self, roots):
         store = self.store
@@ -3058,6 +3071,11 @@ class Audit:
                 if issue['owner'] in self.predecessors:
                     issue['reachableVia'] = self.reachable_via(issue['owner'])
                 yield issue
+
+        def unresolved_native_symbols():
+            for item in store.events('unresolved-native-symbols'):
+                item['reachableVia'] = self.reachable_via(item['owner'])
+                yield item
 
         def missing():
             for key in store.event_groups('missing'):
@@ -3078,7 +3096,7 @@ class Audit:
             retainedExports=_StreamArray(lambda: iter(self.retained_exports)), capabilityProfile=self.cap.get('name'),
             accepted=not self.issues and not self.missing,
             summary=dict(suppliedBindings=len(self.bindings), reachableBindings=len(self.reachable),
-                         missingGlobals=len(self.missing), issues=len(self.issues)),
+                         missingGlobals=len(self.missing), issues=len(self.issues), unresolvedNativeSymbols=len(self.unresolved_native_symbols)),
             reachableBindings=_StreamArray(lambda: (dict(id=key, source=self.sources[key], predecessor=predecessor)
                 for key, predecessor in store.reachable())),
             dependencies=events('edges'), missingGlobals=_StreamArray(missing),
@@ -3089,8 +3107,10 @@ class Audit:
             constructors=_StreamArray(lambda: (dict(id=key, metadata=self.constructors.get(key), uses=events('constructors', key))
                 for key in store.event_groups('constructors'))),
             literals=_StreamArray(literals), issues=_StreamArray(issues),
+            unresolvedNativeSymbols=_StreamArray(unresolved_native_symbols),
             limits=['All syntactically reachable branches and local RHSs are audited, including lazy error paths.',
-                    'Acceptance checks the declared capability profile, not termination, branch feasibility, or runtime correctness.'])
+                    'Acceptance checks well-formed loadable Core; unresolvedNativeSymbols must resolve if their expressions execute.',
+                            'Acceptance does not establish termination, branch feasibility, native symbol availability, or runtime correctness.'])
 
 
 def _input_modules(package_manifest, files, store=None, manifest_identity=None):
