@@ -15,6 +15,7 @@ import java.nio.file.*;
 import java.util.Arrays;
 import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 @EnabledOnOs(OS.LINUX)
 @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
@@ -39,7 +40,7 @@ class OriginalUnlinkTest {
                         boolean compiled;
                         long remove(ManagedAddress name) throws Exception {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            int result = (Integer) Calls.target(target, new Object[]{0L, name, thc.runtime.Unit.INSTANCE});
+                            int result = (Integer) callScalarTestTarget(target, new Object[]{0L, name, thc.runtime.Unit.INSTANCE});
                             assertEquals(before + (compiled ? 1 : 0), ((Number) program.diagnostics().get("compiledEntries")).longValue());
                             if (compiled) assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                             var handoff = language.getHandoffState().get();
@@ -83,6 +84,7 @@ class OriginalUnlinkTest {
                     exercise.compiled = true; exercise.run();
                     var survivor = Files.writeString(directory.resolve("survivor-" + backend), "safe");
                     assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, path(survivor), 7L}));
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, path(survivor), 7L}));
                     assertTrue(Files.exists(survivor), "Invalid State must reject before deletion");
                     assertThrows(RuntimeFault.class, () -> state.getStdio().unlink(ManagedAddress.fromByteArray(new byte[]{65})));
                 } finally { context.leave(); }

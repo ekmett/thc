@@ -62,7 +62,7 @@ class OriginalFstatTest {
                                 case "renamed" -> { Files.move(original,renamed); Files.write(original,new byte[]{42}); } case "unlinked" -> Files.delete(renamed); case "closed" -> { assertEquals(0L,files.close(alias)); assertEquals(0L,files.close(fd)); } }
                             byte[] bytes = new byte[size + 16]; Arrays.fill(bytes,(byte) 90); var address = ManagedAddress.fromByteArray(bytes).plus(8); long source = Objects.equals(row.get(0),"invalid") ? -1L : Objects.equals(row.get(0),"renamed") ? alias : fd;
                             assertEquals(-1L,stdio.close(-1)); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); if (compiled) for (var target : active) valid(target);
-                            long expected = ((Number) row.get(name.equals("originalFstat") ? 1 : 2)).longValue(); assertEquals(expected,Calls.target(entry,new Object[]{0L,source,address}),stage + "/" + backend + "/" + name + "/" + row.get(0)); assertEquals(((Number) row.get(2)).longValue(),stdio.errno());
+                            long expected = ((Number) row.get(name.equals("originalFstat") ? 1 : 2)).longValue(); assertEquals(expected,callScalarTestTarget(entry,new Object[]{0L,source,address}),stage + "/" + backend + "/" + name + "/" + row.get(0)); assertEquals(((Number) row.get(2)).longValue(),stdio.errno());
                             if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); assertEquals(active,targets(entry)); for (var target : active) valid(target); }
                             assertEquals(true,row.get(4),"Native destination/canary observation");
                             if (((Number) row.get(1)).longValue() == 0) { long mode = field(address,OriginalStdioOp.ST_MODE);
@@ -75,7 +75,7 @@ class OriginalFstatTest {
                     }
                 }
                 var exercise = new Exercise(); exercise.run(false); exercise.active = targets(entry); assertEquals(1,exercise.active.size(),"Only the public root remains after State# lowering");
-                var binding = single((List<Map<String,Object>>) linked.get("bindings"),b -> Objects.equals(b.get("name"),name)); int count = 0; for (var node : nodes(binding.get("expr"))) if (!node.isEmpty() && Objects.equals(node.getFirst(),"lam")) count++; assertEquals(2,count);
+                var binding = single((List<Map<String,Object>>) linked.get("bindings"),b -> Objects.equals(b.get("id"),"main:OriginalPosixStatAudit." + name)); int count = 0; for (var node : nodes(binding.get("expr"))) if (!node.isEmpty() && Objects.equals(node.getFirst(),"lam")) count++; assertEquals(2,count);
                 for (var target : exercise.active) { target.getClass().getMethod("compile",boolean.class).invoke(target,true); valid(target); } exercise.run(true); return null;
             }); }
         }
