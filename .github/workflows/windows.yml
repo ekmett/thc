@@ -37,6 +37,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $env:THC_PYTHON = (Get-Command python.exe).Source
           New-Item -ItemType Directory -Force build | Out-Null
+          $env:LLD_REPRODUCE = Join-Path $PWD 'build/windows-native-link.tar'
           & {
             . ./bin/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
             Invoke-ThcTool $env:CABAL @('update')
@@ -50,6 +51,7 @@ jobs:
           if-no-files-found: warn
           path: |
             build/windows-ci.log
+            build/windows-native-link.tar
             build/windows-smoke/
             build/windows-launcher/
             build/windows-driver/
