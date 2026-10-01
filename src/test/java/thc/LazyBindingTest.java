@@ -56,6 +56,27 @@ class LazyBindingTest {
     private long count(ExecutableProgram program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
     private Object invoke(ExecutableProgram program, Object value, Object... arguments) { return Calls.target(program.hostEntryTarget(arguments.length), new Object[]{value, arguments}); }
     private long attempts(List<CoreBindingBody> sources) { long total = 0; for (var source : sources) total += source.decodeAttempts(); return total; }
+    @Test void unselectedNativeFunctionLabelDoesNotResolveButDemandedMissingLabelFails() throws Exception {
+        bothBackends((language, backend, async) -> {
+            var address = map("kind", "address", "primReps", list("AddrRep"), "evaluated", true);
+            var label = list("lit", "function-addr", "missing_optional_native_function", map("rep", address));
+            var body = list("case", list("var", "x"), "choice", list(
+                list("lit", list("int", "0"), list(), list("lit", "null-addr", "0", map("rep", address))),
+                list("default", null, list(), label)), map("rep", address));
+            var source = module(list(binding("entry", list("lam", list(formal), body))));
+            var prepared = program(language, backend, async, source);
+            var entry = prepared.entryValue("entry");
+            assertSame(ManagedAddress.nullAddress(), invoke(prepared, entry, 0L));
+            assertThrows(RuntimeFault.class, () -> invoke(prepared, entry, 1L));
+            assertSame(ManagedAddress.nullAddress(), invoke(prepared, entry, 0L));
+            for (var malformed : list(
+                    list("lit", "function-addr", "", map("rep", address)),
+                    list("lit", "function-addr", "missing_optional_native_function", map("rep", map("kind", "long", "primReps", list("IntRep")))))) {
+                var invalid = module(list(binding("entry", list("lam", list(formal), malformed))));
+                assertThrows(RuntimeFault.class, () -> program(language, backend, async, invalid).entryValue("entry"));
+            }
+        });
+    }
     @Test void firstCompiledColdCellReadDoesNotRetireTheCaller() throws Exception {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();

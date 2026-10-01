@@ -893,6 +893,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" thread-label', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/thread-label/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
         self.assertEqual(14, len([p for p in fast_fixtures.FULL_REQUIRED if p.startswith('build/thread-label/')]))
+        for stage in ('pre', 'post'):
+            stem = f'build/thread-label/{stage}/core/ThreadLabelAudit'
+            self.assertIn(stem + '.cbd', fast_fixtures.FULL_REQUIRED)
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(stem + '.cbd'))
+            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(stem + '.json'))
+            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(stem.replace('ThreadLabelAudit', 'Unreviewed') + '.cbd'))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
 
     def test_original_tcsetattr_registration_and_closed_native_receipt(self):
@@ -2182,6 +2188,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['interface-core']
         self.assertEqual('interface-core', owners['thc.runtime.InterfaceCoreNativeTest'])
         self.assertEqual('interface-core', owners['thc.ManagedImportStubsNativeTest'])
+        self.assertEqual('interface-core', owners['thc.CoreUnitManagedExportTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'interface-core']}], group['commands'])
         self.assertEqual(['build/interface-core'], group['outputs'])

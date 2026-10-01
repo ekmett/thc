@@ -5360,6 +5360,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             case "lit" -> {
                 var kind = (String) expr.get(1);
                 if (kind.equals("rubbish")) yield new RubbishExpression(RubbishLiterals.proof(expr));
+                if (kind.equals("function-addr") && !nativeCallbacks.containsKey(expr.get(2))) {
+                    var proof = CoreRepresentations.expression(expr);
+                    var symbol = (String) expr.get(2);
+                    CFinalizerLabels.validate(symbol, proof);
+                    yield new ProvenExpression(e -> e.builder.emitResolveCFunctionLabel(symbol, proof), proof);
+                }
                 var value = constant(literal(kind, expr.get(2), CoreRepresentations.expression(expr)));
                 yield switch (kind) {
                     case "int8", "word8", "int16", "word16", "int32", "word32" ->

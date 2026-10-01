@@ -139,7 +139,7 @@ public final class SulongCbits {
         var function = symbol.equals("free") ? ownedFree :
             Language.currentState(null).getPackageCbits().finalizer(symbol);
         if (function == null) return Language.currentState(null).getPackageCbits().dataAddress(null, symbol);
-        return ManagedAddress.fromCFinalizer(function);
+        return function.getAddress();
     }
     public void invokeFinalizer(CFinalizerFunction function, ManagedAddress address) {
         function.requireOwner(this);

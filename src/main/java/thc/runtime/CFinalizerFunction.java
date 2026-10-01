@@ -10,10 +10,13 @@ public final class CFinalizerFunction {
     private final String symbol;
     private final Object callable;
     private final PackageScalarFunction packageFunction;
+    private final ManagedAddress address;
     public CFinalizerFunction(SulongCbits owner, String symbol, Object callable) { this(owner, symbol, callable, null); }
     public CFinalizerFunction(SulongCbits owner, String symbol, Object callable, PackageScalarFunction packageFunction) {
         this.owner = owner; this.symbol = symbol; this.callable = callable; this.packageFunction = packageFunction;
+        this.address = ManagedAddress.fromCFinalizer(this);
     }
+    public ManagedAddress getAddress() { return address; }
     public PackageScalarFunction getPackageFunction() { return packageFunction; }
     public String getSymbol() { return symbol; }
     public Object getCallable() { return callable; }

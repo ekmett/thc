@@ -79,7 +79,10 @@ class PackageFinalizerTest {
             context.initialize("thc"); context.enter();
             try {
                 var owner = Language.currentState(); owner.getPackageCbits().declare(link);
-                var label = owner.cbits().finalizerLabel("first");
+                var expression = new CFinalizerLabels("first", new CoreRepresentation(CoreKind.ADDRESS, true, true, List.of("AddrRep")));
+                var label = expression.resolve();
+                assertSame(label, expression.resolve(), "repeated demand reuses the context-owned address");
+                assertSame(label.finalizerFunction(), expression.resolve().finalizerFunction());
                 byte[] bytes = {3}; label.finalizerFunction().invoke(ManagedAddress.fromByteArray(bytes));
                 assertArrayEquals(new byte[]{31}, bytes);
                 owner.getPackageCbits().link(link);
@@ -93,7 +96,8 @@ class PackageFinalizerTest {
             first.initialize("thc"); first.enter();
             try {
                 var state = Language.currentState(null); state.getPackageCbits().link(link);
-                var callback = state.cbits().finalizerLabel("first");
+                var callback = new CFinalizerLabels("first",
+                    new CoreRepresentation(CoreKind.ADDRESS, true, true, List.of("AddrRep"))).resolve();
                 byte[] bytes = {0}; var pointer = ManagedAddress.fromByteArray(bytes);
                 var failed = assertThrows(RuntimeFault.class, () -> state.getPackageCbits().link(conflicting));
                 assertSame(failed, assertThrows(RuntimeFault.class, () -> state.getPackageCbits().finalizer("unpublished")),

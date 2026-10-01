@@ -2042,6 +2042,8 @@ def allowed_payload(name):
         return name in MEMSET_OUTPUTS
     if parts[1] == "original-memory-search":
         return name in MEMORY_SEARCH_OUTPUTS
+    if name in {f"build/thread-label/{stage}/core/ThreadLabelAudit.cbd" for stage in ("pre", "post")}:
+        return True
     if parts[1] == "thread-inventory":
         return name in THREAD_INVENTORY_OUTPUTS
     if parts[1] == "thread-scheduling":

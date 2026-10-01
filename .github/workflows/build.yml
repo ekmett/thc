@@ -388,6 +388,7 @@ jobs:
             build/original-posix-dup/
             build/original-rts-locks/
             build/thread-label/**/*.json
+            build/thread-label/*/core/*.cbd
             build/thread-label/oracle.txt
             build/hint-trace/
             build/delimited-continuations/

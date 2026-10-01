@@ -26,6 +26,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import System.Info (arch)
 
 entries :: [String]
 entries = ["fieldsCase","tupleCase","captureCase","papCase","retainedPapCase","sumCase",
@@ -59,6 +60,8 @@ prepareNarrowIntegerTransport root = do
       binary = native </> "oracle"
       logs = directory </> "commands"
       manifest = output </> "manifest.json"
+      -- GHC's AArch64 native backend cannot compile the genuine SIMD case.
+      backendFlags = ["-fllvm" | arch `elem` ["aarch64", "arm64"]]
   createDirectoryIfMissing True (root </> native)
   stale <- doesFileExist manifest
   when stale (removeFile manifest)
@@ -66,8 +69,8 @@ prepareNarrowIntegerTransport root = do
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   check (commandStdout version == "9.14.1\n") "requires pinned GHC 9.14.1"
   compiled <- runLogged 180 root logs "native-build" [] ghc
-    ["--make","-O2","-dynamic","-Wall","-Werror","-fforce-recomp","-dcore-lint","-dstg-lint",
-     "-it/fixtures/compiler","-odir",native,"-hidir",native,driver,"-o",binary]
+    (backendFlags ++ ["--make","-O2","-dynamic","-Wall","-Werror","-fforce-recomp","-dcore-lint","-dstg-lint",
+     "-it/fixtures/compiler","-odir",native,"-hidir",native,driver,"-o",binary])
   observed <- runLogged 30 root logs "native-run" [] (root </> binary) []
   let parse line = case splitTab line of
         [name,bits,result] -> (,,) name <$> readInteger bits <*> readInteger result
@@ -82,7 +85,7 @@ prepareNarrowIntegerTransport root = do
         reportPath = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core),("THC_GHC_OUT", output </> stage </> "ghc")]
-      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (backendFlags ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-dstg-lint",source])
     original <- readCore (root </> core </> "NarrowIntegerTransport.cbd")
     let proofs = walk original
