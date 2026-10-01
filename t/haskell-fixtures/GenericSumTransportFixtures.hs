@@ -26,6 +26,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import System.Info (arch)
 
 entries :: [String]
 entries = ["addressCase","vectorCase","vectorResultCase","nestedCase","aroundCase","heapCase","captureCase","residualCase",
@@ -57,6 +58,9 @@ prepareGenericSumTransport root = do
       binary = native </> "oracle"
       logs = directory </> "commands"
       manifest = output </> "manifest.json"
+      -- The AArch64 NCG cannot emit the original 128-bit vector sum program.
+      -- Compile both its independent oracle and genuine pre/post Core with LLVM.
+      nativeFlags = ["-fllvm" | arch == "aarch64"]
   createDirectoryIfMissing True (root </> native)
   stale <- doesFileExist manifest
   when stale (removeFile manifest)
@@ -64,8 +68,8 @@ prepareGenericSumTransport root = do
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   check (commandStdout version == "9.14.1\n") "requires pinned GHC 9.14.1"
   compiled <- runLogged 180 root logs "native-build" [] ghc
-    ["--make","-O2","-dynamic","-Wall","-Werror","-fforce-recomp","-dcore-lint","-dstg-lint",
-     "-it/fixtures/compiler","-odir",native,"-hidir",native,driver,"-o",binary]
+    (nativeFlags ++ ["--make","-O2","-dynamic","-Wall","-Werror","-fforce-recomp","-dcore-lint","-dstg-lint",
+     "-it/fixtures/compiler","-odir",native,"-hidir",native,driver,"-o",binary])
   observed <- runLogged 30 root logs "native-run" [] (root </> binary) []
   let parse line = case splitTab line of
         [name,selector,bits,result] -> (,,,) name <$> readInteger selector <*> readInteger bits <*> readInteger result
@@ -80,7 +84,7 @@ prepareGenericSumTransport root = do
         reportPath = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core),("THC_GHC_OUT", output </> stage </> "ghc")]
-      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (nativeFlags ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-dstg-lint",source])
     original <- readCore (root </> core </> "GenericSumTransport.cbd")
     let sums = [value | value <- walk original, field "aggregate" value == Just (String "unboxed-sum")]
