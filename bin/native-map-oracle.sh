@@ -11,7 +11,7 @@ mkdir -p "$BUILD"
 cd "$ROOT/t/fixtures/core"
 "$GHC" --make -O2 -fforce-recomp -dcore-lint -dstg-lint \
   -ddump-simpl -ddump-to-file -dsuppress-all -dsuppress-uniques \
-  -i. -i"$ROOT/vendor/containers-0.8/src" -I"$ROOT/vendor/containers-0.8/include" \
+  -i. -i"$ROOT/t/fixtures/compiler" -i"$ROOT/vendor/containers-0.8/src" -I"$ROOT/vendor/containers-0.8/include" \
   -odir "$BUILD" -hidir "$BUILD" -dumpdir "$BUILD/" \
   NativeOracle.hs -o "$BUILD/native-oracle" >&2
 exec "$BUILD/native-oracle" "$@"
