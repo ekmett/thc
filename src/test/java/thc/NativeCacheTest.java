@@ -168,12 +168,12 @@ class NativeCacheTest {
 
     @Test void ioStoreOptionsReachTheImageRequirementWithoutGuestExecution() {
         var accepted = assertThrows(IllegalStateException.class, () -> NativeCache.main(new String[]{
-            "store", "cache", "module.json", "main", "--io-main", "--shutdown-entry=shutdown", "--verify-artifacts"}));
+            "store", "cache", "module.cbd", "main", "--io-main", "--shutdown-entry=shutdown", "--verify-artifacts"}));
         assertTrue(accepted.getMessage().contains("native-cache image"));
         assertThrows(IllegalArgumentException.class, () -> NativeCache.main(new String[]{
-            "store", "cache", "module.json", "main", "--shutdown-entry=shutdown"}));
+            "store", "cache", "module.cbd", "main", "--shutdown-entry=shutdown"}));
         assertThrows(IllegalArgumentException.class, () -> NativeCache.main(new String[]{
-            "store", "cache", "module.json", "main", "--io-main", "--unknown"}));
+            "store", "cache", "module.cbd", "main", "--io-main", "--unknown"}));
     }
 
     @Test void commandArgumentsPreserveExplicitNumericCarriers() {
