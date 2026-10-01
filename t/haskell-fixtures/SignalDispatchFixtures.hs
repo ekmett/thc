@@ -54,7 +54,7 @@ prepareSignalDispatch root = do
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        consumer = core </> "SignalDispatchAudit.json"
+        consumer = core </> "SignalDispatchAudit.cbd"
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=auditMain"] ++

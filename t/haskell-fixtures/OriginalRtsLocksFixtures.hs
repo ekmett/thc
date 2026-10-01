@@ -13,11 +13,9 @@
 -- Fixture acquisition support for original rts locks.
 module OriginalRtsLocksFixtures (prepareOriginalRtsLocks) where
 
-import Control.Monad (forM, forM_, unless)
-import CompactModelFixtures (writeCompactModel)
-import Data.Aeson (Value, eitherDecode, object, (.=))
+import Control.Monad (forM, unless)
+import Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy as BL
 import Data.IORef (newIORef, writeIORef)
 import Data.Int (Int64)
 import Data.List (isPrefixOf, nubBy, sort, sortOn)
@@ -47,7 +45,7 @@ import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 import Text.Read (readMaybe)
 
@@ -122,12 +120,12 @@ prepareOriginalRtsLocks root requireSupported = do
           calls = nubBy (\a b -> target a == target b) [v | (_,body) <- declarations, v <- variables body, target v /= Nothing]
       unless (length calls == 2 && all (not . isExternalName . varName) calls)
         (die "Expected the two genuine private original lock Ids")
-      projection <- serializePostTidyCore flags ["unit-qualified"] owner (typeEnvTyCons (md_types details))
+      projection <- serializePostTidyCoreCBD flags ["unit-qualified"] owner (typeEnvTyCons (md_types details))
         [NonRec v body | (v,body) <- declarations] emptyIfaceForeign
-      value <- either die pure (eitherDecode (BL.fromStrict (BS.pack projection)) :: Either String Value)
+      BS.writeFile (root </> directory </> "declarations.cbd") projection
       writeJson (root </> directory </> "declarations.json") $ object
         ["originalInterface" .= installed, "completeModule" .= False, "installedArtifactsHashed" .= False,
-         "projection" .= value]
+         "core" .= ("declarations.cbd" :: String)]
       pure calls
     file <- guessTarget (root </> source) Nothing Nothing
     setTargets [file]
@@ -138,7 +136,7 @@ prepareOriginalRtsLocks root requireSupported = do
     desugared <- desugarModule checked
     current <- getSession
     optimized <- liftIO $ hscSimplify current [] (coreModule desugared)
-    liftIO $ serializeOptimizedCore flags ["unit-qualified"] optimized >>= writeFile (root </> directory </> "template-pre.json")
+    liftIO $ serializeOptimizedCoreCBD flags ["unit-qualified"] optimized >>= BS.writeFile (root </> directory </> "template-pre.cbd")
     let bindings = flattenBinds (mg_binds optimized)
         resolve expression = case expression of
           Var v | Just body <- lookup v bindings -> resolve body
@@ -160,10 +158,10 @@ prepareOriginalRtsLocks root requireSupported = do
         actualCalls = [v | (_,body) <- guests, v <- variables body, isFCallId v]
     liftIO $ unless (length actualCalls == 2 && all (`elem` originals) actualCalls)
       (die "Specialized consumer lost original Id membership")
-    liftIO $ serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> "pre.json")
+    liftIO $ serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
     (tidied, _) <- liftIO $ hscTidy current adapted
-    liftIO $ serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-      (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
+    liftIO $ serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+      (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
     let native name symbol = do
           let (_,body) = specialize name symbol
           (value,_,_) <- hscCompileCoreExpr current noSrcSpan body
@@ -194,9 +192,6 @@ prepareOriginalRtsLocks root requireSupported = do
           fromIntegral result :: Int, fromIntegral before :: Int, fromIntegral after :: Int)
   writeJson (root </> directory </> "oracle.json") $ object ["rows" .= rows,
     "execution" .= ("GHC-compiled specialized Core invoking original native RTS FCallIds" :: String)]
-  forM_ ["pre", "post"] $ \stage ->
-    writeCompactModel (root </> directory </> stage ++ ".json")
-      (root </> directory </> stage ++ ".cbd")
   audits <- if not requireSupported then pure [] else forM ["pre","post"] $ \stage ->
     forM ["originalLock","originalUnlock"] $ \entry -> do
       let output = directory </> stage ++ "-" ++ entry ++ ".audit.json"
@@ -205,13 +200,13 @@ prepareOriginalRtsLocks root requireSupported = do
          "--output", output, directory </> stage ++ ".cbd"]
       pure (output,command)
   let commands = [version,info,libdir,imports] ++ map snd (concat audits)
-      artifacts = map (directory </>) ["oracle.json","declarations.json","template-pre.json","pre.json","post.json","pre.cbd","post.cbd"] ++
+      artifacts = map (directory </>) ["oracle.json","declarations.json","declarations.cbd","template-pre.cbd","pre.cbd","post.cbd"] ++
         map fst (concat audits) ++ concatMap commandArtifacts commands
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
   compactFiles <- listDirectory (root </> "src/cbd/THC/Compact")
   scriptFiles <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source,"t/haskell-fixtures/OriginalRtsLocksFixtures.hs",
-    "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/CompactModelFixtures.hs",
+    "t/haskell-fixtures/FixtureSupport.hs",
     "src/core-symbols/THC/CoreSymbols.hs","t/haskell-fixtures/Main.hs","thc.cabal",
     "bin/audit-core.py","bin/core-capabilities.json"] ++
     ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++

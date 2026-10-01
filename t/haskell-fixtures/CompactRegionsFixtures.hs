@@ -48,7 +48,7 @@ prepareCompactFixture root directory source driver entries = do
   installed <- prepareInstalledCoreUnits root directory ["ghc-compact"]
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
-        consumer = stageDir </> "core" </> takeBaseName source ++ ".json"
+        consumer = stageDir </> "core" </> takeBaseName source ++ ".cbd"
     _ <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> stageDir </> "core"), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
@@ -84,7 +84,7 @@ prepareCompactFixture root directory source driver entries = do
     createDirectoryIfMissing True (root </> stageDir </> "originals")
     selected <- forM (zip [0 :: Int ..] originals) $ \(index, origin) -> do
       let (archivePath, member) = splitOrigin origin
-          output = stageDir </> "originals" </> show index ++ ".json"
+          output = stageDir </> "originals" </> show index ++ ".cbd"
       archive <- maybe (die "Missing compact original archive") pure (lookup archivePath archives)
       original <- maybe (die "Missing compact original module") pure (findEntryByPath member archive)
       BL.writeFile (root </> output) (fromEntry original)

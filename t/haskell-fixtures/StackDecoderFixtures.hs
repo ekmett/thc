@@ -43,7 +43,7 @@ prepareOriginalStackDecoder root = do
   plugin <- run "plugin-build" [] "bin/build-compiler.sh" []
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        consumer = core </> "OriginalStackDecoder.json"
+        consumer = core </> "OriginalStackDecoder.cbd"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- run (stage ++ "-export")
