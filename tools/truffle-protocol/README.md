@@ -22,8 +22,10 @@ request; it does not execute or seed either arm.
 
 `beginUnprofiledWhile` preserves While's reachability, stack and backedge/OSR
 handling, but uses the unprofiled condition and the existing no-profile backedge
-sentinel. Only compiler-owned owner-wait retries select it. Operands remain
-saved outside the loop, and only an uncommitted owner wait is retried.
+sentinel. The bytecode lowerer selects it for owner-wait retries, resumable roots
+with loop backedges, and staged overapplication's zero-arity closure loop.
+Owner-wait operands remain saved outside the loop, and only an uncommitted owner
+wait is retried. Nonresumable root loops retain ordinary While.
 
 The new operations are registered after legacy custom and compatibility operations
 so serialized builder event IDs retain their meaning. Instruction kinds are
