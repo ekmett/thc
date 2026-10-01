@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import sys
 
+from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error
+
 
 class Audit:
     def __init__(self, modules, capabilities):
@@ -84,14 +86,17 @@ class Audit:
                 if rep.get('kind') != 'unknown' or rep.get('primReps') != physical:
                     self.issue('representation-proof', owner, path, 'Tuple components disagree with physical representations')
         kind, registers, evaluated = rep.get('kind'), rep.get('primReps'), rep.get('evaluated')
-        kinds = {'long', 'address', 'void', 'data', 'closure', 'object', 'unknown'}
+        kinds = {'long', 'address', 'void', 'data', 'closure', 'object', 'unknown', 'vector'}
         if kind not in kinds or type(evaluated) is not bool or (registers is not None and
                 (not isinstance(registers, list) or any(not isinstance(r, str) for r in registers))):
             self.issue('representation-proof', owner, path, 'Invalid kind, register list, or WHNF evidence')
             return
         longs = {'IntRep', 'Int8Rep', 'Int16Rep', 'Int32Rep', 'Int64Rep',
                  'WordRep', 'Word8Rep', 'Word16Rep', 'Word32Rep', 'Word64Rep'}
-        valid = (kind == 'unknown' or
+        vector_error = vector_proof_error(rep)
+        if vector_error:
+            self.issue('vector-representation', owner, path, vector_error)
+        valid = (kind in ('unknown', 'vector') or
                  kind == 'long' and isinstance(registers, list) and len(registers) == 1 and registers[0] in longs or
                  kind == 'address' and registers == ['AddrRep'] or
                  kind == 'void' and registers == [] or
@@ -112,6 +117,8 @@ class Audit:
             if type(arity) is not int or arity < 0 or arity > available or type(raw) is not int or arity > raw:
                 self.issue('join-metadata', owner, path, 'Join prefix disagrees with erased lambdas/raw join arity')
             self.representation(binding.get('joinResultRep'), owner, path + '/joinResultRep')
+            if is_vector(binding.get('joinResultRep')):
+                self.issue('vector-boundary', owner, path, 'vector join result')
             if self.is_tuple(binding.get('joinResultRep')):
                 self.issue('aggregate-boundary', owner, path, 'unboxed-tuple join result')
 
@@ -207,7 +214,7 @@ class Audit:
         return ('scalar', tuple(registers)) if isinstance(registers, list) else None
 
     def compare_shapes(self, expected, actual, owner, path, component=False):
-        if not component and not (self.is_tuple(expected) or self.is_tuple(actual)):
+        if not component and not (self.is_tuple(expected) or self.is_tuple(actual) or is_vector(expected) or is_vector(actual)):
             return
         left, right = self.shape(expected), self.shape(actual)
         if left is None or right is None or left != right:
@@ -303,13 +310,20 @@ class Audit:
             elif tag == 'lam':
                 ids = self.binder_ids(expr[1], owner, path + '/binders')
                 for binder in expr[1]:
+                    if is_vector(binder.get('rep')):
+                        self.issue('vector-boundary', owner, path, 'vector formal argument')
                     if self.is_tuple(binder.get('rep')):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-tuple formal argument')
                 captured = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                             if self.is_tuple(bound[key])}
+                vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys() if is_vector(bound[key])}
+                if vector_captures:
+                    self.issue('vector-boundary', owner, path, 'vector capture')
                 if captured:
                     self.issue('aggregate-boundary', owner, path, 'unboxed-tuple capture')
                 metadata = expr[3] if len(expr) > 3 and isinstance(expr[3], dict) else {}
+                if is_vector(metadata.get('resultRep')) or is_vector(self.expression_rep(expr[2])):
+                    self.issue('vector-boundary', owner, path, 'vector function result')
                 self.compare_shapes(metadata.get('resultRep'), self.expression_rep(expr[2]), owner, path + '/resultRep')
                 self.walk(expr[2], bound | self.binder_scope(expr[1]), owner, path + '/body')
             elif tag == 'app':
@@ -322,6 +336,16 @@ class Audit:
                 function = expr[1]
                 tuple_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-tuple'
                 proof = self.expression_rep(expr)
+                vector_operation = function[1] if function[0] == 'prim' and function[1] in VECTOR_OPERATIONS else None
+                if vector_operation:
+                    expected, result = VECTOR_OPERATIONS[vector_operation]
+                    if len(arguments) != len(expected):
+                        self.issue('vector-shape', owner, path, 'Vector primitive arity mismatch')
+                    for index, (wanted, actual) in enumerate(zip(expected, arguments)):
+                        self.compare_shapes(wanted, self.expression_rep(actual), owner, f'{path}/arguments/{index}', component=True)
+                    self.compare_shapes(result, proof, owner, path + '/rep', component=True)
+                elif is_vector(proof):
+                    self.issue('vector-boundary', owner, path, 'vector call result')
                 self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor else None)
                 for index, argument in enumerate(arguments):
                     if tuple_constructor and self.is_tuple(proof) and isinstance(proof.get('components'), list):
@@ -329,7 +353,9 @@ class Audit:
                         if index < len(components):
                             self.compare_shapes(components[index], self.expression_rep(argument), owner,
                                                 f'{path}/arguments/{index}/rep', component=True)
-                    if not tuple_constructor and (self.is_tuple(self.expression_rep(argument)) or
+                    if not vector_operation and (is_vector(self.expression_rep(argument)) or argument[0] == 'var' and is_vector(bound.get(argument[1]))):
+                        self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
+                    if not tuple_constructor and not vector_operation and (self.is_tuple(self.expression_rep(argument)) or
                             argument[0] == 'var' and self.is_tuple(bound.get(argument[1]))):
                         self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
                     self.walk(argument, bound, owner, f'{path}/arguments/{index}')
@@ -342,6 +368,8 @@ class Audit:
                 for index, binding in enumerate(group):
                     if not isinstance(binding, dict):
                         continue
+                    if is_vector(binding.get('rep')):
+                        self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector let binding')
                     if self.is_tuple(binding.get('rep')):
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
                     if recursive and binding.get('lifted') is False:

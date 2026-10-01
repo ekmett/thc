@@ -446,6 +446,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     // GHC machine integers wrap. Comparisons return Int# 0/1, not boxed Bool.
+    @Operation public static final class VectorPack {
+        @Specialization public static Int64X2 pack(long first, long second) { return new Int64X2(first, second); }
+    }
+    @Operation public static final class VectorBroadcast {
+        @Specialization public static Int64X2 broadcast(long value) { return new Int64X2(value, value); }
+    }
+    @Operation public static final class VectorNegate {
+        @Specialization public static Int64X2 negate(Int64X2 value) { return Int64X2.negate(value); }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "subtract")
+    public static final class VectorBinary {
+        @Specialization public static Int64X2 binary(boolean subtract, Int64X2 first, Int64X2 second) {
+            return subtract ? Int64X2.subtract(first, second) : Int64X2.add(first, second);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    public static final class VectorUnpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                Int64X2 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first); second.setLong(bytecode, frame, value.second);
+        }
+    }
+
     @Operation public static final class Add { @Specialization public static long apply(long x, long y) { return x + y; } }
     @Operation public static final class Subtract { @Specialization public static long apply(long x, long y) { return x - y; } }
     @Operation public static final class Multiply { @Specialization public static long apply(long x, long y) { return x * y; } }

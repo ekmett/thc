@@ -4,6 +4,8 @@ import argparse
 import hashlib
 import json
 import os
+import platform
+import shutil
 from pathlib import Path
 import subprocess
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,16 +33,22 @@ def main():
     assert subprocess.check_output([ghc, '--numeric-version'], text=True).strip() == '9.14.1'
     OUT.mkdir(parents=True, exist_ok=True)
     commands = []
+    toolchain = dict(ghcVersion=subprocess.check_output([ghc, '--numeric-version'], text=True).strip(),
+        host=platform.node(), machine=platform.machine(), system=platform.platform(),
+        ghcInfo=subprocess.check_output([ghc, '--info'], text=True),
+        ghcBinarySha256=hashlib.sha256(Path(shutil.which(ghc) or ghc).resolve().read_bytes()).hexdigest())
     def run(argv, env=None):
         commands.append(dict(argv=argv, env=env or {}))
         subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
     run(['compiler/build.sh'])
     stages = ['pre'] if args.export_only else ['pre', 'post']
     for stage in stages:
+        (OUT / f'{stage}-core/SimdInt64X2.json').unlink(missing_ok=True)
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else []
         if stage == 'post': options += ['-fplugin-opt=Thc.Plugin:post-tidy']
         run(['compiler/export.sh', *options, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc')))
         module = json.loads((OUT / f'{stage}-core/SimdInt64X2.json').read_text())
+        assert module['boundary'] == ('optimized-Core-before-Tidy' if stage == 'pre' else 'optimized-Core-after-Tidy-before-CorePrep')
         vectors = [v for v in walk(module) if isinstance(v, dict) and v.get('kind') == 'vector']
         assert vectors and all(v['vector'] == {'lanes': 2, 'element': 'Int64ElemRep'} and v['primReps'] == ['VecRep 2 Int64ElemRep'] and 'aggregate' not in v for v in vectors)
         calls = {v[1] for v in walk(module) if isinstance(v, list) and len(v) > 1 and v[0] == 'prim'}
@@ -49,6 +57,7 @@ def main():
     if not args.export_only:
         native = OUT / 'native'; native.mkdir(exist_ok=True)
         run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-icompiler/test-fixtures', '-odir', str(native), '-hidir', str(native), '-o', str(native / 'simd'), str(NATIVE)])
+        commands.append(dict(argv=[str(native / 'simd')], stdout=str(OUT / 'oracle.tsv')))
         output = subprocess.check_output([str(native / 'simd')], cwd=ROOT, text=True)
         actual = {}
         for line in output.splitlines():
@@ -59,7 +68,7 @@ def main():
         (OUT / 'oracle.tsv').write_text(output); rows = len(actual)
     artifacts = [OUT / f'{s}-core/SimdInt64X2.json' for s in stages]
     if rows is not None: artifacts += [OUT / 'oracle.tsv']
-    (OUT / 'provenance.json').write_text(json.dumps(dict(schema=1, commands=commands, nativeRows=rows, stages=stages,
-        sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()), record(ROOT / 'compiler/Thc/Plugin.hs')], artifacts=[record(p) for p in artifacts]), indent=2)+'\n')
+    (OUT / 'provenance.json').write_text(json.dumps(dict(schema=1, commands=commands, nativeRows=rows, stages=stages, toolchain=toolchain,
+        sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()), *[record(p) for p in sorted((ROOT / 'compiler/Thc').glob('*.hs'))]], artifacts=[record(p) for p in artifacts]), indent=2)+'\n')
     print(f'SIMD export stages={stages}; native oracle rows={rows} (None means not run)')
 if __name__ == '__main__': main()

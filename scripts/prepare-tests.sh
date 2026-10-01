@@ -5,6 +5,12 @@ cd "$(dirname "$0")/.."
 compiler/build.sh
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/prepare-tuple-return-audit.py
+# GHC9.14 AArch64 NCG requires LLVM for SIMD. The macOS job deliberately
+# validates pre-Core/model execution; the x86 job also requires native + post-Tidy.
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-simd-audit.py --export-only ;;
+  *) python3 scripts/prepare-simd-audit.py ;;
+esac
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs
 python3 scripts/check-speculation-metadata.py
 python3 scripts/check-representation-metadata.py
