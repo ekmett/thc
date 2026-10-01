@@ -3520,6 +3520,16 @@
         ".github/scripts/test_fast_fixtures.py"
       ]
     },
+    ".github/workflows/test-groups.yml": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py",
+        ".github/scripts/test_fast_workflows.py"
+      ]
+    },
     ".github/workflows/fast.yml": {
       "junit": [],
       "python": [

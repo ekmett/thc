@@ -49,7 +49,8 @@ class FastSelectionTest(unittest.TestCase):
                                             "simd-generated-primops")},
                            automation={name: dict(junit=[], python=["bin/test-other.py"]) for name in
                                        (select.SCRIPT, select.POLICY, ".github/scripts/test_fast_select.py",
-                                        ".github/workflows/fast.yml", ".github/scripts/fast_ci.py")})
+                                        ".github/workflows/fast.yml", ".github/workflows/test-groups.yml",
+                                        ".github/scripts/fast_ci.py")})
         files = {
             select.SCRIPT: Path(select.__file__).read_text(),
             select.POLICY: json.dumps(self.policy),
@@ -686,7 +687,8 @@ private String text = "class FakeString { @Test }";
         self.assertEqual(["thc.runtime.NativeFileBuffersTest"], result["affected"]["junit"])
 
     def test_automation_changes_use_control_tests_and_smoke(self):
-        for path in (".github/workflows/fast.yml", ".github/scripts/fast_ci.py"):
+        for path in (".github/workflows/fast.yml", ".github/workflows/test-groups.yml",
+                     ".github/scripts/fast_ci.py"):
             with self.subTest(path=path):
                 self.write(path, "changed")
                 self.commit()
@@ -1341,7 +1343,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      ".github/scripts/fast-fixtures.json", ".github/scripts/fast-tests.json",
                      ".github/scripts/test_fast_ci.py", ".github/scripts/test_fast_inputs.py",
                      ".github/scripts/test_fast_fixtures.py", ".github/scripts/test_fast_select.py",
-                     ".github/workflows/fast.yml"):
+                     ".github/workflows/fast.yml", ".github/workflows/test-groups.yml"):
             with self.subTest(path=path):
                 self.assertIn(path, automation)
                 self.assertIn(".github/scripts/test_fast_select.py", automation[path]["python"])
