@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from core_package_manifest import inspect_cbd
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/io-main-pap'
@@ -60,7 +61,10 @@ def inventory(stage, modules):
         lam = worker['expr']
         check(worker['arity'] == 3 and lam[0] == 'lam' and len(lam[1]) == 3,
               f'{stage}/{name}: worker no longer has three formals')
-        check([b['type'] for b in lam[1]] == ['Int#', 'Int#', 'State# RealWorld'],
+        check(all(b['lifted'] is False and b['rep']['kind'] == 'long'
+                  and b['rep']['primReps'] == ['IntRep'] for b in lam[1][:2]),
+              f'{stage}/{name}: lost exact Int# prefix formals')
+        check(lam[1][2].get('type') == 'State# RealWorld',
               f'{stage}/{name}: lost exact state binder type')
         state = lam[1][2]
         check(state['lifted'] is False and state['rep']['kind'] == 'void' and state['rep']['primReps'] == [],
@@ -104,13 +108,13 @@ def main():
         for stage in STAGES:
             directory = OUT / stage
             options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
-            run([ROOT / 'bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *options,
+            run([ROOT / 'bin/export-core.sh', *options,
                  *['-fplugin-opt=THC.Plugin:closure=' + name for name in ENTRIES], FIXTURES[0]],
                 dict(THC_CORE_OUT=str(directory / 'core'), THC_GHC_OUT=str(directory / 'ghc'), THC_SOURCE_NOTES='true'))
             paths = sorted((directory / 'core').glob('*.cbd'))
             check({p.name for p in paths} == {'IoMainPapAudit.cbd', 'THC.InterfaceClosure.cbd'}, 'Unexpected Core module set')
-            modules = [(str(p.relative_to(ROOT)), json.loads(p.with_suffix('.json').read_text())) for p in paths]
-            artifacts.extend(paths + [p.with_suffix('.json') for p in paths])
+            modules = [(str(p.relative_to(ROOT)), inspect_cbd(p.read_bytes())) for p in paths]
+            artifacts.extend(paths)
             coverage.append(inventory(stage, modules))
             for name in ENTRIES:
                 report = audit.Audit(modules, capabilities).run([PREFIX + name], io_main=True)
