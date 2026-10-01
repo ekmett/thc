@@ -21,7 +21,8 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
-import System.Directory (findExecutable, getCurrentDirectory, createDirectory, createDirectoryIfMissing, removeFile, getModificationTime,
+import GHC.ResponseFile (escapeArgs)
+import System.Directory (findExecutable, getCurrentDirectory, createDirectory, createDirectoryIfMissing, removeFile, getModificationTime, canonicalizePath,
   makeAbsolute, withCurrentDirectory, createFileLink)
 import System.Environment (getEnv, lookupEnv, setEnv, unsetEnv)
 import System.IO.Error (tryIOError)
@@ -61,7 +62,8 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
           source = root </> "Demand.hs"
           cSource = root </> "provider.c"
           nativeObject = objects </> "provider.o"
-          arguments = ["-odir",objects,"-hidir",objects,"-dynamic","-this-unit-id","fixture-unit"]
+          arguments = ["-odir",objects,"-hidir",objects] ++
+            ["-dynamic" | Host.os /= "mingw32"] ++ ["-this-unit-id","fixture-unit"]
       createDirectoryIfMissing True objects
       writeFile source $ unlines
         ["{-# LANGUAGE MagicHash, UnboxedTuples, UnliftedFFITypes, ForeignFunctionInterface #-}",
@@ -71,27 +73,36 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
          "next :: State# RealWorld -> Int#", "next s = case raw of IO action -> case action s of (# _, I# value #) -> value",
          "nextSafe :: State# RealWorld -> Int#", "nextSafe s = case rawSafe of IO action -> case action s of (# _, I# value #) -> value"]
       writeFile cSource $ unlines
-        ["static unsigned long state;",
+        ["#include <stdint.h>", "static uintptr_t state;",
          "__attribute__((constructor)) static void initialize(void) { state = 40; }",
-         "__attribute__((noinline)) long next(void) { return ++state; }"]
+         "__attribute__((noinline)) intptr_t next(void) { return ++state; }"]
       let nativeArguments = ["-c",cSource,"-o",nativeObject]
       (nativeStatus,_,nativeErrors) <- readProcessWithExitCode compiler nativeArguments ""
       assertEqual nativeErrors ExitSuccess nativeStatus
+      canonicalObject <- canonicalizePath nativeObject
       withEnvironment [("THC_CORE_OUT",directory </> "core"),("THC_GHC_OUT",objects)] $ do
-        (status,_,diagnostic) <- readProcessWithExitCode (repository </> "bin/export-core.sh")
-          ["-this-unit-id=fixture-unit","-fwrite-if-simplified-core",
-           "-fplugin-opt=THC.Plugin:post-tidy","-fplugin-opt=THC.Plugin:unit-qualified",
-           "-fplugin-opt=THC.Plugin:foreign-import-provenance",source] ""
+        let exportArguments = ["-this-unit-id=fixture-unit","-fwrite-if-simplified-core",
+              "-fplugin-opt=THC.Plugin:post-tidy","-fplugin-opt=THC.Plugin:unit-qualified",
+              "-fplugin-opt=THC.Plugin:foreign-import-provenance",source]
+        (status,_,diagnostic) <- if Host.os == "mingw32"
+          then do
+            powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
+            let response = root </> "export.args"
+            writeFile response (escapeArgs exportArguments)
+            readProcessWithExitCode powershell
+              ["-NoProfile","-File",repository </> "bin/export-core.ps1","@" ++ response] ""
+          else readProcessWithExitCode (repository </> "bin/export-core.sh") exportArguments ""
         assertEqual diagnostic ExitSuccess status
-      captureNativeObject (root </> "pieces") compiler nativeArguments
-      capturePackageNative repository helper libdir compiler arguments "fixture-unit" directory
+      withCurrentDirectory root $ do
+        captureNativeObject (root </> "pieces") compiler nativeArguments
+        capturePackageNative repository helper libdir compiler arguments "fixture-unit" directory
       let cbd = directory </> "core/units/u-fixture-unit/Demand.cbd"
       before <- BS.readFile cbd
       original <- either assertFailure pure (readModuleValue before)
       signatures <- either assertFailure pure (nativeSignatures "fixture-unit" [original])
       assertEqual "both actual GHC emitted safety variants survive hydration" 2 (length signatures)
       (_,descriptor) <- finishPackageNativeWithDependencies packageTool Nothing [] [] (root </> "pieces")
-        directory directory "fixture-unit" (Just [nativeObject]) [("Demand",cbd)]
+        directory directory "fixture-unit" (Just [canonicalObject]) [("Demand",cbd)]
       assertBool "normal producer publishes a canonical actual C component" (descriptor /= Nothing)
       after <- BS.readFile cbd
       acquired <- either assertFailure pure (readModuleValue after)
@@ -115,7 +126,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       -- normal acquisition identity, without blessing finalized metadata.
       BS.writeFile cbd before
       (_,again) <- finishPackageNativeWithDependencies packageTool Nothing [] [] (root </> "pieces")
-        directory directory "fixture-unit" (Just [nativeObject]) [("Demand",cbd)]
+        directory directory "fixture-unit" (Just [canonicalObject]) [("Demand",cbd)]
       assertEqual "normal acquisition reuses the canonical component descriptor" descriptor again
       assertEqual "hit leaves the verified canonical cache receipt unchanged" cached =<< BS.readFile cache
       assertEqual "hit performs no forwarding/LLVM construction" produced =<< getModificationTime forwarding
