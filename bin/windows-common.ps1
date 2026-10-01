@@ -14,6 +14,27 @@ function Invoke-ThcTool {
     if ($code -ne 0) { throw "$Program exited $code" }
 }
 
+function Initialize-ThcCabalConfig([string]$ConfigFile) {
+    if (!(Test-Path -LiteralPath $ConfigFile)) {
+        $repository = "repository hackage.haskell.org`n  url: https://hackage.haskell.org/`n  secure: True"
+        Invoke-ThcTool $env:CABAL @("--config-file=$ConfigFile", 'user-config', 'init', '--augment', $repository)
+        return
+    }
+    # Keep existing repository keys and other settings. Cabal's --augment replaces
+    # the complete repository list, including unrelated private repositories.
+    $text = [IO.File]::ReadAllText($ConfigFile)
+    $repository = [regex]::Match($text, '(?ms)^repository hackage\.haskell\.org[ \t]*\r?\n.*?(?=^[^ \t\r\n-]|\z)')
+    if (!$repository.Success -or $repository.Value -notmatch '(?m)^[ \t]+url:[ \t]+https?://hackage\.haskell\.org/[ \t]*\r?$' -or
+        $repository.Value -match '(?im)^[ \t]+secure:[ \t]+False\b') {
+        throw 'Windows bootstrap requires the signed hackage.haskell.org repository; retained existing Cabal config'
+    }
+    $updated = $repository.Value.Replace('http://hackage.haskell.org/', 'https://hackage.haskell.org/').Replace('-- secure: True', 'secure: True')
+    if ($updated -ne $repository.Value) {
+        $text = $text.Substring(0, $repository.Index) + $updated + $text.Substring($repository.Index + $repository.Length)
+        [IO.File]::WriteAllText($ConfigFile, $text, [Text.UTF8Encoding]::new($false))
+    }
+}
+
 function Get-ThcGhc {
     $selected = if ($env:GHC) { $env:GHC } else { 'ghc' }
     $compiler = (Get-Command $selected -CommandType Application -ErrorAction Stop).Source

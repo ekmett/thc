@@ -13,6 +13,11 @@ Use a short, user-owned prefix; GHC archives and Cabal products have deep paths.
 The bootstrap verifies pinned upstream SHA256 values, reuses existing archives
 and installations, and sets environment variables only in the current shell.
 It does not install services, change execution policy, or modify the machine PATH.
+It selects its own `CABAL_CONFIG` under the prefix and uses HTTPS Hackage with
+signed repository metadata and Cabal's standard Hackage trust keys. Existing
+default HTTP configurations are upgraded without replacing other repositories
+or explicit trust keys; disabled Hackage verification is rejected. A fresh CI
+runner therefore uses the same acquisition path as a local cold cache.
 Install a real Python interpreter first; the Microsoft Store alias does not work.
 Pinned libraries also need `sh.exe`, `sed` and the other Unix utilities used by
 their original configure scripts. Bootstrap reuses Git for Windows' `usr/bin`
