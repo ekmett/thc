@@ -312,16 +312,21 @@ buildProject action opts target = do
   let environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
   -- Cabal can build thc's executable without building its library. Publish the
   -- actual Cabal plugin registration before consulting the plugin manifest.
-  runCommandWithEnv True buildPlugin [] thcRoot (Just environment)
-  plugin <- readJson (thcRoot </> "build/compiler/plugin.json")
-  schema <- field plugin "schema" :: IO Int
-  require (schema == 1) "unsupported THC plugin manifest"
-  pluginDb <- field plugin "packageDb"
-  pluginUnit <- field plugin "unitId"
-  pluginLibrary <- field plugin "sharedLibrary"
-  registeredLibrary <- field plugin "cabalSharedLibrary"
-  requireFile pluginLibrary
-  requireDirectory pluginDb
+  let tools = thcRoot </> "build/compiler"
+  createDirectoryIfMissing True tools
+  (pluginDb, pluginUnit, pluginLibrary, registeredLibrary) <-
+    withLock (tools </> "cabal-tools.lock") $ do
+      runCommandWithEnv True buildPlugin [] thcRoot (Just environment)
+      plugin <- readJson (tools </> "plugin.json")
+      schema <- field plugin "schema" :: IO Int
+      require (schema == 1) "unsupported THC plugin manifest"
+      pluginDb <- field plugin "packageDb"
+      pluginUnit <- field plugin "unitId"
+      pluginLibrary <- field plugin "sharedLibrary"
+      registeredLibrary <- field plugin "cabalSharedLibrary"
+      requireFile pluginLibrary
+      requireDirectory pluginDb
+      pure (pluginDb, pluginUnit, pluginLibrary, registeredLibrary)
   let requested = distDirectory flags
       requestedOutput = if isAbsolute requested then requested else project </> requested
   createDirectoryIfMissing True requestedOutput
@@ -736,14 +741,20 @@ prepareInterfaceHelper context root = do
       selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
         ["--disable-shared" | Host.os == "mingw32"] ++
         ["--builddir=" ++ directory | Just directory <- [buildDirectory]]
-  runCommand True cabal ("build" : selection) root
-  (status, output, diagnostic) <- readCreateProcessWithExitCode
-    (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
-  require (status == ExitSuccess) ("cannot locate selected thc-interface: " ++ diagnostic)
-  helper <- case lines output of
-    [path] -> canonicalizePath path
-    _ -> fail "cabal list-bin did not return one thc-interface executable"
-  requireFile helper
+      tools = root </> "build/compiler"
+  createDirectoryIfMissing True tools
+  -- These tools share Cabal's root build tree with plugin publication. Release
+  -- its lock before installed-Core probing and provider work.
+  helper <- withLock (tools </> "cabal-tools.lock") $ do
+    runCommand True cabal ("build" : selection) root
+    (status, output, diagnostic) <- readCreateProcessWithExitCode
+      (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
+    require (status == ExitSuccess) ("cannot locate selected thc-interface: " ++ diagnostic)
+    helper <- case lines output of
+      [path] -> canonicalizePath path
+      _ -> fail "cabal list-bin did not return one thc-interface executable"
+    requireFile helper
+    pure helper
   -- First slice is deliberately limited to pre-existing global registrations.
   -- A store/source component continues to use its existing Cabal build path.
   original <- installedContext ghc pkg helper [] (object
