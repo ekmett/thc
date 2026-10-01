@@ -200,6 +200,8 @@ tasks.withType<Test>().configureEach {
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
             "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
             "mask-functions/native/oracle",
+            "deep-evaluation/**/*.json", "deep-evaluation/logs/*.stdout", "deep-evaluation/logs/*.stderr",
+            "deep-evaluation/native/oracle",
             "interface-core/**/*.json", "interface-core/logs/*.stdout", "interface-core/logs/*.stderr",
             "interface-core/**/*.hi", "interface-core/**/*.dyn_hi", "interface-core/native/oracle",
             "interface-core/**/*.zip",

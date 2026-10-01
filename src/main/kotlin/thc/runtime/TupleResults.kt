@@ -61,11 +61,14 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
         else if (leaves[index].kind == CoreKind.ADDRESS)
             value as? ManagedAddress ?: fault("Expected a managed literal Addr# tuple field")
         else value
-    fun finish(frame: VirtualFrame, slots: IntArray): Any {
+    fun finish(frame: VirtualFrame, slots: IntArray, capturesFrame: Boolean = false): Any {
         if (inlineResult()) {
             val virtual = layout.create()
             write(frame, slots, virtual)
-            CompilerDirectives.ensureVirtualized(virtual)
+            // Async AST callers can retain the carrier in a cold saved frame.
+            // Its creation still folds, but that later capture may materialize it.
+            if (capturesFrame) CompilerDirectives.ensureVirtualizedHere(virtual)
+            else CompilerDirectives.ensureVirtualized(virtual)
             return virtual
         }
         val pool = language.handoffState.get().results
