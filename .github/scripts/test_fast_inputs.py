@@ -34,6 +34,46 @@ class FastInputTests(unittest.TestCase):
             self.assertEqual(0o755, cache.safe_mode(0o755, native))
             self.assertFalse(cache.allowed_payload(native + "-unknown"))
 
+    def test_publication_receipt_keeps_zip_members_inside_the_hashed_source(self):
+        receipt = {"source": {"path": "build/original-process-identity/installed/bundles/unit.zip", "sha256": "a" * 64},
+                   "modules": [{"path": "core/Original.cbd", "sha256": "b" * 64}],
+                   "unit": {"modules": [{"compact": {"path": "build/original-process-identity/installed/unit-core/v3/" + "a" * 64 + "/0.cbd", "sha256": "b" * 64}}]},
+                   "sizes": [123]}
+        self.assertEqual([(receipt["source"]["path"], "a" * 64),
+                          (receipt["unit"]["modules"][0]["compact"]["path"], "b" * 64)], list(cache.hashes_in(receipt, {})))
+
+    def test_process_identity_cache_requires_every_declared_installed_bundle(self):
+        prefix = "build/original-process-identity/"
+        bundles = [prefix + "installed/bundles/ghc-internal-9.1401.0-0c3b.zip",
+                   prefix + "installed/bundles/unix-2.8.8.0-f938.zip"]
+        publications = [prefix + "installed/unit-core/v3/" + "0" * 64 + "/0.cbd",
+                        prefix + "installed/unit-core/v3/" + "0" * 64 + "/publication.json"]
+        runtime = [prefix + "runtime-core/THC.Exception.cbd", prefix + "runtime-core/THC.Internal.Exception.cbd"]
+        artifacts = (cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {prefix + "manifest.json"}) | set(bundles) | set(publications)
+        manifest = dict(schema=1, ghc="9.14.1", unixUnit="unix-2.8.8.0-f938", supported=True,
+                        entries=list(cache.ORIGINAL_PROCESS_IDENTITY_ENTRIES), strictAccepted=True,
+                        runtimeVerified=False, installedArtifactsHashed=True, nativeRows=1,
+                        packageManifest=prefix + "installed/packages.json", installedBundles=bundles,
+                        installedPublications=publications, runtimeModules=runtime,
+                        artifactHashes={path: "0" * 64 for path in artifacts})
+        with patch.object(cache, "ERRNO_NATIVE_HOST", True):
+            self.assertEqual(set(artifacts), set(cache.process_identity_artifact_hashes(manifest)))
+            for missing in [prefix + "installed/packages.json", *bundles, *publications, *runtime]:
+                changed = copy.deepcopy(manifest); del changed["artifactHashes"][missing]
+                with self.assertRaises(cache.CacheMiss): cache.process_identity_artifact_hashes(changed)
+            for values in ([], bundles + bundles[:1], [prefix + "installed/bundles/../forged.zip"], bundles[1:]):
+                changed = dict(manifest, installedBundles=values)
+                with self.assertRaises(cache.CacheMiss): cache.process_identity_artifact_hashes(changed)
+            for values in ([], publications + publications[:1], publications[:1], [prefix + "installed/unit-core/v3/../0.cbd"]):
+                changed = dict(manifest, installedPublications=values)
+                with self.assertRaises(cache.CacheMiss): cache.process_identity_artifact_hashes(changed)
+            changed = dict(manifest, runtimeModules=runtime[:1])
+            with self.assertRaises(cache.CacheMiss): cache.process_identity_artifact_hashes(changed)
+            changed = copy.deepcopy(manifest); changed["artifactHashes"][prefix + "installed/unreviewed.json"] = "0" * 64
+            with self.assertRaises(cache.CacheMiss): cache.process_identity_artifact_hashes(changed)
+        for path in bundles: self.assertTrue(cache.allowed_payload(path))
+        with self.assertRaises(cache.CacheMiss): cache.allowed_payload(prefix + "installed/bundles/../forged.zip")
+
     def test_heap_exception_corpus_cbd_paths_are_closed(self):
         self.assertIn("build/managed-mvars/manifest.json", DECLARED_REQUIRED)
         for name in cache.MANAGED_MVAR_OUTPUTS | cache.SYNCHRONOUS_EXCEPTION_OUTPUTS | cache.HEAP_CORPUS_CBD_OUTPUTS:

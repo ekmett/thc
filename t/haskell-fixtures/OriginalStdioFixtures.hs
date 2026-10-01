@@ -23,6 +23,7 @@ import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import FixtureSupport
+import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCoreUnits)
 import Foreign.C.Types (CInt, CLong)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (sizeOf)
@@ -448,6 +449,10 @@ prepareOriginalProcessIdentity root = do
   scripts <- listDirectory (root </> "bin")
   let sources = sort $ [coreSource, nativeSource, "thc.cabal", "t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/OriginalStdioFixtures.hs",
+        "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/THC/Driver/Installed.hs",
+        "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs",
+        "src/driver/THC/Driver/PackageNative.hs", "src/driver/cbits/target-layout.c",
+        "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs",
         "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/ProcessIdentity.java",
         "src/main/resources/thc/scalar-primop-signatures.json",
         "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
@@ -508,12 +513,20 @@ prepareOriginalProcessIdentity root = do
           pure (name, path, audited)
         pure (stage, modules, Map.fromList [(name, path) | (name, path, _) <- audits],
               exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])
-      let commands = [version, info, unit, compiled, observed] ++ concat [cs | (_, _, _, cs, _) <- exports]
-          artifacts = [binary, observedPath, oracle] ++ concat [paths | (_, _, _, _, paths) <- exports] ++
+      runtimeExport <- execute "runtime-export"
+        [("THC_CORE_OUT", root </> output </> "runtime-core"), ("THC_GHC_OUT", root </> output </> "runtime-ghc")]
+        "bin/export-core.sh" ["-isrc/runtime", "-fplugin-opt=THC.Plugin:post-tidy", "src/runtime/THC/Exception.hs"]
+      let runtimeModules = [output </> "runtime-core" </> name | name <- ["THC.Exception.cbd", "THC.Internal.Exception.cbd"]]
+      installed <- prepareInstalledCoreUnits root output ["unix"]
+      let commands = fixtureCommands installed ++ [version, info, unit, compiled, observed, runtimeExport] ++ concat [cs | (_, _, _, cs, _) <- exports]
+          artifacts = fixtureArtifacts installed ++ runtimeModules ++ [binary, observedPath, oracle] ++ concat [paths | (_, _, _, _, paths) <- exports] ++
             concatMap commandArtifacts commands
       artifactHashes <- hashes root artifacts
       writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= names,
-        "platform" .= Host.os, "supported" .= True, "installedArtifactsHashed" .= False,
+        "platform" .= Host.os, "supported" .= True, "installedArtifactsHashed" .= True,
+        "packageManifest" .= fixturePackages installed, "runtimeModules" .= runtimeModules,
+        "installedPublications" .= filter (\path -> takeExtension path /= ".zip" && path /= fixturePackages installed) (fixtureArtifacts installed),
+        "installedBundles" .= filter ((== ".zip") . takeExtension) (fixtureArtifacts installed),
         "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= (1 :: Int), "unixUnit" .= owner,
         "stages" .= Map.fromList [(stage, modules) | (stage, modules, _, _, _) <- exports],
         "audits" .= Map.fromList [(stage, reports) | (stage, _, reports, _, _) <- exports],

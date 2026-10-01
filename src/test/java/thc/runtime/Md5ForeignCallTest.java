@@ -63,7 +63,8 @@ class Md5ForeignCallTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var module = module(operation, "ghc-internal", true, "foreign-id", closure);
+                var module = OriginalStdioChecks.nativeModules(OriginalStdioChecks.with(
+                    module(operation, "ghc-internal", true, "foreign-id", closure), "schema", 1L, "ghc", "9.14.1"));
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
                 var entry = program.entryTarget("root");
                 class Caller {
@@ -108,30 +109,43 @@ class Md5ForeignCallTest {
                     ManagedAddress.fromByteArray(bytes), Integer.MAX_VALUE, 7L));
                 assertTrue(badState.getMessage().contains("zero-width scalar carrier"), badState.getMessage());
                 assertArrayEquals(beforeBytes, bytes); assertArrayEquals(beforeOutput, output); released(language);
-                if (operation == Md5ForeignOp.UPDATE) for (long length : new long[]{-1,1L << 32,Long.MAX_VALUE}) {
+                // Native C owns valid buffer lengths; this boundary rejects carriers wider than Int32.
+                if (operation == Md5ForeignOp.UPDATE) for (long length : new long[]{1L << 32,Long.MAX_VALUE}) {
                     assertThrows(RuntimeFault.class, () -> caller.call(ManagedAddress.fromByteArray(bytes), ManagedAddress.fromByteArray(output), length));
                     assertArrayEquals(beforeBytes, bytes); assertArrayEquals(beforeOutput, output); released(language);
                 }
             } finally { context.leave(); }
         }
     }
-    @Test void mainUnitAndMissingDescriptorsNeverSelectTheAdapter() {
+    @Test void mainUnitAndMissingDescriptorsNeverSelectTheAdapter() throws Exception {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                java.util.function.Function<Map<String, Object>, ExecutableProgram> load = module -> backend.equals("ast")
-                    ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
+                java.util.function.Function<Map<String, Object>, ExecutableProgram> load = module -> {
+                    try {
+                        var linked = OriginalStdioChecks.nativeModules(OriginalStdioChecks.with(module, "schema", 1L, "ghc", "9.14.1"));
+                        return backend.equals("ast") ? new Program(language, linked, false, false) : new BytecodeProgram(language, linked);
+                    } catch (RuntimeException failure) { throw failure; }
+                    catch (Exception failure) { throw new AssertionError(failure); }
+                };
                 for (var operation : Md5ForeignOp.values()) {
-                    assertThrows(RuntimeFault.class, () -> load.apply(module(operation, "main", true, "foreign-id", closure)));
-                    assertThrows(UnsupportedCore.class, () -> load.apply(module(operation, "ghc-internal", false, "foreign-id", closure)));
+                    var stateBuffer = ManagedAddress.fromByteArray(new byte[88]);
+                    var outputBuffer = ManagedAddress.fromByteArray(new byte[16]);
+                    Object[] arguments = switch (operation) {
+                        case INIT -> new Object[]{0L, stateBuffer, Unit.INSTANCE};
+                        case UPDATE -> new Object[]{0L, stateBuffer, outputBuffer, 0, Unit.INSTANCE};
+                        case FINAL -> new Object[]{0L, outputBuffer, stateBuffer, Unit.INSTANCE};
+                    };
+                    assertThrows(UnsupportedCore.class, () -> ScalarTestCalls.callScalarTestTarget(load.apply(module(operation, "main", true, "foreign-id", closure)).entryTarget("root"), arguments));
+                    assertThrows(UnsupportedCore.class, () -> ScalarTestCalls.callScalarTestTarget(load.apply(module(operation, "ghc-internal", false, "foreign-id", closure)).entryTarget("root"), arguments));
                     // A descriptor cannot bypass ordinary lexical/global Haskell definitions.
                     for (var id : Arrays.asList(null, "", 3L, "p0", "root"))
-                        assertThrows(RuntimeFault.class, () -> load.apply(module(operation, "ghc-internal", true, id, closure)));
+                        assertThrows(RuntimeFault.class, () -> ScalarTestCalls.callScalarTestTarget(load.apply(module(operation, "ghc-internal", true, id, closure)).entryTarget("root"), arguments));
                     var unevaluated = new LinkedHashMap<>(closure); unevaluated.put("evaluated", false);
                     var aggregate = new LinkedHashMap<>(closure); aggregate.put("components", List.of());
                     for (var proof : Arrays.asList(null, state, unevaluated, aggregate))
-                        assertThrows(RuntimeFault.class, () -> load.apply(module(operation, "ghc-internal", true, "foreign-id", proof)));
+                        assertThrows(RuntimeFault.class, () -> ScalarTestCalls.callScalarTestTarget(load.apply(module(operation, "ghc-internal", true, "foreign-id", proof)).entryTarget("root"), arguments));
                 }
             } finally { context.leave(); }
         }

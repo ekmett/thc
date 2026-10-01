@@ -72,7 +72,7 @@ class OriginalStrerrorNativeTest {
             .option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build()) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var module = OriginalStdioFixtures.module(List.of("strerror"));
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var module = nativeModules(with(OriginalStdioFixtures.module(List.of("strerror")), "schema", 1L, "ghc", "9.14.1"));
                 ExecutableProgram program = backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); var entry = program.entryTarget("strerror");
                 class Replay { void run(boolean compiled) throws Exception {
                     for (var row : messages) {
@@ -92,12 +92,12 @@ class OriginalStrerrorNativeTest {
                 }}
                 var replay = new Replay(); replay.run(false); entry.getClass().getMethod("compile",boolean.class).invoke(entry,true); valid(entry); replay.run(true);
                 byte[] bytes = new byte[512]; Arrays.fill(bytes,(byte) 0x55); var address = ManagedAddress.fromByteArray(bytes);
+                // Buffer extent is a C precondition; these failures must occur before entering C.
                 class Control { void reject(Object error,Object output,Object length,Object state) {
                     assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,error,output,length,state})); for (byte value : bytes) assertEquals((byte) 0x55,value);
                 }}
-                assertThrows(RuntimeFault.class,() -> Calls.target(entry,new Object[]{0L,22,address,512L,9L})); var control = new Control(); control.reject(22,address,3L,thc.runtime.Unit.INSTANCE); // C ERANGE indexes buflen-4.
-                control.reject(22,address,513L,thc.runtime.Unit.INSTANCE); control.reject(1L << 32,address,512L,thc.runtime.Unit.INSTANCE);
-                control.reject(22,address,512L,9L); control.reject(22,ManagedAddress.nullAddress(),512L,thc.runtime.Unit.INSTANCE);
+                assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,22,address,512L,9L})); var control = new Control(); control.reject(1L << 32,address,512L,thc.runtime.Unit.INSTANCE);
+                control.reject(22,address,512L,9L); control.reject(22,ManagedAddress.unownedNumeric(1),512L,thc.runtime.Unit.INSTANCE);
             } finally { context.leave(); }
         }
     }

@@ -866,9 +866,9 @@ ORIGINAL_ERRNO_OUTPUTS = frozenset("build/original-errno/" + name for name in (
 
 ORIGINAL_PROCESS_IDENTITY_ENTRIES = ("originalGetPid", "originalGetEuid")
 ORIGINAL_PROCESS_IDENTITY_OUTPUTS = frozenset("build/original-process-identity/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle", "native/observations.txt",
+    "manifest.json", "oracle.json", "native/oracle", "native/observations.txt", "installed/packages.json", "runtime-core/THC.Exception.cbd", "runtime-core/THC.Internal.Exception.cbd",
     *(f"logs/{label}.{suffix}" for label in (
-        "ghc-version", "ghc-info", "unix-unit", "native-build", "native-run", "pre-export", "post-export",
+        "ghc-version", "ghc-info", "unix-unit", "helper-build", "helper-location", "driver-location", "ghc-internal-unit", "native-build", "native-run", "pre-export", "post-export", "runtime-export",
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PROCESS_IDENTITY_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
@@ -1380,11 +1380,30 @@ def process_identity_artifact_hashes(manifest):
         return {}
     require(manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_PROCESS_IDENTITY_ENTRIES) and
             manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
-            manifest.get("installedArtifactsHashed") is False and
+            manifest.get("installedArtifactsHashed") is True and
+            manifest.get("packageManifest") == "build/original-process-identity/installed/packages.json" and
             type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 1,
             "Invalid original process identity proof")
+    bundles = manifest.get("installedBundles")
+    require(isinstance(bundles, list) and bool(bundles) and all(isinstance(path, str) and
+            re.fullmatch(r"build/original-process-identity/installed/bundles/[A-Za-z0-9][A-Za-z0-9_.+-]*\.zip", path)
+            for path in bundles) and len(set(bundles)) == len(bundles) and
+            f"build/original-process-identity/installed/bundles/{manifest['unixUnit']}.zip" in bundles and
+            any(re.fullmatch(r"build/original-process-identity/installed/bundles/ghc-internal-9\.1401\.0-(?:inplace|[0-9a-f]+)\.zip", path) for path in bundles),
+            "Incomplete original process installed bundle inventory")
+    publications = manifest.get("installedPublications")
+    require(isinstance(publications, list) and bool(publications) and len(set(publications)) == len(publications) and
+            all(isinstance(path, str) and re.fullmatch(r"build/original-process-identity/installed/unit-core/v3/[0-9a-f]{64}/(?:[0-9]+\.cbd|publication\.json)", path) for path in publications),
+            "Incomplete original process CBD publication inventory")
+    for path in publications:
+        require(path.rsplit("/", 1)[0] + "/publication.json" in publications, "Missing original process publication receipt")
+    require(manifest.get("runtimeModules") == ["build/original-process-identity/runtime-core/THC.Exception.cbd", "build/original-process-identity/runtime-core/THC.Internal.Exception.cbd"], "Incomplete original exception runtime")
     artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {"build/original-process-identity/manifest.json"},
+    provider_logs = {f"build/original-process-identity/logs/core-provider-version.{suffix}"
+                     for suffix in ("stdout", "stderr", "command.json")}
+    optional = provider_logs if isinstance(artifacts, dict) and provider_logs & set(artifacts) else set()
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            (ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {"build/original-process-identity/manifest.json"}) | set(bundles) | set(publications) | optional,
             "Incomplete/unreviewed original process identity artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid process identity hash")
     return artifacts
@@ -2141,7 +2160,10 @@ def allowed_payload(name):
     if parts[1] == "original-errno":
         return name in ORIGINAL_ERRNO_OUTPUTS
     if parts[1] == "original-process-identity":
-        return name in ORIGINAL_PROCESS_IDENTITY_OUTPUTS
+        return name in ORIGINAL_PROCESS_IDENTITY_OUTPUTS or bool(re.fullmatch(
+            r"build/original-process-identity/installed/(?:bundles/[A-Za-z0-9][A-Za-z0-9_.+-]*\.zip|unit-core/v3/[0-9a-f]{64}/(?:[0-9]+\.cbd|publication\.json))", name)) or name in {
+                f"build/original-process-identity/logs/core-provider-version.{suffix}"
+                for suffix in ("stdout", "stderr", "command.json")}
     if parts[1] == "original-termios":
         return name in ORIGINAL_TERMIOS_OUTPUTS
     if parts[1] == "original-tcsetattr":
@@ -2175,6 +2197,15 @@ def allowed_payload(name):
 def hashes_in(value, tc):
     """All fingerprint spellings used by current original preparation manifests."""
     if isinstance(value, dict):
+        if set(value) == {"source", "modules", "unit", "sizes"}:
+            # The standard publisher receipt retains original ZIP member paths.
+            # Source ZIP and receipt hashes cover them; only ready CBD references
+            # name executable files in the workspace.
+            require(isinstance(value["source"], dict) and isinstance(value["modules"], list) and
+                    isinstance(value["unit"], dict) and isinstance(value["sizes"], list), "Invalid CBD publication receipt")
+            yield from hashes_in(value["source"], tc)
+            yield from hashes_in(value["unit"].get("modules", []), tc)
+            return
         if value.get("format") == "thc-core-packages":
             # Module members name paths inside the independently hashed ZIP,
             # not files relative to the checkout. Preserve the full ZIP hash;

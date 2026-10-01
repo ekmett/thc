@@ -380,7 +380,7 @@ tasks.withType(Test).configureEach {
             "original-fcntl/**/*.json", "original-fcntl/**/*.cbd", "original-fcntl/logs/*.stdout", "original-fcntl/logs/*.stderr", "original-fcntl/native/oracle",
             "original-errno/**/*.json", "original-errno/**/*.cbd", "original-errno/logs/*.stdout", "original-errno/logs/*.stderr",
             "original-errno/native/oracle", "original-errno/native/observations.txt",
-            "original-process-identity/**/*.json", "original-process-identity/**/*.cbd", "original-process-identity/logs/*.stdout",
+            "original-process-identity/**/*.json", "original-process-identity/**/*.cbd", "original-process-identity/installed/bundles/*.zip", "original-process-identity/logs/*.stdout",
             "original-process-identity/logs/*.stderr", "original-process-identity/native/oracle",
             "original-process-identity/native/observations.txt",
             "original-termios/**/*.json", "original-termios/**/*.cbd", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",

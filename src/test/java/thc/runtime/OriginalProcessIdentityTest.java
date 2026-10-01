@@ -34,7 +34,7 @@ class OriginalProcessIdentityTest {
     private Map<String,Object> source(String stage) throws Exception {
         var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalProcessIdentityAudit","THC.InterfaceClosure")) modules.add((Map<String,Object>) cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules);
     }
-    private ExecutableProgram program(Language language,String backend,Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
+    private ExecutableProgram program(Language language,String backend,Map<String,Object> module) throws Exception { var linked = nativeModules(module); return backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); }
     private List<Object> original(Map<String,Object> module,String symbol) { return single(foreignCalls(module),call -> Objects.equals(((Map<?,?>) ((Map<?,?>) ((Map<?,?>) call.get(6)).get("foreignCall")).get("target")).get("symbol"),symbol)); }
     private void released(Language language) { var state = language.getHandoffState().get(); assertEquals(0,state.getArguments().getDepth()); assertEquals(0,state.getArguments().retainedReferences()); assertEquals(0,state.getResults().getDepth()); assertEquals(0,state.getResults().retainedReferences()); assertNull(state.getPending()); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
@@ -47,7 +47,7 @@ class OriginalProcessIdentityTest {
         assertEquals("void",single((List<List<?>>) run.get(2),ignored -> true).get(0));
     }
     private void fixture() throws Exception {
-        var manifest = (Map<String,Object>) json(prefix + "/manifest.json"); assertEquals(1L,manifest.get("schema")); assertEquals("9.14.1",manifest.get("ghc")); assertEquals(true,manifest.get("strictAccepted")); assertEquals(new ArrayList<>(entries.keySet()),manifest.get("entries"));
+        var manifest = (Map<String,Object>) json(prefix + "/manifest.json"); assertEquals(1L,manifest.get("schema")); assertEquals("9.14.1",manifest.get("ghc")); assertEquals(true,manifest.get("strictAccepted")); assertEquals(true,manifest.get("installedArtifactsHashed")); assertEquals(new ArrayList<>(entries.keySet()),manifest.get("entries"));
         assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest.get("unixUnit")));
         for (var stage : List.of("pre","post")) assertEquals(manifest.get("unixUnit"),((Map<?,?>) ((Map<?,?>) ((Map<?,?>) original(source(stage),"geteuid").get(6)).get("foreignCall")).get("target")).get("unit"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalProcessIdentityAudit.hs","t/fixtures/compiler/OriginalProcessIdentityNative.hs","t/haskell-fixtures/OriginalStdioFixtures.hs","bin/core_original_foreign.py","src/main/java/thc/runtime/ProcessIdentity.java"));
@@ -91,10 +91,15 @@ class OriginalProcessIdentityTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var stdio = Language.currentState().getStdio();
                 for (var symbol : entries.values()) {
+                    if (!nativeAccess) {
+                        stdio.setErrno(-23L);
+                        var failure = assertThrows(RuntimeFault.class, () -> program(language,backend,rawModule(original(module,(String) symbol),module)));
+                        assertTrue(Objects.toString(failure.getMessage(), "").contains("requires native access"), failure.getMessage());
+                        assertEquals(-23L,stdio.errno()); released(language); continue;
+                    }
                     var target = program(language,backend,rawModule(original(module,(String) symbol),module)).entryTarget("entry");
                     for (var invalid : list(null,0L,true,ManagedAddress.nullAddress())) { stdio.setErrno(-23L); var failure = assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,invalid}));
                         assertTrue(Objects.toString(failure.getMessage(),"").contains("zero-width scalar carrier") || invalid == null && Objects.equals(failure.getMessage(),"Uninitialized local binding"),failure.getMessage()); assertEquals(-23L,stdio.errno()); released(language); }
-                    if (!nativeAccess) { var failure = assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,thc.runtime.Unit.INSTANCE})); assertTrue(Objects.toString(failure.getMessage(),"").contains("requires native access"),failure.getMessage()); assertEquals(-23L,stdio.errno()); released(language); }
                 }
             } finally { context.leave(); }
         }
@@ -108,21 +113,20 @@ class OriginalProcessIdentityTest {
                 for (var entry : entries.entrySet()) {
                     var name = entry.getKey(); var symbol = (String) entry.getValue(); var call = original(module,symbol);
                     class Control { void rejects(BiConsumer<List<Object>,Map<String,Object>> change) {
-                        var changed = (Map<String,Object>) Json.parse(Json.stringify(rawModule(call,module))); var app = single(foreignCalls(changed),ignored -> true); var descriptor = (Map<String,Object>) ((Map<?,?>) app.get(6)).get("foreignCall"); change.accept(app,descriptor); assertThrows(RuntimeFault.class,() -> program(language,backend,changed));
+                        var changed = (Map<String,Object>) Json.parse(Json.stringify(rawModule(call,module))); var app = single(foreignCalls(changed),ignored -> true); var descriptor = (Map<String,Object>) ((Map<?,?>) app.get(6)).get("foreignCall"); change.accept(app,descriptor); assertThrows(RuntimeFault.class,() -> Calls.target(program(language,backend,changed).entryTarget("entry"),new Object[]{0L,thc.runtime.Unit.INSTANCE}));
                     }}
                     var control = new Control();
                     for (var unit : List.of("main","ghc-internal-9.1401.0-inplace","unix-2.8.7.0-inplace","unix-2.8.8.0-ABCD","unix-2.8.8.0-nothex",symbol.equals("getpid") ? "unix-2.8.8.0-inplace" : "ghc-internal")) control.rejects((a,d) -> ((Map<String,Object>) d.get("target")).put("unit",unit));
-                    for (var unit : List.of("unix-2.8.8.0-inplace","unix-2.8.8.0-460b")) {
-                        var installed = (List<Object>) Json.parse(Json.stringify(call)); ((Map<String,Object>) ((Map<?,?>) ((Map<?,?>) installed.get(6)).get("foreignCall")).get("target")).put("unit",unit); var changed = rawModule(installed,module);
-                        if (symbol.equals("geteuid")) program(language,backend,changed); else assertThrows(RuntimeFault.class,() -> program(language,backend,changed));
-                    }
+                    // Only the exact acquired installed owner can supply this native component.
+                    for (var unit : List.of("unix-2.8.8.0-inplace","unix-2.8.8.0-460b"))
+                        control.rejects((a,d) -> ((Map<String,Object>) d.get("target")).put("unit",unit));
                     for (var edit : List.of(list("schema",true),list("convention","capi"),list("safety","safe"),list("arity",2L),list("suppliedArity",0L))) control.rejects((a,d) -> d.put((String) edit.get(0),edit.get(1)));
                     for (var rep : List.of("IntRep","WordRep",symbol.equals("getpid") ? "Word32Rep" : "Int32Rep")) control.rejects((app,descriptor) -> {
                         var metadata = (Map<?,?>) app.get(6); for (var result : list(metadata.get("rep"),descriptor.get("resultRep"))) { var proof = (Map<String,Object>) result; proof.put("primReps",list(rep)); ((List<Object>) proof.get("components")).set(1,OriginalStdioFixtures.scalar(rep)); }
                     });
                     control.rejects((app,d) -> app.set(1,list("var","p0",map("rep",OriginalStdioFixtures.closure()))));
                     control.rejects((app,d) -> ((List<Object>) app.get(2)).set(0,list("lit","int","1",map("rep",OriginalStdioFixtures.scalar(null)))));
-                    assertThrows(RuntimeFault.class,() -> program(language,backend,rawModule(call,module,0)),name);
+                    assertThrows(RuntimeFault.class,() -> Calls.target(program(language,backend,rawModule(call,module,0)).entryTarget("entry"),new Object[]{0L,thc.runtime.Unit.INSTANCE}),name);
                 }
             } finally { context.leave(); }
         }
