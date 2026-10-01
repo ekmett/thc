@@ -12,7 +12,7 @@ of the expected optimized fixture, but generated unique suffixes are ignored.
 
 import argparse
 import json
-from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
+from core_package_manifest import inspect_cbd
 from pathlib import Path
 import sys
 
@@ -114,10 +114,9 @@ def lambda_parts(binding, count):
     return expr[1], expr[2]
 
 
-def local_binding(expr, name):
+def local_binding(expr, predicate, description):
     return only((binding for node in walk(expr) if node[0] == "let"
-                 for binding in node[2] if binding["name"] == name),
-                f"Local binding {name}")
+                 for binding in node[2] if predicate(binding)), description)
 
 
 def data_alternative(expr, constructor, description):
@@ -139,9 +138,9 @@ class CorpusChecks:
             group = only((g for g in manifest["groups"] if g["id"] == group_id),
                          f"Manifest group {group_id}")
             self.groups[group_id] = group
-            self.modules[group_id] = paired_diagnostic_cbd(
+            self.modules[group_id] = read_cbd(
                 self.build / "groups" / group_id / "core" / (group["module"] + ".cbd"))
-        self.modules["support"] = paired_diagnostic_cbd(
+        self.modules["support"] = read_cbd(
             self.build / "groups/functions/core/CoverageSupport.cbd")
         for name, module in self.modules.items():
             require(module.get("ghc") == "9.14.1", f"{name}: expected GHC 9.14.1 export")
@@ -149,13 +148,13 @@ class CorpusChecks:
                            for b in module["bindings"]}
 
     def binding(self, group, name):
-        return only((b for b in self.modules[group]["bindings"] if b["name"] == name),
+        return only((b for b in self.modules[group]["bindings"] if b["id"] == self.modules[group]["unit"] + ":" + self.modules[group]["module"] + "." + name),
                     f"{group} binding {name}")
 
     def worker(self, group, name):
         # Ignore the unstable GHC unique suffix on a known worker occurrence.
         return only((b for b in self.modules[group]["bindings"]
-                     if b["name"].startswith("$w" + name)),
+                     if b["id"].startswith(self.modules[group]["unit"] + ":" + self.modules[group]["module"] + ".$w" + name)),
                     f"{group} worker for {name}")
 
     def fact(self, kind, **details):
@@ -202,9 +201,11 @@ class CorpusChecks:
         )
         for group, entry, local_name, producer_name, reference_count in fixtures:
             binding = self.binding(group, entry)
-            local = local_binding(binding["expr"], local_name)
             producer_group = "support" if producer_name == "expensiveInt" else group
             producer = self.binding(producer_group, producer_name)
+            local = local_binding(binding["expr"],
+                                  lambda b: bool(calls(b["expr"], producer["id"])),
+                                  f"{entry}: local producer witness")
             require(len(calls(local["expr"], producer["id"])) == 1,
                     f"{entry}: expected one producer call in {local_name}")
             require(local["arity"] == 0 and local["rep"]["evaluated"] is False,
@@ -215,7 +216,10 @@ class CorpusChecks:
                       referenceCount=reference_count)
 
         shared = self.binding("functions", "sharedCapturedThunk")
-        value = local_binding(shared["expr"], "sharedValue")
+        producer = self.binding("support", "expensiveInt")
+        value = local_binding(shared["expr"],
+                              lambda b: bool(calls(b["expr"], producer["id"])),
+                              "sharedCapturedThunk: local producer witness")
         retain = self.binding("functions", "retainUnary")
         retain_call = only(calls(shared["expr"], retain["id"]), "sharedCapturedThunk retain call")
         closure = retain_call[2][0]
@@ -237,7 +241,9 @@ class CorpusChecks:
     def cyclic_list(self):
         knot = self.binding("lists", "streamKnot")
         parameters, _ = lambda_parts(knot, 1)
-        local = local_binding(knot["expr"], "values")
+        local = local_binding(knot["expr"],
+                              lambda b: bool(references(b["expr"], b["id"])),
+                              "streamKnot: recursive local witness")
         recursive = only((node for node in walk(knot["expr"])
                           if node[0] == "let" and local in node[2]), "streamKnot local group")
         require(recursive[1] is True, "streamKnot: values must remain a recursive let binding")
@@ -350,7 +356,14 @@ class CorpusChecks:
 
     def narrow_word_records(self):
         entry = self.binding("narrow-words", "narrowWordRecordChecksum")
-        records = local_binding(entry["expr"], "records")
+        producer = only((b for b in self.modules["narrow-words"]["bindings"]
+                         if calls(b["expr"], b["id"]) and
+                         any(node[:2] == ["con", "main:NarrowWordCoverage.Sample"]
+                             for node in walk(b["expr"]))),
+                        "narrowWordRecordChecksum: recursive Sample producer")
+        records = local_binding(entry["expr"],
+                                lambda b: bool(calls(b["expr"], producer["id"])),
+                                "narrowWordRecordChecksum: records producer witness")
         require(len(references(entry["expr"], records["id"])) == 2,
                 "narrowWordRecordChecksum: both consumers must reference the shared records")
         audit = read_json(self.build / "groups/narrow-words/narrowWordRecordChecksum.audit.json")

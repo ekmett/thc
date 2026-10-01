@@ -6,7 +6,7 @@
 import argparse
 from collections import Counter
 import hashlib
-from core_package_manifest import inspect_cbd, paired_diagnostic_cbd
+from core_package_manifest import inspect_cbd
 import importlib.util
 import json
 import os
@@ -131,6 +131,27 @@ def validate_application(app):
     return name, levities
 
 
+def context_entry(binding, name):
+    roles = {'waitTake': ['mvar', 'state'], 'waitRead': ['mvar', 'state'],
+             'waitPut': ['mvar', 'flag', 'state'], 'makeBox': ['flag']}[name]
+    expr = binding['expr']
+    require(binding['id'] == 'main:ManagedMVarAudit.' + name and expr[0] == 'lam',
+            name + ': wrong context root/lambda')
+    parameters = expr[1]
+    require(binding['arity'] == len(parameters) == len(roles), name + ': wrong context arity')
+    for parameter, role in zip(parameters, roles):
+        require(role_matches(role, parameter['rep']) and parameter['lifted'] is False and
+                parameter['coercion'] is False, name + ': wrong context parameter ABI')
+        if role == 'state':
+            require(parameter.get('type') == 'State# RealWorld', name + ': wrong context state token')
+    result = expr[-1]['resultRep']
+    require(role_matches('boxed' if name == 'makeBox' else 'flag', result), name + ': wrong context result ABI')
+    if name == 'makeBox':
+        require(result['kind'] == 'data' and result['primReps'] == ['BoxedRep (Just Lifted)'],
+                name + ': wrong lifted Box result')
+    return {key: binding[key] for key in ('id', 'name', 'arity', 'rep')} | dict(parameters=parameters, resultRep=result)
+
+
 def validate_rows(text, entries, values):
     rows = [line.split('\t') for line in text.splitlines()]
     require(all(len(row) == 3 for row in rows), 'Malformed native output')
@@ -202,8 +223,6 @@ def expected_artifacts(build, root=ROOT):
                       for name in ('ManagedMVarAudit.cbd', 'THC.InterfaceClosure.cbd')] for stage in ('pre', 'post')}
     files = [build / stage / (name + '.audit.json') for stage in stages for name in ENTRIES + CONTEXT_ENTRIES]
     files += [build / 'logs' / (label + suffix) for label in COMMAND_LABELS for suffix in ('.stdout', '.stderr', '.command.json')]
-    files += [build / stage / 'core' / name for stage in stages
-              for name in ('ManagedMVarAudit.json', 'THC.InterfaceClosure.json')]
     files += [plugin_snapshot(build),
               build / 'native/managed-mvar-oracle', build / 'oracle.tsv', build / 'context-oracle.tsv', build / 'contracts.json']
     return stages, {str(path.relative_to(root)) for path in files} | {path for paths in stages.values() for path in paths}
@@ -213,7 +232,7 @@ def check_prepared(build, root=ROOT):
     """Read-only verification: never repair, delete, compile, or run an oracle."""
     try:
         manifest = json.loads((build / 'manifest.json').read_text())
-        require(manifest['schema'] == 1 and manifest['recipeVersion'] == 3 and manifest['ghc'] == '9.14.1',
+        require(manifest['schema'] == 1 and manifest['recipeVersion'] == 4 and manifest['ghc'] == '9.14.1',
                 'missing/current recipe version mismatch')
         require(manifest['entries'] == manifest['entryNames'] == ENTRIES and manifest['contextEntryNames'] == CONTEXT_ENTRIES,
                 'entry inventory mismatch')
@@ -333,7 +352,7 @@ def main():
     for stage in ('pre', 'post'):
         directory = build / stage
         core = directory / 'core'
-        options = [str(core), 'source-notes', 'pretty-diagnostics'] + (['post-tidy'] if stage == 'post' else [])
+        options = [str(core), 'source-notes'] + (['post-tidy'] if stage == 'post' else [])
         options += ['closure=' + name for name in ENTRIES + CONTEXT_ENTRIES]
         run([ghc, '--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint', '-g', *package_flags,
              '-package-db', plugin['packageDb'],
@@ -344,7 +363,6 @@ def main():
         modules = [(relative(path), inspect_cbd(path.read_bytes())) for path in paths]
         stages[stage] = [name for name, _ in modules]
         artifacts.extend(stages[stage])
-        artifacts.extend(relative(path) for path in sorted(core.glob("*.json")))
         bindings = {b['id']: b for _, module in modules for b in module['bindings']}
         observed = {name: set() for name in CONTRACTS}
         for name in ENTRIES + CONTEXT_ENTRIES:
@@ -366,12 +384,11 @@ def main():
         for name in ('takeMVar#', 'putMVar#', 'readMVar#', 'tryTakeMVar#', 'tryPutMVar#', 'tryReadMVar#'):
             require(observed[name] == both_levities, stage + '/' + name + ': incomplete boxed payload levity coverage')
         context_records[stage] = {}
-        diagnostic = paired_diagnostic_cbd(core / "ManagedMVarAudit.cbd")
         for name in CONTEXT_ENTRIES:
-            candidates = [b for b in diagnostic['bindings'] if b['id'] == 'main:ManagedMVarAudit.' + name]
+            candidates = [b for b in bindings.values() if b['id'] == 'main:ManagedMVarAudit.' + name]
             require(len(candidates) == 1, stage + '/' + name + ': context entry not uniquely exported')
             binding = candidates[0]
-            context_records[stage][name] = {key: binding[key] for key in ('id', 'name', 'type', 'arity')}
+            context_records[stage][name] = context_entry(binding, name)
 
     native = build / 'native'
     native.mkdir()
@@ -397,7 +414,7 @@ def main():
     require(input_hashes == hashes(inputs), 'Inputs changed during native/export preparation')
     save(build / 'contracts.json', {'primitiveRoles': CONTRACTS, 'applications': application_records,
                                     'contextEntries': context_records})
-    manifest = dict(schema=1, recipeVersion=3, ghc='9.14.1', ghcInfo=ghc_info, entries=ENTRIES, entryNames=ENTRIES,
+    manifest = dict(schema=1, recipeVersion=4, ghc='9.14.1', ghcInfo=ghc_info, entries=ENTRIES, entryNames=ENTRIES,
                     contextEntryNames=CONTEXT_ENTRIES, contextEntries=context_records,
                     stages=stages, nativeRows=len(ENTRIES) * len(values), nativeContextRows=len(READY_ENTRIES) * len(values),
                     nativeConcurrent=concurrent, inputs=values, reachableBindings=closures, auditStatus=audit_status,

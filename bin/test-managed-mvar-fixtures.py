@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 """Model/contract checks; synthetic test JSON is never supplied as guest Core."""
 
+import copy
 import importlib.util
 import io
 import json
@@ -38,6 +39,34 @@ def application(name, lifted):
 
 
 class ManagedMVarFixtureTests(unittest.TestCase):
+    def test_context_abi_retains_realworld_and_rejects_wrong_reps_arity_and_result(self):
+        integer = dict(kind='long', primReps=['IntRep'], evaluated=True)
+        mvar = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        state = dict(kind='void', primReps=[], evaluated=True)
+        for name, proofs in (('waitTake', [mvar, state]), ('waitRead', [mvar, state]),
+                             ('waitPut', [mvar, integer, state]), ('makeBox', [integer])):
+            parameters = [dict(id='@local/' + str(i), name='@local/' + str(i), rep=proof,
+                               lifted=False, coercion=False,
+                               **({'type': 'State# RealWorld'} if proof is state else {}))
+                          for i, proof in enumerate(proofs)]
+            result = dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=True) if name == 'makeBox' else integer
+            binding = dict(id='main:ManagedMVarAudit.' + name, name=name, arity=len(parameters),
+                           rep=dict(kind='closure', primReps=['BoxedRep (Just Lifted)'], evaluated=True),
+                           expr=['lam', parameters, ['void'], dict(resultRep=result)])
+            self.assertEqual(recipe.context_entry(binding, name)['parameters'], parameters)
+            for change in ('arity', 'parameter', 'lifted', 'coercion', 'result', 'identity', 'state'):
+                if change == 'state' and name == 'makeBox':
+                    continue
+                bad = copy.deepcopy(binding)
+                if change == 'arity': bad['arity'] += 1
+                elif change == 'parameter': bad['expr'][1][0]['rep'] = state
+                elif change in ('lifted', 'coercion'): bad['expr'][1][0][change] = True
+                elif change == 'result': bad['expr'][-1]['resultRep'] = state
+                elif change == 'identity': bad['id'] = 'other:ManagedMVarAudit.' + name
+                else: bad['expr'][1][-1]['type'] = 'State# s'
+                with self.subTest(name=name, change=change), self.assertRaises(ValueError):
+                    recipe.context_entry(bad, name)
+
     def test_plugin_uses_cabal_identity_dependency_registry_and_owned_snapshot(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -174,7 +203,7 @@ class PreparationReuseTests(unittest.TestCase):
                 (self.build / stage / (name + '.audit.json')).write_text(json.dumps(report))
                 statuses[stage + '/' + name] = 'accepted'
                 reachable[stage + '/' + name] = []
-        manifest = {'schema': 1, 'recipeVersion': 3, 'ghc': '9.14.1', 'entries': recipe.ENTRIES, 'entryNames': recipe.ENTRIES,
+        manifest = {'schema': 1, 'recipeVersion': 4, 'ghc': '9.14.1', 'entries': recipe.ENTRIES, 'entryNames': recipe.ENTRIES,
                     'contextEntryNames': recipe.CONTEXT_ENTRIES, 'stages': stages, 'inputs': values,
                     'contextEntries': {stage: {name: {} for name in recipe.CONTEXT_ENTRIES} for stage in stages},
                     'inputHashes': recipe.hash_files(recipe.source_inputs(self.root), self.root),
