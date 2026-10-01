@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class OriginalRtsLocksTest {
     private final File root = new File(System.getProperty("thc.projectRoot")); private final String prefix = "build/original-rts-locks";
     private Map<String, Object> json(String file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(root, prefix + "/" + file).toPath())); }
-    private Map<String, Object> cbd(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, prefix + "/" + stage + ".cbd").toPath()); }
+    private Map<String, Object> cbd(String stage) throws Exception { return OriginalStdioChecks.module(new File(root, prefix + "/" + stage + ".cbd")); }
     private static String entryId(String name) { return "main:OriginalRtsLocksAudit." + name; }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     @FunctionalInterface private interface Action { void run(Language language) throws Exception; }
@@ -55,10 +55,10 @@ public class OriginalRtsLocksTest {
     @Test public void genuineNativeClaimsMatchPrePostBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest = json("manifest.json"); assertEquals(true, manifest.get("strictAccepted")); assertEquals(true, manifest.get("originalIdsChecked")); assertEquals(true, manifest.get("typeEqualityChecked")); assertEquals(false, manifest.get("installedArtifactsHashed"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalRtsLocksAudit.hs", "t/haskell-fixtures/OriginalRtsLocksFixtures.hs", "bin/core-capabilities.json"), null);
-        var required = new LinkedHashSet<>(List.of(prefix + "/pre.cbd", prefix + "/post.cbd", prefix + "/declarations.json", prefix + "/oracle.json"));
+        var required = new LinkedHashSet<>(List.of(prefix + "/pre.cbd", prefix + "/post.cbd", prefix + "/declarations.json", prefix + "/declarations.cbd", prefix + "/template-pre.cbd", prefix + "/oracle.json"));
         for (var stage : List.of("pre", "post")) for (var entry : List.of("originalLock", "originalUnlock")) required.add(prefix + "/" + stage + "-" + entry + ".audit.json");
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");
-        var declarations = json("declarations.json"); assertEquals(false, declarations.get("completeModule")); var originalCalls = OriginalStdioChecks.foreignCalls(declarations.get("projection"));
+        var declarations = json("declarations.json"); assertEquals(false, declarations.get("completeModule")); assertEquals("declarations.cbd", declarations.get("core")); var originalCalls = OriginalStdioChecks.foreignCalls(cbd("declarations"));
         var rows = (List<List<Object>>) json("oracle.json").get("rows"); var names = new ArrayList<>(); var results = new ArrayList<>();
         for (var row : rows) { names.add(row.get(0)); results.add(row.get(4)); }
         assertEquals(List.of("unknown", "reader", "repeat-reader", "second-reader", "writer-conflict", "release-one", "still-locked", "release-repeat", "release-other", "writer", "reader-conflict", "writer-repeat", "release-writer", "release-missing"), names);
@@ -94,8 +94,7 @@ public class OriginalRtsLocksTest {
                             var args = new ArrayList<Long>(locking ? words : words.subList(0, Math.min(1, words.size()))); if (locking) args.add((Long) row.get(3));
                             var state = Language.currentState(); assertEquals(-1L, state.getStdio().close(-1)); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             if (compiled) for (var group : active.values()) for (var target : group) valid(target);
-                            var packet = new Object[args.size() + 1]; packet[0] = 0L; for (int i = 0; i < args.size(); i++) packet[i + 1] = args.get(i);
-                            assertEquals(row.get(4), Calls.target(entries.get(name), packet), stage + "/" + backend + "/" + row.get(0)); assertEquals(row.get(6), state.getStdio().errno());
+                            assertEquals(row.get(4), OriginalStdioChecks.invoke(program, entryId(name), args.toArray()), stage + "/" + backend + "/" + row.get(0)); assertEquals(row.get(6), state.getStdio().errno());
                             if (compiled) { assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue()); for (var entry : entries.entrySet()) assertEquals(active.get(entry.getKey()), targets(entry.getValue())); for (var group : active.values()) for (var target : group) valid(target); }
                             var handoff = language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
                         }

@@ -108,7 +108,7 @@ class LibdwUnavailableTest {
     }
     private List<Object> originalLabel(String symbol) throws Exception {
         var root = new File(System.getProperty("thc.projectRoot"));
-        var source = Json.parse(Files.readString(root.toPath().resolve("build/libdw-unavailable/foreign-labels.json")));
+        var source = OriginalStdioChecks.module(new File(root, "build/libdw-unavailable/foreign-labels.cbd"));
         var found = findLabel(source, symbol);
         if (found == null) throw new IllegalStateException("Missing genuine GHC " + symbol + " label");
         return found;
@@ -393,13 +393,13 @@ class LibdwUnavailableTest {
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "t/fixtures/compiler/LibdwUnavailableNative.hs", "t/fixtures/compiler/CFinalizerNative.hs",
             "t/fixtures/compiler/ForeignLabelAudit.hs", "src/compiler/THC/Plugin.hs", "t/haskell-fixtures/LibdwUnavailableFixtures.hs"), null);
-        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/oracle.json", prefix + "/foreign-labels.json"), prefix + "/");
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/oracle.json", prefix + "/foreign-labels.cbd"), prefix + "/");
         var oracle = (Map<String, Object>) Json.parse(Files.readString(root.toPath().resolve(prefix + "/oracle.json")));
         assertEquals(false, oracle.get("useLibdw"));
         assertEquals(Collections.nCopies(8, true), oracle.get("observations"));
         assertEquals(Collections.nCopies(18, true), oracle.get("cFinalizerObservations"));
         var labels = new ArrayList<List<String>>();
-        walkLabels(Json.parse(Files.readString(root.toPath().resolve(prefix + "/foreign-labels.json"))), labels);
+        walkLabels(OriginalStdioChecks.module(new File(root, prefix + "/foreign-labels.cbd")), labels);
         assertEquals(List.of(List.of("data-addr", "enabled_capabilities"), List.of("function-addr", "backtraceFree"),
             List.of("function-addr", "free"), List.of("function-addr", "libdwPoolRelease")),
             labels.stream().distinct().sorted(Comparator.<List<String>, String>comparing(pair -> pair.get(0)).thenComparing(pair -> pair.get(1))).toList());
