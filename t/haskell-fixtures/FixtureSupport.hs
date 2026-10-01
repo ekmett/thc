@@ -21,7 +21,7 @@ module FixtureSupport
 import Control.Concurrent (threadDelay)
 import Control.Monad (forM, unless)
 import qualified Crypto.Hash.SHA256 as SHA256
-import Data.Aeson (Value(..), object, (.=), encode)
+import Data.Aeson (Value(..), object, (.=), encode, toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
@@ -33,7 +33,7 @@ import Numeric (showHex)
 import System.Directory (copyFile, createDirectoryIfMissing)
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..), die)
-import System.FilePath ((</>), takeFileName)
+import System.FilePath ((</>), takeDirectory, takeFileName)
 import System.IO (IOMode(ReadMode, WriteMode), withBinaryFile)
 import qualified System.Info as Host
 import System.Process (CreateProcess(..), StdStream(..), proc, readCreateProcessWithExitCode,
@@ -47,42 +47,46 @@ isOriginalUnixUnit value = case stripPrefix "unix-2.8.8.0-" value of
   Just suffix -> not (null suffix) && all (`elem` ("0123456789abcdef" :: String)) suffix
   Nothing -> False
 
--- | Artifacts actually selected by a unit, whether a legacy ZIP or a plain
--- JSON/symbol pair. Moduleless compatibility units can select no artifacts.
+-- | The executable CBD artifacts selected by the unit, in module order.
 unitArtifactReferences :: Value -> [Value]
-unitArtifactReferences (Object fields) = [value | key <- ["bundle", "json", "symbols"],
-  Just value <- [KeyMap.lookup key fields]]
+unitArtifactReferences (Object fields) = case KeyMap.lookup "modules" fields of
+  Just (Array modules) -> [ref | Object item <- foldr (:) [] modules,
+    Just ref <- [KeyMap.lookup "compact" item]]
+  _ -> []
 unitArtifactReferences _ = []
 
--- | Retain immutable selected artifacts with checked hashes and updated paths.
--- This copies bytes, never re-exports modules or changes their symbol offsets.
+-- | Copy the selected CBD bytes unchanged, retaining their checked identities.
 retainUnitArtifacts :: FilePath -> FilePath -> Value -> IO (Value, [FilePath])
 retainUnitArtifacts root directory (Object fields) = do
   identifier <- text "id" fields
-  unless (takeFileName identifier == identifier && identifier `notElem` ["", ".", ".."])
-    (die "Invalid retained unit artifact path")
-  let present key = KeyMap.member key fields
-  unless ((present "json" == present "symbols") && not (present "bundle" && present "json"))
-    (die "Unit must select a bundle or one complete JSON/symbol pair")
-  createDirectoryIfMissing True (root </> directory)
-  retained <- forM [(key, suffix) | (key, suffix) <-
-    [("bundle", ".zip"), ("json", ".jsons"), ("symbols", ".symbols")], present key] $ \(key, suffix) ->
-      case KeyMap.lookup key fields of
-        Just (Object ref) -> do
-          source <- text "path" ref
-          expected <- text "sha256" ref
-          let relative = directory </> identifier ++ suffix
-              destination = root </> relative
-          copyFile source destination
-          actual <- hashFile destination
-          unless (actual == expected) (die "Retained unit artifact hash differs")
-          pure (key, Object (KeyMap.insert "path" (String (Text.pack destination)) ref), relative)
-        _ -> die "Invalid unit artifact reference"
-  pure (Object (foldr (\(key, ref, _) -> KeyMap.insert key ref) fields retained),
-        [relative | (_, _, relative) <- retained])
-  where text key record = case KeyMap.lookup key record of
-          Just (String value) -> pure (Text.unpack value)
-          _ -> die "Missing unit artifact field"
+  safe identifier
+  modules <- case KeyMap.lookup "modules" fields of
+    Just (Array values) -> pure (foldr (:) [] values)
+    Nothing -> pure []
+    _ -> die "Invalid retained CBD modules"
+  retained <- forM modules $ \value -> case value of
+    Object item -> do
+      name <- text "name" item
+      safe name
+      ref <- case KeyMap.lookup "compact" item of
+        Just (Object value') -> pure value'
+        _ -> die "Missing retained CBD artifact"
+      source <- text "path" ref
+      expected <- text "sha256" ref
+      let relative = directory </> identifier </> name ++ ".cbd"
+          destination = root </> relative
+      createDirectoryIfMissing True (takeDirectory destination)
+      copyFile source destination
+      actual <- hashFile destination
+      unless (actual == expected) (die "Retained CBD artifact hash differs")
+      pure (Object (KeyMap.insert "compact" (Object (KeyMap.insert "path" (String (Text.pack destination)) ref)) item), relative)
+    _ -> die "Invalid retained CBD module"
+  pure (Object (KeyMap.insert "modules" (toJSON (map fst retained)) fields), map snd retained)
+  where
+    safe name = unless (takeFileName name == name && name `notElem` ["", ".", ".."]) (die "Invalid retained CBD path")
+    text key record = case KeyMap.lookup key record of
+      Just (String value) -> pure (Text.unpack value)
+      _ -> die "Missing unit artifact field"
 retainUnitArtifacts _ _ _ = die "Invalid unit artifact record"
 
 environmentWith :: [(String,String)] -> IO [(String,String)]

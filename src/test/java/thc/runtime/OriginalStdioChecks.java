@@ -14,6 +14,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 public final class OriginalStdioChecks {
     private OriginalStdioChecks() {}
+    /** Inspect the authentic executable CBD through the canonical record decoder. */
+    public static Map<String, Object> module(File file) throws Exception {
+        return thc.CoreCbdFixtures.read(file.toPath());
+    }
+    /** Invoke genuine Core through the existing host entry and typed input boundary. */
+    public static Object invoke(ExecutableProgram program, String entry, Object... arguments) {
+        return Calls.target(program.hostEntryTarget(arguments.length), new Object[]{program.entryValue(entry), arguments});
+    }
     public static final List<String> names = List.of("originalWrite", "originalSafeWrite", "originalWriteErrno", "originalSafeWriteErrno");
     public static final byte[] payload = new byte[256];
     static { for (int i = 0; i < payload.length; i++) payload[i] = (byte) i; }

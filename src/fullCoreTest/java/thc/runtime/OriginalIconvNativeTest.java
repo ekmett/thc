@@ -39,11 +39,10 @@ public class OriginalIconvNativeTest {
         final Map<String, List<RootCallTarget>> active = new HashMap<>(); final String label; boolean compiled;
         Session(Language language, Map<String, Object> module, List<String> names, String backend, String label) {
             this.label = label;
-            for (var name : names) { var linked = new LinkedHashMap<>(CoreModules.reachable(module, name)); linked.put("instrument", true); ExecutableProgram p = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); programs.put(name, p); entries.put(name, p.entryTarget(name)); }
+            for (var name : names) { var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:OriginalIconvAudit." + name)); linked.put("instrument", true); ExecutableProgram p = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); programs.put(name, p); entries.put(name, p.entryTarget("main:OriginalIconvAudit." + name)); }
         }
         Object call(String name, Object... args) throws Exception {
-            var program = programs.get(name); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var actuals = new Object[args.length + 1]; actuals[0] = 0L; System.arraycopy(args, 0, actuals, 1, args.length);
-            var result = Calls.target(entries.get(name), actuals);
+            var program = programs.get(name); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var result = OriginalStdioChecks.invoke(program, "main:OriginalIconvAudit." + name, args);
             if (compiled) { int count = 0; for (var target : active.get(name)) if (target.getRootNode() instanceof GuestRoot) count++; assertEquals(before + count, ((Number) program.diagnostics().get("compiledEntries")).longValue(), "first compiled " + label + "/" + name); for (var target : active.get(name)) valid(target); }
             return result;
         }
@@ -68,11 +67,11 @@ public class OriginalIconvNativeTest {
     }
     @Test public void actualOriginalImportsMatchNativeIncludingFirstCompiledCalls() throws Exception {
         var oracle = document("oracle.json"); var manifest = document("manifest.json"); assertEquals(10L, manifest.get("nativeRows"));
-        for (var field : List.of("inputHashes", "artifactHashes")) OriginalStdioChecks.hashes(root, manifest.get(field), field.equals("inputHashes") ? Set.of("t/fixtures/compiler/OriginalIconvAudit.hs", "t/fixtures/compiler/OriginalIconvAuditNative.hs") : Set.of("build/original-iconv/OriginalIconvAudit.json", "build/original-iconv/oracle.json"), null);
+        for (var field : List.of("inputHashes", "artifactHashes")) OriginalStdioChecks.hashes(root, manifest.get(field), field.equals("inputHashes") ? Set.of("t/fixtures/compiler/OriginalIconvAudit.hs", "t/fixtures/compiler/OriginalIconvAuditNative.hs") : Set.of("build/original-iconv/OriginalIconvAudit.cbd", "build/original-iconv/oracle.json"), null);
         var declarations = document("declarations.json"); assertEquals(false, declarations.get("completeModule")); assertEquals(false, declarations.get("installedArtifactsHashed")); assertEquals(true, declarations.get("typeEqualityChecked")); assertEquals(true, declarations.get("originalIdentityChecked")); var originals = OriginalStdioChecks.foreignCalls(declarations);
         for (var stage : List.of("pre", "post")) {
-            var module = document(stage.equals("pre") ? "PreIconvAudit.json" : "OriginalIconvAudit.json"); assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", module.get("boundary")); var actual = new ArrayList<List<Object>>();
-            for (var entry : (List<String>) manifest.get("entries")) actual.addAll(OriginalStdioChecks.foreignCalls(CoreModules.reachable(module, entry))); assertEquals(4, actual.size());
+            var module = OriginalStdioChecks.module(new File(root, "build/original-iconv/" + (stage.equals("pre") ? "PreIconvAudit.cbd" : "OriginalIconvAudit.cbd"))); assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", module.get("boundary")); var actual = new ArrayList<List<Object>>();
+            for (var entry : (List<String>) manifest.get("entries")) actual.addAll(OriginalStdioChecks.foreignCalls(CoreModules.reachable(module, "main:OriginalIconvAudit." + entry))); assertEquals(4, actual.size());
             for (var call : actual) {
                 var descriptor = ((Map<?, ?>) call.getLast()).get("foreignCall"); var candidates = new ArrayList<List<Object>>(); for (var original : originals) if (Objects.equals(((Map<?, ?>) original.getLast()).get("foreignCall"), descriptor)) candidates.add(original); assertFalse(candidates.isEmpty(), "exact original foreign descriptor");
                 String originalPrefix = "ghc-internal:GHC.Internal.IO.Encoding.Iconv.", adaptedPrefix = "main:OriginalIconvAudit."; var head = (List<?>) call.get(1); assertTrue(((String) head.get(1)).startsWith(adaptedPrefix));
@@ -90,9 +89,49 @@ public class OriginalIconvNativeTest {
             }
         }
     }
+    private Object mutate(Object value, java.util.function.UnaryOperator<Map<String, Object>> descriptor, boolean flags) {
+        if (value instanceof Map<?, ?> fields) {
+            var copy = new LinkedHashMap<String, Object>();
+            for (var field : fields.entrySet()) copy.put((String) field.getKey(), field.getKey().equals("foreignCall") ? descriptor.apply((Map<String, Object>) field.getValue()) : mutate(field.getValue(), descriptor, flags));
+            return copy;
+        }
+        if (value instanceof List<?> values) {
+            var copy = new ArrayList<Object>(); for (var child : values) copy.add(mutate(child, descriptor, flags));
+            if (flags && values.size() == 7 && Objects.equals(values.getFirst(), "app") && values.getLast() instanceof Map<?, ?> meta && meta.containsKey("foreignCall"))
+                copy.set(3, Collections.nCopies(((List<?>) values.get(3)).size(), true));
+            return copy;
+        }
+        return value;
+    }
     @Test public void malformedOriginalDescriptorsAreRejectedBeforeEffects() throws Exception {
-        var manifest = document("manifest.json"); assertEquals(44L, manifest.get("negativeAudits")); var bad = new ArrayList<File>(); for (var file : Objects.requireNonNull(new File(root, "build/original-iconv/negative").listFiles())) if (file.getName().endsWith(".json") && !file.getName().endsWith(".audit.json")) bad.add(file); assertEquals(11, bad.size());
-        try (var context = context(false, true)) { context.initialize("thc"); context.enter(); try { var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); for (var file : bad) for (var name : (List<String>) manifest.get("entries")) { var module = (Map<String, Object>) Json.parse(Files.readString(file.toPath())); var linked = CoreModules.reachable(module, name); assertThrows(RuntimeFault.class, () -> new Program(language, linked), file + "/" + name + " AST"); assertThrows(RuntimeFault.class, () -> new BytecodeProgram(language, linked), file + "/" + name + " BC"); } assertEquals(0, Language.currentState(null).getIconv().liveHandles()); } finally { context.leave(); } }
+        var original = OriginalStdioChecks.module(new File(root, "build/original-iconv/OriginalIconvAudit.cbd"));
+        var mutations = List.<java.util.function.UnaryOperator<Map<String, Object>>>of(
+            d -> OriginalStdioChecks.with(d, "target", OriginalStdioChecks.with((Map<?, ?>) d.get("target"), "unit", "main")),
+            d -> OriginalStdioChecks.with(d, "target", OriginalStdioChecks.with((Map<?, ?>) d.get("target"), "kind", "dynamic")),
+            d -> OriginalStdioChecks.with(d, "target", OriginalStdioChecks.with((Map<?, ?>) d.get("target"), "isFunction", false)),
+            d -> OriginalStdioChecks.with(d, "convention", "capi"),
+            d -> OriginalStdioChecks.with(d, "safety", "safe"),
+            d -> OriginalStdioChecks.with(d, "arity", 0L),
+            d -> OriginalStdioChecks.with(d, "suppliedArity", 0L),
+            d -> OriginalStdioChecks.with(d, "schema", true),
+            d -> OriginalStdioChecks.with(d, "resultRep", OriginalStdioChecks.with((Map<?, ?>) d.get("resultRep"), "primReps", List.of("IntRep"))),
+            d -> OriginalStdioChecks.with(d, "argumentReps", ((List<Map<String, Object>>) d.get("argumentReps")).stream().map(r -> OriginalStdioChecks.with(r, "evaluated", true)).toList()));
+        var malformed = new ArrayList<Map<String, Object>>();
+        for (var mutation : mutations) malformed.add((Map<String, Object>) mutate(original, mutation, false));
+        malformed.add((Map<String, Object>) mutate(original, java.util.function.UnaryOperator.identity(), true));
+        try (var context = context(false, true)) { context.initialize("thc"); context.enter(); try {
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            for (var module : malformed) for (var name : List.of("originalLocale", "originalIconvOpen", "originalIconvClose", "originalIconv")) {
+                var linked = CoreModules.reachable(module, "main:OriginalIconvAudit." + name);
+                for (var call : OriginalStdioChecks.foreignCalls(linked)) {
+                    var reps = new ArrayList<Object>();
+                    for (var argument : (List<?>) call.get(2)) reps.add(CoreRepresentations.metadata((List<?>) argument).get("rep"));
+                    var meta = (Map<?, ?>) call.get(6);
+                    assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validate(meta, reps, (List<?>) call.get(3), meta.get("rep")), name + " ABI");
+                }
+            }
+            assertEquals(0, Language.currentState(null).getIconv().liveHandles());
+        } finally { context.leave(); } }
     }
     private void bad(Executable action, ManagedAddress input, ManagedAddress inputCell, ManagedAddress inputCount, ManagedAddress output, ManagedAddress outputCell, ManagedAddress outputCount) {
         assertThrows(RuntimeFault.class, action); assertTrue(inputCell.readAddressElementIndex(0).sameLocation(input)); assertTrue(outputCell.readAddressElementIndex(0).sameLocation(output)); assertEquals(2L, ManagedAddressRead.WORD64.read(inputCount, 0)); assertEquals(4L, ManagedAddressRead.WORD64.read(outputCount, 0)); var bytes = new ArrayList<Long>(); for (long i = 0; i <= 3; i++) bytes.add(output.readWord8(i)); assertEquals(List.of(85L, 85L, 85L, 85L), bytes);

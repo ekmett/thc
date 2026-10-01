@@ -29,6 +29,7 @@ import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..), die)
 import System.FilePath
 import qualified THC.Driver.Installed as Installed
+import THC.Compact.Module (readModuleValue)
 
 entries :: [String]
 entries = ["graphChecksum", "graphReachable", "graphDistanceTotal", "graphDistanceAt", "graphControl"]
@@ -110,7 +111,7 @@ prepareGraph root = do
   boot <- readJson (root </> directory </> "boot/boot-provenance.json")
   bootSources <- field boot "sources" :: IO [Value]
   bootSourcePaths <- mapM (\value -> field value "path") bootSources
-  let bootModules = [directory </> "boot/core" </> name <.> "json" |
+  let bootModules = [directory </> "boot/core" </> name <.> "cbd" |
         name <- ["GHC.Internal.CString","GHC.Internal.Err","GHC.InterfaceClosure"]]
   -- The ordinary thin unfolding of reverse references its private reverse1;
   -- lookup has no executable unfolding. Acquire both complete original modules,
@@ -138,20 +139,18 @@ prepareGraph root = do
     path <- maybe (die ("Missing original installed interface: " ++ name)) pure
       (lookup name (Installed.installedInterfaces unit))
     let label = "interface-" ++ name
-        destination = runDir </> "interfaces" </> name <.> "json"
+        destination = runDir </> "interfaces" </> name <.> "cbd"
         interfaceCopy = runDir </> "interfaces" </> name <.> "dyn_hi"
-    _ <- execute label [] helper (Installed.helperCommand context unit (name,path))
-    response <- readJson (root </> logs </> label <.> "stdout")
-    status <- field response "status" :: IO String
-    original <- field response "core" :: IO Value
+    hydrated <- execute label [] helper (Installed.helperCommand context unit (name,path))
+    original <- either die pure (readModuleValue (commandStdout hydrated))
     schema <- field original "schema" :: IO Int
     owner <- field original "unit" :: IO String
     originalName <- field original "module" :: IO String
     boundary <- field original "boundary" :: IO String
-    unless (status == "loaded" && schema == 1 && owner == "ghc-internal" && originalName == name &&
+    unless (schema == 1 && owner == "ghc-internal" && originalName == name &&
       boundary == "optimized-Core-after-Tidy-before-CorePrep")
       (die ("Not complete original executable Core: " ++ name))
-    writeJson (root </> destination) original
+    BS.writeFile (root </> destination) (commandStdout hydrated)
     interfaceHash <- hashFile path
     copyFile path (root </> interfaceCopy)
     copiedHash <- hashFile (root </> interfaceCopy)
@@ -163,13 +162,13 @@ prepareGraph root = do
   stages <- forM ["post"] $ \stage -> do
     let core = runDir </> stage </> "core"
         exportLabel = stage ++ "-export"
-        closurePath = core </> "THC.InterfaceClosure.json"
+        closurePath = core </> "THC.InterfaceClosure.cbd"
         moduleList = directory </> stage ++ "-modules.txt"
     _ <- execute exportLabel [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> runDir </> stage </> "ghc"),
       ("THC_SOURCE_NOTES","false")]
       "bin/export-core.sh" (include ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ [source])
-    closure <- readJson (root </> closurePath)
+    closure <- either die pure . readModuleValue =<< BS.readFile (root </> closurePath)
     modules <- field closure "sourceModules" :: IO [String]
     unless (all ("main:" `isPrefixOf`) modules && "main:GraphWorkload" `elem` modules)
       (die "Graph export changed its source-module unit policy")
@@ -177,14 +176,14 @@ prepareGraph root = do
     fragmentIds <- mapM (\value -> field value "id") fragments :: IO [String]
     unless (all (\name -> any (`isPrefixOf` name) ["ghc-internal:GHC.Internal.Classes.","ghc-internal:GHC.Internal.List."]) fragmentIds)
       (die "Graph requires another actual interface provider; inspect the retained closure")
-    let paths = [core </> drop 5 name <.> "json" | name <- modules] ++
+    let paths = [core </> drop 5 name <.> "cbd" | name <- modules] ++
           [path | (path,_,_,_) <- originals] ++ bootModules
     writeFile (root </> moduleList) (unlines [makeRelative directory path | path <- paths])
     audits <- forM entries $ \entry -> do
       let label = stage ++ "-" ++ entry ++ "-audit"
           reportPath = directory </> label <.> "json"
       attempted <- try (execute label [] "python3" ["bin/audit-core.py","--module-list",moduleList,
-        "--entry",entry,"--output",reportPath]) :: IO (Either ExitCode CommandResult)
+        "--entry","main:GraphWorkload." ++ entry,"--output",reportPath]) :: IO (Either ExitCode CommandResult)
       -- Preserve real strict-rejection reports without converting their exit
       -- status to success. A failed producer still leaves the complete frontier.
       command <- readJson (root </> logs </> label <.> "command.json")

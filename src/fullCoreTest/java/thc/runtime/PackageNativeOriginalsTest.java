@@ -60,11 +60,11 @@ public class PackageNativeOriginalsTest {
         return result;
     }
     private List<File> moduleFiles(String name) {
-        File[] files = new File(directory, name).listFiles(); assertNotNull(files);
+        File[] files = new File(directory, name).listFiles((dir, file) -> file.endsWith(".cbd")); assertNotNull(files);
         Arrays.sort(files, Comparator.comparing(File::getName)); return Arrays.asList(files);
     }
     private List<Map<String, Object>> modules(List<File> files) throws Exception {
-        var result = new ArrayList<Map<String, Object>>(); for (File file : files) result.add(json(file)); return result;
+        var result = new ArrayList<Map<String, Object>>(); for (File file : files) result.add(OriginalStdioChecks.module(file)); return result;
     }
     private PackageScalarLink link(Map<String, Object> merged) {
         var links = (List<PackageScalarLink>) merged.get("packageScalarLinks"); assertEquals(1, links.size()); return links.getFirst();
@@ -102,9 +102,9 @@ public class PackageNativeOriginalsTest {
         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
     }
     private Context context() { return withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build(); }
-    private void checkErf(String backend, List<String> row, Map<String, RootCallTarget> entries, Language language) {
+    private void checkErf(String backend, List<String> row, ExecutableProgram program, Map<String, String> names, Language language) {
         long argument = Long.parseUnsignedLong(row.get(1)), expected = Long.parseUnsignedLong(row.get(2));
-        assertEquals(expected, Calls.target(entries.get(row.getFirst()), new Object[] {0L, argument}), backend + "/" + row); released(language);
+        assertEquals(expected, OriginalStdioChecks.invoke(program, names.get(row.getFirst()), argument), backend + "/" + row); released(language);
     }
 
     @Test public void originalSafeErfImportsMatchNativeInBothFirstInstalledBackends() throws Exception {
@@ -114,11 +114,11 @@ public class PackageNativeOriginalsTest {
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "t/fixtures/compiler/OriginalErfNative.hs", "t/fixtures/compiler/OriginalErfEntry.hs",
             "t/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/THC/Driver/NativeLibrarySources.hs"), null);
-        var moduleNames = List.of("linked/erf-2.0.0.0-inplace/Data.Number.Erf.json", "erf-entry/units/u-original-erf-entry/OriginalErfEntry.json");
+        var moduleNames = List.of("linked/erf-2.0.0.0-inplace/Data.Number.Erf.cbd", "erf-entry/units/u-original-erf-entry/OriginalErfEntry.cbd");
         var namesAndArtifacts = new ArrayList<>(moduleNames); namesAndArtifacts.addAll(List.of("erf-native.tsv", "erf-audit.json"));
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), artifacts(namesAndArtifacts), "build/original-native/");
         assertEquals(true, json(new File(directory, "erf-audit.json")).get("accepted"));
-        var modules = new ArrayList<Map<String, Object>>(); for (String name : moduleNames) modules.add(json(new File(directory, name)));
+        var modules = new ArrayList<Map<String, Object>>(); for (String name : moduleNames) modules.add(OriginalStdioChecks.module(new File(directory, name)));
         var merged = CoreModules.merge(modules); var link = link(merged); assertEquals("llvm-embedded-elf", link.getFormat());
         var symbols = new LinkedHashSet<String>(); for (var abi : link.getAbi()) {
             symbols.add(abi.getSymbol()); assertEquals("safe", abi.getSafety()); assertEquals(List.of(abi.getResult()), abi.getArguments());
@@ -136,10 +136,10 @@ public class PackageNativeOriginalsTest {
                 var entries = new LinkedHashMap<String, RootCallTarget>(); for (var entry : names.entrySet()) entries.put(entry.getKey(), program.entryTarget(entry.getValue()));
                 owner.getThreads().enterCurrent(null, false, true, null);
                 try {
-                    for (var row : rows) checkErf(backend, row, entries, language);
+                    for (var row : rows) checkErf(backend, row, program, names, language);
                     var installed = installed(entries.values()); for (var target : installed) { compile(target); valid(target, backend); }
                     for (var row : rows.reversed()) {
-                        long before = compiled(program); checkErf(backend, row, entries, language); assertTrue(compiled(program) > before);
+                        long before = compiled(program); checkErf(backend, row, program, names, language); assertTrue(compiled(program) > before);
                         for (var target : installed) valid(target, backend + "/" + target.getRootNode().getName() + " retains first-installed code");
                     }
                 } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
@@ -173,8 +173,8 @@ public class PackageNativeOriginalsTest {
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalDigestNative.hs",
             "t/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/THC/Driver/NativeLibrarySources.hs"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/original-native/digest-native.tsv",
-            "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.Adler32.json", "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.CRC32.json",
-            "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.CRC32C.json"), "build/original-native/");
+            "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.Adler32.cbd", "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.CRC32.cbd",
+            "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.CRC32C.cbd"), "build/original-native/");
         var modules = modules(moduleFiles("linked/digest-0.0.2.1-inplace")); var moduleNames = new LinkedHashSet<Object>();
         for (var module : modules) moduleNames.add(module.get("module")); assertEquals(Set.of("Data.Digest.Adler32", "Data.Digest.CRC32", "Data.Digest.CRC32C"), moduleNames);
         var link = link(CoreModules.merge(modules)); assertEquals(6, link.getAbi().size()); var rows = rows("digest-native.tsv"); assertEquals(270, rows.size());
@@ -226,19 +226,19 @@ public class PackageNativeOriginalsTest {
         }
     }
     private record Case(String name, long input, long expected) {}
-    private void checkCase(String backend, Case value, Map<String, RootCallTarget> entries, Language language) {
-        assertEquals(value.expected(), Calls.target(entries.get(value.name()), new Object[] {0L, value.input()}), backend + "/" + value); released(language);
+    private void checkCase(String backend, Case value, ExecutableProgram program, Language language) {
+        assertEquals(value.expected(), OriginalStdioChecks.invoke(program, value.name(), value.input()), backend + "/" + value); released(language);
     }
     @Test public void originalPrimitivePublicSettersRunThroughBothFirstInstalledBackends() throws Exception {
         var manifest = json(new File(directory, "manifest.json")); var files = moduleFiles("linked/primitive-0.9.1.0-inplace");
-        String entryPath = "primitive-entry/units/u-original-primitive-entry/OriginalPrimitiveEntry.json";
+        String entryPath = "primitive-entry/units/u-original-primitive-entry/OriginalPrimitiveEntry.cbd";
         OriginalStdioChecks.hashes(root, manifest.get("sourceHashes"), Set.of("build/original-native/sources/primitive-0.9.1.0/Data/Primitive/ByteArray.hs",
             "build/original-native/sources/primitive-0.9.1.0/Data/Primitive/Internal/Operations.hs"), "build/original-native/sources/");
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalPrimitiveEntry.hs", "t/fixtures/compiler/OriginalPrimitiveNative.hs",
             "t/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/driver/THC/Driver/PackageNative.hs"), null);
         var artifacts = moduleArtifacts(files); artifacts.addAll(artifacts(List.of(entryPath, "primitive-audit.json", "primitive-native.tsv")));
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), artifacts, "build/original-native/");
-        var modules = modules(files); modules.add(json(new File(directory, entryPath))); assertEquals(true, json(new File(directory, "primitive-audit.json")).get("accepted"));
+        var modules = modules(files); modules.add(OriginalStdioChecks.module(new File(directory, entryPath))); assertEquals(true, json(new File(directory, "primitive-audit.json")).get("accepted"));
         var names = new LinkedHashMap<String, String>(); names.put("Int16Rep", "signed16"); names.put("Word16Rep", "unsigned16"); names.put("Int64Rep", "signed64");
         names.replaceAll((key, value) -> "original-primitive-entry:OriginalPrimitiveEntry." + value);
         long[] inputs = {0L, 1L, -1L, -128L, 128L, 0x123456789abcdef0L}; var groups = new LinkedHashMap<String, List<List<String>>>(); int count = 0;
@@ -264,10 +264,10 @@ public class PackageNativeOriginalsTest {
                 var entries = new LinkedHashMap<String, RootCallTarget>(); for (var name : names.values()) entries.put(name, program.entryTarget(name));
                 owner.getThreads().enterCurrent(null, false, true, null);
                 try {
-                    for (var value : cases) checkCase(backend, value, entries, language);
+                    for (var value : cases) checkCase(backend, value, program, language);
                     var installed = installed(entries.values()); for (var target : installed) { compile(target); valid(target, "installed"); }
                     for (var value : cases.reversed()) {
-                        long before = compiled(program); checkCase(backend, value, entries, language); assertTrue(compiled(program) > before);
+                        long before = compiled(program); checkCase(backend, value, program, language); assertTrue(compiled(program) > before);
                         for (var target : installed) valid(target, "first-installed");
                     }
                 } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }

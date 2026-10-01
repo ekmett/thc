@@ -206,7 +206,7 @@ prepareOriginalTimeClock root = do
   unless (headersBefore == headersAfter) (die "Selected clock headers changed during fixture preparation")
   writeJson (root </> directory </> "oracle.json") $ object ["realtime" .= clock,"rows" .= (rows :: [Value])]
   audits <- forM [(stage,entry) | stage <- ["pre","post"], entry <- ["originalId","originalConstant","originalResolution","originalTime"]] $ \(stage,entry) ->
-    runLoggedExpect (if entry == "originalId" then 1 else 0) 180 root (directory </> "logs") (stage ++ "-" ++ entry) [] "python3" ["bin/audit-core.py","--entry",entry,
+    runLoggedExpect (if entry == "originalId" then 1 else 0) 180 root (directory </> "logs") (stage ++ "-" ++ entry) [] "python3" ["bin/audit-core.py","--entry","main:OriginalTimeClockAudit." ++ entry,
       "--output",directory </> stage ++ "-" ++ entry ++ ".audit.json",directory </> "linked.cbd",directory </> stage ++ ".cbd"]
   inputHashes <- hashes root [source,"t/haskell-fixtures/OriginalTimeClockFixtures.hs","src/driver/THC/Driver/ForeignBitcode.hs",
     "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/core_package_manifest.py","bin/audit-core.py"]

@@ -147,9 +147,9 @@ public class GraphWorkloadTest {
         for (var source : (List<Map<String, String>>) boot.get("sources")) assertEquals(source.get("sha256"), inputs.get(source.get("path")));
         var original = (Map<String, Object>) manifest.get("originalInterfaces"); assertEquals(List.of(), original.get("sourcePatches"));
         var originalModules = (List<String>) original.get("modules"); var moduleNames = new ArrayList<Object>();
-        for (var path : originalModules) moduleNames.add(read(path).get("module"));
+        for (var path : originalModules) moduleNames.add(thc.runtime.OriginalStdioChecks.module(new File(root, path)).get("module"));
         assertEquals(List.of("GHC.Internal.Classes", "GHC.Internal.List"), moduleNames);
-        for (var path : originalModules) { assertTrue(artifacts.containsKey(path)); var module = read(path); assertEquals("ghc-internal", module.get("unit")); assertEquals("optimized-Core-after-Tidy-before-CorePrep", module.get("boundary")); }
+        for (var path : originalModules) { assertTrue(artifacts.containsKey(path)); var module = thc.runtime.OriginalStdioChecks.module(new File(root, path)); assertEquals("ghc-internal", module.get("unit")); assertEquals("optimized-Core-after-Tidy-before-CorePrep", module.get("boundary")); }
         var provenance = (String) original.get("provenance"); assertTrue(artifacts.containsKey(provenance));
         var inventory = (List<Map<String, Object>>) read(provenance).get("interfaces");
         for (var source : (List<Map<String, String>>) original.get("sources")) {
@@ -160,7 +160,7 @@ public class GraphWorkloadTest {
         var stages = (List<Map<String, Object>>) manifest.get("stages"); var names = new ArrayList<Object>(); for (var stage : stages) names.add(stage.get("stage")); assertEquals(List.of("post"), names);
         for (var stage : stages) {
             var modules = (List<String>) stage.get("modules"); assertEquals(modules.size(), new HashSet<>(modules).size());
-            for (var suffix : List.of("/GraphWorkload.json", "/Data.Sequence.Internal.json", "/Data.IntSet.Internal.json", "/Data.IntMap.Internal.json")) { boolean found = false; for (var module : modules) if (module.endsWith(suffix)) found = true; assertTrue(found); }
+            for (var suffix : List.of("/GraphWorkload.cbd", "/Data.Sequence.Internal.cbd", "/Data.IntSet.Internal.cbd", "/Data.IntMap.Internal.cbd")) { boolean found = false; for (var module : modules) if (module.endsWith(suffix)) found = true; assertTrue(found); }
             assertTrue(modules.containsAll(originalModules)); for (var module : modules) assertTrue(artifacts.containsKey(module), "Unfingerprinted Core module " + module);
             var audits = (Map<String, String>) stage.get("audits"); assertEquals(new HashSet<>(entries), audits.keySet());
             for (var e : audits.entrySet()) { assertTrue(artifacts.containsKey(e.getValue())); var audit = read(e.getValue()); assertEquals(List.of("main:GraphWorkload." + e.getKey()), audit.get("roots")); assertEquals(true, audit.get("accepted"), "Strict graph frontier retained at " + e.getValue() + ": " + audit.get("missingGlobals") + "; " + audit.get("issues")); assertEquals(List.of(), audit.get("missingGlobals")); assertEquals(List.of(), audit.get("issues")); }
@@ -195,7 +195,7 @@ public class GraphWorkloadTest {
         var manifest = evidence(); var grouped = new LinkedHashMap<String, List<Row>>(); for (var row : rows(Files.readString(new File(root, directory + "/oracle.tsv").toPath()))) grouped.computeIfAbsent(row.entry, ignored -> new ArrayList<>()).add(row);
         for (var stage : (List<Map<String, Object>>) manifest.get("stages")) for (var backend : List.of("ast", "bytecode")) for (var entry : compiled ? List.of("graphChecksum", "graphControl") : entries) try (var context = context(compiled, inlining)) {
             var modules = new ArrayList<String>(); for (var module : (List<String>) stage.get("modules")) modules.add(new File(root, module).getPath());
-            var source = Source.newBuilder("thc", CoreModules.request(modules, entry, true, false, backend), "graph:" + stage.get("stage") + ":" + entry).cached(false).buildLiteral(); context.enter();
+            var source = Source.newBuilder("thc", CoreModules.request(modules, "main:GraphWorkload." + entry, true, false, backend), "graph:" + stage.get("stage") + ":" + entry).cached(false).buildLiteral(); context.enter();
             try {
                 var function = context.eval(source); var cases = grouped.get(entry);
                 for (var row : cases) assertEquals(row.result, function.execute(row.input).asLong(), backend + "/" + row); clean(function, backend);

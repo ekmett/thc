@@ -39,8 +39,8 @@ public class GetEntropyTest {
             "t/fixtures/compiler/NativeGetEntropy.c", "t/fixtures/compiler/OriginalSplitmixNative.hs", "t/fixtures/compiler/OriginalSplitmixEntry.hs",
             "t/haskell-fixtures/GetEntropyFixtures.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/THC/Driver/NativeLibrarySources.hs"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(
-            "build/getentropy/System.Random.SplitMix.Init.json", "build/getentropy/System.Random.SplitMix.json",
-            "build/getentropy/entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.json", "build/getentropy/audit.json",
+            "build/getentropy/System.Random.SplitMix.Init.cbd", "build/getentropy/System.Random.SplitMix.cbd",
+            "build/getentropy/entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.cbd", "build/getentropy/audit.json",
             "build/getentropy/native.tsv", "build/getentropy/splitmix-native.tsv", "build/getentropy/control.so"), "build/getentropy/");
         assertEquals(true, json("audit.json").get("accepted"));
     }
@@ -118,13 +118,13 @@ public class GetEntropyTest {
         var nativeRows = Files.readAllLines(new File(directory, "splitmix-native.tsv").toPath(), StandardCharsets.UTF_8);
         var nativeValues = new LinkedHashSet<Long>(); for (String value : nativeRows) nativeValues.add(Long.parseUnsignedLong(value));
         assertEquals(8, nativeRows.size()); assertTrue(nativeValues.size() > 1, "original native public API observes fresh seeds");
-        var original = json("System.Random.SplitMix.Init.json"); var proof = (Map<?, ?>) original.get("packageNativeLink");
+        var original = OriginalStdioChecks.module(new File(directory, "System.Random.SplitMix.Init.cbd")); var proof = (Map<?, ?>) original.get("packageNativeLink");
         assertEquals("llvm-embedded-elf", proof.get("format"));
         var libraries = (List<Map<?, ?>>) ((Map<?, ?>) proof.get("buildInputs")).get("nativeLibraries");
         var providers = new ArrayList<Object>(); for (var library : libraries) providers.add(library.get("provider"));
         assertEquals(List.of("package-declared-native-libraries-v1"), providers);
         var modules = new ArrayList<Map<String, Object>>(); modules.add(original);
-        for (String name : List.of("System.Random.SplitMix.json", "System.Random.SplitMix32.json", "entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.json")) modules.add(json(name));
+        for (String name : List.of("System.Random.SplitMix.cbd", "System.Random.SplitMix32.cbd", "entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.cbd")) modules.add(OriginalStdioChecks.module(new File(directory, name)));
         var merged = CoreModules.merge(modules); var links = (List<PackageScalarLink>) merged.get("packageScalarLinks");
         assertEquals(1, links.size()); var link = links.getFirst();
         var symbols = new ArrayList<String>(); for (var abi : link.getAbi()) {
@@ -142,12 +142,12 @@ public class GetEntropyTest {
                 var target = program.entryTarget(entry); owner.getThreads().enterCurrent(null, false, true, null);
                 try {
                     var observations = new LinkedHashSet<Long>();
-                    for (int i = 0; i < 4; i++) { observations.add((Long) Calls.target(target, new Object[] {0L, thc.runtime.Unit.INSTANCE})); released(language); }
+                    for (int i = 0; i < 4; i++) { observations.add((Long) OriginalStdioChecks.invoke(program, entry, thc.runtime.Unit.INSTANCE)); released(language); }
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                     for (int i = 0; i < 4; i++) {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                        observations.add((Long) Calls.target(target, new Object[] {0L, thc.runtime.Unit.INSTANCE})); released(language);
+                        observations.add((Long) OriginalStdioChecks.invoke(program, entry, thc.runtime.Unit.INSTANCE)); released(language);
                         assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, backend);
                         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), backend);
                     }
