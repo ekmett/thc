@@ -23,7 +23,12 @@ public final class ProcessSignalJvmProbe {
                 for (var name : StdioHostAbi.SIGNAL_NAMES) {
                     if (name.equals("SIGUSR2")) continue; // Explicitly unavailable JVM relocation, checked below.
                     int signal = (int) abi.signal(name);
-                    check(transport.install(signal, -4).action() == -1);
+                    var installed = transport.install(signal, -4);
+                    if (name.equals("SIGXFSZ")) {
+                        check(installed.action() == -3 && installed.errno() == abi.error(8));
+                        continue; // The pinned Darwin VM owns this disposition; never raise or replace it.
+                    }
+                    check(installed.action() == -1);
                     check((int) raise.invokeExact(signal) == 0);
                     var event = java.util.Objects.requireNonNull(transport.take());
                     check(event.signal() == signal && event.info().length == abi.getSiginfoBytes());
@@ -34,7 +39,7 @@ public final class ProcessSignalJvmProbe {
                 check(failure instanceof RuntimeFault && failure.getMessage().contains("verified standalone JVM"));
             }
             check(!NativeSignalTransport.userSignalAvailable());
-            System.out.println("JVM received seven selected-header signals; unverified USR2 denied"); return;
+            System.out.println("JVM received six selected-header signals; VM-owned XFSZ and unverified USR2 denied"); return;
         }
         if (Arrays.equals(args, new String[] {"unrelocated"})) {
             check(!NativeSignalTransport.userSignalAvailable());

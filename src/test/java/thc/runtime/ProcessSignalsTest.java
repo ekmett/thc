@@ -343,7 +343,7 @@ public class ProcessSignalsTest {
             var child = builder.start();
             try {
                 assertTrue(child.waitFor(30, TimeUnit.SECONDS), "native signal child timed out: " + output); assertEquals(0, child.exitValue(), Files.readString(output.toPath()));
-                assertTrue(Files.readString(output.toPath()).contains(switch (mode) { case "reduced-signals-disabled" -> "Later VM option disables reduced signal usage"; case "unrelocated" -> "Unrelocated JVM retains SIGUSR2"; case "posix-safe" -> "JVM received seven selected-header signals; unverified USR2 denied"; default -> "JVM received signals 1,2,3,10,12,15,24,25"; }), Files.readString(output.toPath()));
+                assertTrue(Files.readString(output.toPath()).contains(switch (mode) { case "reduced-signals-disabled" -> "Later VM option disables reduced signal usage"; case "unrelocated" -> "Unrelocated JVM retains SIGUSR2"; case "posix-safe" -> "JVM received six selected-header signals; VM-owned XFSZ and unverified USR2 denied"; default -> "JVM received signals 1,2,3,10,12,15,24,25"; }), Files.readString(output.toPath()));
             } finally { if (child.isAlive()) child.destroyForcibly().waitFor(); }
         }
     }
