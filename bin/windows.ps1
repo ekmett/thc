@@ -100,6 +100,9 @@ try {
         Invoke-ThcTool $fixture @('libdw-unavailable')
         $focusedTests += 'thc.runtime.LibdwUnavailableTest'
     }
+    if ($Action -in @('Test', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest')) {
+        Invoke-ThcTool $fixture @('foreign-exceptions')
+    }
     if ($focusedTests.Count) {
         # One shared compilation and one pair of reports retain every selected
         # suite; separate invocations of a test task overwrite earlier XML.

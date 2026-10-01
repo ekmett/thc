@@ -283,6 +283,18 @@ private DLL proof and unchanged executable Core segments. `Test` runs it too.
 modes; `MallocTest` checks allocation and returned pointers. These supplement the
 ordinary `Test` action.
 
+`Test`, `CodePageTest`, `WindowsServicesTest` and `LibdwTest` also acquire genuine
+foreign-exception support through the selected registered Windows runtime.
+The producer retains compiler output and hashes, strict Core audits, a native
+GHC oracle and Safe-Haskell controls. The JVM helper selects the required
+exception closure with the ordinary indexed CBD linker and verifies native
+declaration owners without retaining the entire boot-package corpus.
+Acquisition does not establish guest execution: the current Windows support
+provider still lacks the ordinary `ghc-internal` C declaration for
+`__hsbase_MD5Init`, required by the genuine exception dictionary. The linked
+code-page and unavailable-libdw execution controls fail at that boundary.
+Their native-provider controls remain separate evidence.
+
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.

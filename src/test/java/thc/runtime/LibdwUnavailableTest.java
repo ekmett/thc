@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
+import thc.ForeignExceptionFixtureSupport;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -118,8 +119,33 @@ class LibdwUnavailableTest {
         return new PackageScalarLink("ghc-internal", "unused", "libdw-unavailable", "", bytes, signatures,
             "llvm-bitcode", Set.of(), nativeLibrary);
     }
-    private ExecutableProgram load(Language language, String backend, Map<String, Object> module) {
+    private ExecutableProgram load(Language language, String backend, Map<String, Object> module) throws Exception {
+        module = ForeignExceptionFixtureSupport.nativeModules(List.of(module));
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+    }
+    @Test void genuineExceptionSupportPreservesNativeLinksAndRejectsConflictingOwners() throws Exception {
+        try (var context = context(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var link = provider();
+                var supplied = changed(module(), "packageScalarLinks", List.of(link, link));
+                var merged = ForeignExceptionFixtureSupport.nativeModules(List.of(supplied));
+                var links = (List<PackageScalarLink>) merged.get("packageScalarLinks");
+                assertEquals(1, links.stream().filter(value -> value.getUnit().equals(link.getUnit())).count());
+                assertSame(link, links.stream().filter(value -> value.getUnit().equals(link.getUnit())).findFirst().orElseThrow());
+                assertNotNull(merged.get("selectedForeignExceptionBridge"));
+                for (var conflicting : List.of(
+                        new PackageScalarLink(link.getUnit(), link.getTarget(), link.getComponentSha256() + "-conflict",
+                            link.getBitcodeSha256(), link.getBytes(), link.getAbi(), link.getFormat(), link.getFinalizers(), link.getNativeLibrary()),
+                        new PackageScalarLink("other", link.getTarget(), link.getComponentSha256(),
+                            link.getBitcodeSha256(), link.getBytes(), link.getAbi(), link.getFormat(), link.getFinalizers(), link.getNativeLibrary()))) {
+                    var failure = assertThrows(IllegalArgumentException.class, () -> ForeignExceptionFixtureSupport.nativeModules(
+                        List.of(changed(supplied, "packageScalarLinks", List.of(link, conflicting)))));
+                    assertTrue(failure.getMessage().startsWith(conflicting.getUnit().equals(link.getUnit())
+                        ? "Conflicting package C component:" : "Package C entry namespace belongs to another unit:"));
+                }
+            } finally { context.leave(); }
+        }
     }
     private Context context(boolean inlining) {
         return Context.newBuilder("thc").allowNativeAccess(true).allowIO(IOAccess.NONE).allowExperimentalOptions(true)

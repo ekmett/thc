@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 import thc.CoreCbdFixtures;
+import thc.ForeignExceptionFixtureSupport;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -152,7 +153,8 @@ class WindowsCodePagesTest {
         try { return TruffleLanguage.LanguageReference.create(Language.class).get(null); }
         catch (RuntimeException | Error failure) { context.leave(); throw failure; }
     }
-    private ExecutableProgram program(Language language, String backend, Map<String, Object> module) {
+    private ExecutableProgram program(Language language, String backend, Map<String, Object> module) throws Exception {
+        module = ForeignExceptionFixtureSupport.nativeModules(List.of(module));
         return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
     }
     private ManagedAddress buffer(int size, long fill, boolean pinned) {
