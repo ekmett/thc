@@ -190,6 +190,16 @@ class SimdWideArrayNativeTest {
         targets.add(target);
     }
     @Test void nativeOriginalCoreHasExactFirstInstalledEntries() throws Exception { execute(false); }
+    private long stateApplications(Object value) {
+        long count = 0;
+        if (value instanceof List<?> list) {
+            if (CoreStateApplications.inline(list) != null) count++;
+            for (var item : list) count += stateApplications(item);
+        } else if (value instanceof Map<?, ?> map) {
+            for (var item : map.values()) count += stateApplications(item);
+        }
+        return count;
+    }
     private RootCallTarget selected(RootCallTarget host, RootCallTarget original) {
         var matches = new ArrayList<DirectCallNode>();
         for (var call : NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class))
@@ -225,6 +235,7 @@ class SimdWideArrayNativeTest {
                         var core = thc.CoreCbdFixtures.read(new File(root, (String) data.get("core")).toPath());
                         for (var entry : entries) {
                             var entryId = "main:SimdWideArrayAudit." + entry; var linked = new LinkedHashMap<>(CoreModules.reachable(core, entryId)); linked.put("instrument", true);
+                            assertEquals(1L, stateApplications(linked.get("bindings")), "Exact immediate State# application");
                             ExecutableProgram p = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                             int arity = entry.contains("Write") ? 3 : 2;
                             var host = p.hostEntryTarget(arity); var closure = p.entryValue(entryId); var original = p.entryTarget(entryId);
@@ -233,7 +244,8 @@ class SimdWideArrayNativeTest {
                             for (var input : cases) call(input, host, closure, language, stage, backend, inlining);
                             var target = selected(host, original);
                             var targets = activeTargets(target);
-                            int expectedCalls = 2;
+                            // The audited source lambda is beta-reduced before either backend creates roots.
+                            int expectedCalls = 1;
                             assertEquals(expectedCalls, targets.size(), stage + "/" + backend + "/" + entry + " root shape");
                             var installedTargets = new ArrayList<>(targets); installedTargets.add(host);
                             for (var installed : installedTargets) {
