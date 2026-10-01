@@ -640,13 +640,12 @@ class MutableByteArrayTest {
                                             .put("primReps", List.of("BoxedRep (Just Lifted)"));
                                     case 5, 6, 7 -> {
                                         int index = operation == ByteArrayOp.SET ? 3 : 4;
-                                        ((Map<String, Object>) CoreRepresentations
-                                                .metadata((List<Object>) args.get(index))
-                                                .get("rep"))
-                                            .put("primReps",
-                                                List.of(mutation == 5   ? "Word8Rep"
-                                                        : mutation == 6 ? "WordRep"
-                                                                        : "Int64Rep"));
+                                        var rep = new LinkedHashMap<>((Map<String, Object>) CoreRepresentations
+                                                .metadata((List<Object>) args.get(index)).get("rep"));
+                                        rep.put("primReps", List.of(mutation == 5 ? "Word8Rep"
+                                                : mutation == 6 ? "WordRep" : "Int64Rep"));
+                                        // A use-only width change would contradict the original variable's binder.
+                                        args.set(index, List.of("lit", "int", "0", Map.of("rep", rep)));
                                     }
                                     case 8 ->
                                         meta.put("rep",
@@ -675,7 +674,8 @@ class MutableByteArrayTest {
                                 var configured = new LinkedHashMap<>(module);
                                 configured.put("diagnosticUnsupported", diagnostic);
                                 var label = operation + "/" + mutation + "/" + backend + "/" + diagnostic;
-                                if (mutation >= 5 && mutation <= 7 || mutation >= 10 && mutation <= 11)
+                                // Word8 uses an Int carrier; native-word fill/count/offset operands use Long.
+                                if (mutation >= 6 && mutation <= 7 || mutation >= 10 && mutation <= 11)
                                     assertDoesNotThrow(() -> program(language, configured, backend), label);
                                 else
                                     assertThrows(
