@@ -28,12 +28,17 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
-    def test_library_launcher_resolves_the_required_vector_module(self):
+    def test_library_and_map_launchers_resolve_the_required_vector_module(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
-        block = workflow.split("name: Run the complete strict and compiled library checks", 1)[1].split("      - name:", 1)[0]
-        self.assertIn("--add-modules=jdk.incubator.vector", block)
-        self.assertIn("thc.LibraryCheck build/libraries/cases.json", block)
-        self.assertNotIn("continue-on-error", block)
+        for label, entry in (
+            ("Run the complete strict and compiled library checks", "thc.LibraryCheck build/libraries/cases.json"),
+            ("Check diagnostic Map on both backends and handoff modes", "thc.MapCheck build/map/modules.txt build/map/oracle.tsv"),
+        ):
+            with self.subTest(label=label):
+                block = workflow.split("name: " + label, 1)[1].split("\n      - ", 1)[0]
+                self.assertIn("--add-modules=jdk.incubator.vector", block)
+                self.assertIn(entry, block)
+                self.assertNotIn("continue-on-error", block)
 
     def test_full_build_collects_both_handoff_modes_without_fail_fast(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()

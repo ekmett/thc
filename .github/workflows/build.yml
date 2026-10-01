@@ -272,7 +272,7 @@ jobs:
           matrix_status=0
           for handoff in false true; do
             for backend in ast bytecode; do
-              java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+              java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
                 "-Dthc.backend=$backend" "-Dthc.handoffSlabs=$handoff" \
                 -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
                 -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.MapCheck build/map/modules.txt build/map/oracle.tsv \
