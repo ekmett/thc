@@ -7,6 +7,8 @@ import static thc.buildlogic.BytecodeNormalizers.*;
 /** Balance physical root depth for both initial entry and generated continuation entry. */
 public final class BytecodeStackPreparation {
     private BytecodeStackPreparation() {}
+    // Four provided tags occupy bits 3..6; the pinned DSL places continuation state at bit 7.
+    private static final String TAG_ENCODING = "((tags & 0xfL) << 3) | (state.continuationsIndex != 0 ? 0x80L : 0L)";
     private static final String SIGNATURE = "    private Object continueAt(AbstractBytecodeNode bc, long bci, long sp, FrameWithoutBoxing frame, ContinuationRootNodeImpl continuationRootNode) {\n";
     private static final String BODY = SIGNATURE.replace("continueAt(", "continueAtStackBody(");
     private static final String VIRTUAL_OPERANDS = """
@@ -98,12 +100,12 @@ public final class BytecodeStackPreparation {
     // Reversible markers allow the whole generated-source pipeline to run again.
     private static final String[][] FORWARDING = {
         {"""
-            if (CompilerDirectives.inCompiledCode() && (this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+            if (CompilerDirectives.inCompiledCode() && (this.configEncoding & 0x80L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
                 localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
             }
 """, "            // THC unified frame v1: compiled locals\n"},
         {"""
-            if ((this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+            if ((this.configEncoding & 0x80L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
                 localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
             }
 """, "            // THC unified frame v1: interpreter locals\n"},
@@ -126,7 +128,7 @@ public final class BytecodeStackPreparation {
             }
 """, "            // THC unified frame v1: yield\n            MaterializedFrame localFrame = frame.materialize();\n"},
         {"""
-            if ((this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+            if ((this.configEncoding & 0x80L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
                 FrameWithoutBoxing localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
                 result = root.interceptControlFlowException(cfe, localFrame, this, (int) bci);
             } else {
@@ -139,7 +141,7 @@ public final class BytecodeStackPreparation {
             result = root.interceptControlFlowException(cfe, frame, this, (int) bci);
 """},
         {"""
-            if ((this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+            if ((this.configEncoding & 0x80L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
                 FrameWithoutBoxing localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
                 for (int localOffset = targetLocalCount; localOffset < originalLocalCount; localOffset++) {
                     FRAMES.clear(localFrame, USER_LOCALS_START_INDEX + localOffset);
@@ -206,6 +208,7 @@ public final class BytecodeStackPreparation {
     public static String transform(String source, String version) {
         require(VERSION.equals(version), "Review bytecode stack entry for Truffle " + version);
         String result = unix(source, "Mixed generated source newlines");
+        require(result.contains(TAG_ENCODING), "Changed four-tag continuation configuration encoding");
         if (result.contains("THC stale continuation repair")) {
             result = replaceOnce(result, COLD_RECONCILE, RECONCILE, "Changed stale continuation repair");
         }
@@ -243,6 +246,7 @@ public final class BytecodeStackPreparation {
 
     public static void check() {
         String before = "class Entry {\n"
+            + "    long encoding = " + TAG_ENCODING + ";\n"
             + RESERVED_SLOT + USER_SLOTS
             + "    Object initial() { return continueAt(bytecode, 0, stackBase, (FrameWithoutBoxing) frame, null); }\n"
             + "    Object resume() { return root.continueAt(bytecodeNode, index, sp, frame, this); }\n"
@@ -252,6 +256,7 @@ public final class BytecodeStackPreparation {
             + java.util.Arrays.stream(FORWARDING).filter(p -> !p[0].contains("? (FrameWithoutBoxing)"))
                 .map(p -> p[0]).collect(java.util.stream.Collectors.joining()) + "}\n";
         String after = transform(before, VERSION);
+        reject(before.replace(TAG_ENCODING, TAG_ENCODING.replace("0xfL", "0x7L")), VERSION);
         String controlFlowCall = "            result = root.interceptControlFlowException(cfe, frame, this, (int) bci);\n";
         String coldControlFlow = "            CompilerDirectives.transferToInterpreter();\n" + controlFlowCall;
         require(after.contains(coldControlFlow), "Missing interpreter transfer before control-flow frame forwarding");

@@ -18,7 +18,77 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fast_fixtures
 
 
+def process_identity_provider(unit):
+    prefix = 'build/original-process-identity/'
+    publication = prefix + 'installed/unit-core/v3/' + 'a' * 64 + '/'
+    return dict(packageManifest=prefix + 'installed/packages.json',
+        installedBundles=[prefix + 'installed/bundles/ghc-internal-9.1401.0-inplace.zip',
+                          prefix + 'installed/bundles/' + unit + '.zip'],
+        installedPublications=[publication + '0.cbd', publication + 'publication.json'],
+        runtimeModules=[prefix + 'runtime-core/THC.Exception.cbd',
+                        prefix + 'runtime-core/THC.Internal.Exception.cbd'])
+
+
 class FixturePreparationTest(unittest.TestCase):
+    def test_gc_carrier_provenance_has_a_focused_producer(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        classes = {"thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest"}
+        self.assertEqual({"package-native-gc-carriers"}, {owners.get(name) for name in classes})
+        group = manifest["groups"]["package-native-gc-carriers"]
+        self.assertEqual(classes, set(group["junit"]))
+        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "package-native-gc-carriers"]}],
+                         group["commands"])
+        self.assertEqual(["build/package-native-gc-carriers"], group["outputs"])
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+
+    def test_gc_carrier_receipt_rejects_partial_stale_or_unreviewed_products(self):
+        directory = "build/package-native-gc-carriers/"
+        main = ["PackageNativeGcCarriers.cbd", "oracle.txt"]
+        original = ["original-v2/GHC.Internal.Stack.Decode.cbd", "original-v2/objects/GHC/Internal/Stack/Decode.hi"]
+        primitive = ["primitive/PackageNativePrimCarriers.cbd", "primitive/PackageNativeUnknownPrim.cbd",
+                     "primitive/objects/PackageNativePrimCarriers.hi"]
+        def records(names):
+            result = {}
+            for name in names:
+                path = self.root / (directory + name)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"original producer output\n")
+                result[directory + name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            return result
+        manifest = {"schema": 1, "nativeRows": 6, "gcImports": 7, "artifactHashes": records(main),
+            "originalModules": [{"unit": "ghc-internal", "module": "GHC.Internal.Stack.Decode",
+                "nativeSignatures": [], "artifactHashes": records(original)}],
+            "primitiveModule": {"artifactHashes": records(primitive)}}
+        manifest_path = self.root / (directory + "manifest.json")
+        manifest_path.write_text(json.dumps(manifest))
+        group = {"outputs": [directory.rstrip("/")]}
+        outputs = fast_fixtures._output_hashes(self.root, group)
+        self.assertEqual({directory + name for name in ["manifest.json", *main, *original, *primitive]}, set(outputs))
+        for name in [*main, *original, *primitive]:
+            path = self.root / (directory + name)
+            original_bytes = path.read_bytes()
+            path.write_bytes(b"changed\n")
+            with self.assertRaisesRegex(RuntimeError, "Stale original artifact"):
+                fast_fixtures._output_hashes(self.root, group)
+            path.unlink()
+            with self.assertRaises(FileNotFoundError):
+                fast_fixtures._output_hashes(self.root, group)
+            path.symlink_to(manifest_path)
+            with self.assertRaises((ValueError, RuntimeError)):
+                fast_fixtures._output_hashes(self.root, group)
+            path.unlink()
+            path.write_bytes(original_bytes)
+        for mutate in (lambda m: m["originalModules"].clear(),
+                       lambda m: m["originalModules"].append(m["originalModules"][0]),
+                       lambda m: m["artifactHashes"].update({directory + "Invented.cbd": "a" * 64})):
+            bad = json.loads(json.dumps(manifest))
+            mutate(bad)
+            manifest_path.write_text(json.dumps(bad))
+            with self.assertRaises((ValueError, RuntimeError)):
+                fast_fixtures._output_hashes(self.root, group)
+
+
     def test_foreign_exception_preparation_installs_runtime_before_cli_consumers(self):
         project = Path(__file__).resolve().parents[2]
         planned = subprocess.run(
@@ -28,6 +98,28 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn("./gradlew installDist", planned)
         self.assertLess(planned.index("./gradlew installDist"),
                         planned.index(" -- foreign-exceptions"))
+
+    def test_foreign_exception_native_consumers_use_matching_configured_ghc(self):
+        project = Path(__file__).resolve().parents[2]
+        fixture = self.root / "fixture"
+        fixture.write_text('#!/bin/sh\nprintf "%s\\t%s\\n" "$1" "${THC_INSTALLED_CORE_GHC_SOURCE:-missing}"\n')
+        fixture.chmod(0o755)
+        cabal = self.root / "cabal"
+        cabal.write_text('#!/bin/sh\ntest "$1" = list-bin || exit 1\nprintf "%s\\n" "$TEST_FIXTURE_BIN"\n')
+        cabal.chmod(0o755)
+        planned = subprocess.run(
+            ["make", "--dry-run", "--no-print-directory", "foreign-exception-fixtures", "CABAL=" + str(cabal)],
+            cwd=project, check=True, capture_output=True, text=True).stdout
+        # Execute the real broad-consumer recipe, replacing only its compilers.
+        recipe = planned[planned.index("set -eu;"):]
+        source = str(self.root / "configured ghc")
+        consumed = subprocess.run(["sh", "-c", recipe], cwd=project, check=True,
+            capture_output=True, text=True, env={"PATH": "/usr/bin:/bin",
+                "TEST_FIXTURE_BIN": str(fixture), "THC_FOREIGN_EXCEPTION_GHC_SOURCE": source,
+                "THC_INSTALLED_CORE_GHC_SOURCE": "wrong compiler tree"}).stdout.splitlines()
+        self.assertGreaterEqual(len(consumed), 8)
+        for row in consumed:
+            self.assertEqual(source, row.split("\t", 1)[1])
 
     def test_native_inspection_families_require_cbd_without_flat_core_json(self):
         for family, module, outputs in (
@@ -159,7 +251,7 @@ class FixturePreparationTest(unittest.TestCase):
                     with self.assertRaises(FileNotFoundError):
                         fast_fixtures._full_output_hashes(self.root)
                     path.write_text("fixture\n")
-            (self.root / "build/selector-proof/post/core/SelectorProofAudit.json").write_text("changed\n")
+            (self.root / "build/selector-proof/post/core/SelectorProofAudit.cbd").write_text("changed\n")
             self.assertNotEqual(outputs, fast_fixtures._full_output_hashes(self.root))
         script = self.root / "bin/prepare-tests.sh"
         script.parent.mkdir(parents=True, exist_ok=True)
@@ -437,7 +529,7 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rubbish-literals/unowned.json'))
 
-    def test_recent_native_producers_remain_fail_closed_full_preparation_inputs(self):
+    def test_recent_native_producers_have_named_preparation_and_keep_full_receipts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         plan = (project / 'bin/prepare-tests.sh').read_text().splitlines()
@@ -446,7 +538,7 @@ class FixturePreparationTest(unittest.TestCase):
                 ('record-fields', 'thc.runtime.RecordFieldNativeTest', 60, 'logs/post-native.stdout')):
             with self.subTest(family=family):
                 self.assertIn('"$fixture_bin" ' + family, plan)
-                self.assertNotIn(junit, owners)
+                self.assertEqual(family, owners[junit])
                 self.assertNotIn(junit, manifest['fixtureFreeJunit'])
                 output = 'build/' + family
                 self.assertIn(output, fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -1236,24 +1328,26 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" original-process-identity', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-process-identity', fast_fixtures.FULL_OUTPUT_ROOTS)
         name = 'build/original-process-identity/manifest.json'
-        self.assertEqual(45, len(cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS))
+        self.assertEqual(63, len(cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS))
         for item in cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS:
             self.assertTrue(cache.allowed_payload(item), item)
         for item in ('native/private-file', 'native/Main.o', 'pre/core/Other.json', 'logs/unknown.stdout'):
             self.assertFalse(cache.allowed_payload('build/original-process-identity/' + item), item)
         with mock.patch.object(cache, 'ERRNO_NATIVE_HOST', True):
+            provider = process_identity_provider('unix-2.8.8.0-inplace')
+            outputs = cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS | set(provider['installedBundles']) | set(provider['installedPublications'])
             artifacts = {}
-            for item in cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {name}:
+            for item in outputs - {name}:
                 path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
             receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-                           installedArtifactsHashed=False, ghc="9.14.1", unixUnit="unix-2.8.8.0-inplace", nativeRows=1,
-                           entries=list(cache.ORIGINAL_PROCESS_IDENTITY_ENTRIES), artifactHashes=artifacts)
+                           installedArtifactsHashed=True, ghc="9.14.1", unixUnit="unix-2.8.8.0-inplace", nativeRows=1,
+                           entries=list(cache.ORIGINAL_PROCESS_IDENTITY_ENTRIES), artifactHashes=artifacts, **provider)
             path = self.root / name; path.write_text(json.dumps(receipt))
-            self.assertEqual(cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            self.assertEqual(outputs, set(fast_fixtures._output_hashes(self.root, group)))
             for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(nativeRows=2), dict(unixUnit="unix-2.8.7.0-deadbeef"),
                             dict(entries=[]), dict(strictAccepted=False), dict(runtimeVerified=True),
-                            dict(installedArtifactsHashed=True),
+                            dict(installedArtifactsHashed=False),
                             dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
                 with self.assertRaises(cache.CacheMiss):
                     cache.process_identity_artifact_hashes(dict(receipt, **changes))
@@ -1398,6 +1492,11 @@ class FixturePreparationTest(unittest.TestCase):
                 strictAccepted=True, runtimeVerified=False, nativeRows=1, installedArtifactsHashed=False,
                 artifactHashes=artifacts)
             for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
+                if stem == 'original-process-identity':
+                    provider = process_identity_provider(unit)
+                    artifacts = {name: 'a' * 64 for name in outputs | set(provider['installedBundles']) | set(provider['installedPublications'])
+                                 if name != 'build/' + stem + '/manifest.json'}
+                    receipt = dict(receipt, installedArtifactsHashed=True, artifactHashes=artifacts, **provider)
                 self.assertEqual(artifacts, validate(dict(receipt, unixUnit=unit)), (stem, unit))
             for unit in (None, 42, 'unix-2.8.8.0', 'unix-2.8.8.0-', 'unix-2.8.8.0-ABCD',
                          'unix-2.8.8.0-xyz', 'unix-2.8.7.0-460b', 'base-2.8.8.0-460b',
@@ -2019,6 +2118,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('original-open', owners['thc.runtime.OriginalOpenTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-open']}], group['commands'])
         self.assertEqual(['build/original-open'], group['outputs'])
+        self.assertTrue({'t/fixtures/compiler/OriginalOpenRequestNative.hs',
+                         'src/main/c/native-open-request.c', 'src/driver/THC/Driver/NativeCache.hs'}
+                        <= set(group['sources']))
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
         self.assertIn('"$fixture_bin" original-open', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -2033,7 +2135,8 @@ class FixturePreparationTest(unittest.TestCase):
                        installedArtifactsHashed=False, nativeRows=13, nativeVariants=["unsafe", "safe", "interruptible"],
                        ownedRequestControls=True, artifactHashes=artifacts)
         path = self.root / name
-        with mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', True):
+        with mock.patch.object(fast_fixtures.fast_inputs, 'ORIGINAL_OPEN_HOST', True, create=True), \
+                mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', False):
             path.write_text(json.dumps(receipt))
             self.assertEqual(fast_fixtures.fast_inputs.ORIGINAL_OPEN_OUTPUTS,
                              fast_fixtures._output_hashes(self.root, group).keys())
@@ -2331,6 +2434,20 @@ class FixturePreparationTest(unittest.TestCase):
         self.calls = []
         self.mutate_scalar_on_generator = False
         self.toolchain = {"ghcVersion": "9.14.1", "platform": "Linux-x86_64"}
+
+    def test_required_producers_are_ordered_once_and_cycles_fail_closed(self):
+        self.manifest["groups"]["alpha"]["requires"] = ["beta"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        manifest, _ = fast_fixtures._manifest(self.root)
+        self.assertEqual(["beta", "alpha"], fast_fixtures._group_order(manifest, ["alpha", "beta"]))
+        self.manifest["groups"]["beta"]["requires"] = ["alpha"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        with self.assertRaisesRegex(ValueError, "Cyclic"):
+            fast_fixtures._manifest(self.root)
+        self.manifest["groups"]["beta"]["requires"] = ["missing"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        with self.assertRaisesRegex(ValueError, "Unknown"):
+            fast_fixtures._manifest(self.root)
 
     def fake_run(self, name, argv, stdout=None):
         self.calls.append((name, argv, stdout))

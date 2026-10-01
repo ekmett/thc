@@ -195,9 +195,13 @@ class SimdWord16VectorTest {
                         with(lane, "aggregate", "unboxed-tuple", "components", list(lane))))
                     assertThrows(RuntimeFault.class, () -> program(language, backend,
                         broadcastModule(list("lit", "word16", "1", Map.of("rep", wrong))), "root", diagnostic));
-                var unresolved = with(unconstrained, "aggregate", "unboxed-tuple", "components", List.of());
+                var malformedEmpty = with(unconstrained, "aggregate", "unboxed-tuple", "components", List.of());
+                assertEquals("Tuple components disagree with primitive representations", assertThrows(RuntimeFault.class,
+                    () -> program(language, backend,
+                        broadcastModule(list("lit", "word16", "1", Map.of("rep", malformedEmpty))), "root", diagnostic)).getMessage());
+                var unresolved = with(unconstrained, "aggregate", "unboxed-tuple");
                 var input = broadcastModule(list("lit", "word16", "1", Map.of("rep", unresolved)));
-                var reason = "Unsupported Core aggregate representation: unboxed-tuple has unresolved fields";
+                var reason = "Unsupported Core aggregate representation: unboxed-tuple lacks exact components";
                 if (!diagnostic) assertEquals(reason, assertThrows(UnsupportedCore.class,
                     () -> program(language, backend, input, "root")).getMessage());
                 else {
@@ -306,6 +310,45 @@ class SimdWord16VectorTest {
                 visit(active, seen, targets);
         targets.add(target);
     }
+    private Map<String, RootCallTarget> originalTargets(List<RootCallTarget> physical, Set<String> audited) {
+        var originals = new LinkedHashMap<String, RootCallTarget>();
+        for (var target : physical) {
+            var identity = ((GuestRoot) target.getRootNode()).getCoreIdentity();
+            if (identity == null) {
+                assertTrue(target.getRootNode() instanceof BytecodeRoot root && root.entryMask() == 0, "Unclassified physical guest root");
+            } else {
+                assertTrue(audited.contains(identity.bindingId()), "Unexpected original binding: " + identity.bindingId());
+                assertNull(originals.put(identity.bindingId(), target), "Duplicate original binding: " + identity.bindingId());
+            }
+        }
+        assertEquals(audited, originals.keySet(), "Exact audited original target inventory");
+        return originals;
+    }
+    private List<Object> callCounts(List<RootCallTarget> physical) throws Exception {
+        var counts = new ArrayList<Object>();
+        for (var target : physical) counts.add(target.getClass().getMethod("getCallCount").invoke(target));
+        return counts;
+    }
+    private void preparedRegions(List<RootCallTarget> physical, Collection<RootCallTarget> originals) throws Exception {
+        var prepared = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
+        for (var target : originals) if (target.getRootNode() instanceof BytecodeRoot root) {
+            var nodes = new ArrayList<Node>(); nodes.add(root);
+            for (var instruction : root.getBytecodeNode().getInstructions())
+                for (var argument : instruction.getArguments()) if (argument.getKind() == Instruction.Argument.Kind.NODE_PROFILE) {
+                    var cached = argument.asCachedNode(); if (cached != null) nodes.add(cached);
+                }
+            for (var node : nodes) for (var region : NodeUtil.findAllNodeInstances(node, BytecodeCaseRegion.class))
+                for (var call : NodeUtil.findAllNodeInstances(region, DirectCallNode.class))
+                    prepared.add((RootCallTarget) call.getCurrentCallTarget());
+        }
+        var anonymous = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
+        for (var target : physical) if (target.getRootNode() instanceof GuestRoot root && root.getCoreIdentity() == null
+                && root instanceof BytecodeRoot) anonymous.add(target);
+        assertEquals(prepared, anonymous, "Exact prepublished case-region target provenance");
+        for (var target : prepared) {
+            assertEquals(0L, ((BytecodeRoot) target.getRootNode()).entryMask(), "Prepared pass-through region");
+        }
+    }
     private void valid(RootCallTarget target, String label) throws Exception {
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label);
     }
@@ -389,9 +432,21 @@ class SimdWord16VectorTest {
                 assertEquals(callCount, ((Map<String, Number>) provenance.get("checkedGuestCallsByStage")).get(stage + "/" + name).longValue());
                 check(false, cases, expected, p, host, closure, target, List.of(), callCount, language, stage, backend, name, inlining);
                 var targets = activeTargets(target);
-                assertEquals((int) callCount, targets.size(), stage + "/" + backend + "/" + name + " guest roots");
+                var audits = (Map<String, Map<String, Map<String, Object>>>) provenance.get("audits");
+                var audited = new LinkedHashSet<String>();
+                for (var binding : (List<Map<String, Object>>) audits.get(stage).get(name).get("reachableBindings"))
+                    assertTrue(audited.add((String) binding.get("id")), "Duplicate audited binding");
+                var originals = originalTargets(targets, audited);
+                assertEquals((int) callCount, originals.size(), stage + "/" + backend + "/" + name + " original guest roots");
+                assertSame(target, originals.get(entryId), stage + "/" + backend + "/" + name + " original entry");
+                preparedRegions(targets, originals.values());
+                var beforeCalls = callCounts(targets);
+                long beforeInstallation = ((Number) p.diagnostics().get("compiledEntries")).longValue();
                 for (var t : targets) { t.getClass().getMethod("compile", boolean.class).invoke(t, true); valid(t, "initial installation"); }
+                assertEquals(beforeInstallation, ((Number) p.diagnostics().get("compiledEntries")).longValue(), "Installation executes no guest work");
+                assertEquals(beforeCalls, callCounts(targets), "Installation executes no interpreted calls");
                 check(true, cases, expected, p, host, closure, target, targets, callCount, language, stage, backend, name, inlining);
+                assertEquals(beforeCalls, callCounts(targets), "No interpreted physical calls after installation");
                 for (var counter : List.of("unsupportedTraps", "blackholes")) assertEquals(0L, ((Number) p.diagnostics().get(counter)).longValue(), counter);
             }
         });

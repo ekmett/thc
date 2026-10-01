@@ -27,9 +27,9 @@ import qualified THC.Driver.InstalledForeign as Foreign
 import qualified THC.Driver.Project as Project
 import qualified THC.Driver.Wired as Wired
 import System.Directory (copyFile, createDirectoryIfMissing)
-import System.Environment (getExecutablePath, lookupEnv)
+import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>))
+import System.FilePath ((</>), makeRelative)
 
 field :: FromJSON a => Value -> String -> IO a
 field (Aeson.Object fields) name = case KeyMap.lookup (Key.fromString name) fields of
@@ -79,11 +79,15 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
       packagePath = directory </> "installed/packages.json"
   version <- run "ghc-version" ghc ["--numeric-version"]
   unless (BS.words (commandStdout version) == ["9.14.1"]) (die "Installed fixture requires GHC 9.14.1")
-  built <- run "helper-build" cabal ("build" : selection)
+  built <- run "helper-build" cabal ("build" : "exe:thc" : selection)
   located <- run "helper-location" cabal ("list-bin" : selection)
   helper <- case lines (BS.unpack (commandStdout located)) of
     [path] -> pure path
     _ -> die "Expected one selected-GHC thc-interface executable"
+  driverLocated <- run "driver-location" cabal ("list-bin" : "exe:thc" : drop 1 selection)
+  driver <- case lines (BS.unpack (commandStdout driverLocated)) of
+    [path] -> pure path
+    _ -> die "Expected one selected-GHC production thc executable"
   plan <- readJson (root </> "dist-newstyle/cache/plan.json")
   compilerId <- field plan "compiler-id" :: IO String
   abi <- field plan "compiler-abi" :: IO String
@@ -125,7 +129,8 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
       _ -> die ("Expected one selected registration: " ++ library)
   originalUnits <- discover [] (internal : map fst additional)
   cache <- Cache.coreCacheDirectory
-  driverHash <- hashFile =<< getExecutablePath
+  -- Fixture inventory changes do not alter the actual acquisition driver.
+  driverHash <- hashFile driver
   selected <- case foreignSource of
     Nothing -> case coreGhc of
       Just _ -> pure initialContext
@@ -175,10 +180,16 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
     digest <- hashFile (root </> destination)
     unless (digest == Project.bundleHash bundle) (die "Installed fixture bundle changed while copying")
     let local = original {Project.installedBundle = bundle {Project.bundlePath = root </> destination}}
-    records <- mapM (publishCoreUnit cache False) (Project.installedRecords unit local)
-    pure (records, destination)
+    records <- mapM (publishCoreUnit (root </> directory </> "installed") False) (Project.installedRecords unit local)
+    publications <- fmap concat $ forM records $ \record -> do
+      modules <- field record "modules" :: IO [Value]
+      paths <- forM modules $ \value -> do
+        compact <- field value "compact" :: IO Value
+        makeRelative root <$> (field compact "path" :: IO FilePath)
+      pure (paths ++ [directory </> "installed/unit-core/v3" </> digest </> "publication.json" | not (null paths)])
+    pure (records, destination : publications)
   writeJson (root </> packagePath) $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int),
      "ghc" .= ("9.14.1" :: String), "units" .= concatMap fst bundles]
-  pure (InstalledFixture ghc packagePath (packagePath : map snd bundles)
-    ([version, built, located] ++ providerCommands ++ [registration] ++ map snd additional) selected internalRegistration)
+  pure (InstalledFixture ghc packagePath (packagePath : concatMap snd bundles)
+    ([version, built, located, driverLocated] ++ providerCommands ++ [registration] ++ map snd additional) selected internalRegistration)

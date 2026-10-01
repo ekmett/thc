@@ -748,7 +748,7 @@ public final class Program implements ExecutableProgram {
                                   CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
         List<Object> defaultArm = null;
-        if (deferDefaultArm && !outlineCaseArms && !enableAsync && !delimited &&
+        if (deferDefaultArm && !outlineCaseArms && !delimited &&
                 role == FunctionRootRole.FUNCTION && expression.getFirst().equals("case")) {
             List<List<Object>> alternatives = (List<List<Object>>) expression.get(3);
             if (alternatives.size() == 1) {
@@ -913,7 +913,7 @@ public final class Program implements ExecutableProgram {
         if (language instanceof thc.Language thc) root.configureTypedInput(TypedInputLayout.create(thc, inputLayout, captures != null));
         // Leading-case plans retain concrete layouts. Reusable cases resolve
         // their invocation's constructor owner through the indexed program slot.
-        if (!reusableCode && role == FunctionRootRole.FUNCTION && !capturesContinuations && body instanceof Case && inputLayout == null) {
+        if (!reusableCode && role == FunctionRootRole.FUNCTION && body instanceof Case && inputLayout == null) {
             Set<String> used = new LinkedHashSet<>(free);
             used.retainAll(argumentIds);
             root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression, resultProof, root.getEntryArgumentOffset(),
@@ -2639,7 +2639,7 @@ public final class Program implements ExecutableProgram {
         ArgumentLayout input = ArgumentLayout.fromProofs(loweredProofs(nodes));
         if (input != null && input.getRequiresTyped()) return new AstTypedApplication(function, nodes, scope.layout, tail, codeMetrics(),
             tupleProof.isTypedTransport() ? new TupleShape(tupleProof, (thc.Language) language) : null,
-            !reusableCode && tail && !capturesContinuations && scope.self != null &&
+            !reusableCode && tail && scope.self != null &&
                 TypedInputs.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);

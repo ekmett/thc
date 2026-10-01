@@ -10,4 +10,16 @@ Runtime `sourceNotesEnabled=false` suppresses source construction and attachment
 
 `SourceNote` is optimization-tolerant attribution. GHC defines it as a non-counting annotation with soft scope; transformations may copy or widen its coverage. It contains a `RealSrcSpan` and a source name. Optimized laziness, inlining, thunk updates and join lowering therefore prevent a promise of one debugger step per original expression. Binder spans locate declarations but do not locate every generated operation. See GHC 9.14.1's [Tickish definition](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/Types/Tickish.hs) and [source-position semantics](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/Types/SrcLoc.hs).
 
-Actual tracing or breakpoints remain separate work: AST instrumentable nodes and tags, or Bytecode DSL instrumentation/tag support, plus lexical scopes and debugger-safe inspection of lazy values. Source tables supply attribution for roots, nodes and bytecode locations; they do not provide stepping, forced-value history, or an event log.
+Both backends expose Graal root and statement tags for debugger attachment.
+AST source expressions use standard Truffle wrappers; typed evaluation/forcing
+transport does not introduce another statement stop. Bytecode source regions use
+the stock DSL tag instrumentation, which requests lazy CBD source replay when a
+debugger attaches. Ordinary compact execution and source-disabled execution do
+not read debug maps merely to prepare breakpoint support. See the
+[driver DAP contract](driver.md#attach-a-debugger) for launch options, embedded
+source references and the pinned instrument's early-detach limitation.
+
+Source tables supply attribution for roots, nodes and bytecode locations.
+Optimized Core may repeat or collapse source locations. Lexical scopes and
+debugger-safe inspection of lazy values remain separate work; stepping does not
+promise one event per original Haskell expression or a forced-value history.

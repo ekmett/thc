@@ -37,6 +37,9 @@ class OriginalPathModeTest {
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private ManagedAddress cstring(String value) { return ManagedAddress.fromByteArray((value + "\0").getBytes(StandardCharsets.UTF_8)); }
     private ExecutableProgram program(Language language,String backend,Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
+    private Object demand(Language language,String backend,Map<String,Object> module) {
+        return callScalarTestTarget(program(language,backend,module).entryTarget("entry"), new Object[]{0L, cstring(directory.resolve("missing/entry").toString()), 448, Unit.INSTANCE});
+    }
     private Context context() { return NativeFileProvider.createContext(Set.of(),ContextProfile.SYNCHRONOUS_TEST); }
     private static <T> T entered(Context context,Callable<T> action) throws Exception { context.initialize("thc"); context.enter(); try { return action.call(); } finally { context.leave(); } }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
@@ -96,9 +99,9 @@ class OriginalPathModeTest {
             for (var backend : List.of("ast","bytecode")) try (var context = context()) { entered(context,() -> {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var unit : List.of("unix-2.8.8.0-inplace","unix-2.8.8.0-460b")) { var installed = (List<Object>) copy(call); ((Map<String,Object>) ((Map<?,?>) ((Map<?,?>) installed.get(6)).get("foreignCall")).get("target")).put("unit",unit);
-                    if (operation == OriginalStdioOp.MKDIR) { assertEquals(operation,validate(installed)); program(language,backend,raw(installed)); } else assertThrows(RuntimeFault.class,() -> program(language,backend,raw(installed))); }
-                for (int i = 0; i <= 2; i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(language,backend,rawModule(call,source("post"),index))); }
-                var shadowed = raw(call); var body = single((List<Map<String,Object>>) shadowed.get("bindings"),ignored -> true).get("expr"); var copied = single(foreignCalls(body),ignored -> true); copied.set(1,list("var","p0",((List<?>) copied.get(1)).get(2))); assertThrows(RuntimeFault.class,() -> program(language,backend,shadowed)); return null;
+                    if (operation == OriginalStdioOp.MKDIR) { assertEquals(operation,validate(installed)); program(language,backend,raw(installed)); } else assertThrows(RuntimeFault.class,() -> demand(language,backend,raw(installed))); }
+                for (int i = 0; i <= 2; i++) { int index = i; assertThrows(RuntimeFault.class,() -> demand(language,backend,rawModule(call,source("post"),index))); }
+                var shadowed = raw(call); var body = single((List<Map<String,Object>>) shadowed.get("bindings"),ignored -> true).get("expr"); var copied = single(foreignCalls(body),ignored -> true); copied.set(1,list("var","p0",((List<?>) copied.get(1)).get(2))); assertThrows(RuntimeFault.class,() -> demand(language,backend,shadowed)); return null;
             }); }
         }
     }

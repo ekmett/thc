@@ -168,12 +168,6 @@ access. Directory calls and encoding calls share the context's captured Windows
 last-error slot. The original errno slot remains separate.
 GetACP uses ordinary package linkage and requires its original native provider;
 extracting its declaration's Core alone does not supply that provider.
-The code-page fixture derives its native adapters from the genuine interfaces,
-compiles them for Sulong's MSVC target, and links a PE companion from the
-package-declared libraries and original C archive members. Native boundary
-checks compare GetACP and all 263 `maperrno_func` rows with GHC, including the
-first call after compilation. Context-owned error state, conversion and
-allocation operations retain their existing runtime boundaries.
 
 ~~~powershell
 ./bin/windows.ps1 -Action CodePageTest -Jobs 4
@@ -203,10 +197,6 @@ unchanged empty C bodies with native authority and `IOAccess.NONE`, preserving
 context ownership and managed, pinned, literal and native storage lifetimes.
 This resolves their Sulong `KERNEL32.dll` dependency lookup without granting
 guest filesystem access. It does not enable native DWARF stack inspection.
-The fixture also compiles GHC-derived scalar adapters for the four ordinary
-disabled-libdw calls. These execute the original DLL through package linkage;
-the native boundary check uses addressable, context-owned storage and verifies
-the first compiled calls and unchanged location bytes.
 
 ~~~powershell
 ./bin/windows.ps1 -Action LibdwTest -Jobs 4
@@ -227,33 +217,13 @@ Arbitrary MinGW package bitcode cannot be assumed ABI-compatible. See the
 [Sulong build reference](../tools/sulong-windows/README.md) when changing that
 integration.
 Package metadata accepts x86_64 MSVC LLVM on Windows and rejects MinGW LLVM or
-a foreign CPU target. Loaded package companions use `.dll` and Windows NFI
-loading syntax. Their temporary files are scheduled for deletion at JVM exit,
-matching the existing native runtime provider; Windows locks loaded DLL files.
+a foreign CPU target. Loaded package companions use DLLs built from the package's
+declared libraries and original C archive members.
 Native authority does not grant the guest current-directory or file access.
 
-Installed scalar adapters compile for the actual MSVC LLVM target, using Clang's
-GNU attribute compatibility option for GHC's unchanged MinGW headers. Captured
-package LLVM retains its producing target and admission checks. Windows publishes
-verified raw LLVM, with a separate PE companion; it never labels PE as embedded
-ELF or sends the adapter through a Unix `-fPIC` container link.
-
-The producing GHC links that companion with its registered native RTS/Cffi
-closure and CRT ordering. Native archive members can retain RTS utility
-references even when selected for an ordinary package function. Appending RTS
-archives after CRT extraction can duplicate `_fpreset`; undefined allowances or
-replacement helper bodies are not a solution. The companion exports only its
-original package roots. Supporting RTS and Haskell symbols remain private.
-Actual archive hashes survive staging cleanup in installed cache observations.
-
-A native constructor calls the matching GHC's `initializeTimer` to initialize
-its private QPC frequency. This is clock initialization only: it creates no
-ticker, scheduler, native heap or stable-pointer ownership, installs no signal
-handlers, and needs no finalization. It never calls `initTimer`, `startTicker`,
-`hs_init` or `hs_exit`. Each context receives its own companion DLL; managed
-callbacks, scheduling and exceptions retain their THC boundaries. Native C
-assertions and `barf` retain their original fatal behavior. Linking these utilities
-does not establish general native Haskell runtime or callback support.
+Installed C adapters use the x64 MSVC LLVM ABI. Their native dependencies link
+against the original package archives and the matching GHC's registered native
+libraries. Haskell execution, scheduling and exceptions remain owned by THC.
 
 ## Current boundaries
 
@@ -285,30 +255,13 @@ private DLL proof and unchanged executable Core segments. `Test` runs it too.
 modes; `MallocTest` checks allocation and returned pointers. These supplement the
 ordinary `Test` action.
 
-`Test`, `CodePageTest`, `WindowsServicesTest` and `LibdwTest` also acquire genuine
-foreign-exception support through the selected registered Windows runtime.
-The producer retains compiler output and hashes, strict Core audits, a native
-GHC oracle and Safe-Haskell controls. The JVM helper selects the required
-exception closure with the ordinary indexed CBD linker and verifies native
-declaration owners without retaining the entire boot-package corpus.
-Acquisition does not establish guest execution: the current Windows support
-provider still lacks the ordinary `ghc-internal` C declaration for
-`__hsbase_MD5Init`, required by the genuine exception dictionary. The linked
-code-page and unavailable-libdw execution controls fail at that boundary.
-Their native-provider controls remain separate evidence.
-
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.
-- Ordinary foreign calls in either Core backend require the genuine
-  `THC.Exception` bundle. Windows support acquisition retains the selected
-  installed registration alongside its differently named wired Core owner;
-  the runtime sidecar must not acquire that same Core owner twice. The strict
-  audit and JVM loader both admit actual x64 MSVC LLVM and reject MinGW LLVM,
-  foreign CPUs and PE files labelled as LLVM containers.
+- Ordinary foreign calls in either Core backend require the `THC.Exception`
+  support bundle, which Windows project acquisition prepares automatically.
   `thc-fixtures.exe windows-driver` checks native-matching completion in both
   backends and handoff modes, with strict verification on its first run.
-  Regenerate stale receipts from their producers; never edit their hashes.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.

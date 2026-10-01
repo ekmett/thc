@@ -24,8 +24,9 @@ public class FourWayAggregateProtocolTest {
         var result = new ArrayList<Map<String, Object>>(); for (File file : files) if (file.getName().endsWith(".cbd")) result.add(CoreCbdFixtures.read(file.toPath())); return result;
     }
     private CoreRepresentation originalProof() throws Exception {
-        FourWayEvidence.verify(root); var module = CoreCbdFixtures.read(new File(root, "build/fourway-aggregate/pre/core/FourWayAggregateFields.cbd").toPath()); Map<String, Object> original = null;
-        for (var constructor : (List<Map<String, Object>>) module.get("constructors")) if ("ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat".equals(constructor.get("id"))) { assertNull(original); original = constructor; }
+        var id = FourWayEvidence.compilerUnit(root) + ":GHC.CmmToAsm.Format.VirtualRegWithFormat";
+        var module = CoreCbdFixtures.read(new File(root, "build/fourway-aggregate/pre/core/FourWayAggregateFields.cbd").toPath()); Map<String, Object> original = null;
+        for (var constructor : (List<Map<String, Object>>) module.get("constructors")) if (id.equals(constructor.get("id"))) { assertNull(original); original = constructor; }
         assertNotNull(original); return new CoreFields(original).getLogicalProofs()[0];
     }
     @FunctionalInterface private interface Action { void run(Context context, Language language) throws Exception; }
@@ -42,11 +43,12 @@ public class FourWayAggregateProtocolTest {
     }
     private Object call(RootCallTarget target, DataLayout layout, DataValue format, long tag) { return Calls.target(target, new Object[] {0L, layout.create(new Object[] {tag, Long.MIN_VALUE, format})}); }
     @Test public void malformedPhysicalTagsCannotSelectTheOriginalDefaultArm() throws Exception { entered((context, language) -> {
+        var prefix = FourWayEvidence.compilerUnit(root) + ":GHC.CmmToAsm.Format.";
         for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) {
             var linked = CoreModules.reachable(CoreModules.merge(modules(stage)), "main:FourWayAggregateFields.defaultArm", true);
             ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-            var layout = program.constructorLayout("ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat");
-            var format = program.constructorLayout("ghc-9.14.1-inplace:GHC.CmmToAsm.Format.II64").allocate();
+            var layout = program.constructorLayout(prefix + "VirtualRegWithFormat");
+            var format = program.constructorLayout(prefix + "II64").allocate();
             String name = "main:FourWayAggregateFields.consumeDefault"; var target = program.entryTarget(name);
             for (long tag = 1; tag <= 4; tag++) assertEquals(tag == 1L ? Long.MIN_VALUE : -1L, call(target, layout, format, tag));
             assertTrue(context.asValue(new EntryValue(program, name, 1)).invokeMember("compile").asBoolean());

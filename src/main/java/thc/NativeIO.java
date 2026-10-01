@@ -12,7 +12,7 @@ import thc.runtime.WindowsDirectoryStreams;
 /** Explicit host-filesystem authority for an opt-in context. This factory owns
  * the final filesystem configuration and returns a built Context, never a
  * mutable Builder. It cannot authenticate arbitrary filesystem wrappers.
- * Linux supports native files; Windows supports the original directory API. */
+ * POSIX files require selected-ABI resources; Windows supports the original directory API. */
 public final class NativeIO {
     private NativeIO() {}
     public enum StandardEndpoint { INPUT, OUTPUT, ERROR }
@@ -29,7 +29,7 @@ public final class NativeIO {
         }
         return NativeFileProvider.createContext(new LinkedHashSet<>(standardEndpoints), ContextProfile.NATIVE, allowProcesses);
     }
-    public static boolean supportedHost() { return supportedPosixHost() || WindowsDirectoryStreams.supportedHost(); }
+    public static boolean supportedHost() { return NativeFileProvider.supportedHost() || WindowsDirectoryStreams.supportedHost(); }
     public static boolean supportedPosixHost() {
         if (!"Linux".equals(System.getProperty("os.name"))) return false;
         String architecture = System.getProperty("os.arch");
@@ -37,6 +37,6 @@ public final class NativeIO {
     }
     public static Context commandLineContext() {
         if (WindowsDirectoryStreams.supportedHost()) return WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER);
-        return NativeFileProvider.createContext(new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())), ContextProfile.LAUNCHER, true);
+        return NativeFileProvider.createContext(new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())), ContextProfile.LAUNCHER, supportedPosixHost());
     }
 }

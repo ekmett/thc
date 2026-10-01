@@ -376,38 +376,43 @@ class ResizeByteArrayTest {
     }
     @Test
     void stateIsEvaluatedBeforeAllocationAndFailureDoesNotPublish() {
-        var builder = FrameDescriptor.newBuilder();
-        builder.addSlot(FrameSlotKind.Object, null, null);
-        builder.addSlot(FrameSlotKind.Object, null, null);
-        var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], builder.build());
-        for (boolean fail : new boolean[] {false, true}) {
-            var sentinel = new Object();
-            FrameAccess.write(frame, 1, sentinel);
-            var source = new byte[] {3, 5, 7};
-            var events = new ArrayList<String>();
-            var state = new Expr() {
-                @Override
-                public Object execute(VirtualFrame f) {
-                    events.add("state");
-                    assertSame(sentinel, FrameAccess.read(f, 1));
-                    assertArrayEquals(new byte[] {3, 5, 7}, source);
-                    if (fail)
-                        throw new RuntimeFault("State failed");
-                    return Unit.INSTANCE;
+        try (var context = context(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var builder = FrameDescriptor.newBuilder();
+                builder.addSlot(FrameSlotKind.Object, null, null);
+                builder.addSlot(FrameSlotKind.Object, null, null);
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], builder.build());
+                for (boolean fail : new boolean[] {false, true}) {
+                    var sentinel = new Object();
+                    FrameAccess.write(frame, 1, sentinel);
+                    var source = new byte[] {3, 5, 7};
+                    var events = new ArrayList<String>();
+                    var state = new Expr() {
+                        @Override
+                        public Object execute(VirtualFrame f) {
+                            events.add("state");
+                            assertSame(sentinel, FrameAccess.read(f, 1));
+                            assertArrayEquals(new byte[] {3, 5, 7}, source);
+                            if (fail)
+                                throw new RuntimeFault("State failed");
+                            return Unit.INSTANCE;
+                        }
+                    };
+                    var expr = ByteArrayOp.expression(ByteArrayOp.RESIZE, CoreRepresentation.UNKNOWN,
+                        new Expr[] {operand("array", source, events), operand("size", 5L, events), state});
+                    if (fail) {
+                        assertThrows(RuntimeFault.class, () -> expr.executeTuple(frame, new int[] {0, 1}, 1));
+                        assertSame(sentinel, FrameAccess.read(frame, 1));
+                    } else {
+                        expr.executeTuple(frame, new int[] {0, 1}, 1);
+                        var result = (byte[]) FrameAccess.read(frame, 1);
+                        assertEquals(5, result.length);
+                        assertArrayEquals(new byte[] {3, 5, 7}, Arrays.copyOf(result, 3));
+                    }
+                    assertEquals(List.of("array", "size", "state"), events);
                 }
-            };
-            var expr = ByteArrayOp.expression(ByteArrayOp.RESIZE, CoreRepresentation.UNKNOWN,
-                new Expr[] {operand("array", source, events), operand("size", 5L, events), state});
-            if (fail) {
-                assertThrows(RuntimeFault.class, () -> expr.executeTuple(frame, new int[] {0, 1}, 1));
-                assertSame(sentinel, FrameAccess.read(frame, 1));
-            } else {
-                expr.executeTuple(frame, new int[] {0, 1}, 1);
-                var result = (byte[]) FrameAccess.read(frame, 1);
-                assertEquals(5, result.length);
-                assertArrayEquals(new byte[] {3, 5, 7}, Arrays.copyOf(result, 3));
-            }
-            assertEquals(List.of("array", "size", "state"), events);
+            } finally { context.leave(); }
         }
     }
     private Map<String, Object> synthetic() {

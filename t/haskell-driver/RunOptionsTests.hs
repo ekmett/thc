@@ -12,18 +12,66 @@
 -- Tests for run options.
 module RunOptionsTests (tests) where
 
+import Control.Exception (bracket)
 import Control.Monad (forM_)
+import System.IO.Error (tryIOError)
 import Data.List (isInfixOf)
-import System.Directory (createFileLink)
-import System.FilePath ((</>))
+import System.Directory (createFileLink, getPermissions, setPermissions, executable)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.FilePath ((</>), searchPathSeparator)
 import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
-import THC.Driver.Run (runtimeLaunchArguments, runtimeEntryArguments)
+import THC.Driver.Cabal (defaultPlanOptions)
+import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeEntryArguments, runtimeDebugEnvironment)
 
 tests :: Env -> Test
 tests env = TestLabel "run options and target selection" $ TestList
-  [ TestLabel "find THC beside the executable from an unrelated project" $ TestCase $
+  [ TestLabel "completion uses real parser options without building" $ TestCase $ do
+      let complete index words' = run env (root env) Nothing 30 ("--bash-completion" : show (index :: Int) : words')
+      roots <- complete 1 ["thc", "acq"]
+      assertSuccess roots
+      assertEqual "public command prefix" "acquire\n" (out roots)
+      forM_ ["run", "acquire"] $ \command -> do
+        options <- complete 2 ["thc", command, "--inst"]
+        assertSuccess options
+        assertEqual "parser-derived flag" "--installed-core\n" (out options)
+      values <- complete 3 ["thc", "run", "--installed-core", "pi"]
+      assertEqual "option values" "pinned\n" (out values)
+      suffix <- complete 4 ["thc", "run", "target", "--", "--inst"]
+      assertEqual "opaque guest suffix" "" (out suffix)
+      invalid <- run env (root env) Nothing 30 ["--bash-completion", "bad", "thc", ""]
+      assertSuccess invalid
+      assertNoStdout invalid
+  , TestLabel "installed extension completion preserves cursor and argument boundaries" $ TestCase $
+      if os == "mingw32" then pure () else
+      withFixtureNamed env "t/fixtures/run-pure" "completion paths" $ \package -> do
+        let extension = package </> "thc-completion-fixture"
+        writeText extension $ unlines
+          ["#!/bin/sh", "if [ \"$1\" = --bash-completion ]; then",
+           "  test \"$2\" = 1 && test \"$3\" = thc-completion-fixture && test \"$4\" = 'two w' || exit 2",
+           "  printf '%s\\n' 'two words' unrelated", "else", "  printf '%s\\n' \"$@\"", "fi"]
+        permissions <- getPermissions extension
+        setPermissions extension permissions {executable = True}
+        bracket (lookupEnv "PATH") (maybe (unsetEnv "PATH") (setEnv "PATH")) $ \old -> do
+          setEnv "PATH" (package ++ [searchPathSeparator] ++ maybe "" id old)
+          discovered <- run env package Nothing 30 ["--bash-completion", "1", "thc", "completion-f"]
+          assertEqual "PATH extension" "completion-fixture\n" (out discovered)
+          delegated <- run env package Nothing 30 ["--bash-completion", "2", "thc", "completion-fixture", "two w"]
+          assertSuccess delegated
+          assertEqual "child-relative index, executable and prefix filtering" "two words\n" (out delegated)
+          executed <- run env package Nothing 30 ["completion-fixture", "two words", ""]
+          assertSuccess executed
+          assertEqual "normal extension dispatch preserves empty argument" "two words\n\n" (out executed)
+  , TestLabel "generated Bash script queries the executable" $ TestCase $
+      if os == "mingw32" then pure () else do
+        result <- runExe env (root env) Nothing 30 "bash"
+          ["-c", "source <(\"$1\" --bash-completion-script)\n" ++
+                 "COMP_WORDS=(\"$1\" run --inst)\nCOMP_CWORD=2\n_thc\n" ++
+                 "printf '%s\\n' \"${COMPREPLY[@]}\"", "bash", driver env]
+        assertSuccess result
+        assertEqual "real Bash callback" "--installed-core\n" (out result)
+  , TestLabel "find THC beside the executable from an unrelated project" $ TestCase $
       if os == "mingw32" then pure () else
       withFixture env "t/fixtures/run-pure" $ \package -> do
         let missingRuntime = package </> "missing-runtime"
@@ -42,11 +90,47 @@ tests env = TestLabel "run options and target selection" $ TestList
             (["--verify-artifacts" | verify] ++ entry ++ ["--", "program"] ++ guest)
             (runtimeLaunchArguments verify entry "program" guest)
       | verify <- [False, True]
-      , entry <- [["--run-io", "core one.json,core-two.json", "main:Main.main"],
+      , entry <- [["--run-io", "core one.cbd,core-two.cbd", "main:Main.main"],
                   ["--run-io", "@packages.json", "selected:Main.main"],
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
       , guest <- [[], ["--guest-option", "value", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
       ]
+  , TestLabel "DAP JVM options preserve inherited environment" $ TestCase $ do
+      let inherited = [("JAVA_OPTS", "-Xmx2g -Dexample=\"two words\""), ("PATH", "unchanged")]
+          options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True []
+      unchanged <- runtimeDebugEnvironment os options inherited
+      assertEqual "debugging is opt-in" inherited unchanged
+      configured <- runtimeDebugEnvironment os (options {runDapPort = Just 4711, runDapSuspend = False}) inherited
+      assertEqual "loopback options appended without rewriting JVM arguments"
+        (Just "-Xmx2g -Dexample=\"two words\" -Dpolyglot.dap=127.0.0.1:4711 -Dpolyglot.dap.Suspend=false -Dpolyglot.dap.WaitAttached=true")
+        (lookup "JAVA_OPTS" configured)
+      assertEqual "other environment survives" (Just "unchanged") (lookup "PATH" configured)
+      forM_ [options {runDapPort = Just 0}, options {runDapPort = Just 65536},
+             options {runDapSuspend = False}, options {runDapWaitAttached = False}] $ \invalid -> do
+        result <- tryIOError (runtimeDebugEnvironment os invalid inherited)
+        assertBool "invalid debug options rejected before launch" (case result of Left _ -> True; Right _ -> False)
+  , TestLabel "DAP Windows environment keys are case-insensitive" $ TestCase $ do
+      let options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False (Just 4711) True True []
+          inherited = [("java_opts", "-Xmx2g"), ("Java_Opts", "-Dduplicate=true"), ("PATH", "unchanged")]
+      windows <- runtimeDebugEnvironment "mingw32" options inherited
+      assertEqual "one canonical JVM environment key" ["JAVA_OPTS", "PATH"] (map fst windows)
+      assertBool "existing JVM options retained" (maybe False ("-Xmx2g -Dduplicate=true " `isInfixOf`) (lookup "JAVA_OPTS" windows))
+      unix <- runtimeDebugEnvironment "linux" options inherited
+      assertEqual "Unix retains distinct case-sensitive keys" inherited (drop 1 unix)
+  , TestLabel "DAP oversized decimal port cannot wrap into the valid range" $ TestCase $ do
+      result <- run env (root env) Nothing 30
+        ["run", "--thc-root", root env, "--runtime", driver env,
+         "--dap-port", "18446744073709556327"]
+      assertFailure result
+      assertContains "--dap-port must be an integer from 1 to 65535" (err result)
+  , TestLabel "DAP options are run-only" $ TestCase $
+      forM_ [["--dap-port", "4711"], ["--dap-no-suspend"], ["--dap-no-wait-attached"]] $ \arguments -> do
+        accepted <- parseOnly ("run" : arguments)
+        assertFailure accepted
+        assertContains "THC root directory does not exist" (err accepted)
+        rejected <- parseOnly ("acquire" : arguments)
+        assertFailure rejected
+        assertContains "unrecognized option" (err rejected)
   , TestLabel "loose consumers keep paths before the guest boundary" $ TestCase $ do
       let modules = ["C:/core café/Main.json", "C:/core café/THC.InterfaceClosure.json"]
           entry = runtimeEntryArguments modules "C:/support/packages.json" "main:Main.main"

@@ -28,10 +28,11 @@ public class FourWayAggregateStorageTest {
         }
     }
     @Test public void originalWorkerHasTwoLogicalFieldsAndThreePhysicalFields() throws Exception { eachLayout((language, constructors) -> {
-        var info = constructors.get("ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat"); var fields = new CoreFields(info);
+        var prefix = FourWayEvidence.compilerUnit(root) + ":GHC.CmmToAsm.Format.";
+        var info = constructors.get(prefix + "VirtualRegWithFormat"); var fields = new CoreFields(info);
         var layout = DataLayout.fromFields(language, (String) info.get("id"), "VirtualRegWithFormat", fields);
         assertEquals(2, layout.getLogicalArity()); assertEquals(3, layout.getArity()); assertArrayEquals(new int[] {0, 2, 3}, fields.getOffsets());
-        assertTrue(layout.isLong(0)); assertTrue(layout.isLong(1)); assertFalse(layout.isLong(2)); var formatInfo = constructors.get("ghc-9.14.1-inplace:GHC.CmmToAsm.Format.II64");
+        assertTrue(layout.isLong(0)); assertTrue(layout.isLong(1)); assertFalse(layout.isLong(2)); var formatInfo = constructors.get(prefix + "II64");
         var format = DataLayout.fromFields(language, (String) formatInfo.get("id"), "II64", new CoreFields(formatInfo)).allocate();
         for (long tag = 1; tag <= 4; tag++) for (long bits : new long[] {0L, 1L, 0xffffffffL, 0x100000000L, Long.MIN_VALUE, -1L}) {
             var value = layout.create(new Object[] {tag, bits, format}); assertEquals(tag, layout.readLong(value, 0)); assertEquals(bits, layout.readLong(value, 1)); assertSame(format, layout.read(value, 2));

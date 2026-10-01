@@ -20,6 +20,31 @@ The included example returns `()` without printing. It works with the limited
 installed-library provider. Ordinary console and file applications need the
 complete-Core setup below.
 
+## Bash completion and external commands
+
+Enable completion in the current Bash session:
+
+```bash
+source <(thc --bash-completion-script)
+```
+
+For automatic loading with `bash-completion`, install the generated script:
+
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+thc --bash-completion-script > ~/.local/share/bash-completion/completions/thc
+```
+
+The script queries the executable for commands, options and option values.
+An executable `thc-foo` on `PATH` provides `thc foo`; arguments are passed
+unchanged. Its completion hook is `thc-foo --bash-completion INDEX WORD...`,
+where `INDEX` is the zero-based cursor in `WORD...`, including the executable
+name and the current word (which may be empty). The hook prints one raw
+candidate per line, without shell quoting, and must not start the application.
+THC removes its own command word and adjusts the cursor before delegating.
+Built-in commands take precedence. Bash supplies filename completion when a
+hook returns no candidates.
+
 ## Choose a target and pass arguments
 
 ```sh
@@ -42,6 +67,9 @@ missing and ambiguous targets fail explicitly.
 | `--installed-core required` | Acquire complete executable Core from the selected installation. |
 | `--ghc-source DIR` | Supply the matching configured GHC source tree for required foreign annotations. |
 | `--verify-artifacts` | On `run`, audit the reachable Core before launch and verify artifact hashes. |
+| `--dap-port PORT` | On `run`, listen for Graal DAP on `127.0.0.1:PORT` (1..65535), configure attachment waiting and first-statement suspension. |
+| `--dap-no-suspend` | Disable first-statement suspension; requires `--dap-port`. |
+| `--dap-no-wait-attached` | Allow execution before attachment; requires `--dap-port`. |
 | `--runtime PATH` | Override `<thc-root>/build/install/thc/bin/thc`. |
 
 The driver finds its THC checkout from its executable location, following
@@ -55,7 +83,7 @@ Arguments retain their boundaries, empty strings and option-looking values.
 
 `acquire` uses the same target and build options, then atomically publishes
 `DIST/packages.json`. It does not audit or execute the guest. Runtime-only
-options (`--runtime`, `--verify-artifacts`) and guest arguments are rejected. An existing
+options (`--runtime`, `--verify-artifacts`, and the DAP options) and guest arguments are rejected. An existing
 `audit.json` is not refreshed by acquisition or by a run without
 `--verify-artifacts`.
 
@@ -114,6 +142,42 @@ ambiguous bridge identity is a link error; raw embedding must supply that suppor
 To append runtime metrics after a successful IO launch, set
 `JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"`. Normal guest stderr contains
 no metrics report. Embedded callers can read the `diagnostics` member directly.
+
+## Attach a debugger
+
+```sh
+thc run my-package:exe:my-program --dap-port 4711 -- --guest-argument
+```
+
+Build and Core acquisition complete before the JVM starts listening. Connect a
+TCP DAP client to `127.0.0.1:4711`, send `initialize` and `attach`, configure
+breakpoints, then send `configurationDone`. Graal's existing DAP instrument
+provides the protocol; THC does not proxy or implement another debug server.
+By default the instrument waits for configuration and requests suspension on
+the first instrumented statement. Use `--dap-no-suspend` to retain the attachment wait
+without first-statement suspension, or `--dap-no-wait-attached` to allow the
+guest to start before the client connects. A short guest may finish before
+attachment when waiting is disabled.
+
+The driver appends `-Dpolyglot.dap=127.0.0.1:PORT`,
+`-Dpolyglot.dap.Suspend=true|false` and
+`-Dpolyglot.dap.WaitAttached=true|false` to the runtime's `JAVA_OPTS`, preserving
+existing JVM options. An overridden `--runtime` must honor these JVM options
+and include the pinned Graal DAP instrument. Source and breakpoint availability
+depend on the captured Core's source spans and the backend's instrumented
+statements. Both backends expose source statement and root tags. Optimized
+Core attribution can collapse or repeat locations, so stepping is not one stop
+per original Haskell expression. Embedded CBD sources are reported through
+DAP `loadedSource` events and `sourceReference`; use the emitted source object
+in `source` and `setBreakpoints` requests rather than inventing a filesystem
+path for a relative captured name. With the default initial suspension, clients
+can bind breakpoints after receiving the source event and before continuing.
+
+The pinned Graal DAP instrument has an early-disconnect shutdown race: a short
+guest may finish while its DAP connection system thread is still alive, causing
+context closure to fail. Continuing the guest to the `terminated` event uses
+the ordinary instrument shutdown path. Early detach remains an upstream
+instrument limitation; THC does not suppress the closure failure.
 
 ## Caching and failures
 

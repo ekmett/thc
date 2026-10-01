@@ -1508,7 +1508,7 @@ class CoreContinuationNativeTest {
         }
     }
 
-    @Test void ordinaryCatchCannotAcceptPrivateAsyncOrigin() throws Exception {
+    @Test void ordinaryCatchRetainsCaptureAdmissionAndRejectsUnparkedDelivery() throws Exception {
         var payload = new Object(); var delivered = new CapturedAsyncDelivery(payload);
         assertSame(delivered, assertThrows(CapturedAsyncDelivery.class, () -> BytecodeRoot.RequireGuestFailure.payload(delivered)));
         assertSame(payload, BytecodeRoot.RequireCaughtIOFailure.payload(delivered)); var module = module();
@@ -1516,10 +1516,21 @@ class CoreContinuationNativeTest {
             context.initialize("thc");
             entered(context, () -> {
                 var language = language(); var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.nestedCatchAction");
-                var ordinary = new BytecodeProgram(language, linked).bytecodeDump();
+                var program = new BytecodeProgram(language, linked);
+                var ordinary = program.bytecodeDump();
                 var privateDump = new BytecodeProgram(language, linked, new BytecodeCheckpoint()).bytecodeDump();
-                assertTrue(ordinary.contains("RequireGuestFailure")); assertFalse(ordinary.contains("RequireCaughtIOFailure"));
-                assertTrue(privateDump.contains("RequireCaughtIOFailure")); return null;
+                assertTrue(ordinary.contains("RequireCaughtIOFailure"));
+                assertTrue(privateDump.contains("RequireCaughtIOFailure"));
+                var parent = (Thunk) program.entryValue("main:CoreContinuationAudit.nestedCatchAction");
+                var driver = new Driver();
+                assertEquals(0, parent.getState());
+                var rejected = assertThrows(RuntimeFault.class, () -> driver.deliver(parent, null, payload));
+                assertTrue(rejected.getMessage().contains("exact parked action"));
+                assertEquals(0, parent.getState(), "Unowned private delivery must not claim the ordinary action");
+                assertEquals(43L, number((DataValue) driver.force(parent)));
+                assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
+                return null;
             });
         }
     }
@@ -1575,24 +1586,29 @@ class CoreContinuationNativeTest {
         }
     }
 
-    @Test void ordinaryCoreHasNoYieldInstruction() throws Exception {
+    @Test void ordinaryCoreCaptureCapabilityDoesNotYieldWithoutARequest() throws Exception {
         var module = module();
         try (var context = executionContext()) {
             context.initialize("thc"); context.enter();
             try {
-                var language = language(); var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.sharedAnswer"); var ast = new Program(language, linked);
+                var language = language();
+                var owner = Language.currentState();
+                assertTrue(owner.getSingleGuestOriginAssumption().isValid());
+                var linked = CoreModules.reachable(module, "main:CoreContinuationAudit.sharedAnswer"); var ast = new Program(language, linked);
                 var astAnswer = (DataValue) Calls.target(ast.hostEntryTarget(0), new Object[]{ast.entryValue("main:CoreContinuationAudit.sharedAnswer")}); assertEquals(108L, number(astAnswer));
-                var ordinary = new BytecodeProgram(language, linked); assertFalse(ordinary.bytecodeDump().contains("yield"));
+                var ordinary = new BytecodeProgram(language, linked); assertTrue(ordinary.bytecodeDump().contains("yield"), "Ordinary lowering must retain continuation capability");
                 var answer = (DataValue) Calls.target(ordinary.hostEntryTarget(0), new Object[]{ordinary.entryValue("main:CoreContinuationAudit.sharedAnswer")}); assertEquals(108L, number(answer));
                 var normalCall = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit.applicationAnswer"));
-                var normalDump = normalCall.bytecodeDump(); assertFalse(normalDump.contains("yield")); assertFalse(normalDump.contains("CaptureApplicationResult"));
+                var normalDump = normalCall.bytecodeDump(); assertTrue(normalDump.contains("yield")); assertTrue(normalDump.contains("CaptureApplicationResult"));
                 var callAnswer = (DataValue) Calls.target(normalCall.hostEntryTarget(0), new Object[]{normalCall.entryValue("main:CoreContinuationAudit.applicationAnswer")}); assertEquals(208L, number(callAnswer));
                 for (var row : List.of(new NamedAnswer("catchActionAnswer", 42L), new NamedAnswer("catchActionFailure", 77L))) {
                     var name = row.name(); long expected = row.expected(); var action = new BytecodeProgram(language, CoreModules.reachable(module, "main:CoreContinuationAudit." + name));
-                    var dump = action.bytecodeDump(); assertFalse(dump.contains("yield"), name + " ordinary bytecode has no Yield");
-                    assertFalse(dump.contains("InvokeIOActionCheckpoint"), name + " ordinary bytecode has no private checkpoint");
+                    var dump = action.bytecodeDump(); assertTrue(dump.contains("yield"), name + " retains continuation capability");
                     var caught = (DataValue) Calls.target(action.hostEntryTarget(0), new Object[]{action.entryValue("main:CoreContinuationAudit." + name)}); assertEquals(expected, number(caught));
                 }
+                assertTrue(owner.getSingleGuestOriginAssumption().isValid(), "Capture-capable ordinary execution keeps polling cold");
+                assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
             } finally { context.leave(); }
         }
     }

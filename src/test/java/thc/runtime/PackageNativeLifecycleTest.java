@@ -341,7 +341,14 @@ public class PackageNativeLifecycleTest {
             } finally { context.leave(); }
         }
         var output = directory.resolve("relative-lowered.bc");
-        command(List.of(opt, "-passes=pre-isel-intrinsic-lowering,globaldce", input.toString(), "-o", output.toString()));
+        if (List.of(command(List.of(opt, "--print-passes")).split("\\s+")).contains("pre-isel-intrinsic-lowering")) {
+            command(List.of(opt, "-passes=pre-isel-intrinsic-lowering,globaldce", input.toString(), "-o", output.toString()));
+        } else {
+            // LLVM 18 exposes the same production lowering through its legacy pass manager.
+            var lowered = directory.resolve("relative-pre-isel.bc");
+            command(List.of(opt, "--mtriple=" + original.getTarget(), "-pre-isel-intrinsic-lowering", input.toString(), "-o", lowered.toString()));
+            command(List.of(opt, "-passes=globaldce", lowered.toString(), "-o", output.toString()));
+        }
         var bytes = Files.readAllBytes(output);
         var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
         var lowered = new PackageScalarLink("relative-lowered", original.getTarget(), hash, hash, bytes,

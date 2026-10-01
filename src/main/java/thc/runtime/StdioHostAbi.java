@@ -16,14 +16,17 @@ import thc.Json;
 
 /** Actual C errno constants from the build host, not the private service categories. */
 final class StdioHostAbi {
-    private final Map<String, Long> errors, seek, open;
+    private final Map<String, Long> errors, seek, open, signals;
+    private final String system;
     private final Long atFdcwdValue, atRemoveDirValue, atSymlinkNoFollowValue, atEmptyPathValue, siginfoBytesValue;
 
-    private StdioHostAbi(Map<String, Long> errors, Map<String, Long> seek, Map<String, Long> open,
+    private StdioHostAbi(String system, Map<String, Long> errors, Map<String, Long> seek, Map<String, Long> open, Map<String, Long> signals,
             Long atFdcwd, Long atRemoveDir, Long atSymlinkNoFollow, Long atEmptyPath, Long siginfoBytes) {
+        this.system = system;
         this.errors = errors;
         this.seek = seek;
         this.open = open;
+        this.signals = signals;
         atFdcwdValue = atFdcwd;
         atRemoveDirValue = atRemoveDir;
         atSymlinkNoFollowValue = atSymlinkNoFollow;
@@ -40,8 +43,21 @@ final class StdioHostAbi {
     public long getAtSymlinkNoFollow() { return posix(atSymlinkNoFollowValue); }
     public long getAtEmptyPath() { return posix(atEmptyPathValue); }
     public long getSiginfoBytes() { return posix(siginfoBytesValue); }
+    public String librarySuffix() {
+        if (system.equals("Windows")) throw RuntimeFault.fault("POSIX native resource unavailable on Windows");
+        return system.equals("Darwin") ? ".dylib" : ".so";
+    }
+    public long signal(String name) {
+        Long value = signals.get(name);
+        if (value == null) throw RuntimeFault.fault("Missing generated process signal ABI: " + name);
+        return value;
+    }
+    public boolean supportedSignal(long number) {
+        return SIGNAL_NAMES.stream().anyMatch(name -> signal(name) == number);
+    }
+    public long openModeBytes() { return posix(open.get("modeBytes")); }
     public void requireOpenAbi() {
-        if (posix(open.get("modeBytes")) != 4) throw RuntimeFault.fault("Original open requires the Linux Word32 mode_t ABI");
+        if (!Set.of(2L, 4L).contains(posix(open.get("modeBytes")))) throw RuntimeFault.fault("Original open requires Word16 or Word32 mode_t");
     }
     public boolean openReadable(long flags) {
         long access = flags & posix(open.get("O_ACCMODE"));
@@ -102,6 +118,7 @@ final class StdioHostAbi {
     private static final Set<String> SEEK_NAMES = new LinkedHashSet<>(List.of("SEEK_SET", "SEEK_CUR", "SEEK_END"));
     private static final Set<String> OPEN_NAMES = new LinkedHashSet<>(List.of("modeBytes", "O_ACCMODE", "O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND",
         "O_CREAT", "O_EXCL", "O_BINARY", "O_TRUNC", "O_NOCTTY", "O_NONBLOCK", "F_GETFL", "F_SETFL", "F_SETFD", "FD_CLOEXEC"));
+    static final List<String> SIGNAL_NAMES = List.of("SIGHUP", "SIGINT", "SIGQUIT", "SIGUSR1", "SIGUSR2", "SIGTERM", "SIGXCPU", "SIGXFSZ");
 
     private static Long exactInteger(Object value) {
         return value instanceof Integer || value instanceof Long ? ((Number) value).longValue() : null;
@@ -159,7 +176,7 @@ final class StdioHostAbi {
                 manifest.keySet().equals(Set.of("schema", "profile", "system", "architecture", "target",
                     "compilerDefaultTarget", "compilerVersion", "sourceSha256", "widths", "errno", "seek")),
                 "Windows descriptor profile without POSIX fields");
-            return new StdioHostAbi(errors, seek, Map.of(), null, null, null, null, null);
+            return new StdioHostAbi(system, errors, seek, Map.of(), Map.of(), null, null, null, null, null);
         }
         var rawOpen = manifest.get("open") instanceof Map<?, ?> fields ? fields : null;
         requireAbi(rawOpen != null && rawOpen.keySet().equals(OPEN_NAMES), "open fields");
@@ -188,7 +205,24 @@ final class StdioHostAbi {
             "CInt AT_EMPTY_PATH availability");
         Long siginfoBytes = exactInteger(manifest.get("siginfoBytes"));
         requireAbi(siginfoBytes != null && siginfoBytes >= 1 && siginfoBytes <= Integer.MAX_VALUE, "siginfo_t size");
-        return new StdioHostAbi(errors, seek, open, atFdcwd, atRemoveDir, atNoFollow, atEmptyPath, siginfoBytes);
+        var signals = new HashMap<String, Long>();
+        // Old file-only receipts remain valid; actual signal use requires this
+        // selected-header section and never supplies guessed platform numbers.
+        if (manifest.containsKey("signals")) {
+            var names = new HashSet<>(SIGNAL_NAMES); names.addAll(List.of("NSIG", "SIGBUS", "SIGSEGV"));
+            var rawSignals = manifest.get("signals") instanceof Map<?, ?> fields ? fields : null;
+            requireAbi(rawSignals != null && rawSignals.keySet().equals(names), "signal fields");
+            Long limit = exactInteger(rawSignals.get("NSIG"));
+            requireAbi(limit != null && limit >= 2 && limit <= Integer.MAX_VALUE, "signal range");
+            var distinctSignals = new HashSet<Long>();
+            for (String name : names) {
+                Long number = exactInteger(rawSignals.get(name));
+                requireAbi(number != null && number >= 1 && number <= limit &&
+                    (name.equals("NSIG") || number < limit) && distinctSignals.add(number), "signal " + name);
+                signals.put(name, number);
+            }
+        }
+        return new StdioHostAbi(system, errors, seek, open, signals, atFdcwd, atRemoveDir, atNoFollow, atEmptyPath, siginfoBytes);
     }
 
     public static StdioHostAbi load() throws IOException {

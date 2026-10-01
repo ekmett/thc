@@ -12,15 +12,22 @@
 -- Command-line entry point for Cabal planning, Core acquisition and guest execution.
 module Main (main) where
 
-import Control.Monad (when)
-import Data.Maybe (catMaybes, isNothing)
+import Control.Monad (filterM, void, when)
+import Data.Either (fromRight)
+import Data.List (isPrefixOf, nub, sort)
+import Data.Maybe (catMaybes, fromMaybe, isNothing)
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
-import System.Directory (getCurrentDirectory)
-import System.Environment (getArgs)
-import System.Exit (die)
+import System.Directory (doesFileExist, executable, findExecutable, getCurrentDirectory, getPermissions, listDirectory)
+import System.Environment (getArgs, lookupEnv)
+import System.Exit (ExitCode(..), die, exitWith)
+import System.FilePath ((</>), dropExtension, splitSearchPath, takeExtension)
 import System.IO (hSetEncoding, stderr, stdout, utf8)
+import System.IO.Error (tryIOError)
+import qualified System.Info as Host
+import System.Process (rawSystem, readProcessWithExitCode)
+import Text.Read (readMaybe)
 import THC.Driver.Cabal
 import THC.Driver.GhcProxy (runGhcProxy)
 import THC.Driver.Json (renderJson)
@@ -33,6 +40,9 @@ main = topHandler $ do
   hSetEncoding stderr utf8
   args <- getArgs
   case args of
+    ["--bash-completion-script"] -> putStr bashCompletionScript
+    "--bash-completion" : index : words' -> bashCompletion index words'
+    ["--bash-completion"] -> pure ()
     "ghc-proxy" : rest -> runGhcProxy rest
     ["--help"] -> putStr usage
     ["plan-package", "--help"] -> putStr usage
@@ -51,14 +61,89 @@ main = topHandler $ do
       case getOpt Permute (withHelp (if acquire then acquireOptions else runOptions)) driverArgs of
         (updates, _, []) | any isNothing updates -> putStr commandUsage
         (updates, targets, []) | length targets <= 1 -> do
-          let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False guestArgs) (catMaybes updates)
+          let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True guestArgs) (catMaybes updates)
           thcRoot <- resolveThcRoot (runThcRoot opts)
           let selected = opts {runTarget = case targets of [] -> ""; [target] -> target; _ -> error "checked above",
                                runThcRoot = thcRoot}
           current <- getCurrentDirectory
           if acquire then acquireProject selected current else runProject selected current
         (_, _, errors) -> die (concat errors ++ commandUsage)
+    command@(first : _) : rest | first /= '-' && '/' `notElem` command && '\\' `notElem` command -> do
+      extension <- findExecutable ("thc-" ++ command)
+      maybe (die usage) (\path -> rawSystem path rest >>= exitWith) extension
     _ -> die usage
+
+-- | Bash passes the zero-based cursor and its word array, including argv[0].
+-- Candidates are raw lines, never shell code. Extensions receive their own argv[0].
+bashCompletion :: String -> [String] -> IO ()
+bashCompletion cursor words' = case readMaybe cursor of
+  Just index | index > 0 && index < length words' -> do
+    let current = words' !! index
+        before = take index words'
+        previous = words' !! (index - 1)
+    candidates <- if index == 1 then do
+        extensions <- completionExtensions
+        pure (map fst completionCommands ++ ["--help", "--bash-completion-script"] ++ extensions)
+      else case lookup (words' !! 1) completionCommands of
+        Just descriptors
+          | "--" `elem` drop 2 before -> pure []
+          | previous == "--installed-core" && any (takesValue previous) descriptors -> pure ["required", "pinned"]
+          | "--installed-core=" `isPrefixOf` current && any (takesValue "--installed-core") descriptors -> pure ["--installed-core=required", "--installed-core=pinned"]
+          | any (takesValue previous) descriptors -> pure []
+          | otherwise -> pure (concatMap optionNames descriptors)
+        Nothing -> do
+          let command = "thc-" ++ words' !! 1
+          extension <- findExecutable command
+          case extension of
+            Nothing -> pure []
+            Just path -> do
+              response <- tryIOError $ readProcessWithExitCode path
+                ("--bash-completion" : show (index - 1) : command : drop 2 words') ""
+              pure $ case response of
+                Right (ExitSuccess, output, _) -> lines output
+                _ -> []
+    mapM_ putStrLn $ sort $ nub $ filter (current `isPrefixOf`) candidates
+  _ -> pure ()
+  where
+    optionNames (Option shorts longs _ _) = map (\c -> ['-', c]) shorts ++ map ("--" ++) longs
+    takesValue name option@(Option _ _ argument _) = name `elem` optionNames option && case argument of
+      NoArg _ -> False
+      _ -> True
+
+-- Derive option completions from the same descriptors used to parse commands.
+completionCommands :: [(String, [OptDescr ()])]
+completionCommands =
+  [("plan-package", map void (withHelp options)),
+   ("run", map void (withHelp runOptions)),
+   ("acquire", map void (withHelp acquireOptions))]
+
+completionExtensions :: IO [String]
+completionExtensions = do
+  path <- fromMaybe "" <$> lookupEnv "PATH"
+  names <- mapM entries (if null path then [""] else splitSearchPath path)
+  pure (concat names)
+  where
+    entries directory = do
+      let base = if null directory then "." else directory
+      listed <- tryIOError (listDirectory base)
+      let names = fromRight [] listed
+      installed <- filterM (runnable base) [name | name <- names, "thc-" `isPrefixOf` name, length name > 4]
+      pure [drop 4 (if Host.os == "mingw32" && takeExtension name == ".exe" then dropExtension name else name)
+           | name <- installed, '\n' `notElem` name, '\r' `notElem` name]
+    runnable directory name = do
+      result <- tryIOError $ do
+        let file = directory </> name
+        exists <- doesFileExist file
+        if exists then executable <$> getPermissions file else pure False
+      pure (fromRight False result)
+
+bashCompletionScript :: String
+bashCompletionScript = unlines
+  ["# Bash completion for thc. Source this file or install it as a bash-completion entry.",
+   "_thc() {", "    local candidate", "    COMPREPLY=()",
+   "    while IFS= read -r candidate; do", "        COMPREPLY+=(\"$candidate\")",
+   "    done < <(\"${COMP_WORDS[0]}\" --bash-completion \"$COMP_CWORD\" \"${COMP_WORDS[@]}\" 2>/dev/null)",
+   "}", "complete -o bashdefault -o default -F _thc thc"]
 
 -- Parse help as an option, so an option value literally named --help is not
 -- mistaken for a request. The guest suffix has already been split off.
@@ -88,17 +173,29 @@ runOptions =
   , Option [] ["project-file"] (ReqArg (\path r -> r {runProjectFile = Just path}) "FILE") "Cabal project file"
   , Option [] ["thc-root"] (ReqArg (\path r -> r {runThcRoot = path}) "DIR") "THC source/build root (default: locate from the executable)"
   , Option [] ["runtime"] (ReqArg (\path r -> r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
+  , Option [] ["dap-port"] (ReqArg (\value r -> r {runDapPort = Just (parseDapPort value)}) "PORT")
+      "Listen for Graal DAP on 127.0.0.1:PORT (1..65535); suspend and wait for attachment"
+  , Option [] ["dap-no-suspend"] (NoArg (\r -> r {runDapSuspend = False}))
+      "Do not suspend on the first guest statement (requires --dap-port)"
+  , Option [] ["dap-no-wait-attached"] (NoArg (\r -> r {runDapWaitAttached = False}))
+      "Start guest execution before a debugger attaches (requires --dap-port)"
   , Option [] ["verify-artifacts"] (NoArg (\r -> r {runVerifyArtifacts = True}))
       "Audit reachable Core before launch and verify runtime artifacts (default: off)"
   , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
   , Option [] ["ghc-source"] (ReqArg (\path r -> r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
   ] ++ map liftPlanOption options
 
+-- Parse without Int overflow before enforcing the TCP port range.
+parseDapPort :: String -> Int
+parseDapPort value = case readMaybe value :: Maybe Integer of
+  Just port | port >= 1 && port <= 65535 -> fromInteger port
+  _ -> 0
+
 liftPlanOption :: OptDescr (PlanOptions -> PlanOptions) -> OptDescr (RunOptions -> RunOptions)
 liftPlanOption (Option shorts longs argument description) = Option shorts longs (case argument of
   NoArg update -> NoArg (liftUpdate update)
-  ReqArg update name -> ReqArg (\value -> liftUpdate (update value)) name
-  OptArg update name -> OptArg (\value -> liftUpdate (update value)) name) description
+  ReqArg update name -> ReqArg (liftUpdate . update) name
+  OptArg update name -> OptArg (liftUpdate . update) name) description
   where liftUpdate update run = run {runPlan = update (runPlan run)}
 
 runUsage :: String
@@ -106,7 +203,7 @@ runUsage = usageInfo "Usage: thc run [TARGET] [FLAGS] [-- ARG...]\n\nResolve a C
 
 acquireOptions :: [OptDescr (RunOptions -> RunOptions)]
 acquireOptions = [option | option@(Option _ names _ _) <- runOptions,
-  not (any (`elem` ["runtime", "verify-artifacts"]) names)]
+  not (any (`elem` ["runtime", "verify-artifacts", "dap-port", "dap-no-suspend", "dap-no-wait-attached"]) names)]
 
 acquireUsage :: String
 acquireUsage = usageInfo "Usage: thc acquire [TARGET] [FLAGS]\n\nResolve the same Cabal runnable target as run and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native runnable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" (withHelp acquireOptions)

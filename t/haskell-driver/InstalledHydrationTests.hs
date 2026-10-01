@@ -127,7 +127,7 @@ fixture names action = do
       hClose handle
       removeFile path
       createDirectory path
-      pure path
+      canonicalizePath path
 
 tests :: Test
 tests = TestLabel "bounded installed-interface hydration" $ TestList

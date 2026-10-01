@@ -69,6 +69,7 @@ dependencies {
     // Register local native providers in the pinned Sulong context's registry.
     compileOnly("org.graalvm.llvm:llvm-language:$graalVersion")
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
+    runtimeOnly("org.graalvm.tools:dap-tool:$graalVersion")
     runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
     annotationProcessor("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testAnnotationProcessor("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
@@ -154,10 +155,12 @@ def compactHeaderOption = "-XX:${compactObjectHeaders == "true" ? "+" : "-"}UseC
 application {
     mainClass.set("thc.Main")
     applicationDefaultJvmArgs = ["--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "--add-opens=java.base/java.lang=ALL-UNNAMED", "-Xss2m", compactHeaderOption] +
-        // The Linux standalone guest owns GHC's supported process handlers.
+        // The POSIX standalone guest owns GHC's supported process handlers.
         // Embedders do not inherit these launcher JVM arguments.
-        (System.getProperty("os.name") == "Linux" ? ["-Xrs"] : [])
+        (System.getProperty("os.name") == "Linux" || System.getProperty("os.name").startsWith("Mac") ? ["-Xrs"] : [])
 }
+// Keep aggregator POMs in dependency resolution, not executable runtime payloads.
+distributions.main.contents { exclude("**/*.pom") }
 // An explicit oop or RAM-sizing choice belongs to the caller. In particular,
 // forcing compressed oops can cap an otherwise explicit MaxRAMPercentage heap.
 // Defer to opaque @argument files too, without opening or parsing them here.
@@ -179,6 +182,7 @@ tasks.withType(Test).configureEach { task ->
     jvmArgumentProviders.add({ defaultRuntimeOptions(task) } as CommandLineArgumentProvider)
 }
 tasks.startScripts {
+    classpath = classpath.filter { !it.name.endsWith(".pom") }
     // This must happen before Java starts. HotSpot's suspend handler cannot be
     // chained behind the guest's USR2 handler; reserve Linux signal 64 for it.
     def policy = "case \"\$(uname -s)\" in\n  Linux)\n    if [ \"\${_JAVA_SR_SIGNUM+x}\" = x ] && [ \"\$_JAVA_SR_SIGNUM\" != 64 ]; then\n      die \"thc: Linux launcher requires _JAVA_SR_SIGNUM=64; incompatible setting was preserved\"\n    fi\n    _JAVA_SR_SIGNUM=64\n    export _JAVA_SR_SIGNUM\n    ;;\nesac\n"
@@ -221,10 +225,34 @@ tasks.withType(Test).configureEach {
     // Isolated native-signal controls need a child JVM with the actual test
     // classpath; modern Gradle workers need not use URLClassLoader.
     doFirst { systemProperty("thc.testRuntimeClasspath", classpath.asPath) }
+    doFirst {
+        def manifestFile = file("build/package-native-gc-carriers/manifest.json")
+        if (manifestFile.isFile()) {
+            def manifest = new JsonSlurper().parse(manifestFile)
+            def artifacts = [manifest.artifactHashes, manifest.primitiveModule.artifactHashes,
+                *manifest.originalModules.collect { it.artifactHashes }].collectEntries { it }
+            [GC_CARRIERS: "PackageNativeGcCarriers.cbd", PRIM_CARRIERS: "primitive/PackageNativePrimCarriers.cbd",
+             STACK_PRIM: "original-v2/GHC.Internal.Stack.Decode.cbd"].each { kind, name ->
+                def variable = "THC_TEST_${kind}_CBD"
+                if (environment[variable] == null) {
+                    def input = file("build/package-native-gc-carriers/$name")
+                    def matches = artifacts.findAll { path, hash -> file(path).canonicalFile == input.canonicalFile }
+                    checkBuild(matches.size() == 1 && input.isFile()) { "Missing original provenance fixture: $name" }
+                    def expected = matches.values().first()
+                    def actual = MessageDigest.getInstance("SHA-256").digest(input.bytes).encodeHex().toString()
+                    checkBuild(expected == actual) { "Stale original provenance fixture: $name" }
+                    environment(variable, input.absolutePath)
+                    environment("${variable}_SHA256", expected)
+                }
+            }
+        }
+    }
     // Exported Core and native expectations are test inputs even when JVM sources
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
         include("backend-annotations/**/*.cbd")
+        include(["package-native-gc-carriers/**/*.cbd", "package-native-gc-carriers/manifest.json",
+            "package-native-gc-carriers/oracle.txt"])
         include(["core/**/*.cbd", "source-core/**/*.cbd", "cbv-post-core/**/*.cbd",
             "vector-api/core/**/*.cbd", "vector-api/*.tsv", "java-arrays/core/**/*.cbd", "java-arrays/packages.json",
             "truffle-strings/core/**/*.cbd", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",
@@ -352,7 +380,7 @@ tasks.withType(Test).configureEach {
             "original-fcntl/**/*.json", "original-fcntl/**/*.cbd", "original-fcntl/logs/*.stdout", "original-fcntl/logs/*.stderr", "original-fcntl/native/oracle",
             "original-errno/**/*.json", "original-errno/**/*.cbd", "original-errno/logs/*.stdout", "original-errno/logs/*.stderr",
             "original-errno/native/oracle", "original-errno/native/observations.txt",
-            "original-process-identity/**/*.json", "original-process-identity/**/*.cbd", "original-process-identity/logs/*.stdout",
+            "original-process-identity/**/*.json", "original-process-identity/**/*.cbd", "original-process-identity/installed/bundles/*.zip", "original-process-identity/logs/*.stdout",
             "original-process-identity/logs/*.stderr", "original-process-identity/native/oracle",
             "original-process-identity/native/observations.txt",
             "original-termios/**/*.json", "original-termios/**/*.cbd", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",
@@ -1261,6 +1289,30 @@ tasks.withType(JavaCompile).configureEach { options.compilerArgs.addAll(["--add-
 
 // Compile the unchanged pinned GHC cbits for this host. The resulting bitcode
 // remains an optional execution path; no native pointer is exposed to Core.
+// Homebrew Clang may default to an SDK removed during an Xcode upgrade.
+// Keep an explicit caller SDK; otherwise use the SDK selected by xcode-select.
+def macHost = System.getProperty("os.name").startsWith("Mac")
+def nativeSdkRoot = providers.environmentVariable("SDKROOT").orElse(
+    macHost ? providers.exec { commandLine("/usr/bin/xcrun", "--show-sdk-path") }.standardOutput.asText.map { it.trim() }
+            : providers.provider { "" })
+if (macHost) {
+    tasks.withType(Test).configureEach {
+        inputs.property("nativeSdkRoot", nativeSdkRoot)
+        environment("SDKROOT", nativeSdkRoot.get())
+    }
+}
+def nativeClang = providers.environmentVariable("THC_CLANG").orElse("clang")
+def nativeExec = { Closure action ->
+    providers.exec { spec ->
+        if (macHost) spec.environment("SDKROOT", nativeSdkRoot.get())
+        action.delegate = spec
+        action.resolveStrategy = Closure.DELEGATE_FIRST
+        action.call()
+        if (macHost && spec.commandLine[0] == nativeClang.get()) {
+            spec.commandLine([spec.commandLine[0], "--sysroot=${nativeSdkRoot.get()}"] + spec.commandLine.drop(1))
+        }
+    }
+}
 def compileCbits = tasks.register("compileCbits", Exec) {
     inputs.files("bin/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
         "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c", "src/main/c/package-pointer-api.c",
@@ -1277,6 +1329,7 @@ def compileCbits = tasks.register("compileCbits", Exec) {
         "nih/pinned/text-2.1.3/cbits/reverse.c", "nih/pinned/text-2.1.3/LICENSE", "nih/pinned/openbsd-memchr-1.8.c")
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }
+    if (macHost) environment("SDKROOT", nativeSdkRoot.get())
     commandLine(python.get(), "bin/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
@@ -1289,7 +1342,7 @@ def compileNativeAtomics = tasks.register("compileNativeAtomics") {
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/native-atomics")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
@@ -1299,7 +1352,7 @@ def compileNativeAtomics = tasks.register("compileNativeAtomics") {
             def destination = output.get().asFile.toPath().resolve("thc/native/native-atomic-api$extension").toFile()
             destination.parentFile.mkdirs()
             def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
-            providers.exec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path]) }.result.get()
         }
     }
@@ -1307,22 +1360,28 @@ def compileNativeAtomics = tasks.register("compileNativeAtomics") {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-atomics")) }
 tasks.processResources { dependsOn(compileNativeAtomics) }
 
-// Optional Linux opened-resource provider; not original fstat admission.
+// Selected-ABI opened-resource provider; not original fstat admission.
 def compileNativeFiles = tasks.register("compileNativeFiles") {
     dependsOn("generateStdioAbi")
     def source = layout.projectDirectory.file("src/main/c/native-file-api.c")
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/native-files")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-file-api.so").toFile()
+        def darwin = host["system"] == "Darwin"
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
+            def extension = darwin ? ".dylib" : ".so"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-file-api$extension").toFile()
             destination.parentFile.mkdirs()
-            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+            def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-fembed-bitcode", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path]) }.result.get()
+            def bitcode = destination.parentFile.toPath().resolve("native-file-api.bc").toFile()
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-emit-llvm", "-c", source.asFile.path, "-o", bitcode.path]) }.result.get()
         }
     }
 }
@@ -1336,15 +1395,18 @@ def compileNativeDirectories = tasks.register("compileNativeDirectories") {
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/native-directories")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-directory-api.so").toFile()
+        def darwin = host["system"] == "Darwin"
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
+            def extension = darwin ? ".dylib" : ".so"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-directory-api$extension").toFile()
             destination.parentFile.mkdirs()
-            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+            def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path]) }.result.get()
         }
     }
 }
@@ -1358,14 +1420,14 @@ def compileNativeProcesses = tasks.register("compileNativeProcesses") {
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/native-processes")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
             def destination = output.get().asFile.toPath().resolve("thc/native/native-process-api.so").toFile()
             destination.parentFile.mkdirs()
-            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+            nativeExec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
         }
     }
@@ -1381,18 +1443,18 @@ def prepareProcessLifecycleOracle = tasks.register("prepareProcessLifecycleOracl
     def ghc = providers.environmentVariable("GHC").orElse("ghc")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.property("ghc", ghc)
-    inputs.file(policySource); inputs.file(transportSource); inputs.property("clang", clang)
+    inputs.file(policySource); inputs.file(transportSource); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in ["amd64", "x86_64"] }
     doLast {
-        def version = providers.exec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
+        def version = nativeExec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
         checkBuild(version == "9.14.1") { "Process oracle requires GHC 9.14.1, found $version" }
         def destination = output.get().asFile
         destination.mkdirs()
-        providers.exec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
+        nativeExec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
             "-outputdir", destination.path, source.asFile.path, "-o", destination.toPath().resolve("process-oracle").toFile().path) }.result.get()
         // Signal dispositions belong to this standalone control, never the test JVM.
-        providers.exec { commandLine(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+        nativeExec { commandLine(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
             policySource.asFile.path, transportSource.asFile.path, "-Wl,--wrap=posix_spawn",
             "-o", destination.toPath().resolve("sigchld-policy").toFile().path) }.result.get()
     }
@@ -1406,15 +1468,17 @@ def compileNativeOpenRequests = tasks.register("compileNativeOpenRequests") {
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/native-open-requests")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-open-request.so").toFile()
+        if ((host["system"] == "Linux" && host["architecture"] == "x86_64") ||
+            (host["system"] == "Darwin" && host["architecture"] in ["x86_64", "arm64", "aarch64"])) {
+            def darwin = host["system"] == "Darwin"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-open-request" + (darwin ? ".dylib" : ".so")).toFile()
             destination.parentFile.mkdirs()
-            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-pthread", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+            nativeExec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-pthread", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path) }.result.get()
         }
     }
 }
@@ -1428,14 +1492,14 @@ def compileNativeSignals = tasks.register("compileNativeSignals") {
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/native-signals")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
             def destination = output.get().asFile.toPath().resolve("thc/native/native-signal-api.so").toFile()
             destination.parentFile.mkdirs()
-            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+            nativeExec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
         }
     }
@@ -1450,15 +1514,18 @@ def compileNativeProcessSignals = tasks.register("compileNativeProcessSignals") 
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/native-process-signals")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-process-signal-api.so").toFile()
+        def darwin = host["system"] == "Darwin"
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
+            def extension = darwin ? ".dylib" : ".so"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-process-signal-api$extension").toFile()
             destination.parentFile.mkdirs()
-            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-shared", source.asFile.path, "-o", destination.path, "-ldl") }.result.get()
+            def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path] + (darwin ? [] : ["-ldl"])) }.result.get()
         }
     }
 }
@@ -1471,12 +1538,12 @@ def generateWindowsDirectoryAbi = tasks.register("generateWindowsDirectoryAbi") 
     def output = layout.buildDirectory.dir("generated/windows-directory-abi")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source)
-    inputs.property("clang", clang)
+    inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     inputs.property("host", System.getProperty("os.name") + "/" + System.getProperty("os.arch"))
     outputs.dir(output)
     onlyIf { windowsHost }
     doLast {
-        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def run = { List<String> command -> nativeExec { commandLine(command) }.standardOutput.asText.get() }
         def target = run([clang.get(), "-dumpmachine"]).trim()
         requireBuild(System.getProperty("os.arch") in ["amd64", "x86_64"].toSet() &&
             target.startsWith("x86_64-") && (target.contains("windows") || target.contains("mingw"))) {
@@ -1503,11 +1570,11 @@ def generateStdioAbi = tasks.register("generateStdioAbi") {
     def output = layout.buildDirectory.dir("generated/stdio-abi")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source)
-    inputs.property("clang", clang)
+    inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output)
     outputs.upToDateWhen { false }
     doLast {
-        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def run = { List<String> command -> nativeExec { commandLine(command) }.standardOutput.asText.get() }
         def architecture = { String value ->
             def lower = value.toLowerCase(java.util.Locale.ROOT)
             lower == "amd64" ? "x86_64" : lower == "arm64" ? "aarch64" : lower
@@ -1530,7 +1597,7 @@ def generateStdioAbi = tasks.register("generateStdioAbi") {
         def executable = new File(temporaryDir, windowsHost ? "stdio-abi-probe.exe" : "stdio-abi-probe")
         run(command + ["-std=c11", source.path, "-o", executable.path])
         def probe = new JsonSlurper().parseText(run([executable.path])) as Map
-        requireBuild(probe.keySet() == (windowsHost ? ["widths", "errno", "seek"].toSet() : ["widths", "errno", "seek", "open", "at", "siginfoBytes"].toSet())) { "Malformed native stdio ABI probe" }
+        requireBuild(probe.keySet() == (windowsHost ? ["widths", "errno", "seek"].toSet() : ["widths", "errno", "seek", "open", "at", "siginfoBytes", "signals"].toSet())) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Java validates all exact fields and errno values.
         def manifest = ["schema": (windowsHost ? 2 : 1), "system": system,
             "architecture": arch, "target": target, "compilerDefaultTarget": defaultTarget,
@@ -1539,7 +1606,7 @@ def generateStdioAbi = tasks.register("generateStdioAbi") {
                 .encodeHex().toString(),
             "widths": probe["widths"], "errno": probe["errno"], "seek": probe["seek"]]
         if (windowsHost) manifest["profile"] = "windows-managed-descriptors"
-        else { manifest["open"] = probe["open"]; manifest["at"] = probe["at"]; manifest["siginfoBytes"] = probe["siginfoBytes"] }
+        else { manifest["open"] = probe["open"]; manifest["at"] = probe["at"]; manifest["siginfoBytes"] = probe["siginfoBytes"]; manifest["signals"] = probe["signals"] }
         def destination = output.get().asFile.toPath().resolve("thc/native/stdio-host-abi.json").toFile()
         destination.parentFile.mkdirs()
         destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
@@ -1555,10 +1622,10 @@ def generatePosixStatAbi = tasks.register("generatePosixStatAbi") {
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/posix-stat-abi")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output); outputs.upToDateWhen { false }
     doLast {
-        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def run = { List<String> command -> nativeExec { commandLine(command) }.standardOutput.asText.get() }
         // Share the already validated native compiler target, not another list
         // of target triples or guessed ABI sizes.
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
@@ -1586,10 +1653,10 @@ def generateTermiosAbi = tasks.register("generateTermiosAbi") {
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/termios-abi")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output); outputs.upToDateWhen { false }
     doLast {
-        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def run = { List<String> command -> nativeExec { commandLine(command) }.standardOutput.asText.get() }
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         def target = host["target"] as String
         def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])
@@ -1615,10 +1682,10 @@ def generateSigsetAbi = tasks.register("generateSigsetAbi") {
     def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
     def output = layout.buildDirectory.dir("generated/sigset-abi")
     def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
     outputs.dir(output); outputs.upToDateWhen { false }
     doLast {
-        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def run = { List<String> command -> nativeExec { commandLine(command) }.standardOutput.asText.get() }
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         def target = host["target"] as String
         def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])

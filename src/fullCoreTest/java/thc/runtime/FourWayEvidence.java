@@ -11,10 +11,16 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /** Shared provenance checks for the original four-way native/protocol/storage controls. */
 final class FourWayEvidence {
     private FourWayEvidence() {}
+    static String compilerUnit(File root) throws Exception {
+        var unit = (String) verify(root).get("ghcUnit");
+        assertNotNull(unit, "Missing selected compiler package identity");
+        return unit;
+    }
     @SuppressWarnings("unchecked")
     static Map<String, Object> verify(File root) throws Exception {
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/fourway-aggregate/manifest.json").toPath(), StandardCharsets.UTF_8));

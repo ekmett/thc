@@ -25,7 +25,7 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
 # Includes raw vector/string Core exports and their native scalar oracles.
-FULL_PREPARATION_PLAN = "d4f33b229cc37aa07b461788174607a329d08ddf5fb86584460985e1b2d5d993"
+FULL_PREPARATION_PLAN = "2652522e1277e6a8ea2e18178d066f0c532cccafef7b3529466f9cafced595f7"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.cbd", "post.cbd", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -304,6 +304,7 @@ NON_FIXTURE_BUILD_ROOTS = frozenset({
     "snapshot", "source-ghc", "test-results", "tmp",
 })
 COMMON_SOURCES = (
+    "src/driver/**/*.hs",
     "thc.cabal",
     "cabal.project",
     "Setup.hs",
@@ -366,7 +367,10 @@ def _manifest(root):
             owners[name] = group_id
         for path in [*group["outputs"], *group["sources"]]:
             _relative(path)
-        for command in group["commands"]:
+        checks = group.get("ciChecks", [])
+        if not isinstance(checks, list) or any(not isinstance(check, dict) or check.get("platform") != "Linux" for check in checks):
+            raise ValueError(f"Invalid CI checks: {group_id}")
+        for command in [*group["commands"], *checks]:
             argv = command.get("argv") if isinstance(command, dict) else None
             if not isinstance(argv, list) or not argv or not all(
                     isinstance(part, str) and part and "\x00" not in part for part in argv):
@@ -376,7 +380,31 @@ def _manifest(root):
                 if not any(destination == _relative(output) or
                            _relative(output) in destination.parents for output in group["outputs"]):
                     raise ValueError(f"Undeclared fixture stdout: {group_id}")
+    _group_order(data, data["groups"])
     return data, owners
+
+
+def _group_order(manifest, selected):
+    """Producer dependencies run first; ownership remains unique."""
+    result, active = [], set()
+    def visit(name):
+        if name not in manifest["groups"]:
+            raise ValueError(f"Unknown fixture dependency: {name}")
+        if name in active:
+            raise ValueError(f"Cyclic fixture dependency: {name}")
+        if name in result:
+            return
+        required = manifest["groups"][name].get("requires", [])
+        if not isinstance(required, list) or any(not isinstance(dep, str) for dep in required) or len(set(required)) != len(required):
+            raise ValueError(f"Invalid fixture dependencies: {name}")
+        active.add(name)
+        for dep in sorted(required):
+            visit(dep)
+        active.remove(name)
+        result.append(name)
+    for name in sorted(selected):
+        visit(name)
+    return result
 
 
 def _source_hashes(root, group):
@@ -410,6 +438,10 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/package-native-gc-carriers"]:
+        name = "build/package-native-gc-carriers/manifest.json"
+        expected = fast_inputs.gc_carrier_artifact_hashes(root, json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/process-lifecycle/core"]:
         if not fast_inputs.GMP_NATIVE_HOST:
             return {}
@@ -697,6 +729,9 @@ def _full_output_hashes(root):
             continue
         if path.is_symlink() or not path.is_dir():
             raise RuntimeError(f"Unexpected full fixture root: {name}")
+        if name == "build/package-native-gc-carriers":
+            files.update(_output_hashes(root, {"outputs": [name]}))
+            continue
         if name == "build/original-stack-formatter":
             files.update(_formatter_output_hashes(root))
             continue
@@ -783,7 +818,7 @@ def prepare(root, selection, run, toolchain):
     if selection.get("mode") != "narrow":
         raise ValueError("Invalid selected test mode")
 
-    groups = sorted({owners[name] for name in classes if owners[name] is not None
+    groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None
                      and (owners[name] != "original-gmp" or fast_inputs.GMP_NATIVE_HOST)})
     def classify():
         state = []

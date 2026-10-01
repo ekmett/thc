@@ -67,13 +67,13 @@ import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativ
   componentMainModule)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
-import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative,
-  finishPackageNativeWithDependencies, linkInstalledNative)
+import THC.Driver.PackageNative (captureNativeObject, captureConfiguredNativeObject, capturePackageNative, finishPackageNative,
+  finishPackageNativeWithDependencies, linkInstalledNativeWithProduct)
 import THC.Driver.NativeDependencies (readNativeProduct, configuredNativeArchive)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
-import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runResolvedPackage)
+import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeDebugEnvironment, runResolvedPackage)
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Compact.Core (Presence(..))
 import THC.Compact.Debug (SourceFile(..))
@@ -319,19 +319,25 @@ buildProject action opts target = do
                   maybe [] (\path -> [("GHC_PKG", path)]) (ghcPkgPath flags)
   requireFile buildPlugin
   inherited <- getEnvironment
+  launchEnvironment <- runtimeDebugEnvironment Host.os opts inherited
   let environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
   -- Cabal can build thc's executable without building its library. Publish the
   -- actual Cabal plugin registration before consulting the plugin manifest.
-  runCommandWithEnv True buildPlugin [] thcRoot (Just environment)
-  plugin <- readJson (thcRoot </> "build/compiler/plugin.json")
-  schema <- field plugin "schema" :: IO Int
-  require (schema == 1) "unsupported THC plugin manifest"
-  pluginDb <- field plugin "packageDb"
-  pluginUnit <- field plugin "unitId"
-  pluginLibrary <- field plugin "sharedLibrary"
-  registeredLibrary <- field plugin "cabalSharedLibrary"
-  requireFile pluginLibrary
-  requireDirectory pluginDb
+  let tools = thcRoot </> "build/compiler"
+  createDirectoryIfMissing True tools
+  (pluginDb, pluginUnit, pluginLibrary, registeredLibrary) <-
+    withLock (tools </> "cabal-tools.lock") $ do
+      runCommandWithEnv True buildPlugin [] thcRoot (Just environment)
+      plugin <- readJson (tools </> "plugin.json")
+      schema <- field plugin "schema" :: IO Int
+      require (schema == 1) "unsupported THC plugin manifest"
+      pluginDb <- field plugin "packageDb"
+      pluginUnit <- field plugin "unitId"
+      pluginLibrary <- field plugin "sharedLibrary"
+      registeredLibrary <- field plugin "cabalSharedLibrary"
+      requireFile pluginLibrary
+      requireDirectory pluginDb
+      pure (pluginDb, pluginUnit, pluginLibrary, registeredLibrary)
   let requested = distDirectory flags
       requestedOutput = if isAbsolute requested then requested else project </> requested
   createDirectoryIfMissing True requestedOutput
@@ -347,7 +353,7 @@ buildProject action opts target = do
   withProjectLock output $
     runBuiltProject action project working thcRoot runtime output native (runTarget opts) projectOptions
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
-                    source registeredLibrary (runVerifyArtifacts opts) (runArguments opts)
+                    source registeredLibrary (runVerifyArtifacts opts) launchEnvironment (runArguments opts)
 
 resolveRunnable :: FilePath -> String -> [String] -> [(String, String)] -> FilePath -> IO Unit
 resolveRunnable working target configuration environment native = do
@@ -411,9 +417,9 @@ selectedPackageTool ghc requested = do
 
 runBuiltProject :: ProjectAction -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> [String] -> IO ()
+                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> [(String, String)] -> [String] -> IO ()
 runBuiltProject action project working thcRoot runtime output native target projectOptions
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts guestArguments = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts launchEnvironment guestArguments = do
   driver <- getExecutablePath
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
@@ -619,8 +625,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
     -- Full-Core main and shutdown share one program and its Handle CAFs.
     -- Like cabal run, preserve the caller's cwd even with --project-dir.
     let programName = reverse (takeWhile (/= ':') (reverse (snd selection)))
-    runCommand False runtime (runtimeLaunchArguments verifyArtifacts
-      ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working
+    runCommandWithEnv False runtime (runtimeLaunchArguments verifyArtifacts
+      ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working (Just launchEnvironment)
 
 -- | Select the two original exception bridge modules. The flag requests full
 -- artifact verification rather than replaying an unchanged successful read.
@@ -746,14 +752,20 @@ prepareInterfaceHelper context root = do
       selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
         ["--disable-shared" | Host.os == "mingw32"] ++
         ["--builddir=" ++ directory | Just directory <- [buildDirectory]]
-  runCommand True cabal ("build" : selection) root
-  (status, output, diagnostic) <- readCreateProcessWithExitCode
-    (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
-  require (status == ExitSuccess) ("cannot locate selected thc-interface: " ++ diagnostic)
-  helper <- case lines output of
-    [path] -> canonicalizePath path
-    _ -> fail "cabal list-bin did not return one thc-interface executable"
-  requireFile helper
+      tools = root </> "build/compiler"
+  createDirectoryIfMissing True tools
+  -- These tools share Cabal's root build tree with plugin publication. Release
+  -- its lock before installed-Core probing and provider work.
+  helper <- withLock (tools </> "cabal-tools.lock") $ do
+    runCommand True cabal ("build" : selection) root
+    (status, output, diagnostic) <- readCreateProcessWithExitCode
+      (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
+    require (status == ExitSuccess) ("cannot locate selected thc-interface: " ++ diagnostic)
+    helper <- case lines output of
+      [path] -> canonicalizePath path
+      _ -> fail "cabal list-bin did not return one thc-interface executable"
+    requireFile helper
+    pure helper
   -- First slice is deliberately limited to pre-existing global registrations.
   -- A store/source component continues to use its existing Cabal build path.
   original <- installedContext ghc pkg helper [] (object
@@ -966,17 +978,18 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
           "installed Core compiler or registered package-cache identity is invalid"
         configured <- case installedSource context of
           Nothing -> pure Nothing
-          Just source -> configuredNativeArchive source (nativeDirectory </> "configured")
-            (installedCompiler context) (registration registrationUnit)
-        let nativeArguments = maybe [] (\(archive,_) -> ["-optl" ++ archive]) configured ++ arguments
-            configuredInputs = maybe [] snd configured
+          Just source -> configuredNativeArchive (captureConfiguredNativeObject (nativeDirectory </> "pieces"))
+            source (nativeDirectory </> "configured") (installedCompiler context) unit (registration registrationUnit)
+        let nativeArguments = maybe [] (\(archive,_,_) -> ["-optl" ++ archive]) configured ++ arguments
+            configuredInputs = maybe [] (\(_,inputs,_) -> inputs) configured
+            configuredProduct = configured >>= (\(_,_,ownedProduct) -> ownedProduct)
         createDirectory (temporary </> "core")
         staged <- forM (zip [0 :: Int ..] modules) $ \(index, (name, bytes)) -> do
           let path = temporary </> "core" </> show index <.> "cbd"
           BS.writeFile path bytes
           pure (name, path)
-        linked <- linkInstalledNative (installedGhc context) (installedPackageTool context) (installedLibdir context)
-          nativeArguments nativeDirectory unit staged
+        linked <- linkInstalledNativeWithProduct (installedGhc context) (installedPackageTool context) (installedLibdir context)
+          nativeArguments nativeDirectory unit configuredProduct staged
         forM_ configuredInputs $ \input -> do
           path <- field input "path"
           expected <- field input "sha256"

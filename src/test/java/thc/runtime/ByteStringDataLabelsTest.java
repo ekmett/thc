@@ -3,6 +3,8 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import java.io.StreamTokenizer;
+import java.io.StringReader;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -48,7 +50,17 @@ class ByteStringDataLabelsTest {
         var compile = new ArrayList<String>(); compile.add(System.getenv().getOrDefault("THC_CLANG", "clang"));
         if (System.getProperty("os.name").equals("Linux")) compile.add("--target=" +
             (System.getProperty("os.arch").equals("amd64") ? "x86_64" : System.getProperty("os.arch")) + "-unknown-linux-gnu");
-        compile.addAll(List.of("-O1", "-emit-llvm", "-c", source.toString(), "-I" + includes, "-o", bitcode.toString()));
+        // ghc-pkg emits a list, quoting paths that contain spaces.
+        var directories = new StreamTokenizer(new StringReader(includes));
+        directories.resetSyntax();
+        directories.whitespaceChars(0, ' ');
+        directories.wordChars('!', 255);
+        directories.quoteChar('"');
+        while (directories.nextToken() != StreamTokenizer.TT_EOF) {
+            assertNotNull(directories.sval, "Invalid GHC include directory");
+            compile.add("-I" + directories.sval);
+        }
+        compile.addAll(List.of("-O1", "-emit-llvm", "-c", source.toString(), "-o", bitcode.toString()));
         command(compile.toArray(String[]::new));
         var bytes = Files.readAllBytes(bitcode);
         var digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));

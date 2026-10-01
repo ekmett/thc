@@ -48,6 +48,17 @@ public final class NativeFileProvider implements Closeable {
     private final int statSize;
     private final int termiosSize;
 
+    /** Resource and selected-ABI availability only; this does not admit other
+     * POSIX operations such as pidfds, epoll, raw-open or terminal images. */
+    public static boolean supportedHost() {
+        try {
+            String suffix = StdioHostAbi.load().librarySuffix();
+            return NativeFileProvider.class.getResource("/thc/native/native-file-api" + suffix) != null &&
+                NativeFileProvider.class.getResource("/thc/native/native-file-api.bc") != null &&
+                NativeFileProvider.class.getResource("/thc/native/native-directory-api" + suffix) != null;
+        } catch (java.io.IOException | RuntimeException unavailable) { return false; }
+    }
+
     public static Context createContext(Set<StandardEndpoint> endpoints) {
         return createContext(endpoints, ContextProfile.NATIVE, false);
     }
@@ -56,8 +67,9 @@ public final class NativeFileProvider implements Closeable {
     }
     /** No arbitrary Builder, FileSystem, provider attachment, or global map. */
     public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, boolean allowProcesses) {
-        if (!NativeIO.supportedPosixHost())
-            throw new UnsupportedOperationException("Native files are currently verified only on Linux x86_64");
+        if (!supportedHost()) throw new UnsupportedOperationException("Native files require matching selected-ABI resources");
+        if (allowProcesses && !NativeIO.supportedPosixHost())
+            throw new UnsupportedOperationException("Native subprocesses require the Linux pidfd transport");
         var filesystem = new NativeFileSystem(endpoints);
         Context context;
         try {
@@ -96,21 +108,19 @@ public final class NativeFileProvider implements Closeable {
         directoryStreams = new NativeDirectoryStreams(directory);
         if (!env.isNativeAccessAllowed() || !env.isFileIOAllowed())
             throw new SecurityException("Native files require explicit file IO and native access");
-        if (!NativeIO.supportedPosixHost())
-            throw new UnsupportedOperationException("Native files are currently verified only on Linux x86_64");
+        if (!supportedHost()) throw new UnsupportedOperationException("Native files require matching selected-ABI resources");
         try {
             byte[] bytes;
-            try (var input = getClass().getResourceAsStream("/thc/native/native-file-api.so")) {
+            String resource = "native-file-api.bc";
+            try (var input = getClass().getResourceAsStream("/thc/native/" + resource)) {
                 if (input == null) throw fault("Missing native file provider bridge");
                 bytes = input.readAllBytes();
             }
-            library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), "native-file-api.so").build()).call();
+            library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), resource).build()).call();
             statSize = (int) interop.asLong(interop.execute(interop.readMember(library, "thc_file_stat_size")));
             long expected = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0);
             if (statSize != expected) throw fault("Native file provider/stat image ABI mismatch");
             termiosSize = (int) interop.asLong(interop.execute(interop.readMember(library, "thc_file_termios_size")));
-            if (termiosSize != TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0))
-                throw fault("Native file provider/termios image ABI mismatch");
             env.registerOnDispose(this);
         } catch (Throwable failure) { throw propagate(failure); }
     }
@@ -195,12 +205,13 @@ public final class NativeFileProvider implements Closeable {
         if (!operation.getOpening()) throw new IllegalStateException("Check failed.");
         StdioHostAbi abi;
         try { abi = StdioHostAbi.load(); } catch (Throwable failure) { throw propagate(failure); }
+        abi.requireOpenAbi();
         boolean readable = abi.openReadable(flags), writable = abi.openWritable(flags);
         Set<OpenOption> options = Set.of();
         return opened(".", new NativeOpenRequest(null, options, (ignored, anchor) -> {
             if (anchor == null) throw new IllegalStateException("Required value was null.");
             return acquire(readable, writable, lease -> {
-                if (operation == OriginalStdioOp.OPEN) {
+                if (operation.getSafety().equals("unsafe")) {
                     try (var scope = new NativeLimbScope()) {
                         var name = scope.allocate((path.length + 7L) & -8L);
                         name.copyFrom(path, 0, path.length);
@@ -208,7 +219,7 @@ public final class NativeFileProvider implements Closeable {
                     }
                 } else {
                     try (var request = new NativeOpenOperation(path, flags, (int) mode, anchor.getDescriptor())) {
-                        request.await(node, threads, operation == OriginalStdioOp.OPEN_INTERRUPTIBLE, lease);
+                        request.await(node, threads, operation.getSafety().equals("interruptible"), lease);
                     } catch (Throwable failure) { throw propagate(failure); }
                 }
             });
@@ -341,8 +352,11 @@ public final class NativeFileProvider implements Closeable {
             result("standard", lease, endpoint);
         });
     }
-    public NativeFileResource eventfd(int initial, int flags) { return acquire(true, true, lease -> result("eventfd", lease, initial, flags)); }
-    public NativeFileResource epoll(int size) { return acquire(false, false, lease -> result("epoll_create", lease, size)); }
+    private static void requireLinuxEvents() {
+        if (!NativeIO.supportedPosixHost()) throw new UnsupportedOperationException("Native events require the Linux eventfd/epoll transport");
+    }
+    public NativeFileResource eventfd(int initial, int flags) { requireLinuxEvents(); return acquire(true, true, lease -> result("eventfd", lease, initial, flags)); }
+    public NativeFileResource epoll(int size) { requireLinuxEvents(); return acquire(false, false, lease -> result("epoll_create", lease, size)); }
     public record Pipe(NativeFileResource read, NativeFileResource write) {}
     public Pipe pipe() {
         NativeFileResource[] writer = new NativeFileResource[1];
@@ -437,6 +451,7 @@ public final class NativeFileProvider implements Closeable {
         @Override public void readTermios(byte[] image) {
             synchronized (lease) {
                 requireCurrent(); lease.requireOpen();
+                requireTermiosAbi();
                 if (image.length != termiosSize) throw fault("Native termios image has the wrong size");
                 try (var scope = new NativeLimbScope()) {
                     var bytes = scope.allocate((termiosSize + 7L) & -8L); bytes.copyFrom(image, 0, image.length);
@@ -460,6 +475,7 @@ public final class NativeFileProvider implements Closeable {
         @Override public void writeTermios(int action, byte[] image) {
             synchronized (lease) {
                 requireCurrent(); lease.requireOpen();
+                requireTermiosAbi();
                 if (image.length != termiosSize) throw fault("Native termios image has the wrong size");
                 try (var scope = new NativeLimbScope()) {
                     var bytes = scope.allocate((termiosSize + 7L) & -8L); bytes.copyFrom(image, 0, image.length);
@@ -489,6 +505,7 @@ public final class NativeFileProvider implements Closeable {
         @Override public long writeEvent(long value) {
             synchronized (lease) {
                 requireCurrent(); lease.requireOpen();
+                requireLinuxEvents();
                 if (!writable) throw propagate(new NonWritableChannelException());
                 return result("eventfd_write", lease, value);
             }
@@ -556,6 +573,11 @@ public final class NativeFileProvider implements Closeable {
         }
         @Override public boolean isOpen() { return lease.isOpen(); }
         @Override public void close() { retire(lease); }
+    }
+
+    private void requireTermiosAbi() {
+        if (termiosSize != TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0))
+            throw fault("Native file provider/termios image ABI mismatch");
     }
 
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E { throw (E) failure; }

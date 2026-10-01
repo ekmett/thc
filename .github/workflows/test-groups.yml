@@ -1,0 +1,161 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: Ordinary test groups
+on:
+  workflow_call:
+    inputs:
+      os:
+        type: string
+        required: true
+      expected_sha:
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  compile:
+    name: Common compilation (${{ inputs.os }})
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 60
+    outputs:
+      matrix: ${{ steps.inventory.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Verify source and complete fixture ownership
+        id: inventory
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          test -z "$EXPECTED_SHA" || test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          matrix=$(python3 .github/scripts/fast_select.py --matrix)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-version: '3.16.0.0'
+          cabal-update: true
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: common-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-java25.3.4.1-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
+          restore-keys: common-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-java25.3.4.1-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
+      - name: Install Linux LLVM and native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+      - name: Install macOS LLVM
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@18
+          echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
+      - name: Compile common tools and test classes without acquiring fixtures or running tests
+        run: |
+          python3 .github/scripts/fast_ci.py start --report-dir build/ci/common-results
+          python3 .github/scripts/fast_ci.py compile-common --report-dir build/ci/common-results
+          python3 .github/scripts/fast_ci.py pack-common --archive build/ci/common.tar.gz
+      - name: Preserve common compile phases
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: common-build-logs-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/ci/common-results/
+          retention-days: 7
+      - name: Share only this platform's common compile outputs
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: common-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/ci/common.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+  group:
+    name: ${{ matrix.group }} (${{ inputs.os }})
+    needs: compile
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.compile.outputs.matrix) }}
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-version: '3.16.0.0'
+          cabal-update: false
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cabal
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: common-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-java25.3.4.1-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+      - name: Install Linux LLVM and native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+      - name: Install macOS LLVM
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@18
+          echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
+      - name: Download only this source platform and Build attempt
+        uses: actions/download-artifact@v8
+        with:
+          name: common-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/ci/download
+          digest-mismatch: error
+      - name: Verify and restore common compilation
+        run: python3 .github/scripts/fast_ci.py restore-common --archive build/ci/download/common.tar.gz
+      - name: Prepare this group's genuine inputs and run both original handoff modes
+        env:
+          CI_GROUP: ${{ matrix.group }}
+        run: python3 .github/scripts/fast_ci.py group --group "$CI_GROUP" --report-dir build/ci/group-results
+      - name: Preserve each group's original test and preparation output
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: tests-${{ runner.os }}-${{ matrix.group }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/ci/group-results/
+            build/test-results/testDefault/
+            build/test-results/testDense/
+            build/reports/tests/testDefault/
+            build/reports/tests/testDense/
+          if-no-files-found: warn
+          retention-days: 7

@@ -108,4 +108,22 @@ class PosixStdioHostAbiModelTest {
             assertThrows(RuntimeFault.class, () -> StdioHostAbi.parse(value, system, "riscv64"));
         }
     }
+
+    @Test void processSignalMetadataRejectsAliasedMissingAndOutOfRangeNumbers() {
+        // Checked parser model, not a receipt for any native host.
+        var signals = Map.<String, Object>ofEntries(entry("NSIG", 32), entry("SIGHUP", 1), entry("SIGINT", 2),
+            entry("SIGQUIT", 3), entry("SIGUSR1", 30), entry("SIGUSR2", 31), entry("SIGTERM", 15),
+            entry("SIGXCPU", 24), entry("SIGXFSZ", 25), entry("SIGBUS", 10), entry("SIGSEGV", 11));
+        var value = with(document("Darwin", "x86_64"), "signals", signals);
+        assertDoesNotThrow(() -> StdioHostAbi.parse(value, "Darwin", "amd64"));
+        for (var name : signals.keySet()) {
+            reject(with(value, "signals", without(signals, name)), "Darwin");
+            for (Object wrong : Arrays.asList(null, true, 1.0, 0, -1, Long.MAX_VALUE))
+                reject(with(value, "signals", with(signals, name, wrong)), "Darwin");
+        }
+        reject(with(value, "signals", with(signals, "SIGUSR1", 10)), "Darwin"); // BUS is not USR1 in this model.
+        reject(with(value, "signals", with(signals, "SIGUSR2", 32)), "Darwin");
+        reject(with(value, "signals", with(signals, "SIGUSR1", 31)), "Darwin");
+        reject(with(value, "signals", with(signals, "extra", 16)), "Darwin");
+    }
 }

@@ -8,6 +8,8 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 /** Typed execution widens per kind and consumes each evaluated result once. */
 public final class Evaluate extends Expr {
+    // Evaluation/forcing is typed transport, not another source statement.
+    @Override public boolean isInstrumentable() { return false; }
     @Child private Expr value;
     @Child private Force force;
     public Evaluate(Expr value, Metrics metrics) {

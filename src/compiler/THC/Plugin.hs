@@ -24,6 +24,13 @@ module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore, serial
 
 import GHC.Plugins
 import Control.Monad (when)
+import Control.Monad.Trans.State.Strict (State,runState,get,put,modify')
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import Data.Word (Word64)
+import Numeric (showHex)
+import GHC.Float (castFloatToWord32,castDoubleToWord64)
 import GHC.Iface.Env (lookupOrig)
 import GHC.Tc.Utils.Env (lookupGlobal, TyThing(AnId))
 import GHC.Tc.Utils.Monad (initIfaceCheck)
@@ -54,8 +61,14 @@ import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import THC.JSON (J(..), moduleValue)
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Lazy as BL
-import THC.Compact.Module (writeModuleValue, encodeModuleValue, readModuleValue)
+import THC.Compact.Module (writeModuleWithDebug, encodeModuleWithDebug, readModuleValue)
+import qualified THC.Compact.Core as C
+import qualified THC.Compact.Annotations as Display
+import qualified THC.Compact.Debug as Debug
+import qualified THC.Compact.Facts as Facts
+import THC.Compact.JSON (parseModuleFacts)
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
 import qualified GHC.Types.ForeignCall as Foreign
@@ -77,7 +90,6 @@ import qualified Data.List.NonEmpty as NE
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef')
 import Data.Maybe (mapMaybe)
 import System.IO.Unsafe (unsafePerformIO)
-import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory, replaceExtension)
 
@@ -87,7 +99,7 @@ import System.FilePath ((</>), takeDirectory, replaceExtension)
 -- interfaces. The first option is the destination directory (default
 -- @build/core@). GHC compilations using the plugin are forced to recompile so
 -- the export is not silently skipped by native recompilation checks.
--- @pretty-diagnostics@ includes readable Core and Id-info dumps; it is off by
+-- @pretty-diagnostics@ adds readable original Core to CBD inspection; it is off by
 -- default and independent of @source-notes@ and executable representation facts.
 --
 -- For example, after making the plugin package visible to the selected GHC:
@@ -249,17 +261,6 @@ data Ctx = Ctx
   , activeSources :: [String]
   }
 
--- Source notes are side metadata: they never become executable wrappers.
-sourceFields :: Ctx -> [(String,J)]
-sourceFields d = case activeSources d of
-  [] -> []
-  notes -> [("source",S (last notes)),("sourceNotes",A (map S notes))]
-
-binderSource :: Ctx -> Var -> [(String,J)]
-binderSource d v = case (sourceTable d, Sources.binderNote v) of
-  (Just table, Just note) | Sources.hasNote table note -> [("source",S (sourceKey d (Sources.noteKey note)))]
-  _ -> []
-
 underTick :: Ctx -> CoreTickish -> Ctx
 underTick d tick = case (sourceTable d, Sources.tickNote tick) of
   (Just table, Just note) | Sources.hasNote table note ->
@@ -268,21 +269,6 @@ underTick d tick = case (sourceTable d, Sources.tickNote tick) of
 
 sourceKey :: Ctx -> String -> String
 sourceKey d key = maybe key (\unit -> show (unit,key)) (sourceUnit d)
-
-sourceTableFields :: Ctx -> [(String,J)]
-sourceTableFields d = case sourceTable d of
-  Nothing -> []
-  Just table ->
-   [("sourceFiles",A [O [("id",S (sourceKey d (Sources.sourceFileId file))),("path",S (Sources.sourceFilePath file)),
-                       ("content",maybe Z S (Sources.sourceFileContent file))] | file <- Sources.sourceFiles table])
-   ,("sourceSpans",A (map spanRecord (Sources.sourceSpans table)))]
-  where
-    spanRecord record = let Sources.Note span label = Sources.sourceSpanNote record in O
-      [("id",S (sourceKey d (Sources.sourceSpanId record))),("file",S (sourceKey d (Sources.sourceSpanFile record)))
-      ,("startLine",num (srcSpanStartLine span)),("startColumn",num (srcSpanStartCol span))
-      ,("endLine",num (srcSpanEndLine span)),("endColumn",num (srcSpanEndCol span))
-      ,("charIndex",maybe Z num (Sources.sourceCharIndex record))
-      ,("charLength",maybe Z num (Sources.sourceCharLength record)),("label",S label)]
 
 loadSources :: Bool -> [(Id,CoreExpr)] -> IO (Maybe Sources.SourceTable)
 loadSources enabled bindings = if enabled then Just <$> Sources.buildSourceTable bindings else pure Nothing
@@ -304,16 +290,87 @@ nameKey n = case nameModule_maybe n of
 -- Direct binary publication through the shared typed encoder. CBD owns its
 -- fingerprints and source maps. Explicit diagnostics retain the producer's
 -- rich model rather than reconstructing it from the compact runtime payload.
-writeCoreOutput :: [CommandLineOption] -> FilePath -> J -> IO ()
-writeCoreOutput options path result = do
-  _ <- writeModuleValue path (moduleValue result)
-  when ("pretty-diagnostics" `elem` options) $
-    BS.writeFile (replaceExtension path "json") (diagnosticCore result)
+-- Module/native metadata may use Aeson. Executable records and their original
+-- debug observations never enter that tree. The lazy binding stream is consumed
+-- by the existing writer one top-level binding at a time.
+data CoreOutput = CoreOutput J [C.Constructor] [(C.Binding,[Display.Annotation])] Display.ModuleAnnotations [C.ForeignCall]
 
--- Cabal can compile the same module name in several distinct units. Keep the
--- historical flat layout for fixtures, but let package exports preserve the
--- exact GHC unit ID in their path. Escaping is injective and cannot traverse
--- out of the export root, even for an unusual unit ID.
+moduleOutput :: Ctx -> J -> [DataCon] -> [(C.Binding,[Display.Annotation])] -> [C.ForeignCall] -> CoreOutput
+moduleOutput d metadata cons bindings calls = CoreOutput metadata (map (constructor d) cons) bindings
+  (Display.ModuleAnnotations (sourceCatalog d)
+    [(index,bytes (occNameString (nameOccName (dataConName con)))) | (index,con) <- zip [0..] cons]) calls
+
+sourceCatalog :: Ctx -> Display.SourceCatalog
+sourceCatalog d = case sourceTable d of
+  Nothing -> Map.empty
+  Just table ->
+    let files = Map.fromList [(Sources.sourceFileId file,
+          Debug.SourceFile (bytes (sourceKey d (Sources.sourceFileId file))) (bytes (Sources.sourceFilePath file))
+            (maybe C.Unknown (C.Known . bytes) (Sources.sourceFileContent file))) | file <- Sources.sourceFiles table]
+        position record = let Sources.Note span label = Sources.sourceSpanNote record in
+          Debug.SourcePosition (bytes (sourceKey d (Sources.sourceSpanId record))) (C.Known (bytes label))
+            (fromIntegral (srcSpanStartLine span)) (fromIntegral (srcSpanStartCol span))
+            (fromIntegral (srcSpanEndLine span)) (fromIntegral (srcSpanEndCol span))
+            (maybe C.Unknown (C.Known . fromIntegral) (Sources.sourceCharIndex record))
+            (maybe C.Unknown (C.Known . fromIntegral) (Sources.sourceCharLength record))
+        entry record = case Map.lookup (Sources.sourceSpanFile record) files of
+          Just file -> (bytes (sourceKey d (Sources.sourceSpanId record)),(file,position record))
+          Nothing -> error "Original source span references missing file"
+    in Map.fromList (map entry (Sources.sourceSpans table))
+
+outputFacts :: CoreOutput -> IO Facts.Facts
+outputFacts (CoreOutput metadata constructors _ _ calls) = do
+  facts <- either fail pure (parseModuleFacts (moduleValue metadata))
+  let imports (C.Known (Facts.ImportsRecord (Facts.ImportProof schema profile scope execution unit owner status))) =
+        C.Known (Facts.ImportsRecord (Facts.ImportProof schema profile scope execution unit owner (case status of
+          Facts.ImportsVerified wordBits original associations _ addresses wrappers partition ->
+            Facts.ImportsVerified wordBits original associations calls addresses wrappers partition
+          other -> other)))
+      imports other = other
+  pure (facts { Facts.factsConstructors = constructors,
+    Facts.factsPendingProvenance = map imports (Facts.factsPendingProvenance facts) })
+
+-- Header provenance needs call descriptors before DATA publication. Traverse
+-- original Core independently, so preparing metadata never forces or retains
+-- the lazy stream of executable typed bindings.
+coreCalls :: Ctx -> CoreExpr -> [C.ForeignCall]
+coreCalls d original
+  | Just lowered <- wiredCase original = coreCalls d lowered
+  | Just lowered <- wiredApplication original = coreCalls d lowered
+  | Var v <- original, isWiredVoid v = []
+  | Var v <- original, Just lowered <- wiredRhs v =
+      coreCalls (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
+  -- Inventory needs no eta-expansion: revisiting a mask application head
+  -- would repeatedly expand the same primitive. Its operands contain the calls.
+  | otherwise = case original of
+      App{} -> let (function,args) = collectArgs original
+                   values = filter (\case Type{} -> False; _ -> True) args
+                   nested = coreCalls d function ++ concatMap (coreCalls d) values
+               in nested ++ if null values then [] else case foreignCall d function args of C.Known call -> [call]; _ -> []
+      Lam _ body -> coreCalls d body
+      Let bindings body -> concatMap (coreCalls d . snd) (flattenBind bindings) ++ coreCalls d body
+      Case scrut _ _ alternatives -> coreCalls d scrut ++ concat [coreCalls d body | Alt _ _ body <- alternatives]
+      Cast body _ -> coreCalls d body
+      Tick tick body -> coreCalls (underTick d tick) body
+      _ -> []
+
+programCalls :: Ctx -> CoreProgram -> [C.ForeignCall]
+programCalls d = concatMap (concatMap (coreCalls d . snd) . flattenBind)
+
+writeCoreOutput :: [CommandLineOption] -> FilePath -> CoreOutput -> IO ()
+writeCoreOutput options path output@(CoreOutput _ _ bindings annotations _) = do
+  facts <- outputFacts output
+  _ <- writeModuleWithDebug path facts bindings annotations
+  when ("pretty-diagnostics" `elem` options) $ do
+    bytes <- BS.readFile path
+    inspection <- inspectCore output bytes
+    BS.writeFile (replaceExtension path "json") inspection
+
+encodeCoreOutput :: CoreOutput -> IO BS.ByteString
+encodeCoreOutput output@(CoreOutput _ _ bindings annotations _) = do
+  facts <- outputFacts output
+  encodeModuleWithDebug facts bindings annotations
+
 coreOutputPath :: [CommandLineOption] -> FilePath -> String -> String -> FilePath
 coreOutputPath opts dir unit modName
   | "unit-qualified" `elem` opts = dir </> "units" </> ("u-" ++ concatMap escapeUnit unit) </> modName ++ ".cbd"
@@ -329,27 +386,30 @@ varKey d v = case nameModule_maybe (varName v) of
   Just _ -> nameKey (varName v)
   Nothing -> modulePrefix d ++ "." ++ nameKey (varName v)
 
-lifted :: Var -> J
-lifted v | isCoVar v = B False
+-- Runtime categories are direct GHC evidence. Shapes and evaluatedness stay
+-- separate, including the states of nested logical aggregate components.
+lifted :: Var -> C.Presence Bool
+lifted v | isCoVar v = C.Known False
          | otherwise = liftedType (varType v)
 
-liftedType :: Type -> J
+liftedType :: Type -> C.Presence Bool
 liftedType ty = case typeLevity_maybe ty of
-  Just Lifted -> B True
-  Just Unlifted -> B False
-  Nothing -> Z
+  Just Lifted -> C.Known True
+  Just Unlifted -> C.Known False
+  Nothing -> C.Unknown
 
--- Runtime categories are evidence from GHC types, never parsed pretty text.
--- A category describes a value after evaluation; evaluated is a separate WHNF
--- fact, not demand/strictness and not permission to speculate an arbitrary RHS.
-unknownRep :: J
+unknownRep :: C.Rep
 unknownRep = unknownRepWithState False
 
-unknownRepWithState :: Bool -> J
-unknownRepWithState evaluated = O [("primReps",Z),("kind",S "unknown"),("evaluated",B evaluated)]
+unknownRepWithState :: Bool -> C.Rep
+unknownRepWithState evaluated = C.Rep
+  (C.Shape C.UnknownKind C.Unknown C.Missing C.Missing C.Missing C.Missing C.Missing C.Missing)
+  (C.Evaluation (C.Known evaluated) [])
 
-voidRep :: J
-voidRep = O [("primReps",A []),("kind",S "void"),("evaluated",B True)]
+voidRep :: C.Rep
+voidRep = C.Rep
+  (C.Shape C.VoidKind (C.Known []) C.Missing C.Missing C.Missing C.Missing C.Missing C.Missing)
+  (C.Evaluation (C.Known True) [])
 
 -- Tuple storage concatenates its components, including known boxed pointers
 -- with unknown levity. GHC's aggregate RuntimeRep callbacks are partial for
@@ -384,85 +444,91 @@ aggregateRuntimeKind ty = case splitTyConApp_maybe (getRuntimeRep ty) of
     | tc == sumRepDataConTyCon -> Just ("unboxed-sum","alternatives")
   _ -> Nothing
 
-typeRep :: Type -> Bool -> J
-typeRep ty evaluated = O $
-  [("primReps",maybe Z (A . map (S . show)) reps),("kind",S kind),("evaluated",B evaluated)]
-  ++ aggregateFields ++ vectorFields
+typeRep :: Type -> Bool -> C.Rep
+typeRep ty evaluated = C.Rep
+  (C.Shape kind (maybe C.Unknown (C.Known . map compactPrimRep) reps)
+    vector aggregate components alternatives tagSlot alternativeSlots)
+  (C.Evaluation (C.Known evaluated) (map repState children))
   where
     reps = typePrimReps ty
-    vectorFields = case reps of
-      Just [VecRep lanes element] -> [("vector",O [("lanes",num lanes),("element",S (show element))])]
-      _ -> []
-    -- Type abstraction erases, but a newtype/family is not evidence for either
-    -- a data object or a closure. isBoxedDataTyCon makes that distinction in GHC.
+    vector = case reps of
+      Just [VecRep lanes element] -> C.Known (C.Vector (fromIntegral lanes) (compactElement element))
+      _ -> C.Missing
     (_,rho) = splitForAllTyVars ty
-    -- Physical register counts do not distinguish a singleton/empty unboxed
-    -- tuple from a scalar/state token. Preserve the logical GHC type evidence
-    -- even where no constructor is reachable (for example an identity).
-    -- GHC's cycle-checked representation view exposes newtype aliases as
-    -- well as synonyms/casts/foralls. Use it only for aggregate evidence:
-    -- a scalar newtype does not gain a boxed data/closure classification.
-    aggregateFields = case splitTyConApp_maybe (unwrapType ty) of
+    logical = case splitTyConApp_maybe (unwrapType ty) of
       Just (tc,args)
-        | isUnboxedTupleTyCon tc -> aggregate "unboxed-tuple" "components" args
-        | isUnboxedSumTyCon tc -> aggregate "unboxed-sum" "alternatives" args
-        -- State# is a known primitive with TupleRep '[] too. Its zero-width
-        -- token representation is not a logical empty tuple. This also keeps
-        -- newtype aliases of known primitives scalar after unwrapType.
-        | isPrimTyCon tc -> []
+        | isUnboxedTupleTyCon tc -> Just (C.TupleAggregate,Just (dropRuntimeRepArgs args))
+        | isUnboxedSumTyCon tc -> Just (C.SumAggregate,Just (dropRuntimeRepArgs args))
+        | isPrimTyCon tc -> Nothing
       _ -> case aggregateRuntimeKind ty of
-        Just (tag,field) -> [("aggregate",S tag),(field,Z)] ++
-          if tag == "unboxed-sum" then [("tagSlot",num 0),("alternativeSlots",Z)] else []
-        Nothing -> []
-    -- GHC's kind-aware helper removes the RuntimeRep arguments, including
-    -- representation variables. The remaining types are the ordered logical
-    -- components/alternatives, not the flattened physical register layout.
-    -- In particular an empty tuple and State# both use zero registers, but only
-    -- the former has an aggregate boundary. Nested aggregates keep that shape.
-    aggregate tag field args =
-      let types = dropRuntimeRepArgs args
-      in [("aggregate",S tag),(field,A (map component types))] ++
-         if tag == "unboxed-sum" then sumLayout types else []
-    -- These are physical projection indices, separate from the recursive
-    -- logical alternatives above. GHC's unariser uses these same APIs for
-    -- construction and case binders; its payload indices exclude the tag.
-    sumLayout types = [("tagSlot",num 0),("alternativeSlots",maybe Z (A . map (A . map num)) layout)]
-      where
-        layout = do
-          alternatives <- traverse typePrimReps types
-          physical <- reps
-          -- primRepSlot is partial for levity-polymorphic BoxedRep. Never call
-          -- it (or the merger which calls it) on unresolved representation.
-          if all knownSumSlot (concat alternatives) then do
-            let slots = ubxSumRepType alternatives
-            if physical == map slotPrimRep (NE.toList slots)
-              then Just [map (+1) (layoutUbxSum (NE.tail slots) (map primRepSlot alternative))
-                        | alternative <- alternatives]
-              else Nothing
+        Just ("unboxed-tuple",_) -> Just (C.TupleAggregate,Nothing)
+        Just ("unboxed-sum",_) -> Just (C.SumAggregate,Nothing)
+        _ -> Nothing
+    aggregate = maybe C.Missing (C.Known . fst) logical
+    children = case logical of
+      Just (_,Just types) -> map (\t -> typeRep t (typeLevity_maybe t == Just Unlifted)) types
+      _ -> []
+    childShapes = case logical of
+      Just (_,Just _) -> C.Known (map repShape children)
+      Just (_,Nothing) -> C.Unknown
+      Nothing -> C.Missing
+    components = case logical of Just (C.TupleAggregate,_) -> childShapes; _ -> C.Missing
+    alternatives = case logical of Just (C.SumAggregate,_) -> childShapes; _ -> C.Missing
+    tagSlot = case logical of Just (C.SumAggregate,_) -> C.Known 0; _ -> C.Missing
+    alternativeSlots = case logical of
+      Just (C.SumAggregate,Just types) -> maybe C.Unknown (C.Known . map (map fromIntegral)) (sumLayout types)
+      Just (C.SumAggregate,Nothing) -> C.Unknown
+      _ -> C.Missing
+    sumLayout types = do
+      choices <- traverse typePrimReps types
+      physical <- reps
+      if all knownSumSlot (concat choices) then do
+        let slots = ubxSumRepType choices
+        if physical == map slotPrimRep (NE.toList slots)
+          then Just [map (+1) (layoutUbxSum (NE.tail slots) (map primRepSlot alternative)) | alternative <- choices]
           else Nothing
-    -- An evaluated tuple/sum does not evaluate its lifted payloads. This is a
-    -- type layout, so only an unlifted component supplies a WHNF guarantee;
-    -- unknown RuntimeRep/levity and lifted components stay conservative.
-    component ty = typeRep ty (case typeLevity_maybe ty of Just Unlifted -> True; _ -> False)
-    kind | not (null aggregateFields) = "unknown"
+        else Nothing
+    kind | Just _ <- logical = C.UnknownKind
          | otherwise = case reps of
-      Just [] -> "void"
-      Just [r] | longRep r -> "long"
-      Just [VecRep _ _] -> "vector"
-      Just [FloatRep] -> "float"
-      Just [DoubleRep] -> "double"
-      Just [AddrRep] -> "address"
+      Just [] -> C.VoidKind
+      Just [r] | longRep r -> C.LongKind
+      Just [VecRep _ _] -> C.VectorKind
+      Just [FloatRep] -> C.FloatKind
+      Just [DoubleRep] -> C.DoubleKind
+      Just [AddrRep] -> C.AddressKind
       Just [BoxedRep _]
-        | isFunTy rho -> "closure"
-        | Just (tc,_) <- splitTyConApp_maybe rho, isBoxedDataTyCon tc -> "data"
-        | otherwise -> "object"
-      _ -> "unknown"
+        | isFunTy rho -> C.ClosureKind
+        | Just (tc,_) <- splitTyConApp_maybe rho, isBoxedDataTyCon tc -> C.DataKind
+        | otherwise -> C.ObjectKind
+      _ -> C.UnknownKind
     longRep = \case
       IntRep -> True; Int8Rep -> True; Int16Rep -> True; Int32Rep -> True; Int64Rep -> True
       WordRep -> True; Word8Rep -> True; Word16Rep -> True; Word32Rep -> True; Word64Rep -> True
       _ -> False
 
-exprRep :: Ctx -> CoreExpr -> J
+repShape :: C.Rep -> C.Shape
+repShape (C.Rep shape _) = shape
+repState :: C.Rep -> C.Evaluation
+repState (C.Rep _ state) = state
+
+compactPrimRep :: PrimRep -> C.PrimRep
+compactPrimRep = \case
+  IntRep -> C.IntRep; WordRep -> C.WordRep
+  Int8Rep -> C.Int8Rep; Int16Rep -> C.Int16Rep; Int32Rep -> C.Int32Rep; Int64Rep -> C.Int64Rep
+  Word8Rep -> C.Word8Rep; Word16Rep -> C.Word16Rep; Word32Rep -> C.Word32Rep; Word64Rep -> C.Word64Rep
+  FloatRep -> C.FloatRep; DoubleRep -> C.DoubleRep; AddrRep -> C.AddrRep
+  BoxedRep Nothing -> C.BoxedUnknown
+  BoxedRep (Just Lifted) -> C.BoxedLifted
+  BoxedRep (Just Unlifted) -> C.BoxedUnlifted
+  VecRep lanes element -> C.VecRep (C.Vector (fromIntegral lanes) (compactElement element))
+
+compactElement :: PrimElemRep -> C.Element
+compactElement = \case
+  Int8ElemRep -> C.Int8Element; Int16ElemRep -> C.Int16Element; Int32ElemRep -> C.Int32Element; Int64ElemRep -> C.Int64Element
+  Word8ElemRep -> C.Word8Element; Word16ElemRep -> C.Word16Element; Word32ElemRep -> C.Word32Element; Word64ElemRep -> C.Word64Element
+  FloatElemRep -> C.FloatElement; DoubleElemRep -> C.DoubleElement
+
+exprRep :: Ctx -> CoreExpr -> C.Rep
 exprRep d (Tick _ e) = exprRep d e
 exprRep d e
   | not (canCertify d) = unknownRep
@@ -480,65 +546,103 @@ rubbishValue (App f Type{}) = rubbishValue f
 rubbishValue (Cast body _) = rubbishValue body
 rubbishValue _ = False
 
-binderRep :: Ctx -> Bool -> Var -> J
+binderRep :: Ctx -> Bool -> Var -> C.Rep
 binderRep d evaluated v
   | isCoVar v = voidRep
   | not (canCertify d) = unknownRepWithState evaluated
   | otherwise = typeRep (varType v) (evaluated || v `elemVarSet` evaluatedIds d || exprIsHNF (Var v))
 
-binder :: Ctx -> Var -> J
-binder d = binderWithState d False
+-- Ordinals restart at each top-level binding and advance in the canonical
+-- declaration order. Only the lexical scope resolves local references.
+type Locals = Map.Map String Word64
+type Build = State (Word64,[Display.Annotation])
 
-binderWithState :: Ctx -> Bool -> Var -> J
-binderWithState d evaluated v = O $
-  [ ("id",S (varKey d v)), ("name",S (occNameString (nameOccName (varName v))))
-  , ("type",S (pretty d (varType v))), ("lifted",lifted v)
-  , ("coercion",B (isCoVar v)), ("rep",binderRep d evaluated v)
-  , ("info",if isId v then idMetadata d v else Z)
-  ] ++ binderSource d v
+allocate :: Ctx -> Locals -> [Var] -> Build Locals
+allocate d scope variables = do
+  let names = map (varKey d) variables
+  when (length names /= Map.size (Map.fromList [(name,()) | name <- names]))
+    (error "Duplicate lexical declaration in one group")
+  pairs <- mapM (\name -> do
+    (ordinal,annotations) <- get
+    when (ordinal == maxBound) (error "Too many lexical declarations")
+    put (ordinal+1,annotations)
+    pure (name,ordinal)) names
+  pure (Map.union (Map.fromList pairs) scope)
 
-binding :: Ctx -> (Id,CoreExpr) -> J
-binding d (v,e) = O $
-  [ ("id",S (varKey d v)), ("name",S (occNameString (nameOccName (varName v))))
-  , ("type",S (pretty d (varType v))), ("lifted",lifted v)
-  , ("arity",num (idArity v)), ("expr",annotated), ("rep",exprRep d e)
-  , ("info",idMetadata d v)
-  , ("entryStrict",A (map B aligned)), ("entryStrictSource",S origin)
-  ] ++ hostSignatureFields d v ++ joinMetadata d v e ++ binderSource d v
-  where
-    (marks,origin) = if canCertify d then CBV.entryContract (deriveCBVContracts d) v e else ([],"none")
-    exported = expr d e
-    -- Type binders have already erased; coercions retain their value slot.
-    -- Joins may return further lambdas: their suffix must remain unmarked.
-    aligned = case exported of
-      A [S "lam",A parameters,_,_] | length marks <= length parameters -> take (length parameters) (marks ++ repeat False)
-      _ -> marks
-    annotated = case exported of
-      A [S "lam",parameters,body,O metadata] ->
-        A [S "lam",parameters,body,O (metadata ++ [("entryStrict",A (map B aligned)),("entryStrictSource",S origin)])]
-      _ -> exported
+bytes :: String -> BS.ByteString
+bytes = Text.encodeUtf8 . Text.pack
 
--- A newtype's nominal host contract survives even when a cast/alias exposes
--- an Any worker. This is boundary metadata only, not a new execution carrier.
-hostSignatureFields :: Ctx -> Id -> [(String,J)]
-hostSignatureFields d v
-  | canCertify d, isExternalName (varName v), any relevant types =
-      [("hostSignature",O [("inputs",A (map hostType parameters)),("result",hostType result)])]
-  | otherwise = []
+entryType :: Ctx -> Var -> C.EntryType
+entryType d v = case pretty d (varType v) of
+  "IO ()" -> C.IOUnit
+  "State# RealWorld" -> C.StateRealWorld
+  _ -> C.OtherEntry
+
+sourceId :: Ctx -> Var -> Maybe BS.ByteString
+sourceId d v = case (sourceTable d,Sources.binderNote v) of
+  (Just table,Just note) | Sources.hasNote table note -> Just (bytes (sourceKey d (Sources.noteKey note)))
+  _ -> Nothing
+
+annotateBinder :: Display.RecordKind -> Ctx -> Var -> Build ()
+annotateBinder kind d v = modify' (\(ordinal,annotations) ->
+  (ordinal,Display.Annotation kind (Just (bytes (occNameString (nameOccName (varName v))))) (sourceId d v) [] : annotations))
+
+annotateExpr :: Ctx -> Build ()
+annotateExpr d = modify' (\(ordinal,annotations) ->
+  let notes = map bytes (activeSources d)
+      source = case reverse notes of value:_ -> Just value; [] -> Nothing
+  in (ordinal,Display.Annotation Display.ExpressionRecord Nothing source notes : annotations))
+
+binder :: Ctx -> Locals -> Var -> Build C.Binder
+binder d scope = binderWithState d scope False
+
+binderWithState :: Ctx -> Locals -> Bool -> Var -> Build C.Binder
+binderWithState d scope evaluated v = do
+  let ordinal = case Map.lookup (varKey d v) scope of
+        Just value -> value
+        Nothing -> error "Binder has no lexical declaration"
+  annotateBinder (Display.BinderRecord ordinal) d v
+  pure (C.Binder ordinal (entryType d v) (lifted v) (C.Known (isCoVar v))
+    (C.Known (binderRep d evaluated v)) (if isId v then C.Known (idMetadata v) else C.Unknown))
+
+binding :: Ctx -> Locals -> Maybe Locals -> (Id,CoreExpr) -> Build C.Binding
+binding d rhsScope declared (v,e) = do
+  let identity = case declared of
+        Nothing -> C.Global (bytes (varKey d v))
+        Just scope -> case Map.lookup (varKey d v) scope of
+          Just ordinal -> C.Local ordinal
+          Nothing -> error "Local binding has no lexical ordinal"
+  annotateBinder (Display.BindingRecord identity) d v
+  exported <- expr d rhsScope e
+  let (marks,origin) = if canCertify d then CBV.entryContract (deriveCBVContracts d) v e else ([],"none")
+      aligned = case exported of
+        C.Lam _ parameters _ | length marks <= length parameters -> take (length parameters) (marks ++ repeat False)
+        _ -> marks
+      annotated = case exported of
+        C.Lam metadata parameters body -> C.Lam
+          (metadata { C.metaEntryStrict = C.Known aligned, C.metaEntryStrictSource = C.Known (bytes origin) }) parameters body
+        _ -> exported
+      (joinArity,joinRep) = if isJoinId v
+        then let (prefix,result) = collectNBinders (idJoinArity v) e
+             in (C.Known (fromIntegral (length (filter (not . isTyVar) prefix))),C.Known (exprRep d result))
+        else (C.Missing,C.Missing)
+  pure (C.Binding identity (entryType d v) (lifted v) (fromIntegral (idArity v))
+    (C.Known (exprRep d e)) (C.Known (idMetadata v)) (C.Known aligned) (C.Known (bytes origin))
+    joinArity joinRep (hostSignature d v) annotated)
+
+hostSignature :: Ctx -> Id -> C.Presence C.HostSignature
+hostSignature d v
+  | canCertify d, isExternalName (varName v), any relevant (result:parameters) =
+      C.Known (C.HostSignature (map hostType parameters) (hostType result))
+  | otherwise = C.Missing
   where
     (_,rho) = splitForAllTyVars (expandTypeSynonyms (varType v))
     (arguments,result) = splitFunTys rho
     parameters = map scaledThing arguments
-    types = result : parameters
-    relevant = any nominal . hostCarriers
-    nominal (S _) = True
-    nominal _ = False
-    hostType ty = O [("rep",typeRep ty (typeLevity_maybe ty == Just Unlifted)),
-                     ("carriers",A (hostCarriers ty))]
+    relevant = any (/= C.HostPlain) . hostCarriers
+    hostType ty = C.HostType (typeRep ty (typeLevity_maybe ty == Just Unlifted)) (hostCarriers ty)
 
--- Preorder logical scalar leaves, including zero-width tokens. Aggregate
--- structure stays in the ordinary representation proof and is cross-checked.
-hostCarriers :: Type -> [J]
+hostCarriers :: Type -> [C.HostCarrier]
 hostCarriers ty = case splitTyConApp_maybe (expandTypeSynonyms ty) of
   Just (tc,_) | isNewTyCon tc
     , Just owner <- nameModule_maybe (tyConName tc)
@@ -547,95 +651,67 @@ hostCarriers ty = case splitTyConApp_maybe (expandTypeSynonyms ty) of
     , underlying == anyTyCon
     , typePrimReps ty == Just [BoxedRep (Just Unlifted)] ->
         case occNameString (nameOccName (tyConName tc)) of
-          "Object#" -> [S "object"]
-          "InteropLibrary#" -> [S "interop-library"]
-          _ -> [Z]
+          "Object#" -> [C.HostObject]
+          "InteropLibrary#" -> [C.HostInteropLibrary]
+          _ -> [C.HostPlain]
   _ -> case splitTyConApp_maybe (unwrapType ty) of
-    Just (tc,args) | isUnboxedTupleTyCon tc || isUnboxedSumTyCon tc ->
-      concatMap hostCarriers (dropRuntimeRepArgs args)
-    _ -> [Z]
+    Just (tc,args) | isUnboxedTupleTyCon tc || isUnboxedSumTyCon tc -> concatMap hostCarriers (dropRuntimeRepArgs args)
+    _ -> [C.HostPlain]
 
-joinMetadata :: Ctx -> Id -> CoreExpr -> [(String,J)]
-joinMetadata d v e
-  | not (isJoinId v) = []
-  | otherwise =
-      -- GHC.Core, Note [Invariants on join points]: join arity counts type
-      -- lambdas too, and the RHS can return further lambdas after this prefix.
-      let (prefix,result) = collectNBinders (idJoinArity v) e
-      in [("joinValueArity",num (length (filter (not . isTyVar) prefix)))
-         ,("joinResultRep",exprRep d result)]
-
-idMetadata :: Ctx -> Id -> J
-idMetadata d v = O $
-  [ ("joinArity",if isJoinId v then num (idJoinArity v) else Z)
-  , ("cbvEligible",B (CBV.eligible v))
-  , ("cbvMarks",maybe Z (A . map B) (CBV.existingMarks v))
-  ] ++ if prettyDiagnostics d then
-  [ ("callArity",num (idCallArity v)), ("demand",S (pretty d (idDemandInfo v)))
-  , ("strictness",S (pretty d (idDmdSig v))), ("cpr",S (pretty d (idCprSig v)))
-  , ("occurrence",S (pretty d (idOccInfo v))), ("oneShot",S (pretty d (idOneShotInfo v)))
-  , ("inline",S (pretty d (idInlinePragma v)))
-  ] else []
+idMetadata :: Id -> C.IdInfo
+idMetadata v = C.IdInfo
+  (if isJoinId v then C.Known (fromIntegral (idJoinArity v)) else C.Unknown)
+  (C.Known (CBV.eligible v)) (maybe C.Unknown C.Known (CBV.existingMarks v))
 
 flattenBind :: CoreBind -> [(Id,CoreExpr)]
 flattenBind (NonRec v e) = [(v,e)]
 flattenBind (Rec vs) = vs
 
-bindingGroup :: Ctx -> CoreBind -> [J]
-bindingGroup d b = map (binding rhsCtx) (flattenBind b)
+bindingGroup :: Ctx -> CoreBind -> [(C.Binding,[Display.Annotation])]
+bindingGroup d b = map (buildBinding rhsCtx) (flattenBind b)
   where
     rhsCtx = case b of
       NonRec{} -> d
       Rec vs -> d { recursiveIds = extendVarSetList (recursiveIds d) (map fst vs) }
 
-constructor :: Ctx -> DataCon -> J
-constructor d con = O $
-  [ ("id",S (nameKey (dataConName con))), ("name",S (occNameString (nameOccName (dataConName con))))
-  , ("arity",num (dataConRepArity con)), ("tag",num (dataConTag con))
-  , ("kind",S (if isUnboxedTupleDataCon con then "unboxed-tuple" else if isUnboxedSumDataCon con then "unboxed-sum" else if isNewTyCon (dataConTyCon con) then "newtype" else "boxed"))
-  , ("type",S (pretty d (dataConRepType con)))
-  -- These are worker representation slots, not source constructor fields.
-  -- GHC.Core.DataCon documents that rep strictness and rep argument types
-  -- align one-to-one, including zero-width coercion arguments.
-  , ("strictFields",A (map (B . isMarkedStrict) (dataConRepStrictness con)))
-  , ("fieldLifted",A (map (liftedType . scaledThing) (dataConRepArgTys con)))
-  -- Preserve GHC's actual per-slot register representation. Void is []; a
-  -- runtime-polymorphic slot is null, never a guessed reference representation.
-  , ("fieldReps",A (map fieldReps workerTypes))
-  -- A precise reference carrier is safe only after the worker's existing
-  -- strict/unlifted-field obligation has been enforced. A lazy known-data
-  -- field can still hold a THC thunk, so its evaluated flag remains false.
-  , ("fieldTypes",A (zipWith fieldType workerTypes workerStrict))
-  ] ++ [("sumArity",num (length (tyConDataCons (dataConTyCon con)))) | isUnboxedSumDataCon con]
-    ++ [("enumFamily",enumFamily tc) | let tc = dataConTyCon con, supportedEnum tc]
-    ++ [("dataToTagFamily",dataToTagFamily d tc) | let tc = dataConTyCon con, supportedTagFamily tc]
+buildBinding :: Ctx -> (Id,CoreExpr) -> (C.Binding,[Display.Annotation])
+buildBinding d pair = let (record,(_,annotations)) = runState (binding d Map.empty Nothing pair) (0,[])
+                      in (record,reverse annotations)
+
+constructor :: Ctx -> DataCon -> C.Constructor
+constructor d con = C.Constructor
+  (bytes (nameKey (dataConName con))) (fromIntegral (dataConRepArity con)) (fromIntegral (dataConTag con)) kind
+  (map isMarkedStrict marks) (map liftedType workerTypes)
+  (map (maybe C.Unknown (C.Known . map compactPrimRep) . typePrimReps) workerTypes)
+  (zipWith (\ty strict -> typeRep ty (strict || typeLevity_maybe ty == Just Unlifted)) workerTypes workerStrict)
+  (if isUnboxedSumDataCon con then C.Known (fromIntegral (length (tyConDataCons tc))) else C.Missing)
+  (if supportedEnum tc then C.Known (enumFamily tc) else C.Missing)
+  (if supportedTagFamily tc then C.Known (dataToTagFamily d tc) else C.Missing)
   where
+    tc = dataConTyCon con
+    kind | isUnboxedTupleDataCon con = C.TupleConstructor
+         | isUnboxedSumDataCon con = C.SumConstructor
+         | isNewTyCon tc = C.NewtypeConstructor
+         | otherwise = C.BoxedConstructor
     workerTypes = map scaledThing (dataConRepArgTys con)
     marks = dataConRepStrictness con
     workerStrict = if length marks == length workerTypes then map isMarkedStrict marks else repeat False
-    fieldType ty strict = typeRep ty (strict || case typeLevity_maybe ty of Just Unlifted -> True; _ -> False)
-    fieldReps ty = case typePrimReps ty of
-      Nothing -> Z
-      Just reps -> A (map (S . show) reps)
 
-expr :: Ctx -> CoreExpr -> J
-expr d original
-  | Just lowered <- wiredCase original = withRep (exprRep d original) (withUnsafeEqualityCase (expr d lowered))
+expr :: Ctx -> Locals -> CoreExpr -> Build C.Expr
+expr d scope original
+  | Just lowered <- wiredCase original =
+      fmap (withRep (exprRep d original) . mapMeta (\m -> m { C.metaUnsafeEqualityCase = C.Known (bytes "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg") })) (expr d scope lowered)
   | Just lowered <- wiredApplication original =
       if canCertify d && preservesWiredTypes original lowered
-      then expr d lowered
-      else uncertifiedRoot (expr d lowered)
-  | Var v <- original, isWiredVoid v = A [S "void",O (("rep",voidRep) : sourceFields d)]
-  | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
-  | canCertify d, Just saturated <- saturateMask original = expr d saturated
-  | otherwise = exprRaw d original
+      then expr d scope lowered
+      else uncertifiedRoot <$> expr d scope lowered
+  | Var v <- original, isWiredVoid v = do
+      annotateExpr d
+      pure (C.Void (C.emptyMeta { C.metaRep = C.Known voidRep }))
+  | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) scope lowered
+  | canCertify d, Just saturated <- saturateMask original = expr d scope saturated
+  | otherwise = exprRaw d scope original
 
--- These primops have no callable runtime closure. CorePrep normally saturates
--- them, but both export boundaries precede CorePrep. In particular bracket1
--- passes a mask applied only to its action as a State# -> (# State#, a #)
--- function. Use GHC's capture-avoiding, typed eta expansion before erasure;
--- the ordinary lambda path then exports the missing binder and tuple proof.
--- Supplied actions stay beneath the lambda and are not evaluated at creation.
 saturateMask :: CoreExpr -> Maybe CoreExpr
 saturateMask original
   | (Var v,args,ticks) <- collectArgsTicks tickishFloatable original
@@ -649,39 +725,30 @@ saturateMask original
     isTypeArg Type{} = True
     isTypeArg _ = False
 
--- Erasing a cast, tick or type-only application preserves the original result
--- type, without moving the metadata of lambda bodies or case binders.
-withRep :: J -> J -> J
-withRep rep (A xs) = case reverse xs of
-  O fields : rest -> A (reverse rest ++ [O (("rep",rep) : filter ((/= "rep") . fst) fields)])
-  _ -> A (xs ++ [O [("rep",rep)]])
-withRep _ node = node
 
--- A wired identity/unary-class rewrite can change the type of its *result*.
--- Its retained child is still genuine, typed GHC Core: erasing its certificates
--- recursively would also erase an inner State# token, tuple layout or primop
--- application that the rewrite never changed. Only the rewritten root lacks a
--- certificate at the original call site. Keep its old no-demand/HNF contract.
-uncertifiedRoot :: J -> J
+mapMeta :: (C.Meta -> C.Meta) -> C.Expr -> C.Expr
+mapMeta update = \case
+  C.Var m v -> C.Var (update m) v
+  C.Prim m p -> C.Prim (update m) p
+  C.Lit m l -> C.Lit (update m) l
+  C.Lam m bs e -> C.Lam (update m) bs e
+  C.Con m c arity -> C.Con (update m) c arity
+  C.App m f args lifted hnf speculate -> C.App (update m) f args lifted hnf speculate
+  C.Let m recursive bs e -> C.Let (update m) recursive bs e
+  C.Case m scrut ordinal binder alts -> C.Case (update m) scrut ordinal binder alts
+  C.Void m -> C.Void (update m)
+  C.Unsupported m reason -> C.Unsupported (update m) reason
+
+withRep :: C.Rep -> C.Expr -> C.Expr
+withRep rep = mapMeta (\m -> m { C.metaRep = C.Known rep })
+
+uncertifiedRoot :: C.Expr -> C.Expr
 uncertifiedRoot serialized = case withRep unknownRep serialized of
-  A [S "app",function,arguments,lifted,_,_,O metadata] ->
-    A [S "app",function,arguments,lifted,B False,B False,
-       O (filter ((/= "callDemand") . fst) metadata)]
+  C.App m f args lifted _ _ -> C.App (m { C.metaCallDemand = C.Missing }) f args lifted False False
   other -> other
 
--- Record this export-only late rule without obscuring the original Core dump,
--- result representation, or source notes on the surviving expression.
-withUnsafeEqualityCase :: J -> J
-withUnsafeEqualityCase (A xs) = case reverse xs of
-  O fields : rest -> A (reverse rest ++ [O (("unsafeEqualityCase",S "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg") : filter ((/= "unsafeEqualityCase") . fst) fields)])
-  _ -> A (xs ++ [O [("unsafeEqualityCase",S "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg")]])
-withUnsafeEqualityCase node = node
-
--- Preserve GHC's typed FCallId declaration at a direct application. The
--- runtime still validates the exact v1 symbol, convention and machine shape;
--- a similarly named Haskell function cannot acquire this metadata.
-foreignCallFields :: Ctx -> CoreExpr -> [CoreExpr] -> [(String,J)]
-foreignCallFields d f@(Var v) args
+foreignCall :: Ctx -> CoreExpr -> [CoreExpr] -> C.Presence C.ForeignCall
+foreignCall d f@(Var v) args
   | canCertify d
   , Just (Foreign.CCall (Foreign.CCallSpec target convention safety)) <- isFCallId_maybe v
   , let (types,values) = span isTypeArg args
@@ -690,41 +757,36 @@ foreignCallFields d f@(Var v) args
   , null (fst (splitForAllTyVars instantiated))
   , let (parameters,result) = splitFunTys instantiated
         arrays = map (arrayType . scaledThing) parameters
-        hasArrays = any (\case S _ -> True; _ -> False) arrays
-  = [("foreignCall",O (
-      [("schema",num (if hasArrays then 2 else 1 :: Int)),("target",targetRecord target)
-      ,("convention",S (callConvention convention)),("safety",S (callSafety safety))
-      ,("arity",num (length parameters)),("suppliedArity",num (length values))
-      ,("argumentReps",A [typeRep (scaledThing parameter) False | parameter <- parameters])
-      ,("resultRep",typeRep result False)] ++ [("argumentTypes",A arrays) | hasArrays]
-      ++ javascriptFields target convention safety))]
+        hasArrays = any (\case C.Known _ -> True; _ -> False) arrays
+  = C.Known (C.ForeignCall (if hasArrays then 2 else 1) (targetRecord target)
+      (callConvention convention) (callSafety safety) (fromIntegral (length parameters)) (fromIntegral (length values))
+      [typeRep (scaledThing parameter) False | parameter <- parameters] (typeRep result False)
+      (maybe C.Missing (const (C.Known (bytes "javascript-v1"))) script)
+      (maybe C.Missing (C.Known . bytes) script)
+      (if hasArrays then C.Known arrays else C.Missing))
   where
-    -- Runtime reps erase byte-array mutability. Retain only the two actual
-    -- primitive type identities; scalar widths remain owned by argumentReps.
+    script = case isFCallId_maybe v of
+      Just (Foreign.CCall (Foreign.CCallSpec (Foreign.StaticTarget _ symbol _ True) Foreign.CCallConv safety))
+        | safety `elem` [Foreign.PlaySafe,Foreign.PlayRisky] -> javascriptSource (unpackFS symbol)
+      _ -> Nothing
     arrayType ty = case splitTyConApp_maybe (unwrapType ty) of
-      Just (constructor, _) | constructor == byteArrayPrimTyCon -> S "ByteArray#"
-      Just (constructor, _) | constructor == mutableByteArrayPrimTyCon -> S "MutableByteArray#"
-      _ -> Z
+      Just (constructor,_) | constructor == byteArrayPrimTyCon -> C.Known (bytes "ByteArray#")
+      Just (constructor,_) | constructor == mutableByteArrayPrimTyCon -> C.Known (bytes "MutableByteArray#")
+      _ -> C.Unknown
     isTypeArg Type{} = True
     isTypeArg _ = False
-    targetRecord (Foreign.StaticTarget _ symbol unit isFunction) = O
-      [("kind",S "static"),("symbol",S (unpackFS symbol))
-      ,("unit",maybe Z (S . unitString) unit),("isFunction",B isFunction)]
-    targetRecord Foreign.DynamicTarget = O [("kind",S "dynamic")]
-    callConvention Foreign.CCallConv = "ccall"
-    callConvention Foreign.CApiConv = "capi"
-    callConvention Foreign.StdCallConv = "stdcall"
-    callConvention Foreign.PrimCallConv = "prim"
-    callConvention Foreign.JavaScriptCallConv = "javascript"
-    callSafety Foreign.PlayRisky = "unsafe"
-    callSafety Foreign.PlaySafe = "safe"
-    callSafety Foreign.PlayInterruptible = "interruptible"
-    javascriptFields (Foreign.StaticTarget _ symbol _ True) Foreign.CCallConv safety
-      | safety `elem` [Foreign.PlaySafe, Foreign.PlayRisky]
-      , Just source <- javascriptSource (unpackFS symbol)
-      = [("intrinsic",S "javascript-v1"),("javascriptSource",S source)]
-    javascriptFields _ _ _ = []
-foreignCallFields _ _ _ = []
+    targetRecord (Foreign.StaticTarget _ symbol unit isFunction) = C.StaticTarget (bytes (unpackFS symbol))
+      (maybe C.Unknown (C.Known . bytes . unitString) unit) isFunction
+    targetRecord Foreign.DynamicTarget = C.DynamicTarget
+    callConvention Foreign.CCallConv = C.CCall
+    callConvention Foreign.CApiConv = C.CApi
+    callConvention Foreign.StdCallConv = C.StdCall
+    callConvention Foreign.PrimCallConv = C.PrimCall
+    callConvention Foreign.JavaScriptCallConv = C.JavaScriptCall
+    callSafety Foreign.PlayRisky = C.UnsafeCall
+    callSafety Foreign.PlaySafe = C.SafeCall
+    callSafety Foreign.PlayInterruptible = C.InterruptibleCall
+foreignCall _ _ _ = C.Missing
 
 -- Only the versioned Truffle intrinsics are link-resolved without a source
 -- definition. Every other foreign import stays in missingDefinitions.
@@ -768,116 +830,114 @@ polyglotForeign v = case isFCallId_maybe v of
 
 -- Preserve the exact nominal payload type before erasure. Primitive raises
 -- remain lazy; only a compatible public exit may normalize a proven exception.
-someExceptionPayload :: CoreExpr -> [CoreExpr] -> [(String,J)]
+someExceptionPayload :: CoreExpr -> [CoreExpr] -> C.Presence C.ExceptionPayload
 someExceptionPayload (Var callee) (payload:_)
   | Just op <- isPrimOpId_maybe callee
-  , occNameString (primOpOcc op) `elem` ["raise#", "raiseIO#"]
+  , occNameString (primOpOcc op) `elem` ["raise#","raiseIO#"]
   , Just (tc,[]) <- splitTyConApp_maybe (exprType payload)
   , nameKey (tyConName tc) == "ghc-internal:GHC.Internal.Exception.Type.SomeException"
-  = [("exceptionPayload",O [("schema",num (1::Int)),
-       ("type",S "ghc-internal:GHC.Internal.Exception.Type.SomeException")])]
-someExceptionPayload _ _ = []
+  = C.Known (C.ExceptionPayload 1 (bytes "ghc-internal:GHC.Internal.Exception.Type.SomeException"))
+someExceptionPayload _ _ = C.Missing
 
-exprRaw :: Ctx -> CoreExpr -> J
-exprRaw d original = case original of
-  Var v | Just p <- isPrimOpId_maybe v -> node [S "prim",S (occNameString (primOpOcc p))] []
-        | Just con <- isDataConWorkId_maybe v -> node [S "con",S (nameKey (dataConName con)),num (dataConRepArity con)] []
-        | otherwise -> node [S "var",S (varKey d v)] []
-  -- The applied expression type owns the complete representation. Do not
-  -- flatten an aggregate or duplicate a scalar representation in the literal.
-  Lit (LitRubbish _ rep) | noFreeVarsOfType rep -> node [S "lit",S "rubbish",Z] []
-  Lit l -> let (k,v) = literal d l in node [S "lit",S k,S v] []
-  a@App{} -> let (f,args) = collectArgs a
-                 vals = filter (not . isTypeArg) args
-                 -- Saturate the complete application, never its bare head.
-                 -- Otherwise an already saturated primop would become an
-                 -- indirect call through an unnecessary wrapper lambda.
-                 function = case f of
-                   Var v | Just _ <- isPrimOpId_maybe v -> exprRaw d f
-                   _ -> expr d f
-                 demand = case if canCertify d then Demands.callDemand f args else Nothing of
-                   Just (arity,strict) -> [("callDemand",O [("arity",num arity),("strictArgs",A (map B strict))])]
-                   Nothing -> []
-             -- Analyse the original Core application, before erasing type or
-             -- coercion information. A false result is conservative.
-             in if null vals then withRep (exprRep d a) (expr d f) else node
-               [S "app",function,A (map (expr d) vals),A (map argLifted vals)
-               ,B (canCertify d && exprIsHNF a)
-               ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily a]]
-                 ++ [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication a]]
-                 ++ someExceptionPayload f vals ++ foreignCallFields d f args)
-  l@Lam{} -> let (bs,body) = collectBinders l
-                 vals = filter (not . isTyVar) bs
-             in if null vals then withRep (exprRep d l) (expr d body)
-                else node [S "lam",A (map (binder d) vals),expr d body] [("resultRep",exprRep d body)]
-  Let b body -> node [S "let",B (isRec b),A (bindingGroup d b),expr d body] []
-  Case scrut b _ alts ->
-    let branchCtx = d { evaluatedIds = extendVarSetList (evaluatedIds d) (b : scrutineeVars scrut) }
-    in node [S "case",expr d scrut,S (varKey d b),A (map (alt branchCtx) alts)]
-      -- Keep the typed case's own result when an enclosing erased unary
-      -- constructor or cast replaces only the expression's public rep.
-      [("binder",binderWithState d True b),("resultRep",exprRep d original)]
-  Cast e _ -> withRep (exprRep d original) (expr d e)
-  Tick tick e -> expr (underTick d tick) e
-  Type _ -> A [S "unsupported",S "type-as-value"]
-  Coercion _ -> node [S "void"] []
+exprRaw :: Ctx -> Locals -> CoreExpr -> Build C.Expr
+exprRaw d scope original = case original of
+  Cast e _ -> withRep (exprRep d original) <$> expr d scope e
+  Tick tick e -> expr (underTick d tick) scope e
+  Type _ -> error "Core type used as an executable value"
+  a@App{} | let (_,args) = collectArgs a, all isTypeArg args ->
+    let (f,_) = collectArgs a in withRep (exprRep d a) <$> expr d scope f
+  l@Lam{} | let (bs,_) = collectBinders l, all isTyVar bs ->
+    let (_,body) = collectBinders l in withRep (exprRep d l) <$> expr d scope body
+  _ -> do
+    annotateExpr d
+    let metadata = C.emptyMeta { C.metaRep = C.Known (exprRep d original) }
+    case original of
+      Var v | Just p <- isPrimOpId_maybe v -> pure (C.Prim metadata (bytes (occNameString (primOpOcc p))))
+            | Just con <- isDataConWorkId_maybe v -> pure (C.Con metadata (bytes (nameKey (dataConName con))) (fromIntegral (dataConRepArity con)))
+            | otherwise -> pure (C.Var metadata (maybe (C.Global (bytes (varKey d v))) C.Local (Map.lookup (varKey d v) scope)))
+      Lit (LitRubbish _ rep) | noFreeVarsOfType rep -> pure (C.Lit metadata C.LitRubbish)
+      Lit l -> pure (C.Lit metadata (literal d l))
+      a@App{} -> do
+        let (f,args) = collectArgs a
+            vals = filter (not . isTypeArg) args
+            application = metadata
+              { C.metaCallDemand = case if canCertify d then Demands.callDemand f args else Nothing of
+                  Just (arity,strict) -> C.Known (C.CallDemand (fromIntegral arity) strict)
+                  Nothing -> C.Missing
+              , C.metaEnumFamily = maybe C.Missing (C.Known . enumFamily) (tagToEnumFamily a)
+              , C.metaTagFamily = maybe C.Missing (C.Known . dataToTagFamily d) (dataToTagApplication a)
+              , C.metaExceptionPayload = someExceptionPayload f vals
+              , C.metaForeignCall = foreignCall d f args }
+        function <- case f of
+          Var v | Just _ <- isPrimOpId_maybe v -> exprRaw d scope f
+          _ -> expr d scope f
+        arguments <- mapM (expr d scope) vals
+        pure (C.App application function arguments (map argLifted vals)
+          (canCertify d && exprIsHNF a)
+          (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a))
+      l@Lam{} -> do
+        let (bs,body) = collectBinders l
+            vals = filter (not . isTyVar) bs
+        inner <- allocate d scope vals
+        parameters <- mapM (binder d inner) vals
+        C.Lam (metadata { C.metaResultRep = C.Known (exprRep d body) }) parameters <$> expr d inner body
+      Let b body -> do
+        let pairs = flattenBind b
+            recursive = case b of Rec{} -> True; _ -> False
+            rhsCtx = case b of Rec{} -> d { recursiveIds = extendVarSetList (recursiveIds d) (map fst pairs) }; _ -> d
+        inner <- allocate d scope (map fst pairs)
+        records <- mapM (binding rhsCtx (if recursive then inner else scope) (Just inner)) pairs
+        C.Let metadata recursive records <$> expr d inner body
+      Case scrut b _ alts -> do
+        let branchCtx = d { evaluatedIds = extendVarSetList (evaluatedIds d) (b : scrutineeVars scrut) }
+        scrutinee <- expr d scope scrut
+        inner <- allocate d scope [b]
+        information <- binderWithState d inner True b
+        alternatives <- mapM (alt branchCtx inner) alts
+        pure (C.Case (metadata { C.metaResultRep = C.Known (exprRep d original) }) scrutinee
+          (C.binderOrdinal information) (C.Known information) alternatives)
+      Coercion _ -> pure (C.Void metadata)
   where
-    node fields metadata = A (fields ++ [O (("rep",exprRep d original) : metadata ++ sourceFields d)])
     isTypeArg Type{} = True
     isTypeArg _ = False
-    argLifted Coercion{} = B False
+    argLifted Coercion{} = C.Known False
     argLifted e = liftedType (exprType e)
-    isRec Rec{} = True
-    isRec _ = False
     scrutineeVars (Var v) = [v]
     scrutineeVars (Cast e _) = scrutineeVars e
     scrutineeVars (Tick _ e) = scrutineeVars e
     scrutineeVars _ = []
-    alt branchCtx (Alt ac bs body) =
+    alt branchCtx inner (Alt ac bs body) = do
       let vals = filter (not . isTyVar) bs
-          ids = A (map (S . varKey d) vals)
-          -- Core alternatives retain worker slots after type-variable erasure,
-          -- including zero-width coercions. Only exactly aligned strictness
-          -- marks certify fields; lazy fields keep their independent evidence.
           strictFields = case ac of
-            DataAlt c | canCertify d
-                      , let marks = dataConRepStrictness c
-                      , length marks == length vals -> [v | (v,mark) <- zip vals marks, isMarkedStrict mark]
+            DataAlt c | canCertify d, let marks = dataConRepStrictness c, length marks == length vals ->
+              [v | (v,mark) <- zip vals marks, isMarkedStrict mark]
             _ -> []
           bodyCtx = branchCtx { evaluatedIds = extendVarSetList (evaluatedIds branchCtx) strictFields }
-          metadata = O [("binders",A (map (binder bodyCtx) vals))]
-      in case ac of
-        DEFAULT -> A [S "default",Z,ids,expr bodyCtx body,metadata]
-        DataAlt c -> A [S "data",S (nameKey (dataConName c)),ids,expr bodyCtx body,metadata]
-        LitAlt l -> let (k,v) = literal d l in A [S "lit",A [S k,S v],ids,expr bodyCtx body,metadata]
+      declared <- allocate d inner vals
+      parameters <- mapM (binder bodyCtx declared) vals
+      result <- expr bodyCtx declared body
+      pure $ case ac of
+        DEFAULT -> C.DefaultAlt parameters result
+        DataAlt c -> C.DataAlt (bytes (nameKey (dataConName c))) parameters result
+        LitAlt l -> C.LiteralAlt (literal d l) parameters result
 
-literal :: Ctx -> Literal -> (String,String)
+literal :: Ctx -> Literal -> C.Literal
 literal d = \case
-  LitNumber n i -> (numKind n,show i)
-  LitChar c -> ("char",show (ord c))
-  LitString s -> ("string-bytes",concatMap hex (BS.unpack s))
-  LitFloat f -> ("float",show (fromRational f :: Float))
-  LitDouble f -> ("double",show (fromRational f :: Double))
-  LitNullAddr -> ("null-addr","0")
-  -- A label has a symbol and an exact function/data distinction, but no
-  -- calling-convention or argument-type certificate. Preserve only those
-  -- facts; resolving a callable ABI is the foreign provider's obligation.
-  LitLabel symbol IsFunction -> ("function-addr",unpackFS symbol)
-  LitLabel symbol IsData -> ("data-addr",unpackFS symbol)
-  other -> ("unsupported",pretty d other)
-  where
-    hex b = let h = showHex b "" in replicate (2-length h) '0' ++ h
-    numKind LitNumInt = "int"
-    numKind LitNumWord = "word"
-    numKind LitNumInt8 = "int8"
-    numKind LitNumInt16 = "int16"
-    numKind LitNumInt32 = "int32"
-    numKind LitNumInt64 = "int64"
-    numKind LitNumWord8 = "word8"
-    numKind LitNumWord16 = "word16"
-    numKind LitNumWord32 = "word32"
-    numKind LitNumWord64 = "word64"
-    numKind LitNumBigNat = "bignat"
+  LitNumber kind value -> case kind of
+    LitNumInt -> C.LitInt (fromInteger value); LitNumWord -> C.LitWord (fromInteger value)
+    LitNumInt8 -> C.LitInt8 (fromInteger value); LitNumInt16 -> C.LitInt16 (fromInteger value)
+    LitNumInt32 -> C.LitInt32 (fromInteger value); LitNumInt64 -> C.LitInt64 (fromInteger value)
+    LitNumWord8 -> C.LitWord8 (fromInteger value); LitNumWord16 -> C.LitWord16 (fromInteger value)
+    LitNumWord32 -> C.LitWord32 (fromInteger value); LitNumWord64 -> C.LitWord64 (fromInteger value)
+    LitNumBigNat -> C.LitBigNat value
+  LitChar c -> C.LitChar (fromIntegral (ord c))
+  LitString s -> C.LitBytes s
+  LitFloat f -> C.LitFloatBits (castFloatToWord32 (fromRational f))
+  LitDouble f -> C.LitDoubleBits (castDoubleToWord64 (fromRational f))
+  LitNullAddr -> C.LitNullAddr
+  LitLabel symbol IsFunction -> C.LitFunctionAddr (bytes (unpackFS symbol))
+  LitLabel symbol IsData -> C.LitDataAddr (bytes (unpackFS symbol))
+  other -> C.LitUnsupported (bytes (pretty d other))
 
 -- tagToEnum# carries a nominal result-type argument which ordinary application
 -- export erases. Retain only a complete, concrete nullary family; never infer
@@ -887,9 +947,8 @@ supportedEnum tc = isEnumerationTyCon tc && tyConArity tc == 0 && not (isFamInst
   && not (null cs) && all ((== 0) . dataConRepArity) cs
   where cs = tyConDataCons tc
 
-enumFamily :: TyCon -> J
-enumFamily tc = O [("typeConstructor",S (nameKey (tyConName tc)))
-                 ,("constructors",A [S (nameKey (dataConName c)) | c <- tyConDataCons tc])]
+enumFamily :: TyCon -> C.EnumFamily
+enumFamily tc = C.EnumFamily (bytes (nameKey (tyConName tc))) [bytes (nameKey (dataConName c)) | c <- tyConDataCons tc]
 
 tagToEnumFamily :: CoreExpr -> Maybe TyCon
 tagToEnumFamily e = case collectArgs e of
@@ -907,12 +966,8 @@ supportedTagFamily :: TyCon -> Bool
 supportedTagFamily tc = isBoxedDataTyCon tc && not (isNewTyCon tc || isTypeDataTyCon tc)
   && case tyConDataCons_maybe tc of Just (_:_) -> True; _ -> False
 
-dataToTagFamily :: Ctx -> TyCon -> J
-dataToTagFamily d tc = O
-  [("typeConstructor",S (nameKey (tyConName tc)))
-  ,("constructors",A [S (nameKey (dataConName con)) | con <- tyConDataCons tc])
-  ,("smallFamilyLimit",num (mAX_PTR_TAG platform))
-  ,("smallFamily",B (isSmallFamily platform (tyConFamilySize tc)))]
+dataToTagFamily :: Ctx -> TyCon -> C.TagFamily
+dataToTagFamily d tc = C.TagFamily (enumFamily tc) (fromIntegral (mAX_PTR_TAG platform)) (isSmallFamily platform (tyConFamilySize tc))
   where platform = targetPlatform (dynFlags d)
 
 dataToTagApplication :: CoreExpr -> Maybe TyCon
@@ -958,16 +1013,15 @@ exportModule opts guts = do
 -- | The same pre-Tidy serializer used by the plugin, without filesystem writes
 -- or closure registration. Callers must supply genuine optimized ModGuts.
 serializeOptimizedCore :: DynFlags -> [CommandLineOption] -> ModGuts -> IO String
-serializeOptimizedCore flags opts guts
-  | "pretty-diagnostics" `elem` opts =
-      utf8DecodeByteString . diagnosticCore . snd <$> optimizedModule flags opts guts
-  | otherwise =
-      serializeOptimizedCoreCBD flags opts guts >>= fmap utf8DecodeByteString . inspectCore
+serializeOptimizedCore flags opts guts = do
+  (_,output) <- optimizedModule flags opts guts
+  encoded <- encodeCoreOutput output
+  utf8DecodeByteString <$> inspectCore output encoded
 
 serializeOptimizedCoreCBD :: DynFlags -> [CommandLineOption] -> ModGuts -> IO BS.ByteString
 serializeOptimizedCoreCBD flags opts guts = do
   (_,result) <- optimizedModule flags opts guts
-  encodeModuleValue (moduleValue result)
+  encodeCoreOutput result
 
 
 -- A runtime bridge is exported only from the defining module, with the genuine
@@ -995,7 +1049,7 @@ foreignExceptionBridgeFields d unit modName binds
       _ -> Nothing
     typeName ty = nameKey . tyConName . fst <$> splitTyConApp_maybe ty
 
-optimizedModule :: DynFlags -> [CommandLineOption] -> ModGuts -> IO (Ctx,J)
+optimizedModule :: DynFlags -> [CommandLineOption] -> ModGuts -> IO (Ctx,CoreOutput)
 optimizedModule flags opts guts = do
   sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
   policies <- either fail pure (Backend.backendFields (mg_module guts)
@@ -1010,13 +1064,11 @@ optimizedModule flags opts guts = do
         [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S modName)
         , ("unit",S (unitString (moduleUnit (mg_module guts))))
         , ("boundary",S "optimized-Core-before-Tidy")
-        , ("bindings",A (concatMap (bindingGroup d) (mg_binds guts))), ("constructors",A (map (constructor d) cons))
-        , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- mg_binds guts])
-        , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
+        , ("bindings",A []), ("constructors",A [])
         ] ++ (if prettyDiagnostics d then
           [("sourceCore",S (pretty d (mg_binds guts))), ("rules",S (pretty d (mg_rules guts)))] else []) ++
-        sourceTableFields d ++ policies ++ exports ++ foreignExceptionBridgeFields d unit modName binds
-  pure (d,result)
+         policies ++ exports ++ foreignExceptionBridgeFields d unit modName binds
+  pure (d,moduleOutput d result cons (concatMap (bindingGroup d) (mg_binds guts)) (programCalls d (mg_binds guts)))
 
 -- Package rebuilding needs identities that agree with the newly emitted
 -- interfaces, including Tidy-generated external names and implicit selectors.
@@ -1040,8 +1092,8 @@ exportLate hsc opts pair@(guts,_)
       pure pair
 
 -- | Serialize actual post-Tidy Core, including Core hydrated from a complete
--- installed interface. "pretty-diagnostics" retains the rich producer model;
--- otherwise JSON inspection is derived from CBD. "source-notes" and
+-- installed interface. JSON inspection is derived from CBD; optional original
+-- pretty Core remains output-only. "source-notes" and
 -- "unit-qualified" also affect this entry point. It neither writes files nor
 -- registers plugin closure roots.
 -- Foreign products are archival metadata, not executable registration. The
@@ -1057,14 +1109,12 @@ serializePostTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Modul
 serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations =
   utf8DecodeByteString <$> serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations
 
--- | The same ordered document in UTF-8 bytes, without a full output String.
--- Callers must force the strict ByteString before emitting a success response.
+-- | JSON inspection is an output-only view of the same typed binary artifact.
 serializePostTidyCoreWithAnnotationsBytes :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO BS.ByteString
-serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations
-  | "pretty-diagnostics" `elem` opts = diagnosticCore <$>
-      postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
-  | otherwise =
-      serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtifacts annotations >>= inspectCore
+serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations = do
+  output <- postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
+  encoded <- encodeCoreOutput output
+  inspectCore output encoded
 
 -- Normal compiler and interface publication always use these binary APIs,
 -- including when pretty diagnostics are requested.
@@ -1074,15 +1124,22 @@ serializePostTidyCoreCBD flags opts m tycons program foreignArtifacts =
 
 serializePostTidyCoreWithAnnotationsCBD :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO BS.ByteString
 serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtifacts annotations =
-  postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations >>= encodeModuleValue . moduleValue
+  postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations >>= encodeCoreOutput
 
-inspectCore :: BS.ByteString -> IO BS.ByteString
-inspectCore bytes = (\value -> BS.snoc (BL.toStrict (Aeson.encode value)) 10) <$> either fail pure (readModuleValue bytes)
+inspectCore :: CoreOutput -> BS.ByteString -> IO BS.ByteString
+inspectCore (CoreOutput metadata _ _ _ _) encoded = do
+  value <- either fail pure (readModuleValue encoded)
+  -- Optional original pretty Core/rules are output-only diagnostics. They
+  -- never supply executable fields or pass through the typed body reader.
+  let extras = case metadata of
+        O fields -> moduleValue (O (filter ((`elem` ["sourceCore","rules"]) . fst) fields))
+        _ -> error "Core metadata requires a module object"
+      inspected = case (value,extras) of
+        (Aeson.Object fields,Aeson.Object diagnostics) -> Aeson.Object (KeyMap.union diagnostics fields)
+        _ -> error "Compact inspection requires a module object"
+  pure (BS.snoc (BL.toStrict (Aeson.encode inspected)) 10)
 
-diagnosticCore :: J -> BS.ByteString
-diagnosticCore = (`BS.snoc` 10) . BL.toStrict . Aeson.encode . moduleValue
-
-postTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO J
+postTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO CoreOutput
 postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
   policies <- either fail pure (Backend.backendFields m
     [(fmap nameOccName target,payload) | Annotation target payload <- annotations])
@@ -1095,12 +1152,12 @@ postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotat
         Just (Exports.StaticExports _ _ _ records) -> map (exportKey . Exports.exportBinder) records
       signatureTycons = concat [foreignSignatureTycons (idType binder)
         | (binder, _) <- flattenBinds program, nameKey (varName binder) `elem` exported]
-  (_,result) <- postTidyModule flags opts m (tycons ++ signatureTycons) program
+  (_,CoreOutput result constructors bindings catalog calls) <- postTidyModule flags opts m (tycons ++ signatureTycons) program
   exports <- staticExportFields m annotations program
   provenance <- exportProvenanceFields m annotations program foreignArtifacts
-  imports <- importProvenanceFields m annotations foreignArtifacts result
+  imports <- importProvenanceFields m annotations foreignArtifacts
   let annotated = case result of O fields -> O (fields ++ policies ++ exports ++ provenance ++ imports); _ -> result
-  pure (withForeignArtifacts foreignArtifacts annotated)
+  pure (CoreOutput (withForeignArtifacts foreignArtifacts annotated) constructors bindings catalog calls)
   where
     exportKey (Exports.ExportName unit modName occurrence _) = unit ++ ":" ++ modName ++ "." ++ occurrence
 
@@ -1150,8 +1207,8 @@ exportProvenanceFields owner annotations program original = do
 
 -- The complete archived product is compared before producing managed-stub
 -- evidence. The execution label remains not-linked: no C code is registered.
-importProvenanceFields :: Module -> [Annotation] -> ForeignCore.IfaceForeign -> J -> IO [(String,J)]
-importProvenanceFields owner annotations original core = do
+importProvenanceFields :: Module -> [Annotation] -> ForeignCore.IfaceForeign -> IO [(String,J)]
+importProvenanceFields owner annotations original = do
   verdict <- either (ioError . userError . ("THC: " ++)) pure
     (ImportProvenance.inspectImports owner annotations original)
   pure $ case verdict of
@@ -1188,7 +1245,7 @@ importProvenanceFields owner annotations original core = do
     details (ImportProvenance.Rejected reason) = [("status",S "rejected"),("reason",S reason)]
     details (ImportProvenance.Verified imports addresses) = [("status",S "verified"),("wordBits",num (64::Int)),
       ("expectedForeign",foreignArtifactRecord original),("imports",A (map imported imports)),
-      ("expectedCalls",A (calls core))] ++ [("addresses",A (map address addresses)) | not (null addresses)]
+      ("expectedCalls",A [])] ++ [("addresses",A (map address addresses)) | not (null addresses)]
     details (ImportProvenance.VerifiedWrappers imports addresses wrappers) =
       details (ImportProvenance.Verified imports []) ++
       [("addresses",A (map address addresses)),("wrappers",A (map wrapper wrappers))]
@@ -1204,9 +1261,6 @@ importProvenanceFields owner annotations original core = do
          | (language,source,extension) <- files])]
     label (initializer,unit,name,symbol) = O
       [("isInitializer",B initializer),("unit",S unit),("module",S name),("name",S symbol)]
-    calls (O fields) = [value | (key,value) <- fields, key == "foreignCall"] ++ concatMap (calls . snd) fields
-    calls (A values) = concatMap calls values
-    calls _ = []
     identity (Exports.ExportName unit modName occurrence namespace) = O
       [("unit",S unit),("module",S modName),("occurrence",S occurrence),("namespace",S namespace)]
     ty (ImportProvenance.ImportTyCon name arguments) = O [("kind",S "tycon"),("name",identity name),("arguments",A (map ty arguments))]
@@ -1285,7 +1339,7 @@ foreignArtifactRecord (ForeignCore.IfaceForeign stubs files) = O
     file (ForeignCore.IfaceForeignFile sourceLanguage source extension) = O
       [("language",S (show sourceLanguage)),("source",S source),("extension",S extension)]
 
-postTidyModule :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> IO (Ctx,J)
+postTidyModule :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> IO (Ctx,CoreOutput)
 postTidyModule flags opts m tycons program = do
   sources <- loadSources ("source-notes" `elem` opts) binds
   let unit = unitString (moduleUnit m)
@@ -1297,11 +1351,10 @@ postTidyModule flags opts m tycons program = do
       result = O $
         [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S modName), ("unit",S unit)
         , ("boundary",S "optimized-Core-after-Tidy-before-CorePrep")
-        , ("bindings",A (concatMap (bindingGroup d) program)), ("constructors",A (map (constructor d) cons))
-        , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- program])
+        , ("bindings",A []), ("constructors",A [])
         ] ++ [("sourceCore",S (pretty d program)) | prettyDiagnostics d] ++
-        sourceTableFields d ++ foreignExceptionBridgeFields d unit modName binds
-  pure (d,result)
+         foreignExceptionBridgeFields d unit modName binds
+  pure (d,moduleOutput d result cons (concatMap (bindingGroup d) program) (programCalls d program))
   where binds = concatMap flattenBind program
 
 -- Source definitions from earlier modules of this same --make invocation let
@@ -1424,20 +1477,18 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
       recIds = mkVarSet [v | (_,v,_,_) <- imports]
   sources <- loadSources (case sourceTable rootCtx of Just _ -> True; _ -> False) [(v,e) | (_,v,e,_) <- imports]
   let closureCtx = rootCtx { sourceTable = sources, sourceUnit = if "unit-qualified" `elem` opts then Just "dependency-closure" else Nothing }
-  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, deriveCBVContracts = False, sourceTable = sources, sourceUnit = sourceUnit closureCtx, activeSources = [] }) (v,e) of
-        O fields -> O (fields ++ [("origin",S kind),("originModule",S (modulePrefix d))])
-        _ -> error "binding was not an object"
+  let importedBinding (d,v,e,_) = buildBinding (d { recursiveIds = recIds, deriveCBVContracts = False, sourceTable = sources, sourceUnit = sourceUnit closureCtx, activeSources = [] }) (v,e)
       cons = nubBy (\a b -> dataConName a == dataConName b) (concat [exprCons e | (_,_,e,_) <- imports])
       result = O $
         [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S "THC.InterfaceClosure"), ("unit",S "dependency-closure")
         , ("boundary",S "actual-interface-unfoldings"), ("roots",A [S (varKey rootCtx v) | v <- roots])
         , ("sourceModules",A [S (modulePrefix d) | (d,_) <- reverse modules])
-        , ("bindings",A (map importedBinding imports)), ("constructors",A (map (constructor rootCtx) cons))
-        , ("groups",A [O [("recursive",B True),("ids",A [S (varKey d v) | (d,v,_,_) <- imports])]])
+        , ("bindings",A [O [("id",S (varKey d v)),("origin",S kind),("originModule",S (modulePrefix d))] | (d,v,_,kind) <- imports]), ("constructors",A [])
         , ("missingDefinitions",A [O [("id",S (varKey d v)),("type",S (pretty d (varType v))), ("reason",S "No executable interface unfolding; source export required")] | (d,v) <- missing])
         ] ++ [("sourceCore",S (pretty rootCtx [(v,e) | (_,v,e,_) <- imports])) | prettyDiagnostics rootCtx] ++
-        [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx ++ policies
+        [("providedModules", A (map S provided)) | not (null provided)] ++ policies
   let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
   createDirectoryIfMissing True (takeDirectory path)
-  writeCoreOutput opts path result
+  writeCoreOutput opts path (moduleOutput closureCtx result cons (map importedBinding imports)
+    (concat [coreCalls (d { deriveCBVContracts = False }) e | (d,_,e,_) <- imports]))
   putStrLn ("THC interface closure: " ++ show (length imports) ++ " actual unfoldings, " ++ show (length missing) ++ " missing source definitions")

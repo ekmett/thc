@@ -1,5 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
 -- |
@@ -20,7 +21,7 @@ import Data.IORef
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (isPrefixOf)
 import Foreign.C.String (CString, withCString)
-import Foreign.C.Types (CInt(..), CUInt(..))
+import Foreign.C.Types (CInt(..), CUInt(..), CLong(..))
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek, poke)
@@ -70,12 +71,37 @@ consume pointer consumed lease = mask_ $ do
   writeIORef consumed True
   pure result
 
+#if defined(darwin_HOST_OS)
+foreign import ccall unsafe "thc_open_observe" observe :: CInt -> CString -> IO CLong
+
+workerCount :: IO Int
+workerCount = fromIntegral <$> observe 0 nullPtr
+
+descriptorCount :: IO Int
+descriptorCount = fromIntegral <$> observe 2 nullPtr
+
+blockedWorker :: IO Bool
+blockedWorker = (> 0) <$> observe 1 nullPtr
+#else
 workers :: IO [FilePath]
 workers = do
   tasks <- listDirectory "/proc/self/task"
   fmap concat $ mapM (\task -> do
     name <- try (fmap BSC.unpack (BSC.readFile ("/proc/self/task/" ++ task ++ "/comm"))) :: IO (Either IOException String)
     pure [task | name == Right "thc-open\n"]) tasks
+
+workerCount :: IO Int
+workerCount = length <$> workers
+
+descriptorCount :: IO Int
+descriptorCount = length <$> listDirectory "/proc/self/fd"
+
+blockedWorker :: IO Bool
+blockedWorker = do
+  active <- workers
+  states <- mapM (\task -> try (fmap BSC.unpack (BSC.readFile ("/proc/self/task/" ++ task ++ "/syscall"))) :: IO (Either IOException String)) active
+  pure (any (either (const False) ("257 " `isPrefixOf`)) states)
+#endif
 
 checkOpenRequests :: FilePath -> IO ()
 checkOpenRequests directory = do
@@ -85,10 +111,10 @@ checkOpenRequests directory = do
   withCString "/dev/null" $ \name -> alloca $ \errors -> do
     pointer <- start name 0 0 errors
     errorCode <- peek errors
-    assert (pointer == nullPtr && errorCode == 16) "native open stole an existing RT signal"
+    assert (pointer == nullPtr && errorCode == 16) "native open stole an existing cancellation signal"
   disposition 0
   request "/dev/null" $ \pointer consumed -> void (consume pointer consumed nullPtr)
-  baseline <- length <$> listDirectory "/proc/self/fd"
+  baseline <- descriptorCount
   -- Cancel before the flag check, then after actual syscall success but before
   -- fd publication. These barriers compile only into this oracle binary.
   pause 1
@@ -115,10 +141,7 @@ checkOpenRequests directory = do
   -- Observe the real owned worker inside openat, then interrupt it. No peer is
   -- opened to release the FIFO: cancellation must actually unblock the call.
   request fifo $ \pointer consumed -> do
-    untilReady $ do
-      active <- workers
-      states <- mapM (\task -> try (fmap BSC.unpack (BSC.readFile ("/proc/self/task/" ++ task ++ "/syscall"))) :: IO (Either IOException String)) active
-      pure (any (either (const False) ("257 " `isPrefixOf`)) states)
+    untilReady blockedWorker
     cancelError <- cancel pointer
     assert (cancelError == 0) "blocked FIFO cancellation failed"
     untilReady ((== 1) <$> done pointer)
@@ -130,8 +153,8 @@ checkOpenRequests directory = do
     void (cancel pointer)
     errorCode <- consume pointer consumed nullPtr
     assert (errorCode == 0) "completed acquisition changed after cancellation"
-  untilReady (null <$> workers)
-  remaining <- length <$> listDirectory "/proc/self/fd"
+  untilReady ((== 0) <$> workerCount)
+  remaining <- descriptorCount
   assert (remaining == baseline) "native open request leaked descriptors"
   finalMask <- getSignalMask
   assert (map (`inSignalSet` originalMask) [1..64] == map (`inSignalSet` finalMask) [1..64])

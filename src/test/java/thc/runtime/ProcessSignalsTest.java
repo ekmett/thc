@@ -215,7 +215,8 @@ public class ProcessSignalsTest {
         contextTransport(true);
     }
     private void contextTransport(boolean loom) throws Exception {
-        assumeTrue(System.getProperty("os.name").equals("Linux"));
+        assumeTrue(NativeIO.supportedPosixHost() || System.getProperty("os.name").startsWith("Mac"));
+        var abi = StdioHostAbi.load();
         onBackends(loom, (language, backend) -> {
             var owner = Language.currentState(); var events = new LinkedBlockingQueue<ProcessSignalTransport.Event>(); var delivered = new CountDownLatch(8); var closed = new AtomicInteger();
             owner.getThreads().setCapabilityCount(1);
@@ -241,12 +242,13 @@ public class ProcessSignalsTest {
             assertThrows(RuntimeFault.class, () -> service.install(2L, -5L, ManagedAddress.nullAddress())); service.authorizeLauncher();
             for (var bad : List.of(new long[] {64L, -5L}, new long[] {11L, -5L}, new long[] {2L, -3L}, new long[] {2L, 1L}))
                 assertThrows(RuntimeFault.class, () -> service.install(bad[0], bad[1], ManagedAddress.nullAddress()));
-            for (long signal : new long[] {1L, 2L, 3L, 10L, 12L, 15L, 24L, 25L}) {
+            for (var name : StdioHostAbi.SIGNAL_NAMES) {
+                long signal = abi.signal(name);
                 var actual = new ArrayList<Long>(); for (long action : new long[] {-2L, -4L, -5L, -1L}) actual.add(install.applyAsLong(signal, action));
                 assertEquals(List.of(-1L, -2L, -4L, -5L), actual);
             }
             try {
-                for (int signal : new int[] {1, 2, 3, 10, 12, 15, 24, 25}) { var bytes = new byte[128]; for (int i = 0; i < bytes.length; i++) bytes[i] = (byte) i; events.put(new ProcessSignalTransport.Event(signal, bytes)); }
+                for (var name : StdioHostAbi.SIGNAL_NAMES) { var bytes = new byte[Math.toIntExact(abi.getSiginfoBytes())]; for (int i = 0; i < bytes.length; i++) bytes[i] = (byte) i; events.put(new ProcessSignalTransport.Event((int) abi.signal(name), bytes)); }
                 assertTrue(TruffleSafepoint.setBlockedThreadInterruptibleFunction(null, (TruffleSafepoint.InterruptibleFunction<CountDownLatch, Boolean>) latch -> latch.await(5, TimeUnit.SECONDS), delivered), "typed guest dispatcher must return");
                 assertEquals(8, owner.getNativeAllocations().liveCount(), "dispatcher images remain context-owned");
             } finally { service.close(); }
@@ -257,7 +259,10 @@ public class ProcessSignalsTest {
         onBackends((language, backend) -> {
             var service = new ManagedSignals(Language.currentState(), language, false, NativeSignalTransport::userSignalAvailable, () -> { throw new IllegalStateException("denied request must not acquire a native signal transport"); });
             service.bind(program(language, backend)); service.authorizeLauncher();
-            for (long signal : new long[] {1L, 3L, 10L, 12L, 15L, 24L, 25L}) {
+            var abi = StdioHostAbi.load();
+            for (var name : StdioHostAbi.SIGNAL_NAMES) {
+                if (name.equals("SIGINT")) continue;
+                long signal = abi.signal(name);
                 var failure = assertThrows(RuntimeFault.class, () -> service.install(signal, -4L, ManagedAddress.nullAddress())); assertTrue(failure.getMessage().contains("-Xrs"));
             }
             service.close();
@@ -267,7 +272,8 @@ public class ProcessSignalsTest {
         onBackends((language, backend) -> {
             var service = new ManagedSignals(Language.currentState(), language, true, () -> false, () -> { throw new IllegalStateException("denied request must not acquire signal transport"); });
             service.bind(program(language, backend)); service.authorizeLauncher();
-            var failure = assertThrows(RuntimeFault.class, () -> service.install(12L, -4L, ManagedAddress.nullAddress())); assertTrue(failure.getMessage().contains("_JAVA_SR_SIGNUM=64"));
+            long usr2 = StdioHostAbi.load().signal("SIGUSR2");
+            var failure = assertThrows(RuntimeFault.class, () -> service.install(usr2, -4L, ManagedAddress.nullAddress())); assertTrue(failure.getMessage().contains("_JAVA_SR_SIGNUM=64"));
             assertThrows(RuntimeFault.class, () -> service.install(64L, -4L, ManagedAddress.nullAddress())); service.close();
         });
     }
@@ -326,10 +332,12 @@ public class ProcessSignalsTest {
         });
     }
     @Test public void nativeEventsCrossTheActualJvmBoundaryInAnIsolatedProcess() throws Exception {
-        assumeTrue(System.getProperty("os.name").equals("Linux") && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")));
+        boolean linux = System.getProperty("os.name").equals("Linux");
+        boolean darwin = System.getProperty("os.name").startsWith("Mac");
+        assumeTrue(linux && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")) || darwin);
         var classpath = Objects.requireNonNull(System.getProperty("thc.testRuntimeClasspath"), "test runner must expose its child JVM classpath");
         var directory = new File(System.getProperty("thc.projectRoot"), "build/process-signals"); directory.mkdirs();
-        for (var mode : List.of("relocated", "unrelocated", "reduced-signals-disabled")) {
+        for (var mode : linux ? List.of("relocated", "unrelocated", "reduced-signals-disabled") : List.of("posix-safe", "reduced-signals-disabled")) {
             var output = File.createTempFile("jvm-transport-", ".log", directory); var command = new ArrayList<>(List.of(new File(System.getProperty("java.home"), "bin/java").getPath(), "-Xrs", "--enable-native-access=ALL-UNNAMED"));
             if (mode.equals("reduced-signals-disabled")) command.add("-XX:-ReduceSignalUsage"); command.addAll(List.of("-cp", classpath, ProcessSignalJvmProbe.class.getName(), mode));
             var builder = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output); builder.environment().remove("LD_PRELOAD");
@@ -337,14 +345,14 @@ public class ProcessSignalsTest {
             var child = builder.start();
             try {
                 assertTrue(child.waitFor(30, TimeUnit.SECONDS), "native signal child timed out: " + output); assertEquals(0, child.exitValue(), Files.readString(output.toPath()));
-                assertTrue(Files.readString(output.toPath()).contains(switch (mode) { case "reduced-signals-disabled" -> "Later VM option disables reduced signal usage"; case "unrelocated" -> "Unrelocated JVM retains SIGUSR2"; default -> "JVM received signals 1,2,3,10,12,15,24,25"; }), Files.readString(output.toPath()));
+                assertTrue(Files.readString(output.toPath()).contains(switch (mode) { case "reduced-signals-disabled" -> "Later VM option disables reduced signal usage"; case "unrelocated" -> "Unrelocated JVM retains SIGUSR2"; case "posix-safe" -> "JVM received six selected-header signals; VM-owned XFSZ and unverified USR2 denied"; default -> "JVM received signals 1,2,3,10,12,15,24,25"; }), Files.readString(output.toPath()));
             } finally { if (child.isAlive()) child.destroyForcibly().waitFor(); }
         }
     }
     @Test public void standaloneScriptReservesSignalWithoutOverwritingUserSettings(@TempDir Path directory) throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux")); var java = directory.resolve("bin/java").toFile(); java.getParentFile().mkdirs();
         Files.writeString(java.toPath(), "#!/bin/sh\nprintf 'reserved=%s\\n' \"\u0024{_JAVA_SR_SIGNUM-unset}\"\n"); assertTrue(java.setExecutable(true));
-        var script = new File(System.getProperty("thc.projectRoot"), "build/bin/thc");
+        var script = new File(System.getProperty("thc.projectRoot"), "build/scripts/thc");
         for (var setting : Arrays.asList(null, "64", "12", "")) {
             var builder = new ProcessBuilder("sh", script.getPath()).redirectErrorStream(true); builder.environment().put("JAVA_HOME", directory.toString());
             if (setting == null) builder.environment().remove("_JAVA_SR_SIGNUM"); else builder.environment().put("_JAVA_SR_SIGNUM", setting);

@@ -836,13 +836,56 @@ def select(repo, base_ref, head_ref):
                 haskell=dict(suites=sorted(selected_haskell), count=len(selected_haskell), compileTargets=compile_targets))
 
 
+def groups(repo):
+    """Partition the complete ordinary inventory using its sole fixture manifest."""
+    import fast_fixtures
+    inventory = select(repo, "", "HEAD")
+    if not inventory["runnable"] or not inventory["inventoryComplete"]:
+        raise SelectionError("Incomplete grouped JUnit inventory")
+    manifest, owners = fast_fixtures._manifest(Path(repo))
+    classes = set(inventory["junit"]["classes"])
+    if classes != set(owners):
+        raise SelectionError(f"Fixture ownership mismatch: unmapped={sorted(classes-set(owners))}, stale={sorted(set(owners)-classes)}")
+    # A shared expensive provider is acquired once for its connected consumers.
+    components = {name: {name} for name in manifest["groups"]}
+    for name, group in manifest["groups"].items():
+        for dep in group.get("requires", []):
+            merged = components[name] | components[dep]
+            for member in merged:
+                components[member] = merged
+    result = {min(component): sorted({c for name in component for c in manifest["groups"][name]["junit"]})
+              for component in components.values()}
+    free = sorted(manifest["fixtureFreeJunit"])
+    for offset in range(0, len(free), 10):
+        name = "fixture-free-" + free[offset].rsplit(".", 1)[-1].lower()
+        if name in result:
+            raise SelectionError("Duplicate CI group: " + name)
+        result[name] = free[offset:offset+10]
+    if len(result) > 256:
+        raise SelectionError("More than 256 groups: split the platform matrix before adding jobs")
+    return result
+
+
+def group_selection(repo, name):
+    selected = groups(repo)
+    if name not in selected:
+        raise SelectionError("Unknown CI group: " + name)
+    # This existing test independently proves each fork's actual handoff mode.
+    classes = sorted(set(selected[name]) | {"thc.runtime.HandoffTest"})
+    return dict(mode="narrow", runnable=True, junit=dict(classes=classes, patterns=classes))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=ROOT)
+    parser.add_argument("--matrix", action="store_true")
     parser.add_argument("--base", default="")
     parser.add_argument("--head", default="HEAD")
     args = parser.parse_args()
     try:
+        if args.matrix:
+            print(json.dumps({"group": list(groups(args.repo))}))
+            return 0
         result = select(args.repo, args.base, args.head)
     except (OSError, ValueError, TypeError, KeyError, SelectionError) as error:
         # An unusable repository cannot safely produce test counts. Fail the job,

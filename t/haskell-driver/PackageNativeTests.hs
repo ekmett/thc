@@ -26,14 +26,15 @@ import GHC.ResponseFile (escapeArgs)
 import System.Directory (findExecutable, getCurrentDirectory, createDirectory, createDirectoryIfMissing, removeFile, getModificationTime, canonicalizePath,
   makeAbsolute, withCurrentDirectory, createFileLink)
 import System.Environment (getEnv, lookupEnv, setEnv, unsetEnv)
+import System.IO (openTempFile, hClose)
 import System.IO.Error (tryIOError)
 import System.FilePath ((</>), searchPathSeparator)
-import System.Process (readProcess, readProcessWithExitCode)
+import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode, readProcess, readProcessWithExitCode)
 import System.Exit (ExitCode(..))
-import System.IO (hClose, openTempFile)
 import qualified System.Info as Host
 import Test.HUnit
 import THC.Driver.PackageNative
+import THC.Driver.NativeCache (nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding)
@@ -46,12 +47,8 @@ import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestLabel "normal captured GHC calls publish typed unlinked seeds and one C provider" $ TestCase $ do
-      scratch <- getEnv "THC_TEST_SCRATCH"
-      createDirectoryIfMissing True scratch
-      (root,handle) <- openTempFile scratch "demand-acquisition-"
-      hClose handle; removeFile root; createDirectory root
-      repository <- getEnv "THC_TEST_ROOT"
+  [ TestLabel "normal captured GHC calls publish typed unlinked seeds and one C provider" $ TestCase $ withScratch $ \root -> do
+      repository <- lookupEnv "THC_TEST_ROOT" >>= maybe getCurrentDirectory pure
       compiler <- tool "GHC" "ghc"
       packageTool <- tool "GHC_PKG" "ghc-pkg"
       helper <- tool "THC_TEST_INTERFACE" "thc-interface"
@@ -286,15 +283,18 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
   , TestLabel "actual native C references retain strict provider obligations" $ TestCase $ withScratch $ \root -> do
       clang <- tool "THC_CLANG" "clang"
       target <- takeWhile (/= '\n') <$> readProcess clang ["-dumpmachine"] ""
+      compilerFlags <- nativeCompilerFlags
+      compilerEnvironment <- nativeCompilerEnvironment
       let source = root </> "ordinary.c"
           output = root </> "ordinary-library"
           strict = if Host.os == "darwin" then ["-Wl,-undefined,error"] else ["-Wl,--no-undefined"]
-          arguments name = ["-shared","-fPIC",source,"-o",output] ++ strict ++ nativeRootArguments target [name]
+          arguments name = compilerFlags ++ ["-shared","-fPIC",source,"-o",output] ++ strict ++ nativeRootArguments target [name]
+          command name = (proc clang (arguments name)) { env = Just compilerEnvironment }
       writeFile source "long ordinary_provider(void) { return 7; }\n"
-      (positive,_,positiveErrors) <- readProcessWithExitCode clang (arguments "ordinary_provider") ""
+      (positive,_,positiveErrors) <- readCreateProcessWithExitCode (command "ordinary_provider") ""
       assertEqual ("selected compiler accepts the ordinary strict recipe: " ++ positiveErrors) ExitSuccess positive
       writeFile source "extern void getProgArgv(void *, void *); void ordinary_consumer(void) { getProgArgv(0, 0); }\n"
-      (missing,_,missingErrors) <- readProcessWithExitCode clang (arguments "ordinary_consumer") ""
+      (missing,_,missingErrors) <- readCreateProcessWithExitCode (command "ordinary_consumer") ""
       assertBool "a Core capability is not a native definition" (missing /= ExitSuccess)
       assertBool "the actual retained C reference names its missing provider"
         ("getProgArgv" `isInfixOf` missingErrors)
@@ -900,6 +900,27 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (nativeWrapperSource [(signed,"thc_native_signed_0",Just "original.h")])
       assertBool "different widths still conflict" $ isLeft $ nativeSignatures "fixture-unit"
         [moduleWith [set "header" "original.h" (entry "fill" "ccall" [rep,"void"] ["void"]) | rep <- ["Int8Rep","Word16Rep"]]]
+  , TestLabel "configured C dependency outputs belong to the LLVM replay" $ TestCase $ withScratch $ \root -> do
+      repository <- lookupEnv "THC_TEST_ROOT" >>= maybe getCurrentDirectory pure
+      compiler <- tool "GHC" "ghc"
+      forM_ [0 :: Int .. 2] $ \index -> do
+        let directory = root </> show index
+            output = directory </> "original.dyn_o"
+            dependency = directory </> "original.d"
+            options = ["-MD","-MF",dependency,"-MT","original_native_target"]
+            configured = case index of
+              0 -> map ("-optc" ++) options
+              1 -> concatMap (\value -> ["-optc",value]) options
+              _ -> ["-optc-MMD","-optc-MF" ++ dependency,"-optc-MToriginal_native_target"]
+            arguments = ["-c",repository </> "src/driver/cbits/target-layout.c","-fPIC","-o",output] ++ configured
+        createDirectory directory
+        (status,_,diagnostic) <- readProcessWithExitCode compiler arguments ""
+        assertEqual diagnostic ExitSuccess status
+        original <- BS.readFile dependency
+        piece <- captureConfiguredNativeObject (directory </> "pieces") repository compiler arguments
+        assertEqual "LLVM capture preserves the actual successful argv" (Just (toJSON arguments))
+          (lookupField "inputs" piece >>= lookupField "arguments")
+        assertEqual "LLVM replay must not overwrite the native dependency output" original =<< BS.readFile dependency
   , TestCase $ assertEqual "actual configured C/package arguments survive Haskell flag filtering"
       (Right ["-hide-all-packages","-Iinclude","-optc-DREAL=1","-package-db","/db","-package-id","base-unit"])
       (nativeCompilerArguments ["--make","-hide-all-packages","-Iinclude","-O2","-odir","/build",

@@ -24,7 +24,7 @@ public final class NativeSignalTransport implements ProcessSignalTransport {
     public NativeSignalTransport() {
         try {
             try (var call = Arena.ofConfined()) {
-                image = arena.allocate((long) (int) Api.size.invokeExact(), 8);
+                image = arena.allocate(Api.infoSize, 8);
                 var errors = call.allocate(Api.capture);
                 session = (MemorySegment) Api.open.invokeExact(errors);
                 if (session.address() == 0) throw fault("Process signal ownership unavailable (errno " + errors.get(ValueLayout.JAVA_INT, Api.errno) + ")");
@@ -33,7 +33,8 @@ public final class NativeSignalTransport implements ProcessSignalTransport {
     }
     @Override public Result install(int signal, int action) {
         try {
-            if (signal == 12 && !userSignalAvailable()) throw fault("SIGUSR2 requires the standalone JVM launcher with _JAVA_SR_SIGNUM=64 and verified native dispositions");
+            if (signal == Api.abi.signal("SIGUSR2") && !userSignalAvailable())
+                throw fault("SIGUSR2 requires a verified standalone JVM suspend-signal relocation (_JAVA_SR_SIGNUM=64 on Linux) and native dispositions");
             try (var call = Arena.ofConfined()) {
                 var errors = call.allocate(Api.capture);
                 int old = (int) Api.install.invokeExact(errors, session, signal, action);
@@ -77,7 +78,7 @@ public final class NativeSignalTransport implements ProcessSignalTransport {
     }
     /** Explicit CLI-only termination after context shutdown, never guest FFI. */
     public static void exitBySignal(int signal) {
-        if (signal < 1 || signal > 64) throw new IllegalArgumentException("Invalid process exit signal");
+        if (signal < 1 || signal >= Api.abi.signal("NSIG")) throw new IllegalArgumentException("Invalid process exit signal");
         try { Api.exit.invokeExact(signal); } catch (Throwable failure) { throw failed("Process signal exit failed", failure); }
         throw new AssertionError("Signal exit returned");
     }
@@ -87,17 +88,20 @@ public final class NativeSignalTransport implements ProcessSignalTransport {
         var result = new RuntimeFault(message); result.initCause(failure); throw result;
     }
     private static final class Api {
+        private static final StdioHostAbi abi = abi();
+        private static StdioHostAbi abi() {
+            try { return StdioHostAbi.load(); }
+            catch (IOException failure) { throw failed("Missing process signal ABI", failure); }
+        }
         private static final Linker linker = Linker.nativeLinker();
         static final MemoryLayout capture = Linker.Option.captureStateLayout();
         static final long errno = capture.byteOffset(MemoryLayout.PathElement.groupElement("errno"));
         private static final SymbolLookup library = load();
         private static SymbolLookup load() {
-            var arch = System.getProperty("os.arch");
-            if (!"Linux".equals(System.getProperty("os.name")) || !("amd64".equals(arch) || "x86_64".equals(arch)))
-                throw fault("Process signals require Linux x86_64");
-            try (var input = NativeSignalTransport.class.getResourceAsStream("/thc/native/native-process-signal-api.so")) {
+            String suffix = abi.librarySuffix();
+            try (var input = NativeSignalTransport.class.getResourceAsStream("/thc/native/native-process-signal-api" + suffix)) {
                 if (input == null) throw new IOException("Missing native process signal bridge");
-                var library = Files.createTempFile("thc-process-signals-", ".so");
+                var library = Files.createTempFile("thc-process-signals-", suffix);
                 library.toFile().deleteOnExit();
                 Files.copy(input, library, StandardCopyOption.REPLACE_EXISTING);
                 // Late handlers may retain this code after a session closes.
@@ -110,6 +114,7 @@ public final class NativeSignalTransport implements ProcessSignalTransport {
         }
         static final MethodHandle open = function("open", FunctionDescriptor.of(ValueLayout.ADDRESS), true);
         static final MethodHandle size = function("info_size", FunctionDescriptor.of(ValueLayout.JAVA_INT), false);
+        static final MethodHandle constant = function("constant", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT), false);
         static final MethodHandle number = function("number", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), false);
         static final MethodHandle usr2Available = function("usr2_available", FunctionDescriptor.of(ValueLayout.JAVA_INT), false);
         static final MethodHandle install = function("install", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT), true);
@@ -118,6 +123,20 @@ public final class NativeSignalTransport implements ProcessSignalTransport {
         static final MethodHandle reset = function("reset_wake", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), false);
         static final MethodHandle close = function("close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), true);
         static final MethodHandle exit = function("exit", FunctionDescriptor.ofVoid(ValueLayout.JAVA_INT), false);
+        static final long infoSize = verify();
+        private static long verify() {
+            try {
+                var names = new java.util.ArrayList<String>(); names.add("NSIG");
+                names.addAll(StdioHostAbi.SIGNAL_NAMES); names.addAll(java.util.List.of("SIGBUS", "SIGSEGV"));
+                for (int index = 0; index < names.size(); index++)
+                    if ((int) constant.invokeExact(index) != abi.signal(names.get(index)))
+                        throw fault("Native process signal constants/ABI mismatch");
+                long bytes = (int) size.invokeExact();
+                if (bytes != abi.getSiginfoBytes() || bytes < 1 || bytes > 512)
+                    throw fault("Native process siginfo image/ABI mismatch");
+                return bytes;
+            } catch (Throwable failure) { throw failed("Native process signal ABI verification failed", failure); }
+        }
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E { throw (E) failure; }
 }

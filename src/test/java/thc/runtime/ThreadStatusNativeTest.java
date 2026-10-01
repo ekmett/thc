@@ -120,7 +120,7 @@ public class ThreadStatusNativeTest {
                     try {
                         // Inspect the public parser's actual graph, not reconstructed Programs or independent CAFs.
                         loaded = (EntryValue) Language.currentState().getEnv().parsePublic(Source.newBuilder("thc",
-                            CoreModules.request(List.of(source.getPath()), entry, true, false, backend, true, false, null, asyncExceptions), "thread-status-request").build()).call();
+                            CoreModules.request(List.of(source.getPath()), "main:ThreadStatusAudit." + entry, true, false, backend, true, false, null, asyncExceptions), "thread-status-request").build()).call();
                     } finally { context.leave(); }
                     var function = context.asValue(loaded);
                     var field = EntryValue.class.getDeclaredField("guestTarget"); field.setAccessible(true);

@@ -33,7 +33,8 @@ import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory, takeFileName)
 import System.IO (hClose, openTempFile)
-import System.Process (readCreateProcessWithExitCode, proc)
+import System.Process (CreateProcess(..), readCreateProcessWithExitCode, proc)
+import THC.Driver.NativeCache (nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
 -- A complete no-callback CAPI module is the first executable archive. The
@@ -86,6 +87,7 @@ linkClockGetTime libdir includes staging platform unit name original
       header <- findHeader libdir
       headers <- if timeClock then timeClockHeaders libdir includes else pure []
       clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
+      sdkFlags <- nativeCompilerFlags
       defaultTarget <- output clang ["-dumpmachine"]
       let cpu = takeWhile (/= '-') platform
           linux = "-linux" `isSuffixOf` platform
@@ -114,7 +116,7 @@ linkClockGetTime libdir includes staging platform unit name original
            "_Static_assert(offsetof(struct timespec, tv_sec) == 0 && offsetof(struct timespec, tv_nsec) == 8, \"unsupported timespec offsets\");",
            "_Static_assert(sizeof(((struct timespec *)0)->tv_sec) == 8 && sizeof(((struct timespec *)0)->tv_nsec) == 8, \"unsupported timespec fields\");",
            "HsInt32 thc_capi_errno(void) { return errno; }"])
-        run clang (targetFlags ++ ["-O1", "-emit-llvm", "-c", "-I", takeDirectory header,
+        run clang (sdkFlags ++ targetFlags ++ ["-O1", "-emit-llvm", "-c", "-I", takeDirectory header,
                    cfile, "-o", bitcode] ++ concatMap (\path -> ["-I", path]) includes)
         BS.readFile bitcode) `finally` cleanup
       after <- if timeClock then timeClockHeaders libdir includes else pure []
@@ -164,7 +166,8 @@ ownedCall _ _ = False
 
 output :: FilePath -> [String] -> IO String
 output tool arguments = do
-  (status, text, diagnostic) <- readCreateProcessWithExitCode (proc tool arguments) ""
+  environment <- nativeCompilerEnvironment
+  (status, text, diagnostic) <- readCreateProcessWithExitCode (proc tool arguments) {env=Just environment} ""
   unless (status == ExitSuccess) (fail (tool ++ " failed: " ++ diagnostic))
   case lines text of
     line : _ -> pure line
@@ -221,7 +224,8 @@ hex = concatMap (\byte -> [intToDigit (fromIntegral byte `div` 16),
 
 run :: FilePath -> [String] -> IO ()
 run tool arguments = do
-  (status, _, diagnostic) <- readCreateProcessWithExitCode (proc tool arguments) ""
+  environment <- nativeCompilerEnvironment
+  (status, _, diagnostic) <- readCreateProcessWithExitCode (proc tool arguments) {env=Just environment} ""
   unless (status == ExitSuccess) (fail (tool ++ " failed: " ++ diagnostic))
 
 findHeader :: FilePath -> IO FilePath

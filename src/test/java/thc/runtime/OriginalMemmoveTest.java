@@ -11,6 +11,7 @@ import thc.Language;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Consumer;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
 
@@ -66,7 +67,7 @@ class OriginalMemmoveTest {
                 var guest = program(language, backend, module()); var target = guest.entryTarget("move");
                 class Exercise {
                     ManagedAddress move(ManagedAddress destination, ManagedAddress source, long count) {
-                        return (ManagedAddress) Calls.target(target, new Object[]{0L, destination, source, count, thc.runtime.Unit.INSTANCE});
+                        return (ManagedAddress) callScalarTestTarget(target, new Object[]{0L, destination, source, count, thc.runtime.Unit.INSTANCE});
                     }
                     List<Long> contents(ManagedAddress base) {
                         var values = new ArrayList<Long>(); for (long i = 0; i < 16; i++) values.add(base.readWord8(i)); return values;
@@ -115,7 +116,7 @@ class OriginalMemmoveTest {
         assertSame(payload, base.readAddressElementIndex(1)); assertTrue(base.readAddressElementIndex(2).sameLocation(base.plus(32)));
         assertThrows(RuntimeFault.class, () -> base.plus(1).moveTo(base.plus(16), 8));
     }
-    @Test void malformedOriginalDescriptorAndForgedHeadRejectBeforeExecution() throws Exception {
+    @Test void malformedOriginalDescriptorAndForgedHeadTrapWhenReached() throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -124,7 +125,7 @@ class OriginalMemmoveTest {
                 for (String backend : new String[]{"ast", "bytecode"}) {
                     class Control { void reject(Consumer<Map<String,Object>> change) throws Exception {
                         var malformed = new LinkedHashMap<>(descriptor()); change.accept(malformed);
-                        assertThrows(RuntimeFault.class, () -> program(language, backend, module(malformed)));
+                        assertThrows(RuntimeFault.class, () -> callScalarTestTarget(program(language, backend, module(malformed)).entryTarget("move"), new Object[]{0L, ManagedAddress.fromByteArray(new byte[8]), ManagedAddress.fromByteArray(new byte[8]), 0L, Unit.INSTANCE}));
                     }}
                     var control = new Control();
                     control.reject(it -> it.put("safety", "safe")); control.reject(it -> it.put("arity", 3L));

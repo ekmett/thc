@@ -79,14 +79,14 @@ partialCall _ _ = False
 
 -- Inspect genuine exporter output. No proof is repaired, synthesized into the
 -- module, or reduced to scalar width alone; the complete records are retained.
-constructorProofs :: Value -> IO Value
-constructorProofs core = do
+constructorProofs :: String -> Value -> IO Value
+constructorProofs ghcUnit core = do
+  let originalId = ghcUnit ++ ":GHC.CmmToAsm.Format.VirtualRegWithFormat"
   original <- case [con | con <- arrayField "constructors" core,
-      field "id" con == Just (String "ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat")] of
+      field "id" con == Just (toJSON originalId)] of
     [con] -> pure con
     _ -> die "fourway-aggregate: missing or ambiguous original constructor"
-  let originalId = "ghc-9.14.1-inplace:GHC.CmmToAsm.Format.VirtualRegWithFormat" :: String
-      leaf = object ["primReps" .= ["Word64Rep" :: String], "kind" .= ("long" :: String), "evaluated" .= True]
+  let leaf = object ["primReps" .= ["Word64Rep" :: String], "kind" .= ("long" :: String), "evaluated" .= True]
       sumProof = object ["primReps" .= ["WordRep" :: String, "Word64Rep"],
         "kind" .= ("unknown" :: String), "evaluated" .= True,
         "aggregate" .= ("unboxed-sum" :: String), "alternatives" .= replicate 4 leaf,
@@ -159,8 +159,13 @@ prepareFourWayAggregate root = do
   stale <- doesFileExist manifest
   when stale (removeFile manifest)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   check (commandStdout version == "9.14.1\n") "requires GHC 9.14.1"
+  packageId <- runLogged 30 root logs "ghc-package-id" [] ghcPkg ["field", "ghc", "id", "--simple-output"]
+  ghcUnit <- case words (BSC.unpack (commandStdout packageId)) of
+    [unit] -> pure unit
+    _ -> die "fourway-aggregate: expected one selected GHC package identity"
   info <- runLogged 30 root logs "ghc-info" [] ghc ["--info"]
   case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String, String)] of
     Just fields | lookup "target word size" fields == Just "8",
@@ -194,7 +199,7 @@ prepareFourWayAggregate root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-dstg-lint", "-package", "ghc", source])
-    proof <- constructorProofs =<< readCore (root </> modulePath)
+    proof <- constructorProofs ghcUnit =<< readCore (root </> modulePath)
     modules <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
     let paths = map (core </>) modules
     audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
@@ -213,8 +218,8 @@ prepareFourWayAggregate root = do
     ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
     ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   artifactHashes <- hashes root $ [directory </> "oracle.tsv", binary] ++
-    concat [paths | (_, _, _, paths) <- stages] ++ concatMap commandArtifacts [version, info, compiled, observed]
-  writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
+    concat [paths | (_, _, _, paths) <- stages] ++ concatMap commandArtifacts [version, packageId, info, compiled, observed]
+  writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "ghcUnit" .= ghcUnit,
     "wordBits" .= (64 :: Int), "entries" .= entries, "selectors" .= selectors, "payloads" .= map show payloads,
     "nativeRows" .= length rows, "strictAccepted" .= True,
     "constructorProofs" .= Map.fromList [(stage, proof) | (stage, proof, _, _) <- stages],

@@ -33,67 +33,47 @@ public class AstKillThreadTest {
         while (threads.status(id) != wanted && System.nanoTime() < deadline) Thread.sleep(1);
         assertEquals(wanted, threads.status(id));
     }
-    @Test void nonresumableSelfDeliveryPreservesLazyPayloadAndRejectsExternalTargetsBeforeEnqueue() throws Exception {
+    @Test void defaultOffSelfDeliveryPreservesLazyPayloadFromFirstInstalledEntry() throws Exception {
         for (var backend : List.of("ast", "bytecode")) {
-            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc"); context.enter();
-                final GuestThreads threads; final RootCallTarget target; final Thunk payload; var forced = new AtomicInteger();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); threads = Language.currentState().getThreads();
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var owner = Language.currentState(); var threads = owner.getThreads();
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, directKillModule(), false) : new BytecodeProgram(language, directKillModule(), false);
-                    target = program.entryTarget("direct");
-                    payload = new Thunk(new GuestRoot(language, new FrameLayout().build()) {
+                    var target = program.entryTarget("direct"); var forced = new AtomicInteger();
+                    var payload = new Thunk(new GuestRoot(language, new FrameLayout().build()) {
                         @Override public long bloom(VirtualFrame frame) { return 0L; }
                         @Override public Object execute(VirtualFrame frame) { forced.incrementAndGet(); throw new AssertionError("killThread# forced its lifted payload"); }
                     }.getCallTarget(), null);
-                } finally { context.leave(); }
-                var ready = new CompletableFuture<GuestThreadId>(); var finished = new CompletableFuture<Unit>(); var release = new CountDownLatch(1);
-                var receiver = new Thread(() -> {
-                    context.enter();
+                    owner.admitGuestOrigin(); threads.enterCurrent();
                     try {
-                        // Rejection must come from the uncaptured sender before any enqueue.
-                        threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
-                        try {
-                            ready.complete(threads.currentIdentity()); assertTrue(release.await(60, TimeUnit.SECONDS));
-                            SynchronousMasking.set(target.getRootNode(), MaskingState.UNMASKED);
-                            assertNull(threads.poll(target.getRootNode()), backend + " rejected send was queued"); finished.complete(Unit.INSTANCE);
-                        } finally { threads.leaveCurrent(); }
-                    } catch (Throwable failure) { finished.completeExceptionally(failure); } finally { context.leave(); }
-                });
-                receiver.setDaemon(true); receiver.start();
-                try {
-                    var external = ready.get(10, TimeUnit.SECONDS); context.enter();
-                    try {
-                        threads.enterCurrent(null, false, false, null);
-                        try {
-                            var self = threads.currentIdentity();
-                            for (boolean compiled : new boolean[]{false, true}) {
-                                if (compiled) {
-                                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
-                                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
-                                    // Restore the stub without executing a settling call.
-                                    var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
-                                }
-                                for (var mask : MaskingState.values()) {
-                                    SynchronousMasking.set(target.getRootNode(), mask);
-                                    var delivered = assertThrows(AsyncDelivery.class, () -> Calls.target(target, new Object[]{0L, self, payload, Unit.INSTANCE}));
-                                    var request = delivered.getRequest(); assertSame(Thread.currentThread(), request.getTarget());
-                                    assertEquals(self.getLogicalId(), request.getTargetId()); assertTrue(request.getForceSelf()); assertSame(payload, request.getPayload());
-                                    assertEquals(AsyncRequestState.CLAIMED, request.getState());
-                                    if (compiled) assertTrue(request.compiledCapture, backend + " first installed self-delivery");
-                                    assertSame(payload, BytecodeRoot.RequireCaughtIOFailure.payload(delivered)); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
-                                    assertNull(threads.poll(target.getRootNode())); assertEquals(mask, SynchronousMasking.current(target.getRootNode())); assertEquals(0, payload.getState()); assertEquals(0, forced.get());
-                                }
-                                SynchronousMasking.set(target.getRootNode(), MaskingState.UNMASKED);
-                                var rejected = assertThrows(UnsupportedCore.class, () -> Calls.target(target, new Object[]{0L, external, payload, Unit.INSTANCE}));
-                                assertTrue(rejected.getMessage().contains("captured sender continuation")); assertEquals(0, payload.getState()); assertEquals(0, forced.get());
+                        var self = threads.currentIdentity();
+                        for (boolean compiled : new boolean[]{false, true}) {
+                            if (compiled) {
+                                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                                // Restore the stub without executing a settling call.
+                                var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
                             }
-                        } finally { SynchronousMasking.set(target.getRootNode(), MaskingState.UNMASKED); threads.leaveCurrent(); }
-                    } finally { context.leave(); }
-                    release.countDown(); finished.get(10, TimeUnit.SECONDS);
-                } finally { release.countDown(); receiver.join(5000); assertFalse(receiver.isAlive()); }
+                            for (var mask : MaskingState.values()) {
+                                SynchronousMasking.set(target.getRootNode(), mask);
+                                var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
+                                    Calls.target(target, new Object[]{0L, self, payload, Unit.INSTANCE})));
+                                var request = Objects.requireNonNull(saved.asyncRequest()); assertSame(Thread.currentThread(), request.getTarget());
+                                assertEquals(self.getLogicalId(), request.getTargetId()); assertTrue(request.getForceSelf()); assertSame(payload, request.getPayload());
+                                assertEquals(AsyncRequestState.CLAIMED, request.getState());
+                                if (compiled) assertTrue(request.compiledCapture, backend + " first installed self-delivery");
+                                request.acknowledge(); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                                assertSame(Unit.INSTANCE, saved.continueWith(Unit.INSTANCE));
+                                assertNull(threads.poll(target.getRootNode())); assertEquals(mask, SynchronousMasking.current(target.getRootNode()));
+                                assertEquals(0, payload.getState()); assertEquals(0, forced.get()); assertTrue(owner.getSingleGuestOriginAssumption().isValid());
+                            }
+                        }
+                    } finally { SynchronousMasking.set(target.getRootNode(), MaskingState.UNMASKED); threads.leaveCurrent(); }
+                } finally { context.leave(); }
             }
         }
     }
@@ -174,14 +154,14 @@ public class AstKillThreadTest {
             } finally { release.countDown(); receiver.join(5000); if (receiver.isAlive()) { context.close(true); receiver.join(5000); } }
         }
     }
-    @Test void uncapturedExternalSendRejectsBeforeEnqueueAndCapturedSenderResumesTheSameRequestTwice() throws Exception {
+    @Test void defaultOffExternalSenderResumesTheSameRequestTwice() throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             context.initialize("thc"); context.enter(); final GuestThreads threads; final Program captured; final Program plain;
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); threads = Language.currentState().getThreads();
-                captured = new Program(language, directKillModule(), true); plain = new Program(language, directKillModule());
+                captured = new Program(language, directKillModule(), false); plain = new Program(language, directKillModule());
             } finally { context.leave(); }
             var targetReady = new CompletableFuture<GuestThreadId>(); var targetDone = new CompletableFuture<Unit>(); var releaseTarget = new CountDownLatch(1); var deliveries = new AtomicInteger();
             var receiver = new Thread(() -> {
@@ -201,14 +181,6 @@ public class AstKillThreadTest {
             }); receiver.setDaemon(true); receiver.start();
             try {
                 var targetId = targetReady.get(10, TimeUnit.SECONDS); context.enter();
-                try {
-                    threads.enterCurrent();
-                    try {
-                        var unsupported = assertThrows(UnsupportedCore.class, () -> Calls.target(plain.entryTarget("direct"), new Object[]{0L, targetId, "outbound", Unit.INSTANCE}));
-                        assertTrue(unsupported.getMessage().contains("captured sender continuation"));
-                    } finally { threads.leaveCurrent(); }
-                } finally { context.leave(); }
-                assertEquals(0, deliveries.get()); context.enter();
                 try {
                     long self = threads.enterCurrent(); var selfId = threads.currentIdentity();
                     try {

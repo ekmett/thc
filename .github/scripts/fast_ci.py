@@ -14,6 +14,9 @@ from datetime import datetime, timezone
 import hashlib
 import importlib.util
 import json
+import io
+import platform
+import tarfile
 import os
 from pathlib import Path
 import re
@@ -141,14 +144,15 @@ def validate_xml(directory, expected):
             "platformSkippedCases": sorted(platform_skips), "xmlFiles": len(files)}
 
 
-def gradle_command(selection, *, install_dist=False):
+def gradle_command(selection, *, install_dist=False, fail_fast=True):
     require(selection.get("runnable") is True, "Selector could not establish a runnable test inventory")
     require(selection.get("mode") in ("narrow", "full"), "Invalid selection mode")
     classes = selection["junit"]["classes"]
     require(classes and len(set(classes)) == len(classes), "Empty/duplicate selected classes")
     require(all(isinstance(c, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", c) for c in classes),
             "Invalid selected class name")
-    argv = ["./gradlew", "--daemon", "--max-workers=4", "--build-cache", "--continue",
+    # Keep reusable compilation caches, not a prior daemon's limits or failed cache-close state.
+    argv = ["./gradlew", "--no-daemon", "--max-workers=4", "--build-cache", "--continue",
             "--init-script", ".github/scripts/fast_ci.init.gradle"]
     if install_dist:
         argv.append("installDist")
@@ -157,7 +161,9 @@ def gradle_command(selection, *, install_dist=False):
     else:
         require(selection["junit"]["patterns"] == ["*"], "Full mode must run every test")
     for task in HANDOFF_TASKS.values():
-        argv.extend([task, "--rerun", "--fail-fast"])
+        argv.extend([task, "--rerun"])
+        if fail_fast:
+            argv.append("--fail-fast")
         if selection["mode"] == "narrow":
             for name in classes:
                 argv.extend(["--tests", name])
@@ -176,7 +182,7 @@ def polyglot_command(selection):
     require(bool(classes) == optional["required"], "Polyglot selection has no exact classes")
     if not optional["required"]:
         return None
-    return ["./gradlew", "--daemon", "--max-workers=4", "--build-cache",
+    return ["./gradlew", "--no-daemon", "--max-workers=4", "--build-cache",
             "--init-script", ".github/scripts/fast_ci.init.gradle", "polyglotTest", "--rerun"]
 
 
@@ -416,11 +422,106 @@ def finish(recorder):
             stream.write(text)
 
 
+COMMON_OUTPUTS = ("dist-newstyle", ".gradle", "src/build/build", "src/build/.gradle",
+                  "build/classes", "build/generated", "build/resources", "build/install",
+                  "build/diagnostics", "build/libs", "build/scripts", "build/plugin",
+                  "build/native", "build/compiler", "build/thc-fixtures.path")
+
+
+def compile_common(recorder):
+    recorder.data["selection"] = {"mode": "compile-only", "reasons": []}
+    recorder.command("common-cabal", ["cabal", "build", "exe:thc", "exe:thc-fixtures", "exe:thc-compact", "exe:thc-primops"])
+    recorder.command("common-scalars", ["cabal", "run", "exe:thc-primops", "--", "scalars"])
+    recorder.command("common-plugin", ["bin/build-compiler.sh"])
+    recorder.command("common-encoder", ["cabal", "list-bin", "exe:thc-fixtures", "--offline"], stdout="build/thc-fixtures.path")
+    recorder.command("common-gradle", ["./gradlew", "--no-daemon", "--max-workers=2", "--build-cache",
+                                      "testClasses", "installDist", "toolsJar"])
+    recorder.data.update(passed=True, nativeInputs="not acquired")
+    recorder.save()
+
+
+def common_identity(root):
+    import library_bundle
+    identity = library_bundle.identity(root)
+    require(subprocess.check_output(["ghc", "--numeric-version"], text=True).strip() == "9.14.1",
+            "Grouped jobs require GHC 9.14.1")
+    identity["ghcLibdir"] = subprocess.check_output(["ghc", "--print-libdir"], text=True).strip()
+    return identity
+
+
+def pack_common(root, archive):
+    """Only compile outputs; fixture acquisition and test results stay in their jobs."""
+    identity = common_identity(root)
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive, "w:gz", compresslevel=1) as bundle:
+        data = json.dumps(identity).encode()
+        record = tarfile.TarInfo("common-identity.json")
+        record.size = len(data)
+        bundle.addfile(record, io.BytesIO(data))
+        for name in COMMON_OUTPUTS:
+            if (root / name).exists():
+                bundle.add(root / name, arcname=name)
+
+
+def restore_common(root, archive):
+    with tarfile.open(archive, "r:*") as bundle:
+        record = bundle.extractfile("common-identity.json")
+        require(record is not None and json.load(record) == common_identity(root),
+                "Common outputs differ in source, Build attempt, platform or pinned toolchain")
+        members = [member for member in bundle.getmembers() if member.name != "common-identity.json"]
+        require(all(any(member.name == name or member.name.startswith(name + "/")
+                        for name in COMMON_OUTPUTS) for member in members),
+                "Unexpected common compile output")
+        bundle.extractall(root, members=members, filter="data")
+
+
+def run_group(recorder, name):
+    import fast_select
+    selection = fast_select.group_selection(recorder.root, name)
+    manifest, owners = fixtures._manifest(recorder.root)
+    require(all(c in owners for c in selection["junit"]["classes"]), "Unowned selected class")
+    recorder.data["selection"] = {"mode": "group", "group": name, "reasons": []}
+    toolchain = {"platform": {"system": platform.system(), "machine": platform.machine()},
+                 "toolchain": fixtures.fast_inputs.toolchain(recorder.root)}
+    # Unknown ownership fails above; a group job must never widen to all fixtures.
+    recorder.data["nativeInputs"] = fixtures.prepare(recorder.root, selection, recorder.command, toolchain)
+    for group in fixtures._group_order(manifest, {owners[c] for c in selection["junit"]["classes"] if owners[c]}):
+        for index, check in enumerate(manifest["groups"][group].get("ciChecks", [])):
+            if check["platform"] == platform.system():
+                recorder.command(f"proof-{group}-{index}", check["argv"])
+    for mode, task in HANDOFF_TASKS.items():
+        preserve_previous(recorder.root, recorder.directory / ("prior-" + mode), task)
+    code, _ = recorder.command("junit-handoff-modes", gradle_command(selection, fail_fast=False),
+                               allowed=tuple(range(-128, 256)))
+    for mode, task in HANDOFF_TASKS.items():
+        preserve_previous(recorder.root, recorder.directory / mode, task)
+    require(code == 0, f"Grouped handoff tests failed: exit {code}")
+    cases = []
+    for mode in HANDOFF_TASKS:
+        xml = recorder.directory / mode / "xml"
+        suites = [ET.parse(path).getroot() for path in sorted(xml.glob("TEST-*.xml"))]
+        require(suites and not any(suite.findall(".//failure") or suite.findall(".//error") for suite in suites),
+                "Missing or failed fresh grouped JUnit results")
+        proof = ET.parse(xml / "TEST-thc.runtime.HandoffTest.xml").getroot()
+        markers = [line for out in proof.findall("system-out") for line in (out.text or "").splitlines()
+                   if line.startswith("THC_HANDOFF_MODE=")]
+        require(markers == ["THC_HANDOFF_MODE=" + ("true" if mode == "dense" else "false")],
+                f"Wrong {mode} handoff mode: {markers}")
+        # Keep original JUnit platform/tag exclusions and assumption semantics.
+        cases.append(sorted((case.attrib["classname"], case.attrib["name"])
+                            for suite in suites for case in suite.findall("testcase")))
+    require(cases[0] == cases[1], "Grouped handoff modes ran different testcase sets")
+    recorder.data.update(passed=True, testCasesPerMode=len(cases[0]))
+    recorder.save()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish"))
+    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common"))
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
+    parser.add_argument("--group")
+    parser.add_argument("--archive", type=Path)
     parser.add_argument("--base", default=os.environ.get("FAST_BASE_SHA", ""))
     parser.add_argument("--head", default=os.environ.get("FAST_HEAD_SHA", "HEAD"))
     args = parser.parse_args(argv)
@@ -432,6 +533,14 @@ def main(argv=None):
             expected = os.environ.get("EXPECTED_SHA", "")
             require(not expected or expected == git(ROOT, "rev-parse", "HEAD"), "Dispatched revision mismatch")
             recorder.save()
+        elif args.command == "compile-common":
+            compile_common(recorder)
+        elif args.command == "group":
+            run_group(recorder, args.group)
+        elif args.command == "pack-common":
+            pack_common(ROOT, args.archive)
+        elif args.command == "restore-common":
+            restore_common(ROOT, args.archive)
         elif args.command == "identify":
             identify(recorder, identity_path)
         elif args.command == "run":

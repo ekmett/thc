@@ -111,7 +111,7 @@ class LargeLiteralCaseNativeTest {
     private static List<Object> arm(long n, long result) { return List.of("lit", List.of("int", Long.toString(n)), List.of(), number(result)); }
     private static Map<String, Object> binding(String id, List<List<Object>> arms, Map<String, Object> parameter, Map<String, Object> integral, Map<String, Object> closure) {
         var selected = new LinkedHashMap<>(parameter); selected.put("id", "selected");
-        return Map.of("id", id, "name", id, "lifted", true, "expr", List.of("lam", List.of(parameter),
+        return Map.of("id", "main:LargeLiteralCaseAudit." + id, "name", id, "lifted", true, "expr", List.of("lam", List.of(parameter),
             List.of("case", List.of("var", "x"), "selected", arms, Map.of("binder", selected, "rep", integral)), Map.of("rep", closure, "resultRep", integral)));
     }
     @Test void missingDefaultStillFailsAndDuplicateLabelsKeepTheirOriginalOrder() throws Exception {

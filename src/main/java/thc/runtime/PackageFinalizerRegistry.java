@@ -16,6 +16,7 @@ import thc.PackageScalarLink;
 public final class PackageFinalizerRegistry {
     private final Map<String, CFinalizerFunction> labels = new HashMap<>();
     private final Map<String, PackageScalarLink> components = new HashMap<>();
+    private final Map<String, RuntimeFault> failedRegistrations = new HashMap<>();
     private boolean closed;
 
     private static RuntimeFault fault(String message) {
@@ -32,18 +33,25 @@ public final class PackageFinalizerRegistry {
             if (!previous.same(link)) throw fault("Conflicting package finalizer component: " + link.getUnit());
             return; // A synchronous constructor callback can publish these first.
         }
-        Map<String, CFinalizerFunction> additions = new HashMap<>();
-        for (String entry : link.getFinalizers()) {
-            PackageScalarFunction function = functions.get(entry);
-            if (function == null) throw fault("Missing package finalizer entry");
-            String symbol = function.getSignature().getSymbol();
-            if (labels.containsKey(symbol) || additions.containsKey(symbol))
-                throw fault("Ambiguous package C function label: " + symbol);
-            additions.put(symbol, new CFinalizerFunction(owner, symbol, function.getReceiver(), function));
+        var failed = failedRegistrations.get(link.getUnit());
+        if (failed != null) throw failed;
+        try {
+            Map<String, CFinalizerFunction> additions = new HashMap<>();
+            for (String entry : link.getFinalizers()) {
+                PackageScalarFunction function = functions.get(entry);
+                if (function == null) throw fault("Missing package finalizer entry");
+                String symbol = function.getSignature().getSymbol();
+                if (labels.containsKey(symbol) || additions.containsKey(symbol))
+                    throw fault("Ambiguous package C function label: " + symbol);
+                additions.put(symbol, new CFinalizerFunction(owner, symbol, function.getReceiver(), function));
+            }
+            // Validate the whole registration before publishing any names.
+            labels.putAll(additions);
+            components.put(link.getUnit(), link);
+        } catch (RuntimeFault failure) {
+            failedRegistrations.put(link.getUnit(), failure);
+            throw failure;
         }
-        // Validate the whole registration before publishing any names.
-        labels.putAll(additions);
-        components.put(link.getUnit(), link);
     }
 
     @TruffleBoundary
@@ -56,6 +64,7 @@ public final class PackageFinalizerRegistry {
         closed = true;
         labels.clear();
         components.clear();
+        failedRegistrations.clear();
     }
 
     @TruffleBoundary

@@ -16,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
-import thc.NativeIO;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 /** One original safe/interruptible open. Only its native worker acquires the
@@ -74,18 +73,29 @@ public final class NativeOpenOperation implements AutoCloseable, TruffleSafepoin
         }
     }
 
+    // Read-only OS observations for ownership assertions, never acquisition authority.
+    static long observe(int kind, String path) {
+        try (var arena = Arena.ofConfined()) {
+            var name = path == null ? MemorySegment.NULL : arena.allocateFrom(path);
+            long result = (long) Api.OBSERVE.invokeExact(kind, name);
+            if (result < 0) throw fault("Native open observation failed (errno " + -result + ")");
+            return result;
+        } catch (Throwable failure) { throw Api.propagate(failure); }
+    }
+
     /** This helper must execute machine code: its signal handler must never
      * enter Sulong/JVM. Linking is lazy and uses the fixed native-file capability. */
     private static final class Api {
         private static final Linker LINKER = Linker.nativeLinker();
         private static final SymbolLookup LIBRARY = library();
         private static SymbolLookup library() {
-            if (!NativeIO.supportedHost())
-                throw new IllegalStateException("Interruptible open requires Linux x86_64");
+            if (!NativeFileProvider.supportedHost())
+                throw new IllegalStateException("Owned open requires matching selected-ABI resources");
             try {
-                var file = Files.createTempFile("thc-open-", ".so");
+                String suffix = StdioHostAbi.load().librarySuffix();
+                var file = Files.createTempFile("thc-open-", suffix);
                 file.toFile().deleteOnExit();
-                try (var input = NativeOpenOperation.class.getResourceAsStream("/thc/native/native-open-request.so")) {
+                try (var input = NativeOpenOperation.class.getResourceAsStream("/thc/native/native-open-request" + suffix)) {
                     if (input == null) throw fault("Missing native open request bridge");
                     Files.copy(input, file, StandardCopyOption.REPLACE_EXISTING);
                 }
@@ -97,6 +107,7 @@ public final class NativeOpenOperation implements AutoCloseable, TruffleSafepoin
             return LINKER.downcallHandle(LIBRARY.find("thc_open_" + name).orElseThrow(),
                 result == null ? FunctionDescriptor.ofVoid(arguments) : FunctionDescriptor.of(result, arguments));
         }
+        private static final MethodHandle OBSERVE = function("observe", ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
         private static final MethodHandle START = function("start_at", ValueLayout.ADDRESS, ValueLayout.ADDRESS,
             ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
         private static final MethodHandle DONE = function("done", ValueLayout.JAVA_INT, ValueLayout.ADDRESS);

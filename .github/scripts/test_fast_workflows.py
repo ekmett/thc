@@ -28,13 +28,31 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
-    def test_full_build_collects_both_handoff_modes_without_fail_fast(self):
+    def test_library_and_map_launchers_resolve_the_required_vector_module(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
-        block = workflow.split("name: Build and test both handoff modes from source", 1)[1].split("      - name:", 1)[0]
-        self.assertIn("run: bin/try.sh --handoff-modes\n", block)
-        self.assertNotIn("--fail-fast", block)
-        self.assertNotIn("continue-on-error", block)
-        self.assertNotIn("|| true", block)
+        for label, entry in (
+            ("Run the complete strict and compiled library checks", "thc.LibraryCheck build/libraries/cases.json"),
+            ("Check diagnostic Map on both backends and handoff modes", "thc.MapCheck build/map/modules.txt build/map/oracle.tsv"),
+        ):
+            with self.subTest(label=label):
+                block = workflow.split("name: " + label, 1)[1].split("\n      - ", 1)[0]
+                self.assertIn("--add-modules=jdk.incubator.vector", block)
+                self.assertIn(entry, block)
+                self.assertNotIn("continue-on-error", block)
+
+    def test_full_build_reports_independent_groups_and_never_prepares_every_fixture(self):
+        workflow = (WORKFLOW.parent / "build.yml").read_text()
+        grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
+        self.assertEqual(2, workflow.count("uses: ./.github/workflows/test-groups.yml"))
+        self.assertNotIn("bin/try.sh --handoff-modes", workflow)
+        self.assertNotIn("bin/prepare-tests.sh", workflow)
+        self.assertIn("fail-fast: false", grouped)
+        self.assertIn('fast_ci.py group --group "$CI_GROUP"', grouped)
+        self.assertIn("fast_ci.py compile-common", grouped)
+        self.assertIn("digest-mismatch: error", grouped)
+        self.assertIn("cabal-update: false", grouped)
+        self.assertNotIn("continue-on-error", grouped)
+        self.assertNotIn("needs: build", grouped)
 
     def test_tuple_join_ci_uses_stock_core_subset_and_both_modes(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()

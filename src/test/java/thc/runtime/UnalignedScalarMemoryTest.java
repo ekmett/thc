@@ -567,7 +567,7 @@ public class UnalignedScalarMemoryTest {
                                      .map(it
                                          -> it.getKind() == CoreKind.LONG
                                              ? it.copy(it.getKind(), it.getEvaluated(), it.getPresent(),
-                                                   List.of("Word64Rep"), it.getComponents(), it.getVector(),
+                                                   List.of(it.isInt() ? "Word32Rep" : "Word64Rep"), it.getComponents(), it.getVector(),
                                                    it.getAlternatives(), it.getTagSlot(), it.getAlternativeSlots())
                                              : it)
                                      .toList();

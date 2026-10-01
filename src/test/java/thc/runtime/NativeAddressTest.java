@@ -16,6 +16,7 @@ import java.lang.foreign.ValueLayout;
 import java.lang.ref.Reference;
 import java.nio.file.Files;
 import java.util.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
@@ -162,7 +163,7 @@ public class NativeAddressTest {
                     Long literalBits;
                     Object call(String name, Object argument) throws Exception {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var target = targets.get(name);
-                        var result = Calls.target(target, new Object[] {0L, argument});
+                        var result = callScalarTestTarget(target, new Object[] {0L, argument});
                         if (compiled) {
                             var label = backend + "/inlining=" + inlining + "/" + name + "(" + argument + ")";
                             assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue(), () -> {

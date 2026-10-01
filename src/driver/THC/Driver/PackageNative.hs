@@ -14,9 +14,9 @@
 -- retained GHC wrappers while Cabal's headers exist; carry LLVM, not guesses
 -- about native object layouts, into the immutable Core bundle.
 module THC.Driver.PackageNative
-  ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
+  ( captureNativeObject, captureConfiguredNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
-  , linkInstalledNative, installedNativeSignatures, nativeCapiSource
+  , linkInstalledNative, linkInstalledNativeWithProduct, installedNativeSignatures, nativeCapiSource
   , nativeIrSymbol, nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, nativeDeferredLinkArguments, nativeRootArguments, tool
   , nativeCallSeedWitness
   ) where
@@ -34,16 +34,16 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
 import System.Directory
-import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
+import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
-import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives, nativeWindowsRtsInputs)
+import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchivesWithProduct, nativeWindowsRtsInputs)
 import THC.Driver.Installed (boundedInterfaceProcess)
-import THC.Driver.NativeCache (nativeObjcopySelection)
+import THC.Driver.NativeCache (nativeObjcopySelection, nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
 import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
@@ -131,7 +131,12 @@ installedNativeSignatures unit value
 -- be linked; foreign exports/registration remain owned by the managed runtime.
 linkInstalledNative :: FilePath -> FilePath -> FilePath -> [String] -> FilePath -> String ->
   [(String,FilePath)] -> IO [(String,FilePath)]
-linkInstalledNative compiler packageTool libdir arguments directory unit modules = do
+linkInstalledNative compiler packageTool libdir arguments directory unit modules =
+  linkInstalledNativeWithProduct compiler packageTool libdir arguments directory unit Nothing modules
+
+linkInstalledNativeWithProduct :: FilePath -> FilePath -> FilePath -> [String] -> FilePath -> String ->
+  Maybe NativeProduct -> [(String,FilePath)] -> IO [(String,FilePath)]
+linkInstalledNativeWithProduct compiler packageTool libdir arguments directory unit ownedProduct modules = do
   decoded <- mapM (\(_,path) -> BS.readFile path >>= either fail pure . readModuleValue) modules
   -- Do not splice a second component into an already acquired unit.
   let acquired = any (\value -> member value "packageNativeLink" /= Nothing) decoded
@@ -147,7 +152,7 @@ linkInstalledNative compiler packageTool libdir arguments directory unit modules
   let signatures = sort (nub (concat perModule))
       requestedAddresses = nub (concatMap (addressLabels . snd) selected)
       requestedSymbols = nub (requestedAddresses ++ [(symbol,True) | (symbol,_,_,_,_) <- signatures])
-  archives <- nativeSymbolArchives packageTool libdir directory unit arguments requestedSymbols
+  archives <- nativeSymbolArchivesWithProduct packageTool libdir directory unit arguments ownedProduct requestedSymbols
   declaredAddresses <- mapM (either fail pure . nativeAddressDeclarations unit . snd) selected
   -- An ordinary callable root selects its native provider, not an address
   -- getter. The final companion extracts only actually unresolved members.
@@ -161,7 +166,8 @@ linkInstalledNative compiler packageTool libdir arguments directory unit modules
     writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
       unit root signatures [] sources perModule [] (const Nothing) addresses (map fst archives) True
     let original = [(name,bytes) | (name,bytes) <- modules, name `elem` map fst selected]
-    linked <- finishPackageNative packageTool (root </> "pieces") root unit (Just []) original
+    linked <- fst <$> finishPackageNativeWithDependencies packageTool ownedProduct [] []
+      (root </> "pieces") root root unit (Just []) original
     pure [(name,maybe bytes id (lookup name linked)) | (name,bytes) <- modules]
 
 nativeSignatures :: String -> [Value] -> Either String [Signature]
@@ -577,19 +583,34 @@ captureNativeObject pieces compiler arguments = when ("-c" `elem` arguments && a
     [source] -> do
       root <- getCurrentDirectory >>= canonicalizePath
       sourcePath <- canonicalizePath source
-      when (within root sourcePath) $ do
-        let output = maybe (maybe "" id (after "-odir" arguments) </> replaceExtension source "o") id (after "-o" arguments)
-        native <- canonicalizePath output
-        exists <- doesFileExist native
-        when exists $ do
-          nativeHash <- sha <$> BS.readFile native
-          let directory = pieces </> sha (T.encodeUtf8 (T.pack native))
-          createDirectoryIfMissing True directory
-          (bitcode,target,inputs) <- compileC compiler root arguments directory Nothing
-          writeJson (directory </> "piece.json") (object
-            ["root" .= root,"object" .= native,"objectSha256" .= nativeHash,
-             "bitcode" .= bitcode,"target" .= target,"inputs" .= inputs])
+      let output = maybe (maybe "" id (after "-odir" arguments) </> replaceExtension source "o") id (after "-o" arguments)
+      exists <- doesFileExist output
+      when (within root sourcePath && exists) $ do
+        _ <- captureConfiguredNativeObject pieces root compiler arguments
+        pure ()
     _ -> pure ()
+
+-- The installed provider has already compiled this exact configured PIC argv.
+-- Keep its declared object identity; replay only its C/C++ phase into LLVM.
+captureConfiguredNativeObject :: FilePath -> FilePath -> FilePath -> [String] -> IO Value
+captureConfiguredNativeObject pieces sourceRoot compiler arguments = do
+  root <- canonicalizePath sourceRoot
+  case [value | value <- arguments, takeExtension value `elem` [".c", ".cc", ".cpp", ".cxx"],
+                not ("-" `isPrefixOf` value)] of
+    [source] -> do
+      sourcePath <- canonicalizePath (root </> source)
+      check (within root sourcePath) "configured native source is outside its package"
+      let output = maybe (maybe "" id (after "-odir" arguments) </> replaceExtension source "o") id (after "-o" arguments)
+      native <- canonicalizePath (root </> output)
+      nativeHash <- sha <$> BS.readFile native
+      let directory = pieces </> sha (T.encodeUtf8 (T.pack native))
+      createDirectoryIfMissing True directory
+      (bitcode,target,inputs) <- compileC compiler root arguments directory Nothing
+      let piece = object ["root" .= root,"object" .= native,"objectSha256" .= nativeHash,
+            "bitcode" .= bitcode,"target" .= target,"inputs" .= inputs]
+      writeJson (directory </> "piece.json") piece
+      pure piece
+    _ -> fail "configured native capture requires one C/C++ source"
 
 -- Called while the package source and generated headers are still alive.
 -- The CBD written by the late Core pass does not contain retained annotations;
@@ -1157,8 +1178,13 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     -- are "private external", unlike default/protected exports. Inspect the
     -- linked component, since other translation units can narrow visibility.
     symbols <- command directory nm ["--defined-only","--extern-only","--format=darwin",linked]
-    let public = sort . nub $ [symbol | line <- lines symbols, name:attributes <- [reverse (words line)],
+    let visiblePublic = sort . nub $ [symbol | line <- lines symbols, name:attributes <- [reverse (words line)],
           let symbol = nativeIrSymbol target name, symbol `elem` defined, "external" `elem` attributes, "private" `notElem` attributes]
+        -- Installed units are closed executables rooted by their whole-unit
+        -- FFI/address entries. Source-store components remain reusable C
+        -- providers and retain every public definition for declared consumers.
+        public = if member record "installed" == Just (Bool True)
+          then filter (`elem` entries) visiblePublic else visiblePublic
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     linkedSource <- readFile linkedIR
     -- A typed Haskell address is not a C definition proof. Require the actual
@@ -1263,6 +1289,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     dataLibraries <- maybe (pure []) (either fail pure . parseValue) (member record "dataLibraries") :: IO [FilePath]
     let linkArguments = dataLibraries ++ externalArguments
     clang <- tool "THC_CLANG" "clang"
+    sdkFlags <- nativeCompilerFlags
     (artifact,format,libraries,nativeLibrary,runtimeInputs) <- if null nativeExternals
       then pure (final,"llvm-bitcode",[],Nothing,[]) else do
         let darwin = "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
@@ -1291,7 +1318,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
               Just _ -> ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
                 linkArguments ++ resolution ++ exclusions ++ ["-o",container]
         unless (null arguments) $ do
-          _ <- command directory clang arguments
+          _ <- command directory clang (sdkFlags ++ arguments)
           pure ()
         -- A container's machine code is not executed by Sulong. Materialize
         -- native dependencies separately, rooting archive extraction with the
@@ -1337,7 +1364,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
           writeFile initializer clockSource
           pure (compiler,privateArguments,inputs ++ [object ["path" .= initializer,
             "sha256" .= sha (T.encodeUtf8 (T.pack clockSource)),"source" .= clockSource]])
-        else pure (clang,["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
+        else pure (clang,sdkFlags ++ ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
           resolution ++ exclusions ++ ["-o",dependency],[])
         _ <- command directory dependencyCompiler dependencyArguments
         -- Native archives can themselves carry compiler-embedded LLVM. Keep
@@ -1414,6 +1441,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
 compileC :: FilePath -> FilePath -> [String] -> FilePath -> Maybe String -> IO (FilePath,String,Value)
 compileC compiler root original directory generated = do
   clang <- tool "THC_CLANG" "clang"
+  sdkFlags <- nativeCompilerFlags
   opt <- tool "THC_LLVM_OPT" "opt"
   let source = directory </> "wrappers.c"
       bitcode = directory </> "original.bc"
@@ -1431,7 +1459,8 @@ compileC compiler root original directory generated = do
                            not ("-" `isPrefixOf` value)) arguments
       compilerFlag = if cxx then "-pgmcxx" else "-pgmc"
       option = if cxx then "-optcxx" else "-optc"
-  _ <- command root compiler (arguments ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
+  replayed <- either fail pure (replayDependencyArguments option arguments)
+  _ <- command root compiler (replayed ++ map (option ++) sdkFlags ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
     map (option ++) ["-emit-llvm","-O1","-MD","-MF",dependency,
                     "-MT","thc_scalar_input","-Werror=date-time"])
   dependencies <- readDependencies dependency
@@ -1450,6 +1479,25 @@ compileC compiler root original directory generated = do
   pure (adjusted,target,object ["compiler" .= compiler,"clang" .= clang,"arguments" .= arguments,
     "language" .= (if cxx then "c++" else "c" :: String),
     "nativeTarget" .= nativeTarget,"target" .= target,"files" .= observed])
+
+-- Dependency filenames/targets belong to the replay output, like -o above.
+-- Retain the successful original argv in the receipt, including its spelling.
+replayDependencyArguments :: String -> [String] -> Either String [String]
+replayDependencyArguments phase = go
+  where
+    go [] = Right []
+    go (flag:value:rest) | flag == phase = option [flag,value] value rest
+    go (flag:rest) | phase `isPrefixOf` flag && length flag > length phase =
+      option [flag] (drop (length phase) flag) rest
+    go (flag:rest) = (flag:) <$> go rest
+    option original value rest
+      | value `elem` ["-MD","-MMD"] = go rest
+      | value `elem` ["-MF","-MT","-MQ"] = operand rest >>= go
+      | any (\prefix -> prefix `isPrefixOf` value && length value > length prefix) ["-MF","-MT","-MQ"] = go rest
+      | otherwise = (original ++) <$> go rest
+    operand (flag:_:rest) | flag == phase = Right rest
+    operand (flag:rest) | phase `isPrefixOf` flag && length flag > length phase = Right rest
+    operand _ = Left "package native dependency option lacks its compiler operand"
 
 calls :: Value -> [Value]
 calls (Object fields) = maybe [] (:[]) (KM.lookup "foreignCall" fields) ++
@@ -1499,7 +1547,7 @@ writeJson :: FilePath -> Value -> IO ()
 writeJson path = BL.writeFile path . encode
 command :: FilePath -> FilePath -> [String] -> IO String
 command directory program arguments = do
-  inherited <- getEnvironment
+  inherited <- nativeCompilerEnvironment
   let environment = filter ((/= "GHC_ENVIRONMENT") . fst) inherited
   (status,output,diagnostic) <- readCreateProcessWithExitCode
     (proc program arguments) {cwd=Just directory,env=Just environment} ""

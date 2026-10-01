@@ -151,9 +151,16 @@ public final class AstTypedApplication extends Expr {
         } finally { if (!suspended) operands.getSource().clear(frame); }
     }
     private Object dispatchAsync(VirtualFrame frame, Closure closure, int[] slots, int offset) {
-        if (slots == null) return dispatch.execute(frame, closure);
-        if (shape == null) throw fault("Scalar application has no aggregate destination");
-        destination(shape, slots, offset).execute(frame, closure); return null;
+        try {
+            transferSelf(frame, closure);
+            if (slots == null) return dispatch.execute(frame, closure);
+            if (shape == null) throw fault("Scalar application has no aggregate destination");
+            destination(shape, slots, offset).execute(frame, closure); return null;
+        } catch (AstSelfCall | TailCall transfer) {
+            // Saved delimited transfers bypass the separate cleanup suffix.
+            operands.getSource().clear(frame);
+            throw transfer;
+        }
     }
     private static final class Cleanup implements AstResumeStep, DelimitedStep {
         private final AstTypedApplication owner;
@@ -175,7 +182,8 @@ public final class AstTypedApplication extends Expr {
         }
     }
     private void transferSelf(VirtualFrame frame, Closure function) {
-        if (!AstControl.captures(this) && selfTransfer &&
+        // Delimited images retain a separate cleanup suffix around pending operands.
+        if (selfTransfer && !DelimitedControl.enabled(this) &&
             ((FunctionRoot) getRootNode()).getRole$org_intelligence_thc() != FunctionRootRole.PASS_THROUGH &&
             function.arity == operands.getLayout().getLogicalArity() && function.suppliedCount == 0 &&
             function.supplied.length == 0 && function.typedSupplied == null && selfTarget.matches(function.target)) {

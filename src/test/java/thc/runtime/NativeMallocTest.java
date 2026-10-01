@@ -9,6 +9,7 @@ import thc.Language;
 import java.io.*;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
@@ -150,8 +151,26 @@ public class NativeMallocTest {
         assertEquals(0, handoff.getResults().retainedReferences());
     }
     private void supported() {
-        assumeTrue((System.getProperty("os.name").equals("Linux") || WindowsDirectoryStreams.supportedHost())
-            && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")));
+        assumeTrue(WindowsDirectoryStreams.supportedHost() || ManagedNativeAllocations.supportsLibcAbi());
+    }
+    @Test
+    public void libcAbiRequiresExactCarriersAndErrnoButIgnoresLayoutNames() {
+        var layouts = Map.<String, MemoryLayout>of("size_t", ValueLayout.JAVA_LONG.withName("size_t"),
+            "void*", ValueLayout.ADDRESS.withName("pointer"));
+        var errors = MemoryLayout.structLayout(ValueLayout.JAVA_INT.withName("errno"));
+        assertTrue(ManagedNativeAllocations.matchesLibcAbi(layouts, errors));
+        var reversed = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN;
+        for (var size : List.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_DOUBLE,
+                 ValueLayout.JAVA_LONG.withByteAlignment(1), ValueLayout.JAVA_LONG.withOrder(reversed)))
+            assertFalse(ManagedNativeAllocations.matchesLibcAbi(
+                Map.of("size_t", size, "void*", ValueLayout.ADDRESS), errors));
+        assertFalse(ManagedNativeAllocations.matchesLibcAbi(
+            Map.of("size_t", ValueLayout.JAVA_LONG, "void*", ValueLayout.JAVA_LONG), errors));
+        assertFalse(ManagedNativeAllocations.matchesLibcAbi(Map.of("void*", ValueLayout.ADDRESS), errors));
+        assertFalse(ManagedNativeAllocations.matchesLibcAbi(layouts,
+            MemoryLayout.structLayout(ValueLayout.JAVA_INT.withName("GetLastError"))));
+        assertFalse(ManagedNativeAllocations.matchesLibcAbi(layouts,
+            MemoryLayout.structLayout(ValueLayout.JAVA_LONG.withName("errno"))));
     }
     private interface Body {
         void run(Language language) throws Exception;

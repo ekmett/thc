@@ -27,6 +27,8 @@ import zlib
 
 SCHEMA = 1
 GMP_NATIVE_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
+ORIGINAL_OPEN_HOST = (platform.system(), platform.machine()) in {
+    ("Linux", "x86_64"), ("Darwin", "x86_64"), ("Darwin", "arm64"), ("Darwin", "aarch64")}
 ERRNO_NATIVE_HOST = platform.system() in ("Linux", "Darwin") and sys.maxsize > 2**32
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 ORIGINAL_UNIX_UNIT = re.compile(r"unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)\Z")
@@ -68,7 +70,12 @@ bytestring-utf8 original-memset original-memory-search thread-status thread-labe
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
-show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating package-native-gc-carriers""".split()
+GC_CARRIER_OUTPUTS = frozenset("build/package-native-gc-carriers/" + name for name in (
+    "manifest.json", "PackageNativeGcCarriers.cbd", "oracle.txt",
+    "original-v2/GHC.Internal.Stack.Decode.cbd", "original-v2/objects/GHC/Internal/Stack/Decode.hi",
+    "primitive/PackageNativePrimCarriers.cbd", "primitive/PackageNativeUnknownPrim.cbd",
+    "primitive/objects/PackageNativePrimCarriers.hi"))
 BYTESTRING_SORT_ENTRIES = ("sortBytes",)
 BYTESTRING_SORT_OUTPUTS = frozenset("build/bytestring-sort/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
@@ -112,7 +119,7 @@ ORIGINAL_PATH_MODE_OUTPUTS = frozenset("build/original-path-mode/" + name for na
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_MODE_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
-ORIGINAL_PATH_LINK_ENTRIES = ("pathSymlink", "pathReadlink")
+ORIGINAL_PATH_LINK_ENTRIES = ("pathSymlink", "pathReadlink", "pathRename")
 ORIGINAL_PATH_LINK_OUTPUTS = frozenset("build/original-path-link/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_PATH_LINK_ENTRIES),
@@ -584,6 +591,7 @@ CORE_CONTRACT_CBD_REQUIRED = frozenset({
 CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
              "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
+    *GC_CARRIER_OUTPUTS,
     *CORE_CONTRACT_CBD_REQUIRED,
     *BASE_CORE_CBD_OUTPUTS,
     *AGGREGATE_HOST_CBD_OUTPUTS,
@@ -860,9 +868,9 @@ ORIGINAL_ERRNO_OUTPUTS = frozenset("build/original-errno/" + name for name in (
 
 ORIGINAL_PROCESS_IDENTITY_ENTRIES = ("originalGetPid", "originalGetEuid")
 ORIGINAL_PROCESS_IDENTITY_OUTPUTS = frozenset("build/original-process-identity/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle", "native/observations.txt",
+    "manifest.json", "oracle.json", "native/oracle", "native/observations.txt", "installed/packages.json", "runtime-core/THC.Exception.cbd", "runtime-core/THC.Internal.Exception.cbd",
     *(f"logs/{label}.{suffix}" for label in (
-        "ghc-version", "ghc-info", "unix-unit", "native-build", "native-run", "pre-export", "post-export",
+        "ghc-version", "ghc-info", "unix-unit", "helper-build", "helper-location", "driver-location", "ghc-internal-unit", "native-build", "native-run", "pre-export", "post-export", "runtime-export",
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PROCESS_IDENTITY_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
@@ -1182,6 +1190,31 @@ def original_stack_formatter_artifact(name):
     return match is not None and match.group(1) in original_stack_formatter_files()
 
 
+def gc_carrier_artifact_hashes(root, manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            type(manifest.get("nativeRows")) is int and manifest["nativeRows"] == 6 and
+            type(manifest.get("gcImports")) is int and manifest["gcImports"] == 7,
+            "Invalid GC carrier manifest")
+    originals = manifest.get("originalModules")
+    primitive = manifest.get("primitiveModule")
+    require(isinstance(originals, list) and len(originals) == 1 and isinstance(originals[0], dict) and
+            originals[0].get("unit") == "ghc-internal" and originals[0].get("module") == "GHC.Internal.Stack.Decode" and
+            originals[0].get("nativeSignatures") == [] and isinstance(primitive, dict),
+            "Incomplete/unreviewed original GC carrier inventory")
+    artifacts = {}
+    for record in (manifest, originals[0], primitive):
+        hashes = record.get("artifactHashes")
+        require(isinstance(hashes, dict) and bool(hashes), "Missing GC carrier artifacts")
+        for path, digest in hashes.items():
+            name, external = original_name(root, path)
+            require(not external and name not in artifacts and isinstance(digest, str) and HEX.fullmatch(digest),
+                    "Invalid GC carrier artifact")
+            artifacts[name] = digest
+    require(set(artifacts) == GC_CARRIER_OUTPUTS - {"build/package-native-gc-carriers/manifest.json"},
+            "Incomplete/unreviewed GC carrier artifacts")
+    return artifacts
+
+
 def formatter_artifact_hashes(root, manifest):
     """One complete reviewed attempt, excluding overlays and previous attempts."""
     require(isinstance(manifest, dict), "Invalid formatter manifest")
@@ -1273,7 +1306,7 @@ def fd_ready_artifact_hashes(manifest):
 def original_open_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid original open manifest")
-    if not GMP_NATIVE_HOST:
+    if not ORIGINAL_OPEN_HOST:
         require(manifest.get("supported") is False, "Unsupported original open host")
         return {}
     require(manifest.get("supported") is True and manifest.get("strictAccepted") is True and
@@ -1349,11 +1382,30 @@ def process_identity_artifact_hashes(manifest):
         return {}
     require(manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_PROCESS_IDENTITY_ENTRIES) and
             manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
-            manifest.get("installedArtifactsHashed") is False and
+            manifest.get("installedArtifactsHashed") is True and
+            manifest.get("packageManifest") == "build/original-process-identity/installed/packages.json" and
             type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 1,
             "Invalid original process identity proof")
+    bundles = manifest.get("installedBundles")
+    require(isinstance(bundles, list) and bool(bundles) and all(isinstance(path, str) and
+            re.fullmatch(r"build/original-process-identity/installed/bundles/[A-Za-z0-9][A-Za-z0-9_.+-]*\.zip", path)
+            for path in bundles) and len(set(bundles)) == len(bundles) and
+            f"build/original-process-identity/installed/bundles/{manifest['unixUnit']}.zip" in bundles and
+            any(re.fullmatch(r"build/original-process-identity/installed/bundles/ghc-internal-9\.1401\.0-(?:inplace|[0-9a-f]+)\.zip", path) for path in bundles),
+            "Incomplete original process installed bundle inventory")
+    publications = manifest.get("installedPublications")
+    require(isinstance(publications, list) and bool(publications) and len(set(publications)) == len(publications) and
+            all(isinstance(path, str) and re.fullmatch(r"build/original-process-identity/installed/unit-core/v3/[0-9a-f]{64}/(?:[0-9]+\.cbd|publication\.json)", path) for path in publications),
+            "Incomplete original process CBD publication inventory")
+    for path in publications:
+        require(path.rsplit("/", 1)[0] + "/publication.json" in publications, "Missing original process publication receipt")
+    require(manifest.get("runtimeModules") == ["build/original-process-identity/runtime-core/THC.Exception.cbd", "build/original-process-identity/runtime-core/THC.Internal.Exception.cbd"], "Incomplete original exception runtime")
     artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {"build/original-process-identity/manifest.json"},
+    provider_logs = {f"build/original-process-identity/logs/core-provider-version.{suffix}"
+                     for suffix in ("stdout", "stderr", "command.json")}
+    optional = provider_logs if isinstance(artifacts, dict) and provider_logs & set(artifacts) else set()
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            (ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {"build/original-process-identity/manifest.json"}) | set(bundles) | set(publications) | optional,
             "Incomplete/unreviewed original process identity artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid process identity hash")
     return artifacts
@@ -1939,6 +1991,8 @@ def allowed_payload(name):
         return False
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
+    if parts[1] == "package-native-gc-carriers":
+        return name in GC_CARRIER_OUTPUTS
     if parts[1] == "bytestring-sort":
         return name in BYTESTRING_SORT_OUTPUTS
     if parts[1] == "bytestring-decimal":
@@ -2108,7 +2162,10 @@ def allowed_payload(name):
     if parts[1] == "original-errno":
         return name in ORIGINAL_ERRNO_OUTPUTS
     if parts[1] == "original-process-identity":
-        return name in ORIGINAL_PROCESS_IDENTITY_OUTPUTS
+        return name in ORIGINAL_PROCESS_IDENTITY_OUTPUTS or bool(re.fullmatch(
+            r"build/original-process-identity/installed/(?:bundles/[A-Za-z0-9][A-Za-z0-9_.+-]*\.zip|unit-core/v3/[0-9a-f]{64}/(?:[0-9]+\.cbd|publication\.json))", name)) or name in {
+                f"build/original-process-identity/logs/core-provider-version.{suffix}"
+                for suffix in ("stdout", "stderr", "command.json")}
     if parts[1] == "original-termios":
         return name in ORIGINAL_TERMIOS_OUTPUTS
     if parts[1] == "original-tcsetattr":
@@ -2142,6 +2199,15 @@ def allowed_payload(name):
 def hashes_in(value, tc):
     """All fingerprint spellings used by current original preparation manifests."""
     if isinstance(value, dict):
+        if set(value) == {"source", "modules", "unit", "sizes"}:
+            # The standard publisher receipt retains original ZIP member paths.
+            # Source ZIP and receipt hashes cover them; only ready CBD references
+            # name executable files in the workspace.
+            require(isinstance(value["source"], dict) and isinstance(value["modules"], list) and
+                    isinstance(value["unit"], dict) and isinstance(value["sizes"], list), "Invalid CBD publication receipt")
+            yield from hashes_in(value["source"], tc)
+            yield from hashes_in(value["unit"].get("modules", []), tc)
+            return
         if value.get("format") == "thc-core-packages":
             # Module members name paths inside the independently hashed ZIP,
             # not files relative to the checkout. Preserve the full ZIP hash;
@@ -2225,6 +2291,8 @@ def inventory(root, current, read, core_files, verified=None):
         if not name.endswith(".json"):
             continue
         doc = json.loads(data)
+        if name == "build/package-native-gc-carriers/manifest.json":
+            gc_carrier_artifact_hashes(root, doc)
         if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in SIMD_BYTEARRAY_FAMILIES:
             simd_bytearray_artifact_hashes(name.split("/")[1], doc)
         if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in INTEGER_SIMD_FAMILIES:

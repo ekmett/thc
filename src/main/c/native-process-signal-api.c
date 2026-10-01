@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 #define _GNU_SOURCE
+#define _DARWIN_C_SOURCE 1
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -11,7 +12,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__linux__)
 #include <sys/eventfd.h>
+#endif
 #include <unistd.h>
 
 /* This library is loaded as machine code, never as Sulong bitcode. The handler
@@ -23,7 +26,7 @@ static atomic_int owned;
 static const int supported_signals[] = {SIGHUP, SIGINT, SIGQUIT, SIGUSR1, SIGUSR2, SIGTERM, SIGXCPU, SIGXFSZ};
 #define SIGNAL_COUNT (sizeof(supported_signals) / sizeof(supported_signals[0]))
 struct signal_session {
-    int read_fd, write_fd, wake_fd;
+    int read_fd, write_fd, wake_fd, wake_write_fd;
     int action[SIGNAL_COUNT], installed[SIGNAL_COUNT];
     struct sigaction previous[SIGNAL_COUNT];
 };
@@ -41,13 +44,26 @@ static void capture(int signal_number, siginfo_t *info, void *context) {
 
 int thc_signal_info_size(void) { return sizeof(siginfo_t); }
 int thc_signal_number(const void *info) { return ((const siginfo_t *)info)->si_signo; }
+int thc_signal_constant(int index) {
+    if (index == 0) return NSIG;
+    if (index >= 1 && index <= (int)SIGNAL_COUNT) return supported_signals[index - 1];
+    if (index == (int)SIGNAL_COUNT + 1) return SIGBUS;
+    if (index == (int)SIGNAL_COUNT + 2) return SIGSEGV;
+    return -1;
+}
 
 static int vm_handler(const struct sigaction *action) {
     Dl_info image;
-    if (!(action->sa_flags & SA_SIGINFO) || !dladdr((void *)action->sa_sigaction, &image) || !image.dli_fname)
+    void *handler = action->sa_flags & SA_SIGINFO ? (void *)action->sa_sigaction : (void *)action->sa_handler;
+    if (action->sa_handler == SIG_DFL || action->sa_handler == SIG_IGN ||
+        !dladdr(handler, &image) || !image.dli_fname)
         return 0;
     const char *name = strrchr(image.dli_fname, '/');
+#if defined(__APPLE__) && defined(__MACH__)
+    return strcmp(name ? name + 1 : image.dli_fname, "libjvm.dylib") == 0;
+#else
     return strcmp(name ? name + 1 : image.dli_fname, "libjvm.so") == 0;
+#endif
 }
 
 /* HotSpot's suspend handler does not chain. The standalone Linux launcher must
@@ -55,11 +71,34 @@ static int vm_handler(const struct sigaction *action) {
  * current VM released USR2. Signal 64 remains excluded from the guest set.
  * Interposers hiding the real VM dispositions conservatively fail this check. */
 int thc_signal_usr2_available(void) {
+#if defined(__linux__)
     const char *setting = getenv("_JAVA_SR_SIGNUM");
     struct sigaction reserved, guest;
     return setting && strcmp(setting, "64") == 0 &&
         sigaction(64, NULL, &reserved) == 0 && vm_handler(&reserved) &&
         sigaction(SIGUSR2, NULL, &guest) == 0 && !vm_handler(&guest);
+#else
+    /* No legal, verified HotSpot suspend-signal relocation is established here. */
+    return 0;
+#endif
+}
+
+static int nonblocking_pipe(int descriptors[2]) {
+#if defined(__linux__)
+    return pipe2(descriptors, O_NONBLOCK | O_CLOEXEC);
+#else
+    if (pipe(descriptors)) return -1;
+    for (int i = 0; i < 2; ++i) {
+        int flags = fcntl(descriptors[i], F_GETFL);
+        if (flags < 0 || fcntl(descriptors[i], F_SETFL, flags | O_NONBLOCK) < 0 ||
+            fcntl(descriptors[i], F_SETFD, FD_CLOEXEC) < 0) {
+            int error = errno;
+            close(descriptors[0]); close(descriptors[1]);
+            descriptors[0] = descriptors[1] = -1; errno = error; return -1;
+        }
+    }
+    return 0;
+#endif
 }
 
 void *thc_signal_open(void) {
@@ -68,11 +107,18 @@ void *thc_signal_open(void) {
     struct signal_session *s = calloc(1, sizeof(*s));
     int pipes[2] = {-1, -1};
     if (s == NULL) goto failed;
-    s->wake_fd = -1;
+    s->wake_fd = s->wake_write_fd = -1;
     for (unsigned i = 0; i < SIGNAL_COUNT; ++i) s->action[i] = -1;
-    if (pipe2(pipes, O_NONBLOCK | O_CLOEXEC) != 0) goto failed;
+    if (nonblocking_pipe(pipes) != 0) goto failed;
+#if defined(__linux__)
     s->wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (s->wake_fd < 0) goto failed;
+    s->wake_write_fd = s->wake_fd;
+#else
+    int wake[2] = {-1, -1};
+    if (nonblocking_pipe(wake) != 0) goto failed;
+    s->wake_fd = wake[0]; s->wake_write_fd = wake[1];
+#endif
     s->read_fd = pipes[0]; s->write_fd = pipes[1];
     atomic_store(&overflow, 0);
     atomic_store_explicit(&signal_fd, s->write_fd, memory_order_seq_cst);
@@ -82,6 +128,7 @@ failed:;
     if (pipes[0] >= 0) close(pipes[0]);
     if (pipes[1] >= 0) close(pipes[1]);
     if (s != NULL && s->wake_fd >= 0) close(s->wake_fd);
+    if (s != NULL && s->wake_write_fd >= 0 && s->wake_write_fd != s->wake_fd) close(s->wake_write_fd);
     free(s); atomic_store(&owned, 0); errno = error; return NULL;
 }
 
@@ -92,6 +139,14 @@ int thc_signal_install(void *session, int signal_number, int action) {
     unsigned slot = 0;
     while (slot < SIGNAL_COUNT && supported_signals[slot] != signal_number) ++slot;
     if (slot == SIGNAL_COUNT) { errno = EINVAL; return -3; }
+#if defined(__APPLE__) && defined(__MACH__)
+    /* Never overwrite Darwin HotSpot's active non-chaining/reserved dispositions.
+       SIGINT is the explicit launcher-owned GHC interrupt contract. Linux keeps
+       its established -Xrs/USR2 admission, including its replaceable XFSZ handler. */
+    struct sigaction current;
+    if (sigaction(signal_number, NULL, &current)) return -3;
+    if (signal_number != SIGINT && vm_handler(&current)) { errno = EBUSY; return -3; }
+#endif
     struct sigaction next = {0};
     sigemptyset(&next.sa_mask);
     switch (action) {
@@ -113,7 +168,7 @@ void thc_signal_wake(void *session) {
     struct signal_session *s = session;
     uint64_t one = 1;
     int saved_errno = errno;
-    while (write(s->wake_fd, &one, sizeof(one)) < 0 && errno == EINTR) {}
+    while (write(s->wake_write_fd, &one, sizeof(one)) < 0 && errno == EINTR) {}
     errno = saved_errno;
 }
 void thc_signal_reset_wake(void *session) {
@@ -160,7 +215,9 @@ int thc_signal_close(void *session) {
         }
     }
     while (atomic_load_explicit(&active_handlers, memory_order_seq_cst) != 0) sched_yield();
-    close(s->read_fd); close(s->write_fd); close(s->wake_fd); free(s);
+    close(s->read_fd); close(s->write_fd); close(s->wake_fd);
+    if (s->wake_write_fd != s->wake_fd) close(s->wake_write_fd);
+    free(s);
     /* A launcher has one process lifetime. Never reuse the global handler
      * slot: a pending old handler could start after this close completed. */
     atomic_store(&owned, 2); errno = error; return result;

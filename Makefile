@@ -101,7 +101,8 @@ foreign-exception-fixtures: runtime
 	}
 	GHC='$(GHC)' GHC_PKG='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)' CABAL='$(CABAL)' \
 	  $(CABAL) run exe:thc-fixtures $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)' -- foreign-exceptions
-	@set -eu; GHC='$(GHC)'; GHC_PKG='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)'; CABAL='$(CABAL)'; export GHC GHC_PKG CABAL; \
+	@set -eu; GHC='$(GHC)'; GHC_PKG='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)'; CABAL='$(CABAL)'; \
+	  THC_INSTALLED_CORE_GHC_SOURCE="$$THC_FOREIGN_EXCEPTION_GHC_SOURCE"; export GHC GHC_PKG CABAL THC_INSTALLED_CORE_GHC_SOURCE; \
 	  fixture_bin=$$($(CABAL) list-bin exe:thc-fixtures $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)'); \
 	  for family in interface-core original-memory-search original-memset original-fcntl bytestring-utf8 text-cbits java-arrays; do \
 	    "$$fixture_bin" "$$family"; \

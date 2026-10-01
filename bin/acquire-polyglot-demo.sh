@@ -17,7 +17,7 @@ esac
 make check-java >/dev/null
 cabal run exe:thc -- acquire "thc-examples:exe:$demo" \
   --project-dir "$root/src/examples" --thc-root "$root" \
-  --installed-core required --dist-dir "$root/build/$demo" "$@"
+  --dist-dir "$root/build/$demo" "$@"
 # Embed the IO action; the generated :Main wrapper owns the GHC CLI lifecycle.
 entry=$(python3 -c 'import json, sys
 with open(sys.argv[1]) as source:

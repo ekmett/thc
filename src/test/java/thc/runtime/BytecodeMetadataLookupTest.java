@@ -103,7 +103,7 @@ class BytecodeMetadataLookupTest {
                     int[] handlers = (int[]) field(bytecode, "handlers").get(bytecode);
                     boolean[] profiles = (boolean[]) field(bytecode, "exceptionProfiles_").get(bytecode);
                     assertTrue(handlers.length >= 12, "nested real handlers");
-                    var resolve = bytecode.getClass().getDeclaredMethod("resolveHandler", long.class, int.class, int[].class);
+                    var resolve = bytecode.getClass().getDeclaredMethod("resolveHandler", long.class, int.class, int[].class, Throwable.class);
                     resolve.setAccessible(true);
                     int length = ((byte[]) field(bytecode, "bytecodes").get(bytecode)).length;
                     for (long pc = -1; pc <= length; pc++) {
@@ -113,7 +113,7 @@ class BytecodeMetadataLookupTest {
                                 if (handlers[i] <= pc && pc < handlers[i + 1]) { expected = i; break; }
                             for (var table : new int[][]{handlers, handlers.clone()}) {
                                 java.util.Arrays.fill(profiles, false);
-                                assertEquals(expected, resolve.invoke(bytecode, pc, first, table), "ordered sparse/fallback lookup");
+                                assertEquals(expected, resolve.invoke(bytecode, pc, first, table, null), "ordered sparse/fallback lookup");
                                 for (int i = 0; i < profiles.length; i++)
                                     assertEquals(expected == i * 6, profiles[i], "only the selected handler is observed");
                             }

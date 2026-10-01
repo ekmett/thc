@@ -1019,7 +1019,7 @@ public final class ManagedFiles {
         if (flags != (long) (int) flags || mode < 0 || mode > 0xffff_ffffL)
             throw RuntimeFault.fault("Original open requires canonical CInt flags and Word32 mode");
         byte[] bytes = originalPathBytes(path);
-        var safety = operation == OriginalStdioOp.OPEN_INTERRUPTIBLE ? ForeignSafety.INTERRUPTIBLE : ForeignSafety.synchronous(operation.getSafety());
+        var safety = operation.getSafety().equals("interruptible") ? ForeignSafety.INTERRUPTIBLE : ForeignSafety.synchronous(operation.getSafety());
         return result(safety, () -> {
             NativeFileProvider provider;
             OpenClaim claim;
