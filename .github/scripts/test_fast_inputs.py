@@ -580,10 +580,12 @@ class FastInputTests(unittest.TestCase):
         self.assertFalse(cache.allowed_payload("build/state-tuple/other-core/StateTupleAudit.cbd"))
 
     def test_delimited_continuation_closed_outputs_exclude_native_binaries_and_extras(self):
-        self.assertEqual(171, len(cache.DELIMITED_OUTPUTS))
+        self.assertEqual(168, len(cache.DELIMITED_OUTPUTS))
         self.assertIn('build/delimited-continuations/manifest.json', DECLARED_REQUIRED)
         for path in cache.DELIMITED_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path), path)
+            if path.endswith('.cbd'):
+                self.assertFalse(cache.allowed_payload(path.removesuffix('.cbd') + '.json'))
         for suffix in ('native/oracle', 'other.json', 'pre/core/Other.json', 'commands/extra.stdout'):
             self.assertFalse(cache.allowed_payload('build/delimited-continuations/' + suffix))
 
