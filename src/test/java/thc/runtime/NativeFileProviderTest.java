@@ -26,9 +26,12 @@ import static thc.runtime.ManagedFileFixtures.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Provider/ownership proof only, deliberately not original FCall admission. */
-@EnabledOnOs(OS.LINUX)
-@EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
+@EnabledIf("supportedFileTarget")
 class NativeFileProviderTest {
+    private static boolean supportedFileTarget() {
+        return NativeIO.supportedPosixHost() || "Mac OS X".equals(System.getProperty("os.name")) &&
+            Set.of("amd64", "x86_64", "aarch64", "arm64").contains(System.getProperty("os.arch"));
+    }
     @TempDir Path directory;
     private Context nativeContext() { return nativeContext(Set.of()); }
     private Context nativeContext(Set<StandardEndpoint> endpoints) { return NativeIO.createContext(endpoints); }
@@ -101,7 +104,25 @@ class NativeFileProviderTest {
             return null;
         }); }
     }
-    @Test void nativeAndFilesystemAuthorityAreBothRequiredAndErrorsAreReal() throws Exception {
+    @Test void nativeRelativeAcquisitionRetainsDirectoryIdentityAcrossRenameAndReplacement() throws Exception {
+        var original = Files.createDirectory(directory.resolve("relative")); var moved = directory.resolve("relative-moved");
+        Files.writeString(original.resolve("value"), "owned");
+        try (var context = nativeContext()) { entered(context, () -> {
+            var env = Language.currentState(null).getEnv();
+            env.setCurrentWorkingDirectory(env.getPublicTruffleFile(original.toUri()));
+            Files.move(original, moved); Files.createDirectory(original); Files.writeString(original.resolve("value"), "replacement");
+            try (var opened = provider().open("value", 0)) {
+                var bytes = ByteBuffer.allocate(5); assertEquals(5, opened.read(bytes));
+                assertArrayEquals("owned".getBytes(StandardCharsets.UTF_8), bytes.array());
+            }
+            assertEquals("replacement", Files.readString(original.resolve("value")));
+            assertEquals(moved.toRealPath(), Path.of(env.getCurrentWorkingDirectory().toUri()));
+            assertThrows(IllegalArgumentException.class, () -> env.setCurrentWorkingDirectory(env.getPublicTruffleFile(moved.resolve("missing").toUri())));
+            try (var opened = provider().open("value", 0)) { assertEquals(5, opened.size()); }
+            return null;
+        }); }
+    }
+    private void rejectUnauthenticatedFactories() throws Exception {
         try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) { entered(context, () -> { assertThrows(SecurityException.class, this::provider); return null; }); }
         try (var context = Context.newBuilder("thc").allowIO(IOAccess.ALL).build()) { entered(context, () -> { assertThrows(SecurityException.class, this::provider); return null; }); }
         try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowIO(IOAccess.ALL).build()) { entered(context, () -> {
@@ -113,6 +134,13 @@ class NativeFileProviderTest {
                 assertThrows(SecurityException.class, () -> provider().open(directory.resolve("never").toString(), 3)); assertFalse(Files.exists(directory.resolve("never"))); return null;
             }); }
         } finally { readOnlyNative.getDirectoryOwner().close(); }
+    }
+    @Test void nativeAndFilesystemAuthorityRemainRequiredBeforeAcquisition() throws Exception {
+        rejectUnauthenticatedFactories();
+    }
+    @EnabledOnOs(OS.LINUX)
+    @Test void nativeAndFilesystemAuthorityAreBothRequiredAndErrorsAreReal() throws Exception {
+        rejectUnauthenticatedFactories();
         try (var context = nativeContext()) { entered(context, () -> {
             var error = assertThrows(NativeFileException.class, () -> provider().open(directory.resolve("absent").toString(), 0));
             assertEquals(StdioHostAbi.load().error(1), (long) error.getErrno()); assertThrows(SecurityException.class, () -> provider().standard(StandardEndpoint.OUTPUT));
@@ -140,6 +168,7 @@ class NativeFileProviderTest {
             assertArrayEquals(new byte[] {42}, unrelated.toByteArray(), "Ordinary embedding streams remain unchanged"); return null;
         }); }
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void contextDisposalAndRepeatedCloseCannotCloseAReusedResource() throws Exception {
         var context = nativeContext();
         record OpenPair(NativeFileProvider provider, OpenedNativeFile opened) {}
@@ -152,6 +181,7 @@ class NativeFileProviderTest {
         context.close(); assertEquals(0L, nativeDescriptors(directory.resolve("current")), "Host close must release the real kernel fd after LLVM disposal");
         assertFalse(pair.opened.isOpen()); pair.opened.close(); pair.provider.close();
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void completedAcquisitionThenProviderFailureRetainsRollbackOwnership() throws Exception {
         var acquired = new SeekableByteChannel[1]; var failure = new IOException("after completion");
         try (var context = nativeContext()) { entered(context, () -> {
@@ -163,6 +193,7 @@ class NativeFileProviderTest {
             assertEquals(0L, nativeDescriptors(directory.resolve("created"))); return null;
         }); }
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void reentrantProviderDisposalAfterAcquisitionCannotPublishAClosedResource() throws Exception {
         try (var context = nativeContext()) { entered(context, () -> {
             var selected = provider(); var request = new NativeOpenRequest(null, Set.of(), (path, ignored) -> selected.open(Objects.requireNonNull(path).toString(), 3));
@@ -173,6 +204,7 @@ class NativeFileProviderTest {
             assertEquals(0L, nativeDescriptors(directory.resolve("reentrant"))); return null;
         }); }
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void duplicateAndLateCompletionAreRejectedWithoutLeakingChannels() throws Exception {
         try (var context = nativeContext()) { entered(context, () -> {
             var selected = provider(); var request = new NativeOpenRequest(null, Set.of(), (path, ignored) -> selected.open(Objects.requireNonNull(path).toString(), 3));
@@ -209,6 +241,7 @@ class NativeFileProviderTest {
             entered(first, () -> { assertEquals(0L, opened.size()); opened.close(); assertThrows(ClosedChannelException.class, opened::statImage); return null; });
         }
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void managedAliasesKeepAuthoritativeIdentityAndClaimsAcrossHostMutation() throws Exception {
         var original = directory.resolve("managed"); var renamed = directory.resolve("managed-renamed"); Files.writeString(original, "abcdef");
         try (var context = nativeContext()) { entered(context, () -> {
@@ -229,6 +262,7 @@ class NativeFileProviderTest {
             assertEquals("replacement", Files.readString(original)); return null;
         }); }
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void fcntlDuplicateClosesEachNativeLeaseIndependently() throws Exception {
         var file = directory.resolve("fcntl-lifetime"); Files.writeString(file, "abc");
         try (var context = nativeContext()) { entered(context, () -> {
@@ -242,6 +276,7 @@ class NativeFileProviderTest {
             assertEquals(0L, stdio.close(70)); assertEquals(0L, nativeDescriptors(file)); return null;
         }); }
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void managedReplacementMovesCapabilityAndLastOwnerClosesExactlyOnce() throws Exception {
         var a = directory.resolve("owner-a"); var b = directory.resolve("owner-b"); var context = nativeContext(); var files = new ManagedFiles[1];
         entered(context, () -> {
@@ -257,6 +292,7 @@ class NativeFileProviderTest {
         context.close(); assertEquals(0L, nativeDescriptors(b), "Context disposal closes the final alias physically"); files[0].dispose();
         assertEquals(0L, nativeDescriptors(b)); assertArrayEquals(new byte[] {42}, Files.readAllBytes(b));
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void explicitEndpointCapabilitiesPreserveUngrantAndNonregularBoundaries() throws Exception {
         try (var context = nativeContext(Set.of(StandardEndpoint.OUTPUT))) { entered(context, () -> {
             var state = Language.currentState(null); var files = state.getFiles(); var stdio = state.getStdio();
@@ -296,6 +332,7 @@ class NativeFileProviderTest {
         }
         return count;
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void partialStandardInstallationRollsBackBeforePublishingAuthority() throws Exception {
         try (var context = nativeContext(Set.of(StandardEndpoint.OUTPUT))) { entered(context, () -> {
             var state = Language.currentState(null); var standalone = new ManagedFiles(state.getEnv(), state.getThreads());
@@ -308,6 +345,7 @@ class NativeFileProviderTest {
             return null;
         }); }
     }
+    @EnabledOnOs(OS.LINUX)
     @Test void nativeErrorsKeepPrivateCategoriesAndExactOriginalErrno() throws Exception {
         try (var context = nativeContext(Set.of(StandardEndpoint.OUTPUT))) { entered(context, () -> {
             var state = Language.currentState(null); var files = state.getFiles(); var stdio = state.getStdio(); var abi = StdioHostAbi.load();

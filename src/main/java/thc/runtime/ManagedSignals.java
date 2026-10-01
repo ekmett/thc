@@ -64,11 +64,13 @@ public final class ManagedSignals {
         ProcessSignalTransport.Result result;
         synchronized (this) {
         if (!authorized) throw fault("Process signals require explicit NativeIO launcher authority");
-        if ((signal != 1 && signal != 2 && signal != 3 && signal != 10 && signal != 12 && signal != 15 && signal != 24 && signal != 25) ||
+        StdioHostAbi abi;
+        try { abi = StdioHostAbi.load(); } catch (java.io.IOException failure) { throw propagate(failure); }
+        if (!abi.supportedSignal(signal) ||
             (action != -1 && action != -2 && action != -4 && action != -5) || mask != ManagedAddress.nullAddress())
             throw fault("stg_sig_install supports only HUP/INT/QUIT/USR1/USR2/TERM/XCPU/XFSZ, DFL/IGN/HAN/RST and a null mask");
-        if (signal != 2 && !reducedVmSignals) throw fault("GHC process signal handlers require JVM -Xrs or Native Image -R:-EnableSignalHandling");
-        if (signal == 12 && !userSignalAvailable.getAsBoolean()) throw fault("SIGUSR2 requires the standalone JVM launcher with _JAVA_SR_SIGNUM=64 and verified native dispositions");
+        if (signal != abi.signal("SIGINT") && !reducedVmSignals) throw fault("GHC process signal handlers require JVM -Xrs or Native Image -R:-EnableSignalHandling");
+        if (signal == abi.signal("SIGUSR2") && !userSignalAvailable.getAsBoolean()) throw fault("SIGUSR2 requires a verified standalone JVM suspend-signal relocation (_JAVA_SR_SIGNUM=64 on Linux) and native dispositions");
         if (closed || stopping) throw fault("Process signal service is closed");
         var root = binding;
         if (root == null) {

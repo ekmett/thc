@@ -18,8 +18,9 @@ _Static_assert(sizeof(dev_t) == 8 && (dev_t)-1 > 0 && sizeof(ino_t) == 8 && (ino
                "stat requires the exact original Linux scalar ABI");
 #endif
 
-#define FIELD(name) printf("\"" #name "\":{\"offset\":%zu,\"width\":%zu}", \
-                          offsetof(struct stat, name), sizeof(((struct stat *)0)->name))
+#define FIELD(name) printf("\"" #name "\":{\"offset\":%zu,\"width\":%zu,\"signed\":%s}", \
+                          offsetof(struct stat, name), sizeof(((struct stat *)0)->name), \
+                          (__typeof__(((struct stat *)0)->name))-1 < 0 ? "true" : "false")
 int main(void) {
   printf("{\"size\":%zu,\"alignment\":%zu,\"fields\":{", sizeof(struct stat), _Alignof(struct stat));
   FIELD(st_dev); printf(","); FIELD(st_ino); printf(","); FIELD(st_mode); printf(","); FIELD(st_size);

@@ -155,9 +155,9 @@ def compactHeaderOption = "-XX:${compactObjectHeaders == "true" ? "+" : "-"}UseC
 application {
     mainClass.set("thc.Main")
     applicationDefaultJvmArgs = ["--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "--add-opens=java.base/java.lang=ALL-UNNAMED", "-Xss2m", compactHeaderOption] +
-        // The Linux standalone guest owns GHC's supported process handlers.
+        // The POSIX standalone guest owns GHC's supported process handlers.
         // Embedders do not inherit these launcher JVM arguments.
-        (System.getProperty("os.name") == "Linux" ? ["-Xrs"] : [])
+        (System.getProperty("os.name") == "Linux" || System.getProperty("os.name").startsWith("Mac") ? ["-Xrs"] : [])
 }
 // Keep aggregator POMs in dependency resolution, not executable runtime payloads.
 distributions.main.contents { exclude("**/*.pom") }
@@ -1360,7 +1360,7 @@ def compileNativeAtomics = tasks.register("compileNativeAtomics") {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-atomics")) }
 tasks.processResources { dependsOn(compileNativeAtomics) }
 
-// Optional Linux opened-resource provider; not original fstat admission.
+// Selected-ABI opened-resource provider; not original fstat admission.
 def compileNativeFiles = tasks.register("compileNativeFiles") {
     dependsOn("generateStdioAbi")
     def source = layout.projectDirectory.file("src/main/c/native-file-api.c")
@@ -1371,11 +1371,14 @@ def compileNativeFiles = tasks.register("compileNativeFiles") {
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-file-api.so").toFile()
+        def darwin = host["system"] == "Darwin"
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
+            def extension = darwin ? ".dylib" : ".so"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-file-api$extension").toFile()
             destination.parentFile.mkdirs()
-            nativeExec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+            def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-fembed-bitcode", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path]) }.result.get()
         }
     }
 }
@@ -1393,11 +1396,14 @@ def compileNativeDirectories = tasks.register("compileNativeDirectories") {
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-directory-api.so").toFile()
+        def darwin = host["system"] == "Darwin"
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
+            def extension = darwin ? ".dylib" : ".so"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-directory-api$extension").toFile()
             destination.parentFile.mkdirs()
-            nativeExec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+            def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path]) }.result.get()
         }
     }
 }
@@ -1507,11 +1513,14 @@ def compileNativeProcessSignals = tasks.register("compileNativeProcessSignals") 
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-process-signal-api.so").toFile()
+        def darwin = host["system"] == "Darwin"
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
+            def extension = darwin ? ".dylib" : ".so"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-process-signal-api$extension").toFile()
             destination.parentFile.mkdirs()
-            nativeExec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-shared", source.asFile.path, "-o", destination.path, "-ldl") }.result.get()
+            def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path] + (darwin ? [] : ["-ldl"])) }.result.get()
         }
     }
 }
@@ -1583,7 +1592,7 @@ def generateStdioAbi = tasks.register("generateStdioAbi") {
         def executable = new File(temporaryDir, windowsHost ? "stdio-abi-probe.exe" : "stdio-abi-probe")
         run(command + ["-std=c11", source.path, "-o", executable.path])
         def probe = new JsonSlurper().parseText(run([executable.path])) as Map
-        requireBuild(probe.keySet() == (windowsHost ? ["widths", "errno", "seek"].toSet() : ["widths", "errno", "seek", "open", "at", "siginfoBytes"].toSet())) { "Malformed native stdio ABI probe" }
+        requireBuild(probe.keySet() == (windowsHost ? ["widths", "errno", "seek"].toSet() : ["widths", "errno", "seek", "open", "at", "siginfoBytes", "signals"].toSet())) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Java validates all exact fields and errno values.
         def manifest = ["schema": (windowsHost ? 2 : 1), "system": system,
             "architecture": arch, "target": target, "compilerDefaultTarget": defaultTarget,
@@ -1592,7 +1601,7 @@ def generateStdioAbi = tasks.register("generateStdioAbi") {
                 .encodeHex().toString(),
             "widths": probe["widths"], "errno": probe["errno"], "seek": probe["seek"]]
         if (windowsHost) manifest["profile"] = "windows-managed-descriptors"
-        else { manifest["open"] = probe["open"]; manifest["at"] = probe["at"]; manifest["siginfoBytes"] = probe["siginfoBytes"] }
+        else { manifest["open"] = probe["open"]; manifest["at"] = probe["at"]; manifest["siginfoBytes"] = probe["siginfoBytes"]; manifest["signals"] = probe["signals"] }
         def destination = output.get().asFile.toPath().resolve("thc/native/stdio-host-abi.json").toFile()
         destination.parentFile.mkdirs()
         destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")

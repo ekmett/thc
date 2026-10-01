@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 #define _GNU_SOURCE 1
+#define _DARWIN_C_SOURCE 1
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -9,8 +10,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#if defined(__linux__)
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
+#endif
 #include <poll.h>
 #include <termios.h>
 #include <unistd.h>
@@ -21,26 +24,32 @@
 #include <sys/utsname.h>
 
 /* NativeUnix's bounded caller-owned image transport uses this selected ABI. */
+#if defined(__linux__)
 _Static_assert(sizeof(time_t) == 8 && sizeof(struct tms) == 32, "Unix time image ABI");
 _Static_assert(sizeof(struct timeval) == 16 && sizeof(struct timespec) == 16, "Unix timestamp image ABI");
 _Static_assert(sizeof(struct utsname) == 390 && sizeof(struct rlimit) == 16, "Unix query image ABI");
 _Static_assert(sizeof(sigset_t) == 128 && sizeof(struct termios) == 60, "Unix signal/terminal image ABI");
+#endif
 
 // Private Linux provider transport. These are not original GHC FCall symbols.
 // The fd slot belongs to a host lease allocated before acquisition. Once stored,
 // host cleanup can close it without re-entering LLVM. Cancellation between libc
 // acquisition and the slot store has not been proved safe by this checkpoint.
-_Static_assert(sizeof(int) == 4 && sizeof(off_t) == 8 && sizeof(size_t) == 8 && sizeof(mode_t) == 4,
-               "native files require the Linux LP64 ABI");
+_Static_assert(sizeof(int) == 4 && sizeof(off_t) == 8 && sizeof(size_t) == 8 && sizeof(ssize_t) == 8 &&
+               sizeof(void *) == 8 && (sizeof(mode_t) == 2 || sizeof(mode_t) == 4) && (mode_t)-1 > 0,
+               "native files require the selected LP64 ABI");
+#if defined(__linux__)
 _Static_assert(sizeof(struct epoll_event) == 12 && offsetof(struct epoll_event, data) == 4 &&
                sizeof(struct pollfd) == 8 && offsetof(struct pollfd, revents) == 6,
                "native event images require the Linux x86_64 ABI");
+#endif
 
 int64_t thc_file_stat_size(void) { return sizeof(struct stat); }
 int64_t thc_file_termios_size(void) { return sizeof(struct termios); }
 
 // Acquired descriptors are published into host-owned lease slots before the
 // call returns. Guest descriptor numbers are assigned separately by the context.
+#if defined(__linux__)
 int64_t thc_file_eventfd(int *lease, uint32_t initial, int flags, int64_t *error) {
   int fd = eventfd(initial, flags);
   *error = fd < 0 ? errno : 0;
@@ -54,6 +63,7 @@ int64_t thc_file_epoll_create(int *lease, int size, int64_t *error) {
   if (fd >= 0) *lease = fd;
   return fd < 0 ? -1 : 0;
 }
+#endif
 
 int64_t thc_file_pipe(int *reader, int *writer, int64_t *error) {
   int descriptors[2];
@@ -63,11 +73,13 @@ int64_t thc_file_pipe(int *reader, int *writer, int64_t *error) {
   return result;
 }
 
+#if defined(__linux__)
 int64_t thc_file_eventfd_write(const int *lease, uint64_t value, int64_t *error) {
   int result = eventfd_write(*lease, value);
   *error = result < 0 ? errno : 0;
   return result;
 }
+#endif
 
 // The caller seeds the complete image. Preserve libc's actual writes (including
 // unchanged padding and failure paths), rather than inventing an output image.

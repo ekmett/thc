@@ -29,7 +29,7 @@ public final class ManagedSignalMask {
         if (Language.currentState(null) != owner) throw fault("Signal-mask service belongs to another context");
         if (!owner.getEnv().isNativeAccessAllowed()) throw fault("Original sigprocmask requires native access");
         if (Thread.currentThread().isVirtual()) throw fault("Original sigprocmask requires a platform thread");
-        if (!NativeIO.supportedHost()) throw fault("Original sigprocmask requires Linux x86_64 glibc");
+        if (!NativeIO.supportedPosixHost()) throw fault("Original sigprocmask requires Linux x86_64 glibc");
     }
     private Object library() {
         var task = libraryTask.get();

@@ -51,7 +51,7 @@ public final class NativeFileLease implements AutoCloseable, TruffleObject {
             if (closed || slot.get(ValueLayout.JAVA_INT, 0) < 0) throw propagate(new ClosedChannelException());
             try (var call = Arena.ofConfined()) {
                 var errors = call.allocate(NativeCalls.CAPTURE);
-                int result = (int) WaitDuplicate.FCNTL.invokeExact(errors, slot.get(ValueLayout.JAVA_INT, 0), 1030, 0);
+                int result = (int) WaitDuplicate.FCNTL.invokeExact(errors, slot.get(ValueLayout.JAVA_INT, 0), NativeDirectoryApi.duplicateCommand(), 0);
                 if (result < 0) throw new NativeFileException("duplicate readiness lease", errors.get(ValueLayout.JAVA_INT, NativeCalls.ERRNO));
                 return result;
             } catch (Throwable failure) { throw failed("Native readiness duplication failed", failure); }

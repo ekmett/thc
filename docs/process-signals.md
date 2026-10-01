@@ -22,6 +22,14 @@ DFL, IGN, HAN and RST actions and a null signal mask are supported. Other
 signals, non-null masks and Windows delivery remain outside
 this bridge's current implementation.
 
+Darwin builds produce a matching machine-code bridge using the selected headers'
+signal numbers and `siginfo_t` size. It uses nonblocking close-on-exec pipes for
+data and wakeup; Linux retains its existing eventfd wakeup. Resource acquisition
+checks the generated ABI against the loaded bridge before installing any handler.
+Darwin refuses non-INT dispositions owned by `libjvm.dylib`, and SIGUSR2 remains
+unavailable without a verified legal JVM relocation contract. The Linux signal
+64 policy below is not transplanted to Darwin.
+
 Delivery requires continuation-capable code, which ordinary AST and bytecode
 programs retain even with `asyncExceptions=false`. Binding alone preserves the
 single-origin assumption; installing the first handler invalidates it before
@@ -33,7 +41,7 @@ synchronous code rejects concurrency admission before acquiring the transport.
 
 ## JVM and embedding ownership
 
-The Linux standalone JVM launch scripts include `-Xrs`. This leaves the four
+The Linux and Darwin standalone JVM launch scripts include `-Xrs`. This leaves the four
 signals above to the application rather than HotSpot's normal signal handling.
 The bridge checks the effective `ReduceSignalUsage` VM setting and
 refuses every supported signal except SIGINT if a later option disables it. Direct launches without `-Xrs` can acquire only SIGINT.

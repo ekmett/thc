@@ -257,7 +257,10 @@ public class ProcessSignalsTest {
         onBackends((language, backend) -> {
             var service = new ManagedSignals(Language.currentState(), language, false, NativeSignalTransport::userSignalAvailable, () -> { throw new IllegalStateException("denied request must not acquire a native signal transport"); });
             service.bind(program(language, backend)); service.authorizeLauncher();
-            for (long signal : new long[] {1L, 3L, 10L, 12L, 15L, 24L, 25L}) {
+            var abi = StdioHostAbi.load();
+            for (var name : StdioHostAbi.SIGNAL_NAMES) {
+                if (name.equals("SIGINT")) continue;
+                long signal = abi.signal(name);
                 var failure = assertThrows(RuntimeFault.class, () -> service.install(signal, -4L, ManagedAddress.nullAddress())); assertTrue(failure.getMessage().contains("-Xrs"));
             }
             service.close();
@@ -267,7 +270,8 @@ public class ProcessSignalsTest {
         onBackends((language, backend) -> {
             var service = new ManagedSignals(Language.currentState(), language, true, () -> false, () -> { throw new IllegalStateException("denied request must not acquire signal transport"); });
             service.bind(program(language, backend)); service.authorizeLauncher();
-            var failure = assertThrows(RuntimeFault.class, () -> service.install(12L, -4L, ManagedAddress.nullAddress())); assertTrue(failure.getMessage().contains("_JAVA_SR_SIGNUM=64"));
+            long usr2 = StdioHostAbi.load().signal("SIGUSR2");
+            var failure = assertThrows(RuntimeFault.class, () -> service.install(usr2, -4L, ManagedAddress.nullAddress())); assertTrue(failure.getMessage().contains("_JAVA_SR_SIGNUM=64"));
             assertThrows(RuntimeFault.class, () -> service.install(64L, -4L, ManagedAddress.nullAddress())); service.close();
         });
     }
@@ -326,10 +330,12 @@ public class ProcessSignalsTest {
         });
     }
     @Test public void nativeEventsCrossTheActualJvmBoundaryInAnIsolatedProcess() throws Exception {
-        assumeTrue(System.getProperty("os.name").equals("Linux") && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")));
+        boolean linux = System.getProperty("os.name").equals("Linux");
+        boolean darwin = System.getProperty("os.name").startsWith("Mac");
+        assumeTrue(linux && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")) || darwin);
         var classpath = Objects.requireNonNull(System.getProperty("thc.testRuntimeClasspath"), "test runner must expose its child JVM classpath");
         var directory = new File(System.getProperty("thc.projectRoot"), "build/process-signals"); directory.mkdirs();
-        for (var mode : List.of("relocated", "unrelocated", "reduced-signals-disabled")) {
+        for (var mode : linux ? List.of("relocated", "unrelocated", "reduced-signals-disabled") : List.of("posix-safe", "reduced-signals-disabled")) {
             var output = File.createTempFile("jvm-transport-", ".log", directory); var command = new ArrayList<>(List.of(new File(System.getProperty("java.home"), "bin/java").getPath(), "-Xrs", "--enable-native-access=ALL-UNNAMED"));
             if (mode.equals("reduced-signals-disabled")) command.add("-XX:-ReduceSignalUsage"); command.addAll(List.of("-cp", classpath, ProcessSignalJvmProbe.class.getName(), mode));
             var builder = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output); builder.environment().remove("LD_PRELOAD");
@@ -337,7 +343,7 @@ public class ProcessSignalsTest {
             var child = builder.start();
             try {
                 assertTrue(child.waitFor(30, TimeUnit.SECONDS), "native signal child timed out: " + output); assertEquals(0, child.exitValue(), Files.readString(output.toPath()));
-                assertTrue(Files.readString(output.toPath()).contains(switch (mode) { case "reduced-signals-disabled" -> "Later VM option disables reduced signal usage"; case "unrelocated" -> "Unrelocated JVM retains SIGUSR2"; default -> "JVM received signals 1,2,3,10,12,15,24,25"; }), Files.readString(output.toPath()));
+                assertTrue(Files.readString(output.toPath()).contains(switch (mode) { case "reduced-signals-disabled" -> "Later VM option disables reduced signal usage"; case "unrelocated" -> "Unrelocated JVM retains SIGUSR2"; case "posix-safe" -> "JVM received seven selected-header signals; unverified USR2 denied"; default -> "JVM received signals 1,2,3,10,12,15,24,25"; }), Files.readString(output.toPath()));
             } finally { if (child.isAlive()) child.destroyForcibly().waitFor(); }
         }
     }
