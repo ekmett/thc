@@ -13,7 +13,7 @@
 module Main (main) where
 
 import Control.Monad (when)
-import Data.Maybe (catMaybes, isNothing)
+import Data.Maybe (catMaybes, isNothing, fromMaybe)
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
@@ -21,6 +21,7 @@ import System.Directory (getCurrentDirectory)
 import System.Environment (getArgs)
 import System.Exit (die)
 import System.IO (hSetEncoding, stderr, stdout, utf8)
+import Text.Read (readMaybe)
 import THC.Driver.Cabal
 import THC.Driver.GhcProxy (runGhcProxy)
 import THC.Driver.Json (renderJson)
@@ -51,7 +52,7 @@ main = topHandler $ do
       case getOpt Permute (withHelp (if acquire then acquireOptions else runOptions)) driverArgs of
         (updates, _, []) | any isNothing updates -> putStr commandUsage
         (updates, targets, []) | length targets <= 1 -> do
-          let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False guestArgs) (catMaybes updates)
+          let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True guestArgs) (catMaybes updates)
           thcRoot <- resolveThcRoot (runThcRoot opts)
           let selected = opts {runTarget = case targets of [] -> ""; [target] -> target; _ -> error "checked above",
                                runThcRoot = thcRoot}
@@ -88,6 +89,12 @@ runOptions =
   , Option [] ["project-file"] (ReqArg (\path r -> r {runProjectFile = Just path}) "FILE") "Cabal project file"
   , Option [] ["thc-root"] (ReqArg (\path r -> r {runThcRoot = path}) "DIR") "THC source/build root (default: locate from the executable)"
   , Option [] ["runtime"] (ReqArg (\path r -> r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
+  , Option [] ["dap-port"] (ReqArg (\value r -> r {runDapPort = Just (fromMaybe 0 (readMaybe value))}) "PORT")
+      "Listen for Graal DAP on 127.0.0.1:PORT (1..65535); suspend and wait for attachment"
+  , Option [] ["dap-no-suspend"] (NoArg (\r -> r {runDapSuspend = False}))
+      "Do not suspend on the first guest statement (requires --dap-port)"
+  , Option [] ["dap-no-wait-attached"] (NoArg (\r -> r {runDapWaitAttached = False}))
+      "Start guest execution before a debugger attaches (requires --dap-port)"
   , Option [] ["verify-artifacts"] (NoArg (\r -> r {runVerifyArtifacts = True}))
       "Audit reachable Core before launch and verify runtime artifacts (default: off)"
   , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
@@ -106,7 +113,7 @@ runUsage = usageInfo "Usage: thc run [TARGET] [FLAGS] [-- ARG...]\n\nResolve a C
 
 acquireOptions :: [OptDescr (RunOptions -> RunOptions)]
 acquireOptions = [option | option@(Option _ names _ _) <- runOptions,
-  not (any (`elem` ["runtime", "verify-artifacts"]) names)]
+  not (any (`elem` ["runtime", "verify-artifacts", "dap-port", "dap-no-suspend", "dap-no-wait-attached"]) names)]
 
 acquireUsage :: String
 acquireUsage = usageInfo "Usage: thc acquire [TARGET] [FLAGS]\n\nResolve the same Cabal runnable target as run and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native runnable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" (withHelp acquireOptions)

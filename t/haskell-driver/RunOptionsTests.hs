@@ -13,13 +13,15 @@
 module RunOptionsTests (tests) where
 
 import Control.Monad (forM_)
+import System.IO.Error (tryIOError)
 import Data.List (isInfixOf)
 import System.Directory (createFileLink)
 import System.FilePath ((</>))
 import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
-import THC.Driver.Run (runtimeLaunchArguments, runtimeEntryArguments)
+import THC.Driver.Cabal (defaultPlanOptions)
+import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeEntryArguments, runtimeDebugEnvironment)
 
 tests :: Env -> Test
 tests env = TestLabel "run options and target selection" $ TestList
@@ -47,6 +49,28 @@ tests env = TestLabel "run options and target selection" $ TestList
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
       , guest <- [[], ["--guest-option", "value", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
       ]
+  , TestLabel "DAP JVM options preserve inherited environment" $ TestCase $ do
+      let inherited = [("JAVA_OPTS", "-Xmx2g -Dexample=\"two words\""), ("PATH", "unchanged")]
+          options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True []
+      unchanged <- runtimeDebugEnvironment options inherited
+      assertEqual "debugging is opt-in" inherited unchanged
+      configured <- runtimeDebugEnvironment (options {runDapPort = Just 4711, runDapSuspend = False}) inherited
+      assertEqual "loopback options appended without rewriting JVM arguments"
+        (Just "-Xmx2g -Dexample=\"two words\" -Dpolyglot.dap=127.0.0.1:4711 -Dpolyglot.dap.Suspend=false -Dpolyglot.dap.WaitAttached=true")
+        (lookup "JAVA_OPTS" configured)
+      assertEqual "other environment survives" (Just "unchanged") (lookup "PATH" configured)
+      forM_ [options {runDapPort = Just 0}, options {runDapPort = Just 65536},
+             options {runDapSuspend = False}, options {runDapWaitAttached = False}] $ \invalid -> do
+        result <- tryIOError (runtimeDebugEnvironment invalid inherited)
+        assertBool "invalid debug options rejected before launch" (case result of Left _ -> True; Right _ -> False)
+  , TestLabel "DAP options are run-only" $ TestCase $
+      forM_ [["--dap-port", "4711"], ["--dap-no-suspend"], ["--dap-no-wait-attached"]] $ \arguments -> do
+        accepted <- parseOnly ("run" : arguments)
+        assertFailure accepted
+        assertContains "THC root directory does not exist" (err accepted)
+        rejected <- parseOnly ("acquire" : arguments)
+        assertFailure rejected
+        assertContains "unrecognized option" (err rejected)
   , TestLabel "loose consumers keep paths before the guest boundary" $ TestCase $ do
       let modules = ["C:/core café/Main.json", "C:/core café/THC.InterfaceClosure.json"]
           entry = runtimeEntryArguments modules "C:/support/packages.json" "main:Main.main"

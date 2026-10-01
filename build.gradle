@@ -69,6 +69,7 @@ dependencies {
     // Register local native providers in the pinned Sulong context's registry.
     compileOnly("org.graalvm.llvm:llvm-language:$graalVersion")
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
+    runtimeOnly("org.graalvm.tools:dap-tool:$graalVersion")
     runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
     annotationProcessor("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testAnnotationProcessor("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
