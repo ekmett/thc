@@ -5536,7 +5536,7 @@ class RetainedAuditStoreTest(unittest.TestCase):
             command = json.loads(command_path.read_text())['argv']
             entries = [command[index + 1] for index, value in enumerate(command) if value == '--entry']
             modules = [source_root / path for path in command[-2:]]
-            self.assertTrue(all(path.name in ['FourWayAggregateFields.json', 'THC.InterfaceClosure.json'] for path in modules))
+            self.assertTrue(all(path.name in ['FourWayAggregateFields.cbd', 'THC.InterfaceClosure.cbd'] for path in modules))
             common = [sys.executable, str(ROOT / 'audit-core.py'), *map(str, modules)]
             for entry in entries: common.extend(['--entry', entry])
             reports = []
