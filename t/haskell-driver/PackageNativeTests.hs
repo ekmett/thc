@@ -27,12 +27,12 @@ import System.Directory (findExecutable, getCurrentDirectory, createDirectory, c
 import System.Environment (getEnv, lookupEnv, setEnv, unsetEnv)
 import System.IO.Error (tryIOError)
 import System.FilePath ((</>), searchPathSeparator)
-import System.Process (readProcess, readProcessWithExitCode)
+import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode, readProcess, readProcessWithExitCode)
 import System.Exit (ExitCode(..))
-import System.IO (hClose, openTempFile)
 import qualified System.Info as Host
 import Test.HUnit
 import THC.Driver.PackageNative
+import THC.Driver.NativeCache (nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding)
@@ -45,12 +45,8 @@ import NativeCacheTests (withScratch, withEnvironment, writeExecutable)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestLabel "normal captured GHC calls publish typed unlinked seeds and one C provider" $ TestCase $ do
-      scratch <- getEnv "THC_TEST_SCRATCH"
-      createDirectoryIfMissing True scratch
-      (root,handle) <- openTempFile scratch "demand-acquisition-"
-      hClose handle; removeFile root; createDirectory root
-      repository <- getEnv "THC_TEST_ROOT"
+  [ TestLabel "normal captured GHC calls publish typed unlinked seeds and one C provider" $ TestCase $ withScratch $ \root -> do
+      repository <- lookupEnv "THC_TEST_ROOT" >>= maybe getCurrentDirectory pure
       compiler <- tool "GHC" "ghc"
       packageTool <- tool "GHC_PKG" "ghc-pkg"
       helper <- tool "THC_TEST_INTERFACE" "thc-interface"
@@ -285,15 +281,18 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
   , TestLabel "actual native C references retain strict provider obligations" $ TestCase $ withScratch $ \root -> do
       clang <- tool "THC_CLANG" "clang"
       target <- takeWhile (/= '\n') <$> readProcess clang ["-dumpmachine"] ""
+      compilerFlags <- nativeCompilerFlags
+      compilerEnvironment <- nativeCompilerEnvironment
       let source = root </> "ordinary.c"
           output = root </> "ordinary-library"
           strict = if Host.os == "darwin" then ["-Wl,-undefined,error"] else ["-Wl,--no-undefined"]
-          arguments name = ["-shared","-fPIC",source,"-o",output] ++ strict ++ nativeRootArguments target [name]
+          arguments name = compilerFlags ++ ["-shared","-fPIC",source,"-o",output] ++ strict ++ nativeRootArguments target [name]
+          command name = (proc clang (arguments name)) { env = Just compilerEnvironment }
       writeFile source "long ordinary_provider(void) { return 7; }\n"
-      (positive,_,positiveErrors) <- readProcessWithExitCode clang (arguments "ordinary_provider") ""
+      (positive,_,positiveErrors) <- readCreateProcessWithExitCode (command "ordinary_provider") ""
       assertEqual ("selected compiler accepts the ordinary strict recipe: " ++ positiveErrors) ExitSuccess positive
       writeFile source "extern void getProgArgv(void *, void *); void ordinary_consumer(void) { getProgArgv(0, 0); }\n"
-      (missing,_,missingErrors) <- readProcessWithExitCode clang (arguments "ordinary_consumer") ""
+      (missing,_,missingErrors) <- readCreateProcessWithExitCode (command "ordinary_consumer") ""
       assertBool "a Core capability is not a native definition" (missing /= ExitSuccess)
       assertBool "the actual retained C reference names its missing provider"
         ("getProgArgv" `isInfixOf` missingErrors)
