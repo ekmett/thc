@@ -165,9 +165,19 @@ The driver appends `-Dpolyglot.dap=127.0.0.1:PORT`,
 existing JVM options. An overridden `--runtime` must honor these JVM options
 and include the pinned Graal DAP instrument. Source and breakpoint availability
 depend on the captured Core's source spans and the backend's instrumented
-statements. Current THC execution nodes do not expose Graal statement tags, so
-source breakpoints, stepping and first-statement stops remain unavailable;
-a successful protocol connection does not establish source debugging.
+statements. Both backends expose source statement and root tags. Optimized
+Core attribution can collapse or repeat locations, so stepping is not one stop
+per original Haskell expression. Embedded CBD sources are reported through
+DAP `loadedSource` events and `sourceReference`; use the emitted source object
+in `source` and `setBreakpoints` requests rather than inventing a filesystem
+path for a relative captured name. With the default initial suspension, clients
+can bind breakpoints after receiving the source event and before continuing.
+
+The pinned Graal DAP instrument has an early-disconnect shutdown race: a short
+guest may finish while its DAP connection system thread is still alive, causing
+context closure to fail. Continuing the guest to the `terminated` event uses
+the ordinary instrument shutdown path. Early detach remains an upstream
+instrument limitation; THC does not suppress the closure failure.
 
 ## Caching and failures
 

@@ -6,6 +6,9 @@ import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.debug.DebuggerTags;
+import com.oracle.truffle.api.instrumentation.ProvidedTags;
+import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.ExecutionSignature;
 import java.util.*;
@@ -17,6 +20,7 @@ import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import thc.runtime.*;
 
+@ProvidedTags({StandardTags.RootTag.class, StandardTags.RootBodyTag.class, StandardTags.StatementTag.class, DebuggerTags.AlwaysHalt.class})
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
     characterMimeTypes = "application/x-thc-core", defaultMimeType = "application/x-thc-core",
     dependentLanguages = "llvm", contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
