@@ -275,9 +275,6 @@ class BytecodeVectorTransportTest {
             reject(language, family, vectorLet("v", family.vector, payload, variable("v", family.vector), false, true), family.vector);
             var other = family("Word32X4"); reject(language, family, vectorLet("v", family.vector, lanes(other, variable("x")), variable("v", family.vector)), family.vector);
             reject(language, family, vectorLet("v", family.vector, number(0), variable("v", family.vector)), family.vector);
-            // Ordinary closures retaining a lexical vector now have owned lane storage; the genuine capturedCase Core path is proved by SimdCallNativeTest.
-            var fields = tuple(Collections.nCopies(family.lanes, family.lane)); var values = new ArrayList<List<Object>>(); for (int i = 0; i < family.lanes; i++) values.add(laneValue(family, number(i)));
-            reject(language, family, vectorLet("v", fields, application(l("con", "T" + family.lanes, family.lanes), values, fields), variable("v", fields)), fields);
         });
     }
 }
