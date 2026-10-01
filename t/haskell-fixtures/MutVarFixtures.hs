@@ -24,7 +24,7 @@ import FixtureSupport (hashes, readInteger, run, runWithTimeout, writeJson)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>), replaceExtension, takeExtension)
+import System.FilePath ((</>), takeExtension)
 
 entries :: [String]
 entries = ["stRef", "lazyRef", "closureRef", "orderedRef", "unliftedRef", "stLoop",
@@ -73,24 +73,23 @@ prepareMutVar root = do
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        modules = [core </> "MutVarAudit.json", core </> "THC.InterfaceClosure.json"]
-        compactModules = map (`replaceExtension` "cbd") modules
+        modules = [core </> "MutVarAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries]
     _ <- run root [("THC_CORE_OUT", root </> core),
                    ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : postTidy ++ roots ++ [source]) ""
+      "bin/export-core.sh" (postTidy ++ roots ++ [source]) ""
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
-      unless present (die ("Missing genuine MutVar Core export: " ++ path))) (modules ++ compactModules)
-    exportedModules <- sort . filter ((== ".json") . takeExtension) <$>
+      unless present (die ("Missing genuine MutVar Core export: " ++ path))) modules
+    exportedModules <- sort . filter ((== ".cbd") . takeExtension) <$>
       listDirectory (root </> core)
-    unless (exportedModules == ["MutVarAudit.json", "THC.InterfaceClosure.json"]) $
+    unless (exportedModules == ["MutVarAudit.cbd", "THC.InterfaceClosure.cbd"]) $
       die ("Unexpected MutVar Core module inventory: " ++ show exportedModules)
     mapM_ (\name -> do
       let report = stageDir </> name ++ ".audit.json"
       _ <- run root [] "python3"
-        (["bin/audit-core.py", "--entry", "main:MutVarAudit." ++ name, "--output", report] ++ compactModules) ""
+        (["bin/audit-core.py", "--entry", "main:MutVarAudit." ++ name, "--output", report] ++ modules) ""
       pure ()) entries
     pure (stage,modules)
   let native = directory </> "native"
@@ -119,7 +118,7 @@ prepareMutVar root = do
         ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"] ++
         ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"]
       artifacts = [driver,oracle] ++ concat
-        [modules ++ map (`replaceExtension` "cbd") modules ++
+        [modules ++
           [directory </> stage </> name ++ ".audit.json" | name <- entries]
           | (stage,modules) <- stages]
   inputHashes <- hashes root inputs

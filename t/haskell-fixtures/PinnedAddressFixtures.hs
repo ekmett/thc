@@ -35,7 +35,7 @@ import System.FilePath ((</>), takeExtension)
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import System.Timeout (timeout)
 import Text.Read (readMaybe)
-import THC.Compact.Module (encodeModuleValue, writeModuleValue)
+import THC.Compact.Module (readModuleValue, writeModuleValue)
 
 directory, prefix :: String
 directory = "build/pinned-addresses"
@@ -170,7 +170,7 @@ guestStructure entry report modules = do
   reachable <- forM reached (\ident -> maybe (Left "Missing reachable binding") Right (Map.lookup ident indexed))
   names <- mapM (field "name" . snd) reachable
   let allocation = entry `elem` ["pinnedBytes","alignedBytes"]
-      wanted = entry : ["addressBytes" | allocation] ++ ["keptBottom" | entry == "keepAliveLazy"]
+      wanted = map (prefix ++) (entry : ["addressBytes" | allocation] ++ ["keptBottom" | entry == "keepAliveLazy"])
   ensure (Set.fromList names == Set.fromList wanted) "Global closure changed"
   roots <- field "roots" report :: Either String [String]
   rootId <- one "Expected one root" roots
@@ -204,7 +204,7 @@ guestStructure entry report modules = do
     name <- field "name" global :: Either String String
     expr <- field "expr" global
     ident <- field "id" global :: Either String String
-    if name == "keptBottom" then do
+    if name == prefix ++ "keptBottom" then do
       ensure (take 2 (array expr) == [String "var",String (fromString ident)]) "Bottom no longer retained self-reference"
       pure ([],0)
     else do
@@ -237,7 +237,7 @@ guestStructure entry report modules = do
   let lambdas = concatMap fst sites
       rootPath = bindingPath ++ [Key "expr"]
       allowed = [rootPath,rootPath ++ [Index 2,Index 1],keepPath ++ continuationPath] ++
-        [path ++ [Key "expr"] | ((path,_),name) <- zip reachable names, name == "addressBytes"]
+        [path ++ [Key "expr"] | ((path,_),name) <- zip reachable names, name == prefix ++ "addressBytes"]
   ensure (Just (length lambdas) == lookup entry guestCalls && Set.fromList (map fst lambdas) == Set.fromList allowed) "Hidden guest lambda or wrong count"
   formalNames <- forM lambdas (\(_,lambda) -> at [Index 1] lambda >>= decode >>= mapM (field "name") :: Either String [String])
   pure $ object ["guestCalls" .= length lambdas,"localJoinPrefixes" .= sum (map snd sites),"lambdaFormals" .= formalNames,
@@ -312,7 +312,7 @@ structureControls = do
     formal = object ["id" .= ("raw" :: String),"name" .= ("raw" :: String),
       "rep" .= object ["kind" .= ("long" :: String),"primReps" .= ["IntRep" :: String]],"lifted" .= False,"coercion" .= False]
     root = toJSON [String "lam",toJSON [formal],call,object []]
-    modules = toJSON [object ["bindings" .= [object ["id" .= ("root" :: String),"name" .= ("keepAliveWord8" :: String),"expr" .= root]]]]
+    modules = toJSON [object ["bindings" .= [object ["id" .= ("root" :: String),"name" .= (prefix ++ "keepAliveWord8"),"expr" .= root]]]]
     report = object ["roots" .= ["root" :: String],"reachableBindings" .= [object ["id" .= ("root" :: String)]]]
     rootPath = [Index 0,Key "bindings",Index 0,Key "expr"]
     callPath = rootPath ++ [Index 2]
@@ -386,17 +386,11 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
   stages <- if nativeOnly then pure [] else forM ["pre","post"] $ \stage -> do
     let base = directory </> stage
         paths = [base </> "core" </> name ++ ".cbd" | name <- ["PinnedAddressAudit","THC.InterfaceClosure"]]
-        diagnostics = [base </> "core" </> name ++ ".json" | name <- ["PinnedAddressAudit","THC.InterfaceClosure"]]
     _ <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",root </> base </> "core"),("THC_GHC_OUT",root </> base </> "ghc"),("THC_SOURCE_NOTES","true")]
-      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:pretty-diagnostics"] ++
-        ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_) <- entries ++ frontiers] ++ ["t/fixtures/compiler/PinnedAddressAudit.hs"])
-    originals <- mapM (readJson . (root </>)) diagnostics
-    forM_ (zip paths originals) $ \(path,value) -> do
-      encoded <- encodeModuleValue value
-      actual <- BS.readFile (root </> path)
-      check (encoded == actual) "Printed source proof differs from executable CBD"
+    originals <- mapM (\path -> BS.readFile (root </> path) >>= either die pure . readModuleValue) paths
     let modules = toJSON originals
     boundary <- either die pure (at [Index 0,Key "boundary"] modules)
     check (boundary == String (if stage == "pre" then "optimized-Core-before-Tidy" else "optimized-Core-after-Tidy-before-CorePrep")) "Wrong actual Core stage"
@@ -440,7 +434,7 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
       pure (label,object ["entry" .= name,"primitive" .= primitive,"summary" .= summary,"issues" .= issues],
         mutatedPaths ++ [base </> "negative-" ++ label ++ ".audit.json"] ++ commandFiles [stage ++ "-negative-" ++ label ++ "-audit"])
     let negativeReports = Map.fromList [(label,report) | (label,report,_) <- negativesAndArtifacts]
-        artifacts = paths ++ diagnostics ++ [base </> name ++ ".audit.json" | (name,_) <- entries ++ frontiers] ++
+        artifacts = paths ++ [base </> name ++ ".audit.json" | (name,_) <- entries ++ frontiers] ++
           commandFiles ((stage ++ "-export"):[stage ++ "-" ++ name ++ "-audit" | (name,_) <- entries ++ frontiers]) ++
           concat [files | (_,_,files) <- negativesAndArtifacts] ++ [base </> "negative-proofs.json" | accepted]
     when accepted (writeJson (root </> base </> "negative-proofs.json") (toJSON negativeReports))

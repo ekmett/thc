@@ -32,6 +32,7 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 import Text.Read (readMaybe)
+import THC.Compact.Module (readModuleValue)
 
 entries :: [String]
 entries = [family ++ suffix | family <- ["float", "double"],
@@ -127,7 +128,7 @@ structure core report name = do
     immediate == (if any (`isSuffixOf` name) ["Decode","Encode"] then 1 else 0) &&
     nested == dynamic + immediate && length functions + nested == guestCalls name)
     (die ("Changed retained scalar bitcast calls: " ++ name))
-  unless (map (\(_,label,_) -> label) cold == ["bottom" | "Field" `isSuffixOf` name] &&
+  unless (map (\(_,label,_) -> label) cold == ["main:ScalarBitCastAudit.bottom" | "Field" `isSuffixOf` name] &&
     all (\(ident,_,expr) -> take 2 expr == [String "var",String (fromString ident)]) cold)
     (die ("Changed scalar bitcast cold bottom: " ++ name))
   primitives <- field "primitives" report :: IO [Value]
@@ -178,10 +179,9 @@ prepareScalarBitCasts root = do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-        ["-fplugin-opt=THC.Plugin:pretty-diagnostics",source])
+        [source])
     let corePath = directory </> stage ++ "-core/ScalarBitCastAudit.cbd"
-        diagnosticPath = directory </> stage ++ "-core/ScalarBitCastAudit.json"
-    core <- readJson (root </> diagnosticPath)
+    core <- BS.readFile (root </> corePath) >>= either die pure . readModuleValue
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       -- The existing shared Python auditor remains the capability proof.
@@ -197,7 +197,7 @@ prepareScalarBitCasts root = do
       pure (name,report,shape,summary,reportPath:commandArtifacts command)
     let reportPath = directory </> stage ++ "-audit.json"
     writeJson (root </> reportPath) (object [fromString name .= report | (name,report,_,_,_) <- reports])
-    pure (stage,corePath,reports,corePath:diagnosticPath:reportPath:commandArtifacts exported)
+    pure (stage,corePath,reports,corePath:reportPath:commandArtifacts exported)
   let requests = [(name,x) | name <- entries, x <- inputs (if "float" `isPrefixOf` name then 32 else 64)]
       requestPath = directory </> "inputs.tsv"
   unless (length (inputs 32) == 1211 && length (inputs 64) == 1500 && length requests == 13555)
