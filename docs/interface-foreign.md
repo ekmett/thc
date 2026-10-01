@@ -73,14 +73,19 @@ references, public definitions, constructors, address imports and finalizers
 still need real native providers, including when they use the same symbol.
 Other RTS imports need their own implementation.
 
-On Linux x86_64, ordinary `ccall` imports whose exact ABI matches a captured
-package LLVM definition can retain separate compiled adapter seeds. Capture
+Ordinary `ccall` imports whose exact scalar C ABI matches a captured package
+LLVM definition can retain separate compiled adapter seeds. The provider,
+forwarding module and seed must have the same selected target and actual,
+nonempty LLVM data layout; unfamiliar ABI shapes retain strict linkage. Capture
 verifies each seed's sole entry and external symbol, emitted LLVM carriers and
 exact forwarding to the final canonical provider. The first reached call parses
 and binds that verified seed through Sulong on the current context thread;
 it needs no producer subprocess or adapter product cache. Unused seeds remain
 unparsed. All adapters for a unit share the same context-owned component,
 including its globals and constructor state, rather than copying the provider.
+Runtime host admission remains Linux/macOS. Exact forwarding does not generalize
+the Linux x86_64 integer-slot adapters or establish native execution on another
+platform from cross-target LLVM compilation alone.
 
 Adapter receivers and initialization failures are cached within that context.
 An admitted missing-provider seed fails when demanded, and failed initialization
