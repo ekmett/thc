@@ -15,6 +15,7 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
@@ -131,9 +132,8 @@ public final class ManagedNativeAllocations {
         current();
         if (closed) throw fault("Native allocation registry is closed");
         boolean windows = WindowsDirectoryStreams.supportedHost();
-        if (!windows && (!"Linux".equals(System.getProperty("os.name")) ||
-            !(System.getProperty("os.arch") instanceof String arch && ("amd64".equals(arch) || "x86_64".equals(arch)))))
-            throw fault("Native malloc requires verified Linux x86_64 LP64 or Windows x86_64 LLP64");
+        if (!windows && !supportsLibcAbi())
+            throw fault("Native malloc requires a 64-bit size_t/pointer ABI with int errno, or the paired Windows CRT");
         var threads = Language.currentState(null).getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try {
@@ -228,7 +228,7 @@ public final class ManagedNativeAllocations {
         var replacement = ManagedAddress.nullAddress();
         boolean retired = false;
         try {
-            // This is the selected Linux libc contract for realloc(p, 0).
+            // Owned zero-size realloc consumes the allocation and returns NULL.
             if (size != 0) {
                 replacement = malloc(size);
                 if (replacement == ManagedAddress.nullAddress()) return replacement;
@@ -354,6 +354,29 @@ public final class ManagedNativeAllocations {
 
     @SuppressWarnings("unchecked")
     private static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E { throw (E) failure; }
+
+    /** Inspect metadata only: no libc symbol lookup or downcall before context/native permission. */
+    static boolean supportsLibcAbi() {
+        // FFM's Windows errno may belong to another CRT; never replace the paired allocator.
+        if (System.getProperty("os.name").startsWith("Windows")) return false;
+        try {
+            return matchesLibcAbi(Linker.nativeLinker().canonicalLayouts(), Linker.Option.captureStateLayout());
+        } catch (UnsupportedOperationException unsupported) { return false; }
+    }
+
+    static boolean matchesLibcAbi(Map<String, MemoryLayout> layouts, StructLayout capture) {
+        return matchesNativeLayout(layouts.get("size_t"), ValueLayout.JAVA_LONG)
+            && ValueLayout.ADDRESS.byteSize() == Long.BYTES
+            && matchesNativeLayout(layouts.get("void*"), ValueLayout.ADDRESS)
+            && capture.memberLayouts().stream().anyMatch(layout ->
+                "errno".equals(layout.name().orElse(null)) && matchesNativeLayout(layout, ValueLayout.JAVA_INT));
+    }
+
+    private static boolean matchesNativeLayout(MemoryLayout layout, ValueLayout expected) {
+        return layout instanceof ValueLayout value && value.carrier() == expected.carrier()
+            && value.byteSize() == expected.byteSize() && value.byteAlignment() == expected.byteAlignment()
+            && value.order() == expected.order();
+    }
 
     // Initialize host downcalls only when the authorized native path is used.
     private static final class Libc {
