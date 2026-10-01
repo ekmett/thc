@@ -15,6 +15,7 @@ import sys
 import tarfile
 import urllib.request
 from sequence_model import sequence_model
+from core_package_manifest import inspect_cbd
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/libraries'
@@ -110,8 +111,8 @@ def check_existing(manifest):
             path = Path(filename)
             if cases['artifactHashes'].get(filename) != digest(path):
                 raise RuntimeError('Stale library export: ' + filename)
-            modules.append((filename, json.loads(path.read_text())))
-        audit = auditor.Audit(modules, capabilities).run([entry['name'] for entry in group['entries']])
+            modules.append((filename, inspect_cbd(path.read_bytes())))
+        audit = auditor.Audit(modules, capabilities).run(['main:' + group['module'] + '.' + entry['name'] for entry in group['entries']])
         violations.extend(audit_structure_violations(group, audit))
         print(json.dumps(dict(group=group['id'], execution=group['execution'], accepted=audit['accepted'], **audit['summary'])))
         if group['id'] == 'sequence':
@@ -119,7 +120,7 @@ def check_existing(manifest):
             if len(names) != len(set(names)) or set(names) != set(SEQUENCE_ENTRIES):
                 violations.append('sequence: expected every declared entry exactly once')
             for entry in group['entries']:
-                entry_audit = auditor.Audit(modules, capabilities).run([entry['name']])
+                entry_audit = auditor.Audit(modules, capabilities).run(['main:' + group['module'] + '.' + entry['name']])
                 violations.extend(sequence_entry_violations(entry, entry_audit, group['module']))
                 print(json.dumps(dict(entry=entry['name'], execution=entry.get('execution'),
                                       accepted=entry_audit['accepted'], **entry_audit['summary'])))
@@ -273,7 +274,7 @@ def main():
     BUILD.mkdir(parents=True, exist_ok=True)
     run(['bin/build-compiler.sh'])
     run([sys.executable, 'bin/export-boot.py', '--build-dir', BUILD / 'boot'])
-    boot = [BUILD / 'boot/core' / (name + '.json') for name in
+    boot = [BUILD / 'boot/core' / (name + '.cbd') for name in
             ['GHC.Internal.CString', 'GHC.Internal.Err', 'GHC.InterfaceClosure']]
     warm = [1, 8, 64]
     cold = [-3, 0, 2, 3, 7, 15, 16, 31, 63, 65, 127, 128, 129, 255, 256, 257, 1024, 4096, 4097]
@@ -311,9 +312,9 @@ def main():
         run(['bin/export-core.sh', '-i' + str(containers / 'src'), '-I' + str(containers / 'include'),
              *(['-fplugin-opt=THC.Plugin:post-tidy'] if group['postTidy'] else []),
              *['-fplugin-opt=THC.Plugin:closure=' + name for name in group['names']], group['source']], env=env)
-        closure_path = output / 'core/THC.InterfaceClosure.json'
-        closure = json.loads(closure_path.read_text())
-        modules = [output / 'core' / (module.split(':', 1)[1] + '.json') for module in closure['sourceModules']]
+        closure_path = output / 'core/THC.InterfaceClosure.cbd'
+        closure = inspect_cbd(closure_path.read_bytes())
+        modules = [output / 'core' / (module.split(':', 1)[1] + '.cbd') for module in closure['sourceModules']]
         modules += [closure_path, *boot]
         group['modules'] = list(map(str, modules))
         manifest = output / 'modules.txt'
@@ -323,13 +324,13 @@ def main():
             # One unmodified library export, parsed once, with distinct per-entry
             # strict frontiers. No Core rewrite or source-library substitution.
             auditor, capabilities = load_auditor()
-            parsed = [(str(path), json.loads(path.read_text())) for path in modules]
-            audit = auditor.Audit(parsed, capabilities).run(group['names'])
+            parsed = [(str(path), inspect_cbd(path.read_bytes())) for path in modules]
+            audit = auditor.Audit(parsed, capabilities).run(['main:' + group['module'] + '.' + name for name in group['names']])
             write_json(audit_path, audit)
             group['entryAudits'] = {}
             for name in group['names']:
                 entry_path = output / (name + '.audit.json')
-                entry_audit = auditor.Audit(parsed, capabilities).run([name])
+                entry_audit = auditor.Audit(parsed, capabilities).run(['main:' + group['module'] + '.' + name])
                 write_json(entry_path, entry_audit)
                 execution = 'supported' if name in SEQUENCE_SUPPORTED else 'frontier'
                 violations.extend(sequence_entry_violations(dict(name=name, execution=execution), entry_audit, group['module']))
@@ -338,7 +339,7 @@ def main():
         else:
             command = [sys.executable, 'bin/audit-core.py', '--module-list', str(manifest), '--output', str(audit_path)]
             for name in group['names']:
-                command += ['--entry', name]
+                command += ['--entry', 'main:' + group['module'] + '.' + name]
             result = subprocess.run(command, cwd=ROOT)
             if result.returncode not in [0, 1]:
                 raise RuntimeError('Capability auditor failed: ' + str(result.returncode))
@@ -399,7 +400,7 @@ def main():
     inputs = {ROOT / group['source'] for group in groups} | {
         ROOT / 't/fixtures/core/LibraryOracle.hs', ROOT / 't/fixtures/core/GraphWorkload.hs',
         ROOT / 'bin/prepare-library-tests.py',
-        ROOT / 'bin/audit-core.py', ROOT / 'bin/core-capabilities.json',
+        ROOT / 'bin/audit-core.py', ROOT / 'bin/core-capabilities.json', ROOT / 'bin/core_package_manifest.py',
         ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',
         ROOT / 'src/diagnostics/java/thc/LibraryCheck.java', ROOT / 'bin/build-compiler.sh',
         ROOT / 'bin/export-core.sh', ROOT / 'bin/export-boot.py', ROOT / 'bin/toolchain.sh',
