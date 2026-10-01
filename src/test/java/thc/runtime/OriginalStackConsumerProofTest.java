@@ -51,7 +51,7 @@ public class OriginalStackConsumerProofTest {
         var ghc = (Map<String, Object>) manifest.get("ghc"); require("9.14.1".equals(ghc.get("version")) && Boolean.FALSE.equals(ghc.get("installedArtifactsHashed")) && !((String) ghc.get("path")).isEmpty());
         var stages = (Map<String, List<String>>) manifest.get("stages"); require(stages.keySet().equals(Set.of("pre", "post"))); require(proofPath.equals(manifest.get("proofResource")));
         var inputs = (Map<String, String>) manifest.get("inputHashes"); require(inputs.keySet().equals(requiredInputs) && proofHash.equals(inputs.get(proofPath))); var artifacts = (Map<String, String>) manifest.get("artifactHashes");
-        for (var paths : stages.values()) { require(paths.size() == new LinkedHashSet<>(paths).size()); int roots = 0; for (var path : paths) { if (path.endsWith("/OriginalStackAudit.json")) roots++; require(artifacts.containsKey(path)); } require(roots == 1); }
+        for (var paths : stages.values()) { require(paths.size() == new LinkedHashSet<>(paths).size()); int roots = 0; for (var path : paths) { if (path.endsWith("/OriginalStackAudit.cbd")) roots++; require(artifacts.containsKey(path)); } require(roots == 1); }
         require(artifacts.containsKey(manifest.get("nativeOutput")));
         for (var group : List.of("inputHashes", "artifactHashes")) {
             var records = (Map<String, String>) manifest.get(group); require(!records.isEmpty());
@@ -152,10 +152,10 @@ public class OriginalStackConsumerProofTest {
     @Test public void originalsRetainEveryColdGetterAndFreshConsumersRemainSeparateEvidence() throws Exception {
         var manifest = manifest(); var proof = proof(); var all = inventory(proof); boolean originalArchiveCompared = compareOriginals(proof); var reports = new ArrayList<Map<String, Object>>();
         for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {
-            String selected = null; for (var path : stage.getValue()) if (path.endsWith("/OriginalStackAudit.json")) { if (selected != null) throw new IllegalArgumentException("Multiple roots"); selected = path; } if (selected == null) throw new java.util.NoSuchElementException();
-            var fresh = read(selected); require("OriginalStackAudit".equals(fresh.get("module")) && "9.14.1".equals(fresh.get("ghc"))); require((stage.getKey().equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep").equals(fresh.get("boundary")));
-            var names = new ArrayList<>(); for (var binding : (List<Map<String, Object>>) fresh.get("bindings")) names.add(binding.get("name")); require(names.containsAll(entries));
-            var modules = new ArrayList<Map<String, Object>>(); for (var path : stage.getValue()) modules.add(read(path)); var linked = CoreModules.merge(modules);
+            String selected = null; for (var path : stage.getValue()) if (path.endsWith("/OriginalStackAudit.cbd")) { if (selected != null) throw new IllegalArgumentException("Multiple roots"); selected = path; } if (selected == null) throw new java.util.NoSuchElementException();
+            var fresh = thc.CoreCbdFixtures.read(new File(root, selected).toPath()); require("OriginalStackAudit".equals(fresh.get("module")) && "9.14.1".equals(fresh.get("ghc"))); require((stage.getKey().equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep").equals(fresh.get("boundary")));
+            var ids = new ArrayList<>(); for (var binding : (List<Map<String, Object>>) fresh.get("bindings")) ids.add(binding.get("id")); require(ids.containsAll(entries.stream().map(entry -> fresh.get("unit") + ":OriginalStackAudit." + entry).toList()));
+            var modules = new ArrayList<Map<String, Object>>(); for (var path : stage.getValue()) modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath())); var linked = CoreModules.merge(modules);
             // Portable excerpts are not modules and must never substitute for an unfolding.
             for (var entry : entries) {
                 var id = fresh.get("unit") + ":OriginalStackAudit." + entry; var reached = (List<Map<String, Object>>) CoreModules.reachable(linked, id).get("bindings"); var foreign = calls(linked, id); for (var call : foreign) if (specs.containsKey(call.symbol())) checkCall(call);

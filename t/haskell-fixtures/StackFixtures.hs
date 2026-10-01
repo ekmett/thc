@@ -64,9 +64,9 @@ prepareOriginalStack root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage ++ "-ghc")]
       "bin/export-core.sh" options
     paths <- map (core </>) . sort <$> listDirectory (root </> core)
-    let json = filter (\p -> reverse (take 5 (reverse p)) == ".json") paths
-    unless (core </> "OriginalStackAudit.json" `elem` json) (die "Missing original stack consumer export")
-    pure (stage, json, result)
+    let compact = filter ((== ".cbd") . takeExtension) paths
+    unless (core </> "OriginalStackAudit.cbd" `elem` compact) (die "Missing original stack consumer export")
+    pure (stage, compact, result)
 
   let native = directory </> "native"
       executable = native </> "original-stack-native"
@@ -150,7 +150,7 @@ prepareOriginalStackFormatter root = do
   sourceExport <- runLogged 600 root logs "original-source-export" [] executable
     ["original-stack-source-export", directory </> "originals"]
   let coreRoot = directory </> "originals/core"
-  originals <- map (coreRoot </>) . sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> coreRoot)
+  originals <- map (coreRoot </>) . sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> coreRoot)
   let source = "t/fixtures/compiler/OriginalStackFormatter.hs"
       native = "t/fixtures/compiler/OriginalStackFormatterNative.hs"
   stages <- forM ["pre", "post"] $ \stage -> do
@@ -159,7 +159,7 @@ prepareOriginalStackFormatter root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-package", "ghc-internal", "-fignore-interface-pragmas"] ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    pure (stage, core </> "OriginalStackFormatter.json", exported)
+    pure (stage, core </> "OriginalStackFormatter.cbd", exported)
   let nativeDirectory = directory </> "native"
       binary = nativeDirectory </> "formatter"
   createDirectoryIfMissing True (root </> nativeDirectory)
@@ -172,7 +172,7 @@ prepareOriginalStackFormatter root = do
   audits <- forM stages $ \(stage, consumer, _) -> do
     let output = directory </> stage ++ "-audit.json"
     audited <- command (stage ++ "-audit") [] "python3"
-      (["bin/audit-core.py", "--entry", "formatOriginal", "--output", output, consumer] ++ originals)
+      (["bin/audit-core.py", "--entry", "main:OriginalStackFormatter.formatOriginal", "--output", output, consumer] ++ originals)
     pure (output, audited)
   scriptNames <- listDirectory (root </> "bin")
   let generatedSources = [directory </> "originals/generated" </> replaceExtension path "hs" |
