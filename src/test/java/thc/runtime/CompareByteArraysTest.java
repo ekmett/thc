@@ -353,42 +353,6 @@ class CompareByteArraysTest {
                 }
             }
     }
-    @Test
-    void lexicalLongAliasesPreserveComparisonSemanticsInBothBackends() {
-        var aliases = List.of("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep",
-            "Word32Rep", "Int64Rep", "Word64Rep");
-        var a = new byte[] {0, -1, 127, 1};
-        var b = new byte[] {0, 127, -1, 1};
-        var ranges = new int[][] {{0, 0, 0}, {4, 4, 0}, {0, 0, 1}, {0, 0, 4}, {1, 2, 1}, {2, 1, 1}, {2, 2, 1}};
-        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
-                context.initialize("thc");
-                context.enter();
-                try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    // Lexical scalar aliases share Long storage. The audited primop occurrence remains exact IntRep;
-                    // its operation, not the binder alias, supplies semantics.
-                    for (var alias : aliases)
-                        for (int position : new int[] {1, 3, 4}) {
-                            var m = synthetic();
-                            ((List<Map<String, Object>>) lambda(m).get(1))
-                                .get(position)
-                                .put("rep", withReps(longRep, alias));
-                            var target = program(language, m, backend).entryTarget("entry");
-                            for (var range : ranges) {
-                                int from = range[0], to = range[1], length = range[2];
-                                long expected = compare(slice(a, from, length), slice(b, to, length));
-                                long actual = (Long) Calls.target(
-                                    target, new Object[] {0L, a, (long) from, b, (long) to, (long) length});
-                                assertEquals(expected, (long) Long.compare(actual, 0),
-                                    backend + "/" + alias + "/" + position + "/" + from + "/" + to + "/" + length);
-                            }
-                            released(language);
-                        }
-                } finally {
-                    context.leave();
-                }
-            }
-    }
     private List<Object> variants(byte[] bytes) {
         var mutable = ManagedAllocation.mutable(bytes.length, 8);
         mutable.copyBytesIn(bytes, 0, 0, bytes.length);

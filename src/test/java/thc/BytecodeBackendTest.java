@@ -202,7 +202,7 @@ class BytecodeBackendTest {
             var fn = context.eval("thc", request(module(list(binding("entry", lambda("input", body), 1))))); long[] expected = {255L, 65L, 0L, 0L};
             for (int offset = 0; offset < expected.length; offset++) assertEquals(expected[offset], fn.execute(offset).asLong()); compileAndCheck(fn, 0L, 255L);
             for (int offset = 0; offset < expected.length; offset++) assertEquals(expected[offset], fn.execute(offset).asLong()); assertFailure(fn, "outside its backing storage", 4L);
-            var fakeRead = primitive("indexCharOffAddr#", variable("input"), integer(0)); var fake = context.eval("thc", request(module(list(binding("entry", lambda("input", fakeRead), 1))))); assertFailure(fake, "Expected a managed Addr#", 0L);
+            var fakeRead = primitive("indexCharOffAddr#", variable("input"), integer(0)); var fake = context.eval("thc", request(module(list(binding("entry", lambda("input", fakeRead), 1))))); assertFailure(fake, "Expected a managed literal Addr#", 0L);
         }
     }
     @Test void coldRaiseKeepsItsBottomPayloadLazyAndMemoizesTheGuestFailure() throws Exception {

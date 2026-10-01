@@ -281,7 +281,7 @@ class ByteArrayTest {
         ManagedByteArray.write(array, 0, 7);
         var write = ByteArrayOp.expression(ByteArrayOp.WRITE, CoreRepresentation.UNKNOWN,
             new Expr[] {operand("array", () -> array, events), operand("index", () -> 0L, events),
-                operand("byte", () -> 129L, events), operand("state", () -> {
+                operand("byte", () -> 129, events), operand("state", () -> {
                     assertEquals(7L, (long) ManagedByteArray.read(array, 0));
                     return Unit.INSTANCE;
                 }, events)});

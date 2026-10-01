@@ -198,12 +198,16 @@ class ReusableBytesTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                for (var kind : List.of("null-addr", "data-addr", "function-addr")) {
-                    var raw = map("id", "address", "name", "address", "lifted", false, "rep", ADDRESS,
-                        "expr", list("lit", kind, kind.equals("null-addr") ? "0" : "unapproved", map("rep", ADDRESS)));
-                    assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language,
-                        with(module(), "bindings", list(raw)), List.of("address")));
-                }
+                var raw = map("id", "address", "name", "address", "lifted", false, "rep", ADDRESS,
+                    "expr", list("lit", "null-addr", "0", map("rep", ADDRESS)));
+                var nullCode = Program.prepareCode(language, with(module(), "bindings", list(raw)), List.of("address"));
+                assertSame(ManagedAddress.nullAddress(), nullCode.newInstance(language).entryValue("address"));
+                raw.put("expr", list("lit", "data-addr", "unapproved", map("rep", ADDRESS)));
+                assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language,
+                    with(module(), "bindings", list(raw)), List.of("address")));
+                raw.put("expr", list("lit", "function-addr", "unapproved", map("rep", ADDRESS)));
+                var functionCode = Program.prepareCode(language, with(module(), "bindings", list(raw)), List.of("address"));
+                assertThrows(RuntimeFault.class, () -> functionCode.newInstance(language));
                 var computed = map("id", "address", "name", "address", "lifted", false, "rep", ADDRESS,
                     "expr", primitive("plusAddr#", ADDRESS, literal("41"), integer(0)));
                 assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language,
