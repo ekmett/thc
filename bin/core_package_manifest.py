@@ -810,6 +810,7 @@ def package_scalar_link(module, validate_archive=True):
         require(managed_registration(module), 'missing static export registration')
     raw_link = module['packageNativeLink' if native else 'packageScalarLink']
     inputs = native and isinstance(raw_link, dict) and 'buildInputs' in raw_link
+    demand = native and isinstance(raw_link, dict) and raw_link.get('schema') == 3
     callbacks = native and isinstance(raw_link, dict) and raw_link.get('schema') == 2
     companion = native and isinstance(raw_link, dict) and 'nativeLibrary' in raw_link
     data_symbols = native and isinstance(raw_link, dict) and 'dataSymbols' in raw_link
@@ -817,12 +818,13 @@ def package_scalar_link(module, validate_archive=True):
     link = record(raw_link, 'schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi' +
                   (' buildInputs' if inputs else '') + (' finalizers' if callbacks else '') +
                   (' nativeLibrary' if companion else '') + (' dataSymbols' if data_symbols else '') +
-                  (' exports dependencies' if components else ''))
+                  (' exports dependencies' if components else '') + (' callSeeds' if demand else ''))
     if inputs: require(isinstance(link['buildInputs'], dict), 'build inputs record')
-    require(type(link['schema']) is int and (link['schema'] == 1 or callbacks) and (link['format'] == 'llvm-bitcode' or
+    require(type(link['schema']) is int and (link['schema'] == 1 or callbacks or demand) and (link['format'] == 'llvm-bitcode' or
             native and (link['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux' or
                         link['format'] == 'llvm-embedded-mach-o' and platform.system() == 'Darwin')) and
-            link['profile'] == ('thc-package-c-ffi-v1' if native else 'thc-local-scalar-ccall-v1'), 'link profile')
+            link['profile'] == ('thc-package-c-ffi-demand-v1' if demand else
+                               'thc-package-c-ffi-v1' if native else 'thc-local-scalar-ccall-v1'), 'link profile')
     unit = text(link['unit'])
     require(unit == module.get('unit'), 'component owner')
     target = text(link['target'])
@@ -831,10 +833,11 @@ def package_scalar_link(module, validate_archive=True):
     require(target_cpu == cpu and ((platform.system() == 'Linux' and target.endswith('-linux-gnu')) or
             (platform.system() == 'Darwin' and ('-darwin' in target or '-apple-macosx' in target))), 'target differs from audit host')
     require(SHA256.fullmatch(text(link['componentSha256'])) and SHA256.fullmatch(text(link['bitcodeSha256'])), 'digest')
-    encoded = text(link['bitcodeHex'])
+    encoded = link['bitcodeHex']
+    require(isinstance(encoded, str), 'bitcode encoding')
     try: data = bytes.fromhex(encoded)
     except ValueError as error: raise ValueError('Invalid package scalar bitcode encoding') from error
-    require(data and data.hex() == encoded and hashlib.sha256(data).hexdigest() == link['bitcodeSha256'], 'bitcode digest')
+    require((demand or data) and data.hex() == encoded and hashlib.sha256(data).hexdigest() == link['bitcodeSha256'], 'bitcode digest')
     if companion:
         dependency = record(link['nativeLibrary'], 'sha256 hex')
         encoded = text(dependency['hex'])
@@ -935,6 +938,35 @@ def package_scalar_link(module, validate_archive=True):
             require(entry['arguments'] == ['AddrRep'] and entry['result'] == 'void' and
                 entry['convention'] == 'ccall' and entry['safety'] == 'unsafe' and
                 entry['symbol'] not in ('free', 'libdwPoolRelease', 'backtraceFree'), 'finalizer ABI')
+    if demand:
+        require(link['format'] == 'llvm-bitcode' and components and 'dataSymbols' not in link and not finalizers and
+                all(entry['convention'] == 'ccall' for entry in abi.values()), 'ordinary demand component profile')
+        providers = dict(observed)
+        if data: providers[unit] = link
+        seeds = set()
+        require(isinstance(link['callSeeds'], list) and link['callSeeds'], 'missing call seeds')
+        for value in link['callSeeds']:
+            seed = record(value, 'entry bitcodeHex bitcodeSha256 providerUnit providerComponentSha256 providerSymbol')
+            entry = text(seed['entry'])
+            encoded, digest = text(seed['bitcodeHex']), text(seed['bitcodeSha256'])
+            payload = bytes.fromhex(encoded)
+            require(SHA256.fullmatch(digest) and payload and payload.hex() == encoded and
+                    hashlib.sha256(payload).hexdigest() == digest, 'call seed digest')
+            require(entry in available and entry not in data_symbols and entry not in finalizers, 'ordinary call seed ABI')
+            if seed['providerUnit'] is None:
+                require(seed['providerComponentSha256'] is None and seed['providerSymbol'] is None, 'absent call provider')
+            else:
+                owner, component_hash, symbol = text(seed['providerUnit']), text(seed['providerComponentSha256']), text(seed['providerSymbol'])
+                provider = providers.get(owner)
+                require(provider is not None and provider['componentSha256'] == component_hash and
+                        symbol.startswith('thc_provider_' + component_hash + '_') and
+                        re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', symbol) and symbol in provider['exports'],
+                        'exact call seed provider owner')
+            require(entry not in seeds, 'duplicate call seed')
+            seeds.add(entry)
+        if not data:
+            require(not companion and not link['exports'] and not link['dependencies'] and not data_symbols and
+                    not finalizers and len(seeds) == len(abi), 'absent component obligations')
     selected_link = link
     if native and 'staticForeignImports' not in module:
         require('staticForeignImportStubs' not in module, 'unproved retained import obligations')

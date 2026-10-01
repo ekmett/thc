@@ -404,6 +404,84 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(dict(module, packageNativeLink=dict(link, **changes)))
 
+    def demand_module(self):
+        module = self.module(['WordRep'])
+        link = module['packageNativeLink']
+        symbol = 'thc_provider_' + link['componentSha256'] + '_read_bytes'
+        link.update(schema=3, profile='thc-package-c-ffi-demand-v1', exports=[symbol], dependencies=[],
+            callSeeds=[dict(entry=link['abi'][0]['entry'], bitcodeHex=b'seed'.hex(),
+                bitcodeSha256=hashlib.sha256(b'seed').hexdigest(), providerUnit=link['unit'],
+                providerComponentSha256=link['componentSha256'], providerSymbol=symbol)])
+        return module
+
+    def test_demand_seeds_require_exact_canonical_provider_ownership(self):
+        module = self.demand_module()
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual({link['abi'][0]['entry']}, proved)
+        self.assertEqual(module['packageNativeLink']['callSeeds'], link['callSeeds'])
+        provider = dict(schema=1, profile='thc-package-native-component-v1', unit='provider',
+            target=link['target'], componentSha256='b' * 64, bitcodeSha256=hashlib.sha256(b'provider').hexdigest(),
+            bitcodeHex=b'provider'.hex(), format='llvm-bitcode',
+            exports=['thc_provider_' + 'b' * 64 + '_read_bytes'], dependencies=[])
+        link['dependencies'] = [provider]
+        seed = link['callSeeds'][0]
+        seed.update(providerUnit='provider', providerComponentSha256='b' * 64, providerSymbol=provider['exports'][0])
+        self.assertEqual(proved, core_package_manifest.package_scalar_link(module)[1])
+        seed.update(providerUnit=None, providerComponentSha256=None, providerSymbol=None)
+        link.update(bitcodeHex='', bitcodeSha256=hashlib.sha256(b'').hexdigest(), exports=[], dependencies=[])
+        self.assertEqual(proved, core_package_manifest.package_scalar_link(module)[1])
+
+    def test_demand_seed_mutations_cannot_weaken_native_or_typed_obligations(self):
+        import copy
+        original = self.demand_module()
+        mutations = [
+            ('schema', lambda l: l.update(schema=4)),
+            ('profile', lambda l: l.update(profile='thc-package-c-ffi-v1')),
+            ('format', lambda l: l.update(format='llvm-embedded-elf')),
+            ('missing seeds', lambda l: l.update(callSeeds=[])),
+            ('duplicate seed', lambda l: l['callSeeds'].append(copy.deepcopy(l['callSeeds'][0]))),
+            ('extra seed field', lambda l: l['callSeeds'][0].update(extra=True)),
+            ('seed digest', lambda l: l['callSeeds'][0].update(bitcodeHex=b'changed'.hex())),
+            ('uppercase seed', lambda l: l['callSeeds'][0].update(bitcodeHex='AB')),
+            ('empty seed', lambda l: l['callSeeds'][0].update(bitcodeHex='', bitcodeSha256=hashlib.sha256(b'').hexdigest())),
+            ('unknown entry', lambda l: l['callSeeds'][0].update(entry='other_entry')),
+            ('wrong provider unit', lambda l: l['callSeeds'][0].update(providerUnit='other')),
+            ('wrong provider digest', lambda l: l['callSeeds'][0].update(providerComponentSha256='b' * 64)),
+            ('unexported provider', lambda l: l['callSeeds'][0].update(providerSymbol='thc_provider_' + 'a' * 64 + '_missing')),
+            ('wrong namespace', lambda l: l['callSeeds'][0].update(providerSymbol='read_bytes')),
+            ('partial provider', lambda l: l['callSeeds'][0].update(providerUnit=None)),
+            ('missing provider hash', lambda l: l['callSeeds'][0].update(providerComponentSha256=None)),
+            ('CAPI', lambda l: l['abi'][0].update(convention='capi')),
+            ('data address', lambda l: l.update(dataSymbols=[l['abi'][0]['entry']])),
+            ('finalizer', lambda l: l.update(finalizers=[l['abi'][0]['entry']])),
+            ('empty component with provider', lambda l: l.update(bitcodeHex='', bitcodeSha256=hashlib.sha256(b'').hexdigest())),
+        ]
+        for name, mutate in mutations:
+            changed = copy.deepcopy(original)
+            mutate(changed['packageNativeLink'])
+            with self.subTest(change=name), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(changed)
+        for field, value in [('unit', 'wrong-owner'), ('arguments', ['AddrRep', 'void']),
+                             ('result', ['void', 'IntRep']), ('safety', 'safe')]:
+            changed = copy.deepcopy(original)
+            changed['staticForeignImports']['imports'][0]['emitted'][field] = value
+            with self.subTest(emitted=field), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(changed)
+
+    def test_absent_demand_component_cannot_drop_canonical_obligations(self):
+        import copy
+        module = self.demand_module()
+        link = module['packageNativeLink']
+        link.update(bitcodeHex='', bitcodeSha256=hashlib.sha256(b'').hexdigest(), exports=[])
+        link['callSeeds'][0].update(providerUnit=None, providerComponentSha256=None, providerSymbol=None)
+        self.assertEqual({link['abi'][0]['entry']}, core_package_manifest.package_scalar_link(module)[1])
+        for additions in (dict(exports=['public_root']), dict(nativeLibrary=dict(hex='4243',
+                sha256=hashlib.sha256(b'BC').hexdigest())), dict(callSeeds=[])):
+            changed = copy.deepcopy(module)
+            changed['packageNativeLink'].update(additions)
+            with self.subTest(additions=additions), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(changed)
+
     def test_javascript_descriptor_leaves_real_native_adapter_obligations(self):
         import copy
         module = self.module(['WordRep'])
