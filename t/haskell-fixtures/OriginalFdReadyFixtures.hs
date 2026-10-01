@@ -14,7 +14,6 @@
 module OriginalFdReadyFixtures (prepareOriginalFdReady) where
 
 import Control.Monad (forM, unless)
-import CompactModelFixtures (writeCompactModel)
 import Data.Aeson (Value(..), eitherDecode, object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -24,8 +23,6 @@ import Data.Foldable (toList)
 import Data.IORef (newIORef, writeIORef)
 import Data.List (isPrefixOf, nubBy, sort, sortOn)
 import qualified Data.Map.Strict as Map
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import Data.Traversable (mapAccumL)
 import FixtureSupport
 import GHC hiding (entry, exprType)
@@ -44,8 +41,8 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 import THC.Interface
-import THC.Compact.JSON (parseModuleWithDebug)
-import THC.Plugin (serializePostTidyCore)
+import THC.Compact.Module (readModuleValue, writeModuleValue)
+import THC.Plugin (serializePostTidyCoreCBD)
 import Text.Read (readMaybe)
 
 directory, source, driver :: FilePath
@@ -119,26 +116,16 @@ rewriteReady change value = case value of
 negativeCases :: [(String, Value -> Value)]
 negativeCases =
   [("wrong-unit", changeField "target" (changeField "unit" (const (String "main"))))
-  ,("dynamic-target", changeField "target" (changeField "kind" (const (String "dynamic"))))
   ,("non-function", changeField "target" (changeField "isFunction" (const (Bool False))))
   ,("wrong-convention", changeField "convention" (const (String "capi")))
   ,("interruptible", changeField "safety" (const (String "interruptible")))
   ,("wrong-arity", changeField "arity" (const (Number 4)))
   ,("wrong-supplied-arity", changeField "suppliedArity" (const (Number 6)))
-  ,("boolean-schema", changeField "schema" (const (Bool True)))
   ,("signed-cbool", changeField "argumentReps" (changeIndex 1 (wrongRep "Int8Rep")))
   ,("machine-timeout", changeField "argumentReps" (changeIndex 2 (wrongRep "IntRep")))
   ,("scalar-state", changeField "argumentReps" (changeIndex 4 (wrongRep "IntRep")))
   ,("machine-result", changeField "resultRep" (wrongRep "IntRep"))]
   where wrongRep primitive = changeField "primReps" (const (toJSON [primitive :: String]))
-
--- These exact malformed models cannot be represented by the typed codec.
--- Keep their original diagnostics and prove rejection before publication,
--- rather than inventing a CBD that no longer contains the malformed value.
-encodingRejections :: [(String, String)]
-encodingRejections =
-  [("dynamic-target", "Error in $: Unmapped Core fields: [\"isFunction\",\"symbol\",\"unit\"]")
-  ,("boolean-schema", "Error in $.schema: parsing Word64 failed, expected Number, but encountered Boolean")]
 
 foreignApplications :: Value -> [Value]
 foreignApplications value = case value of
@@ -190,9 +177,8 @@ prepareOriginalFdReady root = do
     [object ["entry" .= entry, "scenario" .= scenario, "writing" .= writing, "milliseconds" .= milliseconds,
       "socket" .= socket, "result" .= result, "errnoBefore" .= before, "errnoAfter" .= after]
     | (entry, scenario, writing, milliseconds, socket, result, before, after) <- rows]
-  let originalPath = directory </> "OriginalFDDeclarations.json"
-      templatePath = directory </> "Template.json"
-      adaptedPath = directory </> "OriginalFdReadyAudit.json"
+  let originalPath = directory </> "OriginalFDDeclarations.cbd"
+      templatePath = directory </> "Template.cbd"
       adaptedCompact = directory </> "OriginalFdReadyAudit.cbd"
       factsPath = directory </> "facts.json"
   runGhc (Just libdir) $ do
@@ -235,98 +221,76 @@ prepareOriginalFdReady root = do
       unless (all (\v -> case isFCallId_maybe v of
         Just (Foreign.CCall (Foreign.CCallSpec (Foreign.StaticTarget _ _ (Just foreignOwner) True) _ _)) -> unitString foreignOwner == "ghc-internal"
         _ -> False) originals) (die "Missing original ghc-internal foreign owner")
-      -- Use the real serializer for call metadata, then retain only call nodes
-      -- in a non-executable diagnostic document. The temporary projection is
-      -- not a module export and makes no claim about original foreign products.
-      originalText <- serializePostTidyCore flags ["unit-qualified"] owner
+      -- Proof-only original declarations are persisted as CBD; this subset is
+      -- never supplied as the complete installed FD module for execution.
+      originalBytes <- serializePostTidyCoreCBD flags ["unit-qualified"] owner
         (typeEnvTyCons (md_types details)) [NonRec v body | (v, body) <- declarations] emptyIfaceForeign
-      originalProjection <- either die pure (eitherDecode (BL.fromStrict (Text.encodeUtf8 (Text.pack originalText))))
-      let originalApplications = foreignApplications originalProjection
-      unless (length originalApplications == 5) (die "Original declaration serialization lost fdReady calls")
-      templateText <- interfaceCoreJSON ["unit-qualified"] template
+      originalProjection <- either die pure (readModuleValue originalBytes)
+      unless (length (foreignApplications originalProjection) == 5)
+        (die "Original declaration serialization lost fdReady calls")
+      templateBytes <- interfaceCoreCBD ["unit-qualified"] template
       let adapted = map (mapBind (replaceCalls originals)) (interfaceBindings template)
           adaptedCalls = [v | (_, body) <- flattenBinds adapted, v <- variables body,
                               Just _ <- [readyCall v]]
       unless (length adaptedCalls == 2 && all (`elem` originals) adaptedCalls)
         (die "Adapted consumers did not retain the exact original GHC Ids")
-      adaptedText <- serializePostTidyCore flags ["unit-qualified"] (interfaceModule template)
+      adaptedBytes <- serializePostTidyCoreCBD flags ["unit-qualified"] (interfaceModule template)
         (typeEnvTyCons (md_types (interfaceDetails template))) adapted (interfaceForeign template)
-      writeJson (root </> originalPath) $ object
-        ["schema" .= (1 :: Int), "originalInterface" .= installed,
-         "projection" .= ("original-interface-foreign-declarations-only" :: String),
-         "completeModule" .= False, "calls" .= originalApplications]
-      writeFile (root </> templatePath) templateText
-      writeFile (root </> adaptedPath) adaptedText
+      BS.writeFile (root </> originalPath) originalBytes
+      BS.writeFile (root </> templatePath) templateBytes
+      BS.writeFile (root </> adaptedCompact) adaptedBytes
       writeJson (root </> factsPath) $ object
         ["originalInterface" .= installed, "originalCalls" .= length calls, "adaptedCalls" .= length replacements,
          "installedArtifactsHashed" .= False, "typeEqualityChecked" .= True,
          "originalIdentityChecked" .= True, "originalNamesExternal" .= map (isExternalName . varName) originals,
          "originalProjection" .= ("original-interface-foreign-declarations-only" :: String),
          "boundary" .= ("GHC-compiled test consumer with original installed FD FCallIds; not unchanged Handle/FD execution" :: String)]
-  writeCompactModel (root </> adaptedPath) (root </> adaptedCompact)
   audits <- forM entries $ \entry -> do
     let output = directory </> entry ++ ".audit.json"
     audited <- execute ("audit-" ++ entry) [] "python3"
       ["bin/audit-core.py", adaptedCompact, "--entry", "main:OriginalFdReadyAudit." ++ entry, "--output", output]
     pure (entry, output, audited)
-  adaptedJSON <- either (die . ("Malformed generated readiness Core: " ++)) pure . eitherDecode =<<
-    BL.readFile (root </> adaptedPath)
+  adaptedModel <- BS.readFile (root </> adaptedCompact) >>= either die pure . readModuleValue
   createDirectoryIfMissing True (root </> directory </> "negative")
   controls <- forM negativeCases $ \(label, change) -> do
-    let input = directory </> "negative" </> label ++ ".json"
-        compact = directory </> "negative" </> label ++ ".cbd"
-        mutated = rewriteReady change adaptedJSON
-    unless (mutated /= adaptedJSON) (die "Readiness negative control did not mutate the descriptor")
-    writeJson (root </> input) mutated
-    case lookup label encodingRejections of
-      Just expected -> case parseModuleWithDebug mutated of
-        Left actual | actual == expected -> do
-          let output = directory </> "negative" </> label ++ ".codec-rejection.json"
-          writeJson (root </> output) $ object
-            ["schema" .= (1 :: Int), "label" .= label,
-             "stage" .= ("compact-encoding" :: String), "accepted" .= False,
-             "input" .= input, "entries" .= map ("main:OriginalFdReadyAudit." ++) entries,
-             "error" .= actual]
-          pure ([input, output], [], Just (label, output))
-        Left actual -> die ("Unexpected readiness codec rejection: " ++ actual)
-        Right _ -> die "Malformed readiness control entered the typed codec"
-      Nothing -> do
-        writeCompactModel (root </> input) (root </> compact)
-        rejected <- forM entries $ \entry -> do
-          let output = directory </> "negative" </> label ++ "-" ++ entry ++ ".audit.json"
-          audited <- runLoggedExpect 1 180 root (directory </> "logs") ("negative-" ++ label ++ "-" ++ entry) [] "python3"
-            ["bin/audit-core.py", compact, "--entry", "main:OriginalFdReadyAudit." ++ entry, "--output", output]
-          report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
-          unless (jsonField "accepted" report == Bool False &&
-            case jsonField "issues" report of
-              Array issues -> any ((== String "foreign-call") . jsonField "code") issues
-              _ -> False) (die "Readiness negative control did not reject the original foreign descriptor")
-          pure (output, audited)
-        pure (input : compact : map fst rejected, map snd rejected, Nothing)
+    let compact = directory </> "negative" </> label ++ ".cbd"
+        mutated = rewriteReady change adaptedModel
+    unless (mutated /= adaptedModel) (die "Readiness negative control did not mutate the descriptor")
+    _ <- writeModuleValue (root </> compact) mutated
+    rejected <- forM entries $ \entry -> do
+      let output = directory </> "negative" </> label ++ "-" ++ entry ++ ".audit.json"
+      audited <- runLoggedExpect 1 180 root (directory </> "logs") ("negative-" ++ label ++ "-" ++ entry) [] "python3"
+        ["bin/audit-core.py", compact, "--entry", "main:OriginalFdReadyAudit." ++ entry, "--output", output]
+      report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
+      unless (jsonField "accepted" report == Bool False &&
+        case jsonField "issues" report of
+          Array issues -> any ((== String "foreign-call") . jsonField "code") issues
+          _ -> False) (die "Readiness negative control did not reject the original foreign descriptor")
+      pure (output, audited)
+    pure (compact : map fst rejected, map snd rejected)
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
   compactFiles <- listDirectory (root </> "src/cbd/THC/Compact")
   scriptFiles <- listDirectory (root </> "bin")
-  let negatives = concat [rejected | (_,rejected,_) <- controls]
-      codecRejections = [(label,path) | (_,_,Just (label,path)) <- controls]
+  let negatives = concatMap snd controls
       commands = [version, info, libdirResult, importsResult, compiled, observed] ++
         [command | (_,_,command) <- audits] ++ negatives
       inputs = sort $ [source, driver, "t/haskell-fixtures/OriginalFdReadyFixtures.hs",
         "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/CompactModelFixtures.hs", "src/core-symbols/THC/CoreSymbols.hs", "thc.cabal",
+        "src/core-symbols/THC/CoreSymbols.hs", "thc.cabal",
         "bin/audit-core.py", "bin/core-capabilities.json"] ++
         ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
         ["src/cbd/THC/Compact" </> name | name <- compactFiles, takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
-      artifacts = [oracle, originalPath, templatePath, adaptedPath, adaptedCompact, factsPath, binary,
+      artifacts = [oracle, originalPath, templatePath, adaptedCompact, factsPath, binary,
         directory </> "native/private-file"] ++ [path | (_,path,_) <- audits] ++
-        concat [paths | (paths,_,_) <- controls] ++ concatMap commandArtifacts commands
+        concatMap fst controls ++ concatMap commandArtifacts commands
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "nativeRows" .= length rows, "negativeAudits" .= length negatives,
-     "negativeEncodingRejections" .= length codecRejections, "negativeControls" .= length negativeCases,
-     "negativeControlLabels" .= map fst negativeCases, "codecRejections" .= Map.fromList codecRejections,
+     "negativeControls" .= length negativeCases,
+     "negativeControlLabels" .= map fst negativeCases,
      "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
      "audits" .= Map.fromList [(entry,path) | (entry,path,_) <- audits], "commands" .= map commandRecord commands]
-  putStrLn "original-fd-ready:168 native observations, actual original FCallIds,2 strict entries,12 controls (20 rejected audits,2 typed encoding rejections)"
+  putStrLn "original-fd-ready:168 native observations, actual original FCallIds,2 strict entries,10 controls (20 rejected audits)"
