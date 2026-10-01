@@ -219,6 +219,16 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn("tasks.withType(org.gradle.api.tasks.testing.Test)", init)
         self.assertIn("outputs.doNotCacheIf", init)
 
+    def test_gradle_invocations_do_not_reuse_external_daemon_state(self):
+        selected = self.selection() | {"polyglot": {"required": True, "classes": ["example.PolyglotTest"]}}
+        commands = [ci.gradle_command(self.selection()), ci.gradle_command(self.selection("full")),
+                    ci.gradle_command(self.selection(), install_dist=True), ci.polyglot_command(selected)]
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertIn("--no-daemon", command)
+                self.assertNotIn("--daemon", command)
+                self.assertIn("--build-cache", command)
+
     def test_polyglot_task_is_optional_and_reruns_its_exact_inventory(self):
         self.assertIsNone(ci.polyglot_command(self.selection()))
         selected = self.selection() | {"polyglot": {"required": True, "classes": ["example.PolyglotTest"]}}

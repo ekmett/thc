@@ -148,7 +148,8 @@ def gradle_command(selection, *, install_dist=False):
     require(classes and len(set(classes)) == len(classes), "Empty/duplicate selected classes")
     require(all(isinstance(c, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", c) for c in classes),
             "Invalid selected class name")
-    argv = ["./gradlew", "--daemon", "--max-workers=4", "--build-cache", "--continue",
+    # Keep reusable compilation caches, not a prior daemon's limits or failed cache-close state.
+    argv = ["./gradlew", "--no-daemon", "--max-workers=4", "--build-cache", "--continue",
             "--init-script", ".github/scripts/fast_ci.init.gradle"]
     if install_dist:
         argv.append("installDist")
@@ -176,7 +177,7 @@ def polyglot_command(selection):
     require(bool(classes) == optional["required"], "Polyglot selection has no exact classes")
     if not optional["required"]:
         return None
-    return ["./gradlew", "--daemon", "--max-workers=4", "--build-cache",
+    return ["./gradlew", "--no-daemon", "--max-workers=4", "--build-cache",
             "--init-script", ".github/scripts/fast_ci.init.gradle", "polyglotTest", "--rerun"]
 
 
