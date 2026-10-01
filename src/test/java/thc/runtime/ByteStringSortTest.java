@@ -140,7 +140,7 @@ class ByteStringSortTest {
                     case 9 -> object(descriptor.get("target")).put("unit", "bytestring-0.12.2.0-inplace:forged");
                     case 10 -> object(descriptor.get("target")).put("isFunction", false);
                 }
-                assertThrows(RuntimeFault.class, () -> program(language, backend, candidate), backend + "/variant=" + variant);
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(program(language, backend, candidate).entryTarget("entry"), new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{3, 2, 1}), 3L, Unit.INSTANCE}), backend + "/variant=" + variant);
             }
             var raw = program(language, backend, OriginalStdioChecks.rawModule(original, source("pre"), null));
             var storage = ManagedAddress.fromByteArray(new byte[]{3, 2, 1});

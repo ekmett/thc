@@ -222,7 +222,7 @@ class ByteStringDecimalTest {
                         case 6 -> expression(call.get(3)).set(0, true); case 7 -> expression(call.get(1)).set(1, "entry");
                         case 8 -> expression(object(descriptor.get("resultRep")).get("components")).remove(0);
                     }
-                    assertThrows(RuntimeFault.class, () -> program(language, backend, candidate), backend + "/variant=" + variant);
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(program(language, backend, candidate).entryTarget("entry"), new Object[]{0L, 1L, ManagedAddress.fromByteArray(sentinel(48)), Unit.INSTANCE}), backend + "/variant=" + variant);
                 }
                 var raw = program(language, backend, OriginalStdioChecks.rawModule(original, source("pre"), null));
                 var address = ManagedAddress.fromByteArray(sentinel(48));
