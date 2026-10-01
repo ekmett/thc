@@ -15,6 +15,7 @@
 module THC.Driver.NativeDependencies
   ( NativeProduct, nativeProductProof, nativeProductPieces, readNativeProduct
   , selectNativePieces, nativeLinkInputs, nativeSymbolArchives, configuredNativeArchive
+  , nativeWindowsRtsInputs
   ) where
 
 import Control.Exception (evaluate)
@@ -125,6 +126,35 @@ nativeLinkInputs ghcPkg libdir root publishedDatabases owner arguments = do
         (Package.ldOptions info ++ map (("-F" ++) . packagePath info) (Package.frameworkDirs info) ++
           concatMap (\framework -> ["-framework",framework]) (Package.frameworks info))
   pure (linkPaths (nativeLinkOptions arguments) ++ concatMap libraries (reverse dependencies))
+
+-- | Record the selected compiler's vanilla RTS inputs for the private Windows
+-- C dependency link. GHC supplies their ordering and transitive system libraries.
+-- These are not Core providers: the companion exports only the original package
+-- roots, never native Haskell, scheduler or callback entry points.
+nativeWindowsRtsInputs :: FilePath -> FilePath -> IO (String, [Value])
+nativeWindowsRtsInputs ghcPkg libdir = do
+  (status,registration,diagnostic) <- readProcessWithExitCode ghcPkg
+    ["--global-package-db=" ++ libdir </> "package.conf.d","--no-user-package-db",
+     "describe","rts","--no-expand-pkgroot"] ""
+  check (status == ExitSuccess) ("Cannot read Windows C dependency RTS registration: " ++ diagnostic)
+  (_,info) <- either (fail . show) pure
+    (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
+  check (prettyShow (pkgName (Package.sourcePackageId info)) == "rts")
+    "Windows C dependency registration is not the selected RTS"
+  let expand path
+        | Just suffix <- stripPrefix "${pkgroot}" path, Just pkgRoot <- Package.pkgRoot info = pkgRoot ++ suffix
+        | otherwise = path
+  archives <- forM (Package.hsLibraries info) $ \library -> do
+    candidates <- filterM doesFileExist
+      [expand directory </> "lib" ++ library ++ ".a" | directory <- Package.libraryDirsStatic info]
+    actual <- nub <$> mapM canonicalizePath candidates
+    case actual of
+      [path] -> do
+        hash <- digest <$> BS.readFile path
+        pure (object ["path" .= path,"sha256" .= hash])
+      _ -> fail ("Windows C dependency has no unique registered vanilla archive: " ++ library)
+  check (not (null archives)) "Windows C dependency RTS has no registered archives"
+  pure (prettyShow (Package.installedUnitId info), archives)
 
 -- Native call and address roots can live in a package's ordinary C archive.
 -- Select the actual declaring registration, never an inlining consumer or the

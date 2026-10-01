@@ -225,6 +225,29 @@ loading syntax. Their temporary files are scheduled for deletion at JVM exit,
 matching the existing native runtime provider; Windows locks loaded DLL files.
 Native authority does not grant the guest current-directory or file access.
 
+Installed scalar adapters compile for the actual MSVC LLVM target, using Clang's
+GNU attribute compatibility option for GHC's unchanged MinGW headers. Captured
+package LLVM retains its producing target and admission checks. Windows publishes
+verified raw LLVM, with a separate PE companion; it never labels PE as embedded
+ELF or sends the adapter through a Unix `-fPIC` container link.
+
+The producing GHC links that companion with its registered native RTS/Cffi
+closure and CRT ordering. Native archive members can retain RTS utility
+references even when selected for an ordinary package function. Appending RTS
+archives after CRT extraction can duplicate `_fpreset`; undefined allowances or
+replacement helper bodies are not a solution. The companion exports only its
+original package roots. Supporting RTS and Haskell symbols remain private.
+Actual archive hashes survive staging cleanup in installed cache observations.
+
+A native constructor calls the matching GHC's `initializeTimer` to initialize
+its private QPC frequency. This is clock initialization only: it creates no
+ticker, scheduler, native heap or stable-pointer ownership, installs no signal
+handlers, and needs no finalization. It never calls `initTimer`, `startTicker`,
+`hs_init` or `hs_exit`. Each context receives its own companion DLL; managed
+callbacks, scheduling and exceptions retain their THC boundaries. Native C
+assertions and `barf` retain their original fatal behavior. Linking these utilities
+does not establish general native Haskell runtime or callback support.
+
 ## Current boundaries
 
 To preserve a failing native link's inputs before acquisition removes its
@@ -248,6 +271,9 @@ Native allocations preserve context ownership, bounds and allocator identity.
 `errno`, not `GetLastError`. These services do not provide general file/Handle IO.
 
 Focused platform checks are available with `./bin/windows.ps1 -Action ACTION`:
+`NativeLinkTest` runs the owning Haskell native acquisition tests, including a
+real registered Windows C archive, independent GHC oracle, MSVC adapter target,
+private DLL proof and unchanged executable Core segments. `Test` runs it too.
 `WindowsServicesTest` checks directory and code-page services in both handoff
 modes; `MallocTest` checks allocation and returned pointers. These supplement the
 ordinary `Test` action.
@@ -255,15 +281,15 @@ ordinary `Test` action.
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.
-- Ordinary foreign calls in either Core backend also require the genuine
-  `THC.Exception` bundle. The standalone code-page and disabled-libdw boundary
-  checks pass independently of that bundle. On the development baseline,
-  `thc-fixtures.exe windows-bridge` builds the native oracle and exports pinned
-  Core, then fails acquisition on five physical RTS references:
-  `errorBelch`, `debugBelch`, `getProcessElapsedTime`, `_assertFail` and `barf`.
-  The public `windows-driver` fixture hits the same link boundary. Full Core
-  provider execution and a fresh public-driver receipt remain unqualified;
-  retained stale receipts must be regenerated, not accepted by editing hashes.
+- Ordinary foreign calls in either Core backend require the genuine
+  `THC.Exception` bundle. Windows support acquisition retains the selected
+  installed registration alongside its differently named wired Core owner;
+  the runtime sidecar must not acquire that same Core owner twice. The strict
+  audit and JVM loader both admit actual x64 MSVC LLVM and reject MinGW LLVM,
+  foreign CPUs and PE files labelled as LLVM containers.
+  `thc-fixtures.exe windows-driver` checks native-matching completion in both
+  backends and handoff modes, with strict verification on its first run.
+  Regenerate stale receipts from their producers; never edit their hashes.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.

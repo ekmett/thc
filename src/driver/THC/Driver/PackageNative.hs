@@ -41,7 +41,7 @@ import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
-import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
+import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives, nativeWindowsRtsInputs)
 import THC.Driver.Installed (boundedInterfaceProcess)
 import THC.Driver.NativeCache (nativeObjcopySelection)
 import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
@@ -676,6 +676,20 @@ writeNativeWrappers :: FilePath -> FilePath -> [String] -> [String] -> String ->
   [Signature] -> [String] -> [String] -> [[Signature]] -> [Value] -> (String -> Maybe String) -> [(String,Bool)] -> [FilePath] -> Bool -> IO ()
 writeNativeWrappers compiler root arguments configured unit directory signatures finalizers sources perModule providers wrapperHeader addresses dataLibraries installed = do
   let nativeDirectory = directory </> "native"
+  nativeTarget <- if installed then do
+    clang <- tool "THC_CLANG" "clang"
+    command root clang ["-dumpmachine"]
+    else pure ""
+  -- Installed adapters call the original native package bodies through the
+  -- Win64 scalar ABI. Compile those adapters for Sulong's real MSVC target;
+  -- captured MinGW source LLVM keeps its original target and admission rules.
+  -- MinGW's GHC headers otherwise erase __attribute__ when __GNUC__ is absent,
+  -- breaking Clang's own vector/intrinsic headers. Its GNU compatibility mode
+  -- retains those attributes without changing the actual MSVC target or ABI.
+  let adapterArguments = ["-optc" ++ option |
+        "x86_64-" `isPrefixOf` nativeTarget &&
+        ("-windows" `isInfixOf` nativeTarget || "-mingw" `isInfixOf` nativeTarget),
+        option <- ["--target=x86_64-pc-windows-msvc","-fgnuc-version=4.2.1"]]
   capiOwners <- if installed then forM (nub [symbol | (symbol,"capi",_,_,_) <- signatures]) $ \symbol -> do
       owner <- either fail pure (nativeCapiSource symbol sources)
       pure (symbol,owner)
@@ -683,9 +697,10 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
   dataInputs <- forM dataLibraries $ \path -> do
     digest <- sha <$> BS.readFile path
     pure (object ["path" .= path,"sha256" .= digest])
-  let inputIdentity = object ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,"installed" .= installed,
+  let inputIdentity = object $ ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,"installed" .= installed,
         "sources" .= sources,"providers" .= providers,"addresses" .= addresses,"dataLibraries" .= dataInputs,
-        "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers]
+        "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers] ++
+        ["adapterArguments" .= adapterArguments | not (null adapterArguments)]
       provisional = sha (BL.toStrict (encode inputIdentity))
       inventory = sort ([(signature,False) | signature <- signatures] ++
         [((symbol,"ccall","unsafe",[],"AddrRep"),True) | (symbol,_) <- addresses])
@@ -728,7 +743,7 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
             -- conflict with valid opaque Addr# callers. CAPI keeps its actual
             -- GHC stub headers; adapters need only standard scalar types.
             let preamble = ["#include <Rts.h>\n" | convention == "capi"] ++ ["#include <stdint.h>\n"]
-            (bitcode,target,inputs) <- compileC compiler root configured output
+            (bitcode,target,inputs) <- compileC compiler root (configured ++ adapterArguments) output
               (Just (concat preamble ++ source ++ wrappers))
             headers <- headerInputs (output </> "wrappers.c") inputs
             pure (bitcode,target,inputs,headers)
@@ -738,7 +753,7 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
           let output = nativeDirectory </> "addresses"
           createDirectoryIfMissing True output
           source <- either fail pure (nativeAddressSource (addressEntries component))
-          (bitcode,target,inputs) <- compileC compiler root configured output (Just source)
+          (bitcode,target,inputs) <- compileC compiler root (configured ++ adapterArguments) output (Just source)
           headers <- headerInputs (output </> "wrappers.c") inputs
           pure [(bitcode,target,inputs,headers)]
         pure (called ++ addressUnits)
@@ -884,11 +899,11 @@ nativeStaticExports value = case member value "staticForeignExports" of
         "static export declaration has no exact retained Core binder"
     pure exports
 
--- Nothing omits the machine-code container; its LLVM artifact and separately
--- rooted archive companion retain the actual execution and native providers.
+-- PE is not a Sulong LLVM container. Keep Windows components as verified raw
+-- LLVM with a separately rooted native companion, including ordinary imports.
 nativeDeferredLinkArguments :: String -> [String] -> Maybe [String]
 nativeDeferredLinkArguments target symbols
-  | not (null symbols) && ("-windows" `isInfixOf` target || "-mingw" `isInfixOf` target) = Nothing
+  | "-windows" `isInfixOf` target || "-mingw" `isInfixOf` target = Nothing
   | otherwise = Just $ concatMap (\symbol ->
       if "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
         then ["-Xlinker","-U","-Xlinker",'_' : symbol]
@@ -1248,9 +1263,10 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     dataLibraries <- maybe (pure []) (either fail pure . parseValue) (member record "dataLibraries") :: IO [FilePath]
     let linkArguments = dataLibraries ++ externalArguments
     clang <- tool "THC_CLANG" "clang"
-    (artifact,format,libraries,nativeLibrary) <- if null nativeExternals
-      then pure (final,"llvm-bitcode",[],Nothing) else do
+    (artifact,format,libraries,nativeLibrary,runtimeInputs) <- if null nativeExternals
+      then pure (final,"llvm-bitcode",[],Nothing,[]) else do
         let darwin = "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
+            windows = "-windows" `isInfixOf` target || "-mingw" `isInfixOf` target
             -- Installed Core can retain unused RTS calls. Do not pull native
             -- RTS archives into the process to satisfy them: ordinary shared
             -- library lazy resolution reports a missing target if reached.
@@ -1258,8 +1274,8 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
               then ["-Wl,-undefined,dynamic_lookup" | darwin]
               else [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined"]
             container = directory </> if darwin then "native/final.dylib" else "native/final.so"
-            artifact = if null deferredExternals then container else final
-            format = if not (null deferredExternals) then "llvm-bitcode"
+            artifact = if windows || not (null deferredExternals) then final else container
+            format = if windows || not (null deferredExternals) then "llvm-bitcode"
               else if darwin then "llvm-embedded-mach-o" else "llvm-embedded-elf"
             -- Current Apple ld ignores -fembed-bitcode's legacy bundle flag.
             -- Sulong accepts raw bitcode in the Mach-O __LLVM,__bundle section.
@@ -1268,8 +1284,8 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
               else ["-fembed-bitcode"]
             deferredArguments = nativeDeferredLinkArguments target deferredExternals
             exclusions = maybe [] id deferredArguments
-            -- PE has no per-symbol undefined allowance. Its deferred component
-            -- stays raw LLVM; record no container argv for a skipped command.
+            -- PE components stay raw LLVM; record no container argv for the
+            -- omitted machine-code recipe, without an undefined allowance.
             arguments = case deferredArguments of
               Nothing -> []
               Just _ -> ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
@@ -1291,11 +1307,39 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
               pure [nativeIrSymbol target name | line <- lines output, name:_ <- [words line]])
             pure (filter (`elem` definitions) nativeExternals)
           else pure nativeExternals
-        let dependency = directory </> if darwin then "native/dependencies.dylib" else "native/dependencies.so"
+        let dependency = directory </> if windows then "native/dependencies.dll"
+              else if darwin then "native/dependencies.dylib" else "native/dependencies.so"
             nativeRoots = nativeRootArguments target rooted
-            dependencyArguments = ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
-              resolution ++ exclusions ++ ["-o",dependency]
-        _ <- command directory clang dependencyArguments
+        (dependencyCompiler,dependencyArguments,runtimeInputs) <- if windows then do
+          -- PE cannot defer the real C objects' RTS references. Let the producing
+          -- GHC resolve its registered native closure, before the MinGW CRT;
+          -- appending a static RTS after CRT extraction duplicates _fpreset.
+          -- The DLL namespace contains only the existing package roots. All
+          -- supporting native RTS/Haskell state remains private to this DLL;
+          -- Core-owned operations and deferred callbacks retain their managed
+          -- dispatch, rather than acquiring a second guest runtime.
+          (runtimeUnit,inputs) <- nativeWindowsRtsInputs packageTool libdir
+          let exports = directory </> "native/dependency-exports.def"
+              initializer = directory </> "native/clock.c"
+              clockSource = unlines
+                ["/* Initialize only the original native C clock, never a guest RTS. */",
+                 "extern void initializeTimer(void);",
+                 "static void __attribute__((constructor)) thc_package_native_clock(void) { initializeTimer(); }"]
+              privateArguments = ["-shared","-no-hs-main","-hide-all-packages","-no-user-package-db",
+                "-package-id",runtimeUnit,initializer,"-o",dependency] ++
+                ["-optl" ++ option | option <- nativeRoots ++ linkArguments ++
+                  ["-Wl,--exclude-all-symbols",exports]]
+          check (all identifier rooted) "Windows native dependency root is not a C symbol"
+          writeFile exports (unlines ("EXPORTS":rooted))
+          -- GetTime's QPC frequency is private static storage. Its original
+          -- initializer allocates nothing and needs no finalizer. hs_init would
+          -- instead create a second scheduler/heap and must never run here.
+          writeFile initializer clockSource
+          pure (compiler,privateArguments,inputs ++ [object ["path" .= initializer,
+            "sha256" .= sha (T.encodeUtf8 (T.pack clockSource)),"source" .= clockSource]])
+        else pure (clang,["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
+          resolution ++ exclusions ++ ["-o",dependency],[])
+        _ <- command directory dependencyCompiler dependencyArguments
         -- Native archives can themselves carry compiler-embedded LLVM. Keep
         -- their companion native-only, and the ELF component's LLVM section
         -- exactly final.bc rather than concatenated archive-member payloads.
@@ -1304,18 +1348,19 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
               (if darwin then ["__LLVM,__bundle","__LLVM,__bitcode","__LLVM,__cmdline"] else [".llvmbc",".llvmcmd"]) ++ [dependency]
             componentArguments = ["--update-section=.llvmbc=" ++ final,artifact]
         _ <- command directory objcopy stripArguments
-        unless (darwin || not (null deferredExternals)) $ do
+        unless (windows || darwin || not (null deferredExternals)) $ do
           _ <- command directory objcopy componentArguments
           pure ()
         dependencyBytes <- BS.readFile dependency
         objcopyHash <- sha <$> BS.readFile objcopy
-        compilerHash <- sha <$> BS.readFile clang
+        compilerHash <- sha <$> BS.readFile dependencyCompiler
         pure (artifact,format,[object ["provider" .= ("package-declared-native-libraries-v1"::String),
-          "symbols" .= nativeExternals,"compiler" .= clang,"compilerSha256" .= compilerHash,
+          "symbols" .= nativeExternals,"compiler" .= dependencyCompiler,"compilerSha256" .= compilerHash,
           "arguments" .= arguments,
-          "dependencyArguments" .= dependencyArguments,"objcopy" .= objcopy,"objcopySha256" .= objcopyHash,
-          "objcopyArguments" .= (stripArguments : [componentArguments | not darwin && null deferredExternals])]],
-          Just (object ["sha256" .= sha dependencyBytes,"hex" .= hex dependencyBytes]))
+          "dependencyArguments" .= dependencyArguments,
+          "objcopy" .= objcopy,"objcopySha256" .= objcopyHash,
+          "objcopyArguments" .= (stripArguments : [componentArguments | not windows && not darwin && null deferredExternals])]],
+          Just (object ["sha256" .= sha dependencyBytes,"hex" .= hex dependencyBytes]),runtimeInputs)
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     providerInputs <- mapM (\value -> get value "inputs") providers
@@ -1337,8 +1382,11 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     -- already participate in sourceIdentity/component identity; retain them in
     -- the local cache-observation receipt without inventing compile metadata.
     archiveInputs <- maybe (pure []) (either fail pure . parseValue) (member identity "dataLibraries") :: IO [Value]
+    -- Durable registered archives survive temporary acquisition cleanup; their
+    -- observations invalidate cached Core if the private support bytes change.
     writeJson (directory </> "native/inputs.json") (object
-      ["sources" .= (inputs ++ [object ["files" .= archiveInputs] | not (null archiveInputs)]),"unresolved" .= externals])
+      ["sources" .= (inputs ++ [object ["files" .= (archiveInputs ++ runtimeInputs)] |
+        not (null (archiveInputs ++ runtimeInputs))]),"unresolved" .= externals])
     pure proof
    dependencyClosure :: Value -> IO [Value]
    dependencyClosure value = do
