@@ -30,19 +30,19 @@ public class FileWaitFullCoreTest {
     private Map<String, Object> document(String path) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(fixture, path).toPath(), StandardCharsets.UTF_8)); }
     private boolean valid(RootCallTarget target) throws Exception { return Boolean.TRUE.equals(target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private void compile(RootCallTarget target) throws Exception { target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertTrue(valid(target), target.getRootNode().getName()); }
-    private Object invoke(RootCallTarget target, long fd) { return Calls.target(target, new Object[] {0L, fd, thc.runtime.Unit.INSTANCE}); }
+    private Object invoke(ExecutableProgram program, String entry, long fd) { return OriginalStdioChecks.invoke(program, "main:FileWaitAudit." + entry, fd, thc.runtime.Unit.INSTANCE); }
     @Test public void originalWaitsMatchNativeAndRetainTheExactLazyBadFdPayload() throws Exception {
         var manifest = document("manifest.json"); assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(new ArrayList<>(entries.keySet()), manifest.get("entries"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/FileWaitAudit.hs", "t/fixtures/compiler/FileWaitNative.hs",
             "t/haskell-fixtures/FileWaitFixtures.hs", "bin/core-capabilities.json"), null);
-        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/file-wait/oracle.txt", "build/file-wait/pre/core/FileWaitAudit.json", "build/file-wait/post/core/FileWaitAudit.json"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/file-wait/oracle.txt", "build/file-wait/pre/core/FileWaitAudit.cbd", "build/file-wait/post/core/FileWaitAudit.cbd"), null);
         assertEquals("read-ready\nwrite-ready\noriginal-bad-fd\n", Files.readString(new File(root, (String) manifest.get("oracle")).toPath(), StandardCharsets.UTF_8));
         var originals = new ArrayList<Map<String, Object>>(); var targetLayout = CoreCbdFixtures.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout(); assertNotNull(targetLayout);
         var stages = (Map<String, String>) manifest.get("stages"); assertEquals(Set.of("pre", "post"), stages.keySet());
         for (var stage : stages.entrySet()) {
-            var modules = new ArrayList<>(originals); modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, stage.getValue()).toPath(), StandardCharsets.UTF_8)));
+            var modules = new ArrayList<>(originals); modules.add(OriginalStdioChecks.module(new File(root, stage.getValue())));
             var combined = new LinkedHashMap<>(CoreModules.merge(modules)); combined.put("targetLayout", targetLayout);
-            var closure = document(stage.getKey() + "/core/THC.InterfaceClosure.json"); var discovered = new ArrayList<Object>();
+            var closure = OriginalStdioChecks.module(new File(fixture, stage.getKey() + "/core/THC.InterfaceClosure.cbd")); var discovered = new ArrayList<Object>();
             for (String key : List.of("bindings", "missingDefinitions")) for (var binding : (List<Map<String, Object>>) closure.get(key)) discovered.add(binding.get("id"));
             assertTrue(discovered.contains(CoreFileWait.badFd), stage.getKey() + " must discover the original implicit payload");
             for (var entry : entries.entrySet()) {
@@ -56,18 +56,18 @@ public class FileWaitFullCoreTest {
                         var file = directory.resolve(stage.getKey() + "-" + backend + "-" + entry.getKey()); Files.writeString(file, "ready");
                         byte[] raw = file.toString().getBytes(StandardCharsets.UTF_8); var address = ManagedAddress.fromByteArray(Arrays.copyOf(raw, raw.length + 1));
                         long descriptor = files.open(address, writing ? 2L : 0L, ForeignSafety.UNSAFE); assertTrue(descriptor >= 3L);
-                        var linked = new LinkedHashMap<>(CoreModules.reachable(combined, entry.getKey(), true)); linked.put("instrument", true);
-                        ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var target = program.entryTarget(entry.getKey());
-                        for (int i = 0; i < 6; i++) assertSame(thc.runtime.Unit.INSTANCE, invoke(target, descriptor));
+                        var linked = new LinkedHashMap<>(CoreModules.reachable(combined, "main:FileWaitAudit." + entry.getKey(), true)); linked.put("instrument", true);
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var target = program.entryTarget("main:FileWaitAudit." + entry.getKey());
+                        for (int i = 0; i < 6; i++) assertSame(thc.runtime.Unit.INSTANCE, invoke(program, entry.getKey(), descriptor));
                         var original = program.entryValue(CoreFileWait.badFd);
                         for (int i = 0; i < 2; i++) {
-                            var failure = assertThrows(GuestException.class, () -> invoke(target, -1L)); assertSame(original, failure.getPayload());
+                            var failure = assertThrows(GuestException.class, () -> invoke(program, entry.getKey(), -1L)); assertSame(original, failure.getPayload());
                             if (original instanceof Thunk thunk) assertEquals(0, thunk.getState(), "original CAF remains lazy");
                         }
-                        compile(target); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertSame(thc.runtime.Unit.INSTANCE, invoke(target, descriptor));
+                        compile(target); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertSame(thc.runtime.Unit.INSTANCE, invoke(program, entry.getKey(), descriptor));
                         assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue()); assertTrue(valid(target));
                         for (long bad : new long[] {-1L, descriptor}) {
-                            if (bad == descriptor) assertEquals(0L, files.close(descriptor, ForeignSafety.UNSAFE)); var failure = assertThrows(GuestException.class, () -> invoke(target, bad)); assertSame(original, failure.getPayload());
+                            if (bad == descriptor) assertEquals(0L, files.close(descriptor, ForeignSafety.UNSAFE)); var failure = assertThrows(GuestException.class, () -> invoke(program, entry.getKey(), bad)); assertSame(original, failure.getPayload());
                             if (original instanceof Thunk thunk) assertEquals(0, thunk.getState(), "original CAF remains lazy");
                         }
                         assertTrue(valid(target), stage.getKey() + "/" + backend + "/" + entry.getKey() + " remains installed after bad FD");

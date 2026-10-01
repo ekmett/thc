@@ -62,14 +62,14 @@ prepare coreOnly root = do
         ghcOut = directory </> stage </> "ghc"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
-        consumer = core </> "ArithmeticExceptionsAudit.json"
+        consumer = core </> "ArithmeticExceptionsAudit.cbd"
     mapM_ (createDirectoryIfMissing True . (root </>)) [core, ghcOut]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [source])
     audits <- forM entries $ \entry -> do
       result <- try (run (stage ++ "-audit-" ++ entry) [] "python3"
-        ["bin/audit-core.py", "--package-manifest", packagePath, "--entry", entry,
+        ["bin/audit-core.py", "--package-manifest", packagePath, "--entry", "main:ArithmeticExceptionsAudit." ++ entry,
          "--output", directory </> stage </> entry ++ "-audit.json", consumer]) :: IO (Either ExitCode CommandResult)
       pure (entry, result)
     pure (stage, consumer, exported, audits)
@@ -92,7 +92,7 @@ prepare coreOnly root = do
         concat [exported : [result | (_, Right result) <- audits] | (_,_,exported,audits) <- stages]
       artifacts = fixtureArtifacts installed ++ concatMap commandArtifacts commands ++
         [consumer | (_,consumer,_,_) <- stages] ++
-        [directory </> stage </> "core/THC.InterfaceClosure.json" | stage <- ["pre", "post"]] ++
+        [directory </> stage </> "core/THC.InterfaceClosure.cbd" | stage <- ["pre", "post"]] ++
         [directory </> stage </> entry ++ "-audit.json" | stage <- ["pre", "post"], entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

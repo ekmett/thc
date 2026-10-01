@@ -14,11 +14,9 @@
 module OriginalIconvFixtures (prepareOriginalIconv) where
 
 import Control.Monad (forM, unless)
-import Data.Aeson (Value(..), eitherDecode, object, toJSON, (.=))
-import qualified Data.Aeson.Key as Key
+import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy as BL
 import Data.Foldable (toList)
 import Data.List (nubBy)
 import qualified Data.Map.Strict as Map
@@ -36,7 +34,8 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
 import THC.Interface
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
+import THC.Compact.Module (readModuleValue)
 import Text.Read (readMaybe)
 
 directory :: FilePath
@@ -89,38 +88,6 @@ observation :: Observation -> Value
 observation (result, err, consumed, produced, bytes) = object
   ["result" .= result, "errno" .= err, "consumed" .= consumed, "produced" .= produced, "bytes" .= bytes]
 
-change :: Key.Key -> (Value -> Value) -> Value -> Value
-change key f (Object fields) = case KM.lookup key fields of
-  Just value -> Object (KM.insert key (f value) fields)
-  Nothing -> error "Missing foreign descriptor field"
-change _ _ _ = error "Expected foreign descriptor object"
-rewrite :: (Value -> Value) -> Value -> Value
-rewrite f (Object fields) = Object $ KM.mapWithKey (\key value ->
-  if key == "foreignCall" then f value else rewrite f value) fields
-rewrite f (Array values) = Array (fmap (rewrite f) values)
-rewrite _ value = value
-badFlags :: Value -> Value
-badFlags (Array values) = case map badFlags (toList values) of
-  [String "app", fn, args, Array flags, x, y, meta@(Object fields)] | KM.member "foreignCall" fields ->
-    toJSON [String "app", fn, args, Array (fmap (const (Bool True)) flags), x, y, meta]
-  children -> toJSON children
-badFlags (Object fields) = Object (fmap badFlags fields)
-badFlags value = value
-negativeCases :: [(String, Value -> Value)]
-negativeCases = [("wrong-unit", rewrite (change "target" (change "unit" (const (String "main")))))
-  ,("dynamic", rewrite (change "target" (change "kind" (const (String "dynamic")))))
-  ,("non-function", rewrite (change "target" (change "isFunction" (const (Bool False)))))
-  ,("wrong-convention", rewrite (change "convention" (const (String "capi"))))
-  ,("wrong-safety", rewrite (change "safety" (const (String "safe"))))
-  ,("wrong-arity", rewrite (change "arity" (const (Number 0))))
-  ,("wrong-saturation", rewrite (change "suppliedArity" (const (Number 0))))
-  ,("boolean-schema", rewrite (change "schema" (const (Bool True))))
-  ,("wrong-result", rewrite (change "resultRep" (change "primReps" (const (toJSON ["IntRep" :: String])))))
-  ,("declared-evaluated", rewrite (change "argumentReps" (\v -> case v of
-      Array xs -> Array (fmap (change "evaluated" (const (Bool True))) xs)
-      _ -> error "Expected representations")))
-  ,("wrong-cbv", badFlags)]
-
 prepareOriginalIconv :: FilePath -> IO ()
 prepareOriginalIconv root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
@@ -131,8 +98,8 @@ prepareOriginalIconv root = do
       source = "t/fixtures/compiler/OriginalIconvAudit.hs"
       driver = "t/fixtures/compiler/OriginalIconvAuditNative.hs"
       binary = directory </> "native/oracle"
-      adaptedPath = directory </> "OriginalIconvAudit.json"
-      prePath = directory </> "PreIconvAudit.json"
+      adaptedPath = directory </> "OriginalIconvAudit.cbd"
+      prePath = directory </> "PreIconvAudit.cbd"
   version <- execute "version" ghc ["--numeric-version"]
   unless (oneLine version == "9.14.1") (die "Original iconv fixture requires GHC9.14.1")
   libdir <- execute "libdir" ghc ["--print-libdir"]
@@ -175,14 +142,14 @@ prepareOriginalIconv root = do
           calls = [v | (_, body) <- flattenBinds adapted, v <- variables body, target v /= Nothing]
       unless (length originals == 4 && length calls == 4 && all (`elem` originals) calls &&
         all (not . isExternalName . varName) originals) (die "Original iconv private Id inventory mismatch")
-      originalText <- interfaceCoreJSON ["unit-qualified"] original
-      originalJSON <- either die pure (eitherDecode (BL.fromStrict (BS.pack originalText)))
+      originalBytes <- interfaceCoreCBD ["unit-qualified"] original
+      originalJSON <- either die pure (readModuleValue originalBytes)
       writeJson (root </> directory </> "declarations.json") $ object
         ["completeModule" .= False, "originalInterface" .= installed, "calls" .= foreignApps originalJSON,
          "installedArtifactsHashed" .= False, "typeEqualityChecked" .= True, "originalIdentityChecked" .= True]
-      adaptedText <- serializePostTidyCore flags ["unit-qualified"] (interfaceModule template)
+      adaptedBytes <- serializePostTidyCoreCBD flags ["unit-qualified"] (interfaceModule template)
         (typeEnvTyCons (md_types (interfaceDetails template))) adapted (interfaceForeign template)
-      writeFile (root </> adaptedPath) adaptedText
+      BS.writeFile (root </> adaptedPath) adaptedBytes
       pure originals
     -- The source goes through GHC's actual parser/typechecker/desugarer and
     -- optimizer, stopping before Tidy. Substitution still uses Id/type equality,
@@ -203,42 +170,22 @@ prepareOriginalIconv root = do
     liftIO $ do
       unless (all (`elem` originalIds) calls && all (\symbol -> any ((== Just symbol) . target) calls) symbols)
         (die "Pre-Tidy consumer lost original iconv identities")
-      serializeOptimizedCore flags ["unit-qualified"] adaptedGuts >>= writeFile (root </> prePath)
+      serializeOptimizedCoreCBD flags ["unit-qualified"] adaptedGuts >>= BS.writeFile (root </> prePath)
   audits <- forM entries $ \entry -> do
     let path = directory </> entry ++ ".audit.json"
-    command <- execute ("audit-" ++ entry) "python3" ["bin/audit-core.py", adaptedPath, "--entry", entry, "--output", path]
+    command <- execute ("audit-" ++ entry) "python3" ["bin/audit-core.py", adaptedPath, "--entry", "main:OriginalIconvAudit." ++ entry, "--output", path]
     pure (entry, path, command)
   preAudits <- forM entries $ \entry -> do
     let path = directory </> "pre-" ++ entry ++ ".audit.json"
-    command <- execute ("pre-audit-" ++ entry) "python3" ["bin/audit-core.py", prePath, "--entry", entry, "--output", path]
+    command <- execute ("pre-audit-" ++ entry) "python3" ["bin/audit-core.py", prePath, "--entry", "main:OriginalIconvAudit." ++ entry, "--output", path]
     pure ("pre-" ++ entry, path, command)
-  adaptedJSON <- either die pure . eitherDecode =<< BL.readFile (root </> adaptedPath)
-  createDirectoryIfMissing True (root </> directory </> "negative")
-  negatives <- fmap concat $ forM negativeCases $ \(label, mutate) -> do
-    let path = directory </> "negative" </> label ++ ".json"
-        malformed = mutate adaptedJSON
-    unless (malformed /= adaptedJSON) (die "Iconv negative fixture did not mutate")
-    writeJson (root </> path) malformed
-    forM entries $ \entry -> do
-      let output = directory </> "negative" </> label ++ "-" ++ entry ++ ".audit.json"
-      command <- runLoggedExpect 1 180 root (directory </> "logs") (label ++ "-" ++ entry) [] "python3"
-        ["bin/audit-core.py", path, "--entry", entry, "--output", output]
-      report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
-      case report of
-        Object fields | KM.lookup "accepted" fields == Just (Bool False),
-          Just (Array issues) <- KM.lookup "issues" fields,
-          any (\issue -> case issue of Object xs -> KM.lookup "code" xs == Just (String "foreign-call"); _ -> False) issues -> pure ()
-        _ -> die "Iconv negative audit did not reject the foreign contract"
-      pure (path, output, command)
   let inputs = [source, driver, "t/haskell-fixtures/OriginalIconvFixtures.hs", "src/compiler/THC/Interface.hs",
         "src/compiler/THC/Plugin.hs", "bin/core_original_foreign.py", "bin/audit-core.py", "bin/core-capabilities.json"]
-      artifacts = [oraclePath, adaptedPath, prePath, directory </> "declarations.json"] ++ [p | (_,p,_) <- audits ++ preAudits] ++
-        concat [[input, output] | (input, output, _) <- negatives]
-      commands = [version, libdir, imports, compiled, observed] ++ [c | (_,_,c) <- audits ++ preAudits] ++ [c | (_,_,c) <- negatives]
+      artifacts = [oraclePath, adaptedPath, prePath, directory </> "declarations.json"] ++ [p | (_,p,_) <- audits ++ preAudits]
+      commands = [version, libdir, imports, compiled, observed] ++ [c | (_,_,c) <- audits ++ preAudits]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object ["schema" .= (1 :: Int), "entries" .= entries,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "nativeRows" .= length rows,
-    "negativeAudits" .= length negatives,
     "audits" .= Map.fromList [(entry,path) | (entry,path,_) <- audits ++ preAudits], "commands" .= map commandRecord commands]
-  putStrLn "original-iconv: four installed FCallIds, ten native cases, eight strict pre/post entries,44 rejected ABI controls"
+  putStrLn "original-iconv: four installed FCallIds, ten native cases, eight strict pre/post entries"

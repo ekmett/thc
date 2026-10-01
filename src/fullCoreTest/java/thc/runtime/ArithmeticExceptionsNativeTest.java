@@ -49,14 +49,13 @@ public class ArithmeticExceptionsNativeTest {
         for (String line : Files.readAllLines(new File(root, (String) manifest.get("oracle")).toPath(), StandardCharsets.UTF_8)) {
             String[] row = line.split("\t", -1); rows.computeIfAbsent(row[0], ignored -> new ArrayList<>()).add(new Row(Long.parseLong(row[1]), Long.parseLong(row[2]))); count++;
         }
-        assertEquals(42, count); var stages = (Map<String, String>) manifest.get("stages"); var installedText = new StringBuilder();
-        var targetLayout = CoreCbdFixtures.appendModules(installedText, new File(root, (String) manifest.get("packageManifest")).getPath()); assertNotNull(targetLayout, "Original installed RTS target layout is required");
-        var originals = (List<Map<String, Object>>) Json.parse("[" + installedText + "]");
+        assertEquals(42, count); var stages = (Map<String, String>) manifest.get("stages"); var originals = new ArrayList<Map<String, Object>>();
+        var targetLayout = CoreCbdFixtures.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout(); assertNotNull(targetLayout, "Original installed RTS target layout is required");
         for (var stage : stages.entrySet()) {
-            var modules = new ArrayList<>(originals); modules.add(json(new File(root, stage.getValue()))); var module = new LinkedHashMap<>(CoreModules.merge(modules)); module.put("targetLayout", targetLayout);
+            var modules = new ArrayList<>(originals); modules.add(OriginalStdioChecks.module(new File(root, stage.getValue()))); var module = new LinkedHashMap<>(CoreModules.merge(modules)); module.put("targetLayout", targetLayout);
             // The plugin also discovers RTS-only dependencies in thin interface
             // closures. Complete installed Core supplies the executable bodies.
-            var closure = json(new File(directory, stage.getKey() + "/core/THC.InterfaceClosure.json")); var discovered = new ArrayList<Object>();
+            var closure = OriginalStdioChecks.module(new File(directory, stage.getKey() + "/core/THC.InterfaceClosure.cbd")); var discovered = new ArrayList<Object>();
             for (String key : List.of("bindings", "missingDefinitions")) for (var binding : (List<Map<String, Object>>) closure.get(key)) discovered.add(binding.get("id"));
             for (String name : List.of("raiseDivZero#", "raiseOverflow#", "raiseUnderflow#")) assertTrue(discovered.contains(CoreArithmeticExceptions.payload(name)), stage.getKey() + " discovers the original implicit " + name + " payload");
             for (String backend : List.of("ast", "bytecode")) for (String entry : entries) for (boolean cold : new boolean[] {false, true}) try (Context context = context()) {
@@ -68,14 +67,14 @@ public class ArithmeticExceptionsNativeTest {
                 for (var row : selected) assertEquals(model(entry, row.input()), row.result(), "native/" + entry + "/" + row.input());
                 context.initialize("thc"); context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = new LinkedHashMap<>(CoreModules.reachable(module, entry, true)); linked.put("instrument", true);
-                    ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var function = context.asValue(new EntryValue(program, entry, 1));
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:ArithmeticExceptionsAudit." + entry, true)); linked.put("instrument", true);
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var function = context.asValue(new EntryValue(program, "main:ArithmeticExceptionsAudit." + entry, 1));
                     String label = stage.getKey() + "/" + backend + "/" + entry + "/" + (cold ? "cold" : "profiled");
                     // The cold scenario first encounters exceptions in installed
                     // guest code. The separate profiled scenario must preserve
                     // that code on the first compiled throw, without recompiling.
                     for (int i = 0; i < 5; i++) for (var row : selected) if (!cold || row.input() != 0L) assertEquals(row.result(), function.execute(row.input()).asLong(), label);
-                    var body = program.entryTarget(entry + "Body"); var active = targets(program.entryTarget(entry)); boolean actualBody = false;
+                    var body = program.entryTarget("main:ArithmeticExceptionsAudit." + entry + "Body"); var active = targets(program.entryTarget("main:ArithmeticExceptionsAudit." + entry)); boolean actualBody = false;
                     for (var target : active) if (target == body || target.getRootNode().getName().contains(entry + "Body")) actualBody = true;
                     assertTrue(actualBody, label + " observes the retained primitive body in the actual guest call graph"); for (var target : active) compile(target);
                     assertTrue(function.invokeMember("compile").asBoolean()); for (var target : active) assertTrue(valid(target), label + " remains installed before its first raise");

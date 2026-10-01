@@ -59,7 +59,7 @@ prepareFileWait root = do
   pluginBuild <- run "plugin-build" [] "bin/build-compiler.sh" []
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        output = core </> "FileWaitAudit.json"
+        output = core </> "FileWaitAudit.cbd"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- run (stage ++ "-export")
@@ -69,7 +69,7 @@ prepareFileWait root = do
       let report = directory </> stage </> entry ++ "-audit.json"
       checked <- try (run (stage ++ "-audit-" ++ entry) [] "python3"
         ["bin/audit-core.py", "--package-manifest", packagePath,
-         "--entry", entry, "--output", report, output]) :: IO (Either ExitCode CommandResult)
+         "--entry", "main:FileWaitAudit." ++ entry, "--output", report, output]) :: IO (Either ExitCode CommandResult)
       pure (entry, report, checked)
     pure (stage, output, exported, audits)
   let failed = [stage ++ "/" ++ entry | (stage, _, _, audits) <- stages,
@@ -89,7 +89,7 @@ prepareFileWait root = do
       artifacts = fixtureArtifacts installed ++ [oracle] ++ concatMap commandArtifacts commands ++
         [output | (_, output, _, _) <- stages] ++
         [report | (_, _, _, audits) <- stages, (_, report, _) <- audits] ++
-        [directory </> stage </> "core/THC.InterfaceClosure.json" | stage <- ["pre", "post"]]
+        [directory </> stage </> "core/THC.InterfaceClosure.cbd" | stage <- ["pre", "post"]]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object

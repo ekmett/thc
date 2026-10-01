@@ -42,9 +42,17 @@ public class PackageScalarCbitsTest {
             if (programDocument == null) { programDocument = packages; for (var original : packageUnits) programUnits.put((String) original.get("id"), original); }
             assertEquals(programDocument.get("foreignExceptionBridgeUnit"), packages.get("foreignExceptionBridgeUnit"), "both acquisitions use the same actual runtime exception unit"); Map<String, Object> unit = null;
             for (var candidate : packageUnits) if (Objects.equals(candidate.get("id"), record.get("unit"))) { assertNull(unit); unit = candidate; } Objects.requireNonNull(unit);
-            List<String> keys; if (unit.containsKey("json")) { assertFalse(unit.containsKey("bundle"), "pair and legacy ZIP cannot both be selected"); keys = List.of("json", "symbols"); } else keys = List.of("bundle");
-            var references = (List<Map<String, String>>) record.get("libraryArtifacts"); assertEquals(keys.size(), references.size(), "retain every selected unit artifact"); var relocated = new LinkedHashMap<>(unit);
-            for (int i = 0; i < keys.size(); i++) { String key = keys.get(i); var retained = references.get(i); var original = (Map<String, Object>) unit.get(key); assertEquals(original.get("sha256"), retained.get("sha256"), "unchanged " + key + " artifact hash"); String suffix = switch (key) { case "json" -> ".jsons"; case "symbols" -> ".symbols"; default -> ".zip"; }; assertEquals(new File(root, prefix + "/" + record.get("name") + "/library/" + record.get("unit") + suffix).getCanonicalPath(), new File(retained.get("path")).getCanonicalPath(), "retained " + key + " path"); relocated.put(key, with(original, "path", new File(retained.get("path")).getCanonicalPath())); }
+            var references = (List<Map<String, String>>) record.get("libraryArtifacts");
+            var originalModules = (List<Map<String, Object>>) unit.get("modules");
+            assertEquals(originalModules.size(), references.size(), "retain every selected CBD artifact");
+            var relocatedModules = new ArrayList<Map<String, Object>>();
+            for (int i = 0; i < originalModules.size(); i++) {
+                var module = originalModules.get(i); var compact = (Map<String, Object>) module.get("compact"); var retained = references.get(i);
+                assertEquals(compact.get("sha256"), retained.get("sha256"), "unchanged CBD artifact hash");
+                assertEquals(new File(root, prefix + "/" + record.get("name") + "/library/" + record.get("unit") + "/" + module.get("name") + ".cbd").getCanonicalPath(), new File(retained.get("path")).getCanonicalPath(), "retained CBD path");
+                relocatedModules.add(with(module, "compact", with(compact, "path", new File(retained.get("path")).getCanonicalPath())));
+            }
+            var relocated = with(unit, "modules", relocatedModules);
             programUnits.put((String) record.get("unit"), relocated);
             // Select unchanged hashed acquisition products, never synthetic providers or payloads.
             var selected = temporary.resolve(record.get("name") + "-packages.json"); var selection = with(packages, "units", List.of(relocated)); Files.writeString(selected, Json.stringify(selection)); var directory = CoreUnitDirectory.read(selection);

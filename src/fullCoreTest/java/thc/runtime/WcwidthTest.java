@@ -37,7 +37,7 @@ public class WcwidthTest {
     private void checkRows(boolean compiled, List<List<Long>> rows, int index, ExecutableProgram program, RootCallTarget target, Language language, String label) throws Exception {
         for (var row : rows) {
             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-            assertEquals(row.get(index + 1), Calls.target(target, new Object[] {0L, row.getFirst()}), label + "/" + row.getFirst());
+            assertEquals(row.get(index + 1), OriginalStdioChecks.invoke(program, "wcwidth-ffi-0.1.0.0-inplace:Width." + (index == 0 ? "rawWidth" : "displayWidth"), row.getFirst()), label + "/" + row.getFirst());
             if (compiled) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
             var handoff = language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
             assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
@@ -47,10 +47,10 @@ public class WcwidthTest {
         var manifest = json("manifest.json"); OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "t/fixtures/run-wcwidth/src/Width.hs", "t/fixtures/run-wcwidth/app/Main.hs", "t/haskell-fixtures/WcwidthFixtures.hs",
             "src/driver/THC/Driver/PackageNative.hs", "src/driver/THC/Driver/NativeLibrarySources.hs"), null);
-        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/wcwidth/Width.json", "build/wcwidth/C.tsv", "build/wcwidth/C.UTF-8.tsv",
-            "build/wcwidth/rawWidth.json", "build/wcwidth/displayWidth.json", "build/wcwidth/ConsoleReporter.hs", "build/wcwidth/TASTY-LICENSE"), "build/wcwidth/");
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/wcwidth/Width.cbd", "build/wcwidth/C.tsv", "build/wcwidth/C.UTF-8.tsv",
+            "build/wcwidth/rawWidth.cbd", "build/wcwidth/displayWidth.cbd", "build/wcwidth/ConsoleReporter.hs", "build/wcwidth/TASTY-LICENSE"), "build/wcwidth/");
         for (String entry : List.of("rawWidth", "displayWidth")) assertEquals(true, json(entry + ".json").get("accepted"));
-        var original = json("Width.json"); var proof = (Map<?, ?>) original.get("packageNativeLink"); assertEquals("llvm-embedded-elf", proof.get("format"));
+        var original = OriginalStdioChecks.module(new File(directory, "Width.cbd")); var proof = (Map<?, ?>) original.get("packageNativeLink"); assertEquals("llvm-embedded-elf", proof.get("format"));
         var libraries = (List<Map<?, ?>>) ((Map<?, ?>) proof.get("buildInputs")).get("nativeLibraries"); var providers = new ArrayList<Object>(); for (var library : libraries) providers.add(library.get("provider"));
         assertEquals(List.of("package-declared-native-libraries-v1"), providers); var merged = CoreModules.merge(List.of(original)); var links = (List<PackageScalarLink>) merged.get("packageScalarLinks");
         assertEquals(1, links.size()); var link = links.getFirst(); assertFalse(link.getAbi().isEmpty());

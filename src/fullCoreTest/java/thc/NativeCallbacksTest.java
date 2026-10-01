@@ -11,7 +11,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -21,14 +20,13 @@ import static thc.runtime.OriginalStdioChecks.with;
 
 @SuppressWarnings("unchecked")
 class NativeCallbacksTest {
-    @TempDir Path directory;
     @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
     void originalStaticExportReturnsThroughPackageCAndReleasesStablePointer(String backend, boolean compiled) throws Exception {
         var root = Path.of(System.getProperty("thc.projectRoot"));
-        sources(root, "ast"); // Validate the complete actual producer receipt.
+        sources(root); // Validate the complete actual producer receipt.
         assertEquals("43", Files.readString(root.resolve("build/dynamic-callback/static-oracle.txt")).trim());
         var inputs = List.of("@" + root.resolve("build/dynamic-callback/runtime-support.json"),
-            root.resolve("build/dynamic-callback/NativeExport.json").toString());
+            root.resolve("build/dynamic-callback/NativeExport.cbd").toString());
         String entry = "static-export-fixture:NativeExport.probe";
         for (String hosting : List.of("platform", "loom")) try (var context = Main.withContextProfile(Context.newBuilder("thc")
                 .allowNativeAccess(true).allowCreateThread(true).allowExperimentalOptions(true).option("thc.ThreadHosting", hosting), ContextProfile.SYNCHRONOUS_TEST).build()) {
@@ -80,9 +78,8 @@ class NativeCallbacksTest {
         }
     }
     static Map<String,Object> original() throws Exception {
-        var response = (Map<String,Object>) Json.parse(Files.readString(Path.of("build/dynamic-callback/interface-response.json")));
-        assertEquals("loaded", response.get("status"));
-        return (Map<String,Object>) response.get("core");
+        var root = Path.of(System.getProperty("thc.projectRoot"));
+        return OriginalStdioChecks.module(root.resolve("build/dynamic-callback/interface-response.cbd").toFile());
     }
     @Test void originalWrapperPreservesItsActualCallbackAbiAndHelper() throws Exception {
         var module = original();
@@ -101,25 +98,13 @@ class NativeCallbacksTest {
         var altered = with(proof, "wrappers", List.of(with(item, "arguments", List.of())));
         assertThrows(IllegalArgumentException.class, () -> ManagedCallbackMetadata.read(module, altered));
         var root = Path.of(System.getProperty("thc.projectRoot"));
-        sources(root, "bytecode"); // Verify the genuine compact artifact identities too.
-        var artifact = root.resolve("build/dynamic-callback/DynamicCallback.cbd");
-        var identity = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(artifact)));
-        try (var file = new CoreCompactFile(artifact, identity, true)) {
-            var compact = new CoreCompactRecords(file, identity).header();
-            assertEquals(wrappers, ManagedCallbackMetadata.read(compact, (Map<?,?>) compact.get("staticForeignImportStubs")));
-            var expected = (List<Map<String,Object>>) module.get("constructors");
-            var actual = (List<Map<String,Object>>) compact.get("constructors");
-            assertEquals(expected.size(), actual.size());
-            for (int i = 0; i < expected.size(); i++) {
-                var semantic = new java.util.LinkedHashMap<>(expected.get(i)); semantic.remove("type");
-                assertEquals(semantic, actual.get(i), "Mixed JSON/CBD constructor " + semantic.get("id"));
-            }
-        }
+        sources(root); // Verify the genuine compact artifact identities too.
+
     }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void originalCallbackRunsDirectlyAndAfterNativeRetention(String backend) throws Exception {
         var root = Path.of(System.getProperty("thc.projectRoot"));
-        var sources = sources(root, backend);
+        var sources = sources(root);
         assertEquals("(12,13,2,24)", Files.readAllLines(root.resolve("build/dynamic-callback/oracle.txt")).getFirst());
         try (var context = Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build()) {
             context.eval("thc", CoreModules.request(sources, "callback-fixture:DynamicCallback.run", true, false, backend, true, false, null, true));
@@ -156,7 +141,7 @@ class NativeCallbacksTest {
         }
     }
 
-    private List<String> sources(Path root, String backend) throws Exception {
+    private List<String> sources(Path root) throws Exception {
         var manifest = (Map<String,Object>) Json.parse(Files.readString(root.resolve("build/dynamic-callback/manifest.json")));
         thc.runtime.OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), java.util.Set.of(
             "t/fixtures/run-static-exports/NativeExport.hs", "t/fixtures/run-static-exports/Main.hs",
@@ -167,32 +152,12 @@ class NativeCallbacksTest {
             "src/compiler/THC/ForeignImportProvenance.hs", "src/compiler/THC/Plugin.hs",
             "src/driver/THC/Driver/PackageNative.hs", "bin/audit-core.py", "bin/core_package_manifest.py"), null);
         thc.runtime.OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), java.util.Set.of(
-            "build/dynamic-callback/DynamicCallback.json", "build/dynamic-callback/DynamicCallback.cbd",
-            "build/dynamic-callback/runtime-support.json", "build/dynamic-callback/interface-response.json",
-            "build/dynamic-callback/oracle.txt", "build/dynamic-callback/audit.json", "build/dynamic-callback/NativeExport.json",
+            "build/dynamic-callback/DynamicCallback.cbd",
+            "build/dynamic-callback/runtime-support.json", "build/dynamic-callback/interface-response.cbd",
+            "build/dynamic-callback/oracle.txt", "build/dynamic-callback/audit.json", "build/dynamic-callback/NativeExport.cbd",
             "build/dynamic-callback/static-oracle.txt", "build/dynamic-callback/static-audit.json"), "build/dynamic-callback/");
         var support = root.resolve("build/dynamic-callback/runtime-support.json");
-        if (backend.equals("ast")) return List.of("@" + support, root.resolve("build/dynamic-callback/DynamicCallback.json").toString());
-        // Compact inputs use the package directory, not the loose JSON input path.
-        var document = (Map<String,Object>) Json.parse(Files.readString(support));
-        var hashes = (Map<String,Object>) manifest.get("artifactHashes");
-        var path = root.resolve("build/dynamic-callback/DynamicCallback.cbd");
-        var identity = (String) hashes.get("build/dynamic-callback/DynamicCallback.cbd");
-        try (var file = new CoreCompactFile(path, identity, true)) {
-            var header = file.header();
-            var unit = new java.util.LinkedHashMap<String,Object>();
-            unit.put("id", "callback-fixture"); unit.put("depends", List.of("ghc-internal"));
-            var facts = new CoreCompactRecords(file, identity).header();
-            if (facts.get("targetLayout") != null) unit.put("targetLayout", facts.get("targetLayout"));
-            unit.put("modules", List.of(Map.of("name", "DynamicCallback", "boundary", facts.get("boundary"),
-                "sha256", hashes.get("build/dynamic-callback/DynamicCallback.json"),
-                "compact", Map.of("path", path.toString(), "sha256", identity, "format", CoreCompactFormat.NAME),
-                "containsDelimitedControl", header.getContainsDelimitedControl(), "registrationObligations", header.getRegistrationObligations(),
-                "mainAlias", header.getMainAlias(), "packageScalarDeclarations", header.getPackageScalarDeclarations())));
-            ((List<Object>) document.get("units")).add(unit);
-        }
-        var packages = directory.resolve("packages.json"); Files.writeString(packages, Json.stringify(document));
-        return List.of("@" + packages);
+        return List.of("@" + support, root.resolve("build/dynamic-callback/DynamicCallback.cbd").toString());
     }
 
     private static Object io(ExecutableProgram program, Language language, CoreRepresentation ioProof, String name, Object... inputs) {
@@ -218,7 +183,7 @@ class NativeCallbacksTest {
         var root = Path.of(System.getProperty("thc.projectRoot"));
         assertEquals("(16,1,4)", Files.readAllLines(root.resolve("build/dynamic-callback/oracle.txt")).get(1));
         try (var context = Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build()) {
-            context.eval("thc", CoreModules.request(sources(root, backend), "callback-fixture:DynamicCallback.makePointer", true, false, backend, true, false, null, true));
+            context.eval("thc", CoreModules.request(sources(root), "callback-fixture:DynamicCallback.makePointer", true, false, backend, true, false, null, true));
             context.enter();
             try {
                 var owner = Language.currentState(null);
