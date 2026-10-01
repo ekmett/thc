@@ -237,7 +237,18 @@ prepareWindowsRuntimeWithVerification verify repository selectedCompiler selecte
           ("THC_PROXY_NATIVE_RECIPES",native </> "cache/thc/native-recipes-v1")]
         environment = overrides ++ filter ((`notElem` map fst overrides) . fst) inherited
     wired <- wiredGhcInternal context root
-    (owner, records) <- linkForeignExceptionRuntime context environment "pinned" Nothing archive [wired]
+    internal <- case [value | value <- units,
+        jsonField value "pkg-name" == Just ("ghc-internal" :: String),
+        jsonField value "type" == Just ("pre-existing" :: String)] of
+      [value] -> readUnit value
+      _ -> fail "Windows plugin plan has no unique installed ghc-internal unit"
+    -- The genuine source bundle owns wired Core, while Cabal dependencies name
+    -- its selected installed registration. Preserve that empty registration
+    -- record, as installedRecords does; otherwise the sidecar reacquires the
+    -- already supplied Core owner and correctly rejects the collision.
+    let supplied = wired : [object ["id" .= unitId internal, "depends" .= unitDepends internal,
+          "modules" .= ([] :: [Value])] | jsonField wired "id" /= Just (unitId internal)]
+    (owner, records) <- linkForeignExceptionRuntime context environment "pinned" Nothing archive supplied
     let manifest = output </> "runtime-support/packages.json"
     selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules verify records
     require (selected == Just owner) "Windows runtime dictionary identity differs from its manifest"

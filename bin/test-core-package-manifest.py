@@ -320,6 +320,27 @@ class TimeClockLinkTest(unittest.TestCase):
 
 class PackageNativeVariantsTest(unittest.TestCase):
     """Structural controls only; the placeholder bitcode is never executed."""
+    def test_windows_scalar_target_matches_runtime_and_rejects_foreign_abis(self):
+        with patch('platform.system', return_value='Windows'), patch('platform.machine', return_value='AMD64'):
+            for target in ('x86_64-pc-windows-msvc', 'x86_64-pc-windows-msvc19.33.0'):
+                module = self.module(['WordRep'])
+                module['packageNativeLink']['target'] = target
+                with self.subTest(target=target):
+                    link, proved = core_package_manifest.package_scalar_link(module)
+                    self.assertEqual(target, link['target'])
+                    self.assertEqual({link['abi'][0]['entry']}, proved)
+            for target in ('x86_64-w64-windows-gnu', 'x86_64-w64-mingw32',
+                           'aarch64-pc-windows-msvc', 'x86_64-unknown-linux-gnu', 'x86_64-apple-darwin'):
+                module = self.module(['WordRep'])
+                module['packageNativeLink']['target'] = target
+                with self.subTest(target=target), self.assertRaisesRegex(ValueError, 'target differs from audit host'):
+                    core_package_manifest.package_scalar_link(module)
+            for container in ('llvm-embedded-elf', 'llvm-embedded-mach-o'):
+                module = self.module(['WordRep'])
+                module['packageNativeLink'].update(target='x86_64-pc-windows-msvc', format=container)
+                with self.subTest(container=container), self.assertRaisesRegex(ValueError, 'link profile'):
+                    core_package_manifest.package_scalar_link(module)
+
     def test_genuine_original_primitive_nominals_and_missing_declaration(self):
         import copy
         root = Path(__file__).resolve().parent.parent
@@ -358,7 +379,8 @@ class PackageNativeVariantsTest(unittest.TestCase):
                 emitted=dict(symbol='read_bytes', unit=unit, convention='ccall', safety='unsafe',
                              arguments=[rep, 'void'], result=['void', 'WordRep'])))
         cpu = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(platform.machine().lower(), platform.machine().lower())
-        target = cpu + ('-apple-darwin' if platform.system() == 'Darwin' else '-unknown-linux-gnu')
+        target = cpu + ('-apple-darwin' if platform.system() == 'Darwin' else
+                        '-pc-windows-msvc' if platform.system() == 'Windows' else '-unknown-linux-gnu')
         link = dict(schema=1, format='llvm-bitcode', profile='thc-package-c-ffi-v1', unit=unit, target=target,
             componentSha256='a' * 64, bitcodeSha256=hashlib.sha256(b'BC').hexdigest(), bitcodeHex='4243', abi=abi)
         proof = dict(schema=1, scope='retained-static-import-products', execution='not-linked',

@@ -15,12 +15,13 @@ module PackageNativeTests (tests) where
 
 import Control.Monad (forM_)
 import Control.Exception (bracket)
-import Data.Aeson (Value(..), object, toJSON, (.=))
+import Data.Aeson (Value(..), eitherDecodeStrict', object, toJSON, (.=))
 import qualified Data.ByteString as BS
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
+import qualified Data.Text as Text
 import GHC.ResponseFile (escapeArgs)
 import System.Directory (findExecutable, getCurrentDirectory, createDirectory, createDirectoryIfMissing, removeFile, getModificationTime, canonicalizePath,
   makeAbsolute, withCurrentDirectory, createFileLink)
@@ -296,12 +297,71 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       assertBool "a Core capability is not a native definition" (missing /= ExitSuccess)
       assertBool "the actual retained C reference names its missing provider"
         ("getProgArgv" `isInfixOf` missingErrors)
-  , TestLabel "PE deferred services omit only the unused container" $ TestCase $ do
+  , TestLabel "Windows installed scalar adapters retain the real private C dependency closure" $ TestCase $
+      if Host.os /= "mingw32" then pure () else do
+        scratch <- getEnv "THC_TEST_SCRATCH"
+        (root,handle) <- openTempFile scratch "windows-native-dependency-"
+        hClose handle; removeFile root; createDirectory root
+        repository <- getEnv "THC_TEST_ROOT"
+        compiler <- tool "GHC" "ghc"
+        packageTool <- tool "GHC_PKG" "ghc-pkg"
+        libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
+          [selectedLibdir] -> pure selectedLibdir
+          _ -> assertFailure "selected GHC must report one library directory"
+        -- This actual archive member also references five RTS functions. The
+        -- scalar call must retain those physical obligations, without exposing
+        -- a native guest runtime or substituting the original HsInt ABI.
+        archives <- nativeSymbolArchives packageTool libdir root "ghc-internal" ["-package","ghc-internal"] [("__hscore_bufsiz",True)]
+        archive <- case archives of [(archivePath,_)] -> pure archivePath; _ -> assertFailure "no original buffer-size archive"
+        let source = root </> "WindowsNativeDependency.hs"
+            cbd = root </> "core/units/u-fixture-unit/WindowsNativeDependency.cbd"
+        writeFile source $ unlines
+          ["{-# LANGUAGE MagicHash, UnboxedTuples, ForeignFunctionInterface #-}",
+           "module WindowsNativeDependency (bufferSize) where", "import GHC.Exts", "import GHC.IO (IO(..))",
+           "foreign import ccall unsafe \"__hscore_bufsiz\" original :: IO Int",
+           "bufferSize :: Int# -> Int#",
+           "bufferSize input = case original of IO action -> case action realWorld# of (# _, I# value #) -> value +# input"]
+        powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
+        let response = root </> "export.args"
+        writeFile response (escapeArgs ["-this-unit-id=fixture-unit","-fwrite-if-simplified-core",
+          "-fplugin-opt=THC.Plugin:post-tidy","-fplugin-opt=THC.Plugin:unit-qualified",
+          "-fplugin-opt=THC.Plugin:foreign-import-provenance",source])
+        withEnvironment [("THC_CORE_OUT",root </> "core"),("THC_GHC_OUT",root </> "objects")] $ do
+          (status,_,diagnostic) <- readProcessWithExitCode powershell
+            ["-NoProfile","-File",repository </> "bin/export-core.ps1","@" ++ response] ""
+          assertEqual diagnostic ExitSuccess status
+        let oracle = root </> "Oracle.hs"
+            executable = root </> "oracle.exe"
+        writeFile oracle "module Main where\nimport GHC.Internal.System.Posix.Internals (dEFAULT_BUFFER_SIZE)\nmain :: IO ()\nmain = print dEFAULT_BUFFER_SIZE\n"
+        (built,_,buildErrors) <- readProcessWithExitCode compiler
+          ["--make","-O2","-dcore-lint","-dstg-lint",oracle,"-odir",root,"-hidir",root,"-o",executable] ""
+        assertEqual buildErrors ExitSuccess built
+        (ran,expected,runErrors) <- readProcessWithExitCode executable [] ""
+        assertEqual runErrors ExitSuccess ran
+        writeFile (root </> "oracle.stdout") expected
+        original <- BS.readFile cbd
+        _ <- linkInstalledNative compiler packageTool libdir ["-package","ghc-internal","-optl" ++ archive]
+          root "fixture-unit" [("WindowsNativeDependency",cbd)]
+        acquired <- either assertFailure pure . readModuleValue =<< BS.readFile cbd
+        let proof = maybe (error "missing Windows native proof") id (lookupField "packageNativeLink" acquired)
+        assertEqual "Sulong receives raw LLVM, never a PE file labelled ELF" (Just "llvm-bitcode") (lookupField "format" proof)
+        case lookupField "target" proof of
+          Just (String target) -> assertBool "the adapter actually emits MSVC LLVM" ("x86_64-pc-windows-msvc" `isPrefixOf` Text.unpack target)
+          _ -> assertFailure "missing actual Windows adapter target"
+        (_,_,before) <- either assertFailure pure (unpackContainer original)
+        (_,_,after) <- either assertFailure pure . unpackContainer =<< BS.readFile cbd
+        assertEqual "native publication preserves all original Core segments" before after
+        assertBool "actual native dependency DLL remains in the checked proof" (lookupField "nativeLibrary" proof /= Nothing)
+        observed <- (either assertFailure pure . eitherDecodeStrict' =<< BS.readFile (root </> "native/inputs.json")) :: IO Value
+        assertBool "durable RTS archive inputs survive staging cleanup"
+          ("libHSrts-" `isInfixOf` show observed && "libCffi-" `isInfixOf` show observed)
+        writeFile (scratch </> "qualified-windows-native-cbd.path") cbd
+  , TestLabel "PE components always retain raw LLVM and omit the unused container" $ TestCase $ do
       let services = ["hs_free_stable_ptr","rtsSupportsBoundThreads","peer_export"]
       forM_ ["x86_64-w64-mingw32","x86_64-w64-windows-gnu","x86_64-pc-windows-msvc"] $ \target -> do
         assertEqual "PE never receives ELF unresolved-symbol exclusions" Nothing
           (nativeDeferredLinkArguments target services)
-        assertEqual "ordinary components retain their container step" (Just [])
+        assertEqual "ordinary PE components cannot use the ELF container recipe" Nothing
           (nativeDeferredLinkArguments target [])
   , TestLabel "existing ELF and Mach-O deferred exclusions remain exact" $ TestCase $ do
       let services = ["hs_free_stable_ptr","rtsSupportsBoundThreads","peer_export"]

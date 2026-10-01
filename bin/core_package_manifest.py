@@ -813,7 +813,9 @@ def package_scalar_link(module, validate_archive=True):
     cpu = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(platform.machine().lower(), platform.machine().lower())
     target_cpu = {'arm64': 'aarch64'}.get(target.split('-')[0], target.split('-')[0])
     require(target_cpu == cpu and ((platform.system() == 'Linux' and target.endswith('-linux-gnu')) or
-            (platform.system() == 'Darwin' and ('-darwin' in target or '-apple-macosx' in target))), 'target differs from audit host')
+            (platform.system() == 'Darwin' and ('-darwin' in target or '-apple-macosx' in target)) or
+            (platform.system() == 'Windows' and cpu == 'x86_64' and target.startswith('x86_64-pc-windows-msvc'))),
+            'target differs from audit host')
     require(SHA256.fullmatch(text(link['componentSha256'])) and SHA256.fullmatch(text(link['bitcodeSha256'])), 'digest')
     encoded = link['bitcodeHex']
     require(isinstance(encoded, str), 'bitcode encoding')

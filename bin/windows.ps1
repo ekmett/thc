@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'NativeLinkTest', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -19,7 +19,7 @@ try {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'NativeLinkTest', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -40,6 +40,13 @@ try {
         $python = if ($env:THC_PYTHON) { $env:THC_PYTHON } else { 'python' }
         $clang = if ($env:THC_CLANG) { $env:THC_CLANG } else { 'clang' }
         Invoke-ThcTool $python @('bin/prepare-managed-md5.py', '--cc', $clang)
+    }
+    if ($Action -in @('Test', 'NativeLinkTest')) {
+        if (!$env:THC_TEST_ROOT) { $env:THC_TEST_ROOT = $root }
+        if (!$env:THC_TEST_SCRATCH) { $env:THC_TEST_SCRATCH = Join-Path $root 'build/windows-native-link-tests' }
+        New-Item -ItemType Directory -Force $env:THC_TEST_SCRATCH | Out-Null
+        Invoke-ThcTool $cabal (@('test', 'driver-tests', '--test-options=--package-native-only',
+            '--test-show-details=direct') + $flags)
     }
     if ($Action -eq 'Test') {
         Invoke-ThcTool $cabal (@('test', 'driver-lock-tests', '--test-show-details=direct') + $flags)

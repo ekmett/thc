@@ -214,6 +214,10 @@ a foreign CPU target. Loaded package companions use DLLs built from the package'
 declared libraries and original C archive members.
 Native authority does not grant the guest current-directory or file access.
 
+Installed C adapters use the x64 MSVC LLVM ABI. Their native dependencies link
+against the original package archives and the matching GHC's registered native
+libraries. Haskell execution, scheduling and exceptions remain owned by THC.
+
 ## Current boundaries
 
 To preserve a failing native link's inputs before acquisition removes its
@@ -237,6 +241,9 @@ Native allocations preserve context ownership, bounds and allocator identity.
 `errno`, not `GetLastError`. These services do not provide general file/Handle IO.
 
 Focused platform checks are available with `./bin/windows.ps1 -Action ACTION`:
+`NativeLinkTest` runs the owning Haskell native acquisition tests, including a
+real registered Windows C archive, independent GHC oracle, MSVC adapter target,
+private DLL proof and unchanged executable Core segments. `Test` runs it too.
 `WindowsServicesTest` checks directory and code-page services in both handoff
 modes; `MallocTest` checks allocation and returned pointers. These supplement the
 ordinary `Test` action.
@@ -245,9 +252,9 @@ ordinary `Test` action.
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.
 - Ordinary foreign calls in either Core backend require the `THC.Exception`
-  bundle and its native providers. Windows acquisition of that bundle and
-  public-driver programs is currently blocked by unresolved RTS references:
-  `errorBelch`, `debugBelch`, `getProcessElapsedTime`, `_assertFail` and `barf`.
+  support bundle, which Windows project acquisition prepares automatically.
+  `thc-fixtures.exe windows-driver` checks native-matching completion in both
+  backends and handoff modes, with strict verification on its first run.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.
