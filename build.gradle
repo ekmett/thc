@@ -1268,6 +1268,12 @@ def macHost = System.getProperty("os.name").startsWith("Mac")
 def nativeSdkRoot = providers.environmentVariable("SDKROOT").orElse(
     macHost ? providers.exec { commandLine("/usr/bin/xcrun", "--show-sdk-path") }.standardOutput.asText.map { it.trim() }
             : providers.provider { "" })
+if (macHost) {
+    tasks.withType(Test).configureEach {
+        inputs.property("nativeSdkRoot", nativeSdkRoot)
+        environment("SDKROOT", nativeSdkRoot.get())
+    }
+}
 def nativeClang = providers.environmentVariable("THC_CLANG").orElse("clang")
 def nativeExec = { Closure action ->
     providers.exec { spec ->
