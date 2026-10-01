@@ -6,12 +6,16 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 import thc.runtime.Unit;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.io.IOAccess;
 import org.junit.jupiter.api.Test;
 import thc.Json;
 import thc.Language;
+import thc.PackageScalarLink;
+import thc.PackageScalarSignature;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.*;
@@ -79,19 +83,99 @@ class LibdwUnavailableTest {
         return Map.of("schema", 1, "module", "SyntheticLibdwConsumers", "unit", "test", "ghc", "9.14.1",
             "instrument", true, "bindings", bindings, "constructors", List.of(
                 Map.of("id", "tuple1", "name", "Solo#", "kind", "unboxed-tuple", "arity", 1, "tag", 1),
-                Map.of("id", "tuple2", "name", "(#,#)", "kind", "unboxed-tuple", "arity", 2, "tag", 1)));
+                Map.of("id", "tuple2", "name", "(#,#)", "kind", "unboxed-tuple", "arity", 2, "tag", 1)),
+            "packageScalarLinks", List.of(provider()));
+    }
+    private PackageScalarLink provider() throws Exception {
+        boolean windows = System.getProperty("os.name").startsWith("Windows");
+        byte[] bytes, nativeLibrary = new byte[0];
+        if (windows) {
+            var root = new File(System.getProperty("thc.projectRoot"));
+            var receipt = (Map<String, Object>) Json.parse(Files.readString(root.toPath().resolve("build/libdw-unavailable/manifest.json")));
+            OriginalStdioChecks.hashes(root, receipt.get("artifactHashes"), Set.of("build/libdw-unavailable/native-imports.cbd",
+                "build/libdw-unavailable/native/adapters.c", "build/libdw-unavailable/native/adapters.bc"), "build/libdw-unavailable/");
+            bytes = Files.readAllBytes(root.toPath().resolve("build/libdw-unavailable/native/adapters.bc"));
+            try (var input = getClass().getResourceAsStream("/thc/cbits/libdw-unavailable.dll")) {
+                assertNotNull(input); nativeLibrary = input.readAllBytes();
+            }
+        } else try (var input = getClass().getResourceAsStream("/thc/cbits/libdw-unavailable.bc")) {
+            assertNotNull(input); bytes = input.readAllBytes();
+        }
+        var signatures = new ArrayList<PackageScalarSignature>();
+        for (var declaration : declarations()) {
+            var arguments = (List<Map<String, Object>>) declaration.get("argumentReps");
+            var components = (List<Map<String, Object>>) ((Map<?, ?>) declaration.get("resultRep")).get("components");
+            var result = components.size() == 1 ? "void" :
+                (String) ((List<?>) components.getLast().get("primReps")).getFirst();
+            var symbol = symbol(declaration);
+            signatures.add(new PackageScalarSignature(symbol, windows ? "thc_libdw_adapter_" + symbol : symbol,
+                arguments.subList(0, arguments.size() - 1).stream()
+                    .map(rep -> (String) ((List<?>) rep.get("primReps")).getFirst()).toList(),
+                result, (String) declaration.get("convention"), (String) declaration.get("safety")));
+        }
+        // Windows adapters use Sulong's MSVC ABI and call the original MinGW
+        // DLL. This trusted fixture link does not fabricate a Core companion.
+        return new PackageScalarLink("ghc-internal", "unused", "libdw-unavailable", "", bytes, signatures,
+            "llvm-bitcode", Set.of(), nativeLibrary);
     }
     private ExecutableProgram load(Language language, String backend, Map<String, Object> module) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
     private Context context(boolean inlining) {
-        return Context.newBuilder("thc").allowExperimentalOptions(true)
+        return Context.newBuilder("thc").allowNativeAccess(true).allowIO(IOAccess.NONE).allowExperimentalOptions(true)
             .option("compiler.Inlining", Boolean.toString(inlining)).option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
             .option("engine.SingleTierCompilationThreshold", "10000000").build();
     }
     private void valid(RootCallTarget target) throws Exception {
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+    }
+    private static final class NativeLibdwCall extends RootNode {
+        @Child private PackageScalarAccess access;
+        private final String result;
+        NativeLibdwCall(Language language, PackageScalarCall call) {
+            super(language); access = new PackageScalarAccess(call); result = call.getResult();
+        }
+        @Override public Object execute(VirtualFrame frame) {
+            return switch (result) {
+                case "AddrRep" -> access.executeAddress(frame.getArguments(), Unit.INSTANCE);
+                case "Int32Rep" -> access.executeInt(frame.getArguments(), Unit.INSTANCE);
+                case "void" -> { access.executeVoid(frame.getArguments(), Unit.INSTANCE); yield Unit.INSTANCE; }
+                default -> throw new AssertionError(result);
+            };
+        }
+    }
+    @Test void originalNativeProviderMatchesOracleOnFirstCompiledBoundaryCall() throws Exception {
+        for (boolean inlining : new boolean[]{false, true}) try (var context = context(inlining)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var owner = Language.currentState();
+                owner.getThreads().enterCurrent(null, false, true, null);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var link = provider();
+                owner.getPackageCbits().link(link);
+                var targets = new LinkedHashMap<String, RootCallTarget>();
+                for (var signature : link.getAbi()) targets.put(signature.getSymbol(),
+                    new NativeLibdwCall(language, new PackageScalarCall(link, signature)).getCallTarget());
+                var pointer = owner.getNativeAllocations().malloc(64);
+                pointer.fill(64, 165);
+                var nil = ManagedAddress.nullAddress();
+                Runnable observe = () -> {
+                    assertTrue(((ManagedAddress) targets.get("libdwPoolTake").call()).sameLocation(nil));
+                    assertTrue(((ManagedAddress) targets.get("libdwGetBacktrace").call(pointer)).sameLocation(nil));
+                    assertEquals(1, targets.get("libdwLookupLocation").call(nil, pointer, nil));
+                    assertEquals(Collections.nCopies(64, 165L), LongStream.range(0, 64).map(pointer::readWord8).boxed().toList());
+                    assertSame(Unit.INSTANCE, targets.get("libdwPoolClear").call());
+                };
+                observe.run();
+                for (var target : targets.values()) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }
+                observe.run();
+                for (var target : targets.values()) valid(target);
+                assertThrows(RuntimeFault.class, () -> targets.get("libdwLookupLocation").call(nil, 0L, nil));
+                released(language);
+                owner.getNativeAllocations().free(pointer);
+            } finally { Language.currentState().getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }
     }
     private void released(Language language) {
         var handoff = language.getHandoffState().get();

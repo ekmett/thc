@@ -19,6 +19,7 @@ class PackageScalarLinksTest {
         var scalarType = map("kind", "tycon", "arguments", List.of(), "name", map("unit", "ghc-internal", "module", "GHC.Internal.Int", "occurrence", "Int32", "namespace", "type"));
         var entry = map("symbol", "scalar_value", "entry", "thc_scalar_" + component + "_0", "arguments", list("Int32Rep"), "result", "Int32Rep");
         var target = System.getProperty("os.name").startsWith("Mac") ? System.getProperty("os.arch") + "-apple-darwin"
+            : System.getProperty("os.name").startsWith("Windows") ? "x86_64-pc-windows-msvc19.33.0"
             : (System.getProperty("os.arch").equals("amd64") ? "x86_64" : System.getProperty("os.arch")) + "-unknown-linux-gnu";
         var link = map("schema", 1L, "format", "llvm-bitcode", "profile", "thc-local-scalar-ccall-v1", "unit", unit, "target", target,
             "componentSha256", component, "bitcodeSha256", hash(new byte[]{0x42, 0x43}), "bitcodeHex", "4243", "abi", list(entry));
@@ -142,10 +143,12 @@ class PackageScalarLinksTest {
         var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");
         var dependency = map("sha256", hash(new byte[]{1, 2}), "hex", "0102");
         var link = with(scalar, "profile", "thc-package-c-ffi-v1", "nativeLibrary", dependency,
-            "format", System.getProperty("os.name").startsWith("Mac") ? "llvm-embedded-mach-o" : "llvm-embedded-elf",
+            "format", System.getProperty("os.name").startsWith("Windows") ? "llvm-bitcode" :
+                System.getProperty("os.name").startsWith("Mac") ? "llvm-embedded-mach-o" : "llvm-embedded-elf",
             "abi", list(with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
         var nativeModule = with(without(base, "packageScalarLink"), "packageNativeLink", link);
-        if (!System.getProperty("os.name").equals("Linux") && !System.getProperty("os.name").startsWith("Mac")) {
+        if (!System.getProperty("os.name").equals("Linux") && !System.getProperty("os.name").startsWith("Mac") &&
+                !System.getProperty("os.name").startsWith("Windows")) {
             assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(nativeModule));
             return;
         }
@@ -156,6 +159,15 @@ class PackageScalarLinksTest {
         assertFalse(first.same(Objects.requireNonNull(PackageScalarLinks.read(with(nativeModule, "packageNativeLink", changed))).getLink()));
         assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule, "packageNativeLink",
             with(link, "nativeLibrary", with(dependency, "hex", "0103")))));
+    }
+    @Test void windowsAdmissionRejectsMinGwAndForeignCpuTargets() throws Exception {
+        if (!System.getProperty("os.name").startsWith("Windows")) return;
+        var base = module(); var link = object(base, "packageScalarLink");
+        assertNotNull(PackageScalarLinks.read(base));
+        for (String target : List.of("x86_64-w64-windows-gnu", "x86_64-unknown-windows-gnu",
+                "aarch64-pc-windows-msvc19.33.0", "x86_64-unknown-linux-gnu"))
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(base,
+                "packageScalarLink", with(link, "target", target))));
     }
     @Test void nativeProvidersDoNotInventHaskellAbisAndKeepTheirExactClosure() throws Exception {
         var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");

@@ -55,6 +55,9 @@ class WindowsSulongLibraryLookupTest {
         }
     }
     private ManagedAddress buffer(Language.State owner) throws Exception {
+        return buffer(owner, new byte[0]);
+    }
+    private ManagedAddress buffer(Language.State owner, byte[] nativeLibrary) throws Exception {
         var symbol = "thc_package_pointer_test_buffer";
         var signature = new PackageScalarSignature(symbol, symbol, List.of(), "AddrRep", "ccall", "unsafe");
         byte[] bytes;
@@ -63,7 +66,7 @@ class WindowsSulongLibraryLookupTest {
             bytes = input.readAllBytes();
         }
         var link = new PackageScalarLink("windows-loader-control", "unused", "windows-loader-control", "", bytes,
-            List.of(signature), "llvm-bitcode");
+            List.of(signature), "llvm-bitcode", java.util.Set.of(), nativeLibrary);
         owner.getPackageCbits().link(link);
         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
         return (ManagedAddress) new Buffer(language, new PackageScalarCall(link, signature)).getCallTarget().call();
@@ -89,6 +92,29 @@ class WindowsSulongLibraryLookupTest {
                 Arrays.fill(expected, (byte) 90);
                 var actual = new byte[32];
                 pointer.copyToByteArray(actual, 0, 32);
+                assertArrayEquals(expected, actual);
+                denied(owner, marker);
+            } finally { leave(context); }
+        }
+    }
+
+    @Test void packageDeclaredDllLoadingLeavesGuestFileAccessDenied() throws Exception {
+        byte[] nativeLibrary;
+        try (var input = getClass().getResourceAsStream("/thc/cbits/libdw-unavailable.dll")) {
+            assertNotNull(input);
+            nativeLibrary = input.readAllBytes();
+        }
+        var marker = Files.writeString(scratch.resolve("companion.txt"), "host-only");
+        try (var context = context(true)) {
+            var owner = enter(context);
+            try {
+                denied(owner, marker);
+                var pointer = buffer(owner, nativeLibrary);
+                pointer.fill(32, 73);
+                var actual = new byte[32];
+                pointer.copyToByteArray(actual, 0, 32);
+                var expected = new byte[32];
+                Arrays.fill(expected, (byte) 73);
                 assertArrayEquals(expected, actual);
                 denied(owner, marker);
             } finally { leave(context); }

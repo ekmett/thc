@@ -58,7 +58,10 @@ public final class PackageScalarLinks {
         String system = System.getProperty("os.name");
         String arch = switch (System.getProperty("os.arch")) { case "amd64" -> "x86_64"; case "arm64" -> "aarch64"; default -> System.getProperty("os.arch"); };
         String cpu = target.split("-", 2)[0]; if (cpu.equals("arm64")) cpu = "aarch64";
-        check(cpu.equals(arch) && (system.equals("Linux") && target.endsWith("-linux-gnu") || system.startsWith("Mac") && (target.contains("-darwin") || target.contains("-apple-macosx"))), "target differs from runtime");
+        check(cpu.equals(arch) && (system.equals("Linux") && target.endsWith("-linux-gnu") ||
+            system.startsWith("Mac") && (target.contains("-darwin") || target.contains("-apple-macosx")) ||
+            system.startsWith("Windows") && cpu.equals("x86_64") && target.startsWith("x86_64-pc-windows-msvc")),
+            "target differs from runtime");
     }
     private static String pointerAbi(String rep) { return in(rep, "ByteArray#", "MutableByteArray#") ? "AddrRep" : rep; }
     private static String integerAbi(String rep) { return in(rep, "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep") ? "Word" + rep.substring(3) : rep; }

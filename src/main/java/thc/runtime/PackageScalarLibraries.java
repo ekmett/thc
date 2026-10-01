@@ -137,7 +137,9 @@ public final class PackageScalarLibraries {
         try {
             registerCallbacks(owner);
             if (component.nativeLibrary().length != 0) {
-                var file = Files.createTempFile("thc-package-native-", component.format().equals("llvm-embedded-mach-o") ? ".dylib" : ".so");
+                boolean windows = System.getProperty("os.name").startsWith("Windows");
+                var file = Files.createTempFile("thc-package-native-", windows ? ".dll" :
+                    component.format().equals("llvm-embedded-mach-o") ? ".dylib" : ".so");
                 try {
                     Files.write(file, component.nativeLibrary());
                     // Keep ordinary unresolved native functions lazy: an
@@ -149,9 +151,14 @@ public final class PackageScalarLibraries {
                     if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
                     String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
                     Object handle = env.parseInternal(Source.newBuilder("nfi",
-                        "load(RTLD_LAZY|RTLD_LOCAL) \"" + path + "\"", "package-native").build()).call();
+                        (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", "package-native").build()).call();
                     nativeContext.addLibraryHandles(handle);
-                } finally { Files.deleteIfExists(file); }
+                } finally {
+                    // Windows keeps loaded DLLs locked until their native handle
+                    // is released. Match the existing floating-provider lifetime.
+                    if (windows) file.toFile().deleteOnExit();
+                    else Files.deleteIfExists(file);
+                }
             }
             Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(component.bytes()),
                 component.componentSha256() + switch (component.format()) {
