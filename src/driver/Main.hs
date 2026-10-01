@@ -26,6 +26,7 @@ import THC.Driver.GhcProxy (runGhcProxy)
 import THC.Driver.Json (renderJson)
 import THC.Driver.Project (runProject, acquireProject)
 import THC.Driver.Run
+import THC.Driver.PackageNative (nativeAdapterCommand)
 
 main :: IO ()
 main = topHandler $ do
@@ -34,6 +35,7 @@ main = topHandler $ do
   args <- getArgs
   case args of
     "ghc-proxy" : rest -> runGhcProxy rest
+    ["native-adapter", cache] -> nativeAdapterCommand cache
     ["--help"] -> putStr usage
     ["plan-package", "--help"] -> putStr usage
     "plan-package" : rest -> case getOpt Permute options rest of

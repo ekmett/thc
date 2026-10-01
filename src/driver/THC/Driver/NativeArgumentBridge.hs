@@ -10,7 +10,7 @@
 -- Portability : Linux x86_64 C ABI; verified LLVM input
 --
 -- Bridge verified LLVM integer slots for the Linux x86_64 C ABI.
-module THC.Driver.NativeArgumentBridge (nativeArgumentBridge) where
+module THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding) where
 
 import Control.Monad (guard)
 import Data.Char (isSpace)
@@ -32,8 +32,8 @@ import Data.List (isPrefixOf, nub)
 nativeArgumentBridge :: String -> String -> String -> String -> Maybe (String,String,[String])
 nativeArgumentBridge target symbol entry source = do
   guard (target == "x86_64-unknown-linux-gnu")
-  (calleeLine,callee) <- definition symbol
-  (callerLine,caller) <- definition entry
+  (calleeLine,callee) <- definition source symbol
+  (callerLine,caller) <- definition source entry
   -- Do not replace an inlined/header-rewritten body, instrumentation, or a
   -- compiler alias with a guessed call. The adapter must still be exactly its
   -- original one direct call and return, with no other observable work.
@@ -67,10 +67,6 @@ nativeArgumentBridge target symbol entry source = do
   where
     bodyLinesFor header = map (dropWhile isSpace) . takeWhile (/= "}") . drop 1 $
       dropWhile (/= header) (lines source)
-    definition name = case [line | line <- lines source, "define " `isPrefixOf` line,
-      let (_,after) = break (== '@') line, ("@" ++ name ++ "(") `isPrefixOf` after] of
-        [line] -> (,) line <$> parseDefinition line
-        _ -> Nothing
     both f (a,b) = (f a,f b)
     compatible (from,to)
       | scalar from == scalar to = extension from == extension to
@@ -80,6 +76,46 @@ nativeArgumentBridge target symbol entry source = do
     width "i32" = 32
     width "i16" = 16
     width _ = 8
+
+-- | Reuse the same bounded verified-definition grammar for a call in a
+-- separate adapter module. No casts, side effects, guessed declarations,
+-- varargs or ABI adaptation are admitted by this witness.
+nativeCallWitness :: String -> String -> String -> String -> String -> Maybe ([String],String,[String])
+nativeCallWitness target symbol entry provider source = do
+  guard (target == "x86_64-unknown-linux-gnu")
+  (calleeLine,callee) <- definition provider symbol
+  (callerLine,caller) <- definition source entry
+  guard (result caller == result callee && parameters caller == parameters callee)
+  let body = map (dropWhile isSpace) . takeWhile (/= "}") . drop 1 $
+        dropWhile (/= callerLine) (lines source)
+  case body of
+    [callLine,returnLine] -> passthroughCall symbol caller callLine returnLine
+    _ -> Nothing
+  pure (map scalar (parameters caller),scalar (result caller),calleeLine:callerLine:body)
+
+-- | Forward to one actual verified definition without copying its state.
+-- The same bounded definition grammar supplies both declarations; no guessed
+-- prototype, cast or target extension is introduced at acquisition.
+nativeProviderForwarding :: String -> String -> String -> String -> Maybe String
+nativeProviderForwarding target symbol entry provider = do
+  guard (target == "x86_64-unknown-linux-gnu")
+  (_,callee) <- definition provider symbol
+  let returned = renderResult (result callee)
+      formals = comma [render parameter ++ " %a" ++ show index |
+        (index,parameter) <- zip [0::Int ..] (parameters callee)]
+      actuals = comma [render parameter ++ " %a" ++ show index |
+        (index,parameter) <- zip [0::Int ..] (parameters callee)]
+  pure $ unlines ["declare " ++ returned ++ " @" ++ symbol ++ "(" ++ comma (map render (parameters callee)) ++ ")",
+    "define " ++ returned ++ " @" ++ entry ++ "(" ++ formals ++ ") {",
+    "  " ++ (if scalar (result callee) == "void" then "" else "%r = ") ++ "call " ++ returned ++
+      " @" ++ symbol ++ "(" ++ actuals ++ ")",
+    if scalar (result callee) == "void" then "  ret void" else "  ret " ++ scalar (result callee) ++ " %r", "}"]
+
+definition :: String -> String -> Maybe (String,Definition)
+definition source name = case [line | line <- lines source, "define " `isPrefixOf` line,
+  let (_,after) = break (== '@') line, ("@" ++ name ++ "(") `isPrefixOf` after] of
+    [line] -> (,) line <$> parseDefinition line
+    _ -> Nothing
 
 -- Original libyaml's helpers return unsigned int from buffer_t.used or a
 -- truncated size_t mark field, while their Haskell imports request CULong.

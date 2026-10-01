@@ -359,17 +359,23 @@ hexBytes :: BS.ByteString -> Value
 hexBytes = toJSON . concatMap (\byte -> let digits = showHex byte "" in replicate (2-length digits) '0' ++ digits) . BS.unpack
 
 nativeLink :: NativeLink -> Value
-nativeLink (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers components) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
+nativeLink (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers components seeds) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
   ++ ["finalizers" .= arr str finalizers | schema == 2]
   ++ p "buildInputs" nativeBuildInputs inputs
   ++ p "nativeLibrary" (\(digest,bytes) -> object ["sha256" .= str digest,"hex" .= hexBytes bytes]) companion
   ++ p "dataSymbols" (arr str) dataSymbols
   ++ maybe [] (\(publicSymbols,dependencies) -> ["exports" .= arr str publicSymbols,"dependencies" .= arr nativeComponent dependencies]) components
+  ++ maybe [] (\values -> ["callSeeds" .= arr seed values]) seeds
   where entry (NativeABI symbol name convention safety arguments result) = object
           ["symbol" .= str symbol,"entry" .= str name,
            "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
            "safety" .= tagName ["unsafe","safe","interruptible"] safety,
            "arguments" .= arr str arguments,"result" .= str result]
+        seed (NativeCallSeed name digest bytes provider) = object
+          ["entry" .= str name,"bitcodeSha256" .= str digest,"bitcodeHex" .= hexBytes bytes,
+           "providerUnit" .= maybe Null (\(unit,_,_) -> str unit) provider,
+           "providerComponentSha256" .= maybe Null (\(_,component,_) -> str component) provider,
+           "providerSymbol" .= maybe Null (\(_,_,symbol) -> str symbol) provider]
 
 nativeComponent :: NativeComponent -> Value
 nativeComponent (NativeComponent payload publicSymbols dependencies companion) = object $ linkPayload payload ++

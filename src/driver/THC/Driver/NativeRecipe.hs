@@ -95,10 +95,11 @@ captureNativeRecipe directory compiler arguments = when ("-c" `elem` arguments) 
 readNativeRecipe :: FilePath -> FilePath -> FilePath -> IO (Maybe NativeRecipe)
 readNativeRecipe directory compiler output = do
   result <- tryIOError $ do
+    compilerPath <- canonicalizePath compiler
     bytes <- BS.readFile (recipePath directory output)
     recipe <- either fail pure (eitherDecodeStrict' bytes)
     hash <- digest <$> BS.readFile output
-    pure $ if recipeSchema recipe == 1 && recipeCompiler recipe == compiler &&
+    pure $ if recipeSchema recipe == 1 && recipeCompiler recipe == compilerPath &&
       recipeObject recipe == output && recipeObjectHash recipe == hash then Just recipe else Nothing
   pure (either (const Nothing) id result)
 

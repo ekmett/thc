@@ -194,6 +194,7 @@ public final class Program implements ExecutableProgram {
             // or while preparing the code. Resolution invokes no guest call.
             for (int i = 0; i < packageFunctions.length; i++) {
                 PackageScalarCall call = prepared.packageCalls.get(i);
+                if (call.getLink().getCallSeeds().containsKey(call.getSignature().getEntry())) continue;
                 packageFunctions[i] = contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
             }
             return;
@@ -248,6 +249,7 @@ public final class Program implements ExecutableProgram {
         pendingInitializers = List.of();
         if (packageFunctions != null) for (int i = 0; i < packageFunctions.length; i++) {
             PackageScalarCall call = packageCalls.get(i);
+            if (call.getLink().getCallSeeds().containsKey(call.getSignature().getEntry())) continue;
             packageFunctions[i] = contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
         }
     }

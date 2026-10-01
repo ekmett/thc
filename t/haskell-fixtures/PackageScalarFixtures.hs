@@ -11,7 +11,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Fixture acquisition support for package scalar.
-module PackageScalarFixtures (preparePackageScalar) where
+module PackageScalarFixtures (preparePackageScalar, preparePackageNativeDemand) where
 
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value(..), object, (.=))
@@ -26,6 +26,82 @@ import System.Directory
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath
+
+-- A normal Cabal acquisition/run supplies the immutable fixture consumed by the
+-- demand tests; their private driver-test scratch is not a test prerequisite.
+preparePackageNativeDemand :: FilePath -> IO ()
+preparePackageNativeDemand root = do
+  let directory = "build/package-native-demand"
+      fixture = "t/fixtures/run-scalar-cbits"
+      project = directory </> "project"
+      output = directory </> "acquired"
+      manifest = root </> directory </> "manifest.json"
+      sources = ["src/Demand.hs","app/DemandMain.hs","cbits/demand.c"]
+      execute = runLogged 600 root (directory </> "logs")
+  createDirectoryIfMissing True (root </> directory)
+  stale <- doesFileExist manifest
+  when stale (removeFile manifest)
+  ghc <- selected "THC_INSTALLED_CORE_GHC" "GHC" "ghc"
+  ghcPkg <- selected "THC_INSTALLED_CORE_GHC_PKG" "GHC_PKG" "ghc-pkg"
+  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  ccName <- maybe "clang" id <$> lookupEnv "THC_CLANG"
+  cc <- findExecutable ccName >>= maybe (die "package-native-demand requires configured Clang") canonicalizePath
+  runtime <- maybe (pure (root </> "build/install/thc/bin/thc")) canonicalizePath =<< lookupEnv "THC_TEST_RUNTIME"
+  sourceRoot <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
+  let driverSelection = ["exe:thc","--offline","--with-compiler=" ++ ghc,"--with-hc-pkg=" ++ ghcPkg]
+  built <- execute "driver-build" [] cabal ("build":driverSelection)
+  located <- execute "driver-location" [] cabal ("list-bin":driverSelection)
+  driver <- case BS.lines (commandStdout located) of
+    [path] -> pure (BS.unpack path)
+    _ -> die "Expected one selected-GHC thc executable"
+  forM_ sources $ \source -> do
+    createDirectoryIfMissing True (takeDirectory (root </> project </> source))
+    copyFile (root </> fixture </> source) (root </> project </> source)
+  let packageFile = project </> "native-demand.cabal"
+      projectFile = project </> "cabal.project"
+  writeFile (root </> projectFile) "packages: .\n"
+  writeFile (root </> packageFile) $ unlines
+    ["cabal-version: 3.0","name: native-demand","version: 0.1.0.0","build-type: Simple",
+     "library","  exposed-modules: Demand","  hs-source-dirs: src","  c-sources: cbits/demand.c",
+     "  ghc-options: -O1 -pgmc " ++ show cc,"  build-depends: base","  default-language: Haskell2010",
+     "executable oracle","  main-is: DemandMain.hs","  hs-source-dirs: app",
+     "  build-depends: base, native-demand","  default-language: Haskell2010"]
+  managed <- execute "thc-run" [("THC_BACKEND","ast")] driver
+    (["run","--verify-artifacts","--project-dir",root </> project,"oracle","--thc-root",root,
+      "--runtime",runtime,"--dist-dir",root </> output,"--installed-core","required",
+      "--with-ghc",ghc,"--with-ghc-pkg",ghcPkg] ++ maybe [] (\path -> ["--ghc-source",path]) sourceRoot)
+  plan <- readJson (root </> output </> "native/cache/plan.json")
+  units <- field plan "install-plan" :: IO [Value]
+  oracleComponent <- unique "oracle component" (matching "component-name" "exe:oracle" units)
+  binary <- field oracleComponent "bin-file"
+  native <- execute "native-run" [] binary []
+  unless (commandStdout native == "41\n42\n43\n" && commandStdout managed == commandStdout native)
+    (die "package-native-demand: normal THC/native canonical state observations differ")
+  library <- unique "library component" (matching "component-name" "lib" units)
+  unit <- field library "id" :: IO String
+  audit <- readJson (root </> output </> "audit.json")
+  accepted <- field audit "accepted"
+  unless accepted (die "package-native-demand: original executable was not accepted")
+  inputs <- hashes root ([fixture </> source | source <- sources] ++
+    ["t/haskell-fixtures/PackageScalarFixtures.hs","t/haskell-fixtures/FixtureSupport.hs",
+     "src/driver/THC/Driver/PackageNative.hs","src/driver/THC/Driver/NativeArgumentBridge.hs",
+     "src/driver/THC/Driver/Run.hs","src/driver/THC/Driver/Project.hs","src/main/java/thc/Main.java"])
+  packages <- readJson (root </> output </> "packages.json")
+  records <- field packages "units" :: IO [Value]
+  acquired <- unique "acquired library" (matching "id" unit records)
+  (retained, references) <- retainUnitArtifacts root (directory </> "library") acquired
+  artifacts <- hashes root (references ++ [output </> "packages.json",output </> "audit.json",packageFile,projectFile] ++
+    [project </> source | source <- sources] ++ concatMap commandArtifacts [built,located,managed,native])
+  writeJson manifest $ object ["schema" .= (1::Int),"supported" .= True,"runtimeVerified" .= True,
+    "unit" .= unit,"packages" .= (output </> "packages.json"),"libraryArtifacts" .= unitArtifactReferences retained,
+    "inputHashes" .= inputs,"artifactHashes" .= artifacts,"commands" .= map commandRecord [built,located,managed,native]]
+  putStrLn "package-native-demand: normal acquisition/CLI and original native state41/42/43 agree"
+  where
+    selected preferred ordinary fallback = lookupEnv preferred >>= maybe (maybe fallback id <$> lookupEnv ordinary) pure
+    matching key expected values = [value | value@(Object fields) <- values,
+      KM.lookup (Key.fromString key) fields == Just (String (T.pack expected))]
+    unique _ [value] = pure value
+    unique label _ = die ("package-native-demand: expected one " ++ label)
 
 -- Explicit full-Core proof group: ordinary production acquisition and execution,
 -- followed by a native oracle from that same Cabal build. Never a fake launcher.

@@ -186,8 +186,16 @@ nativeLink decoder = do
     _ -> fail "Retired or invalid compact native entry metadata"
   NativeLink payload abi inputs companion dataSymbols <$>
     (if schema == 2 then list decoder (string decoder) else pure []) <*> pure components
+    <*> (if schema == 3 then Just <$> list decoder seed else pure Nothing)
   where entry = NativeABI <$> string decoder <*> string decoder <*> enumeration <*> enumeration
           <*> list decoder (string decoder) <*> string decoder
+        seed = do
+          name <- string decoder; digest <- string decoder; bytes <- blob decoder
+          provider <- getWord8 >>= \kind -> case kind of
+            0 -> pure Nothing
+            1 -> Just <$> ((,,) <$> string decoder <*> string decoder <*> string decoder)
+            _ -> fail "Invalid native call seed provider tag"
+          pure (NativeCallSeed name digest bytes provider)
 
 nativeComponent :: Decoder -> Get NativeComponent
 nativeComponent decoder = NativeComponent <$> linkPayload decoder <*> list decoder (string decoder)

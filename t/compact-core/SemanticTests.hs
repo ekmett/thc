@@ -380,8 +380,8 @@ semanticTests = TestList
             nominal nominal "representational" (Just (["AddrRep"],"void"))
           imports2 = ImportProof 2 scope execution profile owner name
             (ImportsVerified wordBits productRecord imports calls [address] [] Nothing)
-          NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs companion dataSymbols _ components = completeNativeLink
-          linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs companion dataSymbols ["adapter"] components
+          NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs companion dataSymbols _ components _ = completeNativeLink
+          linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs companion dataSymbols ["adapter"] components Nothing
           facts = completeFacts {factsPendingProvenance =
             [Missing,Known (ImportsRecord imports2),Known (ImportsRecord imports2),Missing,Missing,Missing,
              Known (NativeLinkRecord linked2),Missing]}
@@ -462,6 +462,23 @@ semanticTests = TestList
             Object (KM.insert "packageNativeLink" (Object $ KM.insert "availableEntries" (toJSON (["adapter"] :: [String])) link) fields)
           amend value = value
       assertBool "retired selected-entry proof rejected" (isLeft (parseModuleWithoutDebug (amend original)))
+  , TestLabel "native demand seeds are a typed schema3 extension" $ TestCase $ do
+      let original = moduleJSON completeFacts {factsPendingProvenance =
+            [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord completeNativeLink),Missing]} []
+          seed = object ["entry" .= ("adapter"::String),"bitcodeHex" .= ("00ff42"::String),
+            "bitcodeSha256" .= ("seed-sha"::String),"providerUnit" .= Null,
+            "providerComponentSha256" .= Null,"providerSymbol" .= Null]
+          amend value (Object fields) | Just (Object link) <- KM.lookup "packageNativeLink" fields =
+            Object (KM.insert "packageNativeLink" (Object $ KM.insert "callSeeds" value $
+              KM.insert "profile" "thc-package-c-ffi-demand-v1" $ KM.insert "schema" (Number 3) link) fields)
+          amend _ value = value
+          requested = amend (toJSON [seed]) original
+      (facts,bindings) <- either assertFailure pure (parseModuleWithoutDebug requested)
+      assertEqual "every seed identity and absent provider survive typed inspection" requested (moduleJSON facts bindings)
+      encoded <- encodeModuleValue requested
+      assertEqual "normal CBD transport preserves the immutable seed catalogue" (Right requested) (readModuleValue encoded)
+      assertBool "unknown seed fields cannot become implicit native permissions" (isLeft (parseModuleWithoutDebug
+        (amend (toJSON [case seed of Object fields -> Object (KM.insert "invented" Null fields); _ -> seed]) original)))
   , TestLabel "mixed native dependency components retain exact independent payloads" $ TestCase $ do
       let component owner dependencies = NativeComponent
             (LinkPayload 1 "llvm-bitcode" "thc-package-native-component-v1" owner "actual-target"
@@ -469,8 +486,8 @@ semanticTests = TestList
             ["public_function","public_data"] dependencies (Known ("native-sha",BS.pack [127,69,76,70]))
           leaf = component "native-provider" []
           middle = component "mixed-provider" [leaf]
-          NativeLink payload abi inputs companion symbols finalizers _ = completeNativeLink
-          link = NativeLink payload abi inputs companion symbols finalizers (Just (["own_export"],[middle,leaf]))
+          NativeLink payload abi inputs companion symbols finalizers _ seeds = completeNativeLink
+          link = NativeLink payload abi inputs companion symbols finalizers (Just (["own_export"],[middle,leaf])) seeds
           facts = completeFacts {factsPendingProvenance =
             [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord link),Missing]}
           original = moduleJSON facts []
@@ -698,8 +715,8 @@ nativeFactsWithFlags :: [(BS.ByteString,Bool)] -> Facts
 nativeFactsWithFlags flags = nativeProvenanceFacts
   {factsPendingProvenance=map replace (factsPendingProvenance nativeProvenanceFacts)}
   where
-    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (ArchiveBuildDependencies (Known dependencies)) libraries unresolved bridges)) companion dataSymbols finalizers components))) =
-      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (ArchiveBuildDependencies (Known (map dependency dependencies))) libraries unresolved bridges)) companion dataSymbols finalizers components))
+    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (ArchiveBuildDependencies (Known dependencies)) libraries unresolved bridges)) companion dataSymbols finalizers components seeds))) =
+      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (ArchiveBuildDependencies (Known (map dependency dependencies))) libraries unresolved bridges)) companion dataSymbols finalizers components seeds))
     replace value = value
     dependency (NativeDependency profile unit (SourceIdentity identifier depends kind style name version _ component sourceSha cabalSha source)
         registrationText digest archives products) = NativeDependency profile unit
@@ -725,7 +742,7 @@ completeNativeLink = NativeLink completeLinkPayload [NativeABI "original" "adapt
       [NativeProduct (NativePiece "/source" "api.o" "object-sha" "api.bc" "actual-target" input) "bitcode-sha"]]))
     [NativeLibrary "native-libc" ["free"] "clang" "compiler-sha" ["-lc"] Missing Missing Missing Missing] ["unknown"]
     [ArgumentBridge "actual-integer-width-bridge" "actual LLVM\n" "source-sha" "input-sha" [["define caller","define callee"]]]))
-  Missing Missing [] Nothing
+  Missing Missing [] Nothing Nothing
   where input = CompileInput "ghc" "clang" ["-c","api.c"] (Known "c") "native-target" "actual-target"
           [("api.c","actual-source-sha"),("yaml.h","actual-header-sha")]
 

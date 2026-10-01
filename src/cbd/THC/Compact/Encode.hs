@@ -201,7 +201,7 @@ blob :: Encoder -> BS.ByteString -> IO ()
 blob encoder bytes = number encoder (fromIntegral (BS.length bytes)) >> emit encoder (putByteString bytes)
 
 nativeLink :: Encoder -> NativeLink -> IO ()
-nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers components) = do
+nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers components seeds) = do
   linkPayload encoder payload
   list encoder entry abi
   case inputs of
@@ -224,6 +224,9 @@ nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi in
         list encoder (string encoder) publicSymbols
         list encoder (nativeComponent encoder) dependencies
   when (schema == 2) (list encoder (string encoder) finalizers)
+  when (schema == 3) $ case seeds of
+    Just values -> list encoder seed values
+    Nothing -> fail "Native schema3 requires call seeds"
   where entry (NativeABI symbol name convention safety arguments result) = do
           string encoder symbol
           string encoder name
@@ -231,6 +234,12 @@ nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi in
           enumeration encoder safety
           list encoder (string encoder) arguments
           string encoder result
+        seed (NativeCallSeed entryName digest bytes provider) = do
+          string encoder entryName; string encoder digest; blob encoder bytes
+          case provider of
+            Nothing -> tag encoder 0
+            Just (unit,component,symbol) -> do
+              tag encoder 1; string encoder unit; string encoder component; string encoder symbol
 
 nativeComponent :: Encoder -> NativeComponent -> IO ()
 nativeComponent encoder (NativeComponent payload publicSymbols dependencies companion) = do

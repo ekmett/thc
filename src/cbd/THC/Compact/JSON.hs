@@ -503,7 +503,8 @@ hexBytes = withText "original artifact hex" $ \value -> do
 nativeLink :: Value -> Parser NativeLink
 nativeLink = withObject "native linked artifact" $ \fields -> do
   schema <- fields .: "schema" :: Parser Word64
-  checked fields (linkPayloadKeys ++ ["abi","buildInputs","nativeLibrary","dataSymbols","exports","dependencies"] ++ ["finalizers" | schema == 2])
+  unless (schema `elem` [1,2,3]) (fail "Unsupported native linked schema")
+  checked fields (linkPayloadKeys ++ ["abi","buildInputs","nativeLibrary","dataSymbols","exports","dependencies"] ++ ["finalizers" | schema == 2] ++ ["callSeeds" | schema == 3])
   NativeLink <$> linkPayload fields <*> (fields .: "abi" >>= array entry)
     <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "nativeLibrary" nativeCompanion
     <*> optional fields "dataSymbols" (array bytes)
@@ -512,11 +513,21 @@ nativeLink = withObject "native linked artifact" $ \fields -> do
       (Nothing,Nothing) -> pure Nothing
       (Just publicSymbols,Just dependencies) -> Just <$> ((,) <$> array bytes publicSymbols <*> array nativeComponent dependencies)
       _ -> fail "Native exports and dependencies must be present together")
+    <*> (if schema == 3 then Just <$> (fields .: "callSeeds" >>= array seed) else pure Nothing)
   where entry = withObject "native linked ABI" $ \fields -> do
           checked fields ["symbol","entry","convention","safety","arguments","result"]
           NativeABI <$> bytesAt fields "symbol" <*> bytesAt fields "entry"
             <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "safety" >>= parseSafety)
             <*> (fields .: "arguments" >>= array bytes) <*> bytesAt fields "result"
+        seed = withObject "native call seed" $ \fields -> do
+          checked fields ["entry","bitcodeHex","bitcodeSha256","providerUnit","providerComponentSha256","providerSymbol"]
+          unit <- fields .: "providerUnit"; digest <- fields .: "providerComponentSha256"; symbol <- fields .: "providerSymbol"
+          provider <- case (unit,digest,symbol) of
+            (Null,Null,Null) -> pure Nothing
+            (String _,String _,String _) -> Just <$> ((,,) <$> bytes unit <*> bytes digest <*> bytes symbol)
+            _ -> fail "Native call seed provider identity must be complete or null"
+          NativeCallSeed <$> bytesAt fields "entry" <*> bytesAt fields "bitcodeSha256"
+            <*> (fields .: "bitcodeHex" >>= hexBytes) <*> pure provider
 
 nativeCompanion :: Value -> Parser (BS.ByteString,BS.ByteString)
 nativeCompanion = withObject "native library companion" $ \fields -> do

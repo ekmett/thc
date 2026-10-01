@@ -106,6 +106,7 @@ foreign-exception-fixtures: check-java
 	  for family in interface-core original-memory-search original-memset original-fcntl bytestring-utf8 text-cbits java-arrays; do \
 	    "$$fixture_bin" "$$family"; \
 	  done; \
+	  case "$$(uname -s)-$$(uname -m)" in Linux-x86_64) "$$fixture_bin" package-native-demand ;; esac; \
 	  "$$fixture_bin" original-gmp --require-supported
 
 foreign-exception-test-modes: foreign-exception-fixtures

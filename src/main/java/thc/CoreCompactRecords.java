@@ -565,6 +565,15 @@ public final class CoreCompactRecords {
             default -> throw error("Retired or invalid compact native entry metadata");
         }
         if (Objects.equals(result.get("schema"), 2L)) result.put("finalizers", texts(cursor));
+        if (Objects.equals(result.get("schema"), 3L)) result.put("callSeeds", list(cursor, () -> {
+            var seed = strings(cursor, "entry", "bitcodeSha256"); seed.put("bitcodeHex", blob(cursor));
+            int provider = cursor.readByte();
+            if (provider == 0) {
+                seed.put("providerUnit", null); seed.put("providerComponentSha256", null); seed.put("providerSymbol", null);
+            } else if (provider == 1) seed.putAll(strings(cursor, "providerUnit", "providerComponentSha256", "providerSymbol"));
+            else throw error("Invalid native call seed provider tag");
+            return seed;
+        }));
         return result;
     }
     private Map<String,Object> nativeComponent(CoreCompactCursor cursor) throws Throwable {
