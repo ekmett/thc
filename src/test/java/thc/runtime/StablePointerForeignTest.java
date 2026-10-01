@@ -54,6 +54,7 @@ class StablePointerForeignTest {
         @Override public Object execute(VirtualFrame frame) {
             return switch (call.getResult()) {
                 case "AddrRep" -> access.executeAddress(frame.getArguments(), Unit.INSTANCE);
+                case "Int32Rep" -> access.executeInt(frame.getArguments(), Unit.INSTANCE);
                 case "void" -> { access.executeVoid(frame.getArguments(), Unit.INSTANCE); yield Unit.INSTANCE; }
                 default -> access.executeLong(frame.getArguments(), Unit.INSTANCE);
             };
@@ -85,16 +86,27 @@ class StablePointerForeignTest {
                 var pinned = PinnedMemory.allocate(16, 64);
                 var pinnedAddress = ManagedAddress.fromAllocation(pinned).plus(7);
                 long pinnedBits = Objects.requireNonNull(pinned.nativeSegment()).address();
+                pinnedAddress.writeWord8(0, 0x6b);
                 var returnedPinned = (ManagedAddress) calls.get("stable_identity").call(pinnedAddress);
                 assertEquals(pinnedBits + 7, returnedPinned.toNativeBits());
                 assertEquals(pinnedBits, Objects.requireNonNull(pinned.nativeSegment()).address());
-                assertThrows(RuntimeFault.class, () -> returnedPinned.readWord8(0));
+                assertEquals(0x6bL, returnedPinned.readWord8(0));
+                returnedPinned.writeWord8(0, 0xc9);
+                assertEquals(0xc9L, pinnedAddress.readWord8(0));
+                assertThrows(RuntimeFault.class, () -> returnedPinned.readWord8(9));
                 var forwardedPinned = (ManagedAddress) calls.get("stable_identity").call(returnedPinned);
                 assertEquals(pinnedBits + 7, forwardedPinned.toNativeBits());
-                assertEquals(1L, calls.get("stable_equal").call(returnedPinned, forwardedPinned));
+                assertEquals(1, calls.get("stable_equal").call(returnedPinned, forwardedPinned));
                 assertEquals(pinnedBits + 9, ((ManagedAddress) calls.get("stable_identity").call(returnedPinned.plus(2))).toNativeBits());
                 var heap = ManagedAllocation.mutable(16, 8);
-                assertThrows(RuntimeFault.class, () -> calls.get("stable_identity").call(ManagedAddress.fromAllocation(heap)));
+                var heapAddress = ManagedAddress.fromAllocation(heap).plus(3);
+                heapAddress.writeWord8(0, 0x6b);
+                var returnedHeap = (ManagedAddress) calls.get("stable_identity").call(heapAddress);
+                assertEquals(0x6bL, returnedHeap.readWord8(0));
+                returnedHeap.writeWord8(0, 0xc9);
+                assertEquals(0xc9L, heapAddress.readWord8(0));
+                assertThrows(RuntimeFault.class, () -> returnedHeap.readWord8(13));
+                assertThrows(RuntimeFault.class, returnedHeap::toNativeBits);
                 assertFalse(heap.isPinned());
                 assertNull(heap.nativeSegment());
                 if (System.getProperty("os.name").equals("Linux") && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"))) {
@@ -103,8 +115,12 @@ class StablePointerForeignTest {
                     try {
                         returnedAllocation = (ManagedAddress) calls.get("stable_identity").call(allocation);
                         assertEquals(allocation.toNativeBits(), returnedAllocation.toNativeBits());
-                        assertThrows(RuntimeFault.class, () -> returnedAllocation.readWord8(0));
-                        assertEquals(1L, calls.get("stable_equal").call(allocation, returnedAllocation));
+                        allocation.writeWord8(0, 0x6b);
+                        assertEquals(0x6bL, returnedAllocation.readWord8(0));
+                        returnedAllocation.writeWord8(0, 0xc9);
+                        assertEquals(0xc9L, allocation.readWord8(0));
+                        assertThrows(RuntimeFault.class, () -> returnedAllocation.readWord8(8));
+                        assertEquals(1, calls.get("stable_equal").call(allocation, returnedAllocation));
                         ManagedAddress.withNativeBorrows(List.of(returnedAllocation), () -> {
                             assertThrows(RuntimeFault.class, () -> state.getNativeAllocations().free(allocation));
                             return Unit.INSTANCE;
@@ -117,20 +133,22 @@ class StablePointerForeignTest {
                 var first = state.getStablePointers().make(referent);
                 var second = state.getStablePointers().make(referent);
                 calls.get("stable_store").call(first);
-                assertEquals(1L, calls.get("stable_equal").call(first, first));
-                assertEquals(0L, calls.get("stable_equal").call(first, second));
+                assertEquals(1, calls.get("stable_equal").call(first, first));
+                assertEquals(0, calls.get("stable_equal").call(first, second));
                 var returned = (ManagedAddress) calls.get("stable_load").call();
                 assertSame(referent, state.getStablePointers().dereference(returned));
                 var again = (ManagedAddress) calls.get("stable_identity").call(returned);
                 assertTrue(state.getStablePointers().equal(first, again));
                 assertThrows(RuntimeFault.class, () -> again.readWord8(0));
                 assertThrows(RuntimeFault.class, () -> again.plus(0));
-                // A completely unrelated C pointer must not acquire byte-storage authority.
+                // Genuine package static storage remains a C carrier, without allocation ownership.
                 var unrelated = (ManagedAddress) calls.get("stable_unknown").call();
-                assertThrows(RuntimeFault.class, () -> unrelated.readWord8(0));
+                assertEquals(0L, unrelated.readWord8(0));
+                assertNull(Objects.requireNonNull(unrelated.returnedAddress()).getBacking());
+                assertNull(unrelated.nativeAllocation());
                 assertThrows(RuntimeFault.class, () -> state.getStablePointers().dereference(unrelated));
                 var forwardedStatic = (ManagedAddress) calls.get("stable_identity").call(unrelated);
-                assertEquals(1L, calls.get("stable_equal").call(unrelated, forwardedStatic));
+                assertEquals(1, calls.get("stable_equal").call(unrelated, forwardedStatic));
                 assertThrows(RuntimeFault.class, () -> calls.get("stable_identity").call(
                     ManagedAddress.unownedNumeric(unrelated.toNativeBits())));
                 try (var other = context()) {
