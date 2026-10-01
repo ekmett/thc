@@ -90,7 +90,7 @@ tests env = TestLabel "run options and target selection" $ TestList
             (["--verify-artifacts" | verify] ++ entry ++ ["--", "program"] ++ guest)
             (runtimeLaunchArguments verify entry "program" guest)
       | verify <- [False, True]
-      , entry <- [["--run-io", "core one.json,core-two.json", "main:Main.main"],
+      , entry <- [["--run-io", "core one.cbd,core-two.cbd", "main:Main.main"],
                   ["--run-io", "@packages.json", "selected:Main.main"],
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
       , guest <- [[], ["--guest-option", "value", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
