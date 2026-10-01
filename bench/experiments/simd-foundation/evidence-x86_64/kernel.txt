@@ -1,0 +1,1 @@
+Linux eak-quartus 6.8.0-100-generic #100~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Jan 19 17:10:19 UTC  x86_64 x86_64 x86_64 GNU/Linux
