@@ -37,6 +37,14 @@ class CoreProofJoinTest {
     private Map<String, Object> bind(String id, List<Object> rhs, Integer join) { var result = map("id", id, "name", id, "lifted", true, "rep", closure, "expr", rhs); if (join != null) { result.put("joinValueArity", join); result.put("joinResultRep", longProof); } return result; }
     private List<Object> let(boolean recursive, List<Map<String, Object>> bindings, List<Object> body) { return list("let", recursive, bindings, body, meta()); }
     private List<Object> choose(List<Object> condition, List<Object> yes, List<Object> no) { return list("case", condition, "condition", list(list("lit", list("int", "1"), list(), yes), list("default", null, list(), no)), with(meta(), "binder", arg("condition"))); }
+    @Test void malformedVariableIdentifiersRejectBeforeInputSignatureLookup() {
+        for (var id : Arrays.asList(null, 3L)) {
+            var binding = bind("entry", lam(List.of("input"), app(list("var", id, meta(closure)), v("input"))));
+            var failure = assertThrows(RuntimeFault.class, () -> CoreInputCalls.validate(List.of(binding)));
+            assertEquals("Missing Core variable identifier", failure.getMessage());
+        }
+        assertDoesNotThrow(() -> CoreInputCalls.validate(List.of(bind("entry", lam(List.of("input"), call("external", v("input")))))));
+    }
     @FunctionalInterface private interface Action { void run(Program program) throws ReflectiveOperationException; }
     private void program(List<Object> body, Action action) throws ReflectiveOperationException {
         try (var context = executionContext()) {

@@ -64,7 +64,7 @@ public final class CoreInputCalls {
                 return result;
             }
             if ("var".equals(tag)) {
-                String id = (String) expr.get(1);
+                if (!(expr.get(1) instanceof String id)) throw new RuntimeFault("Missing Core variable identifier");
                 if (scope.containsKey(id)) return scope.get(id).inputs;
                 if (seen.contains(id)) return null;
                 Map<String, Object> binding = globals.get(id);
