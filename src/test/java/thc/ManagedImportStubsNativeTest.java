@@ -25,7 +25,7 @@ class ManagedImportStubsNativeTest {
         }
         assertFalse(Files.exists(directory.resolve("source/ForeignImportStubs.hs")));
         assertEquals("(12,8,9,0,11)", Files.readString(directory.resolve("logs/import-stubs-native-oracle.stdout")).trim());
-        var core = artifact(variant); CoreCbdFixtures.pairedDiagnostic(core); return CoreCbdFixtures.read(core);
+        var core = artifact(variant); return CoreCbdFixtures.read(core);
     }
     private String id(String name) { return "thc-interface-fixture-0.1:ForeignImportStubs." + name; }
     private Path artifact(String variant) { return directory.resolve("import-stubs/" + variant + ".cbd"); }

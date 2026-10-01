@@ -29,7 +29,7 @@ class ManagedExportsNativeTest {
         assertEquals(object(manifest.get("artifactHashes")).get(root.relativize(file).toString()), digest);
     }
     private String verifiedFile(Path file) throws Exception { verifyFile(file); return Files.readString(file); }
-    private Map<String, Object> verifiedCore(Path file) throws Exception { verifyFile(file); CoreCbdFixtures.pairedDiagnostic(file); return CoreCbdFixtures.read(file); }
+    private Map<String, Object> verifiedCore(Path file) throws Exception { verifyFile(file); return CoreCbdFixtures.read(file); }
     private Map<String, Object> original() throws Exception {
         assertFalse(Files.exists(directory.resolve("typed-export-source/" + module + ".hs"))); return verifiedCore(core);
     }
@@ -97,8 +97,7 @@ class ManagedExportsNativeTest {
     @Test void hostValidationPrecedesIoAndFailedLoadsDoNotPublish() throws Exception {
         for (String backend : list("ast", "bytecode")) try (var context = context()) {
             var source = original(); var proof = object(source.get("staticForeignExportRegistration"));
-            var diagnostic = CoreCbdFixtures.pairedDiagnostic(core);
-            var malformed = CoreCbdFixtures.write(temporary.resolve("bad-proof.cbd"), with(diagnostic, "staticForeignExportRegistration", with(proof, "schema", 1L)));
+            var malformed = CoreCbdFixtures.write(temporary.resolve("bad-proof.cbd"), with(source, "staticForeignExportRegistration", with(proof, "schema", 1L)));
             assertThrows(RuntimeException.class, () -> context.eval("thc", CoreModules.managedExportRequest(list(malformed.toString()), backend, true)));
             assertTrue(context.getBindings("thc").getMemberKeys().isEmpty()); var symbols = load(context, backend); var next = symbols.getMember("thc_next");
             for (Object[] arguments : List.of(new Object[0], new Object[]{1, 2}, new Object[]{1L << 32}, new Object[]{1.5}, new Object[]{"3"})) assertThrows(RuntimeException.class, () -> next.execute(arguments));
