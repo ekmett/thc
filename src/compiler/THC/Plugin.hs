@@ -340,7 +340,8 @@ coreCalls d original
   | Var v <- original, isWiredVoid v = []
   | Var v <- original, Just lowered <- wiredRhs v =
       coreCalls (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
-  | canCertify d, Just saturated <- saturateMask original = coreCalls d saturated
+  -- Inventory needs no eta-expansion: revisiting a mask application head
+  -- would repeatedly expand the same primitive. Its operands contain the calls.
   | otherwise = case original of
       App{} -> let (function,args) = collectArgs original
                    values = filter (\case Type{} -> False; _ -> True) args
