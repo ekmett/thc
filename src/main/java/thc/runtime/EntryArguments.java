@@ -16,7 +16,10 @@ public final class EntryArguments extends Node {
     public EntryArguments(RootCallTarget target, Metrics metrics) { this(target, metrics, new boolean[0], 0); }
     public EntryArguments(RootCallTarget target, Metrics metrics, boolean[] knownEvaluated) { this(target, metrics, knownEvaluated, 0); }
     public EntryArguments(RootCallTarget target, Metrics metrics, boolean[] knownEvaluated, int prefixSize) {
-        if (!(target.getRootNode() instanceof GuestRoot root) || captures(root)) positions = new int[0];
+        this(target, metrics, knownEvaluated, prefixSize, false);
+    }
+    EntryArguments(RootCallTarget target, Metrics metrics, boolean[] knownEvaluated, int prefixSize, boolean shortcut) {
+        if (!(target.getRootNode() instanceof GuestRoot root) || captures(root) && !shortcut) positions = new int[0];
         else {
             boolean[] strict = root.getEntryStrict();
             ArgumentLayout layout = root.getInputLayout();

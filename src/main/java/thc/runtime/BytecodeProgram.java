@@ -934,9 +934,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         context.typedArguments = physicalArguments;
         var compiled = compile(expression, scope, tail);
-        boolean anyStrict = false;
-        for (boolean strict : context.entryStrict) anyStrict |= strict;
-        if (!passThrough && (!enableAsync || !anyStrict) && compiled.loweredCase() && context.inputLayout == null) {
+        if (!passThrough && compiled.loweredCase() && context.inputLayout == null) {
             var usedArguments = new LinkedHashSet<>(free);
             usedArguments.retainAll(argumentIds);
             context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression, resultProof,
