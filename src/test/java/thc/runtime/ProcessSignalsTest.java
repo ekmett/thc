@@ -215,7 +215,7 @@ public class ProcessSignalsTest {
         contextTransport(true);
     }
     private void contextTransport(boolean loom) throws Exception {
-        assumeTrue(System.getProperty("os.name").equals("Linux"));
+        var abi = StdioHostAbi.load();
         onBackends(loom, (language, backend) -> {
             var owner = Language.currentState(); var events = new LinkedBlockingQueue<ProcessSignalTransport.Event>(); var delivered = new CountDownLatch(8); var closed = new AtomicInteger();
             owner.getThreads().setCapabilityCount(1);
@@ -241,12 +241,13 @@ public class ProcessSignalsTest {
             assertThrows(RuntimeFault.class, () -> service.install(2L, -5L, ManagedAddress.nullAddress())); service.authorizeLauncher();
             for (var bad : List.of(new long[] {64L, -5L}, new long[] {11L, -5L}, new long[] {2L, -3L}, new long[] {2L, 1L}))
                 assertThrows(RuntimeFault.class, () -> service.install(bad[0], bad[1], ManagedAddress.nullAddress()));
-            for (long signal : new long[] {1L, 2L, 3L, 10L, 12L, 15L, 24L, 25L}) {
+            for (var name : StdioHostAbi.SIGNAL_NAMES) {
+                long signal = abi.signal(name);
                 var actual = new ArrayList<Long>(); for (long action : new long[] {-2L, -4L, -5L, -1L}) actual.add(install.applyAsLong(signal, action));
                 assertEquals(List.of(-1L, -2L, -4L, -5L), actual);
             }
             try {
-                for (int signal : new int[] {1, 2, 3, 10, 12, 15, 24, 25}) { var bytes = new byte[128]; for (int i = 0; i < bytes.length; i++) bytes[i] = (byte) i; events.put(new ProcessSignalTransport.Event(signal, bytes)); }
+                for (var name : StdioHostAbi.SIGNAL_NAMES) { var bytes = new byte[Math.toIntExact(abi.getSiginfoBytes())]; for (int i = 0; i < bytes.length; i++) bytes[i] = (byte) i; events.put(new ProcessSignalTransport.Event((int) abi.signal(name), bytes)); }
                 assertTrue(TruffleSafepoint.setBlockedThreadInterruptibleFunction(null, (TruffleSafepoint.InterruptibleFunction<CountDownLatch, Boolean>) latch -> latch.await(5, TimeUnit.SECONDS), delivered), "typed guest dispatcher must return");
                 assertEquals(8, owner.getNativeAllocations().liveCount(), "dispatcher images remain context-owned");
             } finally { service.close(); }
