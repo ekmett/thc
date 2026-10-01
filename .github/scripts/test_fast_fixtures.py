@@ -29,6 +29,28 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertLess(planned.index("./gradlew installDist"),
                         planned.index(" -- foreign-exceptions"))
 
+    def test_foreign_exception_native_consumers_use_matching_configured_ghc(self):
+        project = Path(__file__).resolve().parents[2]
+        fixture = self.root / "fixture"
+        fixture.write_text('#!/bin/sh\nprintf "%s\\t%s\\n" "$1" "${THC_INSTALLED_CORE_GHC_SOURCE:-missing}"\n')
+        fixture.chmod(0o755)
+        cabal = self.root / "cabal"
+        cabal.write_text('#!/bin/sh\ntest "$1" = list-bin || exit 1\nprintf "%s\\n" "$TEST_FIXTURE_BIN"\n')
+        cabal.chmod(0o755)
+        planned = subprocess.run(
+            ["make", "--dry-run", "--no-print-directory", "foreign-exception-fixtures", "CABAL=" + str(cabal)],
+            cwd=project, check=True, capture_output=True, text=True).stdout
+        # Execute the real broad-consumer recipe, replacing only its compilers.
+        recipe = planned[planned.index("set -eu;"):]
+        source = str(self.root / "configured ghc")
+        consumed = subprocess.run(["sh", "-c", recipe], cwd=project, check=True,
+            capture_output=True, text=True, env={"PATH": "/usr/bin:/bin",
+                "TEST_FIXTURE_BIN": str(fixture), "THC_FOREIGN_EXCEPTION_GHC_SOURCE": source,
+                "THC_INSTALLED_CORE_GHC_SOURCE": "wrong compiler tree"}).stdout.splitlines()
+        self.assertGreaterEqual(len(consumed), 8)
+        for row in consumed:
+            self.assertEqual(source, row.split("\t", 1)[1])
+
     def test_native_inspection_families_require_cbd_without_flat_core_json(self):
         for family, module, outputs in (
                 ("ghc-bco", "GhcBCO", fast_fixtures.fast_inputs.BCO_OUTPUTS),
