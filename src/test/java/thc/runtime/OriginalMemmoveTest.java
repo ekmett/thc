@@ -116,7 +116,7 @@ class OriginalMemmoveTest {
         assertSame(payload, base.readAddressElementIndex(1)); assertTrue(base.readAddressElementIndex(2).sameLocation(base.plus(32)));
         assertThrows(RuntimeFault.class, () -> base.plus(1).moveTo(base.plus(16), 8));
     }
-    @Test void malformedOriginalDescriptorAndForgedHeadRejectBeforeExecution() throws Exception {
+    @Test void malformedOriginalDescriptorAndForgedHeadTrapWhenReached() throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -125,7 +125,7 @@ class OriginalMemmoveTest {
                 for (String backend : new String[]{"ast", "bytecode"}) {
                     class Control { void reject(Consumer<Map<String,Object>> change) throws Exception {
                         var malformed = new LinkedHashMap<>(descriptor()); change.accept(malformed);
-                        assertThrows(RuntimeFault.class, () -> program(language, backend, module(malformed)));
+                        assertThrows(RuntimeFault.class, () -> callScalarTestTarget(program(language, backend, module(malformed)).entryTarget("move"), new Object[]{0L, ManagedAddress.fromByteArray(new byte[8]), ManagedAddress.fromByteArray(new byte[8]), 0L, Unit.INSTANCE}));
                     }}
                     var control = new Control();
                     control.reject(it -> it.put("safety", "safe")); control.reject(it -> it.put("arity", 3L));

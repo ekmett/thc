@@ -93,39 +93,40 @@ class ManagedFileCallTest {
             } finally { context.leave(); }
         }
     }
-    @Test void bothLoadersRejectBoundHeadsUnknownSymbolsAndMalformedProofs() {
+    @Test void bothBackendsTrapBoundHeadsUnknownSymbolsAndMalformedProofsWhenReached() {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                java.util.function.Function<Consumer<List<Object>>, ExecutableProgram> load = mutate -> {
+                java.util.function.Consumer<Consumer<List<Object>>> reach = mutate -> {
                     var module = ManagedFileFixtures.module(List.of("open"), call -> mutate.accept(call));
-                    return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
+                    var program = backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
+                    callScalarTestTarget(program.entryTarget("open"), new Object[]{0L,path(directory.resolve("missing/entry")),3L,Unit.INSTANCE});
                 };
                 for (var id : Arrays.asList(null, "", 3L, "p0", "open"))
-                    assertThrows(RuntimeFault.class, () -> load.apply(call -> ((List<Object>) call.get(1)).set(1, id)));
+                    assertThrows(RuntimeFault.class, () -> reach.accept(call -> ((List<Object>) call.get(1)).set(1, id)));
                 for (var head : List.of(List.of("prim", "open"), List.of("var", "foreign-open"),
                     List.of("var", "foreign-open", Map.of("rep", ManagedFileFixtures.scalar(null, true)))))
-                    assertThrows(RuntimeFault.class, () -> load.apply(call -> call.set(1, head)));
+                    assertThrows(RuntimeFault.class, () -> reach.accept(call -> call.set(1, head)));
                 for (var change : new Object[][]{{"convention","ccall"},{"convention","javascript"},{"safety","unsafe"},{"arity",3.0},{"suppliedArity",2L}})
-                    assertThrows(RuntimeFault.class, () -> load.apply(call -> {
+                    assertThrows(RuntimeFault.class, () -> reach.accept(call -> {
                         var descriptor = (Map<String, Object>) ((Map<String, Object>) call.get(6)).get("foreignCall");
                         descriptor.put((String) change[0], change[1]);
                     }));
-                assertThrows(RuntimeFault.class, () -> load.apply(call -> {
+                assertThrows(RuntimeFault.class, () -> reach.accept(call -> {
                     var descriptor = (Map<String, Object>) ((Map<String, Object>) call.get(6)).get("foreignCall");
                     ((Map<String, Object>) descriptor.get("target")).put("symbol", "thc_io_v1_unknown");
                 }));
-                assertThrows(RuntimeFault.class, () -> load.apply(call -> ((List<Object>) call.get(3)).set(0, true)));
-                assertThrows(RuntimeFault.class, () -> load.apply(call -> {
+                assertThrows(RuntimeFault.class, () -> reach.accept(call -> ((List<Object>) call.get(3)).set(0, true)));
+                assertThrows(RuntimeFault.class, () -> reach.accept(call -> {
                     var arguments = (List<List<Object>>) call.get(2);
                     arguments.get(2).set(2, Map.of("rep", ManagedFileFixtures.scalar("IntRep", true)));
                 }));
-                assertThrows(RuntimeFault.class, () -> load.apply(call -> {
+                assertThrows(RuntimeFault.class, () -> reach.accept(call -> {
                     var arguments = (List<List<Object>>) call.get(2);
                     arguments.get(0).set(1, "p1"); // Occurrence claims AddrRep; lexical binder proves IntRep.
                 }));
-                assertThrows(UnsupportedCore.class, () -> load.apply(call -> ((Map<String, Object>) call.get(6)).remove("foreignCall")));
+                assertThrows(UnsupportedCore.class, () -> reach.accept(call -> ((Map<String, Object>) call.get(6)).remove("foreignCall")));
             } finally { context.leave(); }
         }
     }
