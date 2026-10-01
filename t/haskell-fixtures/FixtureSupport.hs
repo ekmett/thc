@@ -33,7 +33,7 @@ import Numeric (showHex)
 import System.Directory (copyFile, createDirectoryIfMissing)
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..), die)
-import System.FilePath ((</>), takeDirectory, takeFileName)
+import System.FilePath ((</>), isPathSeparator, takeDirectory, takeFileName)
 import System.IO (IOMode(ReadMode, WriteMode), withBinaryFile)
 import qualified System.Info as Host
 import System.Process (CreateProcess(..), StdStream(..), proc, readCreateProcessWithExitCode,
@@ -195,7 +195,7 @@ hashFile path = hexBytes . SHA256.hash <$> BS.readFile path
 hashes :: FilePath -> [FilePath] -> IO (Map.Map String String)
 hashes root paths = Map.fromList <$> forM paths (\path -> do
   digest <- hashFile (root </> path)
-  pure (path,digest))
+  pure (map (\c -> if isPathSeparator c then '/' else c) path,digest))
 
 splitTab :: String -> [String]
 splitTab text = case break (== '\t') text of

@@ -18,6 +18,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.LongStream;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 /** Genuine declaration certificates in explicitly synthetic scalar consumers. */
 @SuppressWarnings("unchecked")
@@ -153,7 +154,7 @@ class LibdwUnavailableTest {
                 var pointer = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8));
                 java.util.function.LongSupplier call = () -> {
                     var weak = Language.currentState().getWeaks().make(new Object(), new Object(), null);
-                    long added = (Long) Calls.target(target, new Object[]{0L, pointer, weak});
+                    long added = (Long) callScalarTestTarget(target, new Object[]{0L, pointer, weak});
                     assertEquals(1L, added);
                     assertEquals(0L, Language.currentState().getWeaks().finalize(weak).getFlag());
                     released(language);
@@ -197,13 +198,13 @@ class LibdwUnavailableTest {
                     try {
                         assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(function, base, 0, weak, state.cbits()));
                     } finally { borrow.close(); }
-                    assertEquals(1L, (Long) Calls.target(target, new Object[]{0L, base, weak}));
+                    assertEquals(1L, (Long) callScalarTestTarget(target, new Object[]{0L, base, weak}));
                     assertEquals(1, state.getNativeAllocations().liveCount());
                     assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
                     assertEquals(0, state.getNativeAllocations().liveCount());
                     assertThrows(RuntimeFault.class, () -> base.readWord8(0));
                     assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
-                    assertEquals(0L, (Long) Calls.target(target, new Object[]{0L, base, weak}),
+                    assertEquals(0L, (Long) callScalarTestTarget(target, new Object[]{0L, base, weak}),
                         "A finalized Weak# rejects registration before inspecting its freed base");
                     assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(function, base, 1, weak, state.cbits()));
                     released(language);
@@ -339,7 +340,7 @@ class LibdwUnavailableTest {
                         var target = targets.get(name);
                         var arguments = new Object[args.length + 1];
                         arguments[0] = 0L; System.arraycopy(args, 0, arguments, 1, args.length);
-                        var result = Calls.target(target, arguments);
+                        var result = callScalarTestTarget(target, arguments);
                         if (compiled) {
                             assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue(), backend + "/" + name);
                             valid(target);

@@ -110,7 +110,8 @@ public enum ByteArrayOp {
             default -> CoreKind.LONG;
         };
         return !proof.isAggregate() && !proof.isVector() &&
-            (proof.getKind() == CoreKind.LONG || registers.equals(proof.getPrimReps())) && proof.getKind() == kind;
+            (proof.getKind() == CoreKind.LONG ? proof.isInt() == (NarrowInteger.fromRep(register) != null) :
+                registers.equals(proof.getPrimReps())) && proof.getKind() == kind;
     }
     public void validate(List<CoreRepresentation> actual, List<?> flags, CoreRepresentation result) {
         if (actual.size() != arguments.size()) throw new RuntimeFault("Primitive arity mismatch: " + primitive);

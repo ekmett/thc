@@ -85,7 +85,8 @@ public class FloatWordArrayNativeTest {
         for (var node : nodes)
             for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
                 if (call.getCurrentCallTarget() instanceof RootCallTarget active
-                    && active.getRootNode() instanceof GuestRoot)
+                    && active.getRootNode() instanceof GuestRoot
+                    && ((com.oracle.truffle.runtime.OptimizedCallTarget) active).getCallCount() > 0)
                     visit(active, seen, targets);
         targets.add(target); // Install callees before their callers.
     }
@@ -588,7 +589,10 @@ public class FloatWordArrayNativeTest {
                             .toList());
                     boolean read = name.equals("moveFloatBits");
                     switch (mutation) {
-                        case 0 -> helper.put("name", "wrongHelper");
+                        case 0 -> {
+                            helper.put("id", coreEntry("wrongHelper"));
+                            ((List<Object>) call.get(1)).set(1, helper.get("id"));
+                        }
                         case 1 -> helper.put("arity", (Long) helper.get("arity") + 1);
                         case 2 -> ((List<Object>) call.get(2)).removeLast();
                         case 3 ->
@@ -702,7 +706,9 @@ public class FloatWordArrayNativeTest {
                                 targets, false, language, context, probes);
                             targets = activeTargets(entry);
                             assertEquals((int) expectedCalls, targets.size(),
-                                stage.getKey() + "/" + backend + "/" + name + " active guest roots");
+                                stage.getKey() + "/" + backend + "/" + name + " active guest roots " +
+                                    targets.stream().map(t -> t.getRootNode().getName()).toList() + " " +
+                                    describe(callState(entry, probes)));
                             assertEquals(expectedLabels,
                                 new HashSet<>(targets.stream().map(t -> t.getRootNode().getName()).toList()),
                                 stage.getKey() + "/" + backend + "/" + name + " guest root labels");
@@ -885,7 +891,7 @@ public class FloatWordArrayNativeTest {
                                         .contains(operation);
                                 boolean sameCarrier = mutation == 6
                                     || (word && !operation.getTuple()
-                                        && (mutation == 7 || (mutation >= 10 && mutation <= 14)));
+                                        && (mutation == 7 || mutation == 10 || mutation == 12 || mutation == 13));
                                 if (sameCarrier) {
                                     var name = owner(operation);
                                     var p = program(

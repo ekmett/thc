@@ -27,6 +27,7 @@ import thc.Json;
 import thc.Language;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 @EnabledOnOs(OS.WINDOWS)
 @SuppressWarnings("unchecked")
@@ -148,7 +149,7 @@ class WindowsDirectoryStreamsTest {
                             var arguments = new Object[args.length + 1];
                             arguments[0] = 0L;
                             System.arraycopy(args, 0, arguments, 1, args.length);
-                            var result = Calls.target(target, arguments);
+                            var result = callScalarTestTarget(target, arguments);
                             if (compiled) {
                                 assertEquals(before + 1, ((Number) executable.diagnostics().get("compiledEntries")).longValue(), stage + "/" + backend + "/" + entry);
                                 valid(target);
@@ -353,7 +354,7 @@ class WindowsDirectoryStreamsTest {
                     arguments[0] = 0L;
                     System.arraycopy(operands, 0, arguments, 1, operands.length);
                     arguments[arguments.length - 1] = 7L;
-                    assertThrows(RuntimeFault.class, () -> Calls.target(target, arguments));
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, arguments));
                     assertEquals(1, streams.liveCount());
                     assertEquals(before, name(output));
                     assertNotEquals(0L, streams.closeSearch(handle));

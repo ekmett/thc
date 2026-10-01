@@ -12,11 +12,13 @@
 -- Tests for run options.
 module RunOptionsTests (tests) where
 
+import Control.Exception (bracket)
 import Control.Monad (forM_)
 import System.IO.Error (tryIOError)
 import Data.List (isInfixOf)
-import System.Directory (createFileLink)
-import System.FilePath ((</>))
+import System.Directory (createFileLink, getPermissions, setPermissions, executable)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.FilePath ((</>), searchPathSeparator)
 import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
@@ -25,7 +27,51 @@ import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeEntryArgum
 
 tests :: Env -> Test
 tests env = TestLabel "run options and target selection" $ TestList
-  [ TestLabel "find THC beside the executable from an unrelated project" $ TestCase $
+  [ TestLabel "completion uses real parser options without building" $ TestCase $ do
+      let complete index words' = run env (root env) Nothing 30 ("--bash-completion" : show (index :: Int) : words')
+      roots <- complete 1 ["thc", "acq"]
+      assertSuccess roots
+      assertEqual "public command prefix" "acquire\n" (out roots)
+      forM_ ["run", "acquire"] $ \command -> do
+        options <- complete 2 ["thc", command, "--inst"]
+        assertSuccess options
+        assertEqual "parser-derived flag" "--installed-core\n" (out options)
+      values <- complete 3 ["thc", "run", "--installed-core", "pi"]
+      assertEqual "option values" "pinned\n" (out values)
+      suffix <- complete 4 ["thc", "run", "target", "--", "--inst"]
+      assertEqual "opaque guest suffix" "" (out suffix)
+      invalid <- run env (root env) Nothing 30 ["--bash-completion", "bad", "thc", ""]
+      assertSuccess invalid
+      assertNoStdout invalid
+  , TestLabel "installed extension completion preserves cursor and argument boundaries" $ TestCase $
+      if os == "mingw32" then pure () else
+      withFixtureNamed env "t/fixtures/run-pure" "completion paths" $ \package -> do
+        let extension = package </> "thc-completion-fixture"
+        writeText extension $ unlines
+          ["#!/bin/sh", "if [ \"$1\" = --bash-completion ]; then",
+           "  test \"$2\" = 1 && test \"$3\" = thc-completion-fixture && test \"$4\" = 'two w' || exit 2",
+           "  printf '%s\\n' 'two words' unrelated", "else", "  printf '%s\\n' \"$@\"", "fi"]
+        permissions <- getPermissions extension
+        setPermissions extension permissions {executable = True}
+        bracket (lookupEnv "PATH") (maybe (unsetEnv "PATH") (setEnv "PATH")) $ \old -> do
+          setEnv "PATH" (package ++ [searchPathSeparator] ++ maybe "" id old)
+          discovered <- run env package Nothing 30 ["--bash-completion", "1", "thc", "completion-f"]
+          assertEqual "PATH extension" "completion-fixture\n" (out discovered)
+          delegated <- run env package Nothing 30 ["--bash-completion", "2", "thc", "completion-fixture", "two w"]
+          assertSuccess delegated
+          assertEqual "child-relative index, executable and prefix filtering" "two words\n" (out delegated)
+          executed <- run env package Nothing 30 ["completion-fixture", "two words", ""]
+          assertSuccess executed
+          assertEqual "normal extension dispatch preserves empty argument" "two words\n\n" (out executed)
+  , TestLabel "generated Bash script queries the executable" $ TestCase $
+      if os == "mingw32" then pure () else do
+        result <- runExe env (root env) Nothing 30 "bash"
+          ["-c", "source <(\"$1\" --bash-completion-script)\n" ++
+                 "COMP_WORDS=(\"$1\" run --inst)\nCOMP_CWORD=2\n_thc\n" ++
+                 "printf '%s\\n' \"${COMPREPLY[@]}\"", "bash", driver env]
+        assertSuccess result
+        assertEqual "real Bash callback" "--installed-core\n" (out result)
+  , TestLabel "find THC beside the executable from an unrelated project" $ TestCase $
       if os == "mingw32" then pure () else
       withFixture env "t/fixtures/run-pure" $ \package -> do
         let missingRuntime = package </> "missing-runtime"
