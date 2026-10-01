@@ -35,7 +35,7 @@ class ReferenceFormalTest {
     private List<Object> choose(List<Object> value, List<Object> zero, List<Object> other) { return list("case", value, "choice", list(list("lit", list("int", "0"), list(), zero), list("default", null, list(), other))); }
     private long count(ExecutableProgram p, String name) { return ((Number) p.diagnostics().get(name)).longValue(); }
     private Object call(ExecutableProgram p, String name, Object... args) { return Calls.target(p.hostEntryTarget(args.length), new Object[]{p.entryValue(name), args}); }
-    private void compile(RootCallTarget target) throws Exception { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(RootCallTarget target) throws Exception { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     private void eachBackend(List<Map<String, Object>> bindings, CheckedBiConsumer<String, ExecutableProgram> action) throws Exception {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();

@@ -104,6 +104,7 @@ class SourceCloneTest {
                 for (int repeat = 0; repeat < 20; repeat++) check(repeat, original, caller, backend);
                 var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
                 type.getMethod("compile", boolean.class).invoke(cloned, true);
+                type.getMethod("waitForCompilation").invoke(cloned);
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(cloned));
                 for (long input : List.of(Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_001L)) check(input, original, caller, backend);
                 assertLocations(original.getRootNode(), cloned.getRootNode());

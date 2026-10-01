@@ -1124,6 +1124,7 @@ class ReusableProgramTest {
                 var target = reader.target;
                 var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
                 type.getMethod("compile", boolean.class).invoke(target, true);
+                type.getMethod("waitForCompilation").invoke(target);
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
                 var runtime = Truffle.getRuntime();
                 runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, target);

@@ -45,7 +45,7 @@ class TypedCaseTest {
         var metadata = map(); if (proof != null) metadata.put("binder", param(binder, proof)); if (result != null) metadata.put("rep", result);
         return list("case", scrutinee, binder, alternatives, metadata);
     }
-    private void compile(RootCallTarget target) throws Exception { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(RootCallTarget target) throws Exception { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     private Object call(ExecutableProgram p, String id, Object... args) { return Calls.target(p.hostEntryTarget(args.length), new Object[]{p.entryValue(id), args}); }
     @FunctionalInterface private interface CaseAction { void accept(boolean enabled, String backend, ExecutableProgram program) throws Exception; }
     private void each(CaseAction action) throws Exception {

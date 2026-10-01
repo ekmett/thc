@@ -32,10 +32,10 @@ public final class Main {
             builder.option("thc.ByteArrayStorage", System.getProperty("thc.byteArrayStorage", "native"));
         if (profile == ContextProfile.NATIVE) return builder;
         builder.allowExperimentalOptions(true)
-            .option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw");
-        if (profile == ContextProfile.SYNCHRONOUS_TEST) return builder;
+        if (profile == ContextProfile.SYNCHRONOUS_TEST)
+            return builder.option("engine.BackgroundCompilation", "false");
         return builder.allowEnvironmentAccess(EnvironmentAccess.INHERIT)
             .option("engine.CompilationFailureAction", "Print")
             .option("engine.CompilerThreads", System.getProperty("polyglot.engine.CompilerThreads", LAUNCHER_COMPILER_THREADS))

@@ -38,7 +38,7 @@ class ReferenceCaptureTest {
     private List<Object> local(List<Map<String, Object>> group, List<Object> body, boolean recursive) { return list("let", recursive, group, body); }
     private long count(ExecutableProgram p, String name) { return ((Number) p.diagnostics().get(name)).longValue(); }
     private Object call(ExecutableProgram p, Object fn, Object... args) { return Calls.target(p.hostEntryTarget(args.length), new Object[]{fn, args}); }
-    private void compile(RootCallTarget target) throws Exception { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(RootCallTarget target) throws Exception { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     private void inLanguage(CheckedConsumer<Language> action) throws Exception {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();

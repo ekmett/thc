@@ -43,6 +43,7 @@ class CStringTest {
     private void compile(RootCallTarget target) throws Exception {
         var targetClass = target.getClass();
         targetClass.getMethod("compile", boolean.class).invoke(target, true);
+        targetClass.getMethod("waitForCompilation").invoke(target);
         assertEquals(true, targetClass.getMethod("isValidLastTier").invoke(target));
         var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
     }

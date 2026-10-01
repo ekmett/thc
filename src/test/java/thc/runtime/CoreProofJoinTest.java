@@ -46,7 +46,7 @@ class CoreProofJoinTest {
     }
     private long run(Program program, long n) { return (Long) Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("entry"), new Object[]{n}}); }
     private long count(Program program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
-    private void compile(Program program) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); var target = program.entryTarget("entry"); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
+    private void compile(Program program) throws ReflectiveOperationException { var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); var target = program.entryTarget("entry"); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target)); }
     private static final class CloneCaller extends RootNode {
         @Child private DirectCallNode call;
         CloneCaller(RootCallTarget target) { super(null); call = DirectCallNode.create(target); }
@@ -65,7 +65,7 @@ class CoreProofJoinTest {
             context.initialize("thc"); final BytecodeProgram p; final GuestThreads threads; context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); threads = Language.currentState().getThreads(); p = new BytecodeProgram(language, map("bindings", list(bind("entry", lam(List.of("input"), body))), "instrument", true), true);
-                var target = p.entryTarget("entry"); assertEquals(10L, Calls.target(target, new Object[]{0L, 10L})); target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                var target = p.entryTarget("entry"); assertEquals(10L, Calls.target(target, new Object[]{0L, 10L})); target.getClass().getMethod("compile", boolean.class).invoke(target, true); target.getClass().getMethod("waitForCompilation").invoke(target); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
             } finally { context.leave(); }
             var completed = new CompletableFuture<Object>();
             var worker = new Thread(() -> {
@@ -210,7 +210,7 @@ class CoreProofJoinTest {
             java.util.function.LongConsumer check = input -> {
                 long expected = (input < 0 ? -input : input == 0L ? 4096L : input + 17) + 19; assertEquals(expected, run(p, input)); assertEquals(expected, Calls.target(caller.getCallTarget(), new Object[]{0L, input}));
             };
-            for (int i = 0; i < 30; i++) check.accept((long) i - 15); compile(p); var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(cloned, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(cloned));
+            for (int i = 0; i < 30; i++) check.accept((long) i - 15); compile(p); var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(cloned, true); type.getMethod("waitForCompilation").invoke(cloned); assertEquals(true, type.getMethod("isValidLastTier").invoke(cloned));
             long before = count(p, "compiledEntries"); for (long input : new long[]{Long.MIN_VALUE, Long.MAX_VALUE, 0L, 3_000_000_001L, -3_000_000_001L}) check.accept(input); assertTrue(count(p, "compiledEntries") > before); assertTrue(count(p, "localJoinTransfers") > 0);
         });
     }

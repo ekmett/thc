@@ -30,7 +30,7 @@ class MaskContinuationProofTest {
     @FunctionalInterface private interface Action<T> { T run() throws Exception; }
     private <T> T entered(Context context, Action<T> action) throws Exception { context.enter(); try { return action.run(); } finally { context.leave(); } }
     private void compile(RootCallTarget target) throws ReflectiveOperationException {
-        var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); assertTrue(type.isInstance(target)); type.getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+        var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); assertTrue(type.isInstance(target)); type.getMethod("compile", boolean.class).invoke(target, true); type.getMethod("waitForCompilation").invoke(target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
         // Match EntryValue.compile: valid guest code alone does not restore a
         // retired HotSpot boundary. Repairing it during entry loses that call.
         var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));

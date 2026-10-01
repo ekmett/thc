@@ -80,7 +80,7 @@ class StockGraphRecoveryTest {
         Truffle.getRuntime();
         Controls.concurrentEntry();
     }
-    @Test void launcherReportsRealCompilerFailureWithoutUnwindingGuestEntry() {
+    @Test void launcherReportsRealCompilerFailureWithoutUnwindingGuestEntry() throws Exception {
         Truffle.getRuntime();
         Controls.launcherPolicy();
     }
@@ -830,24 +830,76 @@ class StockGraphRecoveryTest {
             @Override public Object execute(VirtualFrame frame) { return body.execute(frame); }
         }
 
-        static void launcherPolicy() {
+        static void launcherPolicy() throws Exception {
             try (var context = thc.Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), thc.ContextProfile.LAUNCHER)
-                    .option("engine.SingleTierCompilationThreshold", "1")
-                    .option("compiler.MaximumGraalGraphSize", "10000").build()) {
+                    .option("engine.SingleTierCompilationThreshold", "2")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build();
+                 var worker = Executors.newSingleThreadExecutor()) {
                 context.initialize("thc"); context.enter();
+                var runtime = (OptimizedTruffleRuntime) Truffle.getRuntime();
+                var reached = new CountDownLatch(1); var release = new CountDownLatch(1);
+                OptimizedTruffleRuntimeListener listener = null;
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
+                    var metrics = new Metrics(true);
                     var root = new FunctionRoot(language, new FrameLayout().build(), "launcher recovery", null,
                             new int[0], new int[0], new int[0],
-                            new AstSameFrameArm(new Heavy(new long[4096], effects, source)), new Metrics(true));
+                            new AstSameFrameArm(new Heavy(new long[4096], effects, source)), metrics);
                     var target = (OptimizedCallTarget) root.getCallTarget();
-                    // Compilation happens on this real entry, not around a call-and-replay handler.
-                    assertDoesNotThrow(() -> Calls.target(target, new Object[]{0L}));
-                    assertEquals(1, effects.get()); assertNotSame(root, source.get());
-                    assertEquals(1, ((FunctionRoot) source.get()).getGraphBudgetGeneration());
+                    long expected = 17;
+                    for (int i = 0; i < 4096; i++) expected = expected * 17 + i;
+                    // One visible warm entry; only the second entry reaches the compilation threshold.
+                    assertEquals(expected, Calls.target(target, new Object[]{0L}));
+                    assertEquals(1, effects.get()); assertSame(root, source.get());
+                    assertFalse(target.isSubmittedForCompilation()); assertNull(root.graphFailure.get());
+                    listener = new OptimizedTruffleRuntimeListener() {
+                        @Override public void onCompilationStarted(OptimizedCallTarget compiling, AbstractCompilationTask task) {
+                            if (compiling != target) return;
+                            reached.countDown();
+                            try {
+                                if (!release.await(30, TimeUnit.SECONDS))
+                                    throw new AssertionError("compiler release timed out");
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt(); throw new AssertionError(interrupted);
+                            }
+                        }
+                    };
+                    runtime.addListener(listener);
+                    var entry = worker.submit(() -> {
+                        context.enter();
+                        try { return Calls.target(target, new Object[]{0L}); }
+                        finally { context.leave(); }
+                    });
+                    assertTrue(reached.await(20, TimeUnit.SECONDS), "the real entry must submit compilation");
+                    assertEquals(expected, entry.get(10, TimeUnit.SECONDS), "guest progress must not wait for compilation");
+                    assertEquals(2, effects.get()); assertSame(root, source.get());
+                    assertTrue(target.isSubmittedForCompilation()); assertNull(root.graphFailure.get());
+                    release.countDown();
+                    runtime.waitForCompilation(target, 20000);
                     assertFalse(target.isSubmittedForCompilation()); assertFalse(target.isValid());
-                } finally { context.leave(); }
+                    assertNotNull(root.graphFailure.get());
+                    assertSame(target, root.graphFailure.get().target());
+                    assertTrue(root.graphFailure.get().reason().contains("GraphTooBigBailoutException"));
+                    assertEquals(2, effects.get(), "compiler completion has no guest effects");
+                    assertEquals(expected, Calls.target(target, new Object[]{0L}));
+                    assertEquals(3, effects.get()); assertNotSame(root, source.get());
+                    var fresh = (FunctionRoot) source.get();
+                    assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(1, fresh.getGraphBudgetGeneration());
+                    assertSame(root.compilationOwner(), fresh.compilationOwner());
+                    var installed = (OptimizedCallTarget) fresh.getCallTarget();
+                    installed.compile(true);
+                    runtime.waitForCompilation(installed, 20000);
+                    assertTrue(installed.isValidLastTier()); assertEquals(3, effects.get());
+                    long before = metrics.getCompiledEntries();
+                    assertEquals(expected, Calls.target(target, new Object[]{0L}));
+                    assertEquals(4, effects.get()); assertSame(fresh, source.get());
+                    assertTrue(metrics.getCompiledEntries() > before, "the real entry must execute installed replacement code");
+                } finally {
+                    release.countDown();
+                    if (listener != null) runtime.removeListener(listener);
+                    context.leave(); worker.shutdownNow();
+                }
             }
         }
 
