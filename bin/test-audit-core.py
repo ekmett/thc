@@ -463,6 +463,63 @@ class RuntimeServicesQueryTest(unittest.TestCase):
                 self.assertTrue(self.inspect(expression, dict(bound, **{key: LONG})).issues, key)
 
 
+class CoreOwnedPackageDispatchTest(unittest.TestCase):
+    def calls(self):
+        return json.loads((ROOT.parent / 'src/main/resources/thc/core-native-overrides.json').read_text())['calls']
+
+    def expression(self, call):
+        bound = {f'a{index}': dict(proof, evaluated=True) for index, proof in enumerate(call['argumentReps'])}
+        expression = ['app', ['var', 'foreign-head', dict(rep=CLOSURE)],
+            [['var', key, dict(rep=proof)] for key, proof in bound.items()],
+            [False] * len(bound), False, False,
+            dict(rep=dict(call['resultRep'], evaluated=True), foreignCall=copy.deepcopy(call))]
+        return expression, bound
+
+    def inspect(self, expression, bound, cap=None):
+        auditor = audit_core.Audit([], cap or CAP)
+        unit = expression[6]['foreignCall']['target']['unit']
+        auditor.package_scalar_links[unit] = dict(unit=unit, abi=[])
+        auditor.polyglot_call(expression, bound, 'root', 'root')
+        return auditor
+
+    def test_exact_shared_profile_calls_keep_their_live_owned_validator_before_native_adapters(self):
+        for call in self.calls():
+            expression, bound = self.expression(call)
+            observed = self.inspect(expression, bound)
+            with self.subTest(symbol=call['target']['symbol']):
+                self.assertEqual([], observed.issues)
+                self.assertEqual([call['target']['symbol']], [item['symbol'] for item in observed.foreign_calls])
+
+    def test_profile_routing_retains_descriptor_head_operand_result_and_capability_rejections(self):
+        for call in self.calls():
+            original, bound = self.expression(call)
+            mutations = [('schema', lambda e: e[6]['foreignCall'].update(schema=True)),
+                ('arity', lambda e: e[6]['foreignCall'].update(arity=True)),
+                ('owner', lambda e: e[6]['foreignCall']['target'].update(unit='ordinary-provider')),
+                ('symbol', lambda e: e[6]['foreignCall']['target'].update(symbol='ordinary_missing')),
+                ('convention', lambda e: e[6]['foreignCall'].update(convention='capi')),
+                ('safety', lambda e: e[6]['foreignCall'].update(safety='interruptible')),
+                ('declared carrier', lambda e: e[6]['foreignCall']['argumentReps'][-1].update(primReps=['IntRep'])),
+                ('actual carrier', lambda e: e[2][-1][2].update(rep=LONG)),
+                ('result', lambda e: e[6].update(rep=LONG)),
+                ('flags', lambda e: e[3].__setitem__(-1, True)),
+                ('head', lambda e: e[1][2].update(rep=LONG))]
+            for name, mutate in mutations:
+                changed = copy.deepcopy(original)
+                mutate(changed)
+                with self.subTest(symbol=call['target']['symbol'], mutation=name):
+                    self.assertTrue(self.inspect(changed, bound).issues)
+            with self.subTest(symbol=call['target']['symbol'], mutation='shadowed head'):
+                self.assertTrue(self.inspect(original, dict(bound, **{'foreign-head': CLOSURE})).issues)
+            with self.subTest(symbol=call['target']['symbol'], mutation='stored State carrier'):
+                self.assertTrue(self.inspect(original, dict(bound, **{f'a{len(bound)-1}': LONG})).issues)
+            # Callback release has its own pre-package protocol, not this flag.
+            if call['target']['symbol'] in core_original_foreign.OPERATIONS:
+                disabled = dict(CAP, managedForeignCalls=[])
+                with self.subTest(symbol=call['target']['symbol'], mutation='disabled capability'):
+                    self.assertTrue(self.inspect(original, bound, disabled).issues)
+
+
 class JavaScriptPackageTest(unittest.TestCase):
     def test_mixed_native_unit_keeps_javascript_proof_and_c_adapter_checks(self):
         state = dict(kind='void', primReps=[], evaluated=True)

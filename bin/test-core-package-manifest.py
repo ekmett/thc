@@ -896,6 +896,35 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(header=malformed), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(module)
 
+    def test_exact_owned_profile_archive_routing_keeps_whole_module_obligations_strict(self):
+        import copy
+        profile = json.loads((Path(__file__).resolve().parents[1] /
+            'src/main/resources/thc/core-native-overrides.json').read_text())
+        for call in profile['calls']:
+            module = dict(unit=call['target']['unit'])
+            binding = dict(foreignCall=call)
+            emitted = dict(symbol=call['target']['symbol'], convention=call['convention'], safety=call['safety'])
+            archive = dict(unclassifiedReason=None, unresolvedSymbols=[], unsupportedImports=[emitted])
+            with self.subTest(symbol=emitted['symbol']):
+                self.assertFalse(core_package_manifest.native_archive_blocks(module, binding, archive))
+                self.assertTrue(core_package_manifest.native_archive_blocks(module, binding,
+                    dict(archive, unclassifiedReason='non-static-c-import-declaration')))
+                self.assertTrue(core_package_manifest.native_archive_blocks(module, binding,
+                    dict(archive, unresolvedSymbols=['ordinary_native_import'])))
+            # Preserve identity matching while falsifying the full descriptor.
+            # Legacy owned names retain their existing downstream validators.
+            if core_package_manifest.core_original_foreign.context_owned_rts_call(call): continue
+            for mutate in (lambda c: c.update(schema=True), lambda c: c.update(arity=True),
+                    lambda c: c['argumentReps'][-1].update(primReps=['IntRep']),
+                    lambda c: c.update(resultRep={})):
+                changed = copy.deepcopy(call); mutate(changed)
+                with self.subTest(symbol=emitted['symbol'], changed=changed):
+                    self.assertTrue(core_package_manifest.native_archive_blocks(module, dict(foreignCall=changed), archive))
+        ordinary = dict(schema=1, target=dict(unit='ghc-internal', symbol='ordinary_missing'), convention='ccall', safety='unsafe')
+        self.assertTrue(core_package_manifest.native_archive_blocks(dict(unit='ghc-internal'), dict(foreignCall=ordinary),
+            dict(unclassifiedReason=None, unresolvedSymbols=[], unsupportedImports=[dict(
+                symbol='ordinary_missing', convention='ccall', safety='unsafe')])))
+
     def test_safe_imports_retain_metadata_with_temporary_unsafe_carriers_but_reject_interruptible(self):
         def make(rep, safety, result='WordRep'):
             module = self.module([rep])
