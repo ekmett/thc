@@ -119,6 +119,13 @@ public final class BytecodeMetadataPreparation {
                     this.exceptionProfiles_[handlerEntryIndex] = true;
                 }
     """.indent(4);
+    private static final String CONTROL_PROFILE = PROFILE.replace(
+        "                    CompilerDirectives.transferToInterpreterAndInvalidate();\n",
+        "                    // Private suspension observes the handler without retiring its installed owner.\n"
+        + "                    if (throwable instanceof thc.runtime.InternalGuestControl) CompilerDirectives.transferToInterpreter();\n"
+        + "                    else CompilerDirectives.transferToInterpreterAndInvalidate();\n");
+    private static final String HANDLER_CALL = "            while ((handler = resolveHandler(bci, handler + EXCEPTION_HANDLER_LENGTH, handlerTable)) != -1) {\n";
+    private static final String CONTROL_HANDLER_CALL = HANDLER_CALL.replace("handlerTable)", "handlerTable, throwable)");
     private static final String HANDLERS = """
         @ExplodeLoop
         private int resolveHandler(long bci, int handler, int[] localHandlers) {
@@ -161,7 +168,10 @@ public final class BytecodeMetadataPreparation {
         + "            if (ready && saved != null) ((AbstractBytecodeNode) saved.getBytecodeNode()).prepareMetadataLookup();\n"
         + "            return ready;");
     private static final String NEW_COUNTS = COUNTS.replace("            int count = 0;\n", COUNT_LOOKUP + "            int count = 0;\n");
-    private static final String NEW_HANDLERS = HANDLERS.replace("            for (int i = handler;", HANDLER_LOOKUP + "            for (int i = handler;");
+    private static final String NEW_HANDLERS = HANDLERS
+        .replace("int[] localHandlers)", "int[] localHandlers, Throwable throwable)")
+        .replace("            for (int i = handler;", HANDLER_LOOKUP + "            for (int i = handler;")
+        .replace(PROFILE, CONTROL_PROFILE);
     private static final String NEW_OSR = OSR.replace("// do nothing", "prepareMetadataLookup();");
 
     // Restore first when the complete normalization pipeline is reapplied: root/handler
@@ -176,6 +186,7 @@ public final class BytecodeMetadataPreparation {
             result = replaceOnce(result, NEW_OSR, OSR, MESSAGE);
             result = replaceOnce(result, NEW_COUNTS, COUNTS, MESSAGE);
             result = replaceOnce(result, NEW_HANDLERS, HANDLERS, MESSAGE);
+            result = replaceOnce(result, CONTROL_HANDLER_CALL, HANDLER_CALL, MESSAGE);
         }
         require(!result.contains("thcMetadata_") && !result.contains("prepareMetadataLookup"), MESSAGE);
         return newline(source, result);
@@ -189,6 +200,7 @@ public final class BytecodeMetadataPreparation {
         result = replaceOnce(result, OSR, NEW_OSR, MESSAGE);
         result = replaceOnce(result, COUNTS, NEW_COUNTS, MESSAGE);
         result = replaceOnce(result, HANDLERS, NEW_HANDLERS, MESSAGE);
+        result = replaceOnce(result, HANDLER_CALL, CONTROL_HANDLER_CALL, MESSAGE);
         return newline(source, result);
     }
 
@@ -199,7 +211,7 @@ public final class BytecodeMetadataPreparation {
     }
 
     public static void check() {
-        String before = FIELD + PREPARATION + CONTINUATION_PREPARATION + OSR + COUNTS + HANDLERS;
+        String before = FIELD + PREPARATION + CONTINUATION_PREPARATION + OSR + COUNTS + HANDLERS + HANDLER_CALL;
         String after = transform(before, VERSION);
         require(transform(after, VERSION).equals(after), "Metadata preparation is not idempotent");
         require(restore(after, VERSION).equals(before), "Metadata preparation does not roundtrip");
@@ -210,5 +222,8 @@ public final class BytecodeMetadataPreparation {
         reject(after.replace("saved.getBytecodeNode()", "root.getBytecodeNode()"), VERSION);
         reject(after.replace("volatile int[][]", "int[][]"), VERSION);
         reject(after.replace("prepareMetadataLookup();", "prepareMetadataLookup(1);"), VERSION);
+        reject(after.replace("throwable instanceof thc.runtime.InternalGuestControl", "true"), VERSION);
+        reject(after.replace(CONTROL_HANDLER_CALL, HANDLER_CALL), VERSION);
+        reject(after.replace("else CompilerDirectives.transferToInterpreterAndInvalidate();", "else CompilerDirectives.transferToInterpreter();"), VERSION);
     }
 }
