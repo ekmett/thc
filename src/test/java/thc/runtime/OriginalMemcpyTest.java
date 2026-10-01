@@ -13,6 +13,7 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
 
@@ -52,21 +53,21 @@ class OriginalMemcpyTest {
     private ManagedAddress managed() { return ManagedAddress.fromAllocation(ManagedAllocation.mutable(16,8)); }
     private List<Long> contents(ManagedAddress base) { var values = new ArrayList<Long>(); for (long i = 0; i < 16; i++) values.add(base.readWord8(i)); return values; }
     private boolean linuxNative() { return System.getProperty("os.name").equals("Linux") && Set.of("amd64","x86_64").contains(System.getProperty("os.arch")); }
-    private ManagedAddress copy(RootCallTarget target,ManagedAddress destination,ManagedAddress source,long count) { return (ManagedAddress) Calls.target(target,new Object[]{0L,destination,source,count,thc.runtime.Unit.INSTANCE}); }
+    private ManagedAddress copy(RootCallTarget target,ManagedAddress destination,ManagedAddress source,long count) { return (ManagedAddress) callScalarTestTarget(target,new Object[]{0L,destination,source,count,thc.runtime.Unit.INSTANCE}); }
     @Test void originalArrayMemcpyRetainsBackingIdentityAndByteArraySafety() throws Exception {
         // Original Alex Output module SHA-256 5ca87bc502b96c468c4b45647776d77693510b4bb2febd1af4fbaeb765091664.
         var original = (Map<String,Object>) Json.parse(resource("/core/original-array-memcpy-descriptor.json"));
         for (var backend : List.of("ast","bytecode")) inside(() -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var guest = program(language,backend,module(original,Map.of(),false,original,UnaryOperator.identity())); var target = guest.entryTarget("copy"); byte[] bytes = new byte[16]; for (int i = 0; i < bytes.length; i++) bytes[i] = (byte) (i + 16);
             var mutable = ManagedAllocation.mutable(16,8); for (int i = 0; i < bytes.length; i++) mutable.writeByte(i,bytes[i]); List<Object> sources = List.of(bytes,ManagedAllocation.immutable(bytes.clone(),8),mutable); List<Object> destinations = List.of(new byte[16],ManagedAllocation.mutable(16,8)); byte[] empty = new byte[0];
-            assertTrue(((ManagedAddress) Calls.target(target,new Object[]{0L,empty,empty,0L,thc.runtime.Unit.INSTANCE})).sameLocation(ManagedAddress.fromByteArray(empty)));
-            class Exercise { void run(Object source,Object destination) { var result = (ManagedAddress) Calls.target(target,new Object[]{0L,destination,source,8L,thc.runtime.Unit.INSTANCE}); var view = ManagedAddress.fromGuestByteArray(destination); assertTrue(result.sameLocation(view)); var actual = new ArrayList<Long>(); for (long i = 0; i < 8; i++) actual.add(result.readWord8(i)); assertEquals(List.of(16L,17L,18L,19L,20L,21L,22L,23L),actual); result.writeWord8(15,99); assertEquals(99L,view.readWord8(15)); }}
+            assertTrue(((ManagedAddress) callScalarTestTarget(target,new Object[]{0L,empty,empty,0L,thc.runtime.Unit.INSTANCE})).sameLocation(ManagedAddress.fromByteArray(empty)));
+            class Exercise { void run(Object source,Object destination) { var result = (ManagedAddress) callScalarTestTarget(target,new Object[]{0L,destination,source,8L,thc.runtime.Unit.INSTANCE}); var view = ManagedAddress.fromGuestByteArray(destination); assertTrue(result.sameLocation(view)); var actual = new ArrayList<Long>(); for (long i = 0; i < 8; i++) actual.add(result.readWord8(i)); assertEquals(List.of(16L,17L,18L,19L,20L,21L,22L,23L),actual); result.writeWord8(15,99); assertEquals(99L,view.readWord8(15)); }}
             var exercise = new Exercise(); for (var source : sources) for (var destination : destinations) exercise.run(source,destination); target.getClass().getMethod("compile",boolean.class).invoke(target,true); valid(target);
             for (var source : sources) for (var destination : destinations) { long before = ((Number) guest.diagnostics().get("compiledEntries")).longValue(); exercise.run(source,destination); assertEquals(before + 1,((Number) guest.diagnostics().get("compiledEntries")).longValue()); valid(target); }
             var destination = destinations.getLast(); var before = contents(ManagedAddress.fromGuestByteArray(destination)); var shrunk = ManagedAllocation.mutable(16,8); shrunk.shrink(3); record Invalid(Object source,long count) {}
-            for (var invalid : List.of(new Invalid(sources.getFirst(),-1),new Invalid(sources.getFirst(),17),new Invalid(destination,1),new Invalid(shrunk,4))) { assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,destination,invalid.source(),invalid.count(),thc.runtime.Unit.INSTANCE})); assertEquals(before,contents(ManagedAddress.fromGuestByteArray(destination))); }
-            assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,sources.get(1),sources.getFirst(),8L,thc.runtime.Unit.INSTANCE})); var pointers = ManagedAllocation.mutable(16,8); var payload = managed(); ManagedAddress.fromAllocation(pointers).writeAddressElementIndex(0,payload);
-            Calls.target(target,new Object[]{0L,destination,pointers,8L,thc.runtime.Unit.INSTANCE}); assertSame(payload,ManagedAddress.fromGuestByteArray(destination).readAddressElementIndex(0)); assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,destination,pointers,7L,thc.runtime.Unit.INSTANCE})); assertSame(payload,ManagedAddress.fromGuestByteArray(destination).readAddressElementIndex(0)); return null;
+            for (var invalid : List.of(new Invalid(sources.getFirst(),-1),new Invalid(sources.getFirst(),17),new Invalid(destination,1),new Invalid(shrunk,4))) { assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,destination,invalid.source(),invalid.count(),thc.runtime.Unit.INSTANCE})); assertEquals(before,contents(ManagedAddress.fromGuestByteArray(destination))); }
+            assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,sources.get(1),sources.getFirst(),8L,thc.runtime.Unit.INSTANCE})); var pointers = ManagedAllocation.mutable(16,8); var payload = managed(); ManagedAddress.fromAllocation(pointers).writeAddressElementIndex(0,payload);
+            callScalarTestTarget(target,new Object[]{0L,destination,pointers,8L,thc.runtime.Unit.INSTANCE}); assertSame(payload,ManagedAddress.fromGuestByteArray(destination).readAddressElementIndex(0)); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,destination,pointers,7L,thc.runtime.Unit.INSTANCE})); assertSame(payload,ManagedAddress.fromGuestByteArray(destination).readAddressElementIndex(0)); return null;
         });
     }
     @Test void originalDescriptorCopiesManagedAndNativeRegionsOnFirstCompiledCalls() throws Exception {
@@ -113,7 +114,7 @@ class OriginalMemcpyTest {
                 class Reject { void call(ManagedAddress destination,ManagedAddress source,long count) { assertThrows(RuntimeFault.class,() -> copy(target,destination,source,count)); assertEquals(before,contents(base)); }}
                 var reject = new Reject(); reject.call(base.plus(4),base,8); reject.call(base,base.plus(4),8); reject.call(base,base,1); for (long count : new long[]{-1,17,Long.MAX_VALUE}) reject.call(base,managed(),count);
                 reject.call(base,managed().plus(15),2); reject.call(base.plus(15),managed(),2); reject.call(base,ManagedAddress.unownedNumeric(1),1); reject.call(ManagedAddress.unownedNumeric(1),base,1); reject.call(ManagedAddress.fromHex("0000000000000000"),base,8);
-                assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,base,managed(),1L,0L})); assertEquals(before,contents(base));
+                assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,base,managed(),1L,0L})); assertEquals(before,contents(base));
             }
             var beforeAlias = contents(arrayBase); assertThrows(RuntimeFault.class,() -> copy(target,ManagedAddress.fromByteArray(array).plus(4),arrayBase,8)); assertEquals(beforeAlias,contents(arrayBase));
             if (linuxNative()) {

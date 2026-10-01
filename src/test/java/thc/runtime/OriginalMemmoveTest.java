@@ -11,6 +11,7 @@ import thc.Language;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Consumer;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
 
@@ -66,7 +67,7 @@ class OriginalMemmoveTest {
                 var guest = program(language, backend, module()); var target = guest.entryTarget("move");
                 class Exercise {
                     ManagedAddress move(ManagedAddress destination, ManagedAddress source, long count) {
-                        return (ManagedAddress) Calls.target(target, new Object[]{0L, destination, source, count, thc.runtime.Unit.INSTANCE});
+                        return (ManagedAddress) callScalarTestTarget(target, new Object[]{0L, destination, source, count, thc.runtime.Unit.INSTANCE});
                     }
                     List<Long> contents(ManagedAddress base) {
                         var values = new ArrayList<Long>(); for (long i = 0; i < 16; i++) values.add(base.readWord8(i)); return values;

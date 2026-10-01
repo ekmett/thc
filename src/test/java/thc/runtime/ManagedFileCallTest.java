@@ -18,6 +18,7 @@ import org.graalvm.polyglot.io.IOAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import thc.Language;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Synthetic ABI execution controls; public System.IO Handle coverage is separate. */
@@ -50,7 +51,7 @@ class ManagedFileCallTest {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var target = targets.get(name);
                         var packet = new Object[arguments.length + 2]; packet[0] = 0L;
                         System.arraycopy(arguments, 0, packet, 1, arguments.length); packet[packet.length-1] = Unit.INSTANCE;
-                        var result = Calls.target(target, packet);
+                        var result = callScalarTestTarget(target, packet);
                         if (compiled) { assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue(), name); valid(target); }
                         released(language); return result;
                     }
@@ -83,10 +84,10 @@ class ManagedFileCallTest {
                 caller.compiled = true; caller.exercise("compiled"); caller.compiled = false;
                 // An invalid State must fault before truncate/open or writing guest data.
                 var untouched = directory.resolve(backend + "-state.bin"); Files.write(untouched, new byte[]{8,7,6});
-                assertThrows(RuntimeFault.class, () -> Calls.target(targets.get("open"), new Object[]{0L,path(untouched),1L,9L}));
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(targets.get("open"), new Object[]{0L,path(untouched),1L,9L}));
                 assertArrayEquals(new byte[]{8,7,6}, Files.readAllBytes(untouched));
                 long fd = (Long) caller.call("open", path(untouched), 3L); var buffer = new byte[]{4,5};
-                assertThrows(RuntimeFault.class, () -> Calls.target(targets.get("read"), new Object[]{0L,fd,ManagedAddress.fromByteArray(buffer),2L,9L}));
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(targets.get("read"), new Object[]{0L,fd,ManagedAddress.fromByteArray(buffer),2L,9L}));
                 assertArrayEquals(new byte[]{4,5}, buffer); assertEquals(0L, caller.call("seek", fd, 0L, 1L));
                 assertEquals(0L, caller.call("close", fd)); released(language);
             } finally { context.leave(); }

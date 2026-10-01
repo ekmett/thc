@@ -13,6 +13,7 @@ import thc.Language;
 import java.io.*;
 import java.nio.file.Files;
 import java.util.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
 
@@ -91,7 +92,7 @@ class OriginalStdioReadTest {
                         class Check { void row(Map<String,Object> row) {
                             var args = (List<Long>) row.get("arguments"); long fd = args.get(0), offset = args.get(1), count = args.get(2), start = args.get(3);
                             input.reset(); assertEquals(start, input.skip(start)); byte[] buffer = new byte[16]; Arrays.fill(buffer, (byte) 0xa5); var address = ManagedAddress.fromByteArray(buffer);
-                            assertEquals(row.get("result"), Calls.target(entry, new Object[]{0L,fd,address,offset,count}), label + "/" + row);
+                            assertEquals(row.get("result"), callScalarTestTarget(entry, new Object[]{0L,fd,address,offset,count}), label + "/" + row);
                             assertEquals(row.get("bufferHex"), hex(address.cbitsBacking()), label + " buffer/" + row);
                             assertEquals(0, language.getHandoffState().get().getArguments().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
                         }}
