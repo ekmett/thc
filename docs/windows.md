@@ -19,6 +19,8 @@ default HTTP configurations are upgraded without replacing other repositories
 or explicit trust keys; disabled Hackage verification is rejected. A fresh CI
 runner therefore uses the same acquisition path as a local cold cache.
 Install a real Python interpreter first; the Microsoft Store alias does not work.
+Bootstrap selects the first interpreter on PATH outside the user App Execution
+Alias directory; `THC_PYTHON` overrides discovery. It checks Python 3.12+ afterward.
 Pinned libraries also need `sh.exe`, `sed` and the other Unix utilities used by
 their original configure scripts. Bootstrap reuses Git for Windows' `usr/bin`
 when no shell is already on PATH. This shell runs configure; GHC, Clang, Cabal
