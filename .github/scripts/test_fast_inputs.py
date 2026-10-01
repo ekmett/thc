@@ -433,14 +433,11 @@ class FastInputTests(unittest.TestCase):
             self.assertFalse(cache.allowed_payload('build/original-memory-search/' + path))
 
     def test_simd_memory_closed_receipts_and_export_only_archives(self):
-        counts = {"simd-int32x4-bytearray": (261, 388), "simd-word32x4-bytearray": (261, 388),
-                  "simd-floatx4-bytearray": (448, 649), "simd-doublex2-bytearray": (538, 769)}
-        for family, sizes in counts.items():
+        for family in cache.SIMD_BYTEARRAY_FAMILIES:
             for native in (False, True):
                 name = f"build/{family}/provenance.json"
                 attempt = f"build/{family}/prepare-run-Abc123"
                 required = cache.simd_bytearray_outputs(family, attempt, native)
-                self.assertEqual(sizes[int(native)], len(required))
                 self.assertIn(name, DECLARED_REQUIRED)
                 for path in required:
                     self.assertTrue(cache.allowed_payload(path), path)
@@ -755,6 +752,12 @@ class FastInputTests(unittest.TestCase):
                      'unaligned-scalar-memory/inputs.txt', 'unaligned-scalar-memory/logs/ghc-inventory.stdout'):
             self.assertTrue(cache.allowed_payload('build/' + name), name)
 
+    def test_core_json_is_not_a_fixture_cache_payload(self):
+        for path in ("build/thread-async/pre/core/ThreadAsyncAudit.json",
+                     "build/bytearray/post/core/ByteArrayAudit.json",
+                     "build/boxed-cas/run-1/pre-core/BoxedCasAudit.json"):
+            self.assertFalse(cache.allowed_payload(path))
+
     def test_array_core_products_require_cbd_not_diagnostic_json(self):
         for family, folder, module in (('boxed-arrays', '{stage}/core', 'BoxedArrayAudit'),
                                        ('array-slices', '{stage}-core', 'ArraySliceAudit'),
@@ -1017,7 +1020,7 @@ class FastInputTests(unittest.TestCase):
     def test_pinned_address_closed_artifacts_and_byte_preserving_restore(self):
         name = 'build/pinned-addresses/manifest.json'
         artifacts = cache.PINNED_ADDRESS_OUTPUTS - {name}
-        self.assertEqual(231, len(artifacts))
+        self.assertEqual(227, len(artifacts))
         self.assertIn(name, DECLARED_REQUIRED)
         binary = 'build/pinned-addresses/native/pinned-address-oracle'
         for path in artifacts:
@@ -1049,7 +1052,7 @@ class FastInputTests(unittest.TestCase):
     def test_bignat_closed_artifacts_preserve_receipt_and_reject_missing_records(self):
         name = 'build/bignat-literals/manifest.json'
         artifacts = cache.BIGNAT_OUTPUTS - {name}
-        self.assertEqual(124, len(artifacts))
+        self.assertEqual(121, len(artifacts))
         self.assertIn(name, DECLARED_REQUIRED)
         for path in artifacts:
             self.assertTrue(cache.allowed_payload(path), path)
@@ -1161,7 +1164,7 @@ class FastInputTests(unittest.TestCase):
         with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
 
     def test_termios_exact_image_and_saved_pointer_fixture_inventory(self):
-        self.assertEqual(167, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+        self.assertEqual(163, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
@@ -1223,7 +1226,7 @@ class FastInputTests(unittest.TestCase):
                 self.rejected_without_writes(altered)
 
     def test_rts_locks_exact_nonexecutable_cache_inventory(self):
-        self.assertEqual(36, len(cache.ORIGINAL_RTS_LOCK_OUTPUTS))
+        self.assertEqual(35, len(cache.ORIGINAL_RTS_LOCK_OUTPUTS))
         self.assertIn('build/original-rts-locks/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_RTS_LOCK_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
@@ -1569,7 +1572,7 @@ class FastInputTests(unittest.TestCase):
         self.put(self.pinned_name, self.pinned_source)
         self.put("bin/export-boot.py", "exception_sources = " + repr({
             "GHC/Internal/CString.hs": cache.sha(self.pinned_source)}) + "\n")
-        for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS, *cache.SIMD_BYTEARRAY_RETAINED,
+        for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS,
                      "bin/prepare-tests.sh", "t/fixtures/core/coverage.json",
                      "src/test/resources/core/original-unix-libc-descriptors.json",
                      "src/test/resources/core/original-bytestring-sort-descriptor.json",

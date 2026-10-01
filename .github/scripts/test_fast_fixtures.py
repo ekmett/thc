@@ -966,12 +966,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'libdw-unavailable']}], group['commands'])
         self.assertEqual(['build/libdw-unavailable/manifest.json', 'build/libdw-unavailable/oracle.json',
-                          'build/libdw-unavailable/foreign-labels.json'], group['outputs'])
+                          'build/libdw-unavailable/foreign-labels.cbd'], group['outputs'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
         self.assertIn('"$fixture_bin" libdw-unavailable', (project / 'bin/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/libdw-unavailable/manifest.json', fast_fixtures.FULL_REQUIRED)
-        for suffix in ('manifest.json', 'oracle.json', 'foreign-labels.json'):
+        for suffix in ('manifest.json', 'oracle.json', 'foreign-labels.cbd'):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/' + suffix))
             self.assertIn('"libdw-unavailable/' + suffix + '"', (project / 'build.gradle').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/native/oracle'))
@@ -1840,19 +1840,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('"original-fd-ready/**/*.json"', (project / 'build.gradle').read_text())
         self.assertIn('"original-fd-ready/**/*.cbd"', (project / 'build.gradle').read_text())
-        self.assertIn('t/haskell-fixtures/CompactModelFixtures.hs', group['sources'])
         self.assertIn('src/cbd/THC/Compact/Module.hs', group['sources'])
         self.assertIn('build/original-fd-ready/OriginalFdReadyAudit.cbd',
                       fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
         for label in fast_fixtures.fast_inputs.ORIGINAL_FD_READY_NEGATIVES:
-            if label in ('dynamic-target', 'boolean-schema'):
-                self.assertIn(f'build/original-fd-ready/negative/{label}.codec-rejection.json',
-                              fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
-                self.assertNotIn(f'build/original-fd-ready/negative/{label}.cbd',
-                                 fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
-            else:
-                self.assertIn(f'build/original-fd-ready/negative/{label}.cbd',
-                              fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
+            self.assertIn(f'build/original-fd-ready/negative/{label}.cbd',
+                          fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS)
         for path in fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS:
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
         for name in ('OriginalFD.json', 'native/unreviewed', 'logs/extra.stdout',
@@ -1870,21 +1863,18 @@ class FixturePreparationTest(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('{}\n')
             artifacts[artifact] = fast_fixtures._digest(path)
-        rejections = {label: f'build/original-fd-ready/negative/{label}.codec-rejection.json'
-                      for label in ('dynamic-target', 'boolean-schema')}
         receipt = dict(schema=1, ghc='9.14.1', entries=list(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_ENTRIES),
-                       nativeRows=168, negativeAudits=20, negativeEncodingRejections=2, negativeControls=12,
+                       nativeRows=168, negativeAudits=20, negativeControls=10,
                        negativeControlLabels=list(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_NEGATIVES),
-                       codecRejections=rejections, artifactHashes=artifacts)
+                       artifactHashes=artifacts)
         path = self.root / name
         path.write_text(json.dumps(receipt))
         self.assertEqual(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS,
                          fast_fixtures._output_hashes(self.root, group).keys())
         for key, value in (('schema', True), ('nativeRows', 167), ('nativeRows', True),
                            ('negativeAudits', 24), ('negativeAudits', True),
-                           ('negativeEncodingRejections', 0), ('negativeControls', 11),
-                           ('negativeControlLabels', list(reversed(receipt['negativeControlLabels']))),
-                           ('codecRejections', {'boolean-schema': rejections['boolean-schema']})):
+                           ('negativeControls', 11),
+                           ('negativeControlLabels', list(reversed(receipt['negativeControlLabels'])))):
             path.write_text(json.dumps(dict(receipt, **{key: value})))
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
         for change in ('unknown', 'missing', 'changed', 'symlink'):
@@ -2005,7 +1995,6 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('"original-rts-locks/**/*.json"', (project / 'build.gradle').read_text())
         self.assertIn('"original-rts-locks/**/*.cbd"', (project / 'build.gradle').read_text())
-        self.assertIn('t/haskell-fixtures/CompactModelFixtures.hs', group['sources'])
         self.assertIn('src/cbd/THC/Compact/Module.hs', group['sources'])
         for stage in ('pre', 'post'):
             name = f'build/original-rts-locks/{stage}.cbd'
@@ -2150,7 +2139,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/original-stack-formatter/manifest.json', fast_fixtures.FULL_REQUIRED)
         gradle = (project / 'build.gradle').read_text()
         for pattern in ('original-stack-formatter/manifest.json',
-                        'original-stack-formatter/run-*/originals/core/*.json',
+                        'original-stack-formatter/run-*/originals/core/*.cbd',
                         'original-stack-formatter/run-*/originals/generated/**/*.hs',
                         'original-stack-formatter/run-*/originals/generated.json',
                         'original-stack-formatter/run-*/originals/target-layout.json',
@@ -3017,7 +3006,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertLessEqual({"build/boxed-arrays/manifest.json", "build/floating/checks.json"},
                              fast_fixtures.FULL_REQUIRED)
         gradle = (project / "build.gradle").read_text()
-        for pattern in ("boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "floating/core/**/*.json",
+        for pattern in ("boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "floating/core/**/*.cbd",
                         "floating/checks.json", "floating/oracle.tsv"):
             self.assertIn('"' + pattern + '"', gradle)
 
@@ -3172,8 +3161,6 @@ class FixturePreparationTest(unittest.TestCase):
                 module = fast_fixtures.fast_inputs.SIMD_BYTEARRAY_FAMILIES[group_id][0]
                 self.assertIn(f"build/{group_id}/pre-core/{module}.cbd", expected)
                 self.assertNotIn(f"build/{group_id}/pre-core/{module}.json", expected)
-                self.assertIn(f"{attempt}/retained/pre.json", expected)
-                self.assertIn(f"{attempt}/retained/pre.cbd", expected)
                 self.assertTrue(all(path.endswith(".cbd") for path in expected if "/mutations/" in path))
                 with mock.patch.object(fast_fixtures.fast_inputs, "file_path") as path, mock.patch.object(fast_fixtures, "_manifest_output_hashes") as output:
                     path.return_value.read_text.return_value = json.dumps(dict(schema=1, vector=f"{family}-bytearray",

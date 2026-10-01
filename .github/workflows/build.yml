@@ -294,7 +294,7 @@ jobs:
             build/original-stdio-read/oracle.json
             build/original-stdio-read/manifest.json
             build/original-stdio-read/*/*.audit.json
-            build/original-stdio-read/*/core/*.json
+            build/original-stdio-read/*/core/*.cbd
             build/unaligned-scalar-memory/
             build/floating/core/
             build/floating/checks.json
@@ -392,13 +392,13 @@ jobs:
             build/state-tuple/provenance.json
             build/state-tuple/oracle.tsv
             build/state-tuple/*-audit.json
-            build/state-tuple/*-core/*.json
+            build/state-tuple/*-core/*.cbd
             build/mutvar/manifest.json
             build/stm/
             build/mutvar/oracle.tsv
             build/mutvar/NativeMutVar.hs
             build/mutvar/*/*.audit.json
-            build/mutvar/*/core/*.json
+            build/mutvar/*/core/*.cbd
             build/boxed-arrays/
             build/boxed-array-extensions/
             build/simd128-addresses/
@@ -452,27 +452,27 @@ jobs:
             build/compare-byte-arrays/NativeCompareByteArrays.hs
             build/compare-byte-arrays/*/*.audit.json
             build/compare-byte-arrays/*/boot-provenance.json
-            build/compare-byte-arrays/*/core/*.json
+            build/compare-byte-arrays/*/core/*.cbd
             build/bytearray/manifest.json
             build/bytearray/oracle.tsv
             build/bytearray/NativeByteArray.hs
             build/bytearray/*/*.audit.json
             build/bytearray/*/boot-provenance.json
-            build/bytearray/*/core/*.json
+            build/bytearray/*/core/*.cbd
             build/int-arrays/manifest.json
             build/int-arrays/oracle.tsv
             build/int-arrays/expected.tsv
             build/int-arrays/NativeIntArray.hs
             build/int-arrays/native/int-array-oracle
             build/int-arrays/*/*.audit.json
-            build/int-arrays/*/*/core/*.json
+            build/int-arrays/*/*/core/*.cbd
             build/double-arrays/manifest.json
             build/double-arrays/oracle.tsv
             build/double-arrays/expected.tsv
             build/double-arrays/NativeDoubleArray.hs
             build/double-arrays/native/double-array-oracle
             build/double-arrays/*/*.audit.json
-            build/double-arrays/*/*/core/*.json
+            build/double-arrays/*/*/core/*.cbd
             build/int32-arrays/manifest.json
             build/int32-arrays/oracle.tsv
             build/int32-arrays/literal-oracle.tsv
@@ -480,20 +480,20 @@ jobs:
             build/int32-arrays/NativeInt32Array.hs
             build/int32-arrays/native/int32-array-oracle
             build/int32-arrays/*/*.audit.json
-            build/int32-arrays/*/*/core/*.json
+            build/int32-arrays/*/*/core/*.cbd
             build/float-word-arrays/manifest.json
             build/float-word-arrays/oracle.tsv
             build/float-word-arrays/expected.tsv
             build/float-word-arrays/NativeFloatWordArray.hs
             build/float-word-arrays/native/float-word-array-oracle
             build/float-word-arrays/*/*.audit.json
-            build/float-word-arrays/*/*/core/*.json
+            build/float-word-arrays/*/*/core/*.cbd
             build/int8-arrays/manifest.json
             build/int8-arrays/*.tsv
             build/int8-arrays/NativeInt8Array.hs
             build/int8-arrays/native/int8-array-oracle
             build/int8-arrays/*/*.audit.json
-            build/int8-arrays/*/*/core/*.json
+            build/int8-arrays/*/*/core/*.cbd
             build/int16-arrays/manifest.json
             build/int16-arrays/oracle.tsv
             build/int16-arrays/expected.tsv
@@ -501,7 +501,7 @@ jobs:
             build/int16-arrays/NativeInt16Array.hs
             build/int16-arrays/native/int16-array-oracle
             build/int16-arrays/*/*.audit.json
-            build/int16-arrays/*/*/core/*.json
+            build/int16-arrays/*/*/core/*.cbd
             build/tuple-join/
             build/tuple-join-input/
             build/tuple-arithmetic/
@@ -511,7 +511,7 @@ jobs:
             build/bit-primops/manifest.json
             build/bit-primops/oracle.tsv
             build/bit-primops/NativeBitPrimops.hs
-            build/bit-primops/*-core/*.json
+            build/bit-primops/*-core/*.cbd
             build/bit-primops/*.audit.json
             build/simd/
             build/explicit64-primops/manifest.json

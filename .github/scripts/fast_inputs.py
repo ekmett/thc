@@ -171,7 +171,7 @@ PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
 IO_MAIN_PAP_OUTPUTS = frozenset("build/io-main-pap/" + name for name in (
     "provenance.json", "oracle.tsv", "native-stderr.txt", "native/io-main-pap-oracle",
     *(f"{stage}/core/{module}.{extension}" for stage in ("pre", "post")
-      for module in ("IoMainPapAudit", "THC.InterfaceClosure") for extension in ("cbd", "json")),
+      for module in ("IoMainPapAudit", "THC.InterfaceClosure") for extension in ("cbd",)),
     *(f"{stage}/{entry}-audit.json" for stage in ("pre", "post") for entry in ("goodMain", "badMain"))))
 WEAK_OUTPUTS = frozenset("build/weak-explicit/" + name for name in (
     "manifest.json", "oracle.tsv", "NativeWeak.hs",
@@ -378,7 +378,7 @@ BIGNAT_COMMANDS = ("plugin-build", "boot-export", "native-build", "native-oracle
                    *(f"{stage}-{name}-audit" for stage in ("pre", "post") for name in BIGNAT_AUDITS))
 BIGNAT_OUTPUTS = frozenset("build/bignat-literals/" + path for path in (
     "manifest.json", "requests.tsv", "oracle.tsv", "boot/boot-provenance.json",
-    *(f"boot/core/GHC.Internal.Bignum.{name}{suffix}" for name in ("BigNat", "Integer", "Natural") for suffix in (".cbd", ".json")),
+    *(f"boot/core/GHC.Internal.Bignum.{name}{suffix}" for name in ("BigNat", "Integer", "Natural") for suffix in (".cbd",)),
     *(f"native/{name}" for name in ("bignat-literal-oracle", "Main.hi", "Main.o", "BigNatLiteralAudit.hi", "BigNatLiteralAudit.o")),
     *(f"{stage}-core/{name}.cbd" for stage in ("pre", "post") for name in ("BigNatLiteralAudit", "THC.InterfaceClosure")),
     *(f"{stage}-{name}.audit.json" for stage in ("pre", "post") for name in BIGNAT_AUDITS),
@@ -402,10 +402,10 @@ for _family, (_module, _entries, _driver) in BYTEARRAY_FAMILIES.items():
             f"{stage}-export", *([f"{stage}-original-list"] if _original else []),
             *(f"{stage}-{entry}-audit" for entry in _entries)))
     _stage_outputs = tuple(name for stage in ("pre", "post") for name in (
-            *(f"{stage}/core/{module}.json" for module in (_module, "THC.InterfaceClosure", "GHC.Internal.Base", "GHC.Internal.List")),
+            *(f"{stage}/core/{module}.cbd" for module in (_module, "THC.InterfaceClosure", "GHC.Internal.Base", "GHC.Internal.List")),
             f"{stage}/boot-provenance.json", *(f"{stage}/{entry}.audit.json" for entry in _entries))) if _original else tuple(
         name for stage in ("pre", "post") for name in (
-            *(f"{stage}-core/{module}.json" for module in (_module, "THC.InterfaceClosure")),
+            *(f"{stage}-core/{module}.cbd" for module in (_module, "THC.InterfaceClosure")),
             *(f"{stage}-{entry}.audit.json" for entry in _entries)))
     BYTEARRAY_OUTPUTS[_family] = frozenset(f"build/{_family}/" + name for name in (
         "manifest.json", "requests.tsv", "oracle.tsv", f"native/{_family}-oracle", *([_driver] if _driver else []), *_stage_outputs,
@@ -421,13 +421,6 @@ SIMD_BYTEARRAY_FAMILIES = {
     "simd-floatx4-bytearray": ("SimdFloatX4ByteArray", 6720, ("Int32ElemRep", "Word32ElemRep", "DoubleElemRep")),
     "simd-doublex2-bytearray": ("SimdDoubleX2ByteArray", 4384, ("Int64ElemRep", "Int32ElemRep", "Word32ElemRep", "FloatElemRep")),
 }
-SIMD_BYTEARRAY_RETAINED = frozenset(
-    f"t/fixtures/retained-core/{family.removeprefix('simd-')}/" + path
-    for family in SIMD_BYTEARRAY_FAMILIES for path in (
-        "pre-core.json.gz", "post-core.json.gz",
-        "input-provenance.json.gz" if "floatx4" in family or "doublex2" in family else "native/provenance.json.gz"))
-
-
 def simd_bytearray_outputs(family, attempt, native):
     """Fixed proof/command inventory; never accept arbitrary prepare-run contents."""
     module, _, wrong = SIMD_BYTEARRAY_FAMILIES[family]
@@ -443,12 +436,12 @@ def simd_bytearray_outputs(family, attempt, native):
     frontiers = ("vectorArgument", "readVectorEscape", "readTupleEscape",
                  "vectorReadWorker", "vectorWriteWorker", "scalarReadWorker", "scalarWriteWorker")
     local = tuple(f"{offset}{op}" for offset in ("vector", "scalar") for op in ("Index", "Read", "Write"))
-    mutations = tuple(f"{stage}-wrong-{element}-{entry}" for stage in (*stages, "retained-pre", "retained-post")
+    mutations = tuple(f"{stage}-wrong-{element}-{entry}" for stage in stages
                       for element in wrong for entry in local)
     audits = (*(f"{stage}-{entry}" for stage in stages for entry in (*entries, *graphs, *frontiers)),
-              *mutations, *(f"retained-{stage}-{entry}Case" for stage in ("pre", "post") for entry in local))
+              *mutations)
     commands = ("ghc-version", "ghc-info", "host", "architecture", "system", "compiler-build",
-                "retained-provenance", "retained-pre", "retained-post", *(f"{stage}-export" for stage in stages), *audits,
+                *(f"{stage}-export" for stage in stages), *audits,
                 *(("native-build", "native-oracle") if native else ()), *(("snan-oracle",) if native and floating else ()))
     return frozenset((
         f"{root}/expected.tsv", f"{root}/requests.tsv",
@@ -456,8 +449,6 @@ def simd_bytearray_outputs(family, attempt, native):
         *(f"{root}/{stage}-audit.json" for stage in stages),
         *(f"{attempt}/audits/{label}.json" for label in audits),
         *(f"{attempt}/mutations/{label}.cbd" for label in mutations),
-        *(f"{attempt}/retained/{stage}.{suffix}" for stage in ("pre", "post") for suffix in ("json", "cbd")),
-        *((f"{attempt}/retained-original-source.hs",) if not floating else ()),
         *(f"{attempt}/commands/{label}.{suffix}" for label in commands for suffix in ("stdout", "stderr", "command.json")),
         *((f"{root}/oracle.tsv", f"{root}/native/{family.removeprefix('simd-')}-oracle") if native else ()),
         *(f"{root}/{name}.tsv" for name in ("snan-expected", "snan-requests", "snan-oracle") if native and floating)))
@@ -496,7 +487,7 @@ PINNED_ADDRESS_OUTPUTS = frozenset("build/pinned-addresses/" + path for path in 
     "manifest.json", "requests.tsv", "expected.tsv", "oracle.tsv", "structure-controls.json",
     *(f"native/{name}" for name in ("pinned-address-oracle", "Main.hi", "Main.o", "PinnedAddressAudit.hi", "PinnedAddressAudit.o")),
     *(f"{stage}/core/{name}.{extension}" for stage in ("pre", "post")
-      for name in ("PinnedAddressAudit", "THC.InterfaceClosure") for extension in ("cbd", "json")),
+      for name in ("PinnedAddressAudit", "THC.InterfaceClosure") for extension in ("cbd",)),
     *(f"{stage}/negative-proofs.json" for stage in ("pre", "post")),
     *(f"{stage}/{name}.audit.json" for stage in ("pre", "post") for name in
       (*PINNED_ADDRESS_ENTRIES, *(f"negative-{label}" for label in PINNED_ADDRESS_NEGATIVES))),
@@ -811,7 +802,7 @@ ORIGINAL_OPEN_OUTPUTS = frozenset("build/original-open/" + name for name in (
         "core/OriginalOpenAudit.cbd", "core/THC.InterfaceClosure.cbd", *(f"{entry}.audit.json" for entry in ORIGINAL_OPEN_ENTRIES))),
 ))
 ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for name in (
-    "manifest.json", "oracle.json", "declarations.json", "template-pre.json", "pre.json", "post.json",
+    "manifest.json", "oracle.json", "declarations.json", "declarations.cbd", "template-pre.cbd",
     "pre.cbd", "post.cbd",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_RTS_LOCK_ENTRIES),
     *(f"logs/{label}.{suffix}" for label in ("version", "info", "libdir", "imports",
@@ -830,7 +821,7 @@ ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name i
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_TERMIOS_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalTermiosAudit.cbd", "core/OriginalTermiosAudit.json", "core/THC.InterfaceClosure.cbd", "core/THC.InterfaceClosure.json",
+        "core/OriginalTermiosAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_TERMIOS_ENTRIES))),
     "saved/oracle.json", "saved/native/oracle",
     *(f"logs/{label}.{suffix}" for label in (
@@ -1009,24 +1000,20 @@ ORIGINAL_STRERROR_OUTPUTS = frozenset("build/original-strerror/" + name for name
 
 ORIGINAL_FD_READY_ENTRIES = ("originalReadySafe", "originalReadyUnsafe")
 ORIGINAL_FD_READY_NEGATIVES = (
-    "wrong-unit", "dynamic-target", "non-function", "wrong-convention", "interruptible",
-    "wrong-arity", "wrong-supplied-arity", "boolean-schema", "signed-cbool",
+    "wrong-unit", "non-function", "wrong-convention", "interruptible",
+    "wrong-arity", "wrong-supplied-arity", "signed-cbool",
     "machine-timeout", "scalar-state", "machine-result",
 )
-ORIGINAL_FD_READY_ENCODING_REJECTIONS = ("dynamic-target", "boolean-schema")
-ORIGINAL_FD_READY_AUDIT_NEGATIVES = tuple(
-    label for label in ORIGINAL_FD_READY_NEGATIVES if label not in ORIGINAL_FD_READY_ENCODING_REJECTIONS)
+ORIGINAL_FD_READY_AUDIT_NEGATIVES = ORIGINAL_FD_READY_NEGATIVES
 ORIGINAL_FD_READY_LOGS = (
     "ghc-version", "ghc-info", "ghc-libdir", "ghc-internal-imports", "native-build", "native-observations",
 ) + tuple(f"audit-{entry}" for entry in ORIGINAL_FD_READY_ENTRIES) + tuple(
     f"negative-{label}-{entry}" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES)
 ORIGINAL_FD_READY_OUTPUTS = frozenset("build/original-fd-ready/" + name for name in (
-    "manifest.json", "oracle.json", "OriginalFDDeclarations.json", "Template.json",
-    "OriginalFdReadyAudit.json", "OriginalFdReadyAudit.cbd", "facts.json", "native/oracle", "native/private-file",
+    "manifest.json", "oracle.json", "OriginalFDDeclarations.cbd", "Template.cbd",
+    "OriginalFdReadyAudit.cbd", "facts.json", "native/oracle", "native/private-file",
     *(f"{entry}.audit.json" for entry in ORIGINAL_FD_READY_ENTRIES),
-    *(f"negative/{label}.json" for label in ORIGINAL_FD_READY_NEGATIVES),
     *(f"negative/{label}.cbd" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES),
-    *(f"negative/{label}.codec-rejection.json" for label in ORIGINAL_FD_READY_ENCODING_REJECTIONS),
     *(f"negative/{label}-{entry}.audit.json" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES),
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_FD_READY_LOGS for suffix in ("stdout", "stderr", "command.json")),
 ))
@@ -1035,7 +1022,7 @@ ORIGINAL_FD_READY_OUTPUTS = frozenset("build/original-fd-ready/" + name for name
 # tree. Only artifacts referenced by the current manifest enter the cache.
 ORIGINAL_STACK_FILES = frozenset((
     "native/original-stack-native",
-    *(f"{stage}-core/{module}.json" for stage in ("pre", "post")
+    *(f"{stage}-core/{module}.cbd" for stage in ("pre", "post")
       for module in ("OriginalStackAudit", "THC.InterfaceClosure")),
     *(f"logs/{label}.{suffix}"
       for label in ("ghc-version", "thc-revision", "pre-export", "post-export",
@@ -1076,7 +1063,7 @@ BOXED_CAS_ENTRIES = ("arrayCas", "arrayCasUnlifted", "smallCas", "smallCasUnlift
                      "varCasUnlifted", "modifyValue", "modifyLazy", "modifyBottom", "boxedCasCounter")
 BOXED_CAS_FILES = frozenset((
     "native/boxed-cas-oracle",
-    *(f"{stage}-core/{module}.json" for stage in ("pre", "post")
+    *(f"{stage}-core/{module}.cbd" for stage in ("pre", "post")
       for module in ("BoxedCasAudit", "BoxedCasCounter", "THC.InterfaceClosure")),
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in BOXED_CAS_ENTRIES),
     *(f"logs/{label}.{suffix}" for label in (
@@ -1178,10 +1165,10 @@ def original_stack_formatter_files(root=None):
     modules, _ = wired_catalog(root)
     return frozenset((
         "native/formatter", "originals/generated.json", "originals/target-layout.json",
-        *(f"originals/core/{module}.json" for module in modules.values()),
+        *(f"originals/core/{module}.cbd" for module in modules.values()),
         *("originals/generated/" + str(PurePosixPath(path).with_suffix(".hs"))
           for path in modules if path.endswith(".hsc")),
-        *(f"{stage}-core/OriginalStackFormatter.json" for stage in ("pre", "post")),
+        *(f"{stage}-core/OriginalStackFormatter.cbd" for stage in ("pre", "post")),
         *(f"{stage}-audit.json" for stage in ("pre", "post")),
         *(f"logs/{label}.{suffix}"
           for label in ("ghc-version", "plugin-build", "original-source-export", "pre-export",
@@ -1269,14 +1256,11 @@ def fd_ready_artifact_hashes(manifest):
             manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(ORIGINAL_FD_READY_ENTRIES),
             "Invalid original fdReady manifest")
     for field, expected in (("nativeRows", 168), ("negativeAudits", 20),
-                            ("negativeEncodingRejections", 2), ("negativeControls", 12)):
+                            ("negativeControls", 10)):
         require(type(manifest.get(field)) is int and manifest[field] == expected,
                 "Invalid original fdReady proof count: " + field)
-    require(manifest.get("negativeControlLabels") == list(ORIGINAL_FD_READY_NEGATIVES) and
-            manifest.get("codecRejections") == {
-                label: f"build/original-fd-ready/negative/{label}.codec-rejection.json"
-                for label in ORIGINAL_FD_READY_ENCODING_REJECTIONS},
-            "Incomplete original fdReady rejection stages")
+    require(manifest.get("negativeControlLabels") == list(ORIGINAL_FD_READY_NEGATIVES),
+            "Incomplete original fdReady rejection controls")
     artifacts = manifest.get("artifactHashes")
     require(isinstance(artifacts, dict) and set(artifacts) ==
             ORIGINAL_FD_READY_OUTPUTS - {"build/original-fd-ready/manifest.json"},
@@ -1710,7 +1694,7 @@ def toolchain(root):
 def identity(root):
     tracked = tracked_files(root)
     sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/core/", "t/fixtures/retained-core/", "t/fixtures/package-roots/", "t/fixtures/putstrln/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
-    sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS, *SIMD_BYTEARRAY_RETAINED,
+    sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS,
                     "src/test/resources/core/original-unix-libc-descriptors.json",
                     "src/test/resources/core/original-bytestring-sort-descriptor.json",
                     "src/test/resources/core/original-bytestring-decimal-descriptors.json"))
@@ -1938,6 +1922,9 @@ HEAP_CORPUS_CBD_OUTPUTS = frozenset(
 
 def allowed_payload(name):
     parts = PurePosixPath(relative(name)).parts
+    if name.endswith(".json") and parts[-1][0].isupper() and any(
+            part == "core" or part.endswith("-core") for part in parts[:-1]):
+        return False
     if name in ("build/primop-coverage.json", "build/aggregate-frontier.json"):
         return True
     if native_executable(name):
@@ -2087,7 +2074,7 @@ def allowed_payload(name):
     if parts[1] == "original-stdio-truncate":
         return name in ORIGINAL_STDIO_TRUNCATE_OUTPUTS
     if parts[1] == "libdw-unavailable":
-        return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json")
+        return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.cbd")
     if parts[1] == "native-addresses":
         return name in ("build/native-addresses/manifest.json", "build/native-addresses/oracle.json")
     if parts[1] == "simd-arithmetic":

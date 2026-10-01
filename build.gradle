@@ -225,25 +225,25 @@ tasks.withType(Test).configureEach {
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
         include("backend-annotations/**/*.cbd")
-        include(["core/**/*.json", "core/**/*.cbd", "source-core/**/*.json", "source-core/**/*.cbd", "cbv-post-core/**/*.json", "cbv-post-core/**/*.cbd",
-            "vector-api/core/**/*.cbd", "vector-api/core/**/*.json", "vector-api/*.tsv", "java-arrays/core/**/*.cbd", "java-arrays/core/**/*.json", "java-arrays/packages.json",
-            "truffle-strings/core/**/*.json", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",
-            "floating/core/**/*.json", "floating/core/**/*.cbd", "floating/checks.json", "floating/oracle.tsv",
-            "word-floating/**/*.json", "word-floating/oracle.tsv",
-            "fused-floating/**/*.json", "fused-floating/oracle.tsv",
+        include(["core/**/*.cbd", "source-core/**/*.cbd", "cbv-post-core/**/*.cbd",
+            "vector-api/core/**/*.cbd", "vector-api/*.tsv", "java-arrays/core/**/*.cbd", "java-arrays/packages.json",
+            "truffle-strings/core/**/*.cbd", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",
+            "floating/core/**/*.cbd", "floating/checks.json", "floating/oracle.tsv",
+            "word-floating/**/*.cbd", "word-floating/**/*.json", "word-floating/oracle.tsv",
+            "fused-floating/**/*.cbd", "fused-floating/**/*.json", "fused-floating/oracle.tsv",
             "floating-tuple/**/*.cbd", "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
             "tuple-input/**/*.cbd", "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
             "io-main-pap/**/*.cbd", "io-main-pap/**/*.json", "io-main-pap/*.tsv", "io-main-pap/native/**",
             "addr-identity/**/*.json", "addr-identity/**/*.cbd", "addr-identity/oracle.txt", "addr-identity/native",
             "empty-join-input/**/*.cbd", "empty-join-input/**/*.json", "empty-join-input/*.tsv", "empty-join-input/native/**",
             "empty-tuple-input/**/*.cbd", "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
-            "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
+            "sqrt/**/*.cbd", "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "tag-to-enum/**/*.cbd", "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
-            "show-int/**/*.json", "show-int/*.tsv", "show-int/native/**",
+            "show-int/**/*.cbd", "show-int/**/*.json", "show-int/*.tsv", "show-int/native/**",
             "narrow-literal-proofs/**/*.json", "narrow-literal-proofs/**/*.cbd", "narrow-literal-proofs/*.tsv", "narrow-literal-proofs/native/**",
             "bignat-literals/**/*.cbd", "bignat-literals/**/*.json", "bignat-literals/*.tsv", "bignat-literals/native/**", "bignat-literals/commands/**",
-            "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
-            "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
+            "show-word-list/**/*.cbd", "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
+            "short-bytes-slices/**/*.cbd", "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
             "bytestring-sort/*.cbd", "bytestring-sort/*.json", "bytestring-sort/logs/*.stdout", "bytestring-sort/logs/*.stderr", "bytestring-sort/logs/*.command.json",
             "bytestring-decimal/*.cbd", "bytestring-decimal/*.json", "bytestring-decimal/logs/*.stdout", "bytestring-decimal/logs/*.stderr", "bytestring-decimal/logs/*.command.json",
             "original-path-mode/**/*.cbd",
@@ -259,23 +259,22 @@ tasks.withType(Test).configureEach {
             "unix-libc/*.cbd", "unix-libc/*.json", "unix-libc/logs/*.stdout", "unix-libc/logs/*.stderr", "unix-libc/logs/*.command.json",
             "proxy-void/**/*.cbd", "proxy-void/**/*.json", "proxy-void/*.tsv", "proxy-void/native/**", "proxy-void/api/**", "proxy-void/commands/**",
             "unsafe-equality/**/*.cbd", "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
-            "aggregate-core/**/*.json", "aggregate-core/**/*.cbd", "aggregate-post-core/**/*.json", "aggregate-post-core/**/*.cbd", "map/boot-core/**/*.cbd", "map/boot-core/**/*.json",
-            "aggregate-layout/pre-core/**/*.json", "aggregate-layout/pre-core/**/*.cbd", "aggregate-layout/post-core/**/*.json", "aggregate-layout/post-core/**/*.cbd",
+            "aggregate-core/**/*.cbd", "aggregate-post-core/**/*.cbd", "map/boot-core/**/*.cbd", "aggregate-layout/pre-core/**/*.cbd", "aggregate-layout/post-core/**/*.cbd",
             "sum-layout/**/*.json", "sum-layout/**/*.cbd", "sum-layout/*.tsv", "sum-layout/native/**",
             "sum-result/**/*.json", "sum-result/**/*.cbd", "sum-result/*.tsv", "sum-result/native/**",
-            "tuple-return/pre-core/**/*.cbd", "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.cbd", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
-            "state-tuple/pre-core/**/*.cbd", "state-tuple/post-core/**/*.cbd", "state-tuple/pre-core/**/*.json", "state-tuple/post-core/**/*.json", "state-tuple/oracle.tsv",
+            "tuple-return/pre-core/**/*.cbd", "tuple-return/post-core/**/*.cbd", "tuple-return/oracle.tsv",
+            "state-tuple/pre-core/**/*.cbd", "state-tuple/post-core/**/*.cbd", "state-tuple/oracle.tsv",
             "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
-            "tuple-join/pre-core/**/*.cbd", "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.cbd", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
-            "sum-join/**/*.json", "sum-join/*.tsv", "sum-join/commands/**",
-            "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/pre-core/**/*.cbd", "tuple-arithmetic/post-core/**/*.json", "tuple-arithmetic/post-core/**/*.cbd",
+            "tuple-join/pre-core/**/*.cbd", "tuple-join/post-core/**/*.cbd", "tuple-join/oracle.tsv",
+            "sum-join/**/*.cbd", "sum-join/**/*.json", "sum-join/*.tsv", "sum-join/commands/**",
+            "tuple-arithmetic/pre-core/**/*.cbd", "tuple-arithmetic/post-core/**/*.cbd",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-completion/**/*.cbd", "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
             "integer-completion/native/**", "integer-completion/commands/**",
-            "integer-primops/core/**/*.cbd", "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
-            "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
-            "stm/**/*.json", "stm/*.tsv", "stm/installed/bundles/*.zip", "stm/native/**",
-            "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
+            "integer-primops/core/**/*.cbd", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
+            "mutvar/**/*.cbd", "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
+            "stm/**/*.cbd", "stm/**/*.json", "stm/*.tsv", "stm/installed/bundles/*.zip", "stm/native/**",
+            "stable-pointers/**/*.cbd", "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
             "ghc-bco/**/*.cbd", "ghc-bco/**/*.json", "ghc-bco/commands/**", "stable-names/**/*.cbd", "stable-names/**/*.json", "stable-names/commands/**",
             "weak-explicit/**/*.cbd", "weak-explicit/**/*.json", "weak-explicit/oracle.tsv", "weak-explicit/NativeWeak.hs",
             "shrink-bytearrays/**/*.cbd", "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
@@ -283,7 +282,7 @@ tasks.withType(Test).configureEach {
             "atomic-int-arrays/**/*.cbd", "atomic-int-arrays/**/*.json", "atomic-int-arrays/*.tsv", "atomic-int-arrays/NativeAtomicIntArrays.hs", "atomic-int-arrays/commands/*",
             "managed-mvars/*.json", "managed-mvars/pre/*.json", "managed-mvars/post/*.json", "managed-mvars/logs/*.command.json", "managed-mvars/**/*.cbd", "managed-mvars/*.tsv", "managed-mvars/native/**",
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/**/*.cbd", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
-            "core-continuation/**/*.json", "core-continuation/native-output.txt",
+            "core-continuation/**/*.cbd", "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "thread-status/**/*.json", "thread-status/oracle.txt",
             "thread-inventory/**/*.cbd", "thread-inventory/**/*.json", "thread-inventory/oracle.txt",
             "thread-scheduling/**/*.cbd", "thread-scheduling/**/*.json", "thread-scheduling/oracle.txt",
@@ -297,12 +296,12 @@ tasks.withType(Test).configureEach {
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
             "mask-functions/**/*.cbd", "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
             "mask-functions/native/oracle",
-            "scalar-exception-results/**/*.json", "scalar-exception-results/logs/*.stdout",
+            "scalar-exception-results/**/*.cbd", "scalar-exception-results/**/*.json", "scalar-exception-results/logs/*.stdout",
             "scalar-exception-results/logs/*.stderr", "scalar-exception-results/native/oracle",
             "exception-result-layouts/**/*.json", "exception-result-layouts/oracle.tsv",
             "exception-result-layouts/logs/*.stdout", "exception-result-layouts/logs/*.stderr",
             "exception-result-layouts/native/oracle",
-            "deep-evaluation/**/*.json", "deep-evaluation/logs/*.stdout", "deep-evaluation/logs/*.stderr",
+            "deep-evaluation/**/*.cbd", "deep-evaluation/**/*.json", "deep-evaluation/logs/*.stdout", "deep-evaluation/logs/*.stderr",
             "deep-evaluation/native/oracle",
             "interface-core/**/*.cbd", "interface-core/**/*.json", "interface-core/logs/*.stdout", "interface-core/logs/*.stderr",
             "interface-core/**/*.hi", "interface-core/**/*.dyn_hi", "interface-core/native/oracle",
@@ -319,11 +318,11 @@ tasks.withType(Test).configureEach {
             "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
             "original-posix-stat/**/*.json", "original-posix-stat/**/*.cbd", "original-posix-stat/native/oracle",
             "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
-            "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json", "libdw-unavailable/foreign-labels.json",
+            "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json", "libdw-unavailable/foreign-labels.cbd",
             "native-addresses/manifest.json", "native-addresses/oracle.json",
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
-            "process-lifecycle/core/*.cbd", "process-lifecycle/core/*.json", "process-lifecycle/core/logs/*.json",
+            "process-lifecycle/core/*.cbd", "process-lifecycle/core/logs/*.json",
             "process-lifecycle/core/logs/*.stdout", "process-lifecycle/core/logs/*.stderr",
             "process-lifecycle/native/process-oracle", "process-lifecycle/native/sigchld-policy",
             "original-gmp/**/*.json", "original-gmp/**/*.cbd", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
@@ -367,10 +366,8 @@ tasks.withType(Test).configureEach {
             "text-cbits/**/*.json", "text-cbits/**/*.cbd", "text-cbits/*.tsv", "text-cbits/logs/*.stdout", "text-cbits/logs/*.stderr",
             "unix-wait-status/**/*.cbd", "unix-wait-status/**/*.json", "unix-wait-status/*.tsv", "unix-wait-status/logs/*.stdout", "unix-wait-status/logs/*.stderr",
             "original-stack/manifest.json", "original-stack/run-*/**",
-            "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
-            "original-stack-formatter/run-*/pre-core/*.json", "original-stack-formatter/run-*/post-core/*.json",
+            "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/originals/core/*.cbd", "original-stack-formatter/run-*/logs/*",
             "original-stack-formatter/run-*/*-audit.json", "original-stack-formatter/run-*/native/formatter",
-            "original-stack-formatter/run-*/originals/core/*.json",
             "original-stack-formatter/run-*/originals/generated/**/*.hs",
             "original-stack-formatter/run-*/originals/generated.json",
             "original-stack-formatter/run-*/originals/target-layout.json",
@@ -418,11 +415,11 @@ tasks.withType(Test).configureEach {
             "int16-arrays/**/*.json", "int16-arrays/oracle.tsv", "int16-arrays/expected.tsv", "int16-arrays/literal-oracle.tsv",
             "int16-arrays/NativeInt16Array.hs", "int16-arrays/native/int16-array-oracle", "int16-arrays/native/int16-array-oracle.exe",
             "bit-primops/**/*.cbd", "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
-            "simd/pre-core/**/*.cbd", "simd/pre-core/**/*.json", "simd/post-core/**/*.cbd", "simd/post-core/**/*.json", "simd/oracle.tsv",
+            "simd/pre-core/**/*.cbd", "simd/post-core/**/*.cbd", "simd/oracle.tsv",
             "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**",
             "simd-capability-smoke/**/*.cbd", "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "simd-capability-smoke/native/**", "generated/simd/fixtures/*.hs",
-            "explicit64-primops/core/**/*.cbd", "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
-            "simd-int32x4/pre-core/**/*.cbd", "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.cbd", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
+            "explicit64-primops/core/**/*.cbd", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
+            "simd-int32x4/pre-core/**/*.cbd", "simd-int32x4/post-core/**/*.cbd", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.cbd", "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
             "simd-floatx4-fma/**/*.cbd", "simd-floatx4-fma/**/*.json", "simd-floatx4-fma/oracle.txt",
             "simd-wide-floating-fma/**/*.cbd", "simd-wide-floating-fma/**/*.json", "simd-wide-floating-fma/oracle.txt",
@@ -432,8 +429,7 @@ tasks.withType(Test).configureEach {
             "simd-wide-arrays/*-audit.json", "simd-wide-arrays/native/oracle", "simd-wide-arrays/commands/*",
             "simd128-addresses/manifest.json", "simd128-addresses/*.tsv", "simd128-addresses/*-core/*.cbd", "simd128-addresses/*-core/*.json",
             "simd128-addresses/*-audit.json", "simd128-addresses/native/oracle", "simd128-addresses/commands/*",
-            "simd-arithmetic/manifest.json", "simd-arithmetic/*.tsv", "simd-arithmetic/pre-core/*.cbd", "simd-arithmetic/pre-core/*.json",
-            "simd-arithmetic/*-audit.json", "simd-arithmetic/native/oracle", "simd-arithmetic/commands/*", "simd-arithmetic/sources/*.hs",
+            "simd-arithmetic/manifest.json", "simd-arithmetic/*.tsv", "simd-arithmetic/pre-core/*.cbd", "simd-arithmetic/*-audit.json", "simd-arithmetic/native/oracle", "simd-arithmetic/commands/*", "simd-arithmetic/sources/*.hs",
             "simd128-arrays/manifest.json", "simd128-arrays/*.tsv", "simd128-arrays/*-core/*.cbd", "simd128-arrays/*-core/*.json",
             "simd-address-families/manifest.json", "simd-address-families/*.tsv", "simd-address-families/source/*.hs",
             "simd-address-families/*-core/*.cbd", "simd-address-families/*-core/*.json", "simd-address-families/*-audit.json", "simd-address-families/commands/*",
@@ -453,7 +449,7 @@ tasks.withType(Test).configureEach {
             "simd-int32x4-bytearray/prepare-run-*/commands/*", "simd-int32x4-bytearray/prepare-run-*/retained-original-source.hs",
             "simd-word32x4-bytearray/prepare-run-*/commands/*", "simd-word32x4-bytearray/prepare-run-*/retained-original-source.hs",
             "simd-floatx4-bytearray/prepare-run-*/commands/*", "simd-doublex2-bytearray/prepare-run-*/commands/*",
-            "signed-narrow-primops/core/**/*.cbd", "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
+            "signed-narrow-primops/core/**/*.cbd", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
             "corpus/corpus.json", "corpus/structure.json", "corpus/groups/*/*.json", "corpus/**/*.cbd", "corpus/oracle.tsv", "native/oracle.tsv"])
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
@@ -551,7 +547,6 @@ def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInter
         filter {
             includeTestsMatching("thc.CoreCompactInteropTest")
             includeTestsMatching("thc.CoreCompactDebugInteropTest")
-            includeTestsMatching("thc.CoreCompactHeaderInteropTest")
         }
         [["thc.compactInteropManifest", "packages.json"],[
             "thc.compactInteropReference", "reference-packages.json"],[
@@ -561,10 +556,6 @@ def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInter
                 .orElse(layout.buildDirectory.file("compact-core-interop/$fallback").map { it.asFile })
             inputs.file(input)
             systemProperty(property, input.get().absolutePath)
-        }
-        providers.gradleProperty("thc.compactInteropHeaders").orNull?.with { paths ->
-            inputs.files(paths.split(',').collect { file(it) })
-            systemProperty("thc.compactInteropHeaders", paths)
         }
         systemProperty("thc.handoffSlabs", dense.toString())
         maxParallelForks = 1

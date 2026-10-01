@@ -2757,7 +2757,6 @@
         "thc.CoreLoweringRootsTest",
         "thc.CoreUnitAsyncPolicyTest",
         "thc.CoreUnitCafLifetimeTest",
-        "thc.CoreUnitColdControlTest",
         "thc.CoreUnitLoadTest",
         "thc.ReusableLoaderTest",
         "thc.CoreUnitManagedExportTest",
@@ -2788,14 +2787,13 @@
         "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest", "thc.ReusableProgramTest",
         "thc.RealCoreJoinTest", "thc.RuntimeTest", "thc.StrictFieldsTest",
         "thc.SumLayoutMetadataTest", "thc.TailCycleTest", "thc.ThreadedThunkTest",
-        "thc.ThunkRetentionTest", "thc.TypedApplicationTest"
+        "thc.ThunkRetentionTest"
       ],
       "python": []
     },
     "src/test/java/thc/CoreBackendTestSupport.java": {
       "junit": [
         "thc.BytecodeBackendTest",
-        "thc.BytecodeCoreProofTest",
         "thc.BytecodeSourceNotesTest",
         "thc.BytecodeStaticEntryTest",
         "thc.CStringTest",

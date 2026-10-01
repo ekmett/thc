@@ -82,7 +82,6 @@
     "thc.runtime.HostEntryCompilationTest",
     "thc.runtime.SimdFamiliesTest",
     "thc.ScalarPrimopModelTest",
-    "thc.runtime.IoMainBoundaryTest",
     "thc.runtime.ExecutableLifecycleTest",
     "thc.runtime.TypedInputScalarSourceTest"
   ],
@@ -164,10 +163,7 @@
         "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "t/fixtures/compiler/SimdWord32X4ByteArray.hs",
-        "t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs",
-        "t/fixtures/retained-core/word32x4-bytearray/pre-core.json.gz",
-        "t/fixtures/retained-core/word32x4-bytearray/post-core.json.gz",
-        "t/fixtures/retained-core/word32x4-bytearray/native/provenance.json.gz"
+        "t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs"
       ]
     },
     "simd-int32x4-bytearray": {
@@ -193,10 +189,7 @@
         "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "t/fixtures/compiler/SimdInt32X4ByteArray.hs",
-        "t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs",
-        "t/fixtures/retained-core/int32x4-bytearray/pre-core.json.gz",
-        "t/fixtures/retained-core/int32x4-bytearray/post-core.json.gz",
-        "t/fixtures/retained-core/int32x4-bytearray/native/provenance.json.gz"
+        "t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs"
       ]
     },
     "boxed-cas": {
@@ -341,7 +334,7 @@
     "libdw-unavailable": {
       "junit": ["thc.runtime.LibdwUnavailableTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
-      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json"],
+      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.cbd"],
       "sources": ["t/fixtures/compiler/LibdwUnavailableNative.hs", "t/fixtures/compiler/CFinalizerNative.hs",
         "t/fixtures/compiler/ForeignLabelAudit.hs", "t/haskell-fixtures/LibdwUnavailableFixtures.hs",
         "src/compiler/THC/Plugin.hs", "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs",
@@ -859,10 +852,7 @@
         "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "t/fixtures/compiler/SimdFloatX4ByteArray.hs",
-        "t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs",
-        "t/fixtures/retained-core/floatx4-bytearray/pre-core.json.gz",
-        "t/fixtures/retained-core/floatx4-bytearray/post-core.json.gz",
-        "t/fixtures/retained-core/floatx4-bytearray/input-provenance.json.gz"
+        "t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs"
       ]
     },
     "simd-doublex2-bytearray": {
@@ -888,10 +878,7 @@
         "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "t/fixtures/compiler/SimdDoubleX2ByteArray.hs",
-        "t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs",
-        "t/fixtures/retained-core/doublex2-bytearray/pre-core.json.gz",
-        "t/fixtures/retained-core/doublex2-bytearray/post-core.json.gz",
-        "t/fixtures/retained-core/doublex2-bytearray/input-provenance.json.gz"
+        "t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs"
       ]
     },
     "explicit64-arrays": {
