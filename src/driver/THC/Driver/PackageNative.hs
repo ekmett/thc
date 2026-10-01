@@ -392,7 +392,7 @@ nativeFinalizers unit modules = do
   addresses <- concat <$> mapM (nativeAddresses unit) modules
   sort . nub <$> mapM (\entry -> field entry "symbol")
     [entry | entry <- addresses, member entry "callback" /= Just Null,
-      member entry "symbol" `notElem` [Just "free",Just "libdwPoolRelease",Just "backtraceFree"]]
+      member entry "symbol" /= Just "free"]
 
 nativeSignature :: String -> Value -> Either String Signature
 nativeSignature unit entry = do

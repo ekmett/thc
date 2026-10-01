@@ -25,7 +25,7 @@ shared global-mutability correction but retain the original Windows locator.
 The packaged pointer bridge is genuinely compiled by the selected Clang for
 `x86_64-pc-windows-msvc19.33.0`, the pinned Sulong Windows target. Its Windows
 memory operations use Clang builtins, which emit the same LLVM memory intrinsics
-without requiring a separate MSVC SDK. Native GHC/MD5/libdw DLLs retain their
+without requiring a separate MSVC SDK. Native GHC/MD5 DLLs retain their
 MinGW target. On Windows, `llvm-dis` beside the selected Clang (or selected by
 `THC_LLVM_DIS`/PATH) validates every emitted bitcode target before the cbits
 manifest records it. Non-Clang builds retain the standard `string.h` path. No

@@ -100,7 +100,6 @@ thc.runtime.TermiosImage
 thc.runtime.WindowsCodePages
 # An uninitialized, capture-free lazy lookup. Native
 # library extraction/loading and finalizer handles remain deferred until runtime.
-thc.runtime.WindowsLibdwFinalizers
 # Runtime/deoptimization graph validation requires initialized declaring types.
 # These exception classes and FunctionRoot have no own class initializer.
 thc.runtime.RuntimeFault
@@ -171,7 +170,6 @@ thc.runtime.CompactImageOp
 thc.runtime.CompactOp
 thc.runtime.EnvironmentOp
 thc.runtime.GcForeignOp
-thc.runtime.LibdwForeignOp
 thc.runtime.MVarOp
 thc.runtime.ManagedFileOp
 thc.runtime.MemorySearchOp

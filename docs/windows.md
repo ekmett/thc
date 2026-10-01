@@ -189,21 +189,6 @@ Messages allocated by `base_getErrorMessage` must be released with `LocalFree`.
 Aliases become invalid after release, and context disposal frees remaining
 messages. Interior, stale, cross-context and wrong-allocator frees are rejected.
 
-## Original disabled-libdw finalizers
-
-The original `libdwPoolRelease` and `backtraceFree` function labels use a native
-Windows DLL built from the pinned `USE_LIBDW=0` RTS sources. JDK FFM calls the
-unchanged empty C bodies with native authority and `IOAccess.NONE`, preserving
-context ownership and managed, pinned, literal and native storage lifetimes.
-This resolves their Sulong `KERNEL32.dll` dependency lookup without granting
-guest filesystem access. It does not enable native DWARF stack inspection.
-
-~~~powershell
-./bin/windows.ps1 -Action LibdwTest -Jobs 4
-~~~
-
-See the [finalizer contract](c-finalizers.md) for ownership and lifetime rules.
-
 ## Package and path considerations
 
 Select the pinned `ghc-9.14.1.exe` and `ghc-pkg-9.14.1.exe` binaries for Unicode
@@ -265,8 +250,8 @@ ordinary `Test` action.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.
-  General Windows native IO, arbitrary CAPI/Sulong libraries, enabled-libdw stack
-  inspection and GMP remain outside this platform contract.
+  General Windows native IO, arbitrary CAPI/Sulong libraries and GMP remain
+  outside this platform contract.
 - Sulong bitcode uses its MSVC target; the native GHC helpers use MinGW.
   Arbitrary MinGW package bitcode cannot be assumed ABI-compatible.
 - Pinned source hashes require original LF bytes. Restore converted source bytes
