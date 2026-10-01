@@ -70,6 +70,24 @@ class LibraryBundleTest(unittest.TestCase):
     def write_cases(self):
         (self.root / bundle.CASES).write_text(json.dumps(self.cases))
 
+    def pinned_source(self):
+        upstream = self.root.parent / "pinned-upstream"
+        upstream.mkdir()
+        (upstream / "Pinned.hs").write_bytes(b"original pinned source\n")
+        subprocess.run(["git", "init", "-q", str(upstream)], check=True)
+        subprocess.run(["git", "-C", str(upstream), "add", "Pinned.hs"], check=True)
+        subprocess.run(["git", "-C", str(upstream), "-c", "user.name=Test", "-c",
+                        "user.email=test@example.invalid", "commit", "-qm", "pinned fixture"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "-c", "protocol.file.allow=always",
+                        "submodule", "add", "-q", str(upstream), "nih/pinned/library"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "-c", "user.name=Test", "-c",
+                        "user.email=test@example.invalid", "commit", "-qm", "pin upstream source"], check=True)
+        os.environ["GITHUB_SHA"] = bundle.git(self.root, "rev-parse", "HEAD")
+        source = self.root / "nih/pinned/library/Pinned.hs"
+        self.cases["inputHashes"][str(source)] = bundle.digest(source)
+        self.write_cases()
+        return source
+
     def pack(self):
         self.manifest = bundle.pack(self.root, self.archive)
 
@@ -110,6 +128,40 @@ class LibraryBundleTest(unittest.TestCase):
         self.assertEqual(self.source.read_text(), "verified source\n")
         # Extraction writes data, not an executable native binary or checkout source.
         self.assertFalse(os.access(self.root / "build/libraries/native/library-oracle", os.X_OK))
+
+    def test_pinned_submodule_sources_are_verified_without_becoming_payload(self):
+        source = self.pinned_source()
+        pin = bundle.git(source.parent, "rev-parse", "HEAD")
+        self.pack()
+        name = "nih/pinned/library/Pinned.hs"
+        self.assertIn(name, self.manifest["sourceFiles"])
+        self.assertNotIn(name, self.manifest["payloadFiles"])
+        with tarfile.open(self.archive) as archive:
+            self.assertNotIn("files/" + name, archive.getnames())
+        self.clear_payload()
+        receipt = bundle.restore(self.root, self.archive)
+        self.assertEqual(receipt["sourceFilesVerified"], 2)
+        self.assertEqual(source.read_bytes(), b"original pinned source\n")
+        self.assertEqual(bundle.git(source.parent, "rev-parse", "HEAD"), pin)
+
+    def test_untracked_submodule_file_outside_payload_roots_is_rejected(self):
+        source = self.pinned_source().parent / "Untracked.hs"
+        source.write_bytes(b"untracked source must not be restored\n")
+        self.cases["inputHashes"][str(source)] = bundle.digest(source)
+        self.write_cases()
+        with self.assertRaisesRegex(RuntimeError, "outside build/vendor"):
+            self.pack()
+        self.assertFalse(self.archive.exists())
+
+    def test_changed_pinned_submodule_source_is_not_overwritten(self):
+        source = self.pinned_source()
+        self.pack()
+        self.clear_payload()
+        source.write_bytes(b"changed pinned source\n")
+        with self.assertRaisesRegex(RuntimeError, "checkout is dirty"):
+            bundle.restore(self.root, self.archive)
+        self.assertEqual(source.read_bytes(), b"changed pinned source\n")
+        self.assertFalse((self.root / "build").exists())
 
     def test_run_attempt_platform_source_and_jdk_mismatches_fail_closed(self):
         self.pack()
