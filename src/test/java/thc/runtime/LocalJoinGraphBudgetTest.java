@@ -6,6 +6,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.runtime.OptimizedOSRLoopNode;
+import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -73,6 +74,49 @@ class LocalJoinGraphBudgetTest {
                 .option("engine.OSRCompilationThreshold", "1024")
                 .option("engine.CompilationFailureAction", "Throw")
                 .option("compiler.MaximumGraalGraphSize", "10000").option("compiler.CompilationTimeout", "30").build();
+    }
+    @Test void ordinaryCaseRegionsRecoverWithoutAnAmbientLocalJoin() throws Exception {
+        List<Object> work = integer(0);
+        for (int arm = 0; arm < 8; arm++) work = primitive("+#", work,
+                choice("selected" + arm, variable("key"), List.of(
+                        node("default", null, List.of(), arithmetic(4, arm + 1)))));
+        var module = Map.<String,Object>of("instrument", true, "bindings", List.of(
+                Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                        "expr", lambda(List.of("key"), primitive("+#", work, integer(17))))));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, module, true);
+                var target = (OptimizedCallTarget) program.entryTarget("entry");
+                var root = (FunctionRoot) target.getRootNode();
+                assertTrue(NodeUtil.findAllNodeInstances(root, LocalJoinRegion.class).isEmpty());
+                assertEquals(0, root.getGraphBudgetGeneration());
+                assertEquals(0, target.getCallCount());
+                assertEquals(0L, program.diagnostics().get("compiledEntries"));
+                assertTrue(target.compile(true), "ordinary case regions must provide real budget recovery");
+                assertTrue(root.getGraphBudgetGeneration() > 0, "the compiler must perform a structural extraction");
+                assertTrue(target.isValidLastTier());
+                var field = AstSameFrameArm.class.getDeclaredField("targets"); field.setAccessible(true);
+                for (var arm : NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class)) {
+                    var sides = (com.oracle.truffle.api.RootCallTarget[]) field.get(arm);
+                    if (sides != null) {
+                        var side = (OptimizedCallTarget) sides[2];
+                        assertTrue(side.compile(true), "each extracted long body must also compile");
+                        assertTrue(side.isValidLastTier());
+                        assertEquals(0, side.getCallCount());
+                    }
+                }
+                assertEquals(0, target.getCallCount(), "compilation must not warm the guest in the interpreter");
+                assertEquals(0L, program.diagnostics().get("compiledEntries"), "compilation must not execute the guest");
+                ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(target);
+                // key=0 sums the consecutive integers [16..143], then adds 17 once.
+                assertEquals(10193L, Calls.target(target, new Object[]{0L, 0L}));
+                assertEquals(1L, program.diagnostics().get("compiledEntries"), "the first guest call must use installed code");
+                assertSame(target, program.entryTarget("entry"));
+                assertTrue(target.isValidLastTier(), "the first call must retain the recovered target");
+            } finally { context.leave(); }
+        }
     }
     @Test void asyncLocalJoinRetainsItsBackedgeAndReturnsAfterRealBudgetRecovery() throws Exception {
         try (var context = context()) {
