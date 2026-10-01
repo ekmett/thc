@@ -668,7 +668,7 @@ jobs:
           HANDOFF: ${{ matrix.handoff }}
         run: |
           set -euo pipefail
-          "$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+          "$JAVA_HOME/bin/java" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
             "-Dthc.handoffSlabs=$HANDOFF" -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' \
             thc.LibraryCheck build/libraries/cases.json "$BACKEND" \
             2>&1 | tee "build/libraries/check-$BACKEND-handoff-$HANDOFF.log"
