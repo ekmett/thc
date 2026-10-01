@@ -457,15 +457,6 @@
         "t/haskell-fixtures/OriginalSigsetFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
-    "libdw-unavailable": {
-      "junit": ["thc.runtime.LibdwUnavailableTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
-      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.cbd"],
-      "sources": ["t/fixtures/compiler/LibdwUnavailableNative.hs", "t/fixtures/compiler/CFinalizerNative.hs",
-        "t/fixtures/compiler/ForeignLabelAudit.hs", "t/haskell-fixtures/LibdwUnavailableFixtures.hs",
-        "src/compiler/THC/Plugin.hs", "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs",
-        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
     "original-fcntl": {
       "junit": ["thc.runtime.OriginalFcntlTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fcntl"]}],

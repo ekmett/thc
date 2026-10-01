@@ -107,7 +107,7 @@ class CompilerTargetTest(unittest.TestCase):
             source = root / "src/main/c/md5-api.c"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"/* synthetic ABI wrapper */\n")
-            for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c", "libdw-unavailable.c", "package-pointer-api.c",
+            for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c", "package-pointer-api.c",
                          "text-api.c", "wait-status-api.c", "bytestring-utf8-api.c"):
                 (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
             text_source = root / "nih/pinned/text-2.1.3"
@@ -118,10 +118,10 @@ class CompilerTargetTest(unittest.TestCase):
             utf8 = root / "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c"
             utf8.parent.mkdir(parents=True)
             utf8.write_bytes((build.ROOT / utf8.relative_to(root)).read_bytes())
-            libdw = root / "nih/pinned/ghc-9.14.1/rts"
-            libdw.mkdir(parents=True)
-            for name in build.LIBDW_SHA256 | build.RTS_FLOAT_SHA256:
-                (libdw / name).write_bytes((build.ROOT / "nih/pinned/ghc-9.14.1/rts" / name).read_bytes())
+            rts = root / "nih/pinned/ghc-9.14.1/rts"
+            rts.mkdir(parents=True)
+            for name in build.RTS_FLOAT_SHA256:
+                (rts / name).write_bytes((build.ROOT / "nih/pinned/ghc-9.14.1/rts" / name).read_bytes())
             original = root / "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c"
             original.parent.mkdir(parents=True, exist_ok=True)
             original.write_bytes((build.ROOT / "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c").read_bytes())
@@ -169,10 +169,10 @@ class CompilerTargetTest(unittest.TestCase):
             self.assertEqual(target, manifest["target"])
             self.assertEqual("Linux", manifest["system"])
             self.assertEqual("x86_64", manifest["architecture"])
-            self.assertEqual(13, len(manifest["commands"]))
-            self.assertEqual(29, len(manifest["sources"]))
-            self.assertEqual(11, len(manifest["artifacts"]))
-            float_command = next(c for c in manifest["commands"] if str(libdw / "StgPrimFloat.c") in c)
+            self.assertEqual(12, len(manifest["commands"]))
+            self.assertEqual(21, len(manifest["sources"]))
+            self.assertEqual(10, len(manifest["artifacts"]))
+            float_command = next(c for c in manifest["commands"] if str(rts / "StgPrimFloat.c") in c)
             self.assertIn("-shared", float_command)
             self.assertNotIn("-emit-llvm", float_command)
             utf8_command = next(c for c in manifest["commands"] if str(Path("src/main/c/bytestring-utf8-api.c")) in c)

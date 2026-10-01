@@ -2211,9 +2211,8 @@ class OriginalStackCloneAuditTest(unittest.TestCase):
         self.call(module)[2][0] = ['lit', 'int', '7', state]; self.reject(module)
 
 
-class LibdwUnavailableAuditTest(unittest.TestCase):
+class OriginalForeignAuditFixture(unittest.TestCase):
     """Original declaration certificates; synthetic consumers, no closure claim."""
-    resource = ROOT.parent / 'src/test/resources/core/original-libdw-descriptors.json'
 
     def fixture(self, declaration):
         declaration = copy.deepcopy(declaration)
@@ -2230,38 +2229,8 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
         return dict(schema=1, ghc='9.14.1', bindings=[wrapper], constructors=[])
 
     def audit(self, module, cap=CAP):
-        return audit_core.Audit([('synthetic-libdw-consumer.json', module)], cap).run(['consumer'])
+        return audit_core.Audit([('synthetic-foreign-consumer.json', module)], cap).run(['consumer'])
 
-    def test_original_declarations_admitted_only_with_explicit_unavailable_backend(self):
-        declarations = json.loads(self.resource.read_text())
-        self.assertEqual(set(core_original_foreign.LIBDW_UNAVAILABLE),
-                         {d['target']['symbol'] for d in declarations})
-        for declaration in declarations:
-            module = self.fixture(declaration)
-            result = self.audit(module)
-            self.assertTrue(result['accepted'], result)
-            self.assertEqual([], result['missingGlobals'])
-            self.assertEqual([declaration['target']['symbol']], [c['symbol'] for c in result['foreignCalls']])
-            result = self.audit(module, dict(CAP, managedForeignCalls=[]))
-            self.assertFalse(result['accepted'])
-            self.assertEqual([], result['foreignCalls'])
-
-    def test_descriptor_and_stored_operand_spoofs_rejected(self):
-        for declaration in json.loads(self.resource.read_text()):
-            target = declaration['target']
-            for incorrect in [dict(declaration, schema=1.0), dict(declaration, safety='safe'),
-                              dict(declaration, arity=0), dict(declaration, convention='capi'),
-                              dict(declaration, target=dict(target, unit='main')),
-                              dict(declaration, target=dict(target, isFunction=False)),
-                              dict(declaration, resultRep=LONG)]:
-                result = self.audit(self.fixture(incorrect))
-                self.assertFalse(result['accepted'], result)
-                self.assertEqual([], result['foreignCalls'])
-            module = self.fixture(declaration)
-            module['bindings'][0]['expr'][1][0]['rep'] = LONG
-            result = self.audit(module)
-            self.assertFalse(result['accepted'], result)
-            self.assertEqual([], result['foreignCalls'])
 
 
 class OriginalSignalDeclarationTest(unittest.TestCase):
@@ -2273,7 +2242,7 @@ class OriginalSignalDeclarationTest(unittest.TestCase):
     def check_original(self, name):
         resource = ROOT.parent / 'src/test/resources/core' / name
         declaration = json.loads(resource.read_text())
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         module = fixture.fixture(declaration)
         enabled = dict(CAP, managedForeignCalls=[*CAP['managedForeignCalls'], 'stg_sig_install'])
         missing = fixture.audit(module, enabled)
@@ -2303,7 +2272,7 @@ class NativeMallocDeclarationTest(unittest.TestCase):
         resource = ROOT.parent / 'src/test/resources/core/original-malloc-descriptors.json'
         declarations = json.loads(resource.read_text())
         self.assertEqual(['malloc', 'free'], [d['target']['symbol'] for d in declarations])
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s not in ('malloc', 'free')])
         for declaration in declarations:
             module = fixture.fixture(declaration)
@@ -2332,7 +2301,7 @@ class NativeMallocDeclarationTest(unittest.TestCase):
         declaration['target']['symbol'] = 'realloc'
         declaration['argumentReps'].insert(0, copy.deepcopy(declarations[1]['argumentReps'][0]))
         declaration['arity'] = declaration['suppliedArity'] = 3
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
         disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'realloc'])
         self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
@@ -2351,7 +2320,7 @@ class OriginalUnlinkDeclarationTest(unittest.TestCase):
         descriptor = dict(schema=1, target=dict(kind='static', symbol='unlink', unit='ghc-internal', isFunction=True),
                           convention='ccall', safety='unsafe', arity=2, suppliedArity=2,
                           argumentReps=[address, primitive('void', None, False)], resultRep=result)
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         self.assertTrue(fixture.audit(fixture.fixture(descriptor))['accepted'])
         disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'unlink'])
         self.assertFalse(fixture.audit(fixture.fixture(descriptor), disabled)['accepted'])
@@ -2365,7 +2334,7 @@ class OriginalMemmoveDeclarationTest(unittest.TestCase):
         resource = ROOT.parent / 'src/test/resources/core/original-memmove-descriptor.json'
         declaration = json.loads(resource.read_text())
         self.assertEqual('memmove', declaration['target']['symbol'])
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         module = fixture.fixture(declaration)
         self.assertTrue(fixture.audit(module)['accepted'])
         disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'memmove'])
@@ -2384,7 +2353,7 @@ class OriginalMemmoveDeclarationTest(unittest.TestCase):
 
 class OriginalMemorySearchDeclarationTest(unittest.TestCase):
     def test_exact_cint_csize_and_address_result_contracts(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         def scalar(rep, evaluated=False):
             kind = 'void' if rep is None else 'address' if rep == 'AddrRep' else 'long'
             return dict(kind=kind, primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -2415,7 +2384,7 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
 
 
     def test_memset_state_occurrence_cannot_hide_stored_or_lowered_long(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         def scalar(rep, evaluated=False):
             return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
                         primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -2490,7 +2459,7 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
                          core_original_foreign.operation(target)[2])
 
     def test_windows_encoding_declarations_keep_exact_owners_and_safety(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for declaration in self.declarations():
             symbol = declaration['target']['symbol']
             if symbol not in core_original_foreign.WINDOWS_ENCODING_OPERATIONS and symbol != 'GetLastError':
@@ -2504,7 +2473,7 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
                     self.assertEqual([], report['foreignCalls'])
 
     def test_genuine_shaped_occurrences_and_refinable_stored_proofs_remain_valid(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for declaration in self.declarations():
             with self.subTest(symbol=declaration['target']['symbol'], safety=declaration['safety']):
                 module = fixture.fixture(declaration)
@@ -2514,7 +2483,7 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
                 self.assertTrue(fixture.audit(module)['accepted'])
 
     def test_state_occurrences_cannot_hide_stored_or_lowered_values(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for declaration in self.declarations():
             index = len(declaration['argumentReps']) - 1
             for source in ('formal', 'global', 'literal', 'let', 'case'):
@@ -2548,7 +2517,7 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
 
 class OriginalByteStringUtf8DeclarationTest(unittest.TestCase):
     def test_safe_and_unsafe_pointer_contracts_stay_closed(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         def scalar(rep, evaluated=False):
             return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
                         primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -2575,7 +2544,7 @@ class OriginalByteStringUtf8DeclarationTest(unittest.TestCase):
 class OriginalGcStatsDeclarationTest(unittest.TestCase):
     """Synthetic ABI negatives; real declarations execute in GcStatsNativeTest."""
     def test_closed_original_gc_stats_and_clock_abis(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         def scalar(rep, evaluated=False):
             return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
                         primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -2624,7 +2593,7 @@ class OriginalGcStatsDeclarationTest(unittest.TestCase):
 class CompilerHeapHintDeclarationTest(unittest.TestCase):
     """Synthetic closed-ABI controls; actual GHC binding preparation is separate."""
     def test_only_the_exact_original_compiler_heap_hint_is_admitted(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         def scalar(rep, evaluated=False):
             return dict(kind='void' if rep is None else 'long',
                         primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -2651,7 +2620,7 @@ class CompilerHeapHintDeclarationTest(unittest.TestCase):
 
 class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):
     def test_bytestring_strlen_keeps_csize_abi_for_installed_units(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         declaration = json.loads((ROOT.parent / 'src/test/resources/core/original-bytestring-strlen-descriptor.json').read_text())
         signed = json.loads((ROOT.parent / 'src/test/resources/core/original-string-rts-descriptors.json').read_text())['strlen']
         for unit in ('bytestring-0.12.2.0-inplace', 'bytestring-0.12.2.0', 'bytestring-0.12.2.0-319833abde312f'):
@@ -2675,7 +2644,7 @@ class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], unit)
 
     def test_original_library_carriers_and_abis_remain_distinct(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for resource in ('original-array-memcpy-descriptor.json', 'original-bytestring-strlen-descriptor.json'):
             with self.subTest(resource=resource):
                 declaration = json.loads((ROOT.parent / 'src/test/resources/core' / resource).read_text())
@@ -2692,7 +2661,7 @@ class OriginalMemcpyDeclarationTest(unittest.TestCase):
     def test_original_ram_pointer_abi_and_installed_unit_authority(self):
         declaration = json.loads((ROOT.parent / 'src/test/resources/core/original-ram-memcpy-descriptor.json').read_text())
         arrays = json.loads((ROOT.parent / 'src/test/resources/core/original-array-memcpy-descriptor.json').read_text())
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for unit in (declaration['target']['unit'], 'ram-0.22.1', 'ram-0.22.1-inplace', 'ram-0.22.1-aB123'):
             installed = copy.deepcopy(declaration)
             installed['target']['unit'] = unit
@@ -2720,7 +2689,7 @@ class OriginalMemcpyDeclarationTest(unittest.TestCase):
         resource = ROOT.parent / 'src/test/resources/core/original-memcpy-descriptor.json'
         declaration = json.loads(resource.read_text())
         self.assertEqual('memcpy', declaration['target']['symbol'])
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         result = fixture.audit(fixture.fixture(declaration))
         self.assertTrue(result['accepted'], result)
         self.assertEqual(['memcpy'], [call['symbol'] for call in result['foreignCalls']])
@@ -2741,7 +2710,7 @@ class OriginalMemcpyDeclarationTest(unittest.TestCase):
 
     def test_stored_intrinsic_head_and_raw_proof_spoofs_reject(self):
         declaration = json.loads((ROOT.parent / 'src/test/resources/core/original-memcpy-descriptor.json').read_text())
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
 
         def reject(change):
             module = fixture.fixture(declaration)
@@ -2793,7 +2762,7 @@ class OriginalStringRtsDeclarationTest(unittest.TestCase):
     def test_original_compiler_host_way_family_has_exact_ownership_and_abi(self):
         declarations = json.loads((ROOT.parent / 'src/test/resources/core/original-ghc-host-ways-descriptors.json').read_text())
         self.assertEqual({'rts_isDynamic', 'rts_isProfiled', 'rts_isThreaded', 'rts_isDebugged', 'rts_isTracing'}, set(declarations))
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol, declaration in declarations.items():
             with self.subTest(symbol=symbol):
                 self.assertEqual('ghc-9.14.1-inplace', declaration['target']['unit'])
@@ -2812,7 +2781,7 @@ class OriginalStringRtsDeclarationTest(unittest.TestCase):
         resource = ROOT.parent / 'src/test/resources/core/original-string-rts-descriptors.json'
         declarations = json.loads(resource.read_text())
         self.assertEqual({'strlen', 'rts_isThreaded'}, set(declarations))
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol, declaration in declarations.items():
             self.assertEqual(symbol, declaration['target']['symbol'])
             module = fixture.fixture(declaration)
@@ -2835,7 +2804,7 @@ class OriginalStringRtsDeclarationTest(unittest.TestCase):
 
 class OriginalByteStringSortDeclarationTest(unittest.TestCase):
     def test_original_sort_shape_owner_and_capability(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         declaration = json.loads((ROOT.parent / 'src/test/resources/core/original-bytestring-sort-descriptor.json').read_text())['fps_sort']
         self.assertEqual('fps_sort', declaration['target']['symbol'])
         self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
@@ -2861,7 +2830,7 @@ class OriginalByteStringSortDeclarationTest(unittest.TestCase):
 
 class OriginalByteStringDecimalDeclarationTest(unittest.TestCase):
     def test_original_decimal_shapes_units_and_capabilities(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         declarations = json.loads((ROOT.parent / 'src/test/resources/core/original-bytestring-decimal-descriptors.json').read_text())
         self.assertEqual({'_hs_bytestring_long_long_int_dec', '_hs_bytestring_long_long_int_dec_padded18'}, set(declarations))
         for symbol, declaration in declarations.items():
@@ -2889,7 +2858,7 @@ class OriginalByteStringDecimalDeclarationTest(unittest.TestCase):
 
 class OriginalUnixLibcDeclarationTest(unittest.TestCase):
     def test_original_unix_units_keep_exact_abis_and_capabilities(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         declarations = json.loads((ROOT.parent / 'src/test/resources/core/original-unix-libc-descriptors.json').read_text())
         self.assertEqual({'close', 'dup', 'isatty', 'getenv'}, set(declarations))
         for symbol, declaration in declarations.items():
@@ -2922,7 +2891,7 @@ class OriginalThreadIdentityDeclarationTest(unittest.TestCase):
     symbols = ('rts_getThreadId', 'eq_thread', 'cmp_thread')
 
     def test_context_owned_identity_abi_and_capability_controls(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         enabled = CAP
         for symbol in self.symbols:
             self.assertEqual(1, CAP['managedForeignCalls'].count(symbol))
@@ -2960,7 +2929,7 @@ class OriginalThreadIdentityDeclarationTest(unittest.TestCase):
         self.assertEqual('GHC.Internal.Conc.Sync', module['module'])
         proof = module['staticForeignImports']
         self.assertEqual('verified', proof['status'])
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol in self.symbols:
             declaration = next(call for call in proof['expectedCalls'] if call['target'].get('symbol') == symbol)
             self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
@@ -2968,7 +2937,7 @@ class OriginalThreadIdentityDeclarationTest(unittest.TestCase):
 
 class OriginalEnvironmentDeclarationTest(unittest.TestCase):
     def test_environment_abi_and_capability_controls(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         scalar = lambda rep, evaluated=True: dict(kind=core_original_foreign.scalar_kind(rep),
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         for symbol, arguments, output in (
@@ -3759,7 +3728,7 @@ class OriginalPathStatDeclarationTest(unittest.TestCase):
             resultRep=dict(tuple_rep(state, result), evaluated=False))
 
     def test_exact_original_path_stat_declarations_require_capability(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol in self.symbols:
             module = fixture.fixture(self.declaration(symbol))
             report = fixture.audit(module)
@@ -3768,7 +3737,7 @@ class OriginalPathStatDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(module, dict(CAP, managedForeignCalls=[]))['accepted'])
 
     def test_path_stat_owner_abi_and_actual_stored_operands_reject_spoofs(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol in self.symbols:
             declaration = self.declaration(symbol)
             for key, value in (('convention', 'ccall' if symbol == self.unix_symbol else 'capi'),
@@ -3789,7 +3758,7 @@ class OriginalPathStatDeclarationTest(unittest.TestCase):
                 self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'producer'))
 
     def test_installed_lstat_wrapper_keeps_original_symbol_and_exact_owner(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for suffix in ('inplace', '460b', 'deadbeef'):
             declaration = self.declaration(self.unix_symbol)
             symbol = self.unix_symbol.replace('zminplaceZC', 'zm' + suffix + 'ZC')
@@ -3831,7 +3800,7 @@ class OriginalPathModeDeclarationTest(unittest.TestCase):
             resultRep=dict(tuple_rep(state, result), evaluated=False))
 
     def test_exact_original_path_mode_declarations_require_capability(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol in self.symbols:
             module = fixture.fixture(self.declaration(symbol))
             report = fixture.audit(module)
@@ -3843,7 +3812,7 @@ class OriginalPathModeDeclarationTest(unittest.TestCase):
             self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'], unit)
 
     def test_path_mode_owner_abi_and_actual_stored_operands_reject_spoofs(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol in self.symbols:
             declaration = self.declaration(symbol)
             for key, value in (('convention', 'capi'),
@@ -3884,7 +3853,7 @@ class OriginalFstatAtDeclarationTest(unittest.TestCase):
             resultRep=dict(tuple_rep(state, integer), evaluated=False))
 
     def test_exact_fstatat_owner_wrapper_and_safe_cint_abi(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for suffix in ('inplace', '02fc'):
             declaration = self.declaration(suffix)
             report = fixture.audit(fixture.fixture(declaration))
@@ -3905,7 +3874,7 @@ class OriginalFstatAtDeclarationTest(unittest.TestCase):
                 self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
 
     def test_fstatat_declared_stored_and_lowered_operands_are_checked(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         declaration = self.declaration()
         for index in (0, 3):
             for rep in ('IntRep', 'Word32Rep', 'Word64Rep'):
@@ -3935,7 +3904,7 @@ class OriginalUnlinkAtDeclarationTest(unittest.TestCase):
             resultRep=dict(tuple_rep(state, integer), evaluated=False))
 
     def test_exact_directory_owner_safe_call_and_cint_signature(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for unit in ('directory-1.3.10.0-inplace', 'directory-1.3.10.0-02fc'):
             declaration = self.declaration(); declaration['target']['unit'] = unit
             report = fixture.audit(fixture.fixture(declaration))
@@ -3953,7 +3922,7 @@ class OriginalUnlinkAtDeclarationTest(unittest.TestCase):
         self.assertFalse(fixture.audit(fixture.fixture(declaration), dict(CAP, managedForeignCalls=[]))['accepted'])
 
     def test_unlinkat_declared_stored_and_lowered_operands_are_checked(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         declaration = self.declaration()
         for index in (0, 2):
             for rep in ('IntRep', 'Word32Rep', 'Word64Rep'):
@@ -3983,7 +3952,7 @@ class OriginalPathAccessDeclarationTest(unittest.TestCase):
             resultRep=dict(tuple_rep(state, integer), evaluated=False))
 
     def test_exact_access_requires_capability_and_ghc_owner(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         module = fixture.fixture(self.declaration())
         report = fixture.audit(module)
         self.assertTrue(report['accepted'], report)
@@ -3994,7 +3963,7 @@ class OriginalPathAccessDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(fixture.fixture(declaration))['accepted'], unit)
 
     def test_access_exact_signed_cint_and_state_contract(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         declaration = self.declaration()
         for key, value in (('convention', 'capi'), ('safety', 'safe'), ('arity', 2),
                            ('suppliedArity', 2), ('resultRep', LONG)):
@@ -4018,7 +3987,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
     """Synthetic negatives; genuine unchanged Id positives are Haskell fixtures."""
 
     def test_unix_native_family_uses_shared_declaration_contract(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         declarations = {**core_original_foreign.UNIX_NATIVE_OPERATIONS,
                         **core_original_foreign.UNIX_ENVIRONMENT_OPERATIONS}
         for symbol, (convention, safety, arguments, result) in declarations.items():
@@ -4056,7 +4025,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
             resultRep=dict(tuple_rep(dict(state, evaluated=True), output), evaluated=False))
 
     def test_exact_original_pathname_signatures_and_result(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol in ('symlink', 'rename', 'readlink', 'chdir', 'getcwd', 'rmdir'):
             declaration = self.declaration(symbol)
             report = fixture.audit(fixture.fixture(declaration))
@@ -4084,7 +4053,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(fixture.fixture(declaration), dict(CAP, managedForeignCalls=[]))['accepted'])
 
     def test_stored_and_lowered_pathname_operands_cannot_be_relabelled(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for symbol in ('symlink', 'rename', 'readlink', 'chdir', 'getcwd', 'rmdir'):
             declaration = self.declaration(symbol)
             for index in range(declaration['arity']):
@@ -4111,7 +4080,7 @@ class OriginalDirectoryStreamTest(unittest.TestCase):
                 resultRep=dict(tuple_rep(*(rep(value, True) for value in result)), evaluated=False))
 
     def test_installed_wrapper_owner_abi_and_safety_stay_exact(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for declaration in self.declarations():
             self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'], declaration)
             installed = copy.deepcopy(declaration)
@@ -4130,7 +4099,7 @@ class OriginalDirectoryStreamTest(unittest.TestCase):
             self.assertFalse(fixture.audit(fixture.fixture(declaration), dict(CAP, managedForeignCalls=[]))['accepted'])
 
     def test_output_and_state_operand_authority_cannot_be_relabelled(self):
-        fixture = LibdwUnavailableAuditTest()
+        fixture = OriginalForeignAuditFixture()
         for declaration in self.declarations():
             for index in range(declaration['arity']):
                 module = fixture.fixture(declaration)
@@ -4448,19 +4417,19 @@ class ExplicitWeakContractTest(unittest.TestCase):
                 self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
 
     def test_only_source_certified_function_labels_are_admitted(self):
-        for symbol in ('libdwPoolRelease', 'backtraceFree', 'free', 'enabled_capabilities', 'notACallback'):
+        for symbol in ('free', 'enabled_capabilities', 'notACallback'):
             module = self.fixture('addCFinalizerToWeak#')
             self.call(module)[2][0] = ['lit', 'function-addr', symbol,
                 dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
             report = run_tuple(module)
-            self.assertEqual(symbol in ('libdwPoolRelease', 'backtraceFree', 'free'), report['accepted'], (symbol, report))
+            self.assertEqual(symbol == 'free', report['accepted'], (symbol, report))
         module = self.fixture('addCFinalizerToWeak#')
         self.call(module)[2][0] = ['lit', 'data-addr', 'enabled_capabilities',
             dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
         self.assertFalse(run_tuple(module)['accepted'])
         for mutation in ('missing', 'kind', 'rep', 'aggregate'):
             module = self.fixture('addCFinalizerToWeak#')
-            label = ['lit', 'function-addr', 'libdwPoolRelease',
+            label = ['lit', 'function-addr', 'free',
                 dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
             self.call(module)[2][0] = label
             if mutation == 'missing': label.pop()

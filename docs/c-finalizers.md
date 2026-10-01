@@ -6,31 +6,13 @@ The exporter preserves these as `function-addr` and `data-addr` literals with
 ownership certificate. Runtime providers must establish those separately.
 The exporter does not parse GHC's printed `__label` syntax.
 
-The selected native RTS has `USE_LIBDW=0`. Its original `LibdwPool.c` and
-`Libdw.c` define `libdwPoolRelease` and `backtraceFree` as empty functions with
-the ABI `void (void *)`. Their pinned, unchanged source is compiled into
-`libdw-unavailable.bc` by the existing C pipeline, using the selected GHC
-public headers and original private declarations. Windows also builds a native
-`libdw-unavailable.dll` from those same bodies. The build rejects enabled libdw.
-This preserves actual function symbols and does not invent a successful DWARF
-session or backtrace.
-
-Windows loads the DLL through JDK FFM with native authority and `IOAccess.NONE`.
-This avoids Sulong's PE dependency lookup requiring guest filesystem access for
-`KERNEL32.dll`. The two empty C bodies satisfy the critical downcall contract:
-they do not block, retain pointers, or call Java. Heap access supplies the actual
-managed segment only during the call; pinned and context-owned native storage
-retain their owner locks and borrows. Unowned numeric addresses, stale storage
-and labels belonging to another context reject. Other hosts retain Sulong.
-
 `addCFinalizerToWeak#` has arguments `Addr#, Addr#, Int#, Addr#, Weak#, State#`
 and returns `(# State#, Int# #)`. The addresses are the function, object, and
 optional environment, in that order around the flag. A zero flag calls
 `function(object)`; any nonzero flag calls `function(environment, object)`.
 Registration on a live weak returns 1 and prepends the callback; registration
-on a dead weak returns 0. The two libdw function signatures have no environment
-argument, so their ABI is only suitable for a zero flag. The original `free`
-label uses the same ABI and releases a live, context-owned malloc base (or null).
+on a dead weak returns 0. The original `free` label uses `void (void *)`,
+requires a zero flag and releases a live, context-owned malloc base (or null).
 Dead weak registration returns zero before inspecting an already-freed base;
 function ownership, weak ownership and the ABI flag are still checked.
 
@@ -77,5 +59,3 @@ Primary implementations at the pinned GHC revision:
 
 - [Weak primops](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/rts/PrimOps.cmm#L827)
 - [C callback order and environment](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/rts/Weak.c#L29)
-- [Disabled pool release](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/rts/LibdwPool.c#L57)
-- [Disabled backtrace release](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/rts/Libdw.c#L428)

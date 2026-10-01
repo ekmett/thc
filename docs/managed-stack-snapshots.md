@@ -114,8 +114,8 @@ These restrictions are a diagnostic representation boundary, not native stack
 introspection or resumable `AP_STACK` support. Complete unchanged decoder
 execution remains a separate proof requirement.
 
-The complete original decoder and libdw execution-stack path remain outside this
-managed diagnostic contract. The original Haskell formatter can render constructed
+The complete original decoder remains outside this managed diagnostic contract.
+The original Haskell formatter can render constructed
 stack entries; that does not turn these images into native frames or executable
 continuations. To prepare the original consumer and formatter fixtures, use
 `cabal run exe:thc-fixtures -- original-stack` and `original-stack-formatter`.

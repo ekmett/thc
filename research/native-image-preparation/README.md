@@ -213,7 +213,6 @@ The manual Windows additions are:
 
 ```diff
 +thc.runtime.WindowsCodePages
-+thc.runtime.WindowsLibdwFinalizers
 ```
 
 The Java `WindowsCodePages` declaring-class initializer creates a private `Object`
@@ -222,10 +221,6 @@ read its ABI resource; that lookup remains lazy. `WindowsCodePages$Api` contains
 native resources and is not added. Context instances and their carrier-local
 error state remain runtime-owned. The declaring holder is the relevant constant
 provenance.
-
-The Java `WindowsLibdwFinalizers` has no class initializer; its lookup starts null.
-Preparing that metadata does not extract or load a DLL or acquire native handles;
-those operations remain deferred until runtime.
 
 ### Finite Java metadata compatibility
 
@@ -236,7 +231,7 @@ This is a finite list, not admission of arbitrary Java helpers or packages.
 | Owners in `thc.runtime` | Initialization closure |
 | --- | --- |
 | `ArrayOp`, `ByteArrayOp`, `CompactImageOp`, `MVarOp`, `MutVarOp`, `SmallArrayOp`, `WeakOp` | Literal operation/role/result strings, primitive flags and `List.of` descriptors; constructors only store metadata. |
-| `ByteStringDecimalOp`, `EnvironmentOp`, `LibdwForeignOp`, `ManagedFileOp`, `MemorySearchOp`, `NativeAllocationOp`, `OriginalStackInfoOp`, `PolyglotOp`, `ProcessOp`, `ProcessSignalOp`, `RtsArgumentsOp`, `RtsShutdownOp`, `STMOp`, `StringRtsOp`, `TextForeignOp` | Literal declaration strings/nulls and fresh argument arrays, using `Arrays.asList`, `Collections.singletonList` or `Collections.unmodifiableList`; no foreign operation or runtime owner is created. Lists are not uniformly claimed immutable. |
+| `ByteStringDecimalOp`, `EnvironmentOp`, `ManagedFileOp`, `MemorySearchOp`, `NativeAllocationOp`, `OriginalStackInfoOp`, `PolyglotOp`, `ProcessOp`, `ProcessSignalOp`, `RtsArgumentsOp`, `RtsShutdownOp`, `STMOp`, `StringRtsOp`, `TextForeignOp` | Literal declaration strings/nulls and fresh argument arrays, using `Arrays.asList`, `Collections.singletonList` or `Collections.unmodifiableList`; no foreign operation or runtime owner is created. Lists are not uniformly claimed immutable. |
 | `GcForeignOp`, `RtsDiagnosticOp`, `RtsEventForeignOp`, `RuntimeServiceCall` | Literal foreign/reserved-call descriptors and private argument lists. Collection, clock, thread, native-service and reporting effects occur only in ordinary operation methods, not initialization. |
 | `NarrowInteger` | Six literal width/sign/representation descriptors and primitive `Byte.TYPE`, `Short.TYPE`, `Integer.TYPE` mirrors. `fromRep` is only a literal-string selection among those values. |
 | `OriginalStdioOp` | Literal foreign declarations and private argument arrays wrapped unmodifiable, cached `NarrowInteger.fromRep` results, and four fixed ASCII regular expressions compiled without flags. No host ABI, resource or function lookup is executed. |

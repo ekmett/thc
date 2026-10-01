@@ -117,7 +117,7 @@ public final class PackageFinalizers {
             require(signature != null, "finalizer absent from component ABI");
             require(List.of("AddrRep").equals(signature.getArguments()) && "void".equals(signature.getResult()) &&
                 "ccall".equals(signature.getConvention()) && "unsafe".equals(signature.getSafety()), "finalizer ABI");
-            require(!Set.of("free", "libdwPoolRelease", "backtraceFree").contains(signature.getSymbol()), "reserved runtime finalizer");
+            require(!signature.getSymbol().equals("free"), "reserved runtime finalizer");
         }
         require(!result.isEmpty(), "empty finalizer entries");
         return Set.copyOf(result);
