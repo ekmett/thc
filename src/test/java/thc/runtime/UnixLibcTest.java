@@ -122,7 +122,12 @@ class UnixLibcTest {
                 var changed = (List<Object>) copy(call); var descriptor = (Map<String,Object>) ((Map<?,?>) changed.get(6)).get("foreignCall"); action.accept(changed,descriptor);
                 assertThrows(RuntimeFault.class,() -> validate(changed));
                 for (var backend : List.of("ast","bytecode")) try (var context = Context.newBuilder("thc").build()) { inside(context,() -> {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertThrows(RuntimeFault.class,() -> program(language,rawModule(changed,source),backend)); return null;
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var symbol = ((Map<?,?>) descriptor.get("target")).get("symbol");
+                    Object argument = Objects.equals(symbol,"getenv") ? address("THC_UNIX_FFI_ABSENT") : -1L;
+                    assertThrows(RuntimeFault.class,() -> callScalarTestTarget(program(language,rawModule(changed,source),backend)
+                        .entryTarget("entry"),new Object[]{0L,argument,thc.runtime.Unit.INSTANCE}));
+                    released(language); return null;
                 }); }
             }}
             var control = new Control();
