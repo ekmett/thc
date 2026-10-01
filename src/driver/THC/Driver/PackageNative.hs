@@ -1279,10 +1279,10 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
         -- native dependencies separately, rooting archive extraction with the
         -- actual unresolved symbols. Never include the component here: its
         -- globals and constructors must exist only in the LLVM instance.
-        -- Darwin treats -u as a hard requirement even with dynamic_lookup.
-        -- Root actual archive definitions for extraction; unresolved installed
-        -- calls retain the same lazy policy as the component, without loading RTS.
-        rooted <- if darwin && member record "installed" == Just (Bool True)
+        -- Installed components may retain unused calls without native providers.
+        -- Root actual archive definitions on every target; missing installed
+        -- calls retain the component's lazy policy without loading a native RTS.
+        rooted <- if member record "installed" == Just (Bool True)
           then do
             definitions <- concat <$> forM (nub (filter ((== ".a") . takeExtension) linkArguments)) (\archive -> do
               output <- command directory nm ["--defined-only","--extern-only","--format=posix",archive]
