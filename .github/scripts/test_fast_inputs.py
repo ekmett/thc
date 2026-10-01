@@ -141,17 +141,18 @@ class FastInputTests(unittest.TestCase):
     def test_original_path_link_closed_receipt(self):
         name = 'build/original-path-link/manifest.json'
         outputs = cache.ORIGINAL_PATH_LINK_OUTPUTS
-        self.assertEqual(35, len(outputs))
+        self.assertEqual(43, len(outputs))
         self.assertEqual(cache.platform.system() == 'Linux', name in DECLARED_REQUIRED)
         artifacts = {path: 'a' * 64 for path in outputs - {name}}
         good = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-inplace',
-                    entries=['pathSymlink', 'pathReadlink'], installedArtifactsHashed=False,
+                    entries=['pathSymlink', 'pathReadlink', 'pathRename'], installedArtifactsHashed=False,
                     artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.original_path_link_artifact_hashes(good))
         for path in outputs:
             self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
-                        dict(entries=['pathSymlink']), dict(installedArtifactsHashed=True),
+                        dict(entries=['pathSymlink']), dict(entries=['pathSymlink', 'pathReadlink']),
+                        dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
                         dict(artifactHashes={**artifacts, 'build/original-path-link/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):

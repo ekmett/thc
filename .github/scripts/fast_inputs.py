@@ -117,7 +117,7 @@ ORIGINAL_PATH_MODE_OUTPUTS = frozenset("build/original-path-mode/" + name for na
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_MODE_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
-ORIGINAL_PATH_LINK_ENTRIES = ("pathSymlink", "pathReadlink")
+ORIGINAL_PATH_LINK_ENTRIES = ("pathSymlink", "pathReadlink", "pathRename")
 ORIGINAL_PATH_LINK_OUTPUTS = frozenset("build/original-path-link/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_PATH_LINK_ENTRIES),
