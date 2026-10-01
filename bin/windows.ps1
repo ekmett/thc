@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'NativeLinkTest', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'NativeLinkTest', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'MallocTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -15,11 +15,11 @@ New-Item -ItemType Directory -Force "$root/build" | Out-Null
 $lease = [IO.File]::Open("$root/build/.native-windows-build.lock",
     [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 try {
-    if ($Action -in @('Build', 'Runtime', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest')) {
+    if ($Action -in @('Build', 'Runtime', 'Test', 'DirectoryTest', 'CodePageTest')) {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'NativeLinkTest', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'NativeLinkTest', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'MallocTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -94,11 +94,6 @@ try {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-codepages')
         $focusedTests += 'thc.runtime.WindowsCodePagesTest'
-    }
-    if ($Action -in @('Test', 'LibdwTest')) {
-        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
-        Invoke-ThcTool $fixture @('libdw-unavailable')
-        $focusedTests += 'thc.runtime.LibdwUnavailableTest'
     }
     if ($focusedTests.Count) {
         # One shared compilation and one pair of reports retain every selected

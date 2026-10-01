@@ -88,7 +88,6 @@ import OriginalDirectoryPathsFixtures (prepareOriginalDirectoryPaths)
 import OriginalDirectoryStreamsFixtures (prepareOriginalDirectoryStreams)
 import WindowsDirectoryFixtures (prepareWindowsDirectory)
 import WindowsCodePageFixtures (prepareWindowsCodePages)
-import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
 import ProcessLifecycleFixtures (prepareProcessLifecycle)
@@ -1056,7 +1055,6 @@ main = do
     ["unix-libc"] -> prepareUnixLibc root
     ["unix-wait-status"] -> prepareUnixWaitStatus root
     ["hashable-ffi"] -> prepareHashableFfi root
-    ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root
     ["original-tcsetattr"] -> prepareOriginalTcsetattr root
     ["original-tcgetattr"] -> prepareOriginalTcgetattr root

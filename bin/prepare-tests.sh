@@ -133,7 +133,6 @@ esac
 "$fixture_bin" original-rts-locks --require-supported
 "$fixture_bin" rts-diagnostics
 "$fixture_bin" original-stdio-seek
-"$fixture_bin" libdw-unavailable
 "$fixture_bin" native-addresses
 "$fixture_bin" process-signals
 "$fixture_bin" rts-shutdown

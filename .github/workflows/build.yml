@@ -398,10 +398,6 @@ jobs:
             build/rts-shutdown/logs/
             build/original-open/
             build/process-lifecycle/
-            build/libdw-unavailable/manifest.json
-            build/libdw-unavailable/oracle.json
-            build/libdw-unavailable/foreign-labels.json
-            build/libdw-unavailable/logs/
             build/original-fcntl/
             build/original-termios/
             build/original-tcsetattr/

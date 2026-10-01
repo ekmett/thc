@@ -303,10 +303,6 @@ extra-source-files:
   nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/md5.h
   nih/pinned/ghc-9.14.1/rts/BeginPrivate.h
   nih/pinned/ghc-9.14.1/rts/EndPrivate.h
-  nih/pinned/ghc-9.14.1/rts/Libdw.c
-  nih/pinned/ghc-9.14.1/rts/Libdw.h
-  nih/pinned/ghc-9.14.1/rts/LibdwPool.c
-  nih/pinned/ghc-9.14.1/rts/LibdwPool.h
   nih/pinned/ghc-9.14.1/rts/RtsUtils.h
   docs/compact-core-format.md
   t/compact-core/golden/*.json
@@ -1346,7 +1342,6 @@ executable thc-fixtures
     ByteStringUtf8Fixtures
     MemsetFixtures
     MemorySearchFixtures
-    LibdwUnavailableFixtures
     NativeAddressFixtures
     ProcessSignalFixtures
     ProcessLifecycleFixtures

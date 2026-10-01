@@ -25,15 +25,6 @@ TEXT_SHA256 = {
     "openbsd-memchr.c": "6058dd440eacf8f9929437d8f6bacc593066c3032407e4428ea5f0e6bccff053",
 }
 BYTESTRING_UTF8_SHA256 = "d25c2ce0260fe4509c59ad400cba5df33dfafb9935ef3099ba04b26a2ce36e65"
-LIBDW_SHA256 = {
-    "BeginPrivate.h": "9523f652d274067f5a89ca3ce9ad156f212c88941affbcdf23711f33f684055e",
-    "EndPrivate.h": "636273ae8e7d978ab90ea1c51b2b05aeb624392b2f04c25894622acf84f1726e",
-    "Libdw.c": "97f4914dc6dcee490531f6415d5c654e06fc7233d8ef616f4fa3bdbcac1aecec",
-    "Libdw.h": "018610912b2f4cba487b887c7b1ad5a617fb282ad7b555583dfe649be680971a",
-    "LibdwPool.c": "7e007421ec6a4a8cb6f5d5a70743558c0cd5efbc66194b4ad3dce89350bb23ea",
-    "LibdwPool.h": "db0ca71e54f18b15bd8afbb66ba69b13675ec10b974bfcb838ddb1234127612c",
-    "RtsUtils.h": "6257c9fb28c80ad62c5084b771ce71fd2b2afceaf428633a10e37dc5eb309649",
-}
 RTS_FLOAT_SHA256 = {
     "StgPrimFloat.c": "9cf152e52641b332634c9a9a0a24114f7d4640b08d17a35a020abb7bde4cf8c0",
     "StgPrimFloat.h": "486279f796cfc733a7d371e2445201a21b66a82a08ed501fdb82491c473b8f13",
@@ -110,9 +101,9 @@ def main():
     strerror = ROOT / "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c"
     if hashlib.sha256(strerror.read_bytes()).hexdigest() != STRERROR_SHA256:
         raise SystemExit("Original GHC 9.14.1 strerror.c changed")
-    libdw = ROOT / "nih/pinned/ghc-9.14.1/rts"
-    for name, expected in (LIBDW_SHA256 | RTS_FLOAT_SHA256).items():
-        if hashlib.sha256((libdw / name).read_bytes()).hexdigest() != expected:
+    rts = ROOT / "nih/pinned/ghc-9.14.1/rts"
+    for name, expected in RTS_FLOAT_SHA256.items():
+        if hashlib.sha256((rts / name).read_bytes()).hexdigest() != expected:
             raise SystemExit(f"Original GHC 9.14.1 {name} changed")
     text_source = ROOT / "nih/pinned/text-2.1.3"
     text_sources = {name: ROOT / "nih/pinned/openbsd-memchr-1.8.c" if name == "openbsd-memchr.c" else text_source / name for name in TEXT_SHA256}
@@ -142,8 +133,7 @@ def main():
         if not disassembler:
             raise SystemExit("Windows cbits require llvm-dis beside Clang, on PATH, or selected by THC_LLVM_DIS")
     sources = {"package-pointer": ROOT / "src/main/c/package-pointer-api.c",
-               "md5": ROOT / "src/main/c/md5-api.c",
-               "libdw-unavailable": ROOT / "src/main/c/libdw-unavailable.c"}
+               "md5": ROOT / "src/main/c/md5-api.c"}
     # The locale scope is POSIX-specific. Windows errno/locale interoperability
     # needs its own proof; compiling strerror_s alone would not provide it.
     if system != "Windows":
@@ -199,7 +189,7 @@ def main():
                     not re.search(r'^define .*@bytestring_is_valid_utf8\(', ir, re.M)):
                 raise SystemExit("ByteString UTF-8 dependency is not defined in managed bitcode")
             (output / "bytestring-utf8-LICENSE").write_bytes(bytestring_source.read_bytes())
-    source_files = list(md5_sources.values()) + [libdw / n for n in LIBDW_SHA256] + list(sources.values())
+    source_files = list(md5_sources.values()) + list(sources.values())
     source_files += list(text_sources.values()) + [bytestring_source]
     source_files += unix_headers + [p.parent / "HsUnixConfig.h" for p in unix_headers]
     artifacts = [output / (name + ".bc") for name in sources]
@@ -210,11 +200,11 @@ def main():
     command = [*compiler, "-O1", "-g", "-fno-strict-aliasing", "-shared",
                *([] if system == "Windows" else ["-fPIC"]),
                f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
-               "-I", str(headers[0].parent), str(libdw / "StgPrimFloat.c"),
+               "-I", str(headers[0].parent), str(rts / "StgPrimFloat.c"),
                "-lm", "-o", str(artifact)]
     subprocess.run(command, cwd=ROOT, check=True)
     commands.append(command)
-    source_files += [libdw / name for name in RTS_FLOAT_SHA256]
+    source_files += [rts / name for name in RTS_FLOAT_SHA256]
     artifacts.append(artifact)
     if system == "Windows":
         source = ROOT / "src/main/c/windows-malloc.c"
@@ -247,15 +237,6 @@ def main():
         command = [*compiler, "-std=c11", "-O2", "-fno-strict-aliasing", "-shared",
                    "-I", str(reference / "cbits"), "-I", str(reference / "include"), "-I", str(headers[0].parent),
                    str(ROOT / "src/main/c/md5-api.c"), "-o", str(artifact)]
-        subprocess.run(command, cwd=ROOT, check=True)
-        commands.append(command)
-        artifacts.append(artifact)
-        # These are the unchanged USE_LIBDW=0 RTS bodies, not replacement
-        # callbacks. Native loading keeps their labels usable with IOAccess.NONE.
-        artifact = output / "libdw-unavailable.dll"
-        command = [*compiler, "-O2", "-fno-strict-aliasing", "-shared",
-                   "-I", str(headers[0].parent), "-I", str(config[0].parent),
-                   str(ROOT / "src/main/c/libdw-unavailable.c"), "-o", str(artifact)]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
         artifacts.append(artifact)

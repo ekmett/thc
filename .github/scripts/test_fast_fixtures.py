@@ -1060,25 +1060,6 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/pre/core/Unreviewed.cbd'))
         self.assertTrue(fast_fixtures.fast_inputs.WEAK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
 
-    def test_libdw_unavailable_native_fixture_registration(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        group = manifest['groups']['libdw-unavailable']
-        self.assertEqual('libdw-unavailable', owners['thc.runtime.LibdwUnavailableTest'])
-        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
-                                   'libdw-unavailable']}], group['commands'])
-        self.assertEqual(['build/libdw-unavailable/manifest.json', 'build/libdw-unavailable/oracle.json',
-                          'build/libdw-unavailable/foreign-labels.cbd'], group['outputs'])
-        self.assertTrue(all((project / path).is_file() for path in group['sources']))
-        self.assertIn('"$fixture_bin" libdw-unavailable', (project / 'bin/prepare-tests.sh').read_text())
-        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
-        self.assertIn('build/libdw-unavailable/manifest.json', fast_fixtures.FULL_REQUIRED)
-        for suffix in ('manifest.json', 'oracle.json', 'foreign-labels.cbd'):
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/' + suffix))
-            self.assertIn('"libdw-unavailable/' + suffix + '"', (project / 'build.gradle').read_text())
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/native/oracle'))
-        self.assertIn('build/libdw-unavailable/logs/', (project / '.github/workflows/build.yml').read_text())
-
     def test_native_addresses_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

@@ -488,10 +488,7 @@ assertFailFrontierAudit audit = do
       issues = objects audit "issues"
   -- foreignCalls records only calls whose original descriptor, State/head
   -- proofs and capability admission passed; it is not a symbol inventory.
-  -- libdwPoolTake is admitted with the original RTS USE_LIBDW=0 behavior.
-  forM_ [("stg_cloneMyStackzh", "ghc-internal:GHC.Internal.Exception.Backtrace.$wcollectBacktraces'"),
-         ("libdwPoolTake", "ghc-internal:GHC.Internal.ExecutionStack.Internal.collectStackTrace1"),
-         ("libdwGetBacktrace", "ghc-internal:GHC.Internal.ExecutionStack.Internal.collectStackTrace1")] $
+  forM_ [("stg_cloneMyStackzh", "ghc-internal:GHC.Internal.Exception.Backtrace.$wcollectBacktraces'")] $
     \(symbol, owner) -> do
       let calls = filter (\call -> string (field call "symbol") == symbol &&
                                   string (field call "owner") == owner) (objects audit "foreignCalls")

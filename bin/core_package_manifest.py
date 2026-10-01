@@ -921,7 +921,7 @@ def package_scalar_link(module, validate_archive=True):
             entry = selected[0]
             require(entry['arguments'] == ['AddrRep'] and entry['result'] == 'void' and
                 entry['convention'] == 'ccall' and entry['safety'] == 'unsafe' and
-                entry['symbol'] not in ('free', 'libdwPoolRelease', 'backtraceFree'), 'finalizer ABI')
+                entry['symbol'] != 'free', 'finalizer ABI')
     if demand:
         require(link['format'] == 'llvm-bitcode' and components and 'dataSymbols' not in link and not finalizers and
                 all(entry['convention'] == 'ccall' for entry in abi.values()), 'ordinary demand component profile')

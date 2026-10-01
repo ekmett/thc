@@ -90,13 +90,6 @@ GMP_OPERATIONS = {
     '__gmpn_popcount': ((GMP_ARRAY, 'IntRep', None), (None, 'WordRep')),
 }
 GMP_SYMBOLS = frozenset(GMP_OPERATIONS)
-# The managed runtime has no native DWARF backend, matching RTS USE_LIBDW=0.
-LIBDW_UNAVAILABLE = {
-    'libdwPoolTake': ((None,), (None, 'AddrRep')),
-    'libdwGetBacktrace': (('AddrRep', None), (None, 'AddrRep')),
-    'libdwLookupLocation': (('AddrRep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
-    'libdwPoolClear': ((None,), (None,)),
-}
 TERMIOS_OPERATIONS = {
     '__hscore_get_saved_termios': (('Int32Rep', None), (None, 'AddrRep')),
     '__hscore_set_saved_termios': (('Int32Rep', 'AddrRep', None), (None,)),
@@ -253,8 +246,6 @@ OPERATIONS = {
     'debugBelch2': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None,)),
     'shutdownHaskellAndExit': ('ccall', 'safe', ('Int32Rep', 'Int32Rep', None), (None,)),
     'shutdownHaskellAndSignal': ('ccall', 'safe', ('Int32Rep', 'Int32Rep', None), (None,)),
-    **{symbol: ('ccall', 'unsafe', arguments, output)
-       for symbol, (arguments, output) in LIBDW_UNAVAILABLE.items()},
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in TERMIOS_OPERATIONS.items()},
     **{symbol: ('ccall', 'unsafe', arguments, output)
