@@ -9,7 +9,6 @@ import java.io.ByteArrayOutputStream;
 import java.lang.ref.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.security.MessageDigest;
 import java.util.*;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.*;
@@ -28,11 +27,11 @@ class CoreUnitCafLifetimeTest {
     private final Map<String, Object> data = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
     private final Map<String, Object> closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
     private List<Object> literal(int value) { return list("lit", "int", Integer.toString(value), map("rep", integer)); }
-    private List<Object> box(int value) { return list("app", list("con", "uB:B.Box", 1), list(literal(value)), list(false), true, true, map("rep", with(data, "evaluated", true))); }
+    private List<Object> box(int value) { return list("app", list("con", "uB:B.Box", 1, map()), list(literal(value)), list(false), true, true, map("rep", with(data, "evaluated", true))); }
     private List<Object> trace(String label, List<Object> body) {
         var bytes = HexFormat.of().formatHex(label.getBytes(StandardCharsets.UTF_8));
-        return list("case", list("app", list("prim", "traceEvent#"), list(list("lit", "string-bytes", bytes), list("void", map("rep", state))),
-            list(false, false), false, false, map("rep", state)), "traced", list(list("default", null, List.of(), body)),
+        return list("case", list("app", list("prim", "traceEvent#", map()), list(list("lit", "string-bytes", bytes, map()), list("void", map("rep", state))),
+            list(false, false), false, false, map("rep", state)), "traced", list(list("default", null, List.of(), body, map("binders", List.of()))),
             map("rep", data, "binder", map("id", "traced", "lifted", false, "rep", state)));
     }
     private Map<String, Object> function(String id, List<Object> body) {
@@ -46,30 +45,17 @@ class CoreUnitCafLifetimeTest {
             map("binders", list(map("id", "payload", "name", "payload", "type", "Int#", "lifted", false, "coercion", false, "rep", integer))))),
             map("rep", integer, "binder", map("id", "boxed", "lifted", true, "rep", data)));
     }
-    private byte[] bytes(String text) { return text.getBytes(StandardCharsets.UTF_8); }
-    private String hash(byte[] bytes) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
-    /** Independent model writer; this does not claim native-export provenance. */
     private Map<String, Object> unit(String name, List<Map<String, Object>> bindings, List<Object> constructors) throws Exception {
-        var boundary = "optimized-Core-after-Tidy-before-CorePrep";
-        var metadata = map("schema", 1, "ghc", "9.14.1", "unit", "u" + name, "module", name, "boundary", boundary, "constructors", constructors);
-        var serialized = Json.stringify(metadata); var prefix = serialized.substring(0, serialized.length() - 1) + ",\"bindings\":";
-        var encoded = bindings.stream().map(Json::stringify).toList(); var bodies = "[" + String.join(",", encoded) + "]";
-        var original = bytes(prefix + bodies + "}"); var admitted = bytes(Json.stringify(metadata));
-        var out = new ByteArrayOutputStream(); out.writeBytes(original); out.write(10); out.writeBytes(admitted); var bytes = out.toByteArray();
-        int offset = bytes(prefix).length + 1; var rowList = new ArrayList<String>();
-        for (int i = 0; i < bindings.size(); i++) { rowList.add(bindings.get(i).get("id") + " " + offset + "\n"); offset += bytes(encoded.get(i)).length + 1; }
-        Collections.sort(rowList); var rows = bytes(String.join("", rowList));
-        var json = directory.resolve(name + ".jsons"); var symbols = directory.resolve(name + ".symbols"); Files.write(json, bytes); Files.write(symbols, rows);
-        return map("id", "u" + name, "depends", List.of(), "json", map("path", json.toString(), "sha256", hash(bytes)),
-            "symbols", map("path", symbols.toString(), "sha256", hash(rows)), "modules", list(map("name", name, "path", name + ".json", "sha256", hash(original),
-                "boundary", boundary, "start", 0, "end", original.length, "bindingsStart", bytes(prefix).length, "bindingsEnd", bytes(prefix).length + bytes(bodies).length,
-                "metadataStart", original.length + 1, "metadataEnd", bytes.length, "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", false)));
+        var module = map("schema", 1, "ghc", "9.14.1", "unit", "u" + name, "module", name,
+            "boundary", "optimized-Core-after-Tidy-before-CorePrep", "constructors", constructors, "bindings", bindings);
+        return map("id", "u" + name, "depends", List.of(), "modules",
+            list(CoreCbdFixtures.module(directory.resolve(name + ".cbd"), module)));
     }
     private Path fixture() throws Exception {
         var a = unit("A", List.of(function("uA:A.entry", literal(7))), List.of());
-        var raised = list("app", list("prim", "raise#"), list(box(23)), list(true), false, false, map("rep", data));
+        var raised = list("app", list("prim", "raise#", map()), list(box(23)), list(true), false, false, map("rep", data));
         var b = unit("B", List.of(caf("uB:B.value", trace("success", box(17))), caf("uB:B.failure", trace("failure", raised))),
-            list(map("id", "uB:B.Box", "name", "Box", "kind", "boxed", "arity", 1, "fieldReps", list(list("IntRep")), "strictFields", list(false), "fieldLifted", list(false))));
+            list(map("id", "uB:B.Box", "name", "Box", "kind", "boxed", "arity", 1, "tag", 1, "fieldReps", list(list("IntRep")), "fieldTypes", list(integer), "strictFields", list(false), "fieldLifted", list(false))));
         var c = unit("C", List.of(function("uC:C.success", readCaf("uB:B.value")), function("uC:C.failure", readCaf("uB:B.failure"))), List.of());
         return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, b, c))));
     }
@@ -112,7 +98,7 @@ class CoreUnitCafLifetimeTest {
                 try {
                     var programs = Language.currentState(null).getCoreUnitPrograms(); assertEquals(1, programs.size()); var program = programs.getFirst();
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var prior = evaluateAndDropHandles(program, language, async);
-                    assertEquals(3L, count(program, "coreUnitDecodedBindings"), "A plus two CAFs; C is still cold"); assertEquals(2L, count(program, "coreUnitSourceOpens"));
+                    assertEquals(3L, count(program, "coreCompactDecodedBindings"), "A plus two CAFs; C is still cold"); assertEquals(2L, count(program, "coreCompactModuleOpens"));
                     var effects = "[thc trace event] success\n[thc trace event] failure\n"; assertEquals(effects, output.toString(StandardCharsets.UTF_8));
                     long evaluations = count(program, "thunkEvaluations"); collectWithPressure();
                     // C's unparsed names were not JVM references to B's mutable cells.
@@ -124,7 +110,7 @@ class CoreUnitCafLifetimeTest {
                     assertSame(prior.result().get(), ((Thunk) program.entryValue("uB:B.value")).getValue()); assertNotNull(prior.payload().get());
                     assertSame(prior.payload().get(), observed.getPayload(), "memoized guest payload, not exception-wrapper identity");
                     assertEquals(effects, output.toString(StandardCharsets.UTF_8), "cold demand must not replay either CAF's effect");
-                    assertEquals(evaluations, count(program, "thunkEvaluations")); assertEquals(5L, count(program, "coreUnitDecodedBindings")); assertEquals(3L, count(program, "coreUnitSourceOpens"));
+                    assertEquals(evaluations, count(program, "thunkEvaluations")); assertEquals(5L, count(program, "coreCompactDecodedBindings")); assertEquals(3L, count(program, "coreCompactModuleOpens"));
                     assertEquals(7L, entry.execute(1).asLong(), "the original entry and context stay live"); Reference.reachabilityFence(program);
                 } finally { context.leave(); }
             }

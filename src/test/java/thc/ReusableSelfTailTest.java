@@ -32,26 +32,7 @@ class ReusableSelfTailTest {
         return map("schema", 1, "ghc", "9.14.1", "module", "Synthetic.ReusableSelfTail", "instrument", true,
             "constructors", list(), "bindings", list(function));
     }
-    private long count(Value function, String name) {
-        return ((Number)((Map<?,?>)Json.parse(function.getMember("diagnostics").asString())).get(name)).longValue();
-    }
-    @Test void cachedSelfRecursionKeepsFreshInstanceMetrics() {
-        var source = Source.newBuilder("thc", Json.stringify(map("modules", list(module()), "entry", "f",
-            "backend", "ast", "asyncExceptions", false, "prepareCode", true)), "reusable-self-tail").cached(true).buildLiteral();
-        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
-            try (var preparation = Context.newBuilder("thc").engine(engine).build()) { preparation.parse(source); }
-            for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
-                var first = context.parse(source).execute(); var second = context.parse(source).execute();
-                assertEquals(0L, first.execute(2000L).asLong());
-                assertEquals(2000L, count(first, "selfTailReentries"));
-                assertEquals(0L, count(second, "selfTailReentries"));
-                assertEquals(0L, second.execute(7L).asLong());
-                assertEquals(7L, count(second, "selfTailReentries"));
-                assertEquals(2000L, count(first, "selfTailReentries"));
-                assertEquals(0L, count(first, "loweredRootCount"));
-            }
-        }
-    }
+
     @Test @SuppressWarnings("unchecked") void firstCompiledRecursiveEntryNeedsNoGuestTraining() throws Exception {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
                 .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {

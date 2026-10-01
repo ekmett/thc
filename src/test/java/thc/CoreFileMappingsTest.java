@@ -18,31 +18,31 @@ class CoreFileMappingsTest {
     @TempDir Path directory;
     private Path file(String name, String text) throws Exception { return Files.writeString(directory.resolve(name), text); }
     private String text(MemorySegment segment) { return new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8); }
-    @Test void jsonAndIndexMappingsShareBytesButClosingOneConsumerKeepsTheOtherAlive() throws Exception {
-        var json = file("unit.jsons", "{\"id\":\"unit:Module.value\"}\n"); var index = file("unit.symbols", "unit:Module.value 0\n");
+    @Test void artifactMappingsShareBytesButClosingOneConsumerKeepsTheOtherAlive() throws Exception {
+        var first = file("unit.cbd", "first artifact\n"); var second = file("other.cbd", "other artifact\n");
         try (var cache = new CoreFileMappings(1024, 2)) {
-            var firstJson = cache.acquire(json, "json-v1"); var firstIndex = cache.acquire(index, "index-v1");
-            var otherJson = cache.acquire(json, "json-v1"); var otherIndex = cache.acquire(index, "index-v1");
+            var firstLease = cache.acquire(first, "first-v1"); var secondLease = cache.acquire(second, "second-v1");
+            var otherLease = cache.acquire(first, "first-v1"); var otherSecond = cache.acquire(second, "second-v1");
             try {
-                assertTrue(firstJson.getOpened() && firstIndex.getOpened()); assertFalse(otherJson.getOpened() || otherIndex.getOpened());
-                assertSame(firstJson.getBytes(), otherJson.getBytes()); assertSame(firstIndex.getBytes(), otherIndex.getBytes());
-                assertTrue(otherJson.getBytes().isReadOnly());
-                assertThrows(IllegalArgumentException.class, () -> otherJson.getBytes().set(ValueLayout.JAVA_BYTE, 0, (byte) 0));
-                firstJson.close(); firstIndex.close(); assertThrows(IllegalStateException.class, firstJson::getBytes);
-                assertEquals("{\"id\":\"unit:Module.value\"}\n", text(otherJson.getBytes())); assertEquals("unit:Module.value 0\n", text(otherIndex.getBytes()));
+                assertTrue(firstLease.getOpened() && secondLease.getOpened()); assertFalse(otherLease.getOpened() || otherSecond.getOpened());
+                assertSame(firstLease.getBytes(), otherLease.getBytes()); assertSame(secondLease.getBytes(), otherSecond.getBytes());
+                assertTrue(otherLease.getBytes().isReadOnly());
+                assertThrows(IllegalArgumentException.class, () -> otherLease.getBytes().set(ValueLayout.JAVA_BYTE, 0, (byte) 0));
+                firstLease.close(); secondLease.close(); assertThrows(IllegalStateException.class, firstLease::getBytes);
+                assertEquals("first artifact\n", text(otherLease.getBytes())); assertEquals("other artifact\n", text(otherSecond.getBytes()));
                 assertEquals(2L, cache.statistics().mappingOpens()); assertEquals(2L, cache.statistics().mappingHits());
                 assertEquals(2L, cache.statistics().activeMappings()); assertEquals(2L, cache.statistics().activeLeases());
                 assertEquals(0, cache.statistics().idleMappings());
-            } finally { firstJson.close(); firstIndex.close(); otherJson.close(); otherIndex.close(); }
+            } finally { firstLease.close(); secondLease.close(); otherLease.close(); otherSecond.close(); }
             assertEquals(0L, cache.statistics().activeLeases()); assertEquals(2, cache.statistics().idleMappings());
         }
     }
     @Test void normalizedPathAndSequentialIdentityReuseNeedNoNewMapping() throws Exception {
-        var source = file("unit.jsons", "original");
+        var source = file("unit.cbd", "original");
         try (var cache = new CoreFileMappings(1024, 2)) {
             MemorySegment bytes; try (var it = cache.acquire(source, "v1")) { bytes = it.getBytes(); }
             // This nonexistent intermediate path disappears by lexical normalization.
-            var alias = directory.resolve("absent/../unit.jsons");
+            var alias = directory.resolve("absent/../unit.cbd");
             try (var lease = cache.acquire(alias, "v1")) {
                 assertFalse(lease.getOpened()); assertSame(bytes, lease.getBytes()); assertEquals("original", text(lease.getBytes()));
             }
@@ -50,11 +50,11 @@ class CoreFileMappingsTest {
         }
     }
     @Test void explicitIdleEvictionAllowsSamePathReplacementWithChangedIdentity() throws Exception {
-        var source = file("unit.jsons", "original");
+        var source = file("unit.cbd", "original");
         try (var cache = new CoreFileMappings(1024, 2)) {
             MemorySegment prior; try (var it = cache.acquire(source, "v1")) { prior = it.getBytes(); }
             assertEquals(1, cache.evictIdleBelow(source)); assertFalse(prior.scope().isAlive());
-            var replacement = file("replacement.jsons", "replacement"); Files.move(replacement, source, StandardCopyOption.REPLACE_EXISTING);
+            var replacement = file("replacement.cbd", "replacement"); Files.move(replacement, source, StandardCopyOption.REPLACE_EXISTING);
             try (var second = cache.acquire(source, "v2")) {
                 assertTrue(second.getOpened()); assertNotSame(prior, second.getBytes()); assertEquals("replacement", text(second.getBytes()));
                 assertEquals(2L, cache.statistics().mappingOpens());
@@ -62,7 +62,7 @@ class CoreFileMappingsTest {
         }
     }
     @Test void versionedPathsKeepOldAndNewProducerBytesAliveAtTheSameTime() throws Exception {
-        var oldPath = file("unit-v1.jsons", "original"); var newPath = file("unit-v2.jsons", "replacement");
+        var oldPath = file("unit-v1.cbd", "original"); var newPath = file("unit-v2.cbd", "replacement");
         try (var cache = new CoreFileMappings(1024, 2); var first = cache.acquire(oldPath, "v1"); var second = cache.acquire(newPath, "v2")) {
             assertTrue(second.getOpened()); assertNotSame(first.getBytes(), second.getBytes());
             assertEquals("original", text(first.getBytes())); assertEquals("replacement", text(second.getBytes()));
@@ -71,7 +71,7 @@ class CoreFileMappingsTest {
         }
     }
     @Test void producerIdentitySeparatesSamePathMappingsAndIdleEvictionSkipsTheLiveVersion() throws Exception {
-        var source = file("unit.jsons", "published");
+        var source = file("unit.cbd", "published");
         try (var cache = new CoreFileMappings(1024, 2); var active = cache.acquire(source, "v1")) {
             MemorySegment other;
             try (var it = cache.acquire(source, "v2")) { assertTrue(it.getOpened()); assertNotSame(active.getBytes(), it.getBytes()); other = it.getBytes(); }
@@ -81,7 +81,7 @@ class CoreFileMappingsTest {
         }
     }
     @Test void scopedIdleEvictionAllowsTemporaryCleanupWithoutDisturbingOtherOrActiveMappings() throws Exception {
-        var temporary = Files.createDirectory(directory.resolve("temporary")); var source = Files.writeString(temporary.resolve("unit.jsons"), "temporary");
+        var temporary = Files.createDirectory(directory.resolve("temporary")); var source = Files.writeString(temporary.resolve("unit.cbd"), "temporary");
         var sibling = file("temporary-other", "sibling"); var pinned = file("active", "pinned");
         try (var cache = new CoreFileMappings(1024, 8)) {
             MemorySegment old, other;

@@ -24,9 +24,10 @@ class CoreUnitManagedExportTest {
         var file = fixtures.resolve(relative); var receipt = document(Files.readString(fixtures.resolve("manifest.json"))); var bytes = Files.readAllBytes(file);
         assertEquals(((Map<?, ?>) receipt.get("artifactHashes")).get(root.relativize(file).toString()), hash(bytes)); return bytes;
     }
-    /** Test-only encoding of verified genuine GHC bindings into executable CBD. */
+    /** Verified genuine GHC CBD, with registration mutations for negative controls. */
     private Path manifest(String label, boolean corrupt) throws Exception {
-        var source = document(new String(verified("typed-foreign-exports/managed.json"), StandardCharsets.UTF_8));
+        verified("typed-foreign-exports/managed.cbd");
+        var source = CoreCbdFixtures.read(fixtures.resolve("typed-foreign-exports/managed.cbd"));
         var admitted = corrupt ? with(source, "staticForeignExportRegistration",
             with(without((Map<?, ?>) source.get("staticForeignExportRegistration"), "roots", "wordBits", "expectedForeign", "expectedExports"),
                 "status", "unclassified", "reason", "Unclassified registration test")) : source;

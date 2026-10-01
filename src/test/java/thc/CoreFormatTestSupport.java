@@ -33,24 +33,5 @@ final class CoreFormatTestSupport {
     static void visit(Map<String, Object> input, Consumer<Map<String, Object>> consumer) {
         CoreCbdFixtures.visitRequest(input, consumer);
     }
-    /** Test writer for the separate symbol-offset format; offsets are recorded while emitting. */
-    record SymbolFixture(byte[] bytes, int bindingsStart, int bindingsEnd, String symbols) {}
-    static SymbolFixture symbolFixture(Map<String,Object> module) {
-        var metadata = Json.stringify(without(module, "bindings"));
-        var output = new java.io.ByteArrayOutputStream();
-        output.writeBytes((metadata.substring(0, metadata.length() - 1) + ",\"bindings\":").getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        int start = output.size(); output.write('[');
-        var rows = new TreeMap<String,Integer>((a, b) -> Arrays.compareUnsigned(
-            a.getBytes(java.nio.charset.StandardCharsets.UTF_8), b.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-        boolean first = true;
-        for (var item : (List<?>) module.get("bindings")) {
-            if (!first) output.write(','); first = false;
-            rows.put((String) ((Map<?,?>) item).get("id"), output.size());
-            output.writeBytes(Json.stringify(item).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        }
-        output.write(']'); int end = output.size(); output.write('}');
-        var symbols = new StringBuilder(); rows.forEach((id, offset) -> symbols.append(id).append(' ').append(offset).append('\n'));
-        return new SymbolFixture(output.toByteArray(), start, end, symbols.toString());
-    }
 
 }

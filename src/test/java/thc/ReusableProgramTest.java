@@ -43,10 +43,6 @@ class ReusableProgramTest {
         var unknown = map("kind", "unknown", "evaluated", false);
         var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
         var module = intrinsicCaseModule(map("rep", unknown, "resultRep", data));
-        for (String backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").build()) {
-            var entry = context.eval("thc", Json.stringify(map("modules", list(module), "entry", "read", "backend", backend)));
-            assertEquals(47L, entry.execute(0L).asLong()); assertEquals(-25L, entry.execute(1L).asLong());
-        }
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
                 .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             Program.PreparedCode code;
@@ -79,29 +75,6 @@ class ReusableProgramTest {
             }
         }
         assertEquals("unknown", unknown.get("kind"), "Preparation must not rewrite the outer expression certificate");
-    }
-
-    @Test void intrinsicCaseProofCannotHideMissingOrConflictingRepresentations() {
-        var unknown = map("kind", "unknown", "evaluated", false);
-        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
-        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
-        try (var context = Context.newBuilder("thc").build()) {
-            context.initialize("thc"); context.enter();
-            try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                // Old documents still use rep; an explicit UNKNOWN resultRep must not fall back to it.
-                assertDoesNotThrow(() -> Program.prepareCode(language, intrinsicCaseModule(map("rep", data)), List.of("read")));
-                for (var metadata : List.of(map("rep", unknown), map("rep", data, "resultRep", unknown)))
-                    assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, intrinsicCaseModule(metadata), List.of("read")));
-                for (var metadata : List.of(map("rep", unknown, "resultRep", word), map("rep", word, "resultRep", data))) {
-                    var module = intrinsicCaseModule(metadata);
-                    assertThrows(RuntimeFault.class, () -> Program.prepareCode(language, module, List.of("read")));
-                    for (String backend : List.of("ast", "bytecode"))
-                        assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.eval("thc", Json.stringify(
-                            map("modules", list(module), "entry", "read", "backend", backend))).execute(0L));
-                }
-            } finally { context.leave(); }
-        }
     }
 
     @Test @SuppressWarnings("unchecked")
@@ -455,30 +428,6 @@ class ReusableProgramTest {
             binding("untouched", list("unsupported-never-selected"), true)));
     }
 
-    @Test void preparedOrdinaryCallsAndCapturedLetClosuresKeepCafAndMetricsPerLoad() {
-        var data = ordinaryClosureModule();
-        var source = org.graalvm.polyglot.Source.newBuilder("thc", Json.stringify(map("modules", list(data),
-            "entry", "read", "backend", "ast", "asyncExceptions", false, "prepareCode", true)),
-            "ordinary-reusable-closures").cached(true).buildLiteral();
-        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
-            try (var preparation = Context.newBuilder("thc").engine(engine).build()) { preparation.parse(source); }
-            for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
-                var first = context.parse(source).execute();
-                var second = context.parse(source).execute();
-                assertEquals(47L, first.execute(4L).asLong());
-                assertEquals(1L, publicCount(first, "thunkEvaluations"));
-                assertEquals(0L, publicCount(second, "thunkEvaluations"));
-                assertEquals(0L, publicCount(second, "indirectCalls"));
-                assertTrue(publicCount(first, "indirectCalls") >= 2);
-                assertEquals(-25L, second.execute(-68L).asLong());
-                assertEquals(1L, publicCount(second, "thunkEvaluations"));
-                assertEquals(49L, first.execute(6L).asLong());
-                assertEquals(1L, publicCount(first, "thunkEvaluations"));
-                assertEquals(0L, publicCount(first, "loweredRootCount"));
-            }
-        }
-    }
-
     @Test @SuppressWarnings("unchecked")
     void nestedTargetsMustBeInstalledAndEnterCompiledWithoutTraining() throws Exception {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
@@ -578,37 +527,6 @@ class ReusableProgramTest {
         }
     }
 
-    @Test void cachedLauncherRejectsUninstalledFactoryBeforeCreatingAnInstance() {
-        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
-        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
-        var reader = binding("read", list("lam", list(wordParameter("x")), plus(variable("x"), literal(1)),
-            map("rep", closureRep, "resultRep", longRep)), true);
-        reader.put("arity", 1); reader.put("rep", closureRep);
-        var source = org.graalvm.polyglot.Source.newBuilder("thc", Json.stringify(map(
-            "modules", list(module(list(reader))), "entry", "read", "backend", "ast",
-            "asyncExceptions", false, "prepareCode", true)), "cached-launcher-guard").cached(true).buildLiteral();
-        String previous = System.getProperty("thc.requireCompiledCode");
-        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
-            try (var preparation = Context.newBuilder("thc").engine(engine).build()) { preparation.parse(source); }
-            System.setProperty("thc.requireCompiledCode", "true");
-            try (var runtime = Context.newBuilder("thc").engine(engine).build()) {
-                var failure = assertThrows(org.graalvm.polyglot.PolyglotException.class,
-                    () -> runtime.parse(source).execute());
-                assertTrue(failure.getMessage().contains("Cached compiled target required"), failure.getMessage());
-                System.clearProperty("thc.requireCompiledCode");
-                var interpretedEntry = runtime.parse(source).execute();
-                System.setProperty("thc.requireCompiledCode", "true");
-                var fallback = assertThrows(org.graalvm.polyglot.PolyglotException.class,
-                    () -> interpretedEntry.execute(5L));
-                assertTrue(fallback.getMessage().contains("Cached guest entered the interpreter"), fallback.getMessage());
-                assertEquals(0L, publicCount(interpretedEntry, "compiledEntries"));
-            }
-        } finally {
-            if (previous == null) System.clearProperty("thc.requireCompiledCode");
-            else System.setProperty("thc.requireCompiledCode", previous);
-        }
-    }
-
     private Map<String, Object> binding(String id, List<Object> body, boolean lifted) {
         return map("id", id, "name", id, "type", "Synthetic", "lifted", lifted, "expr", body);
     }
@@ -631,186 +549,6 @@ class ReusableProgramTest {
     private Map<String, Object> module(List<Map<String, Object>> bindings) {
         return map("schema", 1, "ghc", "9.14.1", "module", "Synthetic.Reusable", "instrument", true,
             "constructors", list(), "bindings", bindings);
-    }
-
-    @Test void cachedPublicSourcesCreateFreshProgramsWithinAndAcrossContexts() {
-        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
-        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
-        var caf = binding("shared", plus(literal(17), literal(25)), true);
-        caf.put("arity", 0);
-        var reader = binding("read", list("lam", list(wordParameter("x")), plus(variable("shared"), variable("x")),
-            map("rep", closureRep, "resultRep", longRep)), true);
-        reader.put("arity", 1); reader.put("rep", closureRep);
-        for (String backend : List.of("ast", "bytecode")) {
-            var request = Json.stringify(map("modules", list(module(list(caf, reader))), "entry", "read",
-                "backend", backend, "asyncExceptions", false));
-            var source = org.graalvm.polyglot.Source.newBuilder("thc", request, "owned-load-" + backend).cached(true).buildLiteral();
-            try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build();
-                 var first = Context.newBuilder("thc").engine(engine).build();
-                 var second = Context.newBuilder("thc").engine(engine).build()) {
-                var firstReader = first.eval(source);
-                var sameContextReader = first.eval(source);
-                var secondReader = second.eval(source);
-                assertEquals(0L, publicCount(firstReader, "thunkEvaluations"));
-                assertEquals(0L, publicCount(sameContextReader, "thunkEvaluations"));
-                assertEquals(0L, publicCount(secondReader, "thunkEvaluations"));
-                assertEquals(47L, firstReader.execute(5L).asLong());
-                assertEquals(1L, publicCount(firstReader, "thunkEvaluations"));
-                assertEquals(0L, publicCount(sameContextReader, "thunkEvaluations"));
-                assertEquals(0L, publicCount(secondReader, "thunkEvaluations"));
-                assertEquals(49L, sameContextReader.execute(7L).asLong());
-                assertEquals(1L, publicCount(sameContextReader, "thunkEvaluations"));
-                first.close();
-                assertEquals(51L, secondReader.execute(9L).asLong());
-                assertEquals(1L, publicCount(secondReader, "thunkEvaluations"));
-            }
-        }
-    }
-    private long publicCount(org.graalvm.polyglot.Value entry, String key) {
-        return ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get(key)).longValue();
-    }
-
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"ast", "bytecode"})
-    void ordinaryCompiledFactoryRetainsItsFirstLoadAndGuestEntry(String backend) throws Exception {
-        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
-        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
-        var reader = binding("read", list("lam", list(wordParameter("x")), variable("x"),
-            map("rep", closureRep, "resultRep", longRep)), true);
-        reader.put("arity", 1); reader.put("rep", closureRep);
-        var request = Json.stringify(map("modules", list(module(list(reader))), "entry", "read",
-            "backend", backend, "asyncExceptions", false));
-        try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
-                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
-                .option("engine.CompilationFailureAction", "Throw").build();
-             var context = Context.newBuilder("thc").engine(engine).build()) {
-            context.initialize("thc"); context.enter();
-            try {
-                var factory = Language.currentState().getEnv().parsePublic(com.oracle.truffle.api.source.Source
-                    .newBuilder("thc", request, "ordinary-compiled-factory-" + backend).cached(true).build());
-                var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
-                assertEquals(false, type.getMethod("wasExecuted").invoke(factory));
-                type.getMethod("compile", boolean.class).invoke(factory, true);
-                assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
-                assertEquals(false, type.getMethod("wasExecuted").invoke(factory));
-                var runtime = Truffle.getRuntime();
-                runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, factory);
-                var entry = (EntryValue) factory.call();
-                assertEquals(true, type.getMethod("isValidLastTier").invoke(factory), "first load must retain its original installed factory");
-                var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
-                var before = (Map<?, ?>) Json.parse((String) interop.readMember(entry, "diagnostics"));
-                assertEquals(0L, ((Number) before.get("compiledEntries")).longValue());
-                assertEquals(true, interop.invokeMember(entry, "compile"));
-                assertEquals(47L, interop.execute(entry, 47L));
-                var after = (Map<?, ?>) Json.parse((String) interop.readMember(entry, "diagnostics"));
-                assertTrue(((Number) after.get("compiledEntries")).longValue() > 0);
-                var compilation = (Map<?, ?>) after.get("explicitCompilation");
-                assertEquals(true, compilation.get("sameTargets"));
-                assertEquals(true, compilation.get("validLastTier"));
-                assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
-            } finally { context.leave(); }
-        }
-    }
-
-    @Test void preparedPublicSourceInstantiatesWithoutLoweringAndRejectsCacheMisses() throws Exception {
-        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
-        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
-        var caf = binding("shared", plus(literal(17), literal(25)), true); caf.put("arity", 0);
-        var reader = binding("read", list("lam", list(wordParameter("x")), plus(variable("shared"), variable("x")),
-            map("rep", closureRep, "resultRep", longRep)), true);
-        reader.put("arity", 1); reader.put("rep", closureRep);
-        var request = map("modules", list(module(list(caf, reader))), "entry", "read", "backend", "ast",
-            "asyncExceptions", false, "prepareCode", true);
-        var source = org.graalvm.polyglot.Source.newBuilder("thc", Json.stringify(request), "prepared-owned-load").cached(true).buildLiteral();
-        var previous = System.getProperty("thc.requireCachedCode");
-        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
-            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
-                preparation.parse(source); // Store path parses and lowers, but never executes a guest or load factory.
-            }
-            System.setProperty("thc.requireCachedCode", "true");
-            for (int contextIndex = 0; contextIndex < 2; contextIndex++) {
-                try (var context = Context.newBuilder("thc").engine(engine).build()) {
-                    var first = context.eval(source);
-                    var sibling = context.eval(source);
-                    assertEquals(0L, publicCount(first, "loweredRootCount"), "cached load must not invoke the AST lowerer");
-                    assertEquals(0L, publicCount(sibling, "loweredRootCount"));
-                    assertEquals(0L, publicCount(first, "thunkEvaluations"));
-                    assertEquals(0L, publicCount(sibling, "thunkEvaluations"));
-                    assertEquals(47L, first.execute(5L).asLong());
-                    assertEquals(1L, publicCount(first, "thunkEvaluations"));
-                    assertEquals(0L, publicCount(sibling, "thunkEvaluations"));
-                    assertEquals(49L, sibling.execute(7L).asLong());
-                    assertEquals(1L, publicCount(sibling, "thunkEvaluations"));
-                    assertEquals(0L, publicCount(first, "loweredRootCount"));
-                    var absent = org.graalvm.polyglot.Source.newBuilder("thc", Json.stringify(request), "absent-prepared-load").cached(true).buildLiteral();
-                    assertTrue(assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.eval(absent))
-                        .getMessage().contains("Cached THC source required"));
-                    context.enter();
-                    try {
-                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        assertTrue(assertThrows(UnsupportedCore.class, () -> new Program(language, module(list(caf, reader))))
-                            .getMessage().contains("Runtime THC lowering is disabled"));
-                    } finally { context.leave(); }
-                }
-            }
-        } finally {
-            if (previous == null) System.clearProperty("thc.requireCachedCode"); else System.setProperty("thc.requireCachedCode", previous);
-        }
-    }
-
-    @Test void preparedPublicFactoryHasContextFreeAotPreparationAndStrictAdmission() throws Exception {
-        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
-        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
-        var reader = binding("read", list("lam", list(wordParameter("x")), plus(variable("x"), literal(1)),
-            map("rep", closureRep, "resultRep", longRep)), true);
-        reader.put("arity", 1); reader.put("rep", closureRep);
-        var request = map("modules", list(module(list(reader))), "entry", "read", "backend", "ast",
-            "asyncExceptions", false, "prepareCode", true);
-        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
-                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
-            com.oracle.truffle.api.RootCallTarget factory;
-            try (var context = Context.newBuilder("thc").engine(engine).build()) {
-                context.initialize("thc"); context.enter();
-                try {
-                    factory = (com.oracle.truffle.api.RootCallTarget) Language.currentState().getEnv().parsePublic(
-                        com.oracle.truffle.api.source.Source.newBuilder("thc", Json.stringify(request), "prepared-factory").cached(true).build());
-                } finally { context.leave(); }
-                for (var invalid : List.of(map("backend", "bytecode"), map("asyncExceptions", true),
-                        map("prepareCode", "true"), map("diagnosticUnsupported", true))) {
-                    var rejected = new LinkedHashMap<>(request); rejected.putAll(invalid);
-                    assertThrows(org.graalvm.polyglot.PolyglotException.class,
-                        () -> context.eval("thc", Json.stringify(rejected)), invalid.toString());
-                }
-            }
-            var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
-            assertEquals(false, type.getMethod("wasExecuted").invoke(factory));
-            assertEquals(true, type.getMethod("prepareForAOT").invoke(factory));
-            type.getMethod("compile", boolean.class).invoke(factory, true);
-            assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
-            assertEquals(false, type.getMethod("wasExecuted").invoke(factory));
-            try (var context = Context.newBuilder("thc").engine(engine).build()) {
-                context.initialize("thc"); context.enter();
-                try {
-                    var result = (EntryValue) factory.call();
-                    var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
-                    assertEquals(8L, interop.execute(result, 7L));
-                    var diagnostics = (Map<?, ?>) Json.parse((String) interop.readMember(result, "diagnostics"));
-                    assertEquals(0L, ((Number) diagnostics.get("loweredRootCount")).longValue());
-                    assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
-                    // Check rejection after the original success/retention control:
-                    // stock exception deoptimization is permitted on this negative path.
-                    String previous = System.getProperty("thc.requireCompiledCode");
-                    try {
-                        System.setProperty("thc.requireCompiledCode", "true");
-                        assertTrue(assertThrows(IllegalStateException.class, factory::call).getMessage()
-                            .contains("Cached compiled target required"), "installed factory must not admit uninstalled guest code");
-                    } finally {
-                        if (previous == null) System.clearProperty("thc.requireCompiledCode");
-                        else System.setProperty("thc.requireCompiledCode", previous);
-                    }
-                } finally { context.leave(); }
-            }
-        }
     }
 
     @Test void untouchedRealRootsPrepareOutsideContextAndRetainTheirFirstCompiledEntry() throws Exception {

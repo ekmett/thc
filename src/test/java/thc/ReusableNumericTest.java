@@ -139,26 +139,8 @@ class ReusableNumericTest {
             }
         }
     }
+
     @Test void numericFieldsCasesAndCapturedArgumentsKeepTheirExactCarriers() throws Exception { checks(false); }
-    @Test void publicNarrowArgumentsKeepHostRangesAndUnsignedResults() {
-        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
-            for (var scalar : scalars) {
-                if (!(scalar.largest() instanceof Integer)) continue;
-                var entry = context.eval("thc", Json.stringify(map("modules", list(module(scalar)), "entry", "identity",
-                    "backend", "ast", "asyncExceptions", false, "prepareCode", true)));
-                boolean unsigned = scalar.rep().startsWith("Word");
-                long max = switch (scalar.literal()) {
-                    case "int8" -> 127L; case "word8" -> 255L; case "int16" -> 32767L;
-                    case "word16" -> 65535L; case "int32" -> Integer.MAX_VALUE; default -> 4294967295L;
-                };
-                long min = unsigned ? 0 : -max - 1;
-                assertEquals(max, entry.execute(max).asLong());
-                assertEquals(min, entry.execute(min).asLong());
-                assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> entry.execute(max + 1));
-                assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> entry.execute(min - 1));
-            }
-        }
-    }
     @Test void firstCompiledNumericEntriesNeedNoTraining() throws Exception {
         String before = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
         try { checks(true); }

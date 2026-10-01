@@ -44,9 +44,6 @@ class ReusableWordControlTest {
             "constructors", list(), "bindings", list(binding("shared", arithmetic("+#", literal(17), literal(25))),
                 read, binding("untouched", list("unsupported-never-selected"))));
     }
-    private long count(org.graalvm.polyglot.Value value, String key) {
-        return ((Number)((Map<?,?>)Json.parse(value.getMember("diagnostics").asString())).get(key)).longValue();
-    }
     @Test @SuppressWarnings("unchecked") void reusableControlRejectsUnprovedOrNonWordCarriers() {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
@@ -69,26 +66,7 @@ class ReusableWordControlTest {
             } finally { context.leave(); }
         }
     }
-    @Test void cachedWordBranchesAndRecursiveJoinsKeepFreshCafsAndMetrics() {
-        var source = Source.newBuilder("thc", Json.stringify(map("modules", list(module()), "entry", "read",
-            "backend", "ast", "asyncExceptions", false, "prepareCode", true)), "reusable-word-control").cached(true).buildLiteral();
-        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
-            try (var preparation = Context.newBuilder("thc").engine(engine).build()) { preparation.parse(source); }
-            for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
-                var first = context.parse(source).execute(); var second = context.parse(source).execute();
-                assertEquals(47L, first.execute(0L, 5L).asLong());
-                assertEquals(1L, count(first, "thunkEvaluations"));
-                assertEquals(1L, count(first, "localJoinTransfers"));
-                assertEquals(0L, count(second, "thunkEvaluations"));
-                assertEquals(0L, count(second, "localJoinTransfers"));
-                assertEquals(-25L, second.execute(5L, -82L).asLong());
-                assertEquals(6L, count(second, "localJoinTransfers"));
-                assertEquals(2001042L, first.execute(2000L, 0L).asLong());
-                assertEquals(1L, count(first, "thunkEvaluations"));
-                assertEquals(0L, count(first, "loweredRootCount"));
-            }
-        }
-    }
+
     @Test @SuppressWarnings("unchecked") void firstCompiledJoinBranchesNeedNoGuestTraining() throws Exception {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
                 .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {

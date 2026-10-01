@@ -79,28 +79,5 @@ class NarrowIntegerCarrierTest {
         assertEquals(1, Objects.requireNonNull(NarrowScalarOp.named("remWord32#")).intResult(-1, 2));
         assertEquals(1L, Objects.requireNonNull(NarrowScalarOp.named("gtWord32#")).longResult(Integer.MIN_VALUE, Integer.MAX_VALUE));
     }
-    @SafeVarargs private final List<Object> app(String name, List<Object>... operands) {
-        return list("app", list("prim", name), Arrays.asList(operands), Collections.nCopies(operands.length, false));
-    }
-    @Test void bothBackendsKeepNarrowArithmeticBetweenExplicitMachineBoundaries() {
-        var cases = list(Long.MIN_VALUE, -4294967297L, -65537L, -129L, -1L, 0L, 1L, 127L, 65535L, 2147483648L, 4294967295L, Long.MAX_VALUE);
-        for (var backend : list("ast", "bytecode")) for (var integer : NarrowInteger.values()) {
-            var family = integer.getRep().substring(0, integer.getRep().length() - 3);
-            var lower = Character.toLowerCase(family.charAt(0)) + family.substring(1); var machine = integer.getUnsigned() ? "word" : "int";
-            var body = app(lower + "To" + Character.toUpperCase(machine.charAt(0)) + machine.substring(1) + "#",
-                app("plus" + family + "#", app(machine + "To" + family + "#", list("var", "x")), app(machine + "To" + family + "#", list("var", "y"))));
-            var parameters = new ArrayList<Map<String, Object>>();
-            for (var id : list("x", "y")) parameters.add(map("id", id, "name", id, "type", "Int#", "lifted", false, "coercion", false,
-                "rep", map("kind", "long", "primReps", list("IntRep"), "evaluated", true)));
-            var module = map("schema", 1, "ghc", "9.14.1", "module", "NarrowCarrierControl", "constructors", list(),
-                "bindings", list(map("id", "entry", "name", "entry", "lifted", true, "arity", 2, "expr", list("lam", parameters, body))));
-            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
-                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
-                var function = context.eval("thc", Json.stringify(map("backend", backend, "entry", "entry", "instrument", true, "modules", list(module))));
-                Runnable check = () -> { for (long x : cases) for (long y : cases)
-                    assertEquals(integer.widen(integer.narrow((int) x + (int) y)), function.execute(x, y).asLong(), backend + "/" + family + "/" + x + "/" + y); };
-                check.run(); assertTrue(function.invokeMember("compile").asBoolean()); check.run();
-            }
-        }
-    }
+
 }

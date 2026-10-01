@@ -91,8 +91,7 @@ final class SimdByteArrayEvidence {
         }
         for (String audit : audits) artifacts.add(attempt + "/audits/" + audit + ".json");
         for (String mutation : mutations) artifacts.add(attempt + "/mutations/" + mutation + ".cbd");
-        artifacts.addAll(List.of(attempt + "/retained/pre.json", attempt + "/retained/post.json",
-            attempt + "/retained/pre.cbd", attempt + "/retained/post.cbd"));
+        artifacts.addAll(List.of(attempt + "/retained/pre.cbd", attempt + "/retained/post.cbd"));
         if (!floating(family)) artifacts.add(attempt + "/retained-original-source.hs");
         for (String command : commands) for (String suffix : List.of("stdout", "stderr", "command.json"))
             artifacts.add(attempt + "/commands/" + command + "." + suffix);
