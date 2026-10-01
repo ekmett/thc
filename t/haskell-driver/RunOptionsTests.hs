@@ -132,11 +132,11 @@ tests env = TestLabel "run options and target selection" $ TestList
         assertFailure rejected
         assertContains "unrecognized option" (err rejected)
   , TestLabel "loose consumers keep paths before the guest boundary" $ TestCase $ do
-      let modules = ["C:/core café/Main.json", "C:/core café/THC.InterfaceClosure.json"]
+      let modules = ["C:/core café/Main.cbd", "C:/core café/THC.InterfaceClosure.cbd"]
           entry = runtimeEntryArguments modules "C:/support/packages.json" "main:Main.main"
       assertEqual "exact module association, manifest and guest operands"
         ["--verify-artifacts",
-         "--run-io", "C:/core café/Main.json,C:/core café/THC.InterfaceClosure.json,@C:/support/packages.json", "main:Main.main",
+         "--run-io", "C:/core café/Main.cbd,C:/core café/THC.InterfaceClosure.cbd,@C:/support/packages.json", "main:Main.main",
          "--", "program", "--json-sidecar", "guest", "", "--"]
         (runtimeLaunchArguments True entry "program" ["--json-sidecar", "guest", "", "--"])
   , TestLabel "verification is an explicit run-only switch" $ TestCase $ do
