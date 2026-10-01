@@ -3267,12 +3267,14 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private void savedApply(Emission e, BytecodeLocal fn, List<BytecodeLocal> values,
-            ArgumentLayout layout, boolean[] evaluatedArguments, int arity, boolean tail) {
+            ArgumentLayout layout, boolean[] evaluatedArguments, int arity, boolean tail, boolean selfTransfer) {
         var b = e.builder;
         var typedSource = layout != null && layout.getRequiresTyped() ? new BytecodeInputSource(layout, accessors(values)) : null;
         if (typedSource != null) {
+            if (selfTransfer) { b.beginBlock(); savedTypedSelf(e, fn, typedSource, arity); }
             b.beginApplyTypedInput(typedSource, tail, metrics);
             b.emitStaticLoadObject(fn); b.endApplyTypedInput();
+            if (selfTransfer) b.endBlock();
         } else if (layout != null) {
             b.beginApplyCompact(layout, tail, metrics, evaluatedArguments);
             b.emitStaticLoadObject(fn); for (var value : values) loadSavedInput(e, value);
@@ -3282,6 +3284,18 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.emitStaticLoadObject(fn); for (var value : values) loadSavedInput(e, value);
             b.endApply();
         }
+    }
+
+    /** Completed saved operands are disjoint from formals; exiting scopes retain their finally/clear edges. */
+    private void savedTypedSelf(Emission e, BytecodeLocal fn, BytecodeInputSource source, int arity) {
+        var b = e.builder;
+        b.beginIfThen();
+        b.beginIsTypedSelf(arity); b.emitStaticLoadObject(fn); b.endIsTypedSelf();
+        b.beginBlock();
+        b.beginTransferTypedSelf(Objects.requireNonNull(e.typedInputSlots), source, metrics);
+        b.emitStaticLoadObject(fn); b.endTransferTypedSelf();
+        b.emitBranch(Objects.requireNonNull(e.continueLabel));
+        b.endBlock(); b.endIfThen();
     }
 
     /** One exact call or PAP step; a yielded callee is captured before any suffix runs. */
@@ -3295,7 +3309,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         b.beginStaticStoreObject(result);
         b.beginCaptureApplicationResult(arity);
         b.emitStaticLoadObject(fn);
-        savedApply(e, fn, values, layout, evaluatedArguments, arity, false);
+        savedApply(e, fn, values, layout, evaluatedArguments, arity, false, false);
         b.emitStaticLoadObject(callerMask);
         b.endCaptureApplicationResult();
         b.endStaticStoreObject();
@@ -3390,7 +3404,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             else {
                 b.beginStaticStoreObject(result);
                 var evaluatedSuffix = java.util.Arrays.copyOfRange(evaluatedArguments, start, count);
-                if (tail) savedApply(e, fn, suffix, input, evaluatedSuffix, remaining, true);
+                if (tail) savedApply(e, fn, suffix, input, evaluatedSuffix, remaining, true, false);
                 else checkpointedCall(e, fn, suffix, input, evaluatedSuffix, remaining, callerMask);
                 b.endStaticStoreObject();
             }
@@ -3403,7 +3417,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     /** Capture callees after evaluating operands once, including compact and typed inputs. */
     private void checkpointedApplication(Emission e, Expression function, List<Expression> arguments,
-            boolean[] evaluatedArguments, ArgumentLayout layout, boolean tail) {
+            boolean[] evaluatedArguments, ArgumentLayout layout, boolean tail, boolean selfTransfer) {
         var b = e.builder;
         b.beginBlock();
         var fn = b.createLocal("captured application function", FrameSlotKind.Object);
@@ -3433,7 +3447,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
         if (arguments.isEmpty()) {
-            if (tail) savedApply(e, fn, values, layout, evaluatedArguments, 0, true);
+            if (tail) savedApply(e, fn, values, layout, evaluatedArguments, 0, true, false);
             else checkpointedCall(e, fn, values, layout, evaluatedArguments, 0, callerMask);
             b.endBlock();
             return;
@@ -3445,7 +3459,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         stagedOverapplication(e, fn, values, layout, evaluatedArguments, callerMask, result, arguments.size(), tail, null);
         b.endStaticStoreObject(); b.emitBranch(complete); b.endBlock(); b.endIfThen();
         b.beginStaticStoreObject(result);
-        if (tail) savedApply(e, fn, values, layout, evaluatedArguments, arguments.size(), true);
+        if (tail) savedApply(e, fn, values, layout, evaluatedArguments, arguments.size(), true, selfTransfer);
         else checkpointedCall(e, fn, values, layout, evaluatedArguments, arguments.size(), callerMask);
         b.endStaticStoreObject();
         b.emitLabel(complete); b.emitStaticLoadObject(result);
@@ -3667,7 +3681,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                 reentryResult = b.createLocal("tail result", resumable ? FrameSlotKind.Object : null);
                 if (resumable) b.beginStaticStoreObject(reentryResult); else b.beginStoreLocal(reentryResult);
             }
-            if (resumable && !loop) checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail);
+            if (resumable && !loop) checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail,
+                catchesTail && !delimited && inputLayout != null && inputLayout.getRequiresTyped()
+                    && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
             else if (inputLayout != null && inputLayout.getRequiresTyped())
                 typedArguments(e, function, arguments, inputLayout, tail, null, tail && !resumable
                     && !context.passThrough && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
@@ -3753,7 +3769,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                         savedArguments.add(new ProvenExpression(emission -> emission.builder.emitLoadLocal(local),
                             arguments.get(i).proof()));
                     }
-                    checkpointedApplication(e, savedFunction, savedArguments, evaluatedArguments, null, true);
+                    checkpointedApplication(e, savedFunction, savedArguments, evaluatedArguments, null, true, false);
                 } else {
                     b.beginApply(arguments.size(), true, metrics, evaluatedArguments);
                     b.emitLoadLocal(fn); for (var arg : args) b.emitLoadLocal(arg);
@@ -4713,7 +4729,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         return tupleExpression(shape.getProof(), (e, destination) -> {
             var b = e.builder;
             if (!tail) {
-                if (resumable) checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, false);
+                if (resumable) checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, false, false);
                 else if (inputLayout != null && inputLayout.getRequiresTyped()) {
                     b.beginStoreLocal(b.createLocal("typed tuple call", null));
                     typedArguments(e, function, arguments, inputLayout, false, tupleSlots(shape, destination), false);
@@ -4731,7 +4747,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginBlock();
                 var result = b.createLocal("tuple tail result", FrameSlotKind.Object);
                 b.beginStaticStoreObject(result);
-                if (resumable) checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true);
+                if (resumable) checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true,
+                    !context.passThrough && !delimited && inputLayout != null && inputLayout.getRequiresTyped()
+                        && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
                 else if (inputLayout != null && inputLayout.getRequiresTyped())
                     typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination),
                         !context.passThrough && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
@@ -4809,12 +4827,14 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     /** The exact tuple tail writes its destination or forwards a trusted callee Yield. */
     private void savedTailTuple(Emission e, BytecodeTupleSlots slots, BytecodeLocal fn,
-            List<BytecodeLocal> values, ArgumentLayout inputLayout, int arity) {
+            List<BytecodeLocal> values, ArgumentLayout inputLayout, int arity, boolean selfTransfer) {
         var b = e.builder;
         if (inputLayout != null && inputLayout.getRequiresTyped()) {
             var source = new BytecodeInputSource(inputLayout, accessors(values));
+            if (selfTransfer) { b.beginBlock(); savedTypedSelf(e, fn, source, arity); }
             b.beginApplyTypedInputTuple(source, slots, true, metrics);
             b.emitLoadLocal(fn); b.endApplyTypedInputTuple();
+            if (selfTransfer) b.endBlock();
         } else if (inputLayout == null) {
             b.beginTailApplyTuple(slots, arity, metrics);
             b.emitLoadLocal(fn); for (var value : values) b.emitLoadLocal(value);
@@ -4828,7 +4848,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     /** Saved logical and physical arguments survive every saturated prefix call. */
     private void checkpointedTupleApplication(Emission e, TupleShape shape, Expression function,
-            List<Expression> arguments, ArgumentLayout inputLayout, List<BytecodeLocal> destination, boolean tail) {
+            List<Expression> arguments, ArgumentLayout inputLayout, List<BytecodeLocal> destination, boolean tail, boolean selfTransfer) {
         var b = e.builder;
         var slots = tupleSlots(shape, destination, true);
         b.beginBlock();
@@ -4859,7 +4879,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         FinishTuple finish = (suffix, layout, arity) -> {
             if (tail) {
                 b.beginStaticStoreObject(Objects.requireNonNull(tailResult));
-                savedTailTuple(e, slots, fn, suffix, layout, arity);
+                // Staged prefixes may return a different closure/PAP: only the original exact call moves locally.
+                savedTailTuple(e, slots, fn, suffix, layout, arity, selfTransfer && suffix == values);
                 b.endStaticStoreObject();
             } else checkpointedTupleCall(e, slots, fn, suffix, layout, arity, callerMask);
         };
@@ -7988,8 +8009,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (result != null) b.beginStoreLocal(result);
                 if (resumable) {
                     var stateArgument = new ProvenExpression(target -> target.builder.emitLoadLocal(stateLocal), evaluatedProof(state.proof(), true));
-                    if (destination != null) checkpointedTupleApplication(e, new TupleShape(tupleProof, language), function, List.of(stateArgument), null, destination, false);
-                    else checkpointedApplication(e, function, List.of(stateArgument), new boolean[]{true}, null, false);
+                    if (destination != null) checkpointedTupleApplication(e, new TupleShape(tupleProof, language), function, List.of(stateArgument), null, destination, false, false);
+                    else checkpointedApplication(e, function, List.of(stateArgument), new boolean[]{true}, null, false, false);
                 } else {
                     if (destination != null) b.beginKeepAliveTuple(tupleSlots(new TupleShape(tupleProof, language), destination), metrics);
                     else b.beginKeepAlive(metrics);
