@@ -173,7 +173,7 @@ runOptions =
   , Option [] ["project-file"] (ReqArg (\path r -> r {runProjectFile = Just path}) "FILE") "Cabal project file"
   , Option [] ["thc-root"] (ReqArg (\path r -> r {runThcRoot = path}) "DIR") "THC source/build root (default: locate from the executable)"
   , Option [] ["runtime"] (ReqArg (\path r -> r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
-  , Option [] ["dap-port"] (ReqArg (\value r -> r {runDapPort = Just (fromMaybe 0 (readMaybe value))}) "PORT")
+  , Option [] ["dap-port"] (ReqArg (\value r -> r {runDapPort = Just (parseDapPort value)}) "PORT")
       "Listen for Graal DAP on 127.0.0.1:PORT (1..65535); suspend and wait for attachment"
   , Option [] ["dap-no-suspend"] (NoArg (\r -> r {runDapSuspend = False}))
       "Do not suspend on the first guest statement (requires --dap-port)"
@@ -184,6 +184,12 @@ runOptions =
   , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
   , Option [] ["ghc-source"] (ReqArg (\path r -> r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
   ] ++ map liftPlanOption options
+
+-- Parse without Int overflow before enforcing the TCP port range.
+parseDapPort :: String -> Int
+parseDapPort value = case readMaybe value :: Maybe Integer of
+  Just port | port >= 1 && port <= 65535 -> fromInteger port
+  _ -> 0
 
 liftPlanOption :: OptDescr (PlanOptions -> PlanOptions) -> OptDescr (RunOptions -> RunOptions)
 liftPlanOption (Option shorts longs argument description) = Option shorts longs (case argument of

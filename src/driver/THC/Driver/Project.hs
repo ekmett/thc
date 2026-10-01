@@ -308,7 +308,7 @@ buildProject action opts target = do
                   maybe [] (\path -> [("GHC_PKG", path)]) (ghcPkgPath flags)
   requireFile buildPlugin
   inherited <- getEnvironment
-  launchEnvironment <- runtimeDebugEnvironment opts inherited
+  launchEnvironment <- runtimeDebugEnvironment Host.os opts inherited
   let environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
   -- Cabal can build thc's executable without building its library. Publish the
   -- actual Cabal plugin registration before consulting the plugin manifest.

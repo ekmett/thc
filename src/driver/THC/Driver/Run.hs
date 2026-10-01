@@ -15,6 +15,7 @@ module THC.Driver.Run
   ) where
 
 import Control.Monad (unless, when)
+import Data.Char (toUpper)
 import Data.List (intercalate, sort)
 import Distribution.Compiler (CompilerFlavor(GHC))
 import Distribution.PackageDescription
@@ -91,8 +92,8 @@ runtimeLaunchArguments verify entry program arguments =
 -- | Enable Graal's DAP instrument on an explicitly selected loopback port.
 -- The installed Gradle launcher reads JAVA_OPTS on Unix and Windows. Only
 -- validated numbers and booleans are appended; existing JVM options survive.
-runtimeDebugEnvironment :: RunOptions -> [(String, String)] -> IO [(String, String)]
-runtimeDebugEnvironment opts inherited = case runDapPort opts of
+runtimeDebugEnvironment :: String -> RunOptions -> [(String, String)] -> IO [(String, String)]
+runtimeDebugEnvironment hostOS opts inherited = case runDapPort opts of
   Nothing -> do
     unless (runDapSuspend opts && runDapWaitAttached opts) $
       fail "--dap-no-suspend and --dap-no-wait-attached require --dap-port"
@@ -106,9 +107,10 @@ runtimeDebugEnvironment opts inherited = case runDapPort opts of
           , "-Dpolyglot.dap.Suspend=" ++ boolean (runDapSuspend opts)
           , "-Dpolyglot.dap.WaitAttached=" ++ boolean (runDapWaitAttached opts)
           ]
-        existing = maybe "" id (lookup "JAVA_OPTS" inherited)
+        sameKey key = (if hostOS == "mingw32" then map toUpper key else key) == "JAVA_OPTS"
+        existing = unwords [value | (key, value) <- inherited, sameKey key]
     pure (("JAVA_OPTS", existing ++ " " ++ settings) :
-          filter ((/= "JAVA_OPTS") . fst) inherited)
+          filter (not . sameKey . fst) inherited)
 
 -- | Loose Core modules accompany the authenticated package manifest.
 runtimeEntryArguments :: [FilePath] -> FilePath -> String -> [String]
@@ -126,7 +128,7 @@ runResolvedPackage opts working target prepareRuntime = do
   unless (not (null (runThcRoot opts))) $ fail "run requires --thc-root DIR"
   unless (runInstalledCore opts == "pinned") $
     fail "the Windows simple-package backend does not support --installed-core required"
-  launchEnvironment <- runtimeDebugEnvironment opts =<< getEnvironment
+  launchEnvironment <- runtimeDebugEnvironment os opts =<< getEnvironment
   (cabalFile, lbi) <- configurePackage (runPlan opts) target
   let packageRoot = takeDirectory cabalFile
       selectedName = runTarget opts
