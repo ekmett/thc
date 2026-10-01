@@ -58,11 +58,11 @@ representationShape (Object fields) = case KeyMap.lookup "aggregate" fields of
       _ -> "missing-components"
 representationShape _ = "missing-representation"
 
-constructorProofs :: Value -> IO [Value]
-constructorProofs (Object moduleFields) = case KeyMap.lookup "constructors" moduleFields of
+constructorProofs :: String -> Value -> IO [Value]
+constructorProofs ghcUnit (Object moduleFields) = case KeyMap.lookup "constructors" moduleFields of
   Just (Array constructors) -> forM expected $ \(name, shapes) -> do
     fields <- case [fields | Object fields <- toList constructors,
-      KeyMap.lookup "id" fields == Just (String (Text.pack (if name == "BoxedRep" then "ghc-9.14.1-inplace:GHC.Core.TyCon.BoxedRep" else "main:AggregateHeapFields." ++ name)))] of
+      KeyMap.lookup "id" fields == Just (String (Text.pack (if name == "BoxedRep" then ghcUnit ++ ":GHC.Core.TyCon.BoxedRep" else "main:AggregateHeapFields." ++ name)))] of
       [fields] -> pure fields
       _ -> die ("aggregate-heap: missing or ambiguous constructor " ++ name)
     unless (KeyMap.lookup "kind" fields == Just (String "boxed"))
@@ -80,7 +80,7 @@ constructorProofs (Object moduleFields) = case KeyMap.lookup "constructors" modu
       ("Sum", ["leaf", "sum(tuple(),tuple(leaf,leaf,leaf))", "leaf"]),
       ("Shared", ["leaf", "tuple(leaf,leaf)", "leaf"]),
       ("BoxedRep", ["sum(tuple(),leaf)"])]
-constructorProofs _ = die "aggregate-heap: malformed Core module"
+constructorProofs _ _ = die "aggregate-heap: malformed Core module"
 
 prepareAggregateHeap :: FilePath -> Bool -> IO ()
 prepareAggregateHeap root exportOnly = do
@@ -96,8 +96,13 @@ prepareAggregateHeap root exportOnly = do
   stale <- doesFileExist manifest
   when stale (removeFile manifest)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   unless (commandStdout version == "9.14.1\n") (die "Aggregate heap fields require GHC 9.14.1")
+  packageId <- runLogged 30 root logs "ghc-package-id" [] ghcPkg ["field", "ghc", "id", "--simple-output"]
+  ghcUnit <- case words (BSC.unpack (commandStdout packageId)) of
+    [unit] -> pure unit
+    _ -> die "aggregate-heap: expected one selected GHC package identity"
   info <- runLogged 30 root logs "ghc-info" [] ghc ["--info"]
   case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String, String)] of
     Just fields | lookup "target word size" fields == Just "8",
@@ -127,7 +132,7 @@ prepareAggregateHeap root exportOnly = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-package", "ghc", source])
-    proof <- constructorProofs =<< readCore (root </> modulePath)
+    proof <- constructorProofs ghcUnit =<< readCore (root </> modulePath)
     modules <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
     let modulePaths = map (core </>) modules
     audits <- if exportOnly then pure [] else do
@@ -151,9 +156,9 @@ prepareAggregateHeap root exportOnly = do
     ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
     ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   artifactHashes <- hashes root $ [directory </> "oracle.tsv", binary] ++
-    concat [paths | (_, _, paths) <- stages] ++ concatMap commandArtifacts [version, info, compiled, observations]
+    concat [paths | (_, _, paths) <- stages] ++ concatMap commandArtifacts [version, packageId, info, compiled, observations]
   writeJson (if exportOnly then output </> "export-manifest.json" else manifest) $ object
-    ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "wordBits" .= (64 :: Int),
+    ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "ghcUnit" .= ghcUnit, "wordBits" .= (64 :: Int),
      "entries" .= entries, "inputs" .= inputs, "nativeRows" .= length rows,
      "strictAccepted" .= not exportOnly,
      "constructorProofs" .= Map.fromList [(stage, proof) | (stage, proof, _) <- stages],
