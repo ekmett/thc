@@ -5,7 +5,7 @@ package thc;
 import java.util.*;
 
 public final class PackageScalarLink {
-    /** Acquisition seeds are not context receivers or finalized adapter products. */
+    /** Verified captured adapters are bound lazily to their context's provider. */
     public record CallSeed(String entry, String bitcodeSha256, String bitcodeHex,
             String providerUnit, String providerComponentSha256, String providerSymbol) {}
     private final String unit, target, componentSha256, bitcodeSha256, format;

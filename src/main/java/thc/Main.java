@@ -30,14 +30,6 @@ public final class Main {
         builder.allowCreateThread(true).useSystemExit(false);
         if (profile == ContextProfile.LAUNCHER) {
             builder.option("thc.ByteArrayStorage", System.getProperty("thc.byteArrayStorage", "native"));
-            var driver = System.getenv("THC_PACKAGE_NATIVE_BUILDER");
-            var cache = System.getenv("THC_PACKAGE_NATIVE_CACHE");
-            if (driver != null || cache != null) {
-                require(driver != null && cache != null && !blank(driver) && !blank(cache) &&
-                    java.nio.file.Path.of(driver).isAbsolute() && java.nio.file.Path.of(cache).isAbsolute(),
-                    "THC_PACKAGE_NATIVE_BUILDER and THC_PACKAGE_NATIVE_CACHE must be absolute nonblank paths supplied together");
-                builder.option("thc.PackageNativeBuilder", driver).option("thc.PackageNativeCache", cache);
-            }
         }
         if (profile == ContextProfile.NATIVE) return builder;
         builder.allowExperimentalOptions(true)

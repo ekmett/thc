@@ -76,14 +76,28 @@ public class PackageNativeDemandTest {
             "packageNativeLink", link);
         return PackageScalarLinks.read(module).getLink();
     }
+    @Test public void capturedSeedFirstUseNeedsNoProcessAndSharesCanonicalProviderState() throws Exception {
+        var provider = provider("captured-first-use", 40);
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(false)
+                .allowIO(IOAccess.ALL).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var registry = Language.currentState().getPackageCbits(); registry.link(provider);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var unsafe = new Entry(language, new PackageScalarCall(provider, provider.getAbi().getLast())).getCallTarget();
+                var safe = new Entry(language, new PackageScalarCall(provider, provider.getAbi().getFirst())).getCallTarget();
+                assertEquals(41L, unsafe.call(), "first use binds the captured seed without a producer process");
+                assertEquals(42L, safe.call(), "the second seed shares the original constructor and C state");
+                assertEquals(43L, unsafe.call(), "the cached receiver does not reload its provider");
+                assertFalse(Files.exists(directory.resolve("products")), "no redundant adapter product cache");
+            } finally { context.leave(); }
+        }
+    }
     @Test public void namespacedSameCNameAdaptersShareOnlyTheirCanonicalProvidersState() throws Exception {
         var first = provider("first-provider", 40);
         var second = provider("second-provider", 100);
         for (int contextIndex = 0; contextIndex < 2; contextIndex++) {
-            try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(true).allowExperimentalOptions(true)
-                    .allowEnvironmentAccess(org.graalvm.polyglot.EnvironmentAccess.INHERIT)
-                    .option("thc.PackageNativeBuilder", System.getenv().getOrDefault("THC_TEST_DRIVER", ""))
-                    .option("thc.PackageNativeCache", directory.resolve("products").toString())
+            try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(false).allowExperimentalOptions(true)
                     .allowIO(IOAccess.ALL).build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -162,10 +176,7 @@ public class PackageNativeDemandTest {
             "bindings", List.of(binding("next", provider), binding("missing", missing)),
             "constructors", List.of(fields("id", "Pair", "kind", "unboxed-tuple", "arity", 2, "tag", 1)),
             "packageScalarLinks", List.of(provider, missing));
-        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(true).allowExperimentalOptions(true)
-                .allowEnvironmentAccess(org.graalvm.polyglot.EnvironmentAccess.INHERIT)
-                .option("thc.PackageNativeBuilder", System.getenv().getOrDefault("THC_TEST_DRIVER", ""))
-                .option("thc.PackageNativeCache", directory.resolve("products").toString())
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(false).allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw").allowIO(IOAccess.ALL).build()) {
             context.initialize("thc"); context.enter();
@@ -232,10 +243,7 @@ public class PackageNativeDemandTest {
         String prefix = module.get("unit") + ":Demand.";
         var admission = PackageScalarLinks.read(module);
         assertNotNull(admission); assertEquals(2, admission.getLink().getCallSeeds().size());
-        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(true).allowExperimentalOptions(true)
-                .allowEnvironmentAccess(org.graalvm.polyglot.EnvironmentAccess.INHERIT)
-                .option("thc.PackageNativeBuilder", System.getenv().getOrDefault("THC_TEST_DRIVER", ""))
-                .option("thc.PackageNativeCache", directory.resolve("products").toString())
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(false).allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw").allowIO(IOAccess.ALL).build()) {
             context.initialize("thc"); context.enter();

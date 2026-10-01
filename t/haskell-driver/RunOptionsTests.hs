@@ -14,28 +14,16 @@ module RunOptionsTests (tests) where
 
 import Control.Monad (forM_)
 import Data.List (isInfixOf)
-import System.Directory (canonicalizePath, createFileLink)
-import System.Environment (getExecutablePath)
+import System.Directory (createFileLink)
 import System.FilePath ((</>))
 import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
-import NativeCacheTests (withEnvironment, withScratch)
-import THC.Driver.Run (runtimeLaunchArguments, runtimeEntryArguments, runtimeNativeEnvironment)
+import THC.Driver.Run (runtimeLaunchArguments, runtimeEntryArguments)
 
 tests :: Env -> Test
 tests env = TestLabel "run options and target selection" $ TestList
-  [ TestLabel "launcher receives the canonical current producer and disposable cache, not inherited replacements" $ TestCase $
-      withScratch $ \directory -> withEnvironment [("THC_CACHE_HOME", directory)] $ do
-        driverPath <- canonicalizePath =<< getExecutablePath
-        let inherited = [("THC_PACKAGE_NATIVE_BUILDER", "untrusted-driver"),
-              ("JAVA_OPTS", "-Dunchanged=true"), ("THC_PACKAGE_NATIVE_CACHE", "untrusted-cache"),
-              ("THC_PACKAGE_NATIVE_BUILDER", "second-driver"), ("OTHER", "opaque value")]
-        assertEqual "exact trusted pair and unrelated host settings"
-          [("THC_PACKAGE_NATIVE_BUILDER", driverPath), ("THC_PACKAGE_NATIVE_CACHE", directory </> "native-adapters"),
-           ("JAVA_OPTS", "-Dunchanged=true"), ("OTHER", "opaque value")]
-          =<< runtimeNativeEnvironment inherited
-  , TestLabel "find THC beside the executable from an unrelated project" $ TestCase $
+  [ TestLabel "find THC beside the executable from an unrelated project" $ TestCase $
       if os == "mingw32" then pure () else
       withFixture env "t/fixtures/run-pure" $ \package -> do
         let missingRuntime = package </> "missing-runtime"

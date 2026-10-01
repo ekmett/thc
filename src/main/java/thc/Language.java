@@ -25,10 +25,6 @@ public final class Language extends TruffleLanguage<Language.State> {
     static final OptionKey<String> THREAD_HOSTING = new OptionKey<>("platform");
     @Option(name = "ByteArrayStorage", help = "Ordinary guest byte-array backing: heap (default) or native (requires native access).", category = OptionCategory.USER)
     static final OptionKey<String> BYTE_ARRAY_STORAGE = new OptionKey<>("heap");
-    @Option(name = "PackageNativeBuilder", help = "Trusted THC driver for first-use package C adapters (requires process access).", category = OptionCategory.EXPERT)
-    static final OptionKey<String> PACKAGE_NATIVE_BUILDER = new OptionKey<>("");
-    @Option(name = "PackageNativeCache", help = "Persistent first-use package C adapter product directory.", category = OptionCategory.EXPERT)
-    static final OptionKey<String> PACKAGE_NATIVE_CACHE = new OptionKey<>("");
     @Override protected OptionDescriptors getOptionDescriptors() { return new LanguageOptionDescriptors(); }
     // Layout interning belongs to a context even when the language instance is shared.
     public HandoffLayouts getHandoffLayouts() { return currentState(null).handoffLayouts; }
@@ -117,7 +113,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             foreignRoots = new ManagedForeignRoots(this);
             handoffLayouts = new HandoffLayouts(language);
             javaScriptImports = new JavaScriptImports();
-            packageCbits = new PackageScalarLibraries(env, env.getOptions().get(PACKAGE_NATIVE_BUILDER), env.getOptions().get(PACKAGE_NATIVE_CACHE));
+            packageCbits = new PackageScalarLibraries(env);
             nativeCallbacks = new NativeCallbacks(this);
             maskingState = new CarrierLocal<>(MaskingState.UNMASKED);
             stackAnnotations = new CarrierLocal<>(StackAnnotationState.EMPTY);
