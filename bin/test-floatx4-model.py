@@ -79,13 +79,19 @@ class FloatX4ModelTest(unittest.TestCase):
             argument = tuple_rep if primitive == 'packFloatX4#' else vector
             result = tuple_rep if primitive == 'unpackFloatX4#' else vector
             calls.append(['app', ['prim', primitive], [['synthetic', dict(rep=argument)]], dict(rep=result)])
-        bindings = [dict(name=e['name'], expr=['lam', [dict(rep=scalar)]*e['arity'],
+        bindings = [dict(id='main:SimdFloatX4.'+e['name'], name='main:SimdFloatX4.'+e['name'],
+                    expr=['lam', [dict(rep=scalar)]*e['arity'],
                     calls, dict(resultRep=scalar)]) for e in model.entries()]
-        bindings.append(dict(name='vectorArgument', expr=['lam', [dict(rep=vector)],
+        bindings.append(dict(id='main:SimdFloatX4.vectorArgument', name='main:SimdFloatX4.vectorArgument',
+                        expr=['lam', [dict(rep=vector)],
                         [], dict(resultRep=vector)]))
         fixture = dict(boundary=model.STAGES['pre'], bindings=bindings)
         self.assertEqual(model.inventory(fixture, 'pre')['primitives'], sorted(model.PRIMITIVES))
 
+        bad = copy.deepcopy(fixture)
+        bad['bindings'][0]['id'] = 'other:SimdFloatX4.plusCase'
+        with self.assertRaisesRegex(KeyError, 'plusCase'):
+            model.inventory(bad, 'pre')
         bad = copy.deepcopy(fixture)
         pack = next(c for c in bad['bindings'][0]['expr'][2] if c[1][1] == 'packFloatX4#')
         pack[2] *= 4
