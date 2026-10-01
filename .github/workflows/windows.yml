@@ -40,6 +40,7 @@ jobs:
           $env:LLD_REPRODUCE = Join-Path $PWD 'build/windows-native-link.tar'
           & {
             . ./bin/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
+            & ./bin/test-windows-cabal-config.ps1
             Invoke-ThcTool $env:CABAL @('update')
             & ./bin/windows.ps1 -Action Test -Jobs 4
           } *>&1 | Tee-Object build/windows-ci.log

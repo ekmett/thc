@@ -43,6 +43,7 @@ $env:GHC_PKG = Join-Path $ghcRoot 'bin/ghc-pkg-9.14.1.exe'
 $env:CABAL = Join-Path $Prefix 'cabal/cabal.exe'
 $env:THC_CLANG = Join-Path $ghcRoot 'mingw/bin/clang.exe'
 $env:CABAL_DIR = Join-Path $Prefix 'cabal-home'
+$env:CABAL_CONFIG = Join-Path $env:CABAL_DIR 'config'
 $env:GRADLE_USER_HOME = Join-Path $Prefix 'gradle-home'
 $env:PATH = "$javaRoot/bin;$ghcRoot/bin;$ghcRoot/mingw/bin;$Prefix/cabal;$env:PATH"
 # Cabal runs the pinned libraries' genuine configure scripts through sh.
@@ -59,6 +60,7 @@ Assert-ThcJava
 $null = Get-ThcGhc
 $cabalVersion = Invoke-ThcTool $env:CABAL @('--numeric-version')
 if ($cabalVersion -ne '3.16.0.0') { throw "Unexpected Cabal: $cabalVersion" }
+Initialize-ThcCabalConfig $env:CABAL_CONFIG
 if (!(Test-Path -LiteralPath $env:THC_CLANG)) { throw 'Missing GHC-bundled Clang' }
 if (!$env:THC_PYTHON) { $env:THC_PYTHON = (Get-Command python.exe -CommandType Application -ErrorAction Stop).Source }
 $pythonVersion = Invoke-ThcTool $env:THC_PYTHON @('--version')
