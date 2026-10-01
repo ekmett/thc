@@ -25,6 +25,37 @@ class CoreCbdModelTest {
     }
 
     @SuppressWarnings("unchecked")
+    @Test void decodedFloatingModelsPreserveEveryIeeeBit() throws Exception {
+        var model = (Map<String, Object>) Json.parse(Files.readString(Path.of("t/compact-core/golden/cbd-module-v1.json")));
+        var literals = List.of(new thc.runtime.CoreFloatingLiteral.Single(0x80000000),
+            new thc.runtime.CoreFloatingLiteral.Single(0x7f800000), new thc.runtime.CoreFloatingLiteral.Single(0x7fc12345),
+            new thc.runtime.CoreFloatingLiteral.Double(0x8000000000000000L),
+            new thc.runtime.CoreFloatingLiteral.Double(0x7ff0000000000000L), new thc.runtime.CoreFloatingLiteral.Double(0x7ff8123456789abcL));
+        var bindings = new ArrayList<Map<String, Object>>();
+        for (int i = 0; i < literals.size(); i++) {
+            boolean single = literals.get(i) instanceof thc.runtime.CoreFloatingLiteral.Single;
+            var rep = Map.of("kind", single ? "float" : "double", "primReps", List.of(single ? "FloatRep" : "DoubleRep"), "evaluated", true);
+            bindings.add(Map.of("id", "main:CBDGolden.bits" + i, "arity", 0, "lifted", false, "rep", rep,
+                "expr", List.of("lit", single ? "float" : "double", literals.get(i), Map.of("rep", rep))));
+        }
+        model.put("bindings", bindings);
+        var decoded = (List<Map<String, Object>>) CoreCbdFixtures.read(CoreCbdFixtures.write(directory.resolve("ieee.cbd"), model)).get("bindings");
+        assertEquals(literals.size(), decoded.size());
+        var byId = new LinkedHashMap<Object, Map<String, Object>>();
+        for (var binding : decoded) assertNull(byId.put(binding.get("id"), binding));
+        assertEquals(new HashSet<>(bindings.stream().map(binding -> binding.get("id")).toList()), byId.keySet());
+        for (int i = 0; i < literals.size(); i++) {
+            var expression = (List<?>) byId.get(bindings.get(i).get("id")).get("expr");
+            assertEquals(literals.get(i), expression.get(2));
+            assertEquals(((List<?>) bindings.get(i).get("expr")).getLast(), expression.getLast());
+        }
+        var malformed = new LinkedHashMap<>(bindings.getFirst());
+        malformed.put("expr", List.of("lit", "double", literals.getFirst()));
+        model.put("bindings", List.of(malformed));
+        assertThrows(java.io.IOException.class, () -> CoreCbdFixtures.write(directory.resolve("mismatched.cbd"), model));
+    }
+
+    @SuppressWarnings("unchecked")
     @Test void modelRoundTripPreservesBindingsAndLazyDebug() throws Exception {
         var model = (Map<String, Object>) Json.parse(Files.readString(
             Path.of("t/compact-core/golden/cbd-module-v1.json")));

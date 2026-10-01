@@ -15,7 +15,7 @@ import thc.runtime.CoreFloatingLiteral;
 public final class CoreCbdFixtures {
     private CoreCbdFixtures() {}
     public static Path write(Path output, Map<String,Object> module) throws Exception {
-        return CoreCbdTestSupport.writeModel(output, module);
+        return CoreCbdTestSupport.writeModel(output, (Map<String,Object>) inspection(module, true));
     }
     public static Map<String,Object> module(Path output, Map<String,Object> value) throws Exception {
         write(output, value);
@@ -39,26 +39,25 @@ public final class CoreCbdFixtures {
         if (value instanceof List<?> fields) return new ArrayList<>(fields.stream().map(CoreCbdFixtures::snapshot).toList());
         return value;
     }
-    private static Object inspection(Object value) {
+    private static Object inspection(Object value, boolean model) {
         if (value instanceof CoreFloatingLiteral literal) return literal.document();
         if (value instanceof Map<?,?> fields) {
             var copy = new LinkedHashMap<String,Object>();
-            fields.forEach((key, child) -> copy.put((String) key, inspection(child)));
+            fields.forEach((key, child) -> copy.put((String) key, inspection(child, model)));
             return copy;
         }
-        if (value instanceof List<?> fields) return fields.stream().map(CoreCbdFixtures::inspection).toList();
+        if (value instanceof List<?> fields) {
+            var copy = new ArrayList<>(fields.stream().map(child -> inspection(child, model)).toList());
+            if (model && fields.size() > 2 && "lit".equals(fields.getFirst())) {
+                if ("float".equals(fields.get(1)) && fields.get(2) instanceof CoreFloatingLiteral.Single literal) {
+                    copy.set(1, "float-bits"); copy.set(2, Integer.toUnsignedString(literal.bits()));
+                } else if ("double".equals(fields.get(1)) && fields.get(2) instanceof CoreFloatingLiteral.Double literal) {
+                    copy.set(1, "double-bits"); copy.set(2, Long.toUnsignedString(literal.bits()));
+                }
+            }
+            return copy;
+        }
         return value;
-    }
-    /** Offline source-name/type evidence, verified against the exact executable artifact. */
-    public static Map<String,Object> pairedDiagnostic(Path path) throws Exception {
-        var diagnostic = (Map<String,Object>) Json.parse(Files.readString(path.resolveSibling(path.getFileName().toString().replaceFirst("\\.cbd$", ".json"))));
-        var encoded = Files.createTempFile("thc-paired-diagnostic-", ".cbd");
-        try {
-            write(encoded, diagnostic);
-            if (!Arrays.equals(Files.readAllBytes(path), Files.readAllBytes(encoded)))
-                throw new IllegalArgumentException("Diagnostic JSON differs from executable CBD: " + path);
-            return diagnostic;
-        } finally { Files.deleteIfExists(encoded); }
     }
     public static Map<String,Object> read(Path path) throws Exception {
         try (var file = new CoreCompactFile(path, hash(Files.readAllBytes(path)), true)) {
@@ -90,7 +89,7 @@ public final class CoreCbdFixtures {
         var modules = new ArrayList<Map<String,Object>>();
         for (var record : directory.getModules()) {
             var module = read(record.artifact().path());
-            modules.add(module); accept.accept(module, Json.stringify(inspection(module)));
+            modules.add(module); accept.accept(module, Json.stringify(inspection(module, false)));
         }
         return new Corpus(directory.getTargetLayout(), modules);
     }

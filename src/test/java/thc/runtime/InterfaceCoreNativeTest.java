@@ -88,7 +88,7 @@ class InterfaceCoreNativeTest {
         return rows;
     }
     @Test void realForeignArtifactsSurviveCheckedArchiveButCannotExecute() throws Exception {
-        oracle(); var direct = read("InterfaceForeign.json"); var modules = new StringBuilder("[");
+        oracle(); var direct = CoreCbdFixtures.read(directory.resolve("InterfaceForeign.cbd")); var modules = new StringBuilder("[");
         var layout = CoreCbdFixtures.appendModules(modules, directory.resolve("foreign-packages.json").toAbsolutePath().toString());
         assertNotNull(layout, "archiving foreign code preserves the selected target layout"); assertEquals("fixture", Objects.requireNonNull(layout).getCompilerAbi()); modules.append(']');
         var archived = single((List<Map<String, Object>>) Json.parse(modules.toString()));
@@ -188,8 +188,8 @@ class InterfaceCoreNativeTest {
     }
 
     @Test void helperPreservesGenuineInstalledWorkerCbvMarks() throws Exception {
-        oracle(); var direct = read("direct/CBVCoercionAudit.json"); var loaded = source("coercionEntry");
-        var original = select((List<Map<String, Object>>) direct.get("bindings"), "name", "$wwitnessed");
+        oracle(); var direct = CoreCbdFixtures.read(directory.resolve("direct/CBVCoercionAudit.cbd")); var loaded = source("coercionEntry");
+        var original = select((List<Map<String, Object>>) direct.get("bindings"), "id", "thc-interface-fixture-0.1:CBVCoercionAudit.$wwitnessed");
         var hydrated = select((List<Map<String, Object>>) loaded.get("bindings"), "id", (String) original.get("id"));
         assertEquals(List.of(false, false, true), original.get("entryStrict")); assertEquals(original.get("entryStrict"), hydrated.get("entryStrict"));
         assertEquals("ghc-id", original.get("entryStrictSource")); assertEquals("ghc-id", hydrated.get("entryStrictSource"));

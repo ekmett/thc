@@ -26,7 +26,7 @@ class ManagedForeignRootsNativeTest {
     private String verified(Path file) throws Exception { verifyFile(file); return Files.readString(file); }
     private Map<String, Object> original() throws Exception {
         assertFalse(Files.exists(directory.resolve("typed-export-source/ForeignExportRegistration.hs")));
-        assertEquals("7", verified(directory.resolve("logs/managed-export-registration-native-oracle.stdout")).trim()); verifyFile(core); CoreCbdFixtures.pairedDiagnostic(core); return CoreCbdFixtures.read(core);
+        assertEquals("7", verified(directory.resolve("logs/managed-export-registration-native-oracle.stdout")).trim()); verifyFile(core); return CoreCbdFixtures.read(core);
     }
     private String id(String name) { return "thc-interface-fixture-0.1:ForeignExportRegistration." + name; }
     private String request(String backend) {

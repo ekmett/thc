@@ -24,7 +24,6 @@ import Data.List (isInfixOf, sort)
 import Data.Foldable (toList)
 import Data.Maybe (isNothing)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import FixtureSupport (CommandResult(..), hashes, runLogged, runLoggedExpect, writeJson)
 import InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, prepareImportStubs, inspectInstalledBound)
 import InstalledCacheFixtures (checkInstalledCache)
@@ -108,7 +107,7 @@ prepareInterfaceCore root = do
           "-odir", output, "-hidir", output] ++
           (if complete then ["-package-db", pluginDb, "-plugin-package-id", pluginUnit,
             "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:" ++ root </> directory </> "direct",
-            "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:pretty-diagnostics"] else [])
+            "-fplugin-opt=THC.Plugin:post-tidy"] else [])
     compiled <- run (mode ++ "-compile") ghc (common ++ [generated])
     cbvCompiled <- run (mode ++ "-cbv-compile") ghc (common ++ [cbvSource])
     exists <- doesDirectoryExist database
@@ -174,8 +173,6 @@ prepareInterfaceCore root = do
           Just core -> do
             check (mode == "full") "Thin interface unexpectedly yielded bodies"
             checkCore environment path core
-            rendered <- interfaceCoreJSON ["source-notes", "unit-qualified"] core
-            writeFile (root </> directory </> "InterfaceLibrary.json") rendered
             way <- try (loadInterfaceCore environment expectedModule
               (root </> directory </> "full/InterfaceLibrary.dyn_hi"))
             case way of
@@ -247,25 +244,23 @@ prepareInterfaceCore root = do
         concat builds ++ [foreignBuild] ++ foreignInit ++ [foreignRegistered, nativeBuild, oracle] ++
         helperCommands ++ associationCommands ++ typedAssociationCommands ++ importCommands ++ wiredCommands ++ cacheCommands ++ audits
       artifacts = concatMap commandArtifacts commands ++ wrapperArtifacts ++ cacheArtifacts ++
-        [directory </> name | name <- ["InterfaceLibrary.json", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
+        [directory </> name | name <- ["InterfaceLibrary.cbd", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
           "full/InterfaceLibrary.dyn_hi", "full/InterfaceForeign.hi", "native/oracle", "source/InterfaceLibrary.saved"]] ++
-        [directory </> name | name <- ["CBVCoercionAudit.json", "direct/CBVCoercionAudit.json",
+        [directory </> name | name <- ["CBVCoercionAudit.cbd", "direct/CBVCoercionAudit.cbd",
           "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved",
           "wired-unit.json"]] ++
-        [directory </> "packages.json", directory </> "foreign-packages.json", directory </> "InterfaceForeign.json",
+        [directory </> "packages.json", directory </> "foreign-packages.json", directory </> "InterfaceForeign.cbd",
          directory </> "clock-capi.cbd",
          directory </> "driver-controls.json", directory </> "foreign-association.json",
-         directory </> "installed-bound-facts.json", directory </> "installed-wrapper-facts.json", directory </> "foreign-alias/a.json",
-         directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
+         directory </> "installed-bound-facts.json", directory </> "installed-wrapper-facts.json", directory </> "foreign-alias/a.cbd",
+         directory </> "foreign-alias/b.cbd", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
         [directory </> "typed-foreign-exports.json"] ++
-        [directory </> "typed-foreign-exports" </> variant ++ extension |
-          extension <- [".json", ".cbd"],
+        [directory </> "typed-foreign-exports" </> variant ++ ".cbd" |
           variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented", "managed", "registration"]] ++
         [directory </> "typed-foreign-exports/managed/ForeignExportManaged.hi",
          directory </> "typed-export-source/ForeignExportManaged.hs.saved",
          directory </> "typed-foreign-exports/registration/ForeignExportRegistration.hi",
          directory </> "typed-export-source/ForeignExportRegistration.hs.saved"] ++
-        [directory </> "import-stubs" </> variant ++ ".json" | variant <- ["plain", "labels", "extra-file", "wrapper", "instrumented"]] ++
         [directory </> "import-stubs" </> variant ++ ".cbd" |
           variant <- ["plain", "labels", "labels-header", "capi-labels", "capi-labels-header", "finalizer-label", "extra-file", "wrapper", "instrumented"]] ++
         [directory </> "import-stubs" </> "labels-" ++ entry ++ "-audit.json" |
@@ -453,7 +448,7 @@ checkHelper root directory libdir helper = do
     core <- decodeCore result
     check (valueAt "schema" core == Number 1 && valueAt "unit" core == toJSON unitName &&
       valueAt "module" core == toJSON name) "Helper did not load the exact full Core module"
-    writeJson (root </> directory </> name ++ ".json") core
+    BS.writeFile (root </> directory </> name ++ ".cbd") (commandStdout result)
     pure result
   thin <- run 3 "helper-thin" (arguments "thin" "InterfaceLibrary")
   unavailable <- decode thin
@@ -472,7 +467,7 @@ checkHelper root directory libdir helper = do
   foreignOutput <- decodeCore foreignLoaded
   check (valueAt "unit" foreignOutput == toJSON unitName && valueAt "module" foreignOutput == String "InterfaceForeign" &&
     valueAt "schema" foreignOutput == Number 2) "Foreign Core did not use archive-only schema"
-  writeJson (root </> directory </> "InterfaceForeign.json") foreignOutput
+  BS.writeFile (root </> directory </> "InterfaceForeign.cbd") (commandStdout foreignLoaded)
   badModule <- run 1 "helper-wrong-module"
     ["--libdir", libdir, "--unit", unitName, "--module", "Wrong", "--package-db",
      root </> directory </> "full/package.conf.d", "--interface", root </> directory </> "full/InterfaceLibrary.hi"]
@@ -480,8 +475,8 @@ checkHelper root directory libdir helper = do
   forM_ [badWay,badModule,usageError] $ \result -> do
     output <- decode result
     check (valueAt "status" output == String "error" && valueAt "core" output == Null) "Helper failure looks like loaded/unavailable"
-  direct <- decodeFile (root </> directory </> "direct/CBVCoercionAudit.json")
-  loaded <- decodeFile (root </> directory </> "CBVCoercionAudit.json")
+  direct <- either die pure . readModuleValue =<< BS.readFile (root </> directory </> "direct/CBVCoercionAudit.cbd")
+  loaded <- either die pure . readModuleValue =<< BS.readFile (root </> directory </> "CBVCoercionAudit.cbd")
   let bindings value = case valueAt "bindings" value of Array xs -> toList xs; _ -> []
       marked value = case valueAt "entryStrict" value of Array xs -> Bool True `elem` toList xs; _ -> False
       workers = filter marked (bindings direct)
@@ -516,8 +511,8 @@ checkForeignCore environment path core = do
          "module" .= moduleNameString (moduleName (csl_module value)), "name" .= unpackFS (csl_name value)]
       file (ForeignCore.IfaceForeignFile sourceLanguage source extension) = object
         ["language" .= show sourceLanguage, "source" .= source, "extension" .= extension]
-  rendered <- interfaceCoreJSON ["unit-qualified"] core
-  value <- maybe (die "Foreign archive is not JSON") pure (decodeStrict' (Text.encodeUtf8 (Text.pack rendered)))
+  compact <- interfaceCoreCBD ["unit-qualified"] core
+  value <- either die pure (readModuleValue compact)
   check (valueAt "schema" value == Number 2 && valueAt "foreign" value == expected rawForeign &&
     expected (interfaceForeign core) == expected rawForeign) "Foreign interface metadata was lost or rewritten"
   let stubs = valueAt "stubs" (valueAt "foreign" value)

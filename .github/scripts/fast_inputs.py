@@ -226,9 +226,9 @@ DELIMITED_COMMANDS = ("ghc-version", "native-build", "native-run",
                       *(f"{stage}-export" for stage in ("pre", "post")),
                       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in DELIMITED_ENTRIES))
 DELIMITED_OUTPUTS = frozenset("build/delimited-continuations/" + name for name in (
-    "manifest.json", "parked/audit.json", "parked/core/ParkedControl.cbd", "parked/core/ParkedControl.json",
+    "manifest.json", "parked/audit.json", "parked/core/ParkedControl.cbd",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
-        for suffix in ("core/DelimitedContinuations.cbd", "core/DelimitedContinuations.json", *(f"{entry}-audit.json" for entry in DELIMITED_ENTRIES))),
+        for suffix in ("core/DelimitedContinuations.cbd", *(f"{entry}-audit.json" for entry in DELIMITED_ENTRIES))),
     *(f"commands/{command}.{suffix}" for command in DELIMITED_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
     "manifest.json", "oracle.txt", "callback-oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")

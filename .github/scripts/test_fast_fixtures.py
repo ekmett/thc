@@ -532,7 +532,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('t/fixtures/core/DelimitedContinuations.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'delimited-continuations']}], group['commands'])
         self.assertIn('"$fixture_bin" delimited-continuations', (project / 'bin/prepare-tests.sh').read_text().splitlines())
-        self.assertEqual(171, len(cache.DELIMITED_OUTPUTS))
+        self.assertEqual(168, len(cache.DELIMITED_OUTPUTS))
         self.assertEqual({f"build/delimited-continuations/{stage}/core/DelimitedContinuations.cbd"
                           for stage in ("pre", "post")} |
                          {"build/delimited-continuations/parked/core/ParkedControl.cbd"},
@@ -540,6 +540,9 @@ class FixturePreparationTest(unittest.TestCase):
         for command in ("parked-native-build", "parked-native-run", "parked-export", "parked-audit"):
             for suffix in ("stdout", "stderr", "command.json"):
                 self.assertIn(f"build/delimited-continuations/commands/{command}.{suffix}", cache.DELIMITED_OUTPUTS)
+        for path in cache.DELIMITED_OUTPUTS:
+            if path.endswith(".cbd"):
+                self.assertNotIn(path.removesuffix(".cbd") + ".json", cache.DELIMITED_OUTPUTS)
         self.assertTrue(cache.DELIMITED_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         name = 'build/delimited-continuations/manifest.json'
         artifacts = {}
@@ -2036,28 +2039,32 @@ class FixturePreparationTest(unittest.TestCase):
                       (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/interface-core', fast_fixtures.FULL_OUTPUT_ROOTS)
-        for name in ('manifest.json', 'InterfaceLibrary.json', 'logs/native-oracle.stdout',
+        for name in ('manifest.json', 'InterfaceLibrary.cbd', 'logs/native-oracle.stdout',
                      'full/InterfaceLibrary.hi', 'thin/InterfaceLibrary.hi',
                      'full/InterfaceLibrary.dyn_hi', 'full/InterfaceForeign.hi',
                      'source/InterfaceLibrary.saved', 'opaqueEntry-audit.json',
                      'wrapperEntry-audit.json', 'installed-wrapper-facts.json',
                      'inlineEntry-audit.json', 'recursiveEntry-audit.json',
-                     'CBVCoercionAudit.json', 'direct/CBVCoercionAudit.json',
+                     'CBVCoercionAudit.cbd', 'direct/CBVCoercionAudit.cbd',
                      'full/CBVCoercionAudit.hi', 'thin/CBVCoercionAudit.hi',
                      'source/CBVCoercionAudit.saved', 'coercionEntry-audit.json',
                      'logs/helper-thin.stdout', 'logs/helper-thin.command.json',
                      'wired-unit.json', 'logs/helper-wired-unit.stdout',
                      'logs/helper-wired-unit.command.json', 'packages.json', 'driver-controls.json',
                      'cache-controls/facts.json', 'cache-controls/helper-calls',
-                     'InterfaceForeign.json', 'foreign-packages.json',
+                     'InterfaceForeign.cbd', 'foreign-packages.json',
                      'foreign-association.json', 'installed-bound-facts.json',
-                     'foreign-alias/a.json', 'foreign-alias/b.json',
-                     'source/InterfaceForeignAlias.hs.saved', 'import-stubs/plain.json', 'import-stubs/extra-file.json',
-                     'import-stubs/wrapper.json', 'import-stubs/instrumented.json',
+                     'foreign-alias/a.cbd', 'foreign-alias/b.cbd',
+                     'source/InterfaceForeignAlias.hs.saved', 'import-stubs/plain.cbd', 'import-stubs/extra-file.cbd',
+                     'import-stubs/wrapper.cbd', 'import-stubs/instrumented.cbd',
                      'source/ForeignImportStubs.hs.saved', 'import-stubs/plain/ForeignImportStubs.hi',
                      'logs/import-stubs-native-oracle.stdout'):
             self.assertIn('build/interface-core/' + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"interface-core/**/*.json"', (project / 'build.gradle').read_text())
+        self.assertIn('"interface-core/**/*.cbd"', (project / 'build.gradle').read_text())
+        for path in fast_fixtures.FULL_REQUIRED:
+            if path.startswith("build/interface-core/") and path.endswith(".cbd"):
+                self.assertNotIn(path.removesuffix(".cbd") + ".json", fast_fixtures.FULL_REQUIRED)
 
     def test_formatter_focused_full_gradle_and_upload_registration(self):
         project = Path(__file__).resolve().parents[2]
