@@ -63,6 +63,11 @@ Windows `ghc-internal` is the bootstrap exception: its complete source graph
 compiles with `-fwrite-if-simplified-core` without loading a plugin that imports
 the unfinished home unit. The existing installed-interface helper then exports
 the genuine rebuilt Core and foreign metadata.
+Acquisition uses the selected Cabal registration's complete module and C/C++
+inventory. The genuine wired Core owner remains `ghc-internal`; its actual
+registered unit ID is retained separately for dependencies. The runtime
+projection excludes only the declared native-registration module and records
+the complete source bundle's hash.
 Other pinned Windows packages use Cabal's complete `--make -no-link` invocation after
 checking the full source graph, avoiding a new static-plugin link per module.
 
@@ -209,6 +214,10 @@ Native authority does not grant the guest current-directory or file access.
 Installed C adapters use the x64 MSVC LLVM ABI. Their native dependencies link
 against the original package archives and the matching GHC's registered native
 libraries. Haskell execution, scheduling and exceptions remain owned by THC.
+Configured MinGW C products retain their source, header and object observations
+in the ordinary bundle provenance. They execute through the existing private
+PE companion, alongside MSVC LLVM adapters; their MinGW LLVM is not admitted
+to Sulong or relabeled as MSVC LLVM.
 
 ## Current boundaries
 
@@ -247,6 +256,12 @@ ordinary `Test` action.
   support bundle, which Windows project acquisition prepares automatically.
   `thc-fixtures.exe windows-driver` checks native-matching completion in both
   backends and handoff modes, with strict verification on its first run.
+- Exception-dependent fixture preparation currently fails its strict audit on
+  `libdwPoolRelease` and `backtraceFree` function-address literals reached through
+  GHC's default exception annotations. The optional Libdw backend is unsupported
+  by THC. A completed source/native bundle or a passing pure CLI example does
+  not qualify these foreign-call fixtures; retain the failed audit and do not
+  publish a replacement fixture manifest or restore retired overrides.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.

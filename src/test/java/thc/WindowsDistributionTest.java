@@ -182,22 +182,38 @@ class WindowsDistributionTest {
             try (var full = new ZipFile(complete.get("path"))) {
                 var fullManifest = document(full, "manifest.json");
                 var fullInputs = document(full, "inplace-manifest.json");
-                assertEquals(fullInputs.get("generatedSources"), inputs.get("generatedSources"));
-                var steps = (List<Map<String, Object>>) ((Map<?, ?>) fullInputs.get("sourceBuild")).get("steps");
-                assertEquals(235, steps.size());
-                assertEquals(24L, steps.stream().filter(step -> Boolean.TRUE.equals(step.get("boot"))).count());
-                for (var step : steps) {
-                    assertEquals(0L, step.get("exit"));
-                    var arguments = (List<String>) step.get("arguments");
-                    assertTrue(arguments.containsAll(List.of("-O2", "-dcore-lint", "-fwrite-if-simplified-core", "-DBIGNUM_GMP")));
-                    assertFalse(arguments.contains("-fignore-interface-pragmas"));
+                assertEquals(fullInputs.getOrDefault("generatedSources", List.of()), inputs.get("generatedSources"));
+                var component = (Map<String, Object>) fullInputs.get("component");
+                assertEquals("installed-interface", component.get("kind"));
+                var registration = (Map<String, Object>) component.get("registration");
+                assertEquals("registered-owned-modules", registration.get("coverage"));
+                var alias = single((List<Map<String, Object>>) document(root.resolve(manifests.getFirst())).get("units"),
+                    "id", registration.get("registeredUnit"));
+                assertEquals(List.of(), alias.get("modules"), "Keep the actual registered unit beside the wired owner");
+                var interfaces = (List<Map<String, Object>>) registration.get("interfaces");
+                var registeredNames = interfaces.stream().map(value -> (String) value.get("module")).sorted().toList();
+                assertFalse(registeredNames.isEmpty());
+                assertEquals(registeredNames.size(), new HashSet<>(registeredNames).size());
+                assertTrue(registeredNames.contains("GHC.Internal.Prim"));
+                var generated = (List<Map<String, Object>>) fullInputs.get("generatedCore");
+                assertEquals(registeredNames, generated.stream().map(value -> (String) value.get("module")).sorted().toList());
+                var nativeInputs = (List<Map<String, Object>>) fullInputs.get("nativeArtifacts");
+                var cProducts = nativeInputs.stream().filter(value -> value.containsKey("objectSha256")).toList();
+                assertEquals(17, cProducts.size(), "Complete configured GHC 9.14.1 Windows/GMP C inventory");
+                for (var product : cProducts) assertTrue(((String) product.get("objectSha256")).matches("[0-9a-f]{64}"));
+                assertTrue(cProducts.stream().anyMatch(value -> Path.of((String) value.get("path")).getFileName().toString().equals("md5.c")));
+                for (var input : nativeInputs) {
+                    var path = Path.of((String) input.get("path"));
+                    assertTrue(path.isAbsolute(), path.toString());
+                    assertEquals(input.get("sha256"), digest(path), path.toString());
                 }
                 var fullModules = (List<Map<String, Object>>) fullManifest.get("modules");
                 var projectedModules = new LinkedHashMap<Object, Map<String, Object>>();
                 for (var module : (List<Map<String, Object>>) document(projected, "manifest.json").get("modules"))
                     projectedModules.put(module.get("name"), module);
-                assertEquals(211, fullModules.size());
-                assertEquals(210, selected.size());
+                assertEquals(registeredNames, fullModules.stream().map(value -> (String) value.get("name")).sorted().toList());
+                assertEquals(registeredNames.stream().filter(name -> !name.equals("GHC.Internal.Conc.Bound")).toList(),
+                    selected.stream().map(value -> (String) value.get("name")).sorted().toList());
                 assertEquals(document(projected, "manifest.json").get("modules"), publication.get("modules"));
                 for (var module : selected) {
                     var original = single(fullModules, "name", module.get("name"));

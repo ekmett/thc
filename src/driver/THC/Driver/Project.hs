@@ -78,8 +78,7 @@ import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Compact.Core (Presence(..))
 import THC.Compact.Debug (SourceFile(..))
 import THC.Compact.Module (readModuleMetadata, readModuleMetadataFile, readModuleSources)
-import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes, pinnedSourcePath,
-                         exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout, preparePinnedInterfaces)
+import THC.Driver.Wired (probeTargetLayout, preparePinnedInterfaces)
 
 -- Cabal performs the project solve, preprocessing, host-tool/TH execution and
 -- native build. Its machine-readable plan and per-component build-info, rather
@@ -236,12 +235,12 @@ prepareWindowsRuntimeWithVerification verify repository selectedCompiler selecte
           ("THC_PROXY_GLOBAL_UNITS",""),("THC_PROXY_NO_LINK_UNIT",""),
           ("THC_PROXY_NATIVE_RECIPES",native </> "cache/thc/native-recipes-v1")]
         environment = overrides ++ filter ((`notElem` map fst overrides) . fst) inherited
-    wired <- wiredGhcInternal context root
     internal <- case [value | value <- units,
         jsonField value "pkg-name" == Just ("ghc-internal" :: String),
         jsonField value "type" == Just ("pre-existing" :: String)] of
       [value] -> readUnit value
       _ -> fail "Windows plugin plan has no unique installed ghc-internal unit"
+    wired <- wiredGhcInternal context root (unitId internal)
     -- The genuine source bundle owns wired Core, while Cabal dependencies name
     -- its selected installed registration. Preserve that empty registration
     -- record, as installedRecords does; otherwise the sidecar reacquires the
@@ -983,13 +982,18 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
         let nativeArguments = maybe [] (\(archive,_,_) -> ["-optl" ++ archive]) configured ++ arguments
             configuredInputs = maybe [] (\(_,inputs,_) -> inputs) configured
             configuredProduct = configured >>= (\(_,_,ownedProduct) -> ownedProduct)
+            -- Windows installed adapters execute MSVC LLVM and call the actual
+            -- MinGW archive through the existing private PE companion. Keep C
+            -- globals/lifecycle there once; MinGW LLVM is not a Sulong input.
+            -- Its complete configured inventory remains build provenance below.
+            linkedProduct = if compilerPlatform == "x86_64-windows" then Nothing else configuredProduct
         createDirectory (temporary </> "core")
         staged <- forM (zip [0 :: Int ..] modules) $ \(index, (name, bytes)) -> do
           let path = temporary </> "core" </> show index <.> "cbd"
           BS.writeFile path bytes
           pure (name, path)
         linked <- linkInstalledNativeWithProduct (installedGhc context) (installedPackageTool context) (installedLibdir context)
-          nativeArguments nativeDirectory unit configuredProduct staged
+          nativeArguments nativeDirectory unit linkedProduct staged
         forM_ configuredInputs $ \input -> do
           path <- field input "path"
           expected <- field input "sha256"
@@ -1078,151 +1082,34 @@ installedRecords registrationUnit artifact =
            "bundle" .= object ["path" .= bundlePath bundle, "sha256" .= bundleHash bundle]]]
   where bundle = installedBundle artifact
 
--- Installed ghc-internal interfaces omit executable unfoldings needed by
--- ordinary fail/catch, Typeable, and CString. Re-export original pinned source
--- under its wired unit. This supplies genuine Core; the strict audit still
--- rejects unsupported RTS stack-snapshot operations until they are implemented.
-wiredGhcInternal :: ExportContext -> FilePath -> IO Value
-wiredGhcInternal context thcRoot = do
-  when (Host.os == "mingw32") $ require (contextPlatform context == "x86_64-windows")
-    "The pinned native Windows source recipe requires x86_64-windows"
-  windowsSpec <- if Host.os == "mingw32" then Just <$> readJson (thcRoot </> "etc/ghc/9.14.1/windows-ghc-internal.json") else pure Nothing
-  names <- maybe (pure (map snd moduleSources)) (`field` "modules") windowsSpec
-  let packagePath = "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
-  sources <- maybe (pure [(name, packagePath </> pinnedSourcePath name, digest) | (name, digest) <- sourceHashes]) (\spec -> do
-    files <- field spec "files"
-    forM files $ \item -> do
-      name <- field item "path"
-      path <- optionalField item "source" (packagePath </> name)
-      digest <- field item "sha256"
-      pure (name, path, digest)) windowsSpec
-  let pinned = thcRoot </> packagePath
-      layoutRecipe = thcRoot </> "src/driver/cbits/target-layout.c"
-      unit = "ghc-internal" :: String
-      sourceArtifact (_, path, digest) = object ["path" .= path, "sha256" .= digest]
-      generatedPaths = sort [name | (name, _, _) <- sources, takeExtension name == ".hsc"]
-      verifySources = forM_ sources $ \(name, path, expected) -> do
-        require (not (isAbsolute path) && all (`notElem` [".", ".."]) (splitDirectories path))
-          "Unsafe pinned GHC source path"
-        requireFile (thcRoot </> path)
-        actual <- digestFile (thcRoot </> path)
-        require (actual == expected) ("pinned GHC 9.14.1 source changed: " ++ name)
-  when (Host.os /= "mingw32") verifySources
-  requireFile layoutRecipe
-  recipeHash <- digestFile layoutRecipe
-  pluginHash <- digestFile (contextPluginLibrary context)
-  helper <- if Host.os == "mingw32" then Just <$> prepareInterfaceHelper context thcRoot else pure Nothing
-  helperHash <- traverse (digestFile . installedHelper) helper
-  let inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
-                     "unit" .= unit,
-                     "compiler" .= object ["id" .= contextCompiler context,
-                                           "abi" .= contextAbi context,
-                                           "platform" .= contextPlatform context,
-                                           "way" .= (exportInterfaceWay ++ "-nonprofiling")],
-                     "component" .= object (["kind" .= ("pinned-wired-source" :: String),
-                                             "modules" .= names, "generatedSources" .= generatedPaths] ++
-                       ["sourceGraph" .= spec | Just spec <- [windowsSpec]]),
-                     "nativeArtifacts" .= ([] :: [Value]),
-                     "sourceArtifacts" .= map sourceArtifact sources,
-                     "recipeArtifacts" .= [object
-                       ["path" .= ("src/driver/cbits/target-layout.c" :: String),
-                        "sha256" .= recipeHash]],
-                     "dependencies" .= ([] :: [Value])]
-      buildKey = shaHex (BL.toStrict (encode (object inputFields)))
-      exporter = object (["pluginUnit" .= contextPluginUnit context,
-                         "pluginDb" .= contextPluginDb context,
-                         "pluginHash" .= pluginHash,
-                         "driverHash" .= contextDriverHash context,
-                         "options" .= (["ghc-internal-source-closure-v2", "post-tidy",
-                                        "source-notes", "foreign-import-provenance",
-                                        "foreign-export-associations", "foreign-export-registration",
-                                        "hsc2hs", "-g"] ++
-                           (if Host.os == "mingw32" then ["compiler-source-graph", "-O2", "-fwrite-if-simplified-core"]
-                            else exportWayOptions) ++ ["-dcore-lint", "-XNoPolyKinds"])] ++
-                         ["vanillaInterfaceHelperHash" .= value | Just value <- [helperHash]])
-      exportKey = shaHex (BL.toStrict (encode ("thc-wired-ghc-internal-v2" :: String,
-                                             buildKey, exporter)))
-      buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
-                                           "exportKey" .= exportKey, "exporter" .= exporter])
-      directory = (if Host.os == "mingw32" then contextNative context </> "bundles"
-                   else contextCache context </> "core-bundles/v1" </>
-                     (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context)) </> exportKey
-      destination = directory </> if Host.os == "mingw32" then "unit.zip"
-                    else "ghc-internal-" ++ buildKey ++ ".zip"
-  createDirectoryIfMissing True directory
-  bundle <- withLock (destination ++ ".lock") $ do
-    cached <- doesFileExist destination
-    hit <- if cached then readBundle (contextVerifyArtifacts context) PinnedSourceBundle destination unit buildKey exportKey buildInputs (sort names)
-           else pure Nothing
-    case hit of
-      Just value -> pure value
-      Nothing -> do
-        when cached (removeFile destination)
-        let stagingRoot = contextNative context </> "cache/thc/staging"
-        createDirectoryIfMissing True stagingRoot
-        (staging, handle) <- openTempFile stagingRoot "wired-export-"
-        hClose handle
-        removeFile staging
-        createDirectory staging
-        let cleanup = do exists <- doesDirectoryExist staging
-                         when exists (removePathForcibly staging)
-        (do
-          let packageTool = maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id
-                              (contextGhcPkg context)
-          requireFile packageTool
-          artifacts <- case helper of
-            Nothing -> exportPinnedCore pinned (contextGhc context) packageTool
-              (contextPluginLibrary context) (contextPluginUnit context) layoutRecipe staging
-            Just selectedHelper -> do
-              verifySources
-              exportPinnedWindowsCore pinned [name | (name, _, _) <- sources] (contextGhc context) packageTool
-                (installedHelper selectedHelper) names layoutRecipe staging
-          layout <- readJson (targetLayout artifacts)
-          require (validTargetLayout layout &&
-                   jsonField layout "targetPlatform" == Just (contextPlatform context))
-                  "GHC target layout receipt differs from compiler target"
-          generated <- forM (generatedSources artifacts) $ \(name, path) -> do
-            digest <- digestFile path
-            pure (object ["path" .= map (\c -> if c == '\\' then '/' else c) name, "sha256" .= digest])
-          originalMembers <- forM names $ \name -> do
-            let core = staging </> "core" </> (name ++ ".cbd")
-                member = "core/" ++ name ++ ".cbd"
-            artifact <- readCoreMetadata core
-            foundUnit <- field artifact "unit"
-            foundName <- field artifact "module"
-            foundBoundary <- field artifact "boundary"
-            require (foundUnit == unit && foundName == name && foundBoundary == boundary)
-              ("pinned wired Core has wrong identity: " ++ name)
-            bytes <- BS.readFile core
-            pure (member, bytes)
-          (refs, members) <- packageModules
-            [(name, member, bytes) | (name, (member, bytes)) <- zip names originalMembers]
-          let derived = ["targetLayout" .= layout, "generatedSources" .= generated] ++
-                ["sourceBuild" .= value | Just value <- [sourceBuildReceipt artifacts]]
-              inputsBytes = BL.toStrict (encode (object
-                (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey,
-                                 "exporter" .= exporter] ++ derived)))
-              inner = object ["format" .= ("thc-core-bundle" :: String),
-                              "schema" .= (1 :: Int), "unit" .= unit,
-                              "buildKey" .= buildKey, "exportKey" .= exportKey,
-                              "targetLayout" .= layout,
-                              "generatedSources" .= generated,
-                              "modules" .= refs,
-                              "buildInputs" .= object
-                                ["path" .= ("inplace-manifest.json" :: String),
-                                 "sha256" .= shaHex inputsBytes]]
-          archive <- either fail pure (encodeZip
-            (("manifest.json", BL.toStrict (encode inner)) :
-             ("inplace-manifest.json", inputsBytes) : members))
-          atomicBytes destination (BL.toStrict archive)
-          rememberFreshBundle PinnedSourceBundle unit exportKey buildInputs (sort names)
-            (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
-          `finally` cleanup
-  selected <- maybe (pure bundle) (projectWindowsWiredBundle (contextVerifyArtifacts context) directory bundle) windowsSpec
-  pure (object ["id" .= unit, "depends" .= ([] :: [String]),
-                "modules" .= bundleModules selected,
-                "bundle" .= object ["path" .= bundlePath selected,
-                                   "sha256" .= bundleHash selected]])
+-- The ordinary pinned-source recipe already owns the complete Cabal C/C++
+-- inventory and its configured native archive. Acquire through that recipe
+-- before projecting Windows runtime modules; do not relink a private subset
+-- against the whole wired Core owner.
+wiredGhcInternal :: ExportContext -> FilePath -> String -> IO Value
+wiredGhcInternal context root registeredUnit = do
+  require (Host.os == "mingw32" && contextPlatform context == "x86_64-windows")
+    "Windows wired native acquisition requires the selected native compiler"
+  specification <- readJson (root </> "etc/ghc/9.14.1/windows-ghc-internal.json")
+  original <- prepareInterfaceHelper context root
+  registered <- discoverInstalled original registeredUnit
+  prepared <- preparePinnedInterfaces (contextCache context) (contextDriverHash context)
+    (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context)
+    original [registered]
+  selected <- discoverInstalled prepared (registeredId registered)
+  result <- prepareInstalledBundleWithVerification (contextVerifyArtifacts context)
+    (contextCache context) (contextNative context </> "cache/thc/staging")
+    (root </> "src/driver/cbits/target-layout.c") (contextDriverHash context) prepared selected
+  artifact <- either (fail . show) pure result
+  require (installedOwner artifact == "ghc-internal")
+    "Pinned native source acquisition changed the genuine wired Core owner"
+  let full = installedBundle artifact
+  projection <- projectWindowsWiredBundle (contextVerifyArtifacts context)
+    (takeDirectory (bundlePath full)) full specification
+  pure (object ["id" .= installedOwner artifact, "depends" .= installedDepends selected,
+    "modules" .= bundleModules projection,
+    "bundle" .= object ["path" .= bundlePath projection, "sha256" .= bundleHash projection]])
+
 
 -- Compilation dependencies do not implicitly load native registration code.
 -- Keep the complete genuine archive, and make a separately hashed module-level
@@ -1260,7 +1147,9 @@ projectWindowsWiredBundleCold verify path full refs names excluded key source ex
     (lookup "inplace-manifest.json" entries)
   compiler <- field originalInputs "compiler" :: IO Value
   component <- field originalInputs "component" :: IO Value
-  generated <- field originalInputs "generatedSources" :: IO [Value]
+  -- Ordinary installed acquisition records its source/native inputs in the
+  -- complete bundle; it does not add the old wired recipe's generated list.
+  generated <- optionalField originalInputs "generatedSources" [] :: IO [Value]
   let inputs = object ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
         "unit" .= ("ghc-internal" :: String), "buildKey" .= key, "exportKey" .= key, "compiler" .= compiler,
         "component" .= component,
