@@ -256,7 +256,6 @@ jobs:
             bin/test-managed-mvar-fixtures.py \
             bin/test-managed-mvars.py \
             bin/test-prepare-managed-md5.py \
-            bin/test-putstrln-export.py \
             bin/test-synchronous-exception-fixtures.py; do
             python3 "$test"
             python3 -O "$test"

@@ -43,7 +43,7 @@ class LibraryBundleTest(unittest.TestCase):
         self.environ.start()
         self.addCleanup(self.environ.stop)
         files = {"vendor/source.hs": b"original upstream source\n",
-                 "build/libraries/group/core.json": b'{"source":"native Core"}',
+                 "build/libraries/group/core.cbd": b"CBD fixture bytes, never decoded or executed",
                  "build/libraries/group/audit.json": b'{"accepted":true}',
                  "build/libraries/group/entry.audit.json": b'{"accepted":true}',
                  "build/libraries/group/provenance.json": b'{"compiler":"9.14.1","sourcePatches":[]}',
@@ -61,7 +61,7 @@ class LibraryBundleTest(unittest.TestCase):
             str(self.root / "vendor/source.hs"): bundle.digest(self.root / "vendor/source.hs")},
             "artifactHashes": {str(self.root / name): bundle.digest(self.root / name)
                                for name in files if name.startswith("build/libraries/")},
-            "groups": [{"id": "group", "modules": [str(self.root / "build/libraries/group/core.json")],
+            "groups": [{"id": "group", "modules": [str(self.root / "build/libraries/group/core.cbd")],
                         "audit": str(self.root / "build/libraries/group/audit.json"),
                         "entries": [{"name": "entry", "audit": str(self.root / "build/libraries/group/entry.audit.json")}]}]}
         self.write_cases()
@@ -139,7 +139,7 @@ class LibraryBundleTest(unittest.TestCase):
 
     def test_missing_or_extra_declared_artifact_is_rejected(self):
         self.pack()
-        for change in (lambda m: m["payloadFiles"].pop("build/libraries/group/core.json"),
+        for change in (lambda m: m["payloadFiles"].pop("build/libraries/group/core.cbd"),
                        lambda m: m["payloadFiles"].update({"build/extra": "0" * 64})):
             with self.subTest(change=change):
                 with self.assertRaisesRegex(RuntimeError, "members differ"):

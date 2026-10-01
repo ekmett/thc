@@ -3260,30 +3260,6 @@
       ],
       "python": []
     },
-    "t/fixtures/putstrln/Main.hs": {
-      "junit": [],
-      "python": [
-        "bin/test-putstrln-export.py"
-      ]
-    },
-    "bin/putstrln_export.py": {
-      "junit": [],
-      "python": [
-        "bin/test-putstrln-export.py"
-      ]
-    },
-    "bin/putstrln_hsc.py": {
-      "junit": [],
-      "python": [
-        "bin/test-putstrln-export.py"
-      ]
-    },
-    "bin/putstrln_inventory.py": {
-      "junit": [],
-      "python": [
-        "bin/test-putstrln-export.py"
-      ]
-    },
     "src/driver/THC/Driver/Project.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "python": [],
