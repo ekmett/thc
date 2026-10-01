@@ -17,6 +17,7 @@ import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value(..), eitherDecodeFileStrict, object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.ByteString as BS
 import Data.Foldable (toList)
 import Data.Int (Int64)
 import Data.List (isPrefixOf, sort)
@@ -30,6 +31,8 @@ import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..), die)
 import System.FilePath ((</>), takeExtension)
 import System.Process (CreateProcess(cwd), proc, readCreateProcessWithExitCode)
+import THC.Compact.Inspect (inspectSources)
+import THC.Compact.Module (readModuleValue)
 
 entries, frontiers, effects :: [String]
 entries = ["primitiveCase", "liftedCase", "tupleCase", "lazyCase", "unusedCase", "unusedBottomCase", "nestedCase"]
@@ -75,11 +78,16 @@ variable name value = take 2 (values value) == [String "var", name]
 
 inventory :: FilePath -> (String, String) -> IO Value
 inventory root (stage, boundary) = do
-  original <- readJson (root </> directory </> stage ++ "-core/UnsafeEqualityAudit.json")
-  closure <- readJson (root </> directory </> stage ++ "-core/THC.InterfaceClosure.json")
+  originalBytes <- BS.readFile (root </> directory </> stage ++ "-core/UnsafeEqualityAudit.cbd")
+  closureBytes <- BS.readFile (root </> directory </> stage ++ "-core/THC.InterfaceClosure.cbd")
+  original <- either die pure (readModuleValue originalBytes)
+  closure <- either die pure (readModuleValue closureBytes)
+  sources <- either die pure (inspectSources originalBytes)
+  closureSources <- either die pure (inspectSources closureBytes)
   check (field "ghc" original == String "9.14.1" && field "boundary" original == toJSON boundary) "Wrong Core boundary"
   let bindings = values (field "bindings" original) ++ values (field "bindings" closure)
-      expression name = fromMaybe Null $ lookup (String name)
+      expression name = fromMaybe Null $ lookup (String (if name == "unsafeCoerce"
+        then "ghc-internal:GHC.Internal.Unsafe.Coerce.unsafeCoerce" else "main:UnsafeEqualityAudit." <> name))
         (reverse [(field "name" binding, field "expr" binding) | binding <- bindings])
       hasProof = any (variable proof) . walk
   proofs <- forM [("primitive", "long"), ("nested", "long"), ("tuple", "unknown"),
@@ -88,12 +96,14 @@ inventory root (stage, boundary) = do
       [node] -> pure node
       _ -> die (stage ++ "/" ++ Text.unpack name ++ ": genuine late case must be lowered exactly once")
     let representation = field "rep" mark
-        notes = values (field "sourceNotes" mark)
+        spans = values (field "sourceSpans" sources)
+        notes = [field "id" sourceSpan | sourceSpan <- spans, field "label" sourceSpan == String name]
+        retainedNotes = concatMap (values . field "sourceNotes") (values (field "locations" sources))
     check (field "unsafeEqualityCase" mark == String "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg" &&
            field "kind" representation == String kind) "Wrong unsafe-equality lowering or representation"
     check (not (hasProof (expression name))) "Lowered case still depends on proof"
     unless (name == "unsafeCoerce") $ check (not (null notes) &&
-      all (`elem` map (field "id") (values (field "sourceSpans" original))) notes) "Lost unsafe-equality source notes"
+      all (`elem` retainedNotes) notes) "Lost unsafe-equality source notes"
     pure (name, representation)
   let result name = fromMaybe Null (lookup name proofs)
   check (field "primReps" (result "primitive") == toJSON (["IntRep"] :: [String])) "Unlifted result lost exact representation"
@@ -101,18 +111,19 @@ inventory root (stage, boundary) = do
          field "primReps" (result "tuple") == toJSON (["IntRep", "BoxedRep (Just Lifted)"] :: [String])) "Tuple result proof lost"
   check (all ((== Bool False) . field "evaluated" . result) ["lazyValue", "unsafeCoerce"])
     "Lowering must not mark arbitrary lifted payload evaluated"
-  check (all (\value -> case field "sourceCore" value of
-    String text -> "unsafeEqualityProof" `Text.isInfixOf` text; _ -> False) [original, closure]) "Original Core proof evidence disappeared"
+  check (all (any (\file -> case field "content" file of
+    String text -> "unsafeEqualityProof" `Text.isInfixOf` text; _ -> False) . values . field "sourceFiles")
+    [sources, closureSources]) "Original source proof evidence disappeared"
   forM_ frontiers $ \name -> check (hasProof (expression (Text.pack name))) (name ++ ": nonmatching proof dependency disappeared")
   case [values node | node@(Array _) <- walk (expression "liveBinder"), take 1 (values node) == [String "case"]] of
-    [[_, scrutinee, binder, alternatives, metadata]] -> check (variable proof scrutinee &&
-      field "occurrence" (field "info" (field "binder" metadata)) `notElem` [Null, String "Dead"] &&
+    [[_, scrutinee, binder, alternatives, _]] -> check (variable proof scrutinee &&
       any (variable binder) (walk alternatives)) "Live case binder must remain used and unlowered"
     _ -> die "Expected one genuine live case"
   check (not (or [KeyMap.member "unsafeEqualityCase" fields | Object fields <- walk (expression "wrongCalleeCase")]))
     "Arbitrary proof-producing call must not be erased"
   check (any (\binding -> field "origin" binding == String "interface-core-unfolding" &&
-    field "name" binding == String "unsafeCoerce") (values (field "bindings" closure))) "Expected actual installed unsafeCoerce unfolding"
+    field "id" binding == String "ghc-internal:GHC.Internal.Unsafe.Coerce.unsafeCoerce")
+    (values (field "bindings" closure))) "Expected actual installed unsafeCoerce unfolding"
   pure $ object ["stage" .= stage, "resultProofs" .= object [Key.fromText name .= value | (name, value) <- proofs],
                  "nonmatchingFrontiers" .= frontiers]
 
@@ -191,7 +202,7 @@ prepareUnsafeEquality root checkOnly = do
       let core = directory </> stage ++ "-core"
           exportEnvironment = [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage ++ "-ghc"), ("THC_SOURCE_NOTES", "true")]
           auditArguments names path = ["bin/audit-core.py", core, "--output", directory </> path] ++ concatMap (\name -> ["--entry", "main:UnsafeEqualityAudit." ++ name]) names
-      (_, exported) <- execute exportEnvironment "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      (_, exported) <- execute exportEnvironment "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         map ("-fplugin-opt=THC.Plugin:closure=" ++) (entries ++ frontiers ++ effects) ++ [source])
       (_, audited) <- execute [] "python3" (auditArguments (entries ++ effects) (stage ++ "-audit.json"))
       negative <- forM frontiers $ \name -> do

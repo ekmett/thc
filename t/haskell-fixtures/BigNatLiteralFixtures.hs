@@ -31,9 +31,10 @@ import Foreign (Ptr, alloca, castPtr, peek, poke)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>), takeExtension, replaceExtension)
+import System.FilePath ((</>), takeExtension)
 import Text.Read (readMaybe)
 import THC.Compact.Module (readModuleValue)
+import THC.Compact.Inspect (inspectSources)
 
 entries, arithmetic, modules, originals, vendorSources :: [String]
 entries = ["integerRoundTrip","naturalRoundTrip","integerLiteral","naturalLiteral",
@@ -144,15 +145,15 @@ verifyBootSources root = do
 inventory :: FilePath -> FilePath -> IO (Value,Value,Value)
 inventory root auditDirectory = do
   original <- mapM (readCore . (root </>)) originals
-  -- Pretty source text is diagnostic evidence, not executable input.
-  diagnostics <- mapM (readJson . (root </>) . (`replaceExtension` "json")) originals
-  forM_ diagnostics $ \core -> do
+  forM_ (zip originals original) $ \(path,core) -> do
     ghc <- field "ghc" core :: IO String
     boundary <- field "boundary" core :: IO String
-    sourceCore <- field "sourceCore" core :: IO String
-    spans <- field "sourceSpans" core :: IO [Value]
+    sources <- BS.readFile (root </> path) >>= either die pure . inspectSources
+    files <- field "sourceFiles" sources :: IO [Value]
+    contents <- mapM (field "content") files :: IO [String]
+    spans <- field "sourceSpans" sources :: IO [Value]
     check (ghc == "9.14.1" && boundary == "optimized-Core-after-Tidy-before-CorePrep" &&
-      not (null sourceCore) && not (null spans))
+      not (null contents) && all (not . null) contents && not (null spans))
       "Complete original source evidence required"
   originalBindings <- mapM (field "bindings") original :: IO [[Value]]
   sourceIds <- Set.fromList <$> mapM (field "id") (concat originalBindings) :: IO (Set.Set String)
@@ -265,7 +266,7 @@ prepareBigNatLiterals root checkOnly = do
       _ -> die "BigNat requires native-order 64-bit GHC"
     _ <- runLogged 300 root logs "plugin-build" [] "bin/build-compiler.sh" []
     _ <- runLogged 600 root logs "boot-export" [] "python3"
-      ["bin/export-boot.py","--pretty-diagnostics","--frontier","bignum","--build-dir",root </> directory </> "boot"]
+      ["bin/export-boot.py","--frontier","bignum","--build-dir",root </> directory </> "boot"]
     forM_ ["pre","post"] $ \stage -> do
       _ <- runLogged 300 root logs (stage ++ "-export")
         [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]

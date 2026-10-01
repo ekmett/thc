@@ -48,7 +48,7 @@ prepareThreadAsync root = do
   unless (lines version == ["9.14.1"]) (die "Public thread fixture requires GHC 9.14.1")
   forM_ stages $ \stage -> do
     let core = directory </> stage </> "core"
-        options = "-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
+        options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core),
       ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [source]) ""
@@ -127,7 +127,7 @@ prepareThreadAsync root = do
         directory </> "yield-oracle.txt", directory </> "lazy-oracle.txt", directory </> "saved-oracle.txt",
         directory </> "external-saved-oracle.txt", directory </> "scheduled-saved-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
-          suffix <- ["core/ThreadAsyncAudit.cbd", "core/ThreadAsyncAudit.json", "core/LazyForkAudit.cbd", "core/LazyForkAudit.json", "lazyFork-audit.json"] ++
+          suffix <- ["core/ThreadAsyncAudit.cbd", "core/LazyForkAudit.cbd", "lazyFork-audit.json"] ++
                     [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
