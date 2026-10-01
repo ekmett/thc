@@ -38,6 +38,7 @@ import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.NativeDependencies (nativeLinkInputs, readNativeProduct, nativeProductPieces, nativeProductProof)
 import THC.Driver.PackageNative (captureNativeObject, finishPackageNativeWithDependencies, nativeWrapperSource)
 import THC.Driver.NativeRecipe
+import THC.Driver.NativeCache (nativeCompilerFlags)
 import THC.Driver.Installed (boundedInterfaceProcessInput)
 import THC.Driver.ScalarBitcode (withScalarBitcode)
 import THC.Driver.RuntimeShim (withRuntimeShim)
@@ -81,6 +82,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
         clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
         opt <- maybe "opt" id <$> lookupEnv "THC_LLVM_OPT"
+        sdkFlags <- nativeCompilerFlags
         let pieces = root </> "pieces"
             command program arguments = do
               (status,output,diagnostic) <- readProcessWithExitCode program arguments ""
@@ -88,10 +90,11 @@ tests = TestLabel "actual native compiler receipts" $ TestList
               pure output
             digest = concatMap (\byte -> let text = showHex byte "" in if length text == 1 then '0':text else text)
               . BS.unpack . SHA.hash
-            prepare owner dependencies source = do
-              let cfile = root </> owner <.> "c"
+            prepare owner dependencies = prepareSource owner dependencies "c" []
+            prepareSource owner dependencies extension options source = do
+              let cfile = root </> owner <.> extension
                   obj = root </> owner <.> "o"
-                  arguments = ["-c",cfile,"-fPIC","-o",obj]
+                  arguments = ["-c",cfile,"-fPIC","-o",obj] ++ options
                   registration = root </> owner <.> "conf"
               writeFile cfile source
               _ <- command compiler arguments
@@ -189,32 +192,49 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         assertBool "a declared peer exemption never hides another missing symbol" $ case failure of
           Left reason -> "unrelated_missing" `isInfixOf` show reason
           Right _ -> False
-        table <- prepare "nativestrings" [] (unlines
-          [ "const char *relative_name(unsigned index) {"
-          , "  static const char *const names[] = {\"alpha\",\"beta\",\"gamma\",\"delta\"};"
-          , "  return names[index & 3];"
-          , "}"
-          ])
-        [tablePiece] <- pure (nativeProductPieces table)
-        String tableBitcode <- field "bitcode" tablePiece
-        tableIR <- command opt ["-S","-passes=verify",Text.unpack tableBitcode,"-o","-"]
-        assertBool "actual optimized C string table emits a relative-load intrinsic"
-          ("call ptr @llvm.load.relative." `isInfixOf` tableIR)
-        let oracleSource = root </> "string-oracle.c"
-            originalOracle = root </> "string-original.exe"
-            loweredOracle = root </> "string-lowered.exe"
-            finalTable = root </> "linked/nativestrings/native/package.bc"
-        writeFile oracleSource (unlines ["#include <stdio.h>","extern const char *relative_name(unsigned);",
-          "int main(void){for(unsigned i=0;i<5;++i) puts(relative_name(i));return 0;}"])
-        _ <- command clang ["-O1","-fPIC",oracleSource,root </> "nativestrings.c","-o",originalOracle]
-        expected <- command originalOracle []
-        assertEqual "native string-table semantics" "alpha\nbeta\ngamma\ndelta\nalpha\n" expected
-        _ <- finish "nativestrings" table []
-        loweredIR <- command opt ["-S","-passes=verify",finalTable,"-o","-"]
-        assertBool "package publication lowers backend-only relative loads to ordinary LLVM"
-          (not ("llvm.load.relative." `isInfixOf` loweredIR))
-        _ <- command clang ["-O1","-fPIC",oracleSource,finalTable,"-o",loweredOracle]
-        assertEqual "standard intrinsic lowering preserves native string-table semantics" expected =<< command loweredOracle []
+        let cStrings = unlines
+              [ "const char *relative_name(unsigned index) {"
+              , "  static const char *const names[] = {\"alpha\",\"beta\",\"gamma\",\"delta\"};"
+              , "  return names[index & 3];"
+              , "}"
+              ]
+            cppStrings = unlines
+              [ "struct Base { virtual const char *name() const = 0; };"
+              , "struct Entry : Base { const char *value; constexpr Entry(const char *s) : value(s) {}"
+              , "  const char *name() const override { return value; } };"
+              , "static Entry a(\"alpha\"), b(\"beta\"), c(\"gamma\"), d(\"delta\");"
+              , "extern \"C\" const char *relative_name(unsigned index) {"
+              , "  static const Base *const names[] = {&a, &b, &c, &d};"
+              , "  return names[index & 3]->name();"
+              , "}"
+              ]
+            relativeVtables = ["-pgmcxx",clang,"-optcxx-fno-rtti",
+              "-optcxx-fexperimental-relative-c++-abi-vtables"]
+        -- LLVM disables C relative lookup tables on AArch64 Darwin. The C++
+        -- frontend's relative-vtable ABI exercises the intrinsic on every target.
+        forM_ [("nativestrings","c",[],cStrings,False),
+               ("nativevtables","cpp",relativeVtables,cppStrings,True)] $ \(owner,extension,options,source,relative) -> do
+          table <- prepareSource owner [] extension options source
+          [tablePiece] <- pure (nativeProductPieces table)
+          String tableBitcode <- field "bitcode" tablePiece
+          tableIR <- command opt ["-S","-passes=verify",Text.unpack tableBitcode,"-o","-"]
+          when relative $ assertBool "actual C++ relative vtable emits a relative-load intrinsic"
+            ("call ptr @llvm.load.relative." `isInfixOf` tableIR)
+          let oracleSource = root </> owner ++ "-oracle.c"
+              originalOracle = root </> owner ++ "-original.exe"
+              loweredOracle = root </> owner ++ "-lowered.exe"
+              finalTable = root </> "linked" </> owner </> "native/package.bc"
+          writeFile oracleSource (unlines ["#include <stdio.h>","extern const char *relative_name(unsigned);",
+            "int main(void){for(unsigned i=0;i<5;++i) puts(relative_name(i));return 0;}"])
+          _ <- command clang (sdkFlags ++ ["-O1","-fPIC",oracleSource,root </> owner <.> "o","-o",originalOracle])
+          expected <- command originalOracle []
+          assertEqual "native string-table semantics" "alpha\nbeta\ngamma\ndelta\nalpha\n" expected
+          _ <- finish owner table []
+          loweredIR <- command opt ["-S","-passes=verify",finalTable,"-o","-"]
+          assertBool "package publication lowers backend-only relative loads to ordinary LLVM"
+            (not ("llvm.load.relative." `isInfixOf` loweredIR))
+          _ <- command clang (sdkFlags ++ ["-O1","-fPIC",oracleSource,finalTable,"-o",loweredOracle])
+          assertEqual "standard intrinsic lowering preserves native string-table semantics" expected =<< command loweredOracle []
   , TestLabel "published native dependencies survive removed Cabal package DBs" $ TestCase $ withScratch $ \root -> do
       ghc <- maybe "ghc" id <$> lookupEnv "GHC"
       compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
