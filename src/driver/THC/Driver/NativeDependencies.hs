@@ -14,7 +14,7 @@
 -- exact native archive membership, never from an unresolved symbol spelling.
 module THC.Driver.NativeDependencies
   ( NativeProduct, nativeProductProof, nativeProductPieces, readNativeProduct
-  , selectNativePieces, nativeLinkInputs, nativeSymbolArchives, configuredNativeArchive
+  , selectNativePieces, nativeLinkInputs, nativeSymbolArchives, nativeSymbolArchivesWithProduct, configuredNativeArchive
   , nativeWindowsRtsInputs
   ) where
 
@@ -161,13 +161,28 @@ nativeWindowsRtsInputs ghcPkg libdir = do
 -- RTS. The native linker extracts only the rooted archive members; no whole
 -- Haskell component is loaded alongside its Core implementation.
 nativeSymbolArchives :: FilePath -> FilePath -> FilePath -> String -> [String] -> [(String,Bool)] -> IO [(FilePath,[(String,Bool)])]
-nativeSymbolArchives ghcPkg libdir root owner arguments symbols
+nativeSymbolArchives ghcPkg libdir root owner arguments symbols =
+  nativeSymbolArchivesWithProduct ghcPkg libdir root owner arguments Nothing symbols
+
+-- A complete configured C product already supplies the declaring unit's C
+-- inventory. Its mixed installed archive also contains native Haskell bodies;
+-- those cannot supply managed closures or foreign-export ownership.
+nativeSymbolArchivesWithProduct :: FilePath -> FilePath -> FilePath -> String -> [String] ->
+  Maybe NativeProduct -> [(String,Bool)] -> IO [(FilePath,[(String,Bool)])]
+nativeSymbolArchivesWithProduct ghcPkg libdir root owner arguments capturedProduct symbols
   | null symbols = pure []
   | otherwise = do
       let absolute path = if isAbsolute path then path else root </> path
           database option = if "--package-db=" `isPrefixOf` option
             then "--package-db=" ++ absolute (drop 13 option) else option
           options = ["--global-package-db=" ++ libdir </> "package.conf.d"] ++ map database (nativePackageOptions arguments)
+      capturedUnit <- case capturedProduct of
+        Nothing -> pure Nothing
+        Just captured -> do
+          check (member (nativeProductProof captured) "unit" == Just (String (Data.Text.pack owner)))
+            "configured native archive owner differs"
+          identity <- get (nativeProductProof captured) "sourceIdentity"
+          fmap Just (get identity "id" :: IO String)
       registrations <- fmap concat $ forM (nub ((True,owner):nativePackageSelectors arguments)) $ \(unitId,name) -> do
         (status,registration,_) <- readProcessWithExitCode ghcPkg (options ++ ["--ipid" | unitId] ++ ["describe",name,"--no-expand-pkgroot"]) ""
         if status /= ExitSuccess then pure [] else do
@@ -180,7 +195,7 @@ nativeSymbolArchives ghcPkg libdir root owner arguments symbols
           -- could run. Preserve the original calls/ABI, like other RTS calls;
           -- context-owned services dispatch in the runtime, while unsupported
           -- services remain unresolved rather than acquiring native state.
-          pure [info | package /= "rts",
+          pure [info | Just (prettyShow (Package.installedUnitId info)) /= capturedUnit, package /= "rts",
             prettyShow (Package.installedUnitId info) /= "ghc-9.14.1-inplace",
             prettyShow (Package.installedUnitId info) == owner || package == owner]
       nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
@@ -217,8 +232,9 @@ nativeSymbolArchives ghcPkg libdir root owner arguments symbols
 -- The caller passes the returned archive as an ordinary -optl input and records
 -- the returned files in its existing cache observations. GHC registrations and
 -- the ordinary installed-package path remain unchanged.
-configuredNativeArchive :: FilePath -> FilePath -> Value -> String -> IO (Maybe (FilePath,[Value]))
-configuredNativeArchive source destination compilerIdentity registration = do
+configuredNativeArchive :: (FilePath -> FilePath -> [String] -> IO Value) ->
+  FilePath -> FilePath -> Value -> String -> String -> IO (Maybe (FilePath,[Value],Maybe NativeProduct))
+configuredNativeArchive capture source destination compilerIdentity owner registration = do
   (_,info) <- either (fail . show) pure (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
   root <- canonicalizePath source
   let package = prettyShow (pkgName (Package.sourcePackageId info))
@@ -287,13 +303,13 @@ configuredNativeArchive source destination compilerIdentity registration = do
       directory <- canonicalizePath destination
       let pic = directory </> "pic-objects"
           packageDirectory = takeDirectory configured </> "source"
-      objects <- forM declarations $ \(sourcePath, cxx) -> do
+      captured <- forM declarations $ \(sourcePath, cxx) -> do
         let path = getSymbolicPath sourcePath
         check (not (isAbsolute path) && ".." `notElem` splitDirectories path)
           "configured native source is outside its package"
         -- Hadrian's Context.objectPath places nongenerated foreign objects
         -- under their source extension, independently of Haskell objects.
-        if builtByHadrian then pure (built </> drop 1 (takeExtension path) </> replaceExtension path "dyn_o")
+        if builtByHadrian then pure (built </> drop 1 (takeExtension path) </> replaceExtension path "dyn_o", Nothing)
         else do
           ghc <- maybe (fail "pinned native provider has no configured GHC") (pure . programPath)
             (lookupProgram ghcProgram (Local.withPrograms lbi))
@@ -312,7 +328,10 @@ configuredNativeArchive source destination compilerIdentity registration = do
           (status,_,diagnostic) <- boundedInterfaceProcessIn packageDirectory ghc arguments
           check (status == ExitSuccess) ("Cannot compile pinned native PIC source: " ++
             Data.Text.unpack (T.decodeUtf8 diagnostic))
-          pure (pic </> replaceExtension path "dyn_o")
+          piece <- capture packageDirectory ghc arguments
+          pure (pic </> replaceExtension path "dyn_o", Just piece)
+      let objects = map fst captured
+          pieces = [piece | (_,Just piece) <- captured]
       check (length (nub (map takeFileName objects)) == length objects)
         "configured native PIC archive has duplicate member names"
       present <- filterM doesFileExist objects
@@ -346,7 +365,38 @@ configuredNativeArchive source destination compilerIdentity registration = do
         after <- observe
         check (before == after) "configured native products changed during archiving"
         renameFile temporary output
-        pure (Just (output,before))
+        ownedProduct <- if null pieces then pure Nothing else do
+          (listed,names,errors) <- readProcessWithExitCode ar ["t",output] ""
+          check (listed == ExitSuccess) ("Cannot read configured native archive: " ++ errors)
+          check (sort (archiveObjectNames names) == sort (map takeFileName objects))
+            "configured native archive differs from declared C/C++ objects"
+          members <- forM (archiveObjectNames names) $ \name -> do
+            contents <- withCreateProcess (proc ar ["p",output,name]) {std_out=CreatePipe} $ \_ stream _ process -> do
+              archiveStream <- maybe (fail "Missing configured archive output pipe") pure stream
+              bytes <- BS.hGetContents archiveStream
+              _ <- evaluate (BS.length bytes)
+              memberStatus <- waitForProcess process
+              check (memberStatus == ExitSuccess) "Cannot read configured native archive member"
+              pure bytes
+            pure (name,digest contents)
+          selectedPieces <- either fail pure (selectNativePieces True members pieces)
+          check (length selectedPieces == length declarations) "configured native archive lacks captured C/C++ products"
+          translationUnits <- forM selectedPieces $ \piece -> do
+            path <- get piece "bitcode"
+            hash <- digest <$> BS.readFile path
+            pure (object ["receipt" .= piece,"bitcodeSha256" .= hash])
+          archiveHash <- digest <$> BS.readFile output
+          let proof = object ["profile" .= ("resolved-native-archive-products-v1" :: String),
+                "unit" .= owner,"sourceIdentity" .= object
+                  ["id" .= prettyShow (Package.installedUnitId info),
+                   "depends" .= map prettyShow (Package.depends info),
+                   "pkg-src" .= object ["type" .= ("local" :: String),"path" .= packageDirectory]],
+                "registration" .= registration,"registrationSha256" .= digest (T.encodeUtf8 (Data.Text.pack registration)),
+                "archives" .= [object ["path" .= output,"sha256" .= archiveHash,
+                  "members" .= [object ["name" .= name,"sha256" .= hash] | (name,hash) <- members]]],
+                "translationUnits" .= translationUnits]
+          pure (Just (NativeProduct proof selectedPieces))
+        pure (Just (output,before,ownedProduct))
 
 -- The constructor stays private: only captured C/C++ products with exact
 -- membership in the resolved package archive may become native providers.
@@ -424,7 +474,7 @@ readNativeProduct unit dependencies registration pieces = do
         -- Do not extract native Haskell members. Repeated Haskell basenames
         -- are legal in a mixed archive; only selected C membership must be
         -- unambiguous. C-only registrations still require every member.
-        let names = [name | name <- lines listing, complete || name `elem` candidateNames]
+        let names = [name | name <- archiveObjectNames listing, complete || name `elem` candidateNames]
         check ((not complete || not (null names)) && length names == length (nub names) &&
           all archiveMember names) "Unsupported native archive inventory"
         members <- forM names $ \name -> do
@@ -487,6 +537,12 @@ files directory = do
       if isDirectory then files path else pure [path])
 validHash :: String -> Bool
 validHash value = length value == 64 && all (`elem` ("0123456789abcdef" :: String)) value
+-- BSD archive symbol indexes are container metadata, not compiler objects.
+-- Keep every other member for exact membership and duplicate checks.
+archiveObjectNames :: String -> [String]
+archiveObjectNames listing = [name | name <- lines listing,
+  name `notElem` ["__.SYMDEF", "__.SYMDEF SORTED", "__.SYMDEF_64", "__.SYMDEF_64 SORTED"]]
+
 archiveMember :: String -> Bool
 archiveMember [] = False
 archiveMember name@(first:_) = first `notElem` ['-','@'] &&
