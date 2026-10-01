@@ -99,7 +99,15 @@ class RubbishLiteralTest {
         for (String id : units.keySet())
             if (!id.equals("ghc-internal") || registration.equals(id))
                 expectedArtifacts.add(prefix + "/provider/installed/bundles/" + id + ".zip");
-        var providerCommands = new ArrayList<>(list("ghc-version", "helper-build", "helper-location", "ghc-internal-unit", "containers-unit"));
+        for (var unit : units.values()) for (var module : objects(unit.get("modules"))) {
+            var compact = object(module.get("compact"));
+            assertEquals("thc-cbd-v1", compact.get("format"));
+            Path path = Path.of((String) compact.get("path"));
+            assertTrue(path.startsWith(root.resolve(prefix + "/provider/installed/unit-core/v3")));
+            expectedArtifacts.add(root.relativize(path).toString());
+            expectedArtifacts.add(root.relativize(path.getParent().resolve("publication.json")).toString());
+        }
+        var providerCommands = new ArrayList<>(list("ghc-version", "helper-build", "helper-location", "driver-location", "ghc-internal-unit", "containers-unit"));
         assertTrue(manifest.get("customCoreProvider") instanceof Boolean);
         if (Boolean.TRUE.equals(manifest.get("customCoreProvider"))) providerCommands.add("core-provider-version");
         for (var command : providerCommands)

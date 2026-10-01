@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ThreadLocalAction;
+import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
 import java.util.ArrayDeque;
@@ -21,6 +22,10 @@ public final class GuestThreads {
     private final ThreadLocal<MaskingState> maskingState;
     private final CpuAffinity cpuAffinity;
     private final Wake wake;
+    private final TruffleLanguage.Env env;
+    // Guest completion precedes Truffle carrier teardown. Retain ownership independently.
+    private final WeakHashMap<Thread, Boolean> platformCarriers = new WeakHashMap<>();
+    private boolean stoppingPlatform;
     @com.oracle.truffle.api.CompilerDirectives.CompilationFinal private LoomScheduler loom;
     /** This is execution permission, not the observable Haskell masking state. */
     public enum DeliveryPermission { NONE, GUEST, FOREIGN }
@@ -32,6 +37,10 @@ public final class GuestThreads {
         this(maskingState, CpuAffinity.discover(false), wake);
     }
     public GuestThreads(ThreadLocal<MaskingState> maskingState, CpuAffinity cpuAffinity, Wake wake) {
+        this(maskingState, cpuAffinity, wake, null);
+    }
+    private GuestThreads(ThreadLocal<MaskingState> maskingState, CpuAffinity cpuAffinity, Wake wake, TruffleLanguage.Env env) {
+        this.env = env;
         this.maskingState = maskingState; this.cpuAffinity = cpuAffinity; this.wake = wake;
         logicalCapabilities = cpuAffinity.getCount();
     }
@@ -43,7 +52,7 @@ public final class GuestThreads {
             env.submitThreadLocal(new Thread[]{target}, new ThreadLocalAction(true, false) {
                 // Only wake the target's safepoint. An async exception needs a saved guest cut.
                 @Override protected void perform(Access access) {}
-            }));
+            }), env);
         if (hosting.equals("loom")) loom = new LoomScheduler(env, cpuAffinity);
         else if (!hosting.equals("platform")) throw new RuntimeFault("Unknown THC thread hosting mode: " + hosting);
     }
@@ -86,10 +95,35 @@ public final class GuestThreads {
     }
     @TruffleBoundary public void startThread(Thread thread) {
         if (loom != null) { loom.start(thread); return; }
-        try (var ignored = cpuAffinity.resetCurrent()) { thread.start(); }
-        catch (Throwable failure) { throw propagate(failure); }
+        synchronized (this) {
+            if (stoppingPlatform || closed) throw fault("Guest context is stopping");
+            try (var ignored = cpuAffinity.resetCurrent()) {
+                var previous = platformCarriers.put(thread, Boolean.TRUE);
+                try { thread.start(); }
+                catch (Throwable failure) { if (previous == null) platformCarriers.remove(thread); throw failure; }
+            } catch (Throwable failure) { throw propagate(failure); }
+        }
     }
-    public void stopHostedThreads() { if (loom != null) loom.stopThreads(); }
+    public void stopHostedThreads() {
+        if (loom != null) { loom.stopThreads(); return; }
+        Thread[] carriers;
+        synchronized (this) {
+            stoppingPlatform = true;
+            carriers = platformCarriers.keySet().stream().filter(thread -> thread != Thread.currentThread() && thread.isAlive()).toArray(Thread[]::new);
+        }
+        if (carriers.length != 0) env.submitThreadLocal(carriers, new ThreadLocalAction(true, false) {
+            @Override protected void perform(Access access) { throw new Stopped(); }
+        });
+        boolean[] interrupted = {Thread.interrupted()};
+        try {
+            for (var thread : carriers) TruffleSafepoint.setBlockedThreadInterruptible(null, waiting -> {
+                try { waiting.join(); }
+                catch (InterruptedException failure) { interrupted[0] = true; throw failure; }
+            }, thread);
+            synchronized (this) { platformCarriers.clear(); }
+        } finally { if (interrupted[0]) Thread.currentThread().interrupt(); }
+    }
+    @SuppressWarnings("removal") private static final class Stopped extends ThreadDeath { }
     public static final class GuestThread {
         final Thread thread;
         final GuestThreadId identity;

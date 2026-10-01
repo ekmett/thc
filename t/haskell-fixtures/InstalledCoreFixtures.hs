@@ -70,7 +70,10 @@ prepareInstalledCoreWithForeignUnits root directory source =
 prepareInstalledCoreUnits = prepareInstalledCoreProfile Nothing
 
 prepareInstalledCoreProfile :: Maybe FilePath -> FilePath -> FilePath -> [String] -> IO InstalledFixture
-prepareInstalledCoreProfile foreignSource root directory libraries = do
+prepareInstalledCoreProfile requestedSource root directory libraries = do
+  foreignSource <- case requestedSource of
+    Nothing -> lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
+    source -> pure source
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
