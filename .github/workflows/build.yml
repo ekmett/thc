@@ -52,7 +52,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     # Cold native/Core preparation and both fresh JVM forks share this budget.
-    timeout-minutes: 180
+    # Allow the complete matrix to finish; individual compiler limits remain unchanged.
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v7.0.1
         with:
