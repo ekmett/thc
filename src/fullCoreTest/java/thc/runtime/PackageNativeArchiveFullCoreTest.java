@@ -40,12 +40,12 @@ public class PackageNativeArchiveFullCoreTest {
     }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private long compiled(ExecutableProgram program) { return ((Number) program.diagnostics().get("compiledEntries")).longValue(); }
-    private void checkHeader(String backend, String name, String staticPointer, int column, RootCallTarget target,
+    private void checkHeader(String backend, String name, String staticPointer, int column, ExecutableProgram program,
                              ManagedAddress stateAddress, List<Number> row) {
         assertEquals(row.get(2).longValue(), row.get(3).longValue(), "native GHC typed/wide caller agreement");
-        Object[] inputs = name.equals(staticPointer) ? new Object[] {0L, row.get(0).longValue(), row.get(1).longValue()}
-            : new Object[] {0L, stateAddress, row.get(0).longValue(), row.get(1).longValue()};
-        assertEquals(row.get(column).longValue(), Calls.target(target, inputs),
+        Object[] inputs = name.equals(staticPointer) ? new Object[] {row.get(0).longValue(), row.get(1).longValue()}
+            : new Object[] {stateAddress, row.get(0).longValue(), row.get(1).longValue()};
+        assertEquals(row.get(column).longValue(), OriginalStdioChecks.invoke(program, name, inputs),
             backend + "/" + name + " original native CAPI/ccall declaration boundary " + row);
     }
     @Test public void supportedMixedImportRunsWhileArchivedImportsFailBeforeEffects() throws Exception {
@@ -70,7 +70,7 @@ public class PackageNativeArchiveFullCoreTest {
         var sources = new ArrayList<String>(); sources.add("@" + support.getAbsolutePath());
         for (String path : paths) sources.add(new File(root, path).getAbsolutePath());
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), artifacts, "build/native-archive/");
-        var modules = new ArrayList<Map<String, Object>>(); for (String path : paths) modules.add(json(new File(root, path)));
+        var modules = new ArrayList<Map<String, Object>>(); for (String path : paths) modules.add(OriginalStdioChecks.module(new File(root, path)));
         String mixed = "native-archive-mixed-0.1.0.0-inplace:Mixed.", narrow = "native-archive-mixed-0.1.0.0-inplace:Narrow.";
         String mixedHeader = "native-archive-mixed-0.1.0.0-inplace:CapiMix.mixedProbe#", staticPointer = "native-archive-mixed-0.1.0.0-inplace:CapiMix.staticPointerProbe#";
         String wideHeader = "native-archive-mixed-0.1.0.0-inplace:CapiMix.wideProbe#", word16Header = "native-archive-mixed-0.1.0.0-inplace:CapiMix.word16Probe#";
@@ -112,20 +112,20 @@ public class PackageNativeArchiveFullCoreTest {
                 state.getThreads().enterCurrent(null, false, true, null);
                 try {
                     for (String entry : nativeEntries)
-                        assertEquals(ProcessHandle.current().pid(), Calls.target(program.entryTarget(entry), new Object[] {0L, 0L}));
-                    assertEquals(0.0, Calls.target(program.entryTarget(nativeMath), new Object[] {0L, 0.0}));
+                        assertEquals(ProcessHandle.current().pid(), OriginalStdioChecks.invoke(program, entry, 0L));
+                    assertEquals(0.0, OriginalStdioChecks.invoke(program, nativeMath, 0.0));
                     var allowed = program.entryTarget(mixed + "allowed"); var count = program.entryTarget(mixed + "count");
-                    assertEquals(40L, Calls.target(allowed, new Object[] {0L, 3L}));
-                    assertEquals(42L, Calls.target(program.entryTarget(narrow + "allowed"), new Object[] {0L, 5L}));
-                    assertEquals(0L, Calls.target(count, new Object[] {0L, 0L}));
+                    assertEquals(40L, OriginalStdioChecks.invoke(program, mixed + "allowed", 3L));
+                    assertEquals(42L, OriginalStdioChecks.invoke(program, narrow + "allowed", 5L));
+                    assertEquals(0L, OriginalStdioChecks.invoke(program, mixed + "count", 0L));
                     var shared = program.entryTarget(partial); var partialObservations = (List<Number>) manifest.get("partialObservations");
                     long[] inputs = {3, 5, -2, 1};
-                    for (int i = 0; i < inputs.length; i++) assertEquals(partialObservations.get(i).longValue(), Calls.target(shared, new Object[] {0L, inputs[i]}));
+                    for (int i = 0; i < inputs.length; i++) assertEquals(partialObservations.get(i).longValue(), OriginalStdioChecks.invoke(program, partial, inputs[i]));
                     compile(shared); long beforeShared = compiled(program);
-                    assertEquals(partialObservations.get(4).longValue(), Calls.target(shared, new Object[] {0L, 4L}), backend + " partial adapters share one initialized C global");
+                    assertEquals(partialObservations.get(4).longValue(), OriginalStdioChecks.invoke(program, partial, 4L), backend + " partial adapters share one initialized C global");
                     assertEquals(beforeShared + 1, compiled(program)); valid(shared);
-                    var initialized = program.entryTarget(lifecycle); assertEquals(47L, Calls.target(initialized, new Object[] {0L, 5L}));
-                    compile(initialized); assertEquals(48L, Calls.target(initialized, new Object[] {0L, 6L}), backend + " initialized native C++ state"); valid(initialized);
+                    var initialized = program.entryTarget(lifecycle); assertEquals(47L, OriginalStdioChecks.invoke(program, lifecycle, 5L));
+                    compile(initialized); assertEquals(48L, OriginalStdioChecks.invoke(program, lifecycle, 6L), backend + " initialized native C++ state"); valid(initialized);
                     for (String entry : failures) {
                         assertTrue(((Map<?, ?>) merged.get("archiveBindings")).containsKey(entry), "retained archive exclusion: " + entry);
                         // Exception-bridge preflight can reject an excluded ABI
@@ -133,17 +133,17 @@ public class PackageNativeArchiveFullCoreTest {
                         var rejected = assertThrows(RuntimeException.class, () -> CoreModules.reachable(merged, entry, true));
                         assertTrue(rejected.getMessage().contains("archive-only") ||
                             rejected.getMessage().contains("Unlinked or ambiguous package C signature"), rejected.getMessage());
-                        assertEquals(0L, Calls.target(count, new Object[] {0L, 0L}), backend + "/" + entry + " must not enter native code");
+                        assertEquals(0L, OriginalStdioChecks.invoke(program, mixed + "count", 0L), backend + "/" + entry + " must not enter native code");
                     }
-                    assertEquals(46L, Calls.target(allowed, new Object[] {0L, 9L}));
+                    assertEquals(46L, OriginalStdioChecks.invoke(program, mixed + "allowed", 9L));
                     byte[] stateBytes = new byte[8]; stateBytes[0] = 7; var stateAddress = ManagedAddress.fromByteArray(stateBytes);
                     String[] headers = {mixedHeader, wideHeader, word16Header, staticPointer};
                     for (int i = 0; i < headers.length; i++) {
                         String name = headers[i]; int column = i + 2; var target = program.entryTarget(name);
-                        for (var row : observations) checkHeader(backend, name, staticPointer, column, target, stateAddress, row);
+                        for (var row : observations) checkHeader(backend, name, staticPointer, column, program, stateAddress, row);
                         compile(target);
                         for (var row : observations.reversed()) {
-                            long before = compiled(program); checkHeader(backend, name, staticPointer, column, target, stateAddress, row);
+                            long before = compiled(program); checkHeader(backend, name, staticPointer, column, program, stateAddress, row);
                             assertTrue(compiled(program) > before);
                             assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), backend + "/" + name + " first-installed mixed-header entry retains code");
                         }

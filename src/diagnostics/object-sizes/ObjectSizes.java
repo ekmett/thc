@@ -57,94 +57,99 @@ public final class ObjectSizes {
         for (int length : new int[] {3, 4, 5}) report("PACKET", "Object[" + length + "]", new Object[length], "payload references only");
 
         Path manifest = Path.of(args[0]).toAbsolutePath();
-        var modules = new ArrayList<Map<String, Object>>();
+        var paths = new ArrayList<String>();
         for (String line : Files.readAllLines(manifest)) if (!line.isBlank()) {
             Path path = manifest.getParent().resolve(line.strip()).normalize();
-            modules.add((Map<String, Object>) Json.INSTANCE.parse(Files.readString(path)));
+            paths.add(path.toString());
         }
-        var linked = new LinkedHashMap<String, Object>(CoreModules.INSTANCE.reachable(CoreModules.INSTANCE.merge(modules), "mapAggregate"));
-        linked.put("instrument", false);
-        linked.put("diagnosticUnsupported", true);
-        linked.put("sourceNotesEnabled", true);
-        try (Context context = Context.newBuilder("thc").allowExperimentalOptions(true)
-                .option("engine.Compilation", "false").build()) {
-            context.initialize("thc");
-            context.enter();
-            try {
-                thc.Language language = TruffleLanguage.LanguageReference.create(thc.Language.class).get(null);
-                ExecutableProgram program = args[1].equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                Map<String, DataLayout> layouts = (Map<String, DataLayout>) field(program, "dataLayouts");
-                for (var entry : layouts.entrySet()) {
-                    DataLayout layout = entry.getValue();
-                    Method allocator = Arrays.stream(layout.getClass().getDeclaredMethods())
-                            .filter(method -> method.getName().startsWith("allocate") && method.getParameterCount() == 0
-                                    && DataValue.class.isAssignableFrom(method.getReturnType())).findFirst().orElseThrow();
-                    allocator.setAccessible(true);
-                    Object instance = allocator.invoke(layout);
-                    report("DATA", entry.getKey(), instance, layout.getName() + ";arity=" + layout.getArity());
-                }
+        var request = (Map<String,Object>) Json.parse(CoreModules.request(paths, "main:MapWorkload.mapAggregate", true, false, args[1]));
+        try (var sources = CoreModules.unitDirectory(request).open(true, false)) {
+            var modules = new ArrayList<Map<String,Object>>();
+            CoreModules.visitUnitConsumers(request, sources, modules::add);
+            var linked = new LinkedHashMap<String, Object>(CoreModules.reachable(CoreModules.merge(modules), "main:MapWorkload.mapAggregate"));
+            linked.put("instrument", false);
+            linked.put("diagnosticUnsupported", true);
+            linked.put("sourceNotesEnabled", true);
+            try (Context context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.Compilation", "false").build()) {
+                context.initialize("thc");
+                context.enter();
+                try {
+                    thc.Language language = TruffleLanguage.LanguageReference.create(thc.Language.class).get(null);
+                    ExecutableProgram program = args[1].equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+                    Map<String, DataLayout> layouts = (Map<String, DataLayout>) field(program, "dataLayouts");
+                    for (var entry : layouts.entrySet()) {
+                        DataLayout layout = entry.getValue();
+                        Method allocator = Arrays.stream(layout.getClass().getDeclaredMethods())
+                                .filter(method -> method.getName().startsWith("allocate") && method.getParameterCount() == 0
+                                        && DataValue.class.isAssignableFrom(method.getReturnType())).findFirst().orElseThrow();
+                        allocator.setAccessible(true);
+                        Object instance = allocator.invoke(layout);
+                        report("DATA", entry.getKey(), instance, layout.getName() + ";arity=" + layout.getArity());
+                    }
 
-                var pending = new ArrayDeque<Visit>();
-                pending.add(new Visit(program, "program"));
-                var seen = Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
-                int captures = 0;
-                while (!pending.isEmpty()) {
-                    Visit visit = pending.removeFirst();
-                    Object object = visit.value();
-                    if (!seen.add(object)) continue;
-                    String origin = visit.origin();
-                    if (object instanceof RootCallTarget target) {
-                        pending.add(new Visit(target.getRootNode(), "root:" + target.getRootNode().getName()));
-                        continue;
-                    }
-                    if (object instanceof Iterable<?> iterable) {
-                        int index = 0;
-                        for (Object value : iterable) {
-                            if (value != null) pending.add(new Visit(value, origin + "[" + index + "]"));
-                            index++;
+                    var pending = new ArrayDeque<Visit>();
+                    pending.add(new Visit(program, "program"));
+                    var seen = Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
+                    int captures = 0;
+                    while (!pending.isEmpty()) {
+                        Visit visit = pending.removeFirst();
+                        Object object = visit.value();
+                        if (!seen.add(object)) continue;
+                        String origin = visit.origin();
+                        if (object instanceof RootCallTarget target) {
+                            pending.add(new Visit(target.getRootNode(), "root:" + target.getRootNode().getName()));
+                            continue;
                         }
-                        continue;
-                    }
-                    if (object instanceof Object[] array) {
-                        for (int i = 0; i < array.length; i++) if (array[i] != null)
-                            pending.add(new Visit(array[i], origin + "[" + i + "]"));
-                        continue;
-                    }
-                    if (object instanceof Map<?, ?> map) {
-                        for (var entry : map.entrySet()) if (entry.getValue() != null)
-                            pending.add(new Visit(entry.getValue(), origin + "[" + entry.getKey() + "]"));
-                        continue;
-                    }
-                    if (object instanceof RootNode root) origin = "root:" + root.getName();
-                    if (object instanceof Node node) for (Node child : node.getChildren())
-                        pending.add(new Visit(child, origin + "/" + child.getClass().getSimpleName()));
-                    if (!object.getClass().getName().startsWith("thc.")) continue;
-                    if (object instanceof CaptureLayout layout) {
-                        Object[] layoutFields = (Object[]) field(layout, "fields");
-                        Object[] values = new Object[layoutFields.length];
-                        for (int i = 0; i < layoutFields.length; i++)
-                            if (Boolean.TRUE.equals(field(layoutFields[i], "exactLong"))) values[i] = 0L;
-                        report("CAPTURE", "capture-" + (++captures), layout.captureValues(values), origin);
-                        continue;
-                    }
-                    for (Class<?> type = object.getClass(); type != null && type.getName().startsWith("thc."); type = type.getSuperclass()) {
-                        for (Field member : type.getDeclaredFields()) {
-                            // The allocator owns the key; never read, retain, or print it here.
-                            if (Modifier.isStatic(member.getModifiers()) || member.getName().equals("allocationKey")) continue;
-                            member.setAccessible(true);
-                            Object value = member.get(object);
-                            if (value == null) continue;
-                            if (value instanceof RootCallTarget || value instanceof Node || value instanceof CaptureLayout
-                                    || value instanceof Iterable<?> || value instanceof Object[] || value instanceof Map<?, ?>
-                                    || value instanceof Closure || value instanceof Thunk
-                                    || value.getClass().getName().equals("thc.runtime.GlobalBinding"))
-                                pending.add(new Visit(value, origin + "." + member.getName()));
+                        if (object instanceof Iterable<?> iterable) {
+                            int index = 0;
+                            for (Object value : iterable) {
+                                if (value != null) pending.add(new Visit(value, origin + "[" + index + "]"));
+                                index++;
+                            }
+                            continue;
+                        }
+                        if (object instanceof Object[] array) {
+                            for (int i = 0; i < array.length; i++) if (array[i] != null)
+                                pending.add(new Visit(array[i], origin + "[" + i + "]"));
+                            continue;
+                        }
+                        if (object instanceof Map<?, ?> map) {
+                            for (var entry : map.entrySet()) if (entry.getValue() != null)
+                                pending.add(new Visit(entry.getValue(), origin + "[" + entry.getKey() + "]"));
+                            continue;
+                        }
+                        if (object instanceof RootNode root) origin = "root:" + root.getName();
+                        if (object instanceof Node node) for (Node child : node.getChildren())
+                            pending.add(new Visit(child, origin + "/" + child.getClass().getSimpleName()));
+                        if (!object.getClass().getName().startsWith("thc.")) continue;
+                        if (object instanceof CaptureLayout layout) {
+                            Object[] layoutFields = (Object[]) field(layout, "fields");
+                            Object[] values = new Object[layoutFields.length];
+                            for (int i = 0; i < layoutFields.length; i++)
+                                if (Boolean.TRUE.equals(field(layoutFields[i], "exactLong"))) values[i] = 0L;
+                            report("CAPTURE", "capture-" + (++captures), layout.captureValues(values), origin);
+                            continue;
+                        }
+                        for (Class<?> type = object.getClass(); type != null && type.getName().startsWith("thc."); type = type.getSuperclass()) {
+                            for (Field member : type.getDeclaredFields()) {
+                                // The allocator owns the key; never read, retain, or print it here.
+                                if (Modifier.isStatic(member.getModifiers()) || member.getName().equals("allocationKey")) continue;
+                                member.setAccessible(true);
+                                Object value = member.get(object);
+                                if (value == null) continue;
+                                if (value instanceof RootCallTarget || value instanceof Node || value instanceof CaptureLayout
+                                        || value instanceof Iterable<?> || value instanceof Object[] || value instanceof Map<?, ?>
+                                        || value instanceof Closure || value instanceof Thunk
+                                        || value.getClass().getName().equals("thc.runtime.GlobalBinding"))
+                                    pending.add(new Visit(value, origin + "." + member.getName()));
+                            }
                         }
                     }
-                }
-                if (layouts.isEmpty() || captures == 0) throw new AssertionError("Expected Map constructor and capture layouts");
-                System.out.println("COUNT\tdataLayouts=" + layouts.size() + "\tcaptureLayouts=" + captures);
-            } finally { context.leave(); }
+                    if (layouts.isEmpty() || captures == 0) throw new AssertionError("Expected Map constructor and capture layouts");
+                    System.out.println("COUNT\tdataLayouts=" + layouts.size() + "\tcaptureLayouts=" + captures);
+                } finally { context.leave(); }
+            }
         }
     }
 }
