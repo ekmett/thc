@@ -73,7 +73,7 @@ import THC.Driver.NativeDependencies (readNativeProduct, configuredNativeArchive
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
-import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runResolvedPackage)
+import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeDebugEnvironment, runResolvedPackage)
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Compact.Core (Presence(..))
 import THC.Compact.Debug (SourceFile(..))
@@ -308,6 +308,7 @@ buildProject action opts target = do
                   maybe [] (\path -> [("GHC_PKG", path)]) (ghcPkgPath flags)
   requireFile buildPlugin
   inherited <- getEnvironment
+  launchEnvironment <- runtimeDebugEnvironment Host.os opts inherited
   let environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
   -- Cabal can build thc's executable without building its library. Publish the
   -- actual Cabal plugin registration before consulting the plugin manifest.
@@ -336,7 +337,7 @@ buildProject action opts target = do
   withProjectLock output $
     runBuiltProject action project working thcRoot runtime output native (runTarget opts) projectOptions
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
-                    source registeredLibrary (runVerifyArtifacts opts) (runArguments opts)
+                    source registeredLibrary (runVerifyArtifacts opts) launchEnvironment (runArguments opts)
 
 resolveRunnable :: FilePath -> String -> [String] -> [(String, String)] -> FilePath -> IO Unit
 resolveRunnable working target configuration environment native = do
@@ -400,9 +401,9 @@ selectedPackageTool ghc requested = do
 
 runBuiltProject :: ProjectAction -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> [String] -> IO ()
+                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> [(String, String)] -> [String] -> IO ()
 runBuiltProject action project working thcRoot runtime output native target projectOptions
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts guestArguments = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts launchEnvironment guestArguments = do
   driver <- getExecutablePath
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
@@ -608,8 +609,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
     -- Full-Core main and shutdown share one program and its Handle CAFs.
     -- Like cabal run, preserve the caller's cwd even with --project-dir.
     let programName = reverse (takeWhile (/= ':') (reverse (snd selection)))
-    runCommand False runtime (runtimeLaunchArguments verifyArtifacts
-      ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working
+    runCommandWithEnv False runtime (runtimeLaunchArguments verifyArtifacts
+      ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working (Just launchEnvironment)
 
 -- | Select the two original exception bridge modules. The flag requests full
 -- artifact verification rather than replaying an unchanged successful read.

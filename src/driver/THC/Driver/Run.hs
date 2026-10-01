@@ -11,10 +11,11 @@
 --
 -- Build a selected Cabal component and launch it with explicit guest runtime arguments.
 module THC.Driver.Run
-  ( RunOptions(..), resolveThcRoot, runtimeLaunchArguments, runtimeEntryArguments, runResolvedPackage
+  ( RunOptions(..), resolveThcRoot, runtimeLaunchArguments, runtimeEntryArguments, runtimeDebugEnvironment, runResolvedPackage
   ) where
 
 import Control.Monad (unless, when)
+import Data.Char (toUpper)
 import Data.List (intercalate, sort)
 import Distribution.Compiler (CompilerFlavor(GHC))
 import Distribution.PackageDescription
@@ -49,6 +50,9 @@ data RunOptions = RunOptions
   , runInstalledCore :: String
   , runGhcSource :: Maybe FilePath
   , runVerifyArtifacts :: Bool
+  , runDapPort :: Maybe Int
+  , runDapSuspend :: Bool
+  , runDapWaitAttached :: Bool
   , runArguments :: [String]
   }
 
@@ -85,6 +89,29 @@ runtimeLaunchArguments :: Bool -> [String] -> String -> [String] -> [String]
 runtimeLaunchArguments verify entry program arguments =
   ["--verify-artifacts" | verify] ++ entry ++ ["--", program] ++ arguments
 
+-- | Enable Graal's DAP instrument on an explicitly selected loopback port.
+-- The installed Gradle launcher reads JAVA_OPTS on Unix and Windows. Only
+-- validated numbers and booleans are appended; existing JVM options survive.
+runtimeDebugEnvironment :: String -> RunOptions -> [(String, String)] -> IO [(String, String)]
+runtimeDebugEnvironment hostOS opts inherited = case runDapPort opts of
+  Nothing -> do
+    unless (runDapSuspend opts && runDapWaitAttached opts) $
+      fail "--dap-no-suspend and --dap-no-wait-attached require --dap-port"
+    pure inherited
+  Just port -> do
+    unless (port >= 1 && port <= 65535) $ fail "--dap-port must be an integer from 1 to 65535"
+    let boolean True = "true"
+        boolean False = "false"
+        settings = unwords
+          [ "-Dpolyglot.dap=127.0.0.1:" ++ show port
+          , "-Dpolyglot.dap.Suspend=" ++ boolean (runDapSuspend opts)
+          , "-Dpolyglot.dap.WaitAttached=" ++ boolean (runDapWaitAttached opts)
+          ]
+        sameKey key = (if hostOS == "mingw32" then map toUpper key else key) == "JAVA_OPTS"
+        existing = unwords [value | (key, value) <- inherited, sameKey key]
+    pure (("JAVA_OPTS", existing ++ " " ++ settings) :
+          filter (not . sameKey . fst) inherited)
+
 -- | Loose Core modules accompany the authenticated package manifest.
 runtimeEntryArguments :: [FilePath] -> FilePath -> String -> [String]
 runtimeEntryArguments modules manifest entry =
@@ -101,6 +128,7 @@ runResolvedPackage opts working target prepareRuntime = do
   unless (not (null (runThcRoot opts))) $ fail "run requires --thc-root DIR"
   unless (runInstalledCore opts == "pinned") $
     fail "the Windows simple-package backend does not support --installed-core required"
+  launchEnvironment <- runtimeDebugEnvironment os opts =<< getEnvironment
   (cabalFile, lbi) <- configurePackage (runPlan opts) target
   let packageRoot = takeDirectory cabalFile
       selectedName = runTarget opts
@@ -195,7 +223,7 @@ runResolvedPackage opts working target prepareRuntime = do
                       "--package-manifest", supportManifest,
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
   checked False runtime (runtimeLaunchArguments (runVerifyArtifacts opts)
-    (runtimeEntryArguments modules supportManifest entry) selectedName (runArguments opts)) working inherited
+    (runtimeEntryArguments modules supportManifest entry) selectedName (runArguments opts)) working launchEnvironment
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]
 filterMFile predicate items = do

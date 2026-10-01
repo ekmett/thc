@@ -14,6 +14,7 @@ module RunOptionsTests (tests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM_)
+import System.IO.Error (tryIOError)
 import Data.List (isInfixOf)
 import System.Directory (createFileLink, getPermissions, setPermissions, executable)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -21,7 +22,8 @@ import System.FilePath ((</>), searchPathSeparator)
 import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
-import THC.Driver.Run (runtimeLaunchArguments, runtimeEntryArguments)
+import THC.Driver.Cabal (defaultPlanOptions)
+import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeEntryArguments, runtimeDebugEnvironment)
 
 tests :: Env -> Test
 tests env = TestLabel "run options and target selection" $ TestList
@@ -93,6 +95,42 @@ tests env = TestLabel "run options and target selection" $ TestList
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
       , guest <- [[], ["--guest-option", "value", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
       ]
+  , TestLabel "DAP JVM options preserve inherited environment" $ TestCase $ do
+      let inherited = [("JAVA_OPTS", "-Xmx2g -Dexample=\"two words\""), ("PATH", "unchanged")]
+          options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True []
+      unchanged <- runtimeDebugEnvironment os options inherited
+      assertEqual "debugging is opt-in" inherited unchanged
+      configured <- runtimeDebugEnvironment os (options {runDapPort = Just 4711, runDapSuspend = False}) inherited
+      assertEqual "loopback options appended without rewriting JVM arguments"
+        (Just "-Xmx2g -Dexample=\"two words\" -Dpolyglot.dap=127.0.0.1:4711 -Dpolyglot.dap.Suspend=false -Dpolyglot.dap.WaitAttached=true")
+        (lookup "JAVA_OPTS" configured)
+      assertEqual "other environment survives" (Just "unchanged") (lookup "PATH" configured)
+      forM_ [options {runDapPort = Just 0}, options {runDapPort = Just 65536},
+             options {runDapSuspend = False}, options {runDapWaitAttached = False}] $ \invalid -> do
+        result <- tryIOError (runtimeDebugEnvironment os invalid inherited)
+        assertBool "invalid debug options rejected before launch" (case result of Left _ -> True; Right _ -> False)
+  , TestLabel "DAP Windows environment keys are case-insensitive" $ TestCase $ do
+      let options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False (Just 4711) True True []
+          inherited = [("java_opts", "-Xmx2g"), ("Java_Opts", "-Dduplicate=true"), ("PATH", "unchanged")]
+      windows <- runtimeDebugEnvironment "mingw32" options inherited
+      assertEqual "one canonical JVM environment key" ["JAVA_OPTS", "PATH"] (map fst windows)
+      assertBool "existing JVM options retained" (maybe False ("-Xmx2g -Dduplicate=true " `isInfixOf`) (lookup "JAVA_OPTS" windows))
+      unix <- runtimeDebugEnvironment "linux" options inherited
+      assertEqual "Unix retains distinct case-sensitive keys" inherited (drop 1 unix)
+  , TestLabel "DAP oversized decimal port cannot wrap into the valid range" $ TestCase $ do
+      result <- run env (root env) Nothing 30
+        ["run", "--thc-root", root env, "--runtime", driver env,
+         "--dap-port", "18446744073709556327"]
+      assertFailure result
+      assertContains "--dap-port must be an integer from 1 to 65535" (err result)
+  , TestLabel "DAP options are run-only" $ TestCase $
+      forM_ [["--dap-port", "4711"], ["--dap-no-suspend"], ["--dap-no-wait-attached"]] $ \arguments -> do
+        accepted <- parseOnly ("run" : arguments)
+        assertFailure accepted
+        assertContains "THC root directory does not exist" (err accepted)
+        rejected <- parseOnly ("acquire" : arguments)
+        assertFailure rejected
+        assertContains "unrecognized option" (err rejected)
   , TestLabel "loose consumers keep paths before the guest boundary" $ TestCase $ do
       let modules = ["C:/core café/Main.json", "C:/core café/THC.InterfaceClosure.json"]
           entry = runtimeEntryArguments modules "C:/support/packages.json" "main:Main.main"
