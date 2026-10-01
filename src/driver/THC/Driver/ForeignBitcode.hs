@@ -33,7 +33,8 @@ import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory, takeFileName)
 import System.IO (hClose, openTempFile)
-import System.Process (readCreateProcessWithExitCode, proc)
+import System.Process (CreateProcess(..), readCreateProcessWithExitCode, proc)
+import THC.Driver.NativeCache (nativeCompilerEnvironment)
 import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
 -- A complete no-callback CAPI module is the first executable archive. The
@@ -164,7 +165,8 @@ ownedCall _ _ = False
 
 output :: FilePath -> [String] -> IO String
 output tool arguments = do
-  (status, text, diagnostic) <- readCreateProcessWithExitCode (proc tool arguments) ""
+  environment <- nativeCompilerEnvironment
+  (status, text, diagnostic) <- readCreateProcessWithExitCode (proc tool arguments) {env=Just environment} ""
   unless (status == ExitSuccess) (fail (tool ++ " failed: " ++ diagnostic))
   case lines text of
     line : _ -> pure line
@@ -221,7 +223,8 @@ hex = concatMap (\byte -> [intToDigit (fromIntegral byte `div` 16),
 
 run :: FilePath -> [String] -> IO ()
 run tool arguments = do
-  (status, _, diagnostic) <- readCreateProcessWithExitCode (proc tool arguments) ""
+  environment <- nativeCompilerEnvironment
+  (status, _, diagnostic) <- readCreateProcessWithExitCode (proc tool arguments) {env=Just environment} ""
   unless (status == ExitSuccess) (fail (tool ++ " failed: " ++ diagnostic))
 
 findHeader :: FilePath -> IO FilePath

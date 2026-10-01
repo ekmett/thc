@@ -34,7 +34,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
 import System.Directory
-import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
+import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
@@ -43,7 +43,7 @@ import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
 import THC.Driver.Installed (boundedInterfaceProcess)
-import THC.Driver.NativeCache (nativeObjcopySelection)
+import THC.Driver.NativeCache (nativeObjcopySelection, nativeCompilerEnvironment)
 import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
 import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
@@ -1451,7 +1451,7 @@ writeJson :: FilePath -> Value -> IO ()
 writeJson path = BL.writeFile path . encode
 command :: FilePath -> FilePath -> [String] -> IO String
 command directory program arguments = do
-  inherited <- getEnvironment
+  inherited <- nativeCompilerEnvironment
   let environment = filter ((/= "GHC_ENVIRONMENT") . fst) inherited
   (status,output,diagnostic) <- readCreateProcessWithExitCode
     (proc program arguments) {cwd=Just directory,env=Just environment} ""

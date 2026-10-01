@@ -13,7 +13,7 @@
 -- Cache inputs for package C acquisition, independent of native object
 -- equivalence. A selected tool or freshly captured translation unit must not
 -- disappear behind an older Core bundle with the same Cabal object identity.
-module THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity, nativeObjcopySelection) where
+module THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity, nativeObjcopySelection, nativeCompilerEnvironment) where
 
 import Control.Exception (evaluate)
 import Control.Monad (forM, unless)
@@ -28,9 +28,25 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
 import System.Directory (canonicalizePath, doesFileExist, findExecutable)
-import System.Environment (lookupEnv)
+import System.Environment (getEnvironment, lookupEnv)
+import System.Exit (ExitCode(..))
+import qualified System.Info as Host
+import System.Process (readProcessWithExitCode)
 import System.FilePath ((</>), isAbsolute, takeDirectory, takeExtension)
 import System.IO (IOMode(ReadMode), withBinaryFile)
+
+-- | Homebrew Clang can retain a stale Command Line Tools SDK default. Use the
+-- selected Xcode SDK unless the caller explicitly selected SDKROOT.
+nativeCompilerEnvironment :: IO [(String, String)]
+nativeCompilerEnvironment = do
+  inherited <- getEnvironment
+  if Host.os /= "darwin" || lookup "SDKROOT" inherited /= Nothing
+    then pure inherited
+    else do
+      (status, output, diagnostic) <- readProcessWithExitCode "xcrun" ["--show-sdk-path"] ""
+      case (status, lines output) of
+        (ExitSuccess, [sdk]) | isAbsolute sdk -> pure (("SDKROOT", sdk) : inherited)
+        _ -> fail ("cannot discover selected macOS SDK: " ++ diagnostic)
 
 -- | Missing LLVM tools remain explicit inputs, not an error for pure-Haskell
 -- projects. Acquisition itself diagnoses a missing tool when C is needed.
@@ -55,11 +71,11 @@ nativeToolIdentity = do
         digest <- fileHash path
         pure (object ["path" .= path, "sha256" .= digest])
     pure (Key.fromString variable .= object ["selected" .= selected, "executable" .= observed])
+  inherited <- nativeCompilerEnvironment
   environment <- forM ["PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH",
     "OBJC_INCLUDE_PATH", "SDKROOT", "MACOSX_DEPLOYMENT_TARGET", "SOURCE_DATE_EPOCH",
     "COMPILER_PATH", "GCC_EXEC_PREFIX", "LIBRARY_PATH"] $ \name -> do
-      value <- lookupEnv name
-      pure (Key.fromString name .= value)
+      pure (Key.fromString name .= lookup name inherited)
   pure (object ["schema" .= (1 :: Int), "tools" .= object tools, "environment" .= object environment])
 
 -- | Resolve objcopy identically for acquisition and cache identity. An explicit

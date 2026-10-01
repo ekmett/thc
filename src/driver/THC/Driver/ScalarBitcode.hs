@@ -32,10 +32,11 @@ import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import Distribution.Pretty (prettyShow)
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import qualified Data.Text.Encoding as Text
+import THC.Driver.NativeCache (nativeCompilerEnvironment)
 import THC.Driver.NativeRecipe
 import Numeric (showHex)
 import System.Directory
-import System.Environment (getEnvironment, lookupEnv)
+import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.IO (hClose, openTempFile)
@@ -331,7 +332,7 @@ command :: FilePath -> FilePath -> [String] -> IO String
 command = commandWithEnv []
 commandWithEnv :: [(String,Maybe String)] -> FilePath -> FilePath -> [String] -> IO String
 commandWithEnv overrides directory tool arguments = do
-  inherited <- getEnvironment
+  inherited <- nativeCompilerEnvironment
   let environment = [(key,value) | (key,Just value) <- overrides] ++
         filter (\(key,_) -> key `notElem` map fst overrides) inherited
   (status,out,err) <- readCreateProcessWithExitCode ((proc tool arguments) {cwd=Just directory,env=Just environment}) ""
