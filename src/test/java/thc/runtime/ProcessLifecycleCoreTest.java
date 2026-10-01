@@ -17,7 +17,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 /** Invokes actual original-package FCalls through both interpreters, not direct provider calls. */
 @EnabledOnOs(OS.LINUX)
@@ -71,8 +70,7 @@ public class ProcessLifecycleCoreTest {
         while (!predicate.test() && System.nanoTime() < deadline) Thread.sleep(1); assertTrue(predicate.test(), label);
     }
     private static long call(ExecutableProgram program, String name, Object... arguments) {
-        var packet = new Object[arguments.length + 1]; packet[0] = 0L; System.arraycopy(arguments, 0, packet, 1, arguments.length);
-        return (Long) callScalarTestTarget(program.entryTarget("main:ProcessLifecycleAudit." + name), packet);
+        return (Long) OriginalStdioChecks.invoke(program, "main:ProcessLifecycleAudit." + name, arguments);
     }
     @ParameterizedTest @CsvSource({"pre, ast", "post, ast", "pre, bytecode", "post, bytecode"})
     void originalInterruptibleWaitSavesErrnoAndNeverReplays(String stage, String backend) throws Throwable {
@@ -101,7 +99,7 @@ public class ProcessLifecycleCoreTest {
                         var worker = new Thread(() -> {
                             context.enter(); identity.set(state.getThreads().enterCurrent()); state.getMaskingState().set(mask); state.getStdio().setErrno(73);
                             try {
-                                var result = callScalarTestTarget(wait, new Object[]{0L, pid, destination}); var continuation = SavedGuestContinuations.savedGuestContinuation(result);
+                                var result = OriginalStdioChecks.invoke(async, "main:ProcessLifecycleAudit.processWait", pid, destination); var continuation = SavedGuestContinuations.savedGuestContinuation(result);
                                 if (scenario.equals("uninterruptible")) {
                                     assertNull(continuation); assertEquals(0L, result); assertEquals(73L, state.getStdio().errno()); assertEquals(mask, state.getMaskingState().get());
                                     state.getMaskingState().set(MaskingState.UNMASKED); var request = state.getThreads().poll(new Node() {}, true); assertNotNull(request); request.acknowledge();
@@ -176,7 +174,7 @@ public class ProcessLifecycleCoreTest {
                     void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
                     long call(String name, Object... arguments) throws Exception {
                         var target = targets.get(name); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); if (installed) valid(target);
-                        var packet = new Object[arguments.length + 1]; packet[0] = 0L; System.arraycopy(arguments, 0, packet, 1, arguments.length); long result = (Long) callScalarTestTarget(target, packet);
+                        long result = (Long) OriginalStdioChecks.invoke(program, "main:ProcessLifecycleAudit." + name, arguments);
                         if (installed) { assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue(), stage + "/" + backend + "/" + name + " first installed entry"); valid(target); }
                         var handoff = language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
                         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences()); return result;
