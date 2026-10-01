@@ -52,7 +52,7 @@ prepareSTM root = do
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        consumer = core </> "STMAudit.json"
+        consumer = core </> "STMAudit.cbd"
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries ++ contextEntries] ++ [source]) ""
@@ -90,7 +90,7 @@ prepareSTM root = do
     createDirectoryIfMissing True (root </> stageDir </> "originals")
     selected <- forM (zip [0 :: Int ..] originals) $ \(index, origin) -> do
       let (archivePath, member) = splitOriginal origin
-          outputPath = stageDir </> "originals" </> show index ++ ".json"
+          outputPath = stageDir </> "originals" </> show index ++ ".cbd"
       archive <- maybe (die "Lost original STM archive") pure (lookup archivePath archives)
       original <- maybe (die "Lost original STM module") pure (findEntryByPath member archive)
       BL.writeFile (root </> outputPath) (fromEntry original)

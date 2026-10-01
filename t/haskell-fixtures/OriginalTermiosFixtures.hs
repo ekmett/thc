@@ -88,7 +88,7 @@ prepareLinux root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      "bin/export-core.sh" (["-package", "ghc-internal", "-fplugin-opt=THC.Plugin:pretty-diagnostics"] ++ options ++ ["t/fixtures/compiler/OriginalTermiosAudit.hs"])
+      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ ["t/fixtures/compiler/OriginalTermiosAudit.hs"])
     mapM_ (\path -> doesFileExist (root </> path) >>= \present -> unless present (die ("Missing original Core: " ++ path))) modules
     audits <- forM entries $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
@@ -99,8 +99,6 @@ prepareLinux root = do
   (savedCommands, savedArtifacts) <- prepareSavedTermios root ghc
   let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports] ++ savedCommands
       artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++
-        [directory </> stage </> "core" </> diagnostic | stage <- ["pre", "post"],
-          diagnostic <- ["OriginalTermiosAudit.json", "THC.InterfaceClosure.json"]] ++
         savedArtifacts ++ concatMap commandArtifacts commands
   inputHashes <- fixtureSources root >>= hashes root
   artifactHashes <- hashes root artifacts

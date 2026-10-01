@@ -15,7 +15,7 @@ module LibdwUnavailableFixtures (prepareLibdwUnavailable) where
 
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value(..), decodeStrict', object, (.=))
+import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (toList)
@@ -23,11 +23,12 @@ import Data.List (nub, sort)
 import FixtureSupport (commandStdout, commandStderr, hashes, runLogged, writeJson)
 import GHC
 import GHC.Driver.Main (hscSimplify)
-import THC.Plugin (serializeOptimizedCore)
-import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
+import THC.Compact.Module (readModuleValue)
+import THC.Plugin (serializeOptimizedCoreCBD)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeExtension)
 import qualified System.Info as Host
 import Text.Read (readMaybe)
 
@@ -44,7 +45,7 @@ prepareLibdwUnavailable root = do
       cFinalizerSource = "t/fixtures/compiler/CFinalizerNative.hs"
       labelSource = "t/fixtures/compiler/ForeignLabelAudit.hs"
       -- Manifest keys use repository-relative paths on every host.
-      labelsFile = directory ++ "/foreign-labels.json"
+      labelsFile = directory ++ "/foreign-labels.cbd"
       oracle = directory ++ "/oracle.json"
       manifest = directory </> "manifest.json"
       execute = runLogged 120 root (directory </> "logs")
@@ -77,12 +78,15 @@ prepareLibdwUnavailable root = do
     [path] -> pure path
     _ -> die "Expected one GHC library directory"
   labels <- exportLabels libdir (root </> labelSource)
-  writeJson (root </> labelsFile) labels
+  BS.writeFile (root </> labelsFile) labels
   writeJson (root </> oracle) $ object ["useLibdw" .= (False :: Bool), "observations" .= parsed,
     "cFinalizerObservations" .= cParsed]
-  inputHashes <- hashes root [source, cFinalizerSource, labelSource, "t/haskell-fixtures/LibdwUnavailableFixtures.hs",
-    "src/compiler/THC/Plugin.hs", "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs",
-    "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
+  compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  compactFiles <- listDirectory (root </> "src/cbd/THC/Compact")
+  inputHashes <- hashes root $ sort $ [source, cFinalizerSource, labelSource, "t/haskell-fixtures/LibdwUnavailableFixtures.hs",
+    "src/core-symbols/THC/CoreSymbols.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"] ++
+    ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
+    ["src/cbd/THC/Compact" </> name | name <- compactFiles, takeExtension name == ".hs"]
   artifactHashes <- hashes root [oracle, labelsFile]
   writeJson (root </> manifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
@@ -90,7 +94,7 @@ prepareLibdwUnavailable root = do
 
 -- Compile actual typed Core through the same serializer, with no native link
 -- needed for the separate data-symbol obligation. No pretty-printed parsing.
-exportLabels :: FilePath -> FilePath -> IO Value
+exportLabels :: FilePath -> FilePath -> IO BS.ByteString
 exportLabels libdir source = do
   encoded <- runGhc (Just libdir) $ do
     flags <- getSessionDynFlags
@@ -107,8 +111,8 @@ exportLabels libdir source = do
     desugared <- desugarModule typed
     environment <- getSession
     optimized <- liftIO (hscSimplify environment [] (coreModule desugared))
-    liftIO (serializeOptimizedCore selected [] optimized)
-  value <- maybe (die "Invalid serialized foreign-label Core") pure (decodeStrict' (BS.pack encoded))
+    liftIO (serializeOptimizedCoreCBD selected [] optimized)
+  value <- either die pure (readModuleValue encoded)
   let labels (Array xs) = case toList xs of
         [String "lit", String kind, String symbol, Object meta]
           | kind == "function-addr" || kind == "data-addr" -> [(kind, symbol, KeyMap.lookup "rep" meta)]
@@ -127,4 +131,4 @@ exportLabels libdir source = do
      ("function-addr", "free"), ("function-addr", "libdwPoolRelease")] &&
     all (\(_, _, representation) -> representation == proof) found && hasFinalizer value)
     (die "GHC function/data labels or AddrRep certificates changed")
-  pure value
+  pure encoded
