@@ -159,6 +159,8 @@ application {
         // Embedders do not inherit these launcher JVM arguments.
         (System.getProperty("os.name") == "Linux" ? ["-Xrs"] : [])
 }
+// Keep aggregator POMs in dependency resolution, not executable runtime payloads.
+distributions.main.contents { exclude("**/*.pom") }
 // An explicit oop or RAM-sizing choice belongs to the caller. In particular,
 // forcing compressed oops can cap an otherwise explicit MaxRAMPercentage heap.
 // Defer to opaque @argument files too, without opening or parsing them here.
@@ -180,6 +182,7 @@ tasks.withType(Test).configureEach { task ->
     jvmArgumentProviders.add({ defaultRuntimeOptions(task) } as CommandLineArgumentProvider)
 }
 tasks.startScripts {
+    classpath = classpath.filter { !it.name.endsWith(".pom") }
     // This must happen before Java starts. HotSpot's suspend handler cannot be
     // chained behind the guest's USR2 handler; reserve Linux signal 64 for it.
     def policy = "case \"\$(uname -s)\" in\n  Linux)\n    if [ \"\${_JAVA_SR_SIGNUM+x}\" = x ] && [ \"\$_JAVA_SR_SIGNUM\" != 64 ]; then\n      die \"thc: Linux launcher requires _JAVA_SR_SIGNUM=64; incompatible setting was preserved\"\n    fi\n    _JAVA_SR_SIGNUM=64\n    export _JAVA_SR_SIGNUM\n    ;;\nesac\n"
