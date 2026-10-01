@@ -18,6 +18,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fast_fixtures
 
 
+def process_identity_provider(unit):
+    prefix = 'build/original-process-identity/'
+    publication = prefix + 'installed/unit-core/v3/' + 'a' * 64 + '/'
+    return dict(packageManifest=prefix + 'installed/packages.json',
+        installedBundles=[prefix + 'installed/bundles/ghc-internal-9.1401.0-inplace.zip',
+                          prefix + 'installed/bundles/' + unit + '.zip'],
+        installedPublications=[publication + '0.cbd', publication + 'publication.json'],
+        runtimeModules=[prefix + 'runtime-core/THC.Exception.cbd',
+                        prefix + 'runtime-core/THC.Internal.Exception.cbd'])
+
+
 class FixturePreparationTest(unittest.TestCase):
     def test_gc_carrier_provenance_has_a_focused_producer(self):
         project = Path(__file__).resolve().parents[2]
@@ -1317,24 +1328,26 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" original-process-identity', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-process-identity', fast_fixtures.FULL_OUTPUT_ROOTS)
         name = 'build/original-process-identity/manifest.json'
-        self.assertEqual(45, len(cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS))
+        self.assertEqual(63, len(cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS))
         for item in cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS:
             self.assertTrue(cache.allowed_payload(item), item)
         for item in ('native/private-file', 'native/Main.o', 'pre/core/Other.json', 'logs/unknown.stdout'):
             self.assertFalse(cache.allowed_payload('build/original-process-identity/' + item), item)
         with mock.patch.object(cache, 'ERRNO_NATIVE_HOST', True):
+            provider = process_identity_provider('unix-2.8.8.0-inplace')
+            outputs = cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS | set(provider['installedBundles']) | set(provider['installedPublications'])
             artifacts = {}
-            for item in cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {name}:
+            for item in outputs - {name}:
                 path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
             receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-                           installedArtifactsHashed=False, ghc="9.14.1", unixUnit="unix-2.8.8.0-inplace", nativeRows=1,
-                           entries=list(cache.ORIGINAL_PROCESS_IDENTITY_ENTRIES), artifactHashes=artifacts)
+                           installedArtifactsHashed=True, ghc="9.14.1", unixUnit="unix-2.8.8.0-inplace", nativeRows=1,
+                           entries=list(cache.ORIGINAL_PROCESS_IDENTITY_ENTRIES), artifactHashes=artifacts, **provider)
             path = self.root / name; path.write_text(json.dumps(receipt))
-            self.assertEqual(cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            self.assertEqual(outputs, set(fast_fixtures._output_hashes(self.root, group)))
             for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(nativeRows=2), dict(unixUnit="unix-2.8.7.0-deadbeef"),
                             dict(entries=[]), dict(strictAccepted=False), dict(runtimeVerified=True),
-                            dict(installedArtifactsHashed=True),
+                            dict(installedArtifactsHashed=False),
                             dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
                 with self.assertRaises(cache.CacheMiss):
                     cache.process_identity_artifact_hashes(dict(receipt, **changes))
@@ -1479,6 +1492,11 @@ class FixturePreparationTest(unittest.TestCase):
                 strictAccepted=True, runtimeVerified=False, nativeRows=1, installedArtifactsHashed=False,
                 artifactHashes=artifacts)
             for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
+                if stem == 'original-process-identity':
+                    provider = process_identity_provider(unit)
+                    artifacts = {name: 'a' * 64 for name in outputs | set(provider['installedBundles']) | set(provider['installedPublications'])
+                                 if name != 'build/' + stem + '/manifest.json'}
+                    receipt = dict(receipt, installedArtifactsHashed=True, artifactHashes=artifacts, **provider)
                 self.assertEqual(artifacts, validate(dict(receipt, unixUnit=unit)), (stem, unit))
             for unit in (None, 42, 'unix-2.8.8.0', 'unix-2.8.8.0-', 'unix-2.8.8.0-ABCD',
                          'unix-2.8.8.0-xyz', 'unix-2.8.7.0-460b', 'base-2.8.8.0-460b',
