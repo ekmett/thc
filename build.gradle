@@ -1472,11 +1472,13 @@ def compileNativeOpenRequests = tasks.register("compileNativeOpenRequests") {
     outputs.dir(output)
     doLast {
         def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-open-request.so").toFile()
+        if ((host["system"] == "Linux" && host["architecture"] == "x86_64") ||
+            (host["system"] == "Darwin" && host["architecture"] in ["x86_64", "arm64", "aarch64"])) {
+            def darwin = host["system"] == "Darwin"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-open-request" + (darwin ? ".dylib" : ".so")).toFile()
             destination.parentFile.mkdirs()
             nativeExec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-pthread", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+                "-fPIC", "-pthread", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path) }.result.get()
         }
     }
 }

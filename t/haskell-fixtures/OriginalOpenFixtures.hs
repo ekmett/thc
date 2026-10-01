@@ -18,6 +18,7 @@ import Data.Aeson (object, toJSON, (.=))
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (isPrefixOf, sort)
 import FixtureSupport
+import THC.Driver.NativeCache (nativeCompilerFlags)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile, removePathForcibly)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -36,9 +37,9 @@ prepareOriginalOpen root = do
   createDirectoryIfMissing True (root </> directory </> "native")
   stale <- doesFileExist manifest
   when stale (removeFile manifest)
-  if os /= "linux" || arch /= "x86_64" then do
+  if not ((os == "linux" && arch == "x86_64") || (os == "darwin" && arch `elem` ["x86_64", "aarch64"])) then do
     writeJson manifest $ object ["schema" .= (1 :: Int), "supported" .= False,
-      "reason" .= ("Original raw open is currently Linux x86_64 only" :: String)]
+      "reason" .= ("Original raw open requires Linux x86_64 or Darwin x86_64/arm64" :: String)]
     else do
       ghc <- maybe "ghc" id <$> lookupEnv "GHC"
       version <- execute "ghc-version" [] ghc ["--numeric-version"]
@@ -48,11 +49,12 @@ prepareOriginalOpen root = do
         Just target | Just host <- lookup "Host platform" target, not (null host),
                       lookup "Target platform" target == Just host, lookup "target word size" target == Just "8" -> pure ()
         _ -> die "Original open requires native 64-bit GHC"
-      compiled <- execute "native-build" [] ghc ["--make", "-j2", "-O2", "-fforce-recomp", "-dcore-lint",
+      sdkFlags <- nativeCompilerFlags
+      compiled <- execute "native-build" [] ghc (map ("-optc" ++) sdkFlags ++ map ("-optl" ++) sdkFlags ++ ["--make", "-j2", "-O2", "-fforce-recomp", "-dcore-lint",
         "-package", "ghc-internal", "-package", "unix", "-it/fixtures/compiler", "-threaded",
         "-optc-DTHC_OPEN_REQUEST_TEST", "-optc-std=c11", "-optc-Wall", "-optc-Wextra", "-optc-Werror",
         "-optl-pthread", "src/main/c/native-open-request.c",
-        "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
+        "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native", driver, "-o", root </> binary])
       -- One explicitly fixture-owned scratch directory; not a cache artifact.
       let scratch = root </> directory </> "native/cases"
       removePathForcibly scratch
@@ -80,7 +82,7 @@ prepareOriginalOpen root = do
       plugin <- listDirectory (root </> "src/compiler/THC")
       scripts <- listDirectory (root </> "bin")
       inputHashes <- hashes root $ sort $ [source,driver,"t/fixtures/compiler/OriginalOpenRequestNative.hs", "src/main/c/native-open-request.c", "thc.cabal","t/haskell-fixtures/Main.hs",
-        "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/OriginalOpenFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/OriginalOpenFixtures.hs","src/driver/THC/Driver/NativeCache.hs",
         "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json",
         "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
         ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++

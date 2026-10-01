@@ -10,8 +10,9 @@ resources. Admission requires those resources and the generated host metadata,
 not a blanket POSIX permission. Darwin uses an opened search-capable directory
 and descriptor-relative acquisition; `F_GETPATH` is only an identity-verified name
 observation. Relative generic FileSystem callbacks without a descriptor-authority
-transport fail explicitly. Linux subprocesses, poll/eventfd/epoll, original raw
-open, terminal images and glibc directory streams remain separate capabilities;
+transport fail explicitly. Original raw open has its own Linux x86_64 and
+Darwin x86_64/arm64 resources. Linux subprocesses, poll/eventfd/epoll, terminal
+images and glibc directory streams remain separate capabilities;
 the Darwin file provider does not admit them.
 
 ## Embedding authority
@@ -52,7 +53,7 @@ errno. Embedding descriptors without native metadata report ENOTSUP.
 ## Open and cancellation
 
 Original GHC unsafe, safe and interruptible open declarations forward native
-flags and mode bits unchanged. Relative paths use the context directory, retaining
+flags and the installed mode_t width (Word32 on Linux, Word16 on Darwin). Relative paths use the context directory, retaining
 raw bytes, symlink and dot-segment behavior. Descriptor reservation precedes
 creation/truncation, and acquisition either publishes ownership or rolls it back.
 The private managed-file ABI has a narrower regular-file admission policy;
@@ -65,7 +66,8 @@ exception. A successful syscall retains its descriptor even if cancellation
 races publication. Hard context cancellation joins the worker and releases an
 untransferred descriptor.
 
-This worker mechanism requires an unused SIGRTMIN disposition. Setup rejects an
+This worker mechanism requires an unused SIGRTMIN disposition on Linux or SIGUSR1
+on Darwin. Setup rejects an
 existing owner or later replacement; the embedding host must not concurrently
 change it. The handler remains installed until process exit. Cancellation between
 an unsafe synchronous syscall and lease publication is not guaranteed safe.

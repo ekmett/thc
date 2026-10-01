@@ -55,8 +55,9 @@ final class StdioHostAbi {
     public boolean supportedSignal(long number) {
         return SIGNAL_NAMES.stream().anyMatch(name -> signal(name) == number);
     }
+    public long openModeBytes() { return posix(open.get("modeBytes")); }
     public void requireOpenAbi() {
-        if (posix(open.get("modeBytes")) != 4) throw RuntimeFault.fault("Original open requires the Linux Word32 mode_t ABI");
+        if (!Set.of(2L, 4L).contains(posix(open.get("modeBytes")))) throw RuntimeFault.fault("Original open requires Word16 or Word32 mode_t");
     }
     public boolean openReadable(long flags) {
         long access = flags & posix(open.get("O_ACCMODE"));

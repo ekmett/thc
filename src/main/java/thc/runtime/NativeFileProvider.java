@@ -211,7 +211,7 @@ public final class NativeFileProvider implements Closeable {
         return opened(".", new NativeOpenRequest(null, options, (ignored, anchor) -> {
             if (anchor == null) throw new IllegalStateException("Required value was null.");
             return acquire(readable, writable, lease -> {
-                if (operation == OriginalStdioOp.OPEN) {
+                if (operation.getSafety().equals("unsafe")) {
                     try (var scope = new NativeLimbScope()) {
                         var name = scope.allocate((path.length + 7L) & -8L);
                         name.copyFrom(path, 0, path.length);
@@ -219,7 +219,7 @@ public final class NativeFileProvider implements Closeable {
                     }
                 } else {
                     try (var request = new NativeOpenOperation(path, flags, (int) mode, anchor.getDescriptor())) {
-                        request.await(node, threads, operation == OriginalStdioOp.OPEN_INTERRUPTIBLE, lease);
+                        request.await(node, threads, operation.getSafety().equals("interruptible"), lease);
                     } catch (Throwable failure) { throw propagate(failure); }
                 }
             });
