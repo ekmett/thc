@@ -1379,6 +1379,9 @@ def compileNativeFiles = tasks.register("compileNativeFiles") {
             def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
             nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-fembed-bitcode", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path]) }.result.get()
+            def bitcode = destination.parentFile.toPath().resolve("native-file-api.bc").toFile()
+            nativeExec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-emit-llvm", "-c", source.asFile.path, "-o", bitcode.path]) }.result.get()
         }
     }
 }

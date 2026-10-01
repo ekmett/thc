@@ -54,6 +54,7 @@ public final class NativeFileProvider implements Closeable {
         try {
             String suffix = StdioHostAbi.load().librarySuffix();
             return NativeFileProvider.class.getResource("/thc/native/native-file-api" + suffix) != null &&
+                NativeFileProvider.class.getResource("/thc/native/native-file-api.bc") != null &&
                 NativeFileProvider.class.getResource("/thc/native/native-directory-api" + suffix) != null;
         } catch (java.io.IOException | RuntimeException unavailable) { return false; }
     }
@@ -110,7 +111,7 @@ public final class NativeFileProvider implements Closeable {
         if (!supportedHost()) throw new UnsupportedOperationException("Native files require matching selected-ABI resources");
         try {
             byte[] bytes;
-            String resource = "native-file-api" + StdioHostAbi.load().librarySuffix();
+            String resource = "native-file-api.bc";
             try (var input = getClass().getResourceAsStream("/thc/native/" + resource)) {
                 if (input == null) throw fault("Missing native file provider bridge");
                 bytes = input.readAllBytes();
