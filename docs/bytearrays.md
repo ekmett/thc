@@ -57,7 +57,10 @@ static-image addresses. No safe/unsafe annotation promotes heap storage.
 Writes and copies evaluate all their operands, including the state expression, before the
 effect. Core case evaluation preserves ordering. Freeze returns the same object
 without a copy, matching GHC's shared mutable/immutable heap representation.
-Array contents are never marked compilation-final. Word8 indexing reads one
+Array contents are never marked compilation-final. Narrow integral lanes use
+the lowered JVM `Int` carrier; native-word lanes use `Long`.
+Load-time primitive checks preserve that carrier distinction while allowing
+representation aliases with the same carrier. Word8 indexing reads one
 byte at a byte offset and returns a canonical unsigned value from 0 through 255;
 writes retain the low eight bits. Size is the owner's current logical byte count,
 independent of backing capacity and native allocation rounding. All managed

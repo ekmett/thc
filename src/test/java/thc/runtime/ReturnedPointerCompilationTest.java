@@ -15,6 +15,7 @@ import java.lang.foreign.ValueLayout;
 import java.io.IOException;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.Main.withContextProfile;
 
 public class ReturnedPointerCompilationTest {
@@ -45,8 +46,8 @@ public class ReturnedPointerCompilationTest {
     private byte[] helper() throws IOException {
         try (var input = Objects.requireNonNull(getClass().getResourceAsStream("/thc/cbits/package-pointer.bc"))) { return input.readAllBytes(); }
     }
-    private long equal(RootCallTarget target, ManagedAddress left, ManagedAddress right) { return (Long) Calls.target(target, new Object[] {0L, left, right}); }
-    private long read(RootCallTarget target, ManagedAddress pointer) { return Integer.toUnsignedLong((Integer) Calls.target(target, new Object[] {0L, pointer, 0L})); }
+    private long equal(RootCallTarget target, ManagedAddress left, ManagedAddress right) { return (Long) callScalarTestTarget(target, new Object[] {0L, left, right}); }
+    private long read(RootCallTarget target, ManagedAddress pointer) { return Integer.toUnsignedLong((Integer) callScalarTestTarget(target, new Object[] {0L, pointer, 0L})); }
     private record Equality(ManagedAddress left, ManagedAddress right, long expected) {}
     private record Reading(ManagedAddress pointer, long expected) {}
 

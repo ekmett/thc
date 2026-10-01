@@ -89,7 +89,8 @@ public class Int16ArrayNativeTest {
         for (var node : nodes)
             for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
                 if (call.getCurrentCallTarget() instanceof RootCallTarget active
-                    && active.getRootNode() instanceof GuestRoot)
+                    && active.getRootNode() instanceof GuestRoot
+                    && ((com.oracle.truffle.runtime.OptimizedCallTarget) active).getCallCount() > 0)
                     visit(active, seen, targets);
         targets.add(target); // Install callees before their callers.
     }
@@ -513,7 +514,10 @@ public class Int16ArrayNativeTest {
                             ((Map<String, Object>) ((List<?>) workerExpr.get(1)).get(1))
                                 .put("rep", Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true));
                         case "extra-lambda" -> workerExpr.set(2, List.of("lam", List.of(), workerExpr.get(2)));
-                        case "worker" -> worker.put("name", "wrongWorker");
+                        case "worker" -> {
+                            worker.put("id", coreEntry("wrongWorker"));
+                            ((List<Object>) call.get(1)).set(1, worker.get("id"));
+                        }
                         case "flags" -> call.set(3, List.of(true, false));
                         case "extra-global" -> workerExpr.set(2, List.of("var", evidence.getRoot().get("id")));
                         case "primitives" ->

@@ -80,6 +80,12 @@ dependency-mutation checks against the selected native installation. Set `GHC`,
 `GHC_PKG` and `THC_TEST_DRIVER` to the matching native tools. `THC_TEST_SCRATCH`
 selects test evidence storage; `TEMP`, `TMP`, GHC's `-tmpdir`, and Cabal's
 `--builddir` must also be redirected when using a separate build drive.
+Use `--package-native-only` for captured C providers, actual ABI witnesses,
+immutable Core/cache controls and strict missing-provider negatives. Its captured
+producer uses the native exporter and vanilla interfaces on Windows; C `intptr_t`
+matches the declared Haskell `Int` on Win64. The compiler-process-state archive
+subcheck requires `ghc-9.14.1-inplace` and explicitly skips that subcheck for a
+stock bindist; ordinary native-provider checks still run.
 `THC_CABAL_BUILD_DIR` selects the Cabal build directory for the driver's interface
 helper, the Windows CString fixture's helper, and the `windows-driver` fixture's
 driver lookup. It does not redirect the Windows plugin registry, which reads the checkout's
@@ -147,12 +153,14 @@ rest of the Windows filesystem API.
 
 ## Original Windows code pages and errors
 
-The original ghc-internal declarations of GetACP, GetConsoleCP, GetCPInfo,
+The original ghc-internal declarations of GetConsoleCP, GetCPInfo,
 IsDBCSLeadByteEx, MultiByteToWideChar, WideCharToMultiByte, GetLastError,
 maperrno, maperrno_func, base_getErrorMessage and LocalFree run on Windows x86_64
 in both backends. They require native access without granting guest filesystem
 access. Directory calls and encoding calls share the context's captured Windows
 last-error slot. The original errno slot remains separate.
+GetACP uses ordinary package linkage and requires its original native provider;
+extracting its declaration's Core alone does not supply that provider.
 
 ~~~powershell
 ./bin/windows.ps1 -Action CodePageTest -Jobs 4
