@@ -76,7 +76,11 @@ hashes. Preserve first-compiled-call checks, negative controls and failed eviden
 do not substitute warmup, retries, relaxed limits or weaker assertions.
 
 Use focused checks during development and reuse verified results for unchanged
-code. Record the exact revision, commands and outcomes. Keep known behavioral
+code. Delete tests for retired paths instead of preserving their acquisition or
+serialization history. Executable Core fixtures are CBD; tests must not require
+generated Core JSON siblings or pretty-printed Core. Keep explicit diagnostic
+export and codec tests separate from runtime fixture requirements.
+Record the exact revision, commands and outcomes. Keep known behavioral
 limits in the relevant guides, including `docs/primop-behavior.md`; update affected
 capability metadata and generated documentation when the contract changes.
 Benchmark against native GHC where possible. Keep development benchmark results
