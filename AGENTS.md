@@ -72,7 +72,7 @@ submodules before building. See `docs/windows.md` for native Windows setup.
 Test the behavior changed, including both backends and handoff modes when
 applicable. Derive expected results independently with native GHC or a checked
 model. Regenerate stale fixtures from their inputs; never bless them by editing
-hashes. Preserve first-compiled-call checks, negative controls and failed evidence;
+hashes. Preserve first-compiled-call checks, negative controls and current failed evidence;
 do not substitute warmup, retries, relaxed limits or weaker assertions.
 
 Use focused checks during development and reuse verified results for unchanged
@@ -80,6 +80,12 @@ code. Delete tests for retired paths instead of preserving their acquisition or
 serialization history. Executable Core fixtures are CBD; tests must not require
 generated Core JSON siblings or pretty-printed Core. Keep explicit diagnostic
 export and codec tests separate from runtime fixture requirements.
+Keep compact receipts for the current revision and its qualification. Retaining
+every historical test run is not a goal: delete inactive generated outputs,
+superseded failures and captures once a newer relevant failure is available,
+and obsolete generated Core JSON. Keep the newest evidence needed to diagnose
+ongoing failures, source, dirty work and active builds.
+
 Record the exact revision, commands and outcomes. Keep known behavioral
 limits in the relevant guides, including `docs/primop-behavior.md`; update affected
 capability metadata and generated documentation when the contract changes.
