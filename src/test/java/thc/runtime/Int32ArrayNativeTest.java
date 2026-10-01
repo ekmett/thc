@@ -80,7 +80,8 @@ public class Int32ArrayNativeTest {
         for (var node : nodes)
             for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
                 if (call.getCurrentCallTarget() instanceof RootCallTarget active
-                    && active.getRootNode() instanceof GuestRoot)
+                    && active.getRootNode() instanceof GuestRoot
+                    && ((com.oracle.truffle.runtime.OptimizedCallTarget) active).getCallCount() > 0)
                     visit(active, seen, targets);
         targets.add(target); // Install callees before their callers.
     }

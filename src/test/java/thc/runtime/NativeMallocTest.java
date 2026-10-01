@@ -18,6 +18,7 @@ import java.util.concurrent.locks.*;
 import java.util.function.Consumer;
 import java.util.stream.LongStream;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static thc.runtime.Unit.INSTANCE;
 
@@ -203,7 +204,7 @@ public class NativeMallocTest {
                     boolean compiled = false;
                     ManagedAddress resize(ManagedAddress address, long size) throws Exception {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                        var result = (ManagedAddress) Calls.target(target, new Object[] {0L, address, size, INSTANCE});
+                        var result = (ManagedAddress) callScalarTestTarget(target, new Object[] {0L, address, size, INSTANCE});
                         assertEquals(before + (compiled ? 1 : 0),
                             ((Number) program.diagnostics().get("compiledEntries")).longValue());
                         if (compiled)
@@ -283,7 +284,7 @@ public class NativeMallocTest {
                         Object[] args = new Object[values.length + 1];
                         args[0] = 0L;
                         System.arraycopy(values, 0, args, 1, values.length);
-                        var result = Calls.target(target, args);
+                        var result = callScalarTestTarget(target, args);
                         if (compiled) {
                             assertEquals(
                                 before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
@@ -330,7 +331,7 @@ public class NativeMallocTest {
                 exercise.run(197);
                 assertEquals(23L, exercise.call("free", ManagedAddress.nullAddress(), INSTANCE));
                 exercise.compiled = false;
-                assertThrows(RuntimeFault.class, () -> Calls.target(targets.get("malloc"), new Object[] {0L, 8L, 7L}));
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(targets.get("malloc"), new Object[] {0L, 8L, 7L}));
                 assertEquals(0, registry.liveCount());
             });
     }
@@ -356,7 +357,7 @@ public class NativeMallocTest {
                 void run(long seed, boolean compiled) throws Exception {
                     for (long offset = 0; offset < 24; offset++) source.writeWord8(offset, seed + offset);
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                    assertEquals(23L, Calls.target(target, new Object[] {0L, source, destination, 24L, INSTANCE}));
+                    assertEquals(23L, callScalarTestTarget(target, new Object[] {0L, source, destination, 24L, INSTANCE}));
                     assertEquals(before + (compiled ? 1 : 0),
                         ((Number) program.diagnostics().get("compiledEntries")).longValue());
                     assertEquals(LongStream.range(0, 24).map(it -> (seed + it) & 255).boxed().toList(),
@@ -723,7 +724,7 @@ public class NativeMallocTest {
                     // Word8Rep retains an Int computational carrier after lowering.
                     // Assert that exact carrier, not a widened Number conversion.
                     alias.writeWord8Int(0, 128);
-                    assertEquals(128, Calls.target(target, new Object[] {0L, alias, 0L}));
+                    assertEquals(128, callScalarTestTarget(target, new Object[] {0L, alias, 0L}));
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                     valid(target);
                     var runtime = Truffle.getRuntime();
@@ -734,7 +735,7 @@ public class NativeMallocTest {
                     for (int value : new int[] {255, 0, 129}) {
                         base.writeWord8Int(8, value);
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                        assertEquals(value, Calls.target(target, new Object[] {0L, alias, 0L}));
+                        assertEquals(value, callScalarTestTarget(target, new Object[] {0L, alias, 0L}));
                         assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
                         valid(target);
                         released(language);
@@ -763,7 +764,7 @@ public class NativeMallocTest {
                         var target = program.entryTarget(read.entry());
                         base.writeNativeScalar(8, read.width(), 17L, true);
                         Object initial = read.width() == 4 ? (Object) Integer.valueOf(17) : Long.valueOf(17);
-                        assertEquals(initial, Calls.target(target, new Object[] {0L, alias, 0L}));
+                        assertEquals(initial, callScalarTestTarget(target, new Object[] {0L, alias, 0L}));
                         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                         valid(target);
                         var runtime = Truffle.getRuntime();
@@ -774,7 +775,7 @@ public class NativeMallocTest {
                         valid(target);
                         base.writeNativeScalar(8, read.width(), ((Number) read.expected()).longValue(), true);
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                        assertEquals(read.expected(), Calls.target(target, new Object[] {0L, alias, 0L}));
+                        assertEquals(read.expected(), callScalarTestTarget(target, new Object[] {0L, alias, 0L}));
                         assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
                         assertSame(target, program.entryTarget(read.entry()));
                         valid(target);
@@ -969,7 +970,7 @@ public class NativeMallocTest {
                         // declaration of the original managed allocator.
                         var program = load(language, backend, malformed);
                         assertThrows(UnsupportedCore.class, () ->
-                            Calls.target(program.entryTarget("malloc"), new Object[] {0L, 8L, INSTANCE}));
+                            callScalarTestTarget(program.entryTarget("malloc"), new Object[] {0L, 8L, INSTANCE}));
                         assertEquals(0, Language.currentState().getNativeAllocations().liveCount());
                     } else {
                         assertThrows(
