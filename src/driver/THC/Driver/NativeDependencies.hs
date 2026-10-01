@@ -14,7 +14,7 @@
 -- exact native archive membership, never from an unresolved symbol spelling.
 module THC.Driver.NativeDependencies
   ( NativeProduct, nativeProductProof, nativeProductPieces, readNativeProduct
-  , selectNativePieces, nativeLinkInputs, nativeSymbolArchives, configuredNativeArchive
+  , selectNativePieces, nativeLinkInputs, nativeSymbolArchives, nativeSymbolArchivesWithProduct, configuredNativeArchive
   , nativeWindowsRtsInputs
   ) where
 
@@ -161,13 +161,28 @@ nativeWindowsRtsInputs ghcPkg libdir = do
 -- RTS. The native linker extracts only the rooted archive members; no whole
 -- Haskell component is loaded alongside its Core implementation.
 nativeSymbolArchives :: FilePath -> FilePath -> FilePath -> String -> [String] -> [(String,Bool)] -> IO [(FilePath,[(String,Bool)])]
-nativeSymbolArchives ghcPkg libdir root owner arguments symbols
+nativeSymbolArchives ghcPkg libdir root owner arguments symbols =
+  nativeSymbolArchivesWithProduct ghcPkg libdir root owner arguments Nothing symbols
+
+-- A complete configured C product already supplies the declaring unit's C
+-- inventory. Its mixed installed archive also contains native Haskell bodies;
+-- those cannot supply managed closures or foreign-export ownership.
+nativeSymbolArchivesWithProduct :: FilePath -> FilePath -> FilePath -> String -> [String] ->
+  Maybe NativeProduct -> [(String,Bool)] -> IO [(FilePath,[(String,Bool)])]
+nativeSymbolArchivesWithProduct ghcPkg libdir root owner arguments capturedProduct symbols
   | null symbols = pure []
   | otherwise = do
       let absolute path = if isAbsolute path then path else root </> path
           database option = if "--package-db=" `isPrefixOf` option
             then "--package-db=" ++ absolute (drop 13 option) else option
           options = ["--global-package-db=" ++ libdir </> "package.conf.d"] ++ map database (nativePackageOptions arguments)
+      capturedUnit <- case capturedProduct of
+        Nothing -> pure Nothing
+        Just captured -> do
+          check (member (nativeProductProof captured) "unit" == Just (String (Data.Text.pack owner)))
+            "configured native archive owner differs"
+          identity <- get (nativeProductProof captured) "sourceIdentity"
+          fmap Just (get identity "id" :: IO String)
       registrations <- fmap concat $ forM (nub ((True,owner):nativePackageSelectors arguments)) $ \(unitId,name) -> do
         (status,registration,_) <- readProcessWithExitCode ghcPkg (options ++ ["--ipid" | unitId] ++ ["describe",name,"--no-expand-pkgroot"]) ""
         if status /= ExitSuccess then pure [] else do
@@ -180,7 +195,7 @@ nativeSymbolArchives ghcPkg libdir root owner arguments symbols
           -- could run. Preserve the original calls/ABI, like other RTS calls;
           -- context-owned services dispatch in the runtime, while unsupported
           -- services remain unresolved rather than acquiring native state.
-          pure [info | package /= "rts",
+          pure [info | Just (prettyShow (Package.installedUnitId info)) /= capturedUnit, package /= "rts",
             prettyShow (Package.installedUnitId info) /= "ghc-9.14.1-inplace",
             prettyShow (Package.installedUnitId info) == owner || package == owner]
       nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"

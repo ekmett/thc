@@ -41,7 +41,7 @@ import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
-import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives, nativeWindowsRtsInputs)
+import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchivesWithProduct, nativeWindowsRtsInputs)
 import THC.Driver.Installed (boundedInterfaceProcess)
 import THC.Driver.NativeCache (nativeObjcopySelection, nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
@@ -152,7 +152,7 @@ linkInstalledNativeWithProduct compiler packageTool libdir arguments directory u
   let signatures = sort (nub (concat perModule))
       requestedAddresses = nub (concatMap (addressLabels . snd) selected)
       requestedSymbols = nub (requestedAddresses ++ [(symbol,True) | (symbol,_,_,_,_) <- signatures])
-  archives <- nativeSymbolArchives packageTool libdir directory unit arguments requestedSymbols
+  archives <- nativeSymbolArchivesWithProduct packageTool libdir directory unit arguments ownedProduct requestedSymbols
   declaredAddresses <- mapM (either fail pure . nativeAddressDeclarations unit . snd) selected
   -- An ordinary callable root selects its native provider, not an address
   -- getter. The final companion extracts only actually unresolved members.
