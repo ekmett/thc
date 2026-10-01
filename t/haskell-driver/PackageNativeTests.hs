@@ -34,7 +34,7 @@ import Test.HUnit
 import THC.Driver.PackageNative
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
-import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
+import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding)
 import THC.Driver.NativeDependencies (selectNativePieces, nativeSymbolArchives)
 import THC.Driver.Installed (installedContext, InstalledContext(..))
 import THC.Driver.Project (selectedPackageTool)
@@ -168,6 +168,65 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
           ("extra definition",witness target signature provider (entryName:"extra":[]) externals),
           ("extra external",witness target signature provider definitions (provider:"extra":[]))] $ \(label,accepted) ->
             assertBool ("capture rejects changed " ++ label) (not accepted)
+  , TestLabel "exact forwarding uses the actual Darwin LLVM ABI and linker spelling" $ TestCase $ do
+      withScratch $ \root -> do
+        clang <- tool "THC_CLANG" "clang"
+        nm <- tool "THC_LLVM_NM" "llvm-nm"
+        opt <- tool "THC_LLVM_OPT" "opt"
+        forM_ ["x86_64-apple-darwin", "arm64-apple-macosx14.0.0"] $ \selected -> do
+          let provider = "thc_provider_darwin_next"
+              entryName = "thc_native_darwin_0"
+              compile name body = do
+                let bitcode = root </> name ++ ".bc"; ir = root </> name ++ ".ll"
+                (status,_,diagnostic) <- readProcessWithExitCode clang
+                  ["--target=" ++ selected,"-O1","-emit-llvm","-c","-x","c","-","-o",bitcode] body
+                assertEqual diagnostic ExitSuccess status
+                (verified,_,diagnosticIR) <- readProcessWithExitCode opt ["-S","-passes=verify",bitcode,"-o",ir] ""
+                assertEqual diagnosticIR ExitSuccess verified
+                source <- readFile ir
+                pure (bitcode,source)
+          (_,providerSource) <- compile "darwin-provider" $
+            "static unsigned long state = 40; __attribute__((noinline)) long next(void) { return ++state; }\n" ++
+            "long " ++ provider ++ "(void) { return next(); }\n"
+          let targets = [value | line <- lines providerSource,
+                "target triple = " `isPrefixOf` line, (value,"") <- reads (drop 16 line)]
+          target <- case targets of [value] -> pure value; _ -> assertFailure "actual provider target missing"
+          wrapper <- either assertFailure pure $
+            nativeWrapperSource [((provider,"ccall","unsafe",[],"IntRep"),entryName,Nothing)]
+          (seed,seedSource) <- compile "darwin-seed" ("typedef __INTPTR_TYPE__ intptr_t;\n" ++ wrapper)
+          definitions <- words <$> readProcess nm ["--defined-only","--format=just-symbols",seed] ""
+          externals <- words <$> readProcess nm ["--undefined-only","--format=just-symbols",seed] ""
+          assertEqual "actual Darwin nm adds one linker underscore" ['_':entryName] definitions
+          assertEqual "actual Darwin nm prefixes the external provider" ['_':provider] externals
+          assertBool "actual matching Darwin call and canonical provider are witnessed"
+            (nativeCallSeedWitness target ("next","ccall","unsafe",[],"IntRep") entryName provider
+              providerSource seedSource (map (nativeIrSymbol target) definitions) (map (nativeIrSymbol target) externals))
+          fragment <- maybe (assertFailure "forwarding requires an actual verified Darwin definition") pure
+            (nativeProviderForwarding target "next" provider providerSource)
+          let forwarding = root </> "darwin-forwarding.ll"
+              forwardingVerified = root </> "darwin-forwarding-verified.ll"
+              headers = filter (\line -> any (`isPrefixOf` line) ["target triple = ","target datalayout = "])
+                (lines providerSource)
+          writeFile forwarding (unlines headers ++ fragment)
+          (forwarded,_,forwardErrors) <- readProcessWithExitCode opt
+            ["-S","-passes=verify",forwarding,"-o",forwardingVerified] ""
+          assertEqual forwardErrors ExitSuccess forwarded
+          forwardSource <- readFile forwardingVerified
+          assertBool "actual verified forwarding preserves the provider ABI and module identity"
+            (nativeCallWitness target "next" provider providerSource forwardSource /= Nothing)
+          let withoutHeader prefix = unlines . filter (not . (prefix `isPrefixOf`)) . lines
+              layout = [line | line <- lines seedSource, "target datalayout = " `isPrefixOf` line]
+              badLayouts = [withoutHeader "target datalayout = " seedSource,
+                unlines layout ++ seedSource,
+                "target datalayout = \"e-p:32:32\"\n" ++ withoutHeader "target datalayout = " seedSource,
+                "target datalayout = \"\"\n" ++ withoutHeader "target datalayout = " seedSource,
+                "target datalayout = malformed\n" ++ seedSource,
+                withoutHeader "target triple = " seedSource,
+                "target triple = " ++ show target ++ "\n" ++ seedSource]
+          forM_ badLayouts $ \bad -> assertBool "missing, duplicate or different module identity cannot witness a call"
+            (nativeCallWitness target provider entryName providerSource bad == Nothing)
+          assertBool "a selected target cannot replace the actual module target"
+            (nativeCallWitness "aarch64-unknown-linux-gnu" provider entryName providerSource seedSource == Nothing)
   , TestLabel "Core-owned exact calls do not manufacture native wrappers" $ TestCase $ do
       let rep kind prim evaluated = object ["kind" .= (kind::String),
             "primReps" .= (prim::[String]), "evaluated" .= (evaluated::Bool)]

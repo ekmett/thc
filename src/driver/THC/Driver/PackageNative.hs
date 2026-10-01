@@ -40,7 +40,7 @@ import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
-import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding)
+import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
 import THC.Driver.Installed (boundedInterfaceProcess)
 import THC.Driver.NativeCache (nativeObjcopySelection)
@@ -1008,7 +1008,7 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     target <- get record "target" :: IO String
     abi <- get record "abi" :: IO [Value]
     let empty key = maybe True (== toJSON ([]::[Value])) (member record key)
-        eligible = target == "x86_64-unknown-linux-gnu" && not (null native) && not (null abi) &&
+        eligible = not (null native) && not (null abi) &&
           all ((== Just "ccall") . (`member` "convention")) abi &&
           all empty ["dataSymbols","finalizers","providers"]
     if not eligible then materializeStrict archived record native else do
@@ -1034,12 +1034,15 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
       symbols <- mapM (`get` "symbol") abi :: IO [String]
       -- Unknown providers, unsupported native shapes and ABI conversions stay
       -- on the existing strict path. A catalogue cannot invent their provider.
-      case mapM (\symbol -> nativeProviderForwarding target symbol (provider symbol) source) (nub symbols) of
+      case (,) <$> nativeModuleLayout target source <*>
+        mapM (\symbol -> nativeProviderForwarding target symbol (provider symbol) source) (nub symbols) of
         Nothing -> materializeStrict archived record native
-        Just forwards -> do
+        Just (layout,forwards) -> do
           let forwarding = demand </> "forwarding.ll"
               forwardBitcode = demand </> "forwarding.bc"
-          writeFile forwarding ("target triple = " ++ show target ++ "\n" ++ concat forwards)
+              forwardingSource = unlines ["target triple = " ++ show target,
+                "target datalayout = " ++ show layout] ++ concat forwards
+          writeFile forwarding forwardingSource
           _ <- command directory opt ["-passes=verify",forwarding,"-o",forwardBitcode]
           compiled <- forM (zip [0::Int ..] abi) $ \(index,signature) -> do
             symbol <- get signature "symbol"
@@ -1053,9 +1056,10 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
             (path,observed,metadata) <- compileC compiler root configured seedDirectory
               (Just ("#include <stdint.h>\n" ++ wrappers))
             check (observed == target) "package native call seed target differs"
-            seedSource <- readFile (seedDirectory </> "original.ll")
-            let witness = nativeCallWitness target (provider symbol) (entry index)
-                  ("target triple = " ++ show target ++ "\n" ++ concat forwards) seedSource
+            let seedIR = seedDirectory </> "verified.ll"
+            _ <- command directory opt ["-S","-passes=verify",path,"-o",seedIR]
+            seedSource <- readFile seedIR
+            let witness = nativeCallWitness target (provider symbol) (entry index) forwardingSource seedSource
             bytes <- BS.readFile path
             pure (setMember "entry" (toJSON (entry index)) signature,
               object ["entry" .= entry index,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,
@@ -1079,19 +1083,17 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
               nm <- tool "THC_LLVM_NM" "llvm-nm"
               let names flags path = do
                     output <- command directory nm (flags ++ ["--format=posix",path])
-                    pure (sort [name | line <- lines output, name:_ <- [words line]])
-                  exactTarget ir = [value | line <- lines ir, Just value <- [quoted "target triple = " line]] == [target]
+                    pure (sort [nativeIrSymbol target name | line <- lines output, name:_ <- [words line]])
               verified <- forM (zip [0::Int ..] compiled) $ \(index,(signature,_,_,_)) -> do
                 symbol <- get signature "symbol"; safety <- get signature "safety"
                 arguments <- get signature "arguments"; returned <- get signature "result"
                 let seedDirectory = demand </> "seeds" </> show index
                     path = seedDirectory </> "target.bc"
                     seedIR = seedDirectory </> "verified.ll"
-                _ <- command directory opt ["-S","-passes=verify",path,"-o",seedIR]
                 seedSource <- readFile seedIR
                 definitions <- names ["--defined-only"] path
                 externals <- names ["--undefined-only"] path
-                pure (exactTarget canonicalSource && exactTarget seedSource &&
+                pure (nativeModuleLayout target canonicalSource == Just layout &&
                   nativeCallSeedWitness target (symbol,"ccall",safety,arguments,returned)
                     (entry index) (provider symbol) canonicalSource seedSource definitions externals)
               if not (and verified) then materializeStrict archived record native else do

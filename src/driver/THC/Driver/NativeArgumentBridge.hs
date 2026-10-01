@@ -7,10 +7,10 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Linux x86_64 C ABI; verified LLVM input
+-- Portability : Verified scalar CCC; Linux x86_64 slot adaptation
 --
 -- Bridge verified LLVM integer slots for the Linux x86_64 C ABI.
-module THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding) where
+module THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout) where
 
 import Control.Monad (guard)
 import Data.Char (isSpace)
@@ -82,7 +82,8 @@ nativeArgumentBridge target symbol entry source = do
 -- varargs or ABI adaptation are admitted by this witness.
 nativeCallWitness :: String -> String -> String -> String -> String -> Maybe ([String],String,[String])
 nativeCallWitness target symbol entry provider source = do
-  guard (target == "x86_64-unknown-linux-gnu")
+  layout <- nativeModuleLayout target provider
+  guard (nativeModuleLayout target source == Just layout)
   (calleeLine,callee) <- definition provider symbol
   (callerLine,caller) <- definition source entry
   guard (result caller == result callee && parameters caller == parameters callee)
@@ -98,7 +99,7 @@ nativeCallWitness target symbol entry provider source = do
 -- prototype, cast or target extension is introduced at acquisition.
 nativeProviderForwarding :: String -> String -> String -> String -> Maybe String
 nativeProviderForwarding target symbol entry provider = do
-  guard (target == "x86_64-unknown-linux-gnu")
+  _ <- nativeModuleLayout target provider
   (_,callee) <- definition provider symbol
   let returned = renderResult (result callee)
       formals = comma [render parameter ++ " %a" ++ show index |
@@ -110,6 +111,22 @@ nativeProviderForwarding target symbol entry provider = do
     "  " ++ (if scalar (result callee) == "void" then "" else "%r = ") ++ "call " ++ returned ++
       " @" ++ symbol ++ "(" ++ actuals ++ ")",
     if scalar (result callee) == "void" then "  ret void" else "  ret " ++ scalar (result callee) ++ " %r", "}"]
+
+-- | Retain the selected target and actual nonempty layout of verified LLVM.
+-- Missing, duplicate or mismatched module identity is not a portable ABI proof.
+nativeModuleLayout :: String -> String -> Maybe String
+nativeModuleLayout target source = do
+  observed <- header "target triple = "
+  guard (not (null target) && observed == target)
+  layout <- header "target datalayout = "
+  guard (not (null layout))
+  pure layout
+  where
+    header prefix = case filter (prefix `isPrefixOf`) (lines source) of
+        [line] -> case reads (drop (length prefix) line) of
+          [(value,"")] -> Just value
+          _ -> Nothing
+        _ -> Nothing
 
 definition :: String -> String -> Maybe (String,Definition)
 definition source name = case [line | line <- lines source, "define " `isPrefixOf` line,

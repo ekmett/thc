@@ -73,14 +73,16 @@ references, public definitions, constructors, address imports and finalizers
 still need real native providers, including when they use the same symbol.
 Other RTS imports need their own implementation.
 
-On Linux x86_64, compatible ordinary `ccall` imports load their captured
-adapters on first use. Unused imports need no adapter loading. Calls share one
-native provider per context, preserving its C globals and constructor state.
-This path needs no compiler subprocess or writable adapter cache at runtime.
-A reached import without its declared provider fails at the call; that failure
-persists for the lifetime of the context.
+Compatible ordinary `ccall` imports load their captured adapters on first use.
+Unused imports need no adapter loading. Calls share one native provider per
+context, preserving its C globals and constructor state. This path needs no
+compiler subprocess or writable adapter cache at runtime. A reached import
+without its declared provider fails at the call; that failure persists for the
+lifetime of the context.
 
-Other targets and unsupported ABI shapes use the normal eager-linking path.
+Adapter selection requires a matching target and C ABI. Other imports use the
+normal eager-linking path. Linux execution is validated; native macOS validation
+of this path remains pending.
 
 This narrow path does not defer native C references, public exports,
 constructors, addresses or finalizers, or admit unknown LLVM definitions and
