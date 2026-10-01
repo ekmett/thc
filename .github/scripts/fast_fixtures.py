@@ -78,8 +78,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
       for command in ("ghc-version", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")],
     "build/record-fields/manifest.json", "build/record-fields/pre/oracle", "build/record-fields/post/oracle",
+    *[f"build/record-fields/{stage}/{name}.cbd" for stage in ("pre", "post", "installed")
+      for name in ("RecordFieldLibrary", "RecordFieldClient")],
     *[f"build/record-fields/{stage}/{name}.json" for stage in ("pre", "post", "installed")
-      for name in ("RecordFieldLibrary", "RecordFieldClient", "fieldAlias-audit", "duplicateFields-audit")],
+      for name in ("fieldAlias-audit", "duplicateFields-audit")],
     *[f"build/record-fields/logs/{command}.{suffix}"
       for command in ("plugin-build", "helper-location", "libdir", "pre-compile", "pre-native", "post-compile", "post-native",
                       "installed-RecordFieldLibrary", "installed-RecordFieldClient",
@@ -138,17 +140,17 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/interface-core/import-stubs/plain/ForeignImportStubs.hi",
     "build/interface-core/logs/import-stubs-native-oracle.stdout",
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
-    "build/core-continuation/core/CoreContinuationAudit.json", "build/core-continuation/audit.json",
+    "build/core-continuation/core/CoreContinuationAudit.cbd", "build/core-continuation/audit.json",
     "build/core-continuation/application-audit.json",
     "build/core-continuation/nested-audit.json",
     "build/core-continuation/native-output.txt",
-    "build/core-continuation/core/LazyIOCallbackAudit.json",
+    "build/core-continuation/core/LazyIOCallbackAudit.cbd",
     "build/core-continuation/lazy-native-output.txt",
     "build/core-continuation/keep-alive-scalar-audit.json",
     "build/core-continuation/keep-alive-tuple-audit.json",
     "build/core-continuation/lazy-action-audit.json", "build/core-continuation/lazy-handler-audit.json",
     "build/live-async/manifest.json", "build/live-async/oracle.txt", "build/live-async/strict-oracle.txt",
-    "build/live-async/pre/core/LiveAsyncAudit.json", "build/live-async/post/core/LiveAsyncAudit.json",
+    "build/live-async/pre/core/LiveAsyncAudit.cbd", "build/live-async/post/core/LiveAsyncAudit.cbd",
     "build/live-async/pre/forceShared-audit.json", "build/live-async/post/forceShared-audit.json",
     "build/live-async/pre/strictWorker-audit.json", "build/live-async/post/strictWorker-audit.json",
     "build/live-async/pre/strictCall-audit.json", "build/live-async/post/strictCall-audit.json",
@@ -161,11 +163,11 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/live-async/pre/asyncPayload-audit.json", "build/live-async/post/asyncPayload-audit.json",
     "build/thread-label/manifest.json", "build/thread-label/oracle.txt",
     *[f"build/thread-label/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/ThreadLabelAudit.json", "selfLabel-audit.json", "overwriteLabel-audit.json",
+      for suffix in ("core/ThreadLabelAudit.cbd", "selfLabel-audit.json", "overwriteLabel-audit.json",
                      "emptyLabel-audit.json", "deadLabel-audit.json", "deadOverwrite-audit.json")],
     "build/thread-status/manifest.json", "build/thread-status/oracle.txt",
     *[f"build/thread-status/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/ThreadStatusAudit.json", "selfStatus-audit.json", "maskedStatus-audit.json",
+      for suffix in ("core/ThreadStatusAudit.cbd", "selfStatus-audit.json", "maskedStatus-audit.json",
                      "finishedStatus-audit.json", "diedStatus-audit.json", "blockedStatus-audit.json")],
     "build/thread-async/manifest.json", "build/thread-async/oracle.txt", "build/thread-async/extra-oracle.txt",
     "build/thread-async/lazy-oracle.txt", "build/thread-async/saved-oracle.txt",
@@ -185,7 +187,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *[f"build/thread-async/{stage}/{entry}-audit.json" for stage in ("pre", "post")
       for entry in ("savedSelfThrow", "savedMaskedSelf", "savedSuffixSelf", "savedMaskCatchSelf")],
     "build/uncaught-self/manifest.json", "build/uncaught-self/native/oracle",
-    "build/uncaught-self/pre/core/UncaughtSelfAudit.json", "build/uncaught-self/post/core/UncaughtSelfAudit.json",
+    "build/uncaught-self/pre/core/UncaughtSelfAudit.cbd", "build/uncaught-self/post/core/UncaughtSelfAudit.cbd",
     "build/uncaught-self/pre/audit.json", "build/uncaught-self/post/audit.json",
     "build/uncaught-self/pre/io-audit.json", "build/uncaught-self/post/io-audit.json",
     "build/mask-functions/manifest.json",
@@ -197,29 +199,29 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/exception-result-layouts/oracle.tsv",
     *[f"build/exception-result-layouts/{stage}/{name}"
       for stage in (("pre",) if platform.machine().lower() in ("arm64", "aarch64") else ("pre", "post"))
-      for name in ("core/ExceptionResultLayoutsAudit.json",
+      for name in ("core/ExceptionResultLayoutsAudit.cbd",
                    *[f"{family}Result-audit.json" for family in ("int8", "word8", "int16", "word16", "int32", "word32",
                        "int64", "word64", "float", "double", "empty", "nested", "sum", "vector", "unlifted", "unliftedPayload")])],
     "build/scalar-exception-results/logs/native-oracle.stdout",
     *[f"build/scalar-exception-results/{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/ScalarExceptionResultsAudit.json",
+      for name in ("core/ScalarExceptionResultsAudit.cbd",
                    *[f"{prefix}{suffix}-audit.json" for prefix in ("normal", "throw", "interrupt")
                      for suffix in ("Int", "Word", "Addr")])],
     "build/deep-evaluation/manifest.json", "build/deep-evaluation/native/oracle",
     *[f"build/deep-evaluation/{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/DeepEvaluation.json", "core/THC.InterfaceClosure.json", "audit.json")],
+      for name in ("core/DeepEvaluation.cbd", "core/THC.InterfaceClosure.cbd", "audit.json")],
     *[f"build/deep-evaluation/logs/{command}.{suffix}"
       for command in ("ghc-version", "native-compile", "native-oracle", "pre-export", "pre-audit", "post-export", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")],
-    "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
+    "build/addr-identity/pre-core/AddressIdentityAudit.cbd", "build/addr-identity/post-core/AddressIdentityAudit.cbd",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",
     *fast_inputs.INTEGER_COMPLETION_OUTPUTS,
     "build/pinned-pointer-cells/manifest.json",
     "build/pinned-pointer-cells/oracle.tsv", "build/pinned-pointer-cells/pre/audit.json",
     "build/pinned-pointer-cells/post/audit.json",
-    "build/pinned-pointer-cells/pre/core/PinnedPointerCellsAudit.json",
-    "build/pinned-pointer-cells/post/core/PinnedPointerCellsAudit.json",
+    "build/pinned-pointer-cells/pre/core/PinnedPointerCellsAudit.cbd",
+    "build/pinned-pointer-cells/post/core/PinnedPointerCellsAudit.cbd",
     "build/floating-address/manifest.json", "build/floating-address/oracle.tsv",
     "build/atomic-address/manifest.json", "build/atomic-address/oracle.tsv",
     "build/atomic-address/pre/audit.json", "build/atomic-address/post/audit.json",

@@ -76,6 +76,48 @@ class FixturePreparationTest(unittest.TestCase):
                         fast_fixtures._full_output_hashes(self.root)
                     path.write_bytes(b"fixture\n")
 
+    def test_full_converted_core_families_require_cbd_artifacts(self):
+        paths = {
+            *(f"record-fields/{stage}/{module}.cbd"
+              for stage in ("pre", "post", "installed")
+              for module in ("RecordFieldLibrary", "RecordFieldClient")),
+            "core-continuation/core/CoreContinuationAudit.cbd",
+            "core-continuation/core/LazyIOCallbackAudit.cbd",
+            *(f"{family}/{stage}/core/{module}.cbd" for stage in ("pre", "post")
+              for family, module in (("live-async", "LiveAsyncAudit"),
+                                     ("thread-label", "ThreadLabelAudit"),
+                                     ("thread-status", "ThreadStatusAudit"),
+                                     ("uncaught-self", "UncaughtSelfAudit"),
+                                     ("scalar-exception-results", "ScalarExceptionResultsAudit"),
+                                     ("deep-evaluation", "DeepEvaluation"),
+                                     ("deep-evaluation", "THC.InterfaceClosure"),
+                                     ("pinned-pointer-cells", "PinnedPointerCellsAudit"))),
+            *(f"addr-identity/{stage}-core/AddressIdentityAudit.cbd" for stage in ("pre", "post")),
+            *(f"exception-result-layouts/{stage}/core/ExceptionResultLayoutsAudit.cbd"
+              for stage in (("pre",) if fast_fixtures.platform.machine().lower()
+                            in ("arm64", "aarch64") else ("pre", "post"))),
+        }
+        required = {"build/" + name for name in paths}
+        for name in required:
+            self.assertTrue(name in fast_fixtures.FULL_REQUIRED, "Missing Core artifact: " + name)
+            legacy = name.removesuffix(".cbd") + ".json"
+            self.assertFalse(legacy in fast_fixtures.FULL_REQUIRED, "Obsolete Core artifact: " + legacy)
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fixture\n")
+        with mock.patch.object(fast_fixtures, "FULL_REQUIRED", required):
+            outputs = fast_fixtures._full_output_hashes(self.root)
+            self.assertEqual(required, set(outputs))
+            for name in sorted(required):
+                path = self.root / name
+                with self.subTest(artifact=name):
+                    path.write_bytes(b"changed\n")
+                    self.assertNotEqual(outputs, fast_fixtures._full_output_hashes(self.root))
+                    path.unlink()
+                    with self.assertRaises(FileNotFoundError):
+                        fast_fixtures._full_output_hashes(self.root)
+                    path.write_bytes(b"fixture\n")
+
     def test_selector_proof_is_required_for_full_preparation_reuse(self):
         project = Path(__file__).resolve().parents[2]
         source = (project / "bin/prepare-tests.sh").read_text()
@@ -212,8 +254,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/deep-evaluation', fast_fixtures.FULL_OUTPUT_ROOTS)
         for path in ('manifest.json', 'native/oracle', 'logs/native-oracle.stdout',
-                     'pre/core/DeepEvaluation.json', 'post/core/DeepEvaluation.json',
-                     'pre/core/THC.InterfaceClosure.json', 'post/core/THC.InterfaceClosure.json',
+                     'pre/core/DeepEvaluation.cbd', 'post/core/DeepEvaluation.cbd',
+                     'pre/core/THC.InterfaceClosure.cbd', 'post/core/THC.InterfaceClosure.cbd',
                      'pre/audit.json', 'post/audit.json'):
             self.assertIn('build/deep-evaluation/' + path, fast_fixtures.FULL_REQUIRED)
 
@@ -1898,7 +1940,7 @@ class FixturePreparationTest(unittest.TestCase):
         expected = {'build/exception-result-layouts/manifest.json',
                     'build/exception-result-layouts/native/oracle', 'build/exception-result-layouts/oracle.tsv'}
         stages = ('pre',) if fast_fixtures.platform.machine().lower() in ('arm64', 'aarch64') else ('pre', 'post')
-        expected.update(f'build/exception-result-layouts/{stage}/core/ExceptionResultLayoutsAudit.json'
+        expected.update(f'build/exception-result-layouts/{stage}/core/ExceptionResultLayoutsAudit.cbd'
                         for stage in stages)
         expected.update(f'build/exception-result-layouts/{stage}/{family}Result-audit.json'
                         for stage in stages for family in ('int8', 'word8', 'int16', 'word16',
@@ -1919,7 +1961,7 @@ class FixturePreparationTest(unittest.TestCase):
         expected = {'build/scalar-exception-results/manifest.json',
                     'build/scalar-exception-results/native/oracle',
                     'build/scalar-exception-results/logs/native-oracle.stdout'}
-        expected.update(f'build/scalar-exception-results/{stage}/core/ScalarExceptionResultsAudit.json'
+        expected.update(f'build/scalar-exception-results/{stage}/core/ScalarExceptionResultsAudit.cbd'
                         for stage in ('pre', 'post'))
         expected.update(f'build/scalar-exception-results/{stage}/{prefix}{suffix}-audit.json'
                         for stage in ('pre', 'post') for prefix in ('normal', 'throw', 'interrupt')
