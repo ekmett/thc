@@ -373,7 +373,7 @@ captureGlobalUnits context project requested missing = do
         store = staging </> "store"
         dist = staging </> "dist"
         capture = staging </> "capture"
-        arguments = ["--store-dir=" ++ store, "build", "all", "--offline",
+        arguments = ["--store-dir=" ++ store, "build", "all",
                      "--enable-build-info", "--project-file", "cabal.project",
                      "--builddir", dist, "--with-compiler", wrapper] ++
                     maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)
