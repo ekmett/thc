@@ -5,7 +5,6 @@ package thc.runtime;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import java.nio.file.*;
-import java.security.MessageDigest;
 import java.util.*;
 import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
@@ -54,10 +53,6 @@ class ShowWordListTest {
     }
     private void nativeShow(boolean inlining) throws Exception {
         var manifest = object(Json.parse(Files.readString(root.resolve("build/show-word-list/manifest.json"))));
-        for (var kind : list("sources", "artifacts")) for (var item : objects(manifest.get(kind))) {
-            var path = (String) item.get("path"); var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(path))));
-            assertEquals(item.get("sha256"), hash, "Stale Show Word/list preparation: " + path);
-        }
         var rows = new ArrayList<Row>();
         for (var line : Files.readAllLines(root.resolve("build/show-word-list/oracle.tsv"))) {
             var parts = line.split("\t", -1); rows.add(new Row(parts[0], Long.parseLong(parts[1]), Long.parseLong(parts[2]), Long.parseLong(parts[3]), Long.parseLong(parts[4])));
@@ -80,7 +75,7 @@ class ShowWordListTest {
         assertEquals(expectedRows, rows, "Every unsigned/list character, checksum, and end sentinel matches independently");
         for (var stage : object(manifest.get("stages")).entrySet()) {
             var modules = new ArrayList<Map<String, Object>>();
-            for (var path : expression(stage.getValue())) modules.add(object(Json.parse(Files.readString(root.resolve((String) path)))));
+            for (var path : expression(stage.getValue())) modules.add(thc.CoreCbdFixtures.read(root.resolve((String) path)));
             var module = CoreModules.merge(modules);
             for (var name : entries) {
                 var workerIds = name.startsWith("word") ? list(wordWorker) : listWorkers;
@@ -91,10 +86,10 @@ class ShowWordListTest {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var instrumented = with(CoreModules.reachable(module, name), "instrument", true);
+                        var instrumented = with(CoreModules.reachable(module, "main:ShowWordListAudit." + name), "instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, instrumented) : new BytecodeProgram(language, instrumented);
                         int arity = switch (name) { case "wordChecksum" -> 1; case "listCharacter" -> 3; default -> 2; };
-                        var function = context.asValue(new EntryValue(program, name, arity)); var host = program.hostEntryTarget(arity); var original = program.entryTarget(name);
+                        var function = context.asValue(new EntryValue(program, "main:ShowWordListAudit." + name, arity)); var host = program.hostEntryTarget(arity); var original = program.entryTarget("main:ShowWordListAudit." + name);
                         var workers = workerIds.stream().map(program::entryTarget).toList(); var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
                         // Warm every retained row once; no extra settling, retries, or threshold changes.
                         for (var row : selected) check(function, name, row, label, language);

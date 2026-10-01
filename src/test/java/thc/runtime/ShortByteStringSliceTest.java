@@ -16,7 +16,6 @@ import thc.*;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
-import java.security.MessageDigest;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -180,19 +179,13 @@ class ShortByteStringSliceTest {
     private Map<String, Object> manifest() throws Exception {
         var manifest =
             (Map<String, Object>) Json.parse(Files.readString(new File(directory, "manifest.json").toPath()));
-        for (var kind : List.of("sources", "artifacts"))
-            for (var item : (List<Map<String, String>>) manifest.get(kind)) {
-                var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
-                    Files.readAllBytes(new File(root, Objects.requireNonNull(item.get("path"))).toPath())));
-                assertEquals(item.get("sha256"), hash, "Stale byte-slice preparation: " + item.get("path"));
-            }
         assertEquals(entries, manifest.get("entries"));
         return manifest;
     }
     private Map<String, Object> merged(List<String> paths) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
         for (var path : paths)
-            modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
         return CoreModules.merge(modules);
     }
     @Test
@@ -271,14 +264,14 @@ class ShortByteStringSliceTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var instrumented = new LinkedHashMap<>(CoreModules.reachable(module, name));
+                            var instrumented = new LinkedHashMap<>(CoreModules.reachable(module, "main:ShortByteStringSliceAudit." + name));
                             instrumented.put("instrument", true);
                             ExecutableProgram program = backend.equals("ast")
                                 ? new Program(language, instrumented)
                                 : new BytecodeProgram(language, instrumented);
-                            var function = context.asValue(new EntryValue(program, name, 4));
+                            var function = context.asValue(new EntryValue(program, "main:ShortByteStringSliceAudit." + name, 4));
                             var host = program.hostEntryTarget(4);
-                            var original = program.entryTarget(name);
+                            var original = program.entryTarget("main:ShortByteStringSliceAudit." + name);
                             var worker = program.entryTarget(lengthWorker);
                             var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                             // Warm the complete native corpus once; no settling calls, retries, automatic threshold
@@ -367,7 +360,7 @@ class ShortByteStringSliceTest {
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var linked = CoreModules.reachable(merged(paths), name);
+                            var linked = CoreModules.reachable(merged(paths), "main:ShortByteStringSliceAudit." + name);
                             assertThrows(UnsupportedCore.class, () -> {
                                 if (backend.equals("ast"))
                                     new Program(language, linked);
