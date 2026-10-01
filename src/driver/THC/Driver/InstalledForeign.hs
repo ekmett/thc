@@ -71,6 +71,9 @@ unixModules :: [String]
 unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals",
   "System.Posix.Directory.PosixPath", "System.Posix.Env.PosixString", "System.Posix.IO.Common"]
 
+nominalModules :: [String]
+nominalModules = ["GHC.Internal.TopHandler", "GHC.Internal.Conc.Sync"]
+
 -- | Determine whether a configured producer module lacks retained provenance.
 -- Presence is not permission to replace bad evidence. The helper has already
 -- checked actual annotations against the retained Core/foreign products.
@@ -82,6 +85,10 @@ missingForeignProof name core
       _ -> Left "incomplete static foreign-export evidence"
   | name `elem` (posixModule : directoryModule : unixModules) =
       maybe (Right True) classified (member "staticForeignImportStubs" core)
+  | name `elem` nominalModules = case (member "staticForeignImports" core, member "staticForeignImportStubs" core) of
+      (Nothing, Nothing) -> Right True
+      (Just proof, _) -> classified proof
+      _ -> Left "incomplete static foreign-import evidence"
   | otherwise = Left "module is outside the installed foreign producer profile"
   where
     classified proof
@@ -105,7 +112,11 @@ prepareForeignInterfaces producer cache source context registrations = do
       case candidates of
         [] -> pure selected
         [unit] -> do
-          original <- forM names $ \name -> do
+          -- Regenerate the same unit in one view: a second overlay would
+          -- otherwise lose earlier Bound/Posix provenance from this unit.
+          let selectedNames = names ++ [name | names == [boundModule, posixModule],
+                name <- nominalModules, name `elem` map fst (installedInterfaces unit)]
+          original <- forM selectedNames $ \name -> do
             path <- maybe (fail "missing original foreign interface") pure (lookup name (installedInterfaces unit))
             before <- hashFile path
             core <- readCore selected unit name path
@@ -115,7 +126,7 @@ prepareForeignInterfaces producer cache source context registrations = do
             pure (name, core, missing, (path, before))
           let needed = [(name, core) | (name, core, True, _) <- original]
               observed = [observation | (_, _, _, observation) <- original]
-          if null needed then pure selected else prepare selected unit names needed observed
+          if null needed then pure selected else prepare selected unit selectedNames needed observed
         _ -> fail "multiple installed units contain the original foreign modules"
     prepare selected unit names needed originalFiles = do
       root <- canonicalizePath source
@@ -200,7 +211,8 @@ configuredRecipe producer context unit root names = do
   version <- command (foreignGhc producer) ["--numeric-version"] Nothing
   check (words version == ["9.14.1"]) "--ghc-source requires selected GHC 9.14.1"
   packageName <- case names of
-    [bound, posix] | bound == boundModule && posix == posixModule -> pure "ghc-internal"
+    bound : posix : nominal | bound == boundModule && posix == posixModule &&
+      all (`elem` nominalModules) nominal && length (nub nominal) == length nominal -> pure "ghc-internal"
     _ | names == unixModules -> pure "unix"
     [directory] | directory == directoryModule -> pure "directory"
     _ -> fail "unsupported installed foreign source profile"
@@ -264,7 +276,8 @@ configuredRecipe producer context unit root names = do
     retained <- either fail pure (retainedUsageFiles description)
     verified <- verifyUsageFiles root retained
     required <- mapM canonicalizePath $ (if hscProfile
-      then [src </> modulePath name <.> "hsc"] else [root </> "rts/include/ghcversion.h", macros]) ++
+      then [src </> modulePath name <.> "hsc"] else
+        [path | not (null retained), path <- [root </> "rts/include/ghcversion.h", macros]]) ++
       (if name == posixModule then [built </> "include/HsBaseConfig.h", stage </> "rts/build/include/ghcplatform.h"] else [])
     check (all (`elem` map fst verified) required)
       ("original interface lacks required CPP dependency evidence: " ++ name)
@@ -466,6 +479,7 @@ fileInventory = mapM (\path -> (,) path <$> hashFile path)
 -- by a quoted Haskell FilePath and its Fingerprint. Restrict parsing to the
 -- original Self-Recomp section, never source strings in the retained Core/C.
 -- An absent/stripped or differently formatted record is not sufficient evidence.
+-- A non-CPP module still has a complete usages record, but no header UsageFiles.
 retainedUsageFiles :: String -> Either String [(FilePath, String)]
 retainedUsageFiles description = do
   section <- case dropWhile (/= "Self-Recomp") (lines description) of
@@ -475,7 +489,8 @@ retainedUsageFiles description = do
       (body, _) -> Right body
   let rows = [dropWhile isSpace line | line <- section,
               "addDependentFile" `isPrefixOf` dropWhile isSpace line]
-  unless (not (null rows)) (Left "original interface lacks retained CPP UsageFile evidence")
+  unless (any ("  usages: [" `isPrefixOf`) section)
+    (Left "original interface lacks retained usage evidence")
   traverse parse rows
   where
     parse row = case reads (drop (length ("addDependentFile" :: String)) row) :: [(String, String)] of
