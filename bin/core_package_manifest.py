@@ -65,30 +65,6 @@ def inspect_cbd(data, *, sources=False):
         return strict_json(result.stdout if sources else output.read_text(encoding='utf-8'))
 
 
-def paired_diagnostic_cbd(path):
-    """Offline source-label/type evidence, accepted only for the exact sibling CBD."""
-    path = Path(path)
-    diagnostic = path.with_suffix('.json')
-    value = strict_json(diagnostic.read_text(encoding='utf-8'))
-    root = Path(__file__).resolve().parent.parent
-    executable = os.environ.get('THC_FIXTURES')
-    if not executable:
-        result = subprocess.run([os.environ.get('CABAL', 'cabal'), 'list-bin', 'exe:thc-fixtures', '--offline'],
-                                cwd=root, capture_output=True, text=True, timeout=60)
-        if result.returncode:
-            raise ValueError('Cannot locate diagnostic CBD encoder: ' + result.stderr.strip())
-        executable = result.stdout.strip()
-    with TemporaryDirectory(prefix='thc-cbd-diagnostic-') as temporary:
-        encoded = Path(temporary) / 'paired.cbd'
-        result = subprocess.run([executable, 'compact-model', str(diagnostic), str(encoded)],
-                                cwd=root, capture_output=True, text=True, timeout=60)
-        if result.returncode:
-            raise ValueError('Diagnostic CBD encoding failed: ' + result.stderr.strip())
-        if encoded.read_bytes() != path.read_bytes():
-            raise ValueError('Diagnostic/CBD export mismatch: ' + str(path))
-    return value
-
-
 def time_clock_symbols(unit):
     owner = unit.replace('-', 'zm').replace('.', 'zi')
     return {f'ghczuwrapperZC{index}ZC{owner}ZCDataziTimeziClockziInternalziCTimespecZC{name}': kind
