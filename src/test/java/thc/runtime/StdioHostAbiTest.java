@@ -148,11 +148,13 @@ class StdioHostAbiTest {
             List.of("Darwin", "x86_64", "x86_64-apple-darwin25"), List.of("Darwin", "aarch64", "arm64-apple-darwin25"))) {
             var system = target.get(0); var architecture = target.get(1);
             var value = with(document(), "system", system, "architecture", architecture, "target", target.get(2));
-            assertDoesNotThrow(() -> StdioHostAbi.parse(value, system, architecture));
+            // A synthetic target also needs that target’s AT_EMPTY_PATH availability.
+            var consistent = with(value, "at", with((Map<?, ?>) value.get("at"), "AT_EMPTY_PATH", system.equals("Linux") ? 4096L : 0L));
+            assertDoesNotThrow(() -> StdioHostAbi.parse(consistent, system, architecture));
             for (var wrong : List.of("x86_64-unknown-linux-gnux32", "x86_64-unknown-linux-musl", "aarch64", "wasm32-wasi"))
-                assertThrows(RuntimeFault.class, () -> StdioHostAbi.parse(with(value, "target", wrong), system, architecture));
-            assertThrows(RuntimeFault.class, () -> StdioHostAbi.parse(value, "Windows", architecture));
-            assertThrows(RuntimeFault.class, () -> StdioHostAbi.parse(value, system, "riscv64"));
+                assertThrows(RuntimeFault.class, () -> StdioHostAbi.parse(with(consistent, "target", wrong), system, architecture));
+            assertThrows(RuntimeFault.class, () -> StdioHostAbi.parse(consistent, "Windows", architecture));
+            assertThrows(RuntimeFault.class, () -> StdioHostAbi.parse(consistent, system, "riscv64"));
         }
     }
 }
