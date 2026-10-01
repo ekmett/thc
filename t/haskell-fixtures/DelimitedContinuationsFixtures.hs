@@ -56,14 +56,14 @@ prepareDelimitedContinuations root = do
   unless (parkedValues == [11023000000, 107119096192]) (die "Unexpected parked-continuation native observations")
   parkedExported <- runLogged 180 root logs "parked-export"
     [("THC_CORE_OUT", root </> parked </> "core"), ("THC_GHC_OUT", root </> parked </> "ghc")]
-    "bin/export-core.sh" ["-fplugin-opt=THC.Plugin:pretty-diagnostics", parkedSource]
+    "bin/export-core.sh" [parkedSource]
   parkedAudited <- runLogged 30 root logs "parked-audit" [] "python3"
     ["bin/audit-core.py", "--entry", "main:ParkedControl.observe", "--output", parked </> "audit.json", parked </> "core/ParkedControl.cbd"]
   artifacts <- fmap concat $ forM stages $ \stage -> do
     let core = directory </> stage </> "core"
     exported <- runLogged 180 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     audits <- fmap concat $ forM entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
       audited <- runLogged 30 root logs (stage ++ "-audit-" ++ entry) [] "python3"
@@ -75,7 +75,7 @@ prepareDelimitedContinuations root = do
           KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
         _ -> die ("Strict continuation audit rejected " ++ entry)
       pure (report : commandArtifacts audited)
-    pure ([core </> "DelimitedContinuations.cbd", core </> "DelimitedContinuations.json"] ++ commandArtifacts exported ++ audits)
+    pure ([core </> "DelimitedContinuations.cbd"] ++ commandArtifacts exported ++ audits)
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = [source, driver, parkedSource, parkedDriver, "thc.cabal", "t/haskell-fixtures/Main.hs",
@@ -85,7 +85,7 @@ prepareDelimitedContinuations root = do
         ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   sourceHashes <- hashes root sources
-  artifactHashes <- hashes root (artifacts ++ [parked </> "core/ParkedControl.cbd", parked </> "core/ParkedControl.json", parked </> "audit.json"] ++
+  artifactHashes <- hashes root (artifacts ++ [parked </> "core/ParkedControl.cbd", parked </> "audit.json"] ++
     concatMap commandArtifacts [version, compiled, observations, parkedCompiled, parkedObserved, parkedExported, parkedAudited])
   writeJson (output </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
