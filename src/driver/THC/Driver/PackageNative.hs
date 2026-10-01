@@ -1454,7 +1454,8 @@ compileC compiler root original directory generated = do
                            not ("-" `isPrefixOf` value)) arguments
       compilerFlag = if cxx then "-pgmcxx" else "-pgmc"
       option = if cxx then "-optcxx" else "-optc"
-  _ <- command root compiler (arguments ++ map (option ++) sdkFlags ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
+  replayed <- either fail pure (replayDependencyArguments option arguments)
+  _ <- command root compiler (replayed ++ map (option ++) sdkFlags ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
     map (option ++) ["-emit-llvm","-O1","-MD","-MF",dependency,
                     "-MT","thc_scalar_input","-Werror=date-time"])
   dependencies <- readDependencies dependency
@@ -1473,6 +1474,25 @@ compileC compiler root original directory generated = do
   pure (adjusted,target,object ["compiler" .= compiler,"clang" .= clang,"arguments" .= arguments,
     "language" .= (if cxx then "c++" else "c" :: String),
     "nativeTarget" .= nativeTarget,"target" .= target,"files" .= observed])
+
+-- Dependency filenames/targets belong to the replay output, like -o above.
+-- Retain the successful original argv in the receipt, including its spelling.
+replayDependencyArguments :: String -> [String] -> Either String [String]
+replayDependencyArguments phase = go
+  where
+    go [] = Right []
+    go (flag:value:rest) | flag == phase = option [flag,value] value rest
+    go (flag:rest) | phase `isPrefixOf` flag && length flag > length phase =
+      option [flag] (drop (length phase) flag) rest
+    go (flag:rest) = (flag:) <$> go rest
+    option original value rest
+      | value `elem` ["-MD","-MMD"] = go rest
+      | value `elem` ["-MF","-MT","-MQ"] = operand rest >>= go
+      | any (\prefix -> prefix `isPrefixOf` value && length value > length prefix) ["-MF","-MT","-MQ"] = go rest
+      | otherwise = (original ++) <$> go rest
+    operand (flag:_:rest) | flag == phase = Right rest
+    operand (flag:rest) | phase `isPrefixOf` flag && length flag > length phase = Right rest
+    operand _ = Left "package native dependency option lacks its compiler operand"
 
 calls :: Value -> [Value]
 calls (Object fields) = maybe [] (:[]) (KM.lookup "foreignCall" fields) ++

@@ -900,6 +900,27 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (nativeWrapperSource [(signed,"thc_native_signed_0",Just "original.h")])
       assertBool "different widths still conflict" $ isLeft $ nativeSignatures "fixture-unit"
         [moduleWith [set "header" "original.h" (entry "fill" "ccall" [rep,"void"] ["void"]) | rep <- ["Int8Rep","Word16Rep"]]]
+  , TestLabel "configured C dependency outputs belong to the LLVM replay" $ TestCase $ withScratch $ \root -> do
+      repository <- lookupEnv "THC_TEST_ROOT" >>= maybe getCurrentDirectory pure
+      compiler <- tool "GHC" "ghc"
+      forM_ [0 :: Int .. 2] $ \index -> do
+        let directory = root </> show index
+            output = directory </> "original.dyn_o"
+            dependency = directory </> "original.d"
+            options = ["-MD","-MF",dependency,"-MT","original_native_target"]
+            configured = case index of
+              0 -> map ("-optc" ++) options
+              1 -> concatMap (\value -> ["-optc",value]) options
+              _ -> ["-optc-MMD","-optc-MF" ++ dependency,"-optc-MToriginal_native_target"]
+            arguments = ["-c",repository </> "src/driver/cbits/target-layout.c","-fPIC","-o",output] ++ configured
+        createDirectory directory
+        (status,_,diagnostic) <- readProcessWithExitCode compiler arguments ""
+        assertEqual diagnostic ExitSuccess status
+        original <- BS.readFile dependency
+        piece <- captureConfiguredNativeObject (directory </> "pieces") repository compiler arguments
+        assertEqual "LLVM capture preserves the actual successful argv" (Just (toJSON arguments))
+          (lookupField "inputs" piece >>= lookupField "arguments")
+        assertEqual "LLVM replay must not overwrite the native dependency output" original =<< BS.readFile dependency
   , TestCase $ assertEqual "actual configured C/package arguments survive Haskell flag filtering"
       (Right ["-hide-all-packages","-Iinclude","-optc-DREAL=1","-package-db","/db","-package-id","base-unit"])
       (nativeCompilerArguments ["--make","-hide-all-packages","-Iinclude","-O2","-odir","/build",
