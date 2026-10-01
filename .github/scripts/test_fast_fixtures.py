@@ -2118,6 +2118,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('original-open', owners['thc.runtime.OriginalOpenTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-open']}], group['commands'])
         self.assertEqual(['build/original-open'], group['outputs'])
+        self.assertTrue({'t/fixtures/compiler/OriginalOpenRequestNative.hs',
+                         'src/main/c/native-open-request.c', 'src/driver/THC/Driver/NativeCache.hs'}
+                        <= set(group['sources']))
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
         self.assertIn('"$fixture_bin" original-open', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -2132,7 +2135,8 @@ class FixturePreparationTest(unittest.TestCase):
                        installedArtifactsHashed=False, nativeRows=13, nativeVariants=["unsafe", "safe", "interruptible"],
                        ownedRequestControls=True, artifactHashes=artifacts)
         path = self.root / name
-        with mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', True):
+        with mock.patch.object(fast_fixtures.fast_inputs, 'ORIGINAL_OPEN_HOST', True, create=True), \
+                mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', False):
             path.write_text(json.dumps(receipt))
             self.assertEqual(fast_fixtures.fast_inputs.ORIGINAL_OPEN_OUTPUTS,
                              fast_fixtures._output_hashes(self.root, group).keys())

@@ -27,6 +27,8 @@ import zlib
 
 SCHEMA = 1
 GMP_NATIVE_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
+ORIGINAL_OPEN_HOST = (platform.system(), platform.machine()) in {
+    ("Linux", "x86_64"), ("Darwin", "x86_64"), ("Darwin", "arm64"), ("Darwin", "aarch64")}
 ERRNO_NATIVE_HOST = platform.system() in ("Linux", "Darwin") and sys.maxsize > 2**32
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 ORIGINAL_UNIX_UNIT = re.compile(r"unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)\Z")
@@ -1304,7 +1306,7 @@ def fd_ready_artifact_hashes(manifest):
 def original_open_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid original open manifest")
-    if not GMP_NATIVE_HOST:
+    if not ORIGINAL_OPEN_HOST:
         require(manifest.get("supported") is False, "Unsupported original open host")
         return {}
     require(manifest.get("supported") is True and manifest.get("strictAccepted") is True and
