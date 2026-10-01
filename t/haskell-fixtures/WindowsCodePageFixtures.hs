@@ -27,7 +27,7 @@ import Data.Aeson.Key (Key)
 import qualified Data.ByteString as Bytes
 import qualified Data.ByteString.Char8 as BS
 import Data.Char (toUpper)
-import Data.List (isPrefixOf, nubBy, sort)
+import Data.List (isPrefixOf, nub, nubBy, sort)
 import qualified Data.Map.Strict as Map
 import qualified Distribution.InstalledPackageInfo as Package
 import Data.Time (getCurrentTime, defaultTimeLocale, formatTime)
@@ -56,6 +56,9 @@ import System.Exit (die)
 import System.FilePath ((</>), makeRelative, takeDirectory, takeExtension)
 import qualified THC.Interface as Interface
 import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
+import THC.Compact.Module (readModuleValue)
+import THC.Driver.NativeDependencies (nativeLinkInputs, nativeSymbolArchives)
+import THC.Driver.PackageNative (installedNativeSignatures, nativeWrapperSource)
 import Unsafe.Coerce (unsafeCoerce)
 
 operations :: [(String,String)]
@@ -103,6 +106,7 @@ prepareWindowsCodePages root = do
   let directory = "build/windows-codepages"
       logs = directory </> stamp
       overlay = root </> logs </> "interfaces"
+      providers = root </> logs </> "providers"
       output = root </> logs </> "consumer"
       source = "t/fixtures/compiler/WindowsCodePageAudit.hs"
       execute = runLogged 180 root logs
@@ -115,6 +119,7 @@ prepareWindowsCodePages root = do
       upstream = root </> "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
   createDirectoryIfMissing True overlay
   createDirectoryIfMissing True output
+  createDirectoryIfMissing True providers
   stale <- doesFileExist (root </> directory </> "manifest.json")
   when stale (removeFile (root </> directory </> "manifest.json"))
   version <- execute "version" [] ghc ["--numeric-version"]
@@ -172,10 +177,44 @@ prepareWindowsCodePages root = do
       let expected = mkModule (stringToUnit "ghc-internal") (mkModuleName name)
       core <- Interface.loadInterfaceCore environment expected (overlay </> relative name ++ ".hi") >>= maybe
         (die "Original Windows declaration interface lacks full Core") pure
+      Interface.interfaceCoreCBD ["unit-qualified"] core >>= Bytes.writeFile (providers </> name ++ ".cbd")
       pure [value | (_,body) <- flattenBinds (Interface.interfaceBindings core), value <- variables body, originalCall value /= Nothing]
     let distinct = nubBy (\a b -> originalCall a == originalCall b && eqType (idType a) (idType b)) values
     liftIO $ unless (length distinct == length operations) (die "Missing original Windows FCallIds")
     pure distinct
+  -- Derive every native signature from the genuine declaration owners. The
+  -- runtime still selects its existing context-owned operations before these
+  -- ordinary adapters; no symbol list supplies missing package functions.
+  signatures <- fmap (sort . nub . concat) $ forM modules $ \name -> do
+    providerModule <- Bytes.readFile (providers </> name ++ ".cbd") >>= either die pure . readModuleValue
+    either die pure (installedNativeSignatures "ghc-internal" providerModule)
+  unless (not (null signatures) && all (\(_,convention,_,_,_) -> convention == "ccall") signatures)
+    (die "Code-page native adapters require original ordinary ccall declarations")
+  let nativeEntries = zip [0 :: Int ..] signatures
+      adapterEntry index = "thc_windows_codepage_" ++ show index
+  wrappers <- either die pure (nativeWrapperSource
+    [(signature,adapterEntry index,Nothing) | (index,signature) <- nativeEntries])
+  let adapterSource = providers </> "adapters.c"
+      adapter = providers </> "adapters.bc"
+      exports = providers </> "dependencies.def"
+      nativeLibrary = providers </> "dependencies.dll"
+      adapterTriple = "x86_64-pc-windows-msvc19.33.0"
+  BS.writeFile adapterSource (BS.pack ("#include <stdint.h>\n" ++
+    "_Static_assert(sizeof(void *) == 8 && sizeof(uint32_t) == 4, \"unsupported Windows adapter ABI\");\n" ++ wrappers))
+  -- Let the native linker resolve the declared libraries and publish their
+  -- actual symbols. A PE import thunk exports the ordinary system function;
+  -- no package function is replaced or allowed by a tested-symbol inventory.
+  BS.writeFile exports (BS.pack ("EXPORTS\n" ++ unlines (nub [symbol | (symbol,_,_,_,_) <- signatures])))
+  clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
+  adapterTarget <- execute "adapter-target" [] clang ["--target=" ++ adapterTriple,"-dumpmachine"]
+  unless (oneLine adapterTarget == adapterTriple) (die "Clang did not select the Sulong MSVC ABI")
+  adapterBuilt <- execute "adapter-build" [] clang ["--target=" ++ adapterTriple,"-O1","-g","-emit-llvm","-c",adapterSource,"-o",adapter]
+  nativeInputs <- nativeLinkInputs pkg (oneLine library) root [] (Just "ghc-internal") ["-package","ghc-internal"]
+  nativeArchives <- nativeSymbolArchives pkg (oneLine library) root "ghc-internal" ["-package","ghc-internal"]
+    [(symbol,True) | (symbol,_,_,_,_) <- signatures]
+  nativeArchiveHashes <- hashes root (map fst nativeArchives)
+  nativeLinked <- execute "native-provider-link" [] clang
+    (["-shared",exports] ++ map fst nativeArchives ++ nativeInputs ++ ["-o",nativeLibrary])
   oracle <- runGhc (Just (oneLine library)) $ do
     initial <- getSessionDynFlags
     before <- getSession
@@ -226,21 +265,28 @@ prepareWindowsCodePages root = do
       "--output",logs </> stage ++ "-" ++ name ++ ".audit.json",logs </> stage ++ ".cbd"]
   afterHashes <- hashes root usedSources
   unless (sourceHashes == afterHashes) (die "Compiling declaration interfaces changed upstream sources")
-  let commands = [version,library,registration,rtsRegistration] ++ compiled ++ audits
+  let commands = [version,library,registration,rtsRegistration] ++ compiled ++ [adapterTarget,adapterBuilt,nativeLinked] ++ audits
       inputs = [source,"etc/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/WindowsCodePageFixtures.hs",
         "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
+        "src/driver/THC/Driver/PackageNative.hs","src/driver/THC/Driver/NativeDependencies.hs","src/driver/THC/Driver/NativeLibrarySources.hs",
         "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
         "src/main/java/thc/runtime/OriginalStdioExpression.java","src/main/java/thc/runtime/BytecodeProgram.java",
         "src/main/java/thc/runtime/BytecodeRoot.java","src/main/java/thc/runtime/WindowsCodePages.java","src/main/c/windows-directory-abi.c"]
   inputHashes <- hashes root inputs
   rawArtifacts <- hashes root ([logs </> file | file <- ["pre.cbd","post.cbd","oracle.json"]] ++
+    [makeRelative root (providers </> name ++ ".cbd") | name <- modules] ++
+    map (makeRelative root) [adapterSource,adapter,exports,nativeLibrary] ++
     [makeRelative root (overlay </> relative name ++ ".hi") | name <- modules] ++ concatMap commandArtifacts commands ++
     [logs </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"],name <- map fst operations])
   let artifactHashes = Map.mapKeys (map (\c -> if c == '\\' then '/' else c)) rawArtifacts
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"logs" .= logs,"entries" .= map fst operations,
      "originalFCallIds" .= True,"upstream" .= upstreamIdentity,"sourceHashes" .= sourceHashes,
+     "nativeArchiveHashes" .= nativeArchiveHashes,
+     "nativeAbi" .= [object ["symbol" .= symbol,"entry" .= adapterEntry index,
+       "convention" .= convention,"safety" .= safety,"arguments" .= arguments,"result" .= result] |
+       (index,(symbol,convention,safety,arguments,result)) <- nativeEntries],
      "inheritedInterfaceHashes" .= inheritedHashes,"inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
   putStrLn "windows-codepages: twelve genuine GHC FCallIds, native encoding/error oracle and 24 strict audits"

@@ -7,6 +7,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -30,6 +31,8 @@ import thc.CoreModules;
 import thc.Json;
 import thc.Language;
 import thc.Main;
+import thc.PackageScalarLink;
+import thc.PackageScalarSignature;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -43,13 +46,106 @@ class WindowsCodePagesTest {
         return (Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.toPath().resolve(path)));
     }
     private Map<String, Object> receipt() throws Exception { return json("build/windows-codepages/manifest.json"); }
-    private Map<String, Object> source(String stage) throws Exception { return cbd(receipt().get("logs") + "/" + stage + ".cbd"); }
+    private Map<String, Object> source(String stage) throws Exception {
+        var module = new LinkedHashMap<>(cbd(receipt().get("logs") + "/" + stage + ".cbd"));
+        module.put("packageScalarLinks", List.of(provider()));
+        return module;
+    }
     private Map<String, Object> source() throws Exception { return source("post"); }
     private Context context(boolean nativeAccess) {
         return Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(nativeAccess)
             .allowIO(IOAccess.NONE), ContextProfile.SYNCHRONOUS_TEST).build();
     }
     private Context context() { return context(true); }
+    private PackageScalarLink provider() throws Exception {
+        var proof = receipt();
+        String logs = proof.get("logs").toString().replace('\\', '/');
+        OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/providers/adapters.bc",
+            logs + "/providers/dependencies.dll", logs + "/providers/dependencies.def"), logs + "/");
+        // Installed archives are host inputs, separately recorded from the
+        // repository-relative fixture artifacts checked above.
+        for (var archive : ((Map<String, String>) proof.get("nativeArchiveHashes")).entrySet()) {
+            var path = java.nio.file.Path.of(archive.getKey());
+            assertTrue(path.isAbsolute());
+            assertEquals(archive.getValue(), java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))));
+        }
+        var signatures = new ArrayList<PackageScalarSignature>();
+        for (var abi : (List<Map<String, Object>>) proof.get("nativeAbi"))
+            signatures.add(new PackageScalarSignature((String) abi.get("symbol"), (String) abi.get("entry"),
+                (List<String>) abi.get("arguments"), (String) abi.get("result"),
+                (String) abi.get("convention"), (String) abi.get("safety")));
+        // Genuine interface declarations drive these ordinary adapters and PE
+        // imports. The explicit trusted fixture link adds no invented Core body.
+        return new PackageScalarLink("ghc-internal", "x86_64-pc-windows-msvc19.33.0", "windows-codepage-fixture", "",
+            Files.readAllBytes(root.toPath().resolve(logs + "/providers/adapters.bc")), signatures,
+            "llvm-bitcode", Set.of(), Files.readAllBytes(root.toPath().resolve(logs + "/providers/dependencies.dll")));
+    }
+    private static final class NativeCodePage extends RootNode {
+        @Child private PackageScalarAccess access;
+        NativeCodePage(Language language, PackageScalarCall call) { super(language); access = new PackageScalarAccess(call); }
+        @Override public Object execute(VirtualFrame frame) {
+            return Integer.toUnsignedLong(access.executeInt(frame.getArguments(), Unit.INSTANCE));
+        }
+    }
+    @Test void originalAnsiPageUsesDeclaredNativeProviderOnFirstCompiledBoundaryCall() throws Exception {
+        var proof = receipt();
+        String logs = proof.get("logs").toString().replace('\\', '/');
+        var expected = json(logs + "/oracle.json").get("ansi");
+        try (var context = context()) {
+            var language = enter(context);
+            var owner = Language.currentState();
+            owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                assertThrows(SecurityException.class, () -> owner.getEnv().getCurrentWorkingDirectory());
+                var link = provider();
+                var matches = link.getAbi().stream().filter(abi -> abi.getSymbol().equals("GetACP")).toList();
+                assertEquals(1, matches.size());
+                var signature = matches.getFirst();
+                assertEquals(List.of(), signature.getArguments());
+                assertEquals("Word32Rep", signature.getResult());
+                owner.getPackageCbits().link(link);
+                var target = new NativeCodePage(language, new PackageScalarCall(link, signature)).getCallTarget();
+                assertEquals(expected, target.call());
+                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                valid(target);
+                assertEquals(expected, target.call());
+                valid(target);
+                assertThrows(RuntimeFault.class, () -> target.call(0L));
+                assertThrows(SecurityException.class, () -> owner.getEnv().getCurrentWorkingDirectory());
+            } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
+    @Test void originalErrorMappingUsesDeclaredNativeProviderOnFirstCompiledBoundaryCall() throws Exception {
+        var proof = receipt();
+        String logs = proof.get("logs").toString().replace('\\', '/');
+        var rows = (List<List<Long>>) json(logs + "/oracle.json").get("mapping");
+        assertEquals(263, rows.size());
+        try (var context = context()) {
+            var language = enter(context);
+            var owner = Language.currentState();
+            owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                var link = provider();
+                var matches = link.getAbi().stream().filter(abi -> abi.getSymbol().equals("maperrno_func")).toList();
+                assertEquals(1, matches.size());
+                var signature = matches.getFirst();
+                assertEquals(List.of("Word32Rep"), signature.getArguments());
+                assertEquals("Int32Rep", signature.getResult());
+                owner.getPackageCbits().link(link);
+                var target = new NativeCodePage(language, new PackageScalarCall(link, signature)).getCallTarget();
+                for (var row : rows) assertEquals(row.get(1), target.call(row.getFirst().intValue()));
+                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                valid(target);
+                for (var row : rows) {
+                    assertEquals(row.get(1), target.call(row.getFirst().intValue()));
+                    valid(target);
+                }
+                assertThrows(RuntimeFault.class, () -> target.call(0L));
+                assertThrows(SecurityException.class, () -> owner.getEnv().getCurrentWorkingDirectory());
+            } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
     private Language enter(Context context) {
         context.initialize("thc");
         context.enter();
@@ -92,7 +188,9 @@ class WindowsCodePagesTest {
         operations.put("localFree", OriginalStdioOp.LOCAL_FREE);
     }
     private List<Object> original(String name) throws Exception {
-        var calls = OriginalStdioChecks.foreignCalls(CoreModules.INSTANCE.reachable(source(),entryId(name), false));
+        // Inspect the genuine declaration artifact before runtime linking.
+        var calls = OriginalStdioChecks.foreignCalls(CoreModules.INSTANCE.reachable(
+            cbd(receipt().get("logs") + "/post.cbd"),entryId(name), false));
         assertEquals(1, calls.size());
         return calls.getFirst();
     }
@@ -150,7 +248,14 @@ class WindowsCodePagesTest {
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                 var language = enter(context);
                 try {
-                    var module = new LinkedHashMap<>(source(stage));
+                    // Compile the exact entry set exercised below. The wide
+                    // conversion control does not execute ordinary ANSI/error
+                    // mapping imports from unrelated bindings in this module.
+                    var entries = operations.keySet().stream()
+                        .filter(entry -> !wideOnly || List.of("wideChar", "wideCharSafe", "windowsError").contains(entry)).toList();
+                    var module = new LinkedHashMap<>(CoreModules.reachable(
+                        cbd(logs + "/" + stage + ".cbd"), entries.stream().map(this::entryId).toList(), false));
+                    module.put("packageScalarLinks", List.of(provider()));
                     module.put("instrument", true);
                     var executable = program(language, backend, module);
                     var targets = new LinkedHashMap<String, RootCallTarget>();

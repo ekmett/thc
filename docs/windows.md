@@ -161,6 +161,12 @@ access. Directory calls and encoding calls share the context's captured Windows
 last-error slot. The original errno slot remains separate.
 GetACP uses ordinary package linkage and requires its original native provider;
 extracting its declaration's Core alone does not supply that provider.
+The code-page fixture derives its native adapters from the genuine interfaces,
+compiles them for Sulong's MSVC target, and links a PE companion from the
+package-declared libraries and original C archive members. Native boundary
+checks compare GetACP and all 263 `maperrno_func` rows with GHC, including the
+first call after compilation. Context-owned error state, conversion and
+allocation operations retain their existing runtime boundaries.
 
 ~~~powershell
 ./bin/windows.ps1 -Action CodePageTest -Jobs 4
@@ -190,6 +196,10 @@ unchanged empty C bodies with native authority and `IOAccess.NONE`, preserving
 context ownership and managed, pinned, literal and native storage lifetimes.
 This resolves their Sulong `KERNEL32.dll` dependency lookup without granting
 guest filesystem access. It does not enable native DWARF stack inspection.
+The fixture also compiles GHC-derived scalar adapters for the four ordinary
+disabled-libdw calls. These execute the original DLL through package linkage;
+the native boundary check uses addressable, context-owned storage and verifies
+the first compiled calls and unchanged location bytes.
 
 ~~~powershell
 ./bin/windows.ps1 -Action LibdwTest -Jobs 4
@@ -209,6 +219,11 @@ filesystem access. Its bitcode target is MSVC; native GHC helpers use MinGW.
 Arbitrary MinGW package bitcode cannot be assumed ABI-compatible. See the
 [Sulong build reference](../tools/sulong-windows/README.md) when changing that
 integration.
+Package metadata accepts x86_64 MSVC LLVM on Windows and rejects MinGW LLVM or
+a foreign CPU target. Loaded package companions use `.dll` and Windows NFI
+loading syntax. Their temporary files are scheduled for deletion at JVM exit,
+matching the existing native runtime provider; Windows locks loaded DLL files.
+Native authority does not grant the guest current-directory or file access.
 
 ## Current boundaries
 
@@ -224,6 +239,15 @@ ordinary `Test` action.
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.
+- Ordinary foreign calls in either Core backend also require the genuine
+  `THC.Exception` bundle. The standalone code-page and disabled-libdw boundary
+  checks pass independently of that bundle. On the development baseline,
+  `thc-fixtures.exe windows-bridge` builds the native oracle and exports pinned
+  Core, then fails acquisition on five physical RTS references:
+  `errorBelch`, `debugBelch`, `getProcessElapsedTime`, `_assertFail` and `barf`.
+  The public `windows-driver` fixture hits the same link boundary. Full Core
+  provider execution and a fresh public-driver receipt remain unqualified;
+  retained stale receipts must be regenerated, not accepted by editing hashes.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.
