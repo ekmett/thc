@@ -368,9 +368,9 @@ configuredNativeArchive capture source destination compilerIdentity owner regist
         ownedProduct <- if null pieces then pure Nothing else do
           (listed,names,errors) <- readProcessWithExitCode ar ["t",output] ""
           check (listed == ExitSuccess) ("Cannot read configured native archive: " ++ errors)
-          check (sort (lines names) == sort (map takeFileName objects))
+          check (sort (archiveObjectNames names) == sort (map takeFileName objects))
             "configured native archive differs from declared C/C++ objects"
-          members <- forM (lines names) $ \name -> do
+          members <- forM (archiveObjectNames names) $ \name -> do
             contents <- withCreateProcess (proc ar ["p",output,name]) {std_out=CreatePipe} $ \_ stream _ process -> do
               archiveStream <- maybe (fail "Missing configured archive output pipe") pure stream
               bytes <- BS.hGetContents archiveStream
@@ -474,7 +474,7 @@ readNativeProduct unit dependencies registration pieces = do
         -- Do not extract native Haskell members. Repeated Haskell basenames
         -- are legal in a mixed archive; only selected C membership must be
         -- unambiguous. C-only registrations still require every member.
-        let names = [name | name <- lines listing, complete || name `elem` candidateNames]
+        let names = [name | name <- archiveObjectNames listing, complete || name `elem` candidateNames]
         check ((not complete || not (null names)) && length names == length (nub names) &&
           all archiveMember names) "Unsupported native archive inventory"
         members <- forM names $ \name -> do
@@ -537,6 +537,12 @@ files directory = do
       if isDirectory then files path else pure [path])
 validHash :: String -> Bool
 validHash value = length value == 64 && all (`elem` ("0123456789abcdef" :: String)) value
+-- BSD archive symbol indexes are container metadata, not compiler objects.
+-- Keep every other member for exact membership and duplicate checks.
+archiveObjectNames :: String -> [String]
+archiveObjectNames listing = [name | name <- lines listing,
+  name `notElem` ["__.SYMDEF", "__.SYMDEF SORTED", "__.SYMDEF_64", "__.SYMDEF_64 SORTED"]]
+
 archiveMember :: String -> Bool
 archiveMember [] = False
 archiveMember name@(first:_) = first `notElem` ['-','@'] &&
