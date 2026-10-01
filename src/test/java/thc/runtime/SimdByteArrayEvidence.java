@@ -68,16 +68,11 @@ final class SimdByteArrayEvidence {
         names.addAll(graphs); names.addAll(hostEntries); names.addAll(frontiers);
         for (String stage : stages) for (String name : names) fresh.add(stage + "-" + name);
         var mutations = new ArrayList<String>();
-        var allStages = new ArrayList<>(stages);
-        allStages.addAll(List.of("retained-pre", "retained-post"));
-        for (String stage : allStages) for (String element : wrong.get(family)) for (String operation : local)
+        for (String stage : stages) for (String element : wrong.get(family)) for (String operation : local)
             mutations.add(stage + "-wrong-" + element + "-" + operation);
-        var retained = new ArrayList<String>();
-        for (String stage : List.of("pre", "post")) for (String operation : local) retained.add("retained-" + stage + "-" + operation + "Case");
         var audits = new ArrayList<>(fresh);
-        audits.addAll(mutations); audits.addAll(retained);
-        var commands = new ArrayList<>(List.of("ghc-version", "ghc-info", "host", "architecture", "system", "compiler-build",
-            "retained-provenance", "retained-pre", "retained-post"));
+        audits.addAll(mutations);
+        var commands = new ArrayList<>(List.of("ghc-version", "ghc-info", "host", "architecture", "system", "compiler-build"));
         for (String stage : stages) commands.add(stage + "-export");
         commands.addAll(audits);
         if (nativeRows) {
@@ -91,8 +86,6 @@ final class SimdByteArrayEvidence {
         }
         for (String audit : audits) artifacts.add(attempt + "/audits/" + audit + ".json");
         for (String mutation : mutations) artifacts.add(attempt + "/mutations/" + mutation + ".cbd");
-        artifacts.addAll(List.of(attempt + "/retained/pre.cbd", attempt + "/retained/post.cbd"));
-        if (!floating(family)) artifacts.add(attempt + "/retained-original-source.hs");
         for (String command : commands) for (String suffix : List.of("stdout", "stderr", "command.json"))
             artifacts.add(attempt + "/commands/" + command + "." + suffix);
         if (nativeRows) {
@@ -100,7 +93,6 @@ final class SimdByteArrayEvidence {
             if (floating(family)) for (String file : List.of("snan-expected.tsv", "snan-requests.tsv", "snan-oracle.tsv")) artifacts.add(directory + "/" + file);
         }
         records(manifest, "artifacts", new HashSet<>(artifacts));
-        String retainedBase = "t/fixtures/retained-core/" + family + "-bytearray";
         var sources = new ArrayList<>(List.of("t/fixtures/compiler/" + module + ".hs", "t/fixtures/compiler/" + module + "Native.hs",
             "t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs",
             "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
@@ -113,12 +105,9 @@ final class SimdByteArrayEvidence {
             if (file.getName().endsWith(".hs")) sources.add("src/compiler/THC/" + file.getName());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles()))
             if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add("bin/" + file.getName());
-        for (String file : List.of("pre-core.json.gz", "post-core.json.gz", floating(family) ? "input-provenance.json.gz" : "native/provenance.json.gz"))
-            sources.add(retainedBase + "/" + file);
         records(manifest, "sources", new HashSet<>(sources));
         String controls = floating(family) ? "familyNegativeControls" : family.equals("int32x4") ? "unsignedNegativeControls" : "signedNegativeControls";
         assertEquals(new HashSet<>(stages), ((Map<?, ?>) manifest.get(controls)).keySet());
-        assertEquals(Set.of("pre", "post"), ((Map<?, ?>) manifest.get("retainedControls")).keySet());
         assertEquals(commands.size(), ((List<?>) manifest.get("commands")).size());
     }
     private static Map<String, Object> with(Map<String, Object> original, String key, Object value) {

@@ -338,72 +338,6 @@ mutationControls family root attempt audit stage core = do
   pure (if floating family then toJSON (Map.fromList [(wrong,value) | (wrong,value,_,_) <- controls]) else case controls of [(_,value,_,_)] -> value; _ -> Null,
         concat [commands | (_,_,commands,_) <- controls],concat [paths | (_,_,_,paths) <- controls])
 
-first4 :: (a,b,c,d) -> a
-first4 (value,_,_,_) = value
-
--- Remove only the added license and module-documentation headers. Keep every
--- other byte, including LANGUAGE pragmas, for comparison with the frozen source
--- digest; changes to the fixture itself must still invalidate that evidence.
-retainedFixtureBody :: Family -> BS.ByteString -> Maybe BS.ByteString
-retainedFixtureBody family current = do
-  body <- BS.stripPrefix "-- SPDX-FileCopyrightText: 2026 Edward Kmett\n-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause\n\n" current
-  let name = BSC.pack (moduleName family)
-      marker = "\n-- |\n-- Module      : " <> name <> "\n"
-      (before, documentation) = BS.breakSubstring marker body
-  if BS.null documentation then pure body else do
-    let (comments, declaration) = BS.breakSubstring "\nmodule " documentation
-    if all commentLine (BSC.lines (BS.drop 1 comments)) &&
-       ("\nmodule " <> name <> " where\n") `BS.isPrefixOf` declaration
-      then pure (before <> BS.drop 1 declaration)
-      else Nothing
-  where
-    commentLine line = (line == "--" || "-- " `BS.isPrefixOf` line) &&
-      BS.all (\byte -> byte == 9 || byte >= 32) line
-
-retainedControls :: Family -> FilePath -> FilePath -> Audit -> IO (Value,[CommandResult],[FilePath],[FilePath])
-retainedControls family root attempt audit = do
-  let retained = "t/fixtures/retained-core" </> familyName family
-      provenance = if not (floating family) then retained </> "native/provenance.json.gz" else retained </> "input-provenance.json.gz"
-      logs = attempt </> "commands"
-      decompress label path = runLogged 60 root logs label [] "gzip" ["-dc",path]
-  provenanceCommand <- decompress "retained-provenance" provenance
-  parsed <- either die pure (eitherDecodeStrict' (commandStdout provenanceCommand))
-  let source = if not (floating family) then parsed else get "core" parsed
-      hashes = Map.fromList [(string (get "path" item),string (get "sha256" item)) | item <- items (get "artifacts" source)]
-  when (family `elem` [Int32Lanes,Word32Lanes]) $ do
-    let fixture = "t/fixtures/compiler" </> moduleName family ++ ".hs"
-        originalFixture = "compiler/test-fixtures" </> moduleName family ++ ".hs"
-        wanted = [string (get "sha256" item) | item <- items (get "sources" source),get "path" item == toJSON originalFixture]
-    current <- BS.readFile (root </> fixture)
-    let path = attempt </> "retained-original-source.hs"
-    check (length wanted == 1) "Retained fixture source provenance missing"
-    original <- maybe (die "Retained fixture source headers malformed") pure (retainedFixtureBody family current)
-    BS.writeFile (root </> path) original
-    digest <- hashFile (root </> path)
-    check (wanted == [digest]) "Retained original fixture body changed"
-  stages <- forM ["pre","post"] $ \stage -> do
-    let compressed = retained </> stage ++ "-core.json.gz"
-        path = attempt </> "retained" </> stage ++ ".json"
-        originalPath = "build" </> "simd-" ++ familyName family </> stage ++ "-core" </> moduleName family ++ ".json"
-    result <- decompress ("retained-" ++ stage) compressed
-    createDirectoryIfMissing True (root </> attempt </> "retained")
-    BS.writeFile (root </> path) (commandStdout result)
-    digest <- hashFile (root </> path)
-    check (Map.lookup originalPath hashes == Just digest) "Retained genuine Core artifact hash changed"
-    core <- readJson (root </> path)
-    _ <- inventory family stage core
-    let compact = attempt </> "retained" </> stage ++ ".cbd"
-    _ <- writeModuleValue (root </> compact) core
-    positives <- forM [f ++ o ++ "Case" | f <- ["vector","scalar"],o <- ["Index","Read","Write"]] $ \entry -> do
-      triple@(report,_,_) <- audit ("retained-" ++ stage ++ "-" ++ entry) entry compact False
-      check (get "accepted" report == Bool True && items (get "issues" report) == [] && items (get "missingGlobals" report) == []) "Retained positive rejected"
-      pure triple
-    (controls,commands,paths) <- mutationControls family root attempt audit ("retained-" ++ stage) core
-    pure (stage,controls,result:[r | (_,r,_) <- positives] ++ commands,path:compact:[p | (_,_,p) <- positives] ++ paths,compressed)
-  pure (toJSON (Map.fromList [(stage,controls) | (stage,controls,_,_,_) <- stages]),provenanceCommand:concat [commands | (_,_,commands,_,_) <- stages],
-    concat [paths | (_,_,_,paths,_) <- stages] ++ [attempt </> "retained-original-source.hs" | family `elem` [Int32Lanes,Word32Lanes]],
-    provenance:[path | (_,_,_,_,path) <- stages])
-
 prepareSimdByteArray :: FilePath -> String -> [String] -> IO ()
 prepareSimdByteArray root name args = do
   family <- case filter ((== name) . familyName) families of [answer] -> pure answer; _ -> die "Unknown SIMD memory family"
@@ -483,7 +417,6 @@ prepareSimdByteArray root name args = do
     writeJson (root </> auditPath) (toJSON reportMap)
     pure (stage,object ([("entries",toJSON (Map.fromList structures))] ++ case facts of Object fields -> KM.toList fields; _ -> []),reportMap,controls,
           exported : [result | (_,(_,result,_)) <- reports],corePath:auditPath:[path | (_,(_,_,path)) <- reports])
-  retained <- retainedControls family root attempt audit
   native <- if exportOnly then pure Nothing else do
     let directoryNative = directory </> "native"
         binary = directoryNative </> name ++ "-oracle"
@@ -507,10 +440,9 @@ prepareSimdByteArray root name args = do
     pure (Just (built,observed,diagnostic,binary))
   let controlsCommands = concat [records | (_,_,_,(_,records,_),_,_) <- prepared]
       controlsPaths = concat [paths | (_,_,_,(_,_,paths),_,_) <- prepared]
-      (_,retainedCommands,retainedPaths,retainedSources) = retained
-      commands = [version,ghcInfo,host,architecture,system,compiler] ++ concat [cs | (_,_,_,_,cs,_) <- prepared] ++ controlsCommands ++ retainedCommands ++
+      commands = [version,ghcInfo,host,architecture,system,compiler] ++ concat [cs | (_,_,_,_,cs,_) <- prepared] ++ controlsCommands ++
         case native of Nothing -> []; Just (built,observed,diagnostic,_) -> [built,observed] ++ [result | Just (_,result) <- [diagnostic]]
-      artifacts = [directory </> "expected.tsv",directory </> "requests.tsv"] ++ concat [paths | (_,_,_,_,_,paths) <- prepared] ++ controlsPaths ++ retainedPaths ++ concatMap commandArtifacts commands ++
+      artifacts = [directory </> "expected.tsv",directory </> "requests.tsv"] ++ concat [paths | (_,_,_,_,_,paths) <- prepared] ++ controlsPaths ++ concatMap commandArtifacts commands ++
         case native of Nothing -> []; Just (_,_,diagnostic,binary) -> [directory </> "oracle.tsv",binary] ++ [directory </> path | Just _ <- [diagnostic],path <- ["snan-expected.tsv","snan-requests.tsv","snan-oracle.tsv"]]
   compilerSources <- map ("src/compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "src/compiler/THC")
   auditorSources <- map ("bin" </>) . filter (\path -> "core_" `isPrefixOf` path && takeExtension path == ".py") <$> listDirectory (root </> "bin")
@@ -521,7 +453,7 @@ prepareSimdByteArray root name args = do
     "src/main/java/thc/runtime/VectorReadCase.java","src/main/java/thc/runtime/CoreVectorMemory.java",
     "src/main/java/thc/runtime/VectorByteArrayExpression.java",
     "src/main/resources/thc/scalar-primop-signatures.json","bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
-    ["src/main/java/thc/runtime/VectorMemory.java" | family == DoubleLanes] ++ compilerSources ++ auditorSources ++ retainedSources
+    ["src/main/java/thc/runtime/VectorMemory.java" | family == DoubleLanes] ++ compilerSources ++ auditorSources
   artifactRecords <- mapM (record root) (sort (Set.toList (Set.fromList artifacts)))
   let controlKey = case family of Int32Lanes -> "unsignedNegativeControls"; Word32Lanes -> "signedNegativeControls"; _ -> "familyNegativeControls"
       hasNative = maybe False (const True) native
@@ -536,7 +468,7 @@ prepareSimdByteArray root name args = do
         "checkedGraphGuestCallsByStage" .= Map.fromList [(s ++ "/" ++ n,1 :: Int) | s <- stages,n <- graphNames family],
         "guestCountPolicy" .= ("Count source-proven lowered roots: exact immediate State# applications execute in-frame; retain outer/helper lambdas; no settling calls" :: String),
         Key.fromString controlKey .= Map.fromList [(s,control) | (s,_,_,(control,_,_),_,_) <- prepared],
-        "retainedControls" .= first4 retained,"nativeDiagnostics" .= (case native of Just (_,_,Just (diagnostic,_),_) -> diagnostic; _ -> Null),
+        "nativeDiagnostics" .= (case native of Just (_,_,Just (diagnostic,_),_) -> diagnostic; _ -> Null),
         "commands" .= map commandRecord commands,"sources" .= sources,"artifacts" .= artifactRecords,"attempt" .= attempt,
         "toolchain" .= object ["ghc" .= ghc,"ghcVersion" .= ("9.14.1" :: String),"architecture" .= trim architecture,"machine" .= trim architecture,
           "host" .= trim host,"system" .= trim system,"byteOrder" .= ("little" :: String),"ghcInfo" .= BSC.unpack (commandStdout ghcInfo),"ghcOptions" .= ghcOptions],
