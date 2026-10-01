@@ -62,6 +62,7 @@ printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" sqrt
 "$fixture_bin" original-stack
 "$fixture_bin" original-stack-formatter
+"$fixture_bin" package-native-gc-carriers
 "$fixture_bin" boxed-array-extensions
 "$fixture_bin" boxed-cas
 "$fixture_bin" bytearray

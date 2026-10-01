@@ -152,8 +152,9 @@ preparePrimitiveCarriers root helper libdir = do
     "nativeSignatures" .= signatures,"commands" .= map commandRecord
       [exported,hydrated,validated,unknownExport,unknownHydrate,unknownValidated]])
 
--- Optional original-unit qualification uses explicitly supplied genuine source
--- and home interfaces. Copies isolate GHC's one-shot -hidir lookup and writes;
+-- The normal Stack proof uses pinned original source and the selected compiler's
+-- installed interfaces. Explicit source/home inputs retain the broader original
+-- GC qualification. Copies isolate GHC's one-shot -hidir lookup and writes;
 -- dynamic interface contents are unchanged, only their private lookup suffix is
 -- selected to match the existing dynamic external-plugin acquisition.
 prepareOriginalGcCarriers :: FilePath -> FilePath -> FilePath -> FilePath -> IO [Value]
@@ -161,8 +162,25 @@ prepareOriginalGcCarriers root ghc helper libdir = do
   sourceInput <- lookupEnv "THC_GC_CARRIER_GHC_SOURCE"
   homeInput <- lookupEnv "THC_GC_CARRIER_HOME_INTERFACES"
   case (sourceInput,homeInput) of
-    (Nothing,Nothing) -> pure []
-    (Just suppliedSource,Just suppliedHome) -> do
+    (Nothing,Nothing) -> do
+      ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+      selected <- runLogged 180 root "build/package-native-gc-carriers/original-v2/logs"
+        "installed-interfaces" [] ghcPkg ["field","ghc-internal","import-dirs","--simple-output"]
+      home <- case BSC.lines (commandStdout selected) of
+        [value] | not (BS.null value) -> pure (BSC.unpack value)
+        _ -> fail "expected one selected ghc-internal interface directory"
+      prepareOriginal [stack] (root </> "nih/pinned/ghc-9.14.1") home
+    (Just suppliedSource,Just suppliedHome) -> prepareOriginal
+      [("GHC.Internal.Conc.Sync",["rts_getThreadId","eq_thread","cmp_thread",
+          "rts_enableThreadAllocationLimit","rts_disableThreadAllocationLimit","reportStackOverflow"]),
+       ("GHC.Internal.TopHandler",["rts_setMainThread"]),stack] suppliedSource suppliedHome
+    _ -> fail "Set both THC_GC_CARRIER_GHC_SOURCE and THC_GC_CARRIER_HOME_INTERFACES, or neither"
+  where
+    stack = ("GHC.Internal.Stack.Decode",["getUnderflowFrameNextChunkzh","getWordzh","isArgGenBigRetFunTypezh",
+      "getLargeBitmapzh","getBCOLargeBitmapzh","getRetFunLargeBitmapzh","getSmallBitmapzh",
+      "getRetFunSmallBitmapzh","getInfoTableAddrszh","getStackInfoTableAddrzh","getStackClosurezh",
+      "getStackFieldszh","advanceStackFrameLocationzh"])
+    prepareOriginal modules suppliedSource suppliedHome = do
       sourceRoot <- canonicalizePath suppliedSource
       home <- canonicalizePath suppliedHome
       let relative = "build/package-native-gc-carriers/original-v2"
@@ -190,13 +208,7 @@ prepareOriginalGcCarriers root ghc helper libdir = do
       plugin <- execute "plugin" [] "python3" ["bin/plugin.py","--external-plugin",output </> "source-core",
         "-fplugin-opt=THC.Plugin:foreign-import-provenance","-fplugin-opt=THC.Plugin:post-tidy",
         "-fplugin-opt=THC.Plugin:unit-qualified"] >>= line
-      forM [("GHC.Internal.Conc.Sync",["rts_getThreadId","eq_thread","cmp_thread",
-                "rts_enableThreadAllocationLimit","rts_disableThreadAllocationLimit","reportStackOverflow"]),
-            ("GHC.Internal.TopHandler",["rts_setMainThread"]),
-            ("GHC.Internal.Stack.Decode",["getUnderflowFrameNextChunkzh","getWordzh","isArgGenBigRetFunTypezh",
-              "getLargeBitmapzh","getBCOLargeBitmapzh","getRetFunLargeBitmapzh","getSmallBitmapzh",
-              "getRetFunSmallBitmapzh","getInfoTableAddrszh","getStackInfoTableAddrzh","getStackClosurezh",
-              "getStackFieldszh","advanceStackFrameLocationzh"])] $ \(name,expectedGc) -> do
+      forM modules $ \(name,expectedGc) -> do
         let modulePath = map (\character -> if character == '.' then pathSeparator else character) name
             source = sourceRoot </> "libraries/ghc-internal/src" </> modulePath <.> "hs"
             core = output </> name <.> "cbd"
@@ -235,7 +247,6 @@ prepareOriginalGcCarriers root ghc helper libdir = do
           "homeInterfaceHashes" .= homeHashes,
           "artifactHashes" .= artifacts,"nativeSignatures" .= signatures,
           "commands" .= map commandRecord [compiled,hydrated,validated]])
-    _ -> fail "Set both THC_GC_CARRIER_GHC_SOURCE and THC_GC_CARRIER_HOME_INTERFACES, or neither"
 
 -- Real Cabal/GHC acquisition: ordinary native dependencies link by default,
 -- while unsupported calling conventions retain their declaration obligations.
