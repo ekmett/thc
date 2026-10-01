@@ -1906,7 +1906,6 @@ MANAGED_MVAR_ENTRIES = ("transitions", "lazyPayload", "aliasRoundTrip", "unlifte
 MANAGED_MVAR_OUTPUTS = frozenset("build/managed-mvars/" + name for name in (
     "manifest.json", "contracts.json", "oracle.tsv", "context-oracle.tsv", "native/managed-mvar-oracle",
     "plugin/thc-core-plugin." + ("dylib" if platform.system() == "Darwin" else "so"),
-    *(f"{stage}/core/{module}.json" for stage in ("pre", "post") for module in ("ManagedMVarAudit", "THC.InterfaceClosure")),
     *(f"{stage}/core/{module}.cbd" for stage in ("pre", "post") for module in ("ManagedMVarAudit", "THC.InterfaceClosure")),
     *(f"{stage}/{entry}.audit.json" for stage in ("pre", "post") for entry in MANAGED_MVAR_ENTRIES),
     *(f"logs/{label}{suffix}" for label in ("ghc-version", "ghc-package-db", "ghc-info", "plugin-build", "plugin-metadata",
@@ -2049,6 +2048,8 @@ def allowed_payload(name):
         return True
     if name in HEAP_CORPUS_CBD_OUTPUTS:
         return True
+    if parts[1] == "corpus" and "core" in parts and PurePosixPath(name).suffix == ".json":
+        return False
     if parts[1] == "floating-remainder":
         return name in FLOATING_REMAINDER_OUTPUTS
     if name in {f"build/{family}/{folder.format(stage=stage)}/{module}.cbd"

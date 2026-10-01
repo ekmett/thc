@@ -42,6 +42,9 @@ class FastInputTests(unittest.TestCase):
                                ("addr-identity", "pre-core"), ("corpus", "groups/lists/core")):
             self.assertFalse(cache.allowed_payload(f"build/{family}/{folder}/Other.cbd"))
             self.assertFalse(cache.allowed_payload(f"build/{family}/unreviewed/core/THC.InterfaceClosure.cbd"))
+        for name in cache.MANAGED_MVAR_OUTPUTS | cache.HEAP_CORPUS_CBD_OUTPUTS:
+            if name.endswith(".cbd") and ("/managed-mvars/" in name or "/corpus/" in name):
+                self.assertFalse(cache.allowed_payload(name[:-4] + ".json"), name)
         self.assertFalse(cache.allowed_payload("build/managed-mvars/logs/unknown.stdout"))
         self.assertFalse(cache.allowed_payload("build/synchronous-exceptions/logs/unknown.stdout"))
 
