@@ -50,6 +50,32 @@ class FixturePreparationTest(unittest.TestCase):
                     self.assertIn(path + ".cbd", fast_fixtures.FULL_REQUIRED)
                     self.assertNotIn(path + ".json", fast_fixtures.FULL_REQUIRED)
 
+    def test_full_truffle_string_reuse_requires_cbd_without_core_json(self):
+        modules = ("THC.Prim", "StringPrimitives", "IntrinsicOperands",
+                   "TruffleStringExceptions", "THC.Exception", "THC.Internal.Exception")
+        required = {name for name in fast_fixtures.FULL_REQUIRED
+                    if name.startswith("build/truffle-strings/")}
+        expected = {f"build/truffle-strings/core/{module}.cbd" for module in modules}
+        expected.update("build/truffle-strings/" + name
+                        for name in ("manifest.json", "oracle.json", "native/oracle"))
+        self.assertEqual(expected, required)
+        for name in expected:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fixture\n")
+        with mock.patch.object(fast_fixtures, "FULL_REQUIRED", required):
+            outputs = fast_fixtures._full_output_hashes(self.root)
+            self.assertEqual(expected, set(outputs))
+            for module in modules:
+                path = self.root / f"build/truffle-strings/core/{module}.cbd"
+                with self.subTest(module=module):
+                    path.write_bytes(b"changed\n")
+                    self.assertNotEqual(outputs, fast_fixtures._full_output_hashes(self.root))
+                    path.unlink()
+                    with self.assertRaises(FileNotFoundError):
+                        fast_fixtures._full_output_hashes(self.root)
+                    path.write_bytes(b"fixture\n")
+
     def test_selector_proof_is_required_for_full_preparation_reuse(self):
         project = Path(__file__).resolve().parents[2]
         source = (project / "bin/prepare-tests.sh").read_text()
