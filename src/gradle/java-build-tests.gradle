@@ -67,6 +67,29 @@ tasks.register('verifyJavaOnlySources') {
     }
 }
 
+tasks.register('verifyInstalledRuntime') {
+    group = 'verification'
+    description = 'Check the installed runtime and both launcher classpaths retain every runtime JAR without POM metadata.'
+    dependsOn(tasks.installDist)
+    doLast {
+        def runtimeJars = configurations.runtimeClasspath.files.findAll { it.name.endsWith('.jar') }
+        def expected = (runtimeJars + tasks.jar.archiveFile.get().asFile).collectEntries { [(it.name): it] }
+        def installed = layout.buildDirectory.dir('install/thc/lib').get().asFile.listFiles().toList()
+        checkBuild(installed.every { it.isFile() && it.name.endsWith('.jar') }) { 'Installed runtime contains non-JAR metadata' }
+        checkBuild(installed*.name.toSet() == expected.keySet()) { 'Installed runtime lost or added a runtime JAR' }
+        for (jar in installed) {
+            checkBuild(java.nio.file.Files.mismatch(jar.toPath(), expected[jar.name].toPath()) == -1L) { "Installed runtime JAR changed: ${jar.name}" }
+        }
+        for (script in [tasks.startScripts.unixScript, tasks.startScripts.windowsScript]) {
+            def line = script.readLines('UTF-8').find { it.startsWith('CLASSPATH=') || it.startsWith('set CLASSPATH=') }
+            checkBuild(line != null && !line.contains('.pom')) { "Launcher classpath contains POM metadata: ${script.name}" }
+            def names = line.substring(line.indexOf('=') + 1).split('[:;]').collect { it.tokenize('/\\').last() }
+            checkBuild(names.toSet() == expected.keySet() && names.size() == expected.size()) { "Launcher lost or added a runtime JAR: ${script.name}" }
+        }
+    }
+}
+tasks.named('check') { dependsOn('verifyInstalledRuntime') }
+
 // Keep these existing native-backed graph controls compilable against the current
 // runtime. This task neither prepares inputs nor executes a guest/benchmark.
 tasks.register('compileRuntimeGraphProbes', JavaCompile) {
