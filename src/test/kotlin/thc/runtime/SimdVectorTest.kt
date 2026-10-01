@@ -38,6 +38,9 @@ class SimdVectorTest {
         assertEquals(listOf(Long::class.javaPrimitiveType, Long::class.javaPrimitiveType), Int64X2::class.java.declaredFields.map { it.type })
         assertThrows(RuntimeFault::class.java) { CoreVectors.proof.refine(CoreVectors.unpacked) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packInt64X2#", listOf(CoreVectors.proof), CoreVectors.proof) }
+        assertEquals(CoreVectors.proof, CoreVectors.caseResult(listOf(CoreVectors.proof, CoreVectors.proof)))
+        assertThrows(RuntimeFault::class.java) { CoreVectors.caseResult(listOf(CoreVectors.proof, CoreVectors.unpacked)) }
+        assertThrows(RuntimeFault::class.java) { CoreVectors.caseResult(listOf(CoreVectors.proof, CoreRepresentation.UNKNOWN)) }
     }
     @Test fun vectorCallAndResultBoundariesStayExplicitlyUnsupported() = withLanguage { language ->
         for (backend in listOf("ast", "bytecode")) {
@@ -63,6 +66,77 @@ class SimdVectorTest {
             unpack[2] = listOf(listOf("var", first["id"], mapOf("rep" to vector)))
             hidden["bindings"] = listOf(hBinding)
             assertThrows(RuntimeFault::class.java) { program(language, backend, hidden, "vectorCase") }
+        }
+    }
+    @Test fun vectorJoinFormalRejectsWithoutAnEarlierVectorLet() = withLanguage { language ->
+        val m = module().toMutableMap()
+        val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "branchCase" }
+        val expression = (binding["expr"] as List<Any?>).toMutableList()
+        val outer = expression[2] as List<Any?>
+        val vectorBinding = (outer[2] as List<Map<String, Any?>>).single()
+        val vectorId = vectorBinding["id"]
+        // Inline only the ordinary vector let; retain GHC's genuine join and its formal.
+        fun inline(value: Any?): Any? = when (value) {
+            is List<*> -> if (value.firstOrNull() == "var" && value.getOrNull(1) == vectorId)
+                vectorBinding["expr"] else value.map(::inline)
+            is Map<*, *> -> value.mapValues { inline(it.value) }
+            else -> value
+        }
+        expression[2] = inline(outer[3])
+        m["bindings"] = listOf(binding + ("expr" to expression))
+        for (backend in listOf("ast", "bytecode")) {
+            val error = assertThrows(UnsupportedCore::class.java) { program(language, backend, m, "branchCase") }
+            assertEquals("Unsupported Core vector boundary: join argument", error.message, backend)
+        }
+    }
+    @Test fun caseCannotHideAVectorBoundaryWhenMetadataIsMissing() = withLanguage { language ->
+        val m = module().toMutableMap()
+        val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "vectorCase" }
+        val expression = (binding["expr"] as List<Any?>).toMutableList()
+        val unpack = (expression[2] as List<Any?>)[1] as List<Any?>
+        val vector = (unpack[2] as List<List<Any?>>).single()
+        val first = (expression[1] as List<Map<String, Any?>>).first()
+        val scalar = listOf("var", first["id"], mapOf("rep" to first["rep"]))
+        val hiddenCase = listOf("case", scalar,
+            "vector-result-scrutinee", listOf(listOf("default", null, emptyList<String>(), vector)))
+        expression[3] = (expression[3] as Map<String, Any?>) - "resultRep"
+        val argument = listOf("app", listOf("prim", "+#"), listOf(hiddenCase, scalar), listOf(false, false), false, true,
+            mapOf("rep" to first["rep"]))
+        val join = listOf("let", false, listOf(mapOf("id" to "vector-join", "name" to "vector-join", "lifted" to false,
+            "joinValueArity" to 0L, "expr" to hiddenCase)), listOf("var", "vector-join"))
+        for ((boundary, body) in listOf("function result" to hiddenCase, "argument" to argument, "join result" to join))
+          for (backend in listOf("ast", "bytecode")) {
+            expression[2] = body
+            m["bindings"] = listOf(binding + ("expr" to expression.toList()))
+            val error = assertThrows(UnsupportedCore::class.java) { program(language, backend, m, "vectorCase") }
+            assertEquals("Unsupported Core vector boundary: $boundary", error.message, backend)
+        }
+    }
+    @Test fun exactVectorCaseStaysLocalAndExecutesCompiled() = withLanguage { language ->
+        val m = module().toMutableMap()
+        val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "vectorCase" }
+        val expression = binding["expr"] as List<Any?>
+        val unpack = (expression[2] as List<Any?>)[1] as MutableList<Any?>
+        val vector = (unpack[2] as List<List<Any?>>).single()
+        val first = (expression[1] as List<Map<String, Any?>>).first()
+        unpack[2] = listOf(listOf("case", listOf("var", first["id"], mapOf("rep" to first["rep"])),
+            "vector-local-case", listOf(listOf("default", null, emptyList<String>(), vector)),
+            mapOf("rep" to (vector[6] as Map<String, Any?>)["rep"])))
+        m["bindings"] = listOf(binding)
+        for (backend in listOf("ast", "bytecode")) {
+            val program = program(language, backend, m, "vectorCase")
+            fun check() {
+                for (a in listOf(Long.MIN_VALUE, 123L, Long.MAX_VALUE)) {
+                    val b = -4097L
+                    assertEquals(((a+a+91)*7) xor ((b+a+91)*11),
+                        Calls.target(program.hostEntryTarget(2), arrayOf(program.entryValue("vectorCase"), arrayOf(a, b))))
+                }
+            }
+            check(); check()
+            val target = program.entryTarget("vectorCase")
+            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+            check()
+            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), backend)
         }
     }
     @Test fun realCoreVectorArithmeticRemainsInstalledAfterCompiledExecution() {

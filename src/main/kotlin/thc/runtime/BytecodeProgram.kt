@@ -368,7 +368,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
         if (expr[0] == "var") scope.locals[expr[1]]?.let { CoreRepresentations.requireNoVector(it.proof, "argument") }
         if (expr[0] == "var" && expr[1] in scope.tuples) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (argument)")
-        if (!lifted) return force(compile(expr, scope, false))
+        if (!lifted) return force(compile(expr, scope, false).also {
+            CoreRepresentations.requireNoVector(it.proof, "argument")
+        })
         if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return compile(expr, scope, false)
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
     }
@@ -561,9 +563,12 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val bodies = definitions.mapIndexed { index, definition ->
             val bodyScope = (if (recursive) local else scope).child()
             targets[index].locals.forEach { bodyScope.bindLocal(it.name, it) }
-            compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
+            compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail).also {
+                CoreRepresentations.requireNoVector(it.proof, "join result")
+            }
         }
         val entry = compile(expression, local, tail)
+        CoreRepresentations.requireNoVector(entry.proof, "join result")
         return ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -765,6 +770,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val category = caseCategory(binderProof, alternatives.map { when (it.kind) {
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
+            val resultProof = CoreRepresentations.expression(expr)
+            val mergedProof = CoreVectors.caseResult(alternatives.map { it.body.proof })?.refine(resultProof)
+                ?: resultProof.copy(evaluated = alternatives.all { it.body.proof.evaluated })
             LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
                 val b = e.builder
                 b.beginBlock()
@@ -811,7 +819,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 emitChoice(0)
                 b.endBlock()
                 e.locals.remove(binder.id)
-            }, CoreRepresentations.expression(expr).copy(evaluated = alternatives.all { it.body.proof.evaluated })))
+            }, mergedProof))
             }
         }
         "con" -> {
