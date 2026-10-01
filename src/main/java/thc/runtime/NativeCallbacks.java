@@ -44,7 +44,8 @@ public final class NativeCallbacks {
     private void checkContext() {
         if (Language.currentState(null) != owner || !alive.isValid()) throw fault("Native callback belongs to another or closed context");
     }
-    private void checkEntry() {
+    // Inspect carrier-owned native projections without compiling their service state.
+    @TruffleBoundary private void checkEntry() {
         checkOwner();
         for (var projection : pointerCalls.get()) if (projection.holdsAllocationMonitors())
             throw fault("Native callback cannot enter during a pointer-cell projection");

@@ -3,6 +3,7 @@
 package thc;
 
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.util.*;
 import thc.runtime.*;
 
@@ -76,7 +77,8 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     @Override public boolean getAsynchronousExceptions() { return async; }
     @Override public boolean getCapturesContinuations() { return true; }
     public TargetLayout getTargetLayout() { return sources.getTargetLayout(); }
-    @Override public boolean getHasBytecode() { return demand.preparedPrograms().stream().anyMatch(ExecutableProgram::getHasBytecode); }
+    // Member discovery snapshots cold admissions, not guest executable state.
+    @Override @TruffleBoundary public boolean getHasBytecode() { return demand.preparedPrograms().stream().anyMatch(ExecutableProgram::getHasBytecode); }
     @Override public String bytecodeDump() {
         var dumps = new ArrayList<String>();
         for (var program : demand.preparedPrograms()) dumps.add(program.bytecodeDump());
