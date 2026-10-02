@@ -35,7 +35,8 @@ final class TupleArithmeticExpression extends Expr {
         long x = left.executeRequiredLong(frame);
         long y = right.executeRequiredLong(frame);
         long first = operation.first(x, y);
-        long second = operation.second(x, y);
+        long second = operation == TupleArithmeticOp.QUOT_REM_INT || operation == TupleArithmeticOp.QUOT_REM_WORD
+                ? x - first * y : operation.second(x, y);
         long third = operation.getResultArity() == 3 ? operation.third(x, y) : 0L;
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], first);
         FrameAccess.INSTANCE.writeLong(frame, slots[offset + 1], second);
