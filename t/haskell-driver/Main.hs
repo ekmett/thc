@@ -74,9 +74,12 @@ runTests arguments = do
     ["--run-options-only"] -> pure [RunOptionsTests.tests env]
     ["--run-ffi-only"] -> pure [RunOptionsTests.tests env, RunTests.tests env]
     ["--public-packages-only"] -> pure [PublicPackageTests.tests env]
+    ["--cstring-project-only"] -> pure [ProjectTests.cstringTests env]
     ["--store-inventory-only"] -> pure [EmptyStoreProjectTests.tests env]
+    ["--store-project-only"] -> pure [StoreProjectTests.storeProjectTest env]
+    ["--native-variants-only"] -> pure [StoreProjectTests.nativeVariantsTest env False, StoreProjectTests.nativeVariantsTest env True]
     ["--store-projects-only"] -> pure [StoreProjectTests.tests env]
-    ["--store-capture-lifetime-only"] -> pure [StoreProjectTests.captureLifetimeTests env]
+    ["--custom-store-only"] -> pure [StoreProjectTests.customStoreProjectTest env]
     ["--export-safety-only"] -> pure [StoreProjectTests.exportSafetyTests env]
     ["--inplace-store-only"] -> pure [StoreProjectTests.inplaceTests env]
     ["--concurrent-store-only"] -> pure [StoreProjectTests.concurrentTests env]
@@ -108,6 +111,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--test-support-only|--project-replay-only|--pinned-flags-only|--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--build-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--public-packages-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-view-only|--installed-foreign-source-only|--package-native-only|--native-cache-only|--native-recipe-only|--scalar-bitcode-only]"
+    _ -> die "Usage: driver-tests [--test-support-only|--project-replay-only|--pinned-flags-only|--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--build-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--public-packages-only|--cstring-project-only|--store-inventory-only|--store-project-only|--native-variants-only|--store-projects-only|--custom-store-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-view-only|--installed-foreign-source-only|--package-native-only|--native-cache-only|--native-recipe-only|--scalar-bitcode-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

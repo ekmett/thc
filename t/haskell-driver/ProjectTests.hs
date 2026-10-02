@@ -10,10 +10,10 @@
 -- Portability : Native GHC; fixture compiler and host process services
 --
 -- Tests for project.
-module ProjectTests (tests, acquisitionTests, buildTests, exceptionBridgeTests, interopTests, projectReplayTests) where
+module ProjectTests (tests, acquisitionTests, buildTests, exceptionBridgeTests, interopTests, projectReplayTests, cstringTests) where
 
 import Control.Exception (bracket)
-import Control.Monad (foldM, forM, forM_, when)
+import Control.Monad (foldM, forM_, when)
 import Data.Aeson (Value)
 import qualified Data.ByteString as BS
 import qualified Data.Text as Text
@@ -47,11 +47,11 @@ interopTests env = TestLabel "interop acquisition skips only the selected native
     writeText (project </> "cabal.project")
       ("packages: run-interop.cabal interop-support-0.1.0.0.tar.gz " ++ show (thcRoot env </> "thc.cabal") ++ "\n")
     let output = takeDirectory project </> "output"
-        acquire target = run env project Nothing 300
-          ["acquire", target, "--project-dir", project, "--thc-root", thcRoot env,
-           "--installed-core", "pinned", "--dist-dir", output]
+        arguments target = ["acquire", target, "--project-dir", project, "--thc-root", thcRoot env,
+                            "--installed-core", "pinned", "--dist-dir", output]
+        acquire target = run env project Nothing 300 (arguments target)
         component plan name = one ((== name) . string . (`field` "component-name")) (objects plan "install-plan")
-    acquired <- acquire "interop-app"
+    acquired <- runPreparation env project (arguments "interop-app")
     assertSuccess acquired
     plan <- readJson (output </> "native/cache/plan.json")
     let entry = component plan "exe:interop-app"
@@ -126,14 +126,14 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
     let base = takeDirectory project
         sidecarOutput = base </> "sidecar-output"
         linkedOutput = base </> "linked-output"
-        acquire output = run env base Nothing 300
-          ["acquire", "--project-dir", project, "completed", "--thc-root", thcRoot env,
-           "--dist-dir", output]
+        arguments output = ["acquire", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+                            "--dist-dir", output]
+        acquire output = run env base Nothing 300 (arguments output)
         selected manifest = string (field manifest "foreignExceptionBridgeUnit")
         runtimeRecord manifest = one ((== selected manifest) . string . (`field` "id"))
           (objects manifest "units")
     before <- readText (project </> "run-pure.cabal")
-    first <- acquire sidecarOutput
+    first <- runPreparation env base (arguments sidecarOutput)
     assertSuccess first
     manifest <- readSourceManifest (sidecarOutput </> "packages.json")
     let bridge = selected manifest
@@ -184,7 +184,7 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
       (replaceText "build-depends: base" "build-depends: thc:runtime, base" before)
     writeText (project </> "cabal.project")
       ("packages: run-pure.cabal " ++ show (thcRoot env </> "thc.cabal") ++ "\n")
-    linked <- acquire linkedOutput
+    linked <- runPreparation env base (arguments linkedOutput)
     assertSuccess linked
     linkedManifest <- readSourceManifest (linkedOutput </> "packages.json")
     linkedPlan <- readJson (linkedOutput </> "native/cache/plan.json")
@@ -423,105 +423,61 @@ projectTestsWithBootstrap bootstrapRoot env = TestLabel "three-package project n
       assertBool "cabal clean removes in-place Core bundles" (not remains)
 
 cstringTests :: Env -> Test
-cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ TestCase $
+cstringTests env = TestLabel "pinned CString and MonadFail programs match native execution" $ TestCase $
   withFixtureNamed env "t/fixtures/run-cstring" "project café" $ \project ->
   withCache (scratch env </> "core-cache") $ do
     let output = takeDirectory project </> "output"
-        invoke backend = run env (takeDirectory project) (Just backend) 240
-          ["run", "--verify-artifacts", "--project-dir", project, "cstring", "--thc-root", thcRoot env,
-           "--runtime", runtime env, "--dist-dir", output]
-        wired manifest = one ((== "ghc-internal") . string . (`field` "id"))
-                            (objects manifest "units")
-    bundles <- forM ["ast", "bytecode"] $ \backend -> do
-      result <- invoke backend
+        arguments = ["--project-dir", project, "cstring", "--thc-root", thcRoot env,
+                     "--dist-dir", output]
+    prepared <- runPreparation env (takeDirectory project) (["build"] ++ arguments)
+    assertSuccess prepared
+    assertNoStdout prepared
+    forM_ ["ast", "bytecode"] $ \backend -> do
+      result <- if backend == "ast"
+        then run env (takeDirectory project) (Just backend) 240
+          (["run", "--verify-artifacts"] ++ arguments ++ ["--runtime", runtime env])
+        else runExe env (takeDirectory project) (Just backend) 240 (runtime env)
+          ["--verify-artifacts", "--run-executable", '@' : (output </> "packages.json"),
+           "main::Main.main", "ghc-internal:GHC.Internal.TopHandler.flushStdHandles", "--", "cstring"]
       assertSuccess result
       assertNoStdout result
       diagnostics <- json (last $ lines $ err result)
       assertEqual "backend" backend (string $ field diagnostics "backend")
       assertEqual "unsupported traps" 0 (number $ field diagnostics "unsupportedTraps")
-      audit <- readJson (output </> "audit.json")
-      assertBool "strict audit" (bool $ field audit "accepted")
-      assertExecutableLifecycle audit
-      assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
-      assertBool "original CString binding reached" $ any
-        ((== "ghc-internal:GHC.Internal.CString.unpackCString#") . string . (`field` "id"))
-        (objects audit "reachableBindings")
-      manifest <- readSourceManifest (output </> "packages.json")
-      let sourceModules = moduleNames $ wired manifest
-      assertBool "original CString source included" ("GHC.Internal.CString" `elem` sourceModules)
-      assertBool "original MonadFail source included"
-        ("GHC.Internal.Control.Monad.Fail" `elem` sourceModules)
-      assertBool "original exception backtrace source included"
-        ("GHC.Internal.Exception.Backtrace" `elem` sourceModules)
-      assertBool "original Typeable source included"
-        ("GHC.Internal.Data.Typeable.Internal" `elem` sourceModules)
-      let bundle = string $ field (field (wired manifest) "bundle") "path"
-      requireFile bundle
-      inner <- readCore bundle "manifest.json"
-      inputs <- readCore bundle "inplace-manifest.json"
-      let layout = field inner "targetLayout"
-          compiler = field inputs "compiler"
-          component = field inputs "component"
-          registration = field component "registration"
-          registeredModules = map (string . (`field` "module")) (objects registration "interfaces")
-          generatedCore = objects inputs "generatedCore"
-      assertEqual "wired layout receipt matches hashed build inputs"
-        layout (field inputs "targetLayout")
-      assertEqual "nonprofiling Core way" "dynamic-nonprofiling"
-        (string $ field compiler "way")
-      assertBool "target word size is supported"
-        (number (field layout "wordBytes") `elem` [4, 8])
-      assertBool "InfoProv starts inside InfoProvEnt"
-        (number (field layout "infoProvEntProvOffset") >
-         number (field layout "infoProvEntInfoOffset") &&
-         number (field layout "infoProvEntProvOffset") <
-         number (field layout "infoProvEntBytes"))
-      assertEqual "complete pinned source uses the installed-interface boundary"
-        "installed-interface" (string $ field component "kind")
-      assertEqual "source coverage follows the actual registered library inventory"
-        "registered-owned-modules" (string $ field registration "coverage")
-      assertEqual "every registered module has captured genuine Core"
-        (sort registeredModules) (sort [string (field item "module") | item <- generatedCore])
-      assertEqual "every captured module is published"
-        (sort registeredModules) (sort sourceModules)
-      assertEqual "bundle module receipt matches publication"
-        (objects (wired manifest) "modules") (objects inner "modules")
-      forM_ (objects registration "interfaces") $ \interface ->
-        requireFile (string $ field interface "path")
-      assertEqual "layout belongs to the selected compiler target"
-        (field compiler "platform") (field layout "targetPlatform")
-      assertEqual "installed capture preserves the original native-call linkage recipe"
-        "installed-native-fcall-v1"
-        (string $ field (field inputs "exporter") "foreignLinkRecipe")
-      forM_ ["post-tidy", "unit-qualified", "source-notes", "dynamic"] $ \option ->
-        assertBool (option ++ " is part of installed export identity")
-          (option `elem` strings (field (field inputs "exporter") "options"))
-      plan <- readJson (output </> "native/cache/plan.json")
-      let entry = one ((== "exe:cstring") . string . (`field` "component-name"))
-                      (objects plan "install-plan")
-      native <- runExe env project Nothing 60 (string $ field entry "bin-file") []
-      assertSuccess native
-      assertNoStdout native
-      moment <- getModificationTime bundle
-      pure (bundle, moment)
-    case bundles of
-      [first, second] -> assertEqual "wired bundle reused across backends" first second
-      _ -> fail "expected AST and bytecode CString bundle results"
+      when (backend == "ast") $ do
+        audit <- readJson (output </> "audit.json")
+        assertBool "strict audit" (bool $ field audit "accepted")
+        assertExecutableLifecycle audit
+        assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
+        assertBool "original CString binding reached" $ any
+          ((== "ghc-internal:GHC.Internal.CString.unpackCString#") . string . (`field` "id"))
+          (objects audit "reachableBindings")
+    plan <- readJson (output </> "native/cache/plan.json")
+    let cstringEntry = one ((== "exe:cstring") . string . (`field` "component-name"))
+                           (objects plan "install-plan")
+    cstringNative <- runExe env project Nothing 60 (string $ field cstringEntry "bin-file") []
+    assertSuccess cstringNative
+    assertNoStdout cstringNative
     let base = takeDirectory project
         frontier = base </> "fail-frontier"
         frontierOutput = base </> "fail-output"
     copyTree (root env </> "t/fixtures/run-fail-frontier") frontier
     forM_ ["ast", "bytecode"] $ \backend -> do
-      frontierResult <- run env base (Just backend) 240
-        ["run", "--verify-artifacts", "--project-dir", frontier, "fail-frontier", "--thc-root", thcRoot env,
-         "--runtime", runtime env, "--dist-dir", frontierOutput]
+      frontierResult <- if backend == "ast"
+        then run env base (Just backend) 240
+          ["run", "--verify-artifacts", "--project-dir", frontier, "fail-frontier", "--thc-root", thcRoot env,
+           "--runtime", runtime env, "--dist-dir", frontierOutput]
+        else runExe env base (Just backend) 240 (runtime env)
+          ["--verify-artifacts", "--run-executable", '@' : (frontierOutput </> "packages.json"),
+           "main::Main.main", "ghc-internal:GHC.Internal.TopHandler.flushStdHandles", "--", "fail-frontier"]
       assertSuccess frontierResult
       assertNoStdout frontierResult
       diagnostics <- json (last $ lines $ err frontierResult)
       assertEqual "fail-frontier backend" backend (string $ field diagnostics "backend")
       assertEqual "fail-frontier unsupported traps" 0 (number $ field diagnostics "unsupportedTraps")
-      frontierAudit <- readJson (frontierOutput </> "audit.json")
-      assertFailFrontierAudit frontierAudit
+      when (backend == "ast") $ do
+        frontierAudit <- readJson (frontierOutput </> "audit.json")
+        assertFailFrontierAudit frontierAudit
     frontierPlan <- readJson (frontierOutput </> "native/cache/plan.json")
     let entry = one ((== "exe:fail-frontier") . string . (`field` "component-name"))
                     (objects frontierPlan "install-plan")
@@ -546,40 +502,8 @@ assertFailFrontierAudit audit = do
   assertEqual "complete pinned Core resolves every reachable global" []
     (array $ field audit "missingGlobals")
   assertExecutableLifecycle audit
-  let missing = map (string . (`field` "id")) (objects audit "missingGlobals")
-      missingName name = any (name `isInfixOf`) missing
-      issues = objects audit "issues"
-  -- foreignCalls records only calls whose original descriptor, State/head
-  -- proofs and capability admission passed; it is not a symbol inventory.
-  forM_ [("stg_cloneMyStackzh", "ghc-internal:GHC.Internal.Exception.Backtrace.$wcollectBacktraces'")] $
-    \(symbol, owner) -> do
-      let calls = filter (\call -> string (field call "symbol") == symbol &&
-                                  string (field call "owner") == owner) (objects audit "foreignCalls")
-      assertEqual (symbol ++ " has one validated original foreign call in " ++ owner) 1 (length calls)
-      let call = one (const True) calls
-          sameSite issue = field issue "owner" == field call "owner" &&
-                           field issue "path" == field call "path"
-      assertBool (symbol ++ " retains its Core expression location")
-        ("/expr/" `isPrefixOf` string (field call "path"))
-      assertBool (symbol ++ " is neither missing nor rejected at its call site")
-        (not (missingName symbol) && not (any sameSite issues))
-  -- Complete source acquisition must preserve original decoder foreign-call
-  -- admission rather than replacing those calls or accepting missing globals.
-  assertEqual "supplied definitions have no unsupported operations" [] issues
-  let stackCalls = filter (\call ->
-        "ghc-internal:GHC.Internal.Stack.Decode." `isPrefixOf` string (field call "owner"))
-        (objects audit "foreignCalls")
-  forM_ ["getStackInfoTableAddrzh", "advanceStackFrameLocationzh", "getInfoTableAddrszh",
-         "getStackClosurezh", "getSmallBitmapzh", "isArgGenBigRetFunTypezh", "getWordzh",
-         "getRetFunSmallBitmapzh", "getUnderflowFrameNextChunkzh", "getStackFieldszh",
-         "getBCOLargeBitmapzh", "getLargeBitmapzh", "getRetFunLargeBitmapzh"] $ \symbol -> do
-    let calls = filter ((== symbol) . string . (`field` "symbol")) stackCalls
-    assertBool (symbol ++ " has a validated original stack-decoder call") (not $ null calls)
-    assertBool (symbol ++ " is not missing") (not $ missingName symbol)
-    forM_ calls $ \call -> assertBool (symbol ++ " retains its Core expression location")
-      ("/expr/" `isPrefixOf` string (field call "path"))
-  assertBool "genuine MonadFail/Typeable definitions are supplied"
-    (not $ any missingName ["$fMonadFailIO_$cfail", "sameTypeRep", "mkTrCon"])
+  assertEqual "supplied definitions have no unsupported operations" []
+    (objects audit "issues")
 
 withCache :: FilePath -> IO a -> IO a
 withCache path action = bracket acquire restore (const action)

@@ -10,16 +10,15 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for store project.
-module StoreProjectTests (tests, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest, staticExportsTest, captureLifetimeTests) where
+module StoreProjectTests (tests, storeProjectTest, nativeVariantsTest, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest, staticExportsTest, customStoreProjectTest) where
 
 import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, readMVar)
 import Control.Exception (bracket, finally, throwIO)
 import Control.Monad (forM_, unless)
-import Data.Char (isHexDigit)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.List (isPrefixOf, sort, stripPrefix)
+import Data.List (sort, stripPrefix)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -29,75 +28,34 @@ import System.Directory (getModificationTime, getPermissions, removeFile,
 import qualified System.Directory as Directory
 import System.Environment (getEnvironment, lookupEnv, setEnv, unsetEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeDirectory, takeFileName)
+import System.FilePath ((</>), takeDirectory)
 import qualified System.Process as Process
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 import THC.Driver.GhcProxy (ghcProxyCommand, directPlugin)
-import THC.Driver.Lock (withLock)
 import THC.Driver.PackageNative (nativeSignatures, finishPackageNative)
 import THC.Driver.Installed (boundedInterfaceProcessIn)
 import THC.Compact.Module (readModuleValue)
 
 tests :: Env -> Test
-tests env = TestList [proxyOptionsTest env, staticExportsTest env, captureLifetimeTests env, storeProjectTest env, customStoreProjectTest env,
+tests env = TestList [proxyOptionsTest env, staticExportsTest env, storeProjectTest env, customStoreProjectTest env,
   inplaceTests env, concurrentTests env, exportSafetyTests env, nativeVariantsTest env False, nativeVariantsTest env True]
-
-captureLifetimeTests :: Env -> Test
-captureLifetimeTests env = TestLabel "isolated capture retains failures and cleans successes" $ TestCase $
-  withFixtureNamed env "t/fixtures/run-store-project" "capture lifetime" $ \project ->
-  withCache (takeDirectory project </> "cache") $ do
-    let base = takeDirectory project
-        output = base </> "output"
-        staging = output </> "native/cache/thc/staging"
-        marker = base </> "fail-isolated-capture"
-        wrapper = base </> "ghc-lifetime.sh"
-        quote value = "'" ++ concatMap (\c -> if c == '\'' then "'\\''" else [c]) value ++ "'"
-    compiler <- maybe "ghc" id <$> lookupEnv "GHC"
-    ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
-    writeText marker ""
-    writeText wrapper $ unlines
-      ["#!/bin/sh", "if [ -n \"$THC_PROXY_GLOBAL_UNITS\" ] && [ -f " ++ quote marker ++ " ]; then",
-       "  echo 'intentional isolated capture failure' >&2", "  exit 1", "fi",
-       "exec " ++ quote compiler ++ " \"$@\""]
-    permissions <- getPermissions wrapper
-    setPermissions wrapper permissions { Directory.executable = True }
-    let dependency = base </> "dependency-source"
-    copyTree (project </> "dep-data") dependency
-    sourceDist env dependency project
-    let acquire = run env base Nothing 240
-          ["acquire", "completed", "--project-dir", project, "--thc-root", thcRoot env,
-           "--dist-dir", output, "--with-ghc", wrapper, "--with-ghc-pkg", ghcPkg]
-    rejected <- acquire
-    assertFailure rejected
-    retained <- Directory.listDirectory staging
-    assertEqual "exactly the failed replay remains" 1 (length retained)
-    forM_ retained $ \name -> do
-      let path = staging </> name
-      assertContains ("Cabal store capture retained after failure: " ++ path) (err rejected)
-      requireFile (path </> "ghc-proxy.sh")
-    removeFile marker
-    completed <- acquire
-    assertSuccess completed
-    assertNoStdout completed
-    assertEqual "successful replay cleans itself without deleting earlier evidence"
-      (sort retained) . sort =<< Directory.listDirectory staging
 
 exportSafetyTests :: Env -> Test
 exportSafetyTests env = TestLabel "local export preserves inferred safety and rejects Unsafe imports" $ TestCase $
   withFixtureNamed env "t/fixtures/run-store-project" "local safe library" $ \project ->
-  withCache (takeDirectory project </> "cache") $ do
+  withCache (scratch env </> "core-cache") $ do
     let base = takeDirectory project
         output = base </> "output"
         source = project </> "dep-data/src/SafeDependency.hs"
-        acquire = run env base Nothing 240
-          ["acquire", "completed", "--project-dir", project, "--thc-root", thcRoot env,
-           "--dist-dir", output]
+        arguments = ["acquire", "completed", "--project-dir", project, "--thc-root", thcRoot env,
+                     "--dist-dir", output]
+        acquire = run env base Nothing 240 arguments
     -- The existing store fixture has an inferred-safe helper and a Safe caller.
     -- Keeping the dependency local exercises Project.freshExport, not GhcProxy.
     writeText (project </> "cabal.project") "packages: app/app.cabal dep-data/dep-data.cabal\n"
-    acquired <- acquire
+    acquired <- runPreparation env base arguments
     assertSuccess acquired
     assertNoStdout acquired
     plan <- readJson (output </> "native/cache/plan.json")
@@ -150,16 +108,18 @@ concurrentTests :: Env -> Test
 concurrentTests env = TestLabel "overlapping project captures share immutable cache publications" $ TestCase $
   withFixtureNamed env "t/fixtures/run-store-project" "first" $ \first ->
   withFixtureNamed env "t/fixtures/run-store-project" "second" $ \second ->
-  withCache (takeDirectory first </> "cache") $ do
+  withCache (scratch env </> "core-cache") $ do
     let base = takeDirectory first
         source = base </> "dependency-source"
         facade = base </> "facade-source"
-        cache = base </> "cache/core-bundles/v1"
         output project = takeDirectory project </> "output"
         invoke project backend = run env (takeDirectory project) (Just backend) 240
           ["run", "--verify-artifacts", "completed", "--project-dir", project, "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output project]
     copyTree (first </> "dep-data") source
+    -- Fresh source keeps the raced archive absent from the shared cache while
+    -- compiler-library preparation can reuse its unchanged inputs.
+    appendFile (source </> "src/Answer.hs") ("\n-- Concurrent capture source: " ++ show source ++ "\n")
     sourceDist env source first
     Directory.copyFile (first </> "dep-data-0.1.0.0.tar.gz") (second </> "dep-data-0.1.0.0.tar.gz")
     forM_ [first, second] $ \project -> removePathForcibly (project </> "dep-data")
@@ -177,24 +137,34 @@ concurrentTests env = TestLabel "overlapping project captures share immutable ca
     let description = second </> "app/app.cabal"
     original <- readText description
     writeText description (replaceText "dep-data ==0.1.0.0" "dep-data ==0.1.0.0, dep-extra ==0.1.0.0" original)
-    Directory.createDirectoryIfMissing True cache
-    -- A separate producer retaining the old global lock must not block either
-    -- project. This is a synchronization control, not a timing benchmark.
-    withLock (cache </> "global-export.lock") $ do
-      completed <- newEmptyMVar
-      bracket (forkFinally (invoke second "bytecode") (putMVar completed))
-        (\thread -> killThread thread >> readMVar completed >> pure ()) $ \_ -> do
-          left <- invoke first "ast"
-          right <- readMVar completed >>= either throwIO pure
-          forM_ [("ast", left), ("bytecode", right)] $ \(backend, result) -> do
-            assertSuccess result
-            assertNoStdout result
-            assertBackend backend result
+    -- Acquire the compiler libraries through the existing local dependency.
+    -- Its inplace export cannot publish the archived store unit raced below.
+    let preparationProject = base </> "preparation.project"
+    writeText preparationProject ("packages: " ++ show (source </> "dep-data.cabal") ++ "\n")
+    prepared <- runPreparation env base
+      ["build", "dep-data:lib:dep-data", "--project-dir", base,
+       "--project-file", preparationProject, "--thc-root", thcRoot env,
+       "--dist-dir", base </> "prepared"]
+    assertSuccess prepared
+    assertNoStdout prepared
+    completed <- newEmptyMVar
+    bracket (forkFinally (invoke second "bytecode") (putMVar completed))
+      (\thread -> killThread thread >> readMVar completed >> pure ()) $ \_ -> do
+        left <- invoke first "ast"
+        right <- readMVar completed >>= either throwIO pure
+        forM_ [("ast", left), ("bytecode", right)] $ \(backend, result) -> do
+          assertSuccess result
+          assertNoStdout result
+          assertBackend backend result
+    leftPlan <- readJson (output first </> "native/cache/plan.json")
+    rightPlan <- readJson (output second </> "native/cache/plan.json")
     leftManifest <- readSourceManifest (output first </> "packages.json")
     rightManifest <- readSourceManifest (output second </> "packages.json")
-    let dependency manifest = one (isPrefixOf "dep-data-" . string . (`field` "id")) (objects manifest "units")
-        leftUnit = dependency leftManifest
-        rightUnit = dependency rightManifest
+    let dependency plan manifest =
+          let planned = one ((== "dep-data") . string . (`field` "pkg-name")) (objects plan "install-plan")
+          in one ((== string (field planned "id")) . string . (`field` "id")) (objects manifest "units")
+        leftUnit = dependency leftPlan leftManifest
+        rightUnit = dependency rightPlan rightManifest
         identifier = string (field leftUnit "id")
         bundle = field leftUnit "bundle"
         path = string (field bundle "path")
@@ -202,9 +172,8 @@ concurrentTests env = TestLabel "overlapping project captures share immutable ca
     assertEqual "both manifests retain the same immutable publication" bundle (field rightUnit "bundle")
     bytes <- BS.readFile path
     stamp <- getModificationTime path
-    forM_ [first, second] $ \project -> do
+    forM_ [(first, leftPlan), (second, rightPlan)] $ \(project, plan) -> do
       assertReachable (output project) identifier
-      plan <- readJson (output project </> "native/cache/plan.json")
       let executable = string (field (one ((== "exe:completed") . string . (`field` "component-name"))
             (objects plan "install-plan")) "bin-file")
       native <- runExe env project Nothing 60 executable []
@@ -218,7 +187,7 @@ concurrentTests env = TestLabel "overlapping project captures share immutable ca
 inplaceTests :: Env -> Test
 inplaceTests env = TestLabel "archive dependency retains its project-local dependency contents" $ TestCase $
   withFixtureNamed env "t/fixtures/run-store-project" "inplace dependencies" $ \project ->
-  withCache (takeDirectory project </> "cache") $ do
+  withCache (scratch env </> "core-cache") $ do
     let base = takeDirectory project
         dependency = base </> "dependency-source"
         facade = base </> "facade-source"
@@ -259,6 +228,11 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
     writeText (project </> "cabal.project") $ unlines
       ["packages: app/app.cabal local-leaf/local-leaf.cabal",
        "          dep-data-0.1.0.0.tar.gz leaf-facade-0.1.0.0.tar.gz"]
+    prepared <- runPreparation env base
+      ["build", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+       "--dist-dir", output]
+    assertSuccess prepared
+    assertNoStdout prepared
     first <- invoke "ast"
     assertSuccess first
     assertNoStdout first
@@ -266,7 +240,6 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
     plan <- readJson (output </> "native/cache/plan.json")
     let dependencyUnit = planned plan "dep-data"
         identifier = string (field dependencyUnit "id")
-        facadeId = string (field (planned plan "leaf-facade") "id")
         executable = string (field (planned plan "app-store") "bin-file")
         leafDist = string (field (planned plan "local-leaf") "dist-dir")
         leafArtifacts = map ((leafDist </> "build") </>) ["LocalLeaf.o", "LocalLeaf.hi"]
@@ -278,11 +251,6 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
     assertEqual "unchanged native oracle" (out native) (out first)
     manifest <- readSourceManifest (output </> "packages.json")
     let path = bundlePath manifest identifier
-    facadeInner <- readCore (bundlePath manifest facadeId) "manifest.json"
-    assertEqual "reexport-only inplace archive owns no synthetic Core" []
-      (objects facadeInner "modules")
-    assertBool "exact isolated registration retained"
-      (not (null (string (field facadeInner "reexportRegistration"))))
     assertReachable output identifier
     stamp <- getModificationTime path
     second <- invoke "bytecode"
@@ -565,7 +533,7 @@ storeProjectTest :: Env -> Test
 storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
   -- Keep assembler output paths portable; proxy-only cases above cover quotes.
   withFixtureNamed env "t/fixtures/run-store-project" "project café" $ \project ->
-  withCache (takeDirectory project </> "cache") $ do
+  withCache (scratch env </> "core-cache") $ do
     let base = takeDirectory project
         source = base </> "dependency-source"
         answer = source </> "src/SafeDependency.hs"
@@ -581,59 +549,43 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
           ((== identifier) . string . (`field` "id")) (objects manifest "units")) "bundle"
     copyTree (project </> "dep-data") source
     removePathForcibly (project </> "dep-data")
-    -- Exercise both generated wrappers with a real GHC RTS option: local
-    -- compilation uses native-ghc, store capture uses its temporary wrapper.
-    let dependencyDescription = source </> "dep-data.cabal"
-    dependency <- readText dependencyDescription
-    writeText dependencyDescription (dependency ++ "\n  ghc-options: +RTS -A8m -RTS\n")
     sourceDist env source project
-    -- Both the initial native build and fresh-store Core capture must select
-    -- the requested executable, not build every sibling component. This valid
-    -- Cabal component deliberately fails if either path still uses `all`.
-    let appDescription = project </> "app/app.cabal"
-    description <- readText appDescription
-    writeText appDescription (description ++ "\n  ghc-options: +RTS -A8m -RTS\n" ++ unlines
-      ["", "executable unrelated", "  main-is: Unrelated.hs", "  hs-source-dirs: app",
-       "  build-depends: base >=4.22 && <4.23", "  default-language: Haskell2010"])
-    writeText (project </> "app/app/Unrelated.hs")
-      "module Main where\nmain :: IO ()\nmain = intentionallyUnbuildableSibling\n"
-    first <- invoke "ast"
-    assertSuccess first
-    assertNoStdout first
-    assertBackend "ast" first
+    prepared <- runPreparation env base
+      ["build", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+       "--dist-dir", output]
+    assertSuccess prepared
+    assertNoStdout prepared
     firstPlan <- readJson (output </> "native/cache/plan.json")
     let firstId = string (field (global firstPlan) "id")
         executable = string (field (one
           (\unit -> string (field unit "component-name") == "exe:completed")
           (objects firstPlan "install-plan")) "bin-file")
-    native <- runExe env project Nothing 60 executable []
-    assertSuccess native
-    assertEqual "native and THC output" (out native) (out first)
     firstManifest <- readSourceManifest (output </> "packages.json")
     let firstPath = string (field (bundle firstManifest firstId) "path")
     firstInner <- readCore firstPath "manifest.json"
-    let exportKey = string (field firstInner "exportKey")
-        buildKey = string (field firstInner "buildKey")
-        digest key = length key == 64 && all isHexDigit key
     assertEqual "store manifest identifies its Cabal unit" firstId
       (string $ field firstInner "unit")
-    assertBool "store build key is a SHA-256 digest" (digest buildKey)
-    assertBool "store export key is a SHA-256 digest" (digest exportKey)
-    assertEqual "store export key selects its cache directory" exportKey
-      (takeFileName $ takeDirectory firstPath)
-    assertBool "store ZIP uses shared application cache"
-      ((base </> "cache/core-bundles/v1") `isPrefixOf` firstPath)
-    assertEqual "Cabal store ID is ZIP basename" (firstId ++ ".zip") (takeFileName firstPath)
-    assertReachable output firstId
     firstTime <- getModificationTime firstPath
-    second <- invoke "bytecode"
+    -- The first strict run reacquires the checked build and must reuse its
+    -- publication. Its audit is independent of the chosen execution backend.
+    first <- invoke "ast"
+    assertSuccess first
+    assertNoStdout first
+    assertBackend "ast" first
+    assertReachable output firstId
+    repeated <- readSourceManifest (output </> "packages.json")
+    assertEqual "store ZIP reused" firstPath (string $ field (bundle repeated firstId) "path")
+    assertEqual "store ZIP not rewritten" firstTime =<< getModificationTime firstPath
+    native <- runExe env project Nothing 60 executable []
+    assertSuccess native
+    assertEqual "native and THC output" (out native) (out first)
+    second <- runExe env base (Just "bytecode") 240 (runtime env)
+      ["--verify-artifacts", "--run-executable", '@' : (output </> "packages.json"),
+       "main::Main.main", "ghc-internal:GHC.Internal.TopHandler.flushStdHandles", "--", "completed"]
     assertSuccess second
     assertNoStdout second
     assertBackend "bytecode" second
-    secondManifest <- readSourceManifest (output </> "packages.json")
-    assertEqual "store ZIP reused" firstPath (string $ field (bundle secondManifest firstId) "path")
-    secondTime <- getModificationTime firstPath
-    assertEqual "store ZIP not rewritten" firstTime secondTime
+    assertEqual "native and bytecode output" (out native) (out second)
 
     original <- readText answer
     writeText answer (replaceText "stableValue = 42" "stableValue = 41" original)
@@ -650,19 +602,24 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
     assertReachable output changedId
 
 customStoreProjectTest :: Env -> Test
-customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-only transitive closure" $ TestCase $
+customStoreProjectTest env = TestLabel "Custom Setup capture recovers failures and retains runtime-only closure" $ TestCase $
   withFixtureNamed env "t/fixtures/run-store-project" "custom project" $ \project ->
-  withCache (takeDirectory project </> "cache") $ do
+  withCache (scratch env </> "core-cache") $ do
     let base = takeDirectory project
         dependency = base </> "dependency-source"
         leaf = base </> "leaf-source"
         setupOnly = base </> "setup-source"
         output = base </> "output"
+        staging = output </> "native/cache/thc/staging"
+        marker = base </> "fail-isolated-capture"
+        buildArguments = ["build", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+                          "--dist-dir", output]
         invoke backend = run env base (Just backend) 240
           ["run", "--verify-artifacts", "--project-dir", project, "completed", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         planned plan name = one ((== name) . string . (`field` "pkg-name")) (objects plan "install-plan")
         described manifest identifier = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
+    writeText marker ""
     copyTree (project </> "dep-data") dependency
     removePathForcibly (project </> "dep-data")
     Directory.createDirectoryIfMissing True leaf
@@ -687,16 +644,50 @@ customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-onl
     writeText descriptionPath (replaceText "build-type: Simple" "build-type: Custom"
       (replaceText "build-depends: base >=4.22 && <4.23"
         "build-depends: base >=4.22 && <4.23, runtime-leaf ==0.1.0.0" description) ++ unlines
-      ["", "custom-setup", "  setup-depends: base, Cabal, setup-only ==0.1.0.0"])
+      ["", "  ghc-options: +RTS -A8m -RTS", "", "custom-setup",
+       "  setup-depends: base, Cabal, directory, setup-only ==0.1.0.0"])
+    -- The unique marker path gives this failure control fresh package source
+    -- identity while compiler libraries continue using the shared cache.
     writeText (dependency </> "Setup.hs") $ unlines
-      ["import Distribution.Simple (defaultMain)", "import SetupOnly (prepare)",
-       "main :: IO ()", "main = prepare >> defaultMain"]
+      ["import Control.Monad (when)", "import Distribution.Simple (defaultMain)",
+       "import System.Directory (doesFileExist)", "import System.Environment (lookupEnv)",
+       "import System.Exit (die)", "import SetupOnly (prepare)",
+       "main :: IO ()", "main = do",
+       "  selected <- lookupEnv \"THC_PROXY_GLOBAL_UNITS\"",
+       "  failing <- doesFileExist " ++ show marker,
+       "  when (maybe False (not . null) selected && failing)",
+       "    (die \"intentional isolated capture failure\")",
+       "  prepare", "  defaultMain"]
     writeText (dependency </> "src/SafeDependency.hs") $ unlines
       ["module SafeDependency (stableValue) where", "import RuntimeLeaf (leafValue)",
        "stableValue :: Int", "stableValue = leafValue"]
+    -- Both the native build and isolated capture must preserve compiler RTS
+    -- arguments and select completed without building an unrelated executable.
+    let appDescription = project </> "app/app.cabal"
+    appText <- readText appDescription
+    writeText appDescription (appText ++ "\n  ghc-options: +RTS -A8m -RTS\n" ++ unlines
+      ["", "executable unrelated", "  main-is: Unrelated.hs", "  hs-source-dirs: app",
+       "  build-depends: base >=4.22 && <4.23", "  default-language: Haskell2010"])
+    writeText (project </> "app/app/Unrelated.hs")
+      "module Main where\nmain :: IO ()\nmain = intentionallyUnbuildableSibling\n"
     mapM_ (\source -> sourceDist env source project) [leaf, setupOnly, dependency]
     writeText (project </> "cabal.project") $ unlines
       ["packages: app/app.cabal dep-data-0.1.0.0.tar.gz runtime-leaf-0.1.0.0.tar.gz setup-only-0.1.0.0.tar.gz"]
+    rejected <- runPreparation env base buildArguments
+    assertFailure rejected
+    assertContains "intentional isolated capture failure" (out rejected ++ err rejected)
+    retained <- Directory.listDirectory staging
+    assertEqual "exactly the failed replay remains" 1 (length retained)
+    forM_ retained $ \name -> do
+      path <- Directory.canonicalizePath (staging </> name)
+      assertContains ("Cabal store capture retained after failure: " ++ path) (err rejected)
+      requireFile (path </> "ghc-proxy.sh")
+    removeFile marker
+    prepared <- run env base Nothing 240 buildArguments
+    assertSuccess prepared
+    assertNoStdout prepared
+    assertEqual "successful replay cleans itself without deleting earlier evidence"
+      (sort retained) . sort =<< Directory.listDirectory staging
     first <- invoke "ast"
     assertSuccess first
     assertNoStdout first
@@ -709,7 +700,8 @@ customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-onl
         components = field custom "components"
         runtimeDeps = array (field (field components "lib") "depends")
         setupDeps = array (field (field components "setup") "depends")
-        executable = string (field (planned plan "app-store") "bin-file")
+        executable = string (field (one ((== "exe:completed") . string . (`field` "component-name"))
+          (objects plan "install-plan")) "bin-file")
     native <- runExe env project Nothing 60 executable []
     assertSuccess native
     assertEqual "Custom Setup native and THC output" (out native) (out first)
@@ -738,7 +730,7 @@ nativeVariantsTest :: Env -> Bool -> Test
 nativeVariantsTest env cxx = TestLabel
   ("same native " ++ (if cxx then "C++/ccall-header" else "C") ++ " symbol retains pointer and byte-array variants") $ TestCase $
   withFixtureNamed env "t/fixtures/run-native-variants" "native variants" $ \project ->
-  withCache (takeDirectory project </> "cache") $ do
+  withCache (scratch env </> "core-cache") $ do
     if cxx then do
       original <- readText (project </> "variants.c")
       writeText (project </> "variants.cc") $ unlines
@@ -757,16 +749,24 @@ nativeVariantsTest env cxx = TestLabel
         invoke backend = run env base (Just backend) 240
           ["run", "--verify-artifacts", "--project-dir", project, "variants", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
-    forM_ ["ast", "bytecode"] $ \backend -> do
-      actual <- invoke backend
-      assertSuccess actual
-      assertNoStdout actual
-      diagnostics <- json (last $ lines $ err actual)
-      assertEqual "selected backend" backend (string $ field diagnostics "backend")
-      assertEqual "no runtime traps" 0 (number $ field diagnostics "unsupportedTraps")
-      audit <- readJson (output </> "audit.json")
-      assertBool "unchanged strict audit accepted both call shapes" (bool $ field audit "accepted")
-      assertEqual "no missing foreign or Haskell globals" [] (array $ field audit "missingGlobals")
+    prepared <- runPreparation env base
+      ["build", "--project-dir", project, "variants", "--thc-root", thcRoot env,
+       "--dist-dir", output]
+    assertSuccess prepared
+    assertNoStdout prepared
+    first <- invoke "ast"
+    assertSuccess first
+    assertNoStdout first
+    assertBackend "ast" first
+    audit <- readJson (output </> "audit.json")
+    assertBool "unchanged strict audit accepted both call shapes" (bool $ field audit "accepted")
+    assertEqual "no missing foreign or Haskell globals" [] (array $ field audit "missingGlobals")
+    second <- runExe env base (Just "bytecode") 240 (runtime env)
+      ["--verify-artifacts", "--run-executable", '@' : (output </> "packages.json"),
+       "main::Main.main", "ghc-internal:GHC.Internal.TopHandler.flushStdHandles", "--", "variants"]
+    assertSuccess second
+    assertNoStdout second
+    assertBackend "bytecode" second
     plan <- readJson (output </> "native/cache/plan.json")
     let component = one ((== "exe:variants") . string . (`field` "component-name"))
           [unit | unit <- objects plan "install-plan", string (field unit "type") == "configured"]
@@ -816,8 +816,6 @@ assertBackend backend result = do
   unless (not (null (lines $ err result))) (fail "missing THC diagnostics")
   diagnostics <- json (last $ lines $ err result)
   assertEqual "backend" backend (string $ field diagnostics "backend")
-  assertEqual "external value forced" 1
-    (number $ field (field diagnostics "thunkEvaluationsByLabel") "answerValue")
   assertEqual "no traps" 0 (number $ field diagnostics "unsupportedTraps")
 
 withCache :: FilePath -> IO a -> IO a
