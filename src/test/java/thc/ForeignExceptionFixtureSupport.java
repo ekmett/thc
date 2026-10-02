@@ -77,7 +77,9 @@ public final class ForeignExceptionFixtureSupport {
             var request = (Map<String, Object>) Json.parse(CoreModules.request(paths, entry, false, false, "ast", false,
                 false, null, null, true));
             var selected = CoreModules.selectedModules(request, entry);
-            nativeRuntime = new LinkedHashMap<>(CoreModules.merge((List<Map<String, Object>>) selected.get("modules")));
+            var merger = new CoreModules.Merger();
+            for (var module : (List<Map<String, Object>>) selected.get("modules")) merger.addDetached(module);
+            nativeRuntime = new LinkedHashMap<>(merger.finish());
             nativeRuntime.put("targetLayout", selected.get("targetLayout"));
         }
         return nativeRuntime;
@@ -107,7 +109,9 @@ public final class ForeignExceptionFixtureSupport {
         var request = (Map<String, Object>) Json.parse(CoreModules.request(List.of("@" + packageManifest),
             entry, false, false, "ast", false, true, (String) proof.get("project"), null, true));
         var selected = CoreModules.selectedModules(request, entry);
-        var runtime = new LinkedHashMap<>(CoreModules.merge((List<Map<String, Object>>) selected.get("modules")));
+        var merger = new CoreModules.Merger();
+        for (var module : (List<Map<String, Object>>) selected.get("modules")) merger.addDetached(module);
+        var runtime = new LinkedHashMap<>(merger.finish());
         runtime.put("foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit());
         runtime.put("targetLayout", directory.getTargetLayout().document());
         return nativeModules(modules, directory, runtime);
