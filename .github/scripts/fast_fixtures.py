@@ -38,7 +38,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/backend-annotations", "build/process-signals",
     "build/process-lifecycle/core",
     "build/vector-api", "build/truffle-strings",
-    "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
+    "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
     "build/floating-byte-offset", "build/unaligned-scalar-memory",
@@ -209,7 +209,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
       for command in ("ghc-version", "native-compile", "native-oracle", "pre-export", "pre-audit", "post-export", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")],
     "build/addr-identity/pre-core/AddressIdentityAudit.cbd", "build/addr-identity/post-core/AddressIdentityAudit.cbd",
-    "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
+    "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json",
     "build/pinned-addresses/manifest.json",
     *fast_inputs.INTEGER_COMPLETION_OUTPUTS,
     "build/pinned-pointer-cells/manifest.json",
@@ -529,8 +529,6 @@ def _output_hashes(root, group):
         name = "build/pinned-addresses/manifest.json"
         expected = fast_inputs.pinned_address_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
-    if group["outputs"] == ["build/original-stack-formatter"]:
-        return _formatter_output_hashes(root)
     if group["outputs"] == ["build/rts-diagnostics"]:
         name = "build/rts-diagnostics/manifest.json"
         expected = fast_inputs.rts_diagnostic_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -611,22 +609,6 @@ def _require_prepared_encoder(root):
         raise FileNotFoundError(f"Missing prepared fixture executable: {executable}")
 
 
-def _formatter_output_hashes(root):
-    # The source exporter creates a symlink overlay of installed interfaces.
-    # Only the manifest's exact reviewed artifacts are reusable fixture data.
-    name = "build/original-stack-formatter/manifest.json"
-    path = fast_inputs.file_path(root, name)
-    manifest = json.loads(path.read_text())
-    expected = fast_inputs.formatter_artifact_hashes(root, manifest)
-    result = {name: _digest(path)}
-    for artifact, recorded in sorted(expected.items()):
-        actual = _digest(fast_inputs.file_path(root, artifact))
-        if actual != recorded:
-            raise RuntimeError("Stale formatter artifact: " + artifact)
-        result[artifact] = actual
-    return result
-
-
 def _manifest_output_hashes(root, name, expected):
     path = fast_inputs.file_path(root, name)
     result = {name: _digest(path)}
@@ -684,9 +666,6 @@ def _full_output_hashes(root):
             continue
         if name == "build/package-native-gc-carriers":
             files.update(_output_hashes(root, {"outputs": [name]}))
-            continue
-        if name == "build/original-stack-formatter":
-            files.update(_formatter_output_hashes(root))
             continue
         if name == "build/process-lifecycle/core":
             files.update(_output_hashes(root, {"outputs": [name]}))

@@ -1304,7 +1304,7 @@
     "src/test/java/thc/runtime/ExplicitInteropProbeRoot.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
     "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
     "src/test/java/thc/runtime/ScalarTestCalls.java": {
-      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.Md5ForeignCallTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.OriginalFcntlTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalStrerrorNativeTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
+      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.OriginalFcntlTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalStrerrorNativeTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
       "python": []
     },
     "src/test/java/thc/runtime/ScalarValueTestSupport.java": {
@@ -1805,14 +1805,6 @@
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
       "python": []
     },
-    "t/fixtures/compiler/OriginalStackFormatter.hs": {
-      "junit": ["thc.runtime.OriginalStackFormatterTest"],
-      "python": []
-    },
-    "t/fixtures/compiler/OriginalStackFormatterNative.hs": {
-      "junit": ["thc.runtime.OriginalStackFormatterTest"],
-      "python": []
-    },
     "bin/prepare-boxed-arrays.py": {
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
       "python": []
@@ -1870,7 +1862,7 @@
       "python": []
     },
     "t/haskell-fixtures/StackFixtures.hs": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "python": []
     },
     "src/test/java/thc/runtime/ManagedStackInfoImageTest.java": {
@@ -2663,7 +2655,6 @@
         "thc.runtime.SimdWideFloatFmaTest",
         "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.WordFloatingTest",
-        "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.LargeLiteralCaseNativeTest",
         "thc.runtime.AsyncStrictEntryNativeTest",
@@ -2975,15 +2966,15 @@
       "haskell": ["driver-tests"]
     },
     "src/main/java/thc/runtime/TargetLayout.java": {
-      "junit": ["thc.CoreCompactDirectoryTest", "thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.CoreCompactDirectoryTest", "thc.runtime.InterfaceCoreNativeTest"],
       "python": []
     },
     "src/driver/THC/Driver/Wired.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalProcessIdentityTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalProcessIdentityTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "src/driver/cbits/target-layout.c": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalProcessIdentityTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalProcessIdentityTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "t/fixtures/run-pure/run-pure.cabal": {

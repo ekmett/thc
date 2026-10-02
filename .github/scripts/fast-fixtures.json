@@ -153,7 +153,6 @@
     "thc.runtime.CoreFloatingLiteralTest",
     "thc.runtime.CoreFunctionIdentityTest",
     "thc.runtime.CoreKeepAliveTest",
-    "thc.runtime.CoreMd5ForeignTest",
     "thc.runtime.CoreNativeOverrideProfileTest",
     "thc.runtime.CoreProofJoinTest",
     "thc.runtime.CoreStackInfoForeignTest",
@@ -203,7 +202,6 @@
     "thc.runtime.NativePinnedStorageTest",
     "thc.runtime.OperandRetentionTest",
     "thc.runtime.OriginalStackCloneTest",
-    "thc.runtime.OriginalStackFormatterCommandTest",
     "thc.runtime.OriginalStackInfoCallTest",
     "thc.runtime.OriginalStdioExpressionTest",
     "thc.runtime.PackageNativeDemandTest",
@@ -441,7 +439,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-process-identity": {
-      "junit": ["thc.runtime.OriginalProcessIdentityTest", "thc.runtime.Md5ForeignCallTest"],
+      "junit": ["thc.runtime.OriginalProcessIdentityTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-process-identity"]}],
       "outputs": ["build/original-process-identity"],
       "sources": ["t/fixtures/compiler/OriginalProcessIdentityAudit.hs", "t/fixtures/compiler/OriginalProcessIdentityNative.hs", "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/cbits/target-layout.c", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java", "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs"]
@@ -862,21 +860,6 @@
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
         "src/compiler/THC/ForeignImportProvenance.hs",
         "src/driver/THC/Driver/PackageNative.hs"
-      ]
-    },
-    "original-stack-formatter": {
-      "junit": ["thc.runtime.OriginalStackFormatterTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
-      "outputs": ["build/original-stack-formatter"],
-      "sources": [
-        "t/fixtures/compiler/OriginalStackFormatter.hs",
-        "t/fixtures/compiler/OriginalStackFormatterNative.hs",
-        "t/haskell-fixtures/StackFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "src/driver/THC/Driver/Wired.hs",
-        "src/driver/cbits/target-layout.c"
       ]
     },
     "boxed-array-extensions": {
@@ -1500,12 +1483,6 @@
       "junit": ["thc.runtime.NarrowLiteralProofTest"],
       "commands": [{"argv": ["python3", "bin/prepare-narrow-literal-proofs.py"]}],
       "outputs": ["build/narrow-literal-proofs"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
-    "managed-md5": {
-      "junit": ["thc.runtime.ManagedMd5Test"],
-      "commands": [{"argv": ["python3", "bin/prepare-managed-md5.py"]}],
-      "outputs": ["build/managed-md5-native"],
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "simd-int64x2": {

@@ -64,8 +64,7 @@ Ordinary arrays use heap segments by default; the optional
 Heap segments retain moving-GC freedom. Managed Sulong accesses them by object plus offset, without
 physical pinning; raw native projection rejects them even after unsafe freeze.
 Buffer-only and native-pointer-capable views of pinned storage are both
-available without copying. Windows MD5 may stage unpinned heap data; pinned paths
-borrow the original segment. Native storage ownership does not imply that
+available without copying. Native storage ownership does not imply that
 allocation is as cheap as JVM heap allocation.
 The separate [native address projection](native-addresses.md) and explicit
 malloc/free ownership paths do not grant access to arbitrary process memory. See the

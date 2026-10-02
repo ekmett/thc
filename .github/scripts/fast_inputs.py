@@ -63,7 +63,7 @@ MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-li
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc original-stack original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating package-native-gc-carriers""".split()
 GC_CARRIER_OUTPUTS = frozenset("build/package-native-gc-carriers/" + name for name in (
     "manifest.json", "PackageNativeGcCarriers.cbd", "oracle.txt",
@@ -870,8 +870,7 @@ def original_stack_artifact(name):
 
 def native_executable(name):
     return name in NATIVE_EXECUTABLES or name in BYTEARRAY_NATIVES or (
-        original_stack_artifact(name) and name.endswith("/native/original-stack-native")) or (
-        original_stack_formatter_artifact(name) and name.endswith("/native/formatter"))
+        original_stack_artifact(name) and name.endswith("/native/original-stack-native"))
 
 
 class CacheMiss(RuntimeError):
@@ -990,30 +989,6 @@ def wired_catalog(root):
     return modules, hashes
 
 
-def original_stack_formatter_files(root=None):
-    # Reuse the exporter's authoritative module names and HSC sources instead
-    # of maintaining another manually synchronized list of 37 modules.
-    root = Path(__file__).resolve().parents[2] if root is None else root
-    modules, _ = wired_catalog(root)
-    return frozenset((
-        "native/formatter", "originals/generated.json", "originals/target-layout.json",
-        *(f"originals/core/{module}.cbd" for module in modules.values()),
-        *("originals/generated/" + str(PurePosixPath(path).with_suffix(".hs"))
-          for path in modules if path.endswith(".hsc")),
-        *(f"{stage}-core/OriginalStackFormatter.cbd" for stage in ("pre", "post")),
-        *(f"{stage}-audit.json" for stage in ("pre", "post")),
-        *(f"logs/{label}.{suffix}"
-          for label in ("ghc-version", "plugin-build", "original-source-export", "pre-export",
-                        "post-export", "native-compile", "native-observations", "pre-audit", "post-audit")
-          for suffix in ("stdout", "stderr", "command.json")),
-    ))
-
-
-def original_stack_formatter_artifact(name):
-    match = re.fullmatch(r"build/original-stack-formatter/run-[1-9][0-9]*/(.+)", name)
-    return match is not None and match.group(1) in original_stack_formatter_files()
-
-
 def gc_carrier_artifact_hashes(root, manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
             type(manifest.get("nativeRows")) is int and manifest["nativeRows"] == 6 and
@@ -1036,23 +1011,6 @@ def gc_carrier_artifact_hashes(root, manifest):
             artifacts[name] = digest
     require(set(artifacts) == GC_CARRIER_OUTPUTS - {"build/package-native-gc-carriers/manifest.json"},
             "Incomplete/unreviewed GC carrier artifacts")
-    return artifacts
-
-
-def formatter_artifact_hashes(root, manifest):
-    """One complete reviewed attempt, excluding overlays and previous attempts."""
-    require(isinstance(manifest, dict), "Invalid formatter manifest")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and bool(artifacts), "Missing formatter artifact hashes")
-    attempts = set()
-    for name, digest in artifacts.items():
-        match = re.fullmatch(r"(build/original-stack-formatter/run-[1-9][0-9]*)/(.+)", relative(name))
-        require(match is not None and isinstance(digest, str) and HEX.fullmatch(digest),
-                "Invalid formatter artifact")
-        attempts.add(match.group(1))
-    require(len(attempts) == 1, "Mixed formatter attempts")
-    expected = {next(iter(attempts)) + "/" + name for name in original_stack_formatter_files(root)}
-    require(set(artifacts) == expected, "Incomplete/unreviewed formatter artifacts")
     return artifacts
 
 
@@ -1870,8 +1828,6 @@ def allowed_payload(name):
         return name in ORIGINAL_TCGETATTR_OUTPUTS
     if parts[1] == "original-stack":
         return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
-    if parts[1] == "original-stack-formatter":
-        return name == "build/original-stack-formatter/manifest.json" or original_stack_formatter_artifact(name)
     if parts[1] == "boxed-array-extensions":
         return name == "build/boxed-array-extensions/manifest.json" or boxed_array_extension_artifact(name)
     if parts[1] == "boxed-cas":
@@ -2024,8 +1980,6 @@ def inventory(root, current, read, core_files, verified=None):
             require(isinstance(doc.get("artifactHashes"), dict) and
                     set(doc["artifactHashes"]) == FLOATING_REMAINDER_OUTPUTS - {name},
                     "Incomplete floating remainder fixture inventory")
-        if name == "build/original-stack-formatter/manifest.json":
-            formatter_artifact_hashes(root, doc)
         if name == "build/original-path-stat/manifest.json":
             original_path_stat_artifact_hashes(doc)
         if name == "build/original-path-mode/manifest.json":

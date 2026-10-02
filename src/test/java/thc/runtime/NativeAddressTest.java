@@ -227,10 +227,6 @@ public class NativeAddressTest {
                 var nativeMemory = MemorySegment.ofAddress(interop.asPointer(view)).reinterpret(4);
                 assertArrayEquals(new byte[] {97, 98, 99, 0}, nativeMemory.toArray(ValueLayout.JAVA_BYTE));
                 System.gc(); assertEquals(98L, registry.recover(bits + 1).readWord8(0));
-                var md5 = ManagedAddress.fromByteArray(new byte[96]); var digest = ManagedAddress.fromByteArray(new byte[16]);
-                ManagedMd5.init(md5); ManagedMd5.update(md5, original, 3); ManagedMd5.finish(digest, md5);
-                var hex = new StringBuilder(); for (long i = 0; i < 16; i++) hex.append(String.format(Locale.ROOT, "%02x", digest.readWord8(i)));
-                assertEquals("900150983cd24fb0d6963f7d28e17f72", hex.toString());
                 registry.close(); assertFalse(interop.isPointer(view)); assertFalse(interop.isPointer(olderBuffer));
                 assertThrows(UnsupportedMessageException.class, () -> interop.asPointer(view)); assertThrows(UnsupportedMessageException.class, () -> interop.asPointer(olderBuffer));
                 assertThrows(RuntimeFault.class, () -> registry.recover(bits)); assertThrows(RuntimeFault.class, original::toNativeBits); Reference.reachabilityFence(view);

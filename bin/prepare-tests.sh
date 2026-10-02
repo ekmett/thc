@@ -54,7 +54,6 @@ printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" simd-wide-floating-fma
 "$fixture_bin" sqrt
 "$fixture_bin" original-stack
-"$fixture_bin" original-stack-formatter
 "$fixture_bin" package-native-gc-carriers
 "$fixture_bin" boxed-array-extensions
 "$fixture_bin" boxed-cas
@@ -97,7 +96,6 @@ python3 bin/prepare-synchronous-exceptions.py
 "$fixture_bin" deep-evaluation
 "$fixture_bin" interface-core
 "$fixture_bin" record-fields
-python3 bin/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 "$fixture_bin" original-stdio-read
 "$fixture_bin" original-handle-readiness

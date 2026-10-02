@@ -14,8 +14,6 @@ import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
-PINNED = {"md5.c": "4fa83bda7aacc8a1656d7e2d78251bbe70a04b56",
-          "md5.h": "a87296687a2f3dc6748264ff2a8a0c919518db55"}
 RTS_FLOAT_SHA256 = {
     "StgPrimFloat.c": "9cf152e52641b332634c9a9a0a24114f7d4640b08d17a35a020abb7bde4cf8c0",
     "StgPrimFloat.h": "486279f796cfc733a7d371e2445201a21b66a82a08ed501fdb82491c473b8f13",
@@ -64,11 +62,6 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     reference = ROOT / "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
-    md5_sources = {name: reference / ("cbits" if name.endswith(".c") else "include") / name for name in PINNED}
-    for name, expected in PINNED.items():
-        data = md5_sources[name].read_bytes()
-        if hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest() != expected:
-            raise ValueError(f"Pinned original {name} changed")
     clang = shutil.which(os.environ.get("THC_CLANG", "clang"))
     if not clang:
         raise SystemExit("Original cbits require clang on PATH (or THC_CLANG); install a compatible LLVM compiler")
@@ -115,8 +108,7 @@ def main():
         disassembler = shutil.which(os.environ.get("THC_LLVM_DIS", str(sibling) if sibling.is_file() else "llvm-dis"))
         if not disassembler:
             raise SystemExit("Windows cbits require llvm-dis beside Clang, on PATH, or selected by THC_LLVM_DIS")
-    sources = {"package-pointer": ROOT / "src/main/c/package-pointer-api.c",
-               "md5": ROOT / "src/main/c/md5-api.c"}
+    sources = {"package-pointer": ROOT / "src/main/c/package-pointer-api.c"}
     if system in ("Linux", "Darwin"):
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
         if system == "Linux" and arch == "x86_64":
@@ -139,7 +131,7 @@ def main():
         expected_target = pointer_target if name == "package-pointer" else target
         artifact = output / (name + ".bc")
         bitcode_targets[artifact.name] = bitcode_target(disassembler, artifact, expected_target) if disassembler else expected_target
-    source_files = list(md5_sources.values()) + list(sources.values())
+    source_files = list(sources.values())
     source_files += unix_headers + [p.parent / "HsUnixConfig.h" for p in unix_headers]
     artifacts = [output / (name + ".bc") for name in sources]
     # The original RTS floating helpers contain no GHC heap state. Supply the
@@ -180,15 +172,6 @@ def main():
             "dllSha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}, indent=2) + "\n")
         source_files.append(source)
         artifacts.extend([artifact, receipt])
-        # Sulong's PE dependency locator probes the guest filesystem even for
-        # system DLLs. This stateless native bridge preserves IOAccess.NONE.
-        artifact = output / "md5.dll"
-        command = [*compiler, "-std=c11", "-O2", "-fno-strict-aliasing", "-shared",
-                   "-I", str(reference / "cbits"), "-I", str(reference / "include"), "-I", str(headers[0].parent),
-                   str(ROOT / "src/main/c/md5-api.c"), "-o", str(artifact)]
-        subprocess.run(command, cwd=ROOT, check=True)
-        commands.append(command)
-        artifacts.append(artifact)
     record = lambda p: {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
     manifest = {"schema": 1, "target": target, "compilerDefaultTarget": default_target,
                 "bitcodeTargets": bitcode_targets,

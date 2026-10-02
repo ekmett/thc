@@ -17,16 +17,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipFile;
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.io.IOAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import thc.runtime.CoreRepresentations;
-import thc.runtime.ManagedAddress;
-import thc.runtime.ManagedMd5;
-import thc.runtime.RuntimeFault;
 import thc.runtime.UnsupportedCore;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -87,7 +82,6 @@ class WindowsDistributionTest {
         if (selectedBuild != null)
             assertTrue(Path.of(helperArguments.getFirst().getFirst()).startsWith(root.resolve(selectedBuild).normalize()),
                 "CString must use the helper from the selected Cabal build");
-        assertNotNull(getClass().getResource("/thc/cbits/md5.dll"));
         try (var input = getClass().getResourceAsStream("/thc/native/stdio-host-abi.json")) {
             assertNotNull(input);
             var abi = (Map<String, Object>) Json.INSTANCE.parse(new String(input.readAllBytes(), StandardCharsets.UTF_8));
@@ -210,7 +204,7 @@ class WindowsDistributionTest {
                 var nativeInputs = (List<Map<String, Object>>) fullInputs.get("nativeArtifacts");
                 var cProducts = nativeInputs.stream().filter(value -> value.containsKey("objectSha256")).toList();
                 for (var product : cProducts) assertTrue(((String) product.get("objectSha256")).matches("[0-9a-f]{64}"));
-                assertTrue(cProducts.stream().anyMatch(value -> Path.of((String) value.get("path")).getFileName().toString().equals("md5.c")));
+                assertFalse(cProducts.isEmpty(), "Installed GHC libraries retain their native C products");
                 for (var input : nativeInputs) {
                     var path = Path.of((String) input.get("path"));
                     assertTrue(path.isAbsolute(), path.toString());
@@ -311,30 +305,4 @@ class WindowsDistributionTest {
         }
     }
 
-    @Test void nativeMd5NeedsNativeAuthorityButNoGuestFilesystemAuthority() throws Exception {
-        for (boolean nativeAccess : new boolean[] {false, true, false, true}) {
-            try (var context = Context.newBuilder("thc").allowNativeAccess(nativeAccess).allowIO(IOAccess.NONE).build()) {
-                context.initialize("thc");
-                context.enter();
-                try {
-                    var bytes = new byte[88];
-                    Arrays.fill(bytes, (byte) 0xa5);
-                    var address = ManagedAddress.fromByteArray(bytes);
-                    if (!nativeAccess) {
-                        assertThrows(RuntimeFault.class, () -> ManagedMd5.init(address));
-                        var untouched = new byte[88];
-                        Arrays.fill(untouched, (byte) 0xa5);
-                        assertArrayEquals(untouched, bytes);
-                    } else {
-                        ManagedMd5.init(address);
-                        var output = new byte[16];
-                        ManagedMd5.update(address, ManagedAddress.fromHex("616263"), 3);
-                        ManagedMd5.finish(ManagedAddress.fromByteArray(output), address);
-                        assertArrayEquals(MessageDigest.getInstance("MD5").digest("abc".getBytes(StandardCharsets.UTF_8)), output);
-                        assertArrayEquals(new byte[88], bytes);
-                    }
-                } finally { context.leave(); }
-            }
-        }
-    }
 }

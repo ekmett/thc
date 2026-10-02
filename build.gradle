@@ -378,13 +378,7 @@ tasks.withType(Test).configureEach {
             "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
             "original-iconv/**/*.json", "original-iconv/native/oracle",
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
-            "managed-md5-native/**",
             "original-stack/manifest.json", "original-stack/run-*/**",
-            "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/originals/core/*.cbd", "original-stack-formatter/run-*/logs/*",
-            "original-stack-formatter/run-*/*-audit.json", "original-stack-formatter/run-*/native/formatter",
-            "original-stack-formatter/run-*/originals/generated/**/*.hs",
-            "original-stack-formatter/run-*/originals/generated.json",
-            "original-stack-formatter/run-*/originals/target-layout.json",
             "pinned-addresses/**/*.cbd", "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**", "pinned-addresses/commands/**",
             "pinned-pointer-cells/**/*.cbd", "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
             "address-array-copy/**/*.cbd", "address-array-copy/**/*.json", "address-array-copy/*.tsv", "address-array-copy/native/**", "address-array-copy/commands/**",
@@ -483,7 +477,6 @@ tasks.withType(Test).configureEach {
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py",
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
-            "prepare-managed-md5.py",
             "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",
             "prepare-managed-address-reads.py",
             "prepare-data-to-tag.py", "test-core-data-tags.py",
@@ -1284,11 +1277,8 @@ def nativeExec = { Closure action ->
     }
 }
 def compileCbits = tasks.register("compileCbits", Exec) {
-    inputs.files("bin/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
-        "src/main/c/package-pointer-api.c",
-        "src/main/c/windows-malloc.c",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/md5.c",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/md5.h")
+    inputs.files("bin/build-cbits.py", "src/main/c/iconv-api.c",
+        "src/main/c/package-pointer-api.c", "src/main/c/windows-malloc.c")
     inputs.files("nih/pinned/ghc-9.14.1/rts/StgPrimFloat.c", "nih/pinned/ghc-9.14.1/rts/StgPrimFloat.h")
     inputs.file("src/main/c/wait-status-api.c")
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
@@ -1639,7 +1629,7 @@ if (windowsHost) {
 }
 
 // Native Windows checkpoint: the default test task keeps its complete contract.
-// Both tasks consume fresh thc-fixtures windows-smoke and native MD5 inputs.
+// Both tasks consume fresh thc-fixtures windows-smoke inputs.
 [["windowsSmokeTest", false],[ "windowsDenseSmokeTest", true]].each { name, dense ->
     tasks.register(name, Test) {
         group = "verification"
@@ -1650,7 +1640,7 @@ if (windowsHost) {
         filter {
             ["thc.FastSmokeTest", "thc.RuntimeTest", "thc.BytecodeBackendTest",
                 "thc.CoreRequestTest", "thc.FramesTest", "thc.CStringTest",
-                "thc.runtime.ManagedMd5Test", "thc.WindowsDistributionTest",
+                "thc.WindowsDistributionTest",
                 "thc.runtime.WindowsSulongLibraryLookupTest",
                 "thc.runtime.NarrowReturnedPointerTest"].each { includeTestsMatching(it) }
         }

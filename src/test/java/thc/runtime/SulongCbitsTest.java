@@ -9,7 +9,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -92,18 +91,6 @@ public class SulongCbitsTest {
                 var cbits = Language.currentState().cbits(); var bytes = new byte[96]; var first = ManagedAddress.fromByteArray(bytes); var owner = cbits.buffer(first, true);
                 assertSame(owner, cbits.buffer(ManagedAddress.fromByteArray(bytes).plus(4), true)); assertNotSame(owner, cbits.buffer(ManagedAddress.fromByteArray(bytes.clone()), true));
                 assertFalse(InteropLibrary.getUncached().isBufferWritable(cbits.buffer(ManagedAddress.fromHex("00"), true)));
-                // C at offset zero sees byte storage, not struct members.
-                ManagedMd5.init(first); assertEquals((byte) 0x67, bytes[3]);
-            } finally { context.leave(); }
-        }
-    }
-    @Test public void nativeRuntimePermissionFailsBeforeGuestMemoryChanges() {
-        try (var context = Context.newBuilder("thc").build()) {
-            context.initialize("thc"); context.enter();
-            try {
-                var bytes = new byte[88]; Arrays.fill(bytes, (byte) 0xa5); var before = bytes.clone();
-                var error = assertThrows(RuntimeFault.class, () -> ManagedMd5.init(ManagedAddress.fromByteArray(bytes)));
-                assertTrue(Objects.toString(error.getMessage(), "").contains("native access")); assertArrayEquals(before, bytes);
             } finally { context.leave(); }
         }
     }

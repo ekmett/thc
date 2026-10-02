@@ -11,8 +11,6 @@ import thc.Language;
 import java.lang.foreign.*;
 import java.lang.ref.Reference;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.LongStream;
 import static org.junit.jupiter.api.Assertions.*;
@@ -210,49 +208,6 @@ public class NativePinnedStorageTest {
         assertEquals(bits, Objects.requireNonNull(storage.nativeSegment()).address());
         assertEquals(93L, storage.readByte(2));
         Reference.reachabilityFence(retainedBuffer[0]);
-    }
-    @Test
-    public void originalSulongMd5ReadsAndMutatesPinnedStorageWithoutChangingAnyAddress() throws Throwable {
-        assumeTrue(!System.getProperty("os.name").startsWith("Windows"), "Windows uses its native MD5 provider");
-        inside(() -> {
-            byte[] payload = "Native pinned storage stays shared across original C calls. ".repeat(3).getBytes(
-                StandardCharsets.US_ASCII);
-            var contextStorage = PinnedMemory.allocate(88, 64);
-            var inputStorage = PinnedMemory.allocate(payload.length + 16L, 64);
-            var outputStorage = PinnedMemory.allocate(16, 64);
-            inputStorage.fill(0, inputStorage.getSize(), 0x5a);
-            for (int index = 0; index < payload.length; index++) inputStorage.writeByte(index + 7L, payload[index]);
-            var context = ManagedAddress.fromGuestByteArray(contextStorage);
-            var input = ManagedAddress.fromGuestByteArray(inputStorage).plus(7);
-            var output = ManagedAddress.fromGuestByteArray(outputStorage);
-            var outputAlias = ManagedByteArray.freezeGuest(outputStorage);
-            var addresses = List.of(context, input, output);
-            var bits = addresses.stream().map(ManagedAddress::toNativeBits).toList();
-            var cbits = Language.currentState().cbits();
-            var outputBuffer = cbits.buffer(output, true);
-            var interop = InteropLibrary.getUncached();
-            assertTrue(interop.isPointer(outputBuffer));
-            assertEquals(bits.get(2).longValue(), interop.asPointer(outputBuffer));
-            cbits.init(context);
-            assertEquals(bits, addresses.stream().map(ManagedAddress::toNativeBits).toList());
-            cbits.update(context, input, 13);
-            assertEquals(bits, addresses.stream().map(ManagedAddress::toNativeBits).toList());
-            cbits.update(context, input.plus(13), payload.length - 13);
-            assertEquals(bits, addresses.stream().map(ManagedAddress::toNativeBits).toList());
-            cbits.finish(output, context);
-            assertEquals(bits, addresses.stream().map(ManagedAddress::toNativeBits).toList());
-            var expected = MessageDigest.getInstance("MD5").digest(payload);
-            byte[] guest = new byte[16], buffer = new byte[16];
-            for (int i = 0; i < 16; i++) guest[i] = (byte) ManagedByteArray.readGuest(outputAlias, i, true);
-            assertArrayEquals(expected, guest);
-            for (int i = 0; i < 16; i++) buffer[i] = interop.readBufferByte(outputBuffer, i);
-            assertArrayEquals(expected, buffer);
-            assertArrayEquals(
-                expected, Objects.requireNonNull(outputStorage.nativeSegment()).toArray(ValueLayout.JAVA_BYTE));
-            assertEquals(0x5aL, inputStorage.readByte(6));
-            assertEquals(0x5aL, inputStorage.readByte(payload.length + 7L));
-            Reference.reachabilityFence(addresses);
-        });
     }
     private void checkAtomicAliases(int width, AtomicIntArrayOp arrayOp, AtomicAddressOp addressOp) {
         var storage = PinnedMemory.allocate(width * 3L, 64);
