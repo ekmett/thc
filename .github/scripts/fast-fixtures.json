@@ -1618,8 +1618,8 @@
     "process-signals": {
       "junit": ["thc.runtime.ForkHostFailureTest", "thc.runtime.LoomSignalProcessTest", "thc.runtime.ProcessSignalsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "process-signals"]}],
-      "outputs": ["build/process-signals"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+      "outputs": ["build/process-signals/manifest.json", "build/process-signals/oracle.txt", "build/process-signals/native-controls.txt"],
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"]
     },
     "record-fields": {
       "junit": ["thc.runtime.RecordFieldNativeTest"],

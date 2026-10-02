@@ -55,6 +55,10 @@ try {
             'windowsSmokeTest', 'windowsDenseSmokeTest', '--rerun')
     }
     $focusedTests = @()
+    if ($Action -eq 'Test') {
+        Invoke-ThcTool $fixture @('tuple-arithmetic')
+        $focusedTests += @('thc.runtime.TupleArithmeticTest', 'thc.runtime.WordCarryTest')
+    }
     if ($Action -in @('Test', 'ArrayTest')) {
         Assert-ThcJava
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)

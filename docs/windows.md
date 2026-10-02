@@ -255,6 +255,17 @@ private DLL proof and unchanged executable Core segments. `Test` runs it too.
 modes; `MallocTest` checks allocation and returned pointers. These supplement the
 ordinary `Test` action.
 
+`Test` also prepares the original tuple-arithmetic fixture with the native
+PowerShell exporter, pre/post-tidy Core audits and a fresh GHC executable oracle.
+It runs the whole `thc.runtime.TupleArithmeticTest` and `thc.runtime.WordCarryTest`
+classes in both handoff modes. They check AST and bytecode results against native GHC and an independent
+integer model, including the original first compiled call controls. With those
+fixtures prepared, run the owning checks directly:
+
+~~~powershell
+./gradlew.bat --no-daemon --max-workers=4 --continue testDefault --tests thc.runtime.TupleArithmeticTest --tests thc.runtime.WordCarryTest testDense --tests thc.runtime.TupleArithmeticTest --tests thc.runtime.WordCarryTest
+~~~
+
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.
