@@ -13,6 +13,8 @@ import org.junit.jupiter.api.io.TempDir;
 import thc.Language;
 import thc.NativeIO;
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.ValueLayout;
 import java.nio.channels.ClosedChannelException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -24,15 +26,30 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Real opened FIFOs and private service protocol, not exported-Core or primop
  * admission proof. In particular these tests cannot replace the required exact
  * installed blockedOnBadFD payload and continuation-resumption fixture. */
-@EnabledOnOs(OS.LINUX)
-@EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
+@EnabledIf("supportedReadinessHost")
 @Timeout(40)
 class NativeFdWaitTest {
+    static boolean supportedReadinessHost() {
+        String os = System.getProperty("os.name"), arch = System.getProperty("os.arch");
+        return (os.equals("Linux") && Set.of("amd64", "x86_64").contains(arch)) ||
+            (os.equals("Mac OS X") && Set.of("x86_64", "aarch64", "arm64").contains(arch));
+    }
     @TempDir Path directory;
     private ManagedAddress path(Path path) { return ManagedAddress.fromByteArray((path + "\0").getBytes(StandardCharsets.UTF_8)); }
     private ManagedAddress bytes(byte... values) { return ManagedAddress.fromByteArray(values); }
+    private long openFlags(boolean writing) throws IOException {
+        var abi = StdioHostAbi.load();
+        return abi.flagConstant(writing ? OriginalStdioOp.O_WRONLY : OriginalStdioOp.O_RDONLY)
+            | abi.flagConstant(OriginalStdioOp.O_NONBLOCK);
+    }
     private long physicalDescriptors() throws IOException {
         long count = 0;
+        if (StdioHostAbi.load().librarySuffix().equals(".dylib")) {
+            try (var entries = Files.newDirectoryStream(directory)) {
+                for (var entry : entries) count += NativeOpenOperation.observe(2, entry.toString());
+            }
+            return count;
+        }
         try (var entries = Files.newDirectoryStream(Path.of("/proc/self/fd"))) {
             for (var entry : entries) try { if (Files.readSymbolicLink(entry).startsWith(directory)) count++; }
             catch (NoSuchFileException ignored) { }
@@ -47,8 +64,8 @@ class NativeFdWaitTest {
         var file = directory.resolve("pipe-" + System.nanoTime()); var process = new ProcessBuilder("mkfifo", file.toString()).start();
         assertTrue(process.waitFor(5, TimeUnit.SECONDS)); assertEquals(0, process.exitValue());
         return entered(context, () -> {
-            var io = Language.currentState(null).getStdio(); long read = io.open(path(file), 0x800, 0); // Linux O_RDONLY | O_NONBLOCK.
-            assertTrue(read >= 3); long write = io.open(path(file), 0x801, 0); assertTrue(write >= 3); return new Pipe(read, write);
+            var io = Language.currentState(null).getStdio(); long read = io.open(path(file), openFlags(false), 0);
+            assertTrue(read >= 3); long write = io.open(path(file), openFlags(true), 0); assertTrue(write >= 3); return new Pipe(read, write);
         });
     }
     private void awaitRegistered(ManagedFiles files, long fd) throws InterruptedException {
@@ -79,6 +96,28 @@ class NativeFdWaitTest {
                     return blocked.getRequest().getPayload() != null ? blocked.getRequest().getPayload() : thc.runtime.Unit.INSTANCE;
                 }
             } finally { state.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
+        }
+    }
+    @Test void privateWakeDrainsEverySignalAndClosesBothEnds() {
+        try (var arena = Arena.ofConfined()) {
+            var polls = arena.allocate(16, 4);
+            var value = arena.allocate(ValueLayout.JAVA_LONG);
+            value.set(ValueLayout.JAVA_LONG, 0, 1L);
+            var errors = arena.allocate(NativePollApi.CAPTURE);
+            try (var wake = NativePollApi.wake()) {
+                polls.set(ValueLayout.JAVA_INT, 0, wake.read());
+                polls.set(ValueLayout.JAVA_INT, 8, wake.write());
+                polls.set(ValueLayout.JAVA_SHORT, 4, (short) 1);
+                NativePollApi.signal(wake.write(), value, errors);
+                NativePollApi.signal(wake.write(), value, errors);
+                assertEquals(1, NativePollApi.poll(polls, 0, 2L));
+                NativePollApi.drain(wake.read(), value, errors);
+                assertEquals(0, NativePollApi.poll(polls, 0, 2L), "Reset must consume every queued wake");
+            }
+            polls.set(ValueLayout.JAVA_SHORT, 12, (short) 4);
+            NativePollApi.poll(polls, 0, 2L);
+            assertEquals(32, polls.get(ValueLayout.JAVA_SHORT, 6), "Read handle must be closed (POLLNVAL)");
+            assertEquals(32, polls.get(ValueLayout.JAVA_SHORT, 14), "Write handle must be closed (POLLNVAL)");
         }
     }
     @Test void originalDirectionTimeoutEofAndStickyErrnoUseActualFifoReadiness() throws Exception {
@@ -187,8 +226,8 @@ class NativeFdWaitTest {
                 });
                 files = service;
                 long read = entered(context, () -> {
-                    long descriptor = service.openOriginal(path(pipe), 0x800, 0, OriginalStdioOp.OPEN, null); assertTrue(descriptor >= 3);
-                    assertTrue(service.openOriginal(path(pipe), 0x801, 0, OriginalStdioOp.OPEN, null) >= 3); return descriptor;
+                    long descriptor = service.openOriginal(path(pipe), openFlags(false), 0, OriginalStdioOp.OPEN, null); assertTrue(descriptor >= 3);
+                    assertTrue(service.openOriginal(path(pipe), openFlags(true), 0, OriginalStdioOp.OPEN, null) >= 3); return descriptor;
                 });
                 var token = entered(context, () -> service.waitToken(read, false));
                 var future = pool.submit(() -> entered(context, () -> {
