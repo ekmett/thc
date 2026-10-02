@@ -1,6 +1,7 @@
 # Descriptor readiness and waiting
 
-The Linux x86_64 native file provider supplies readiness for its owned resources.
+The Linux x86_64 and Darwin x86_64/arm64 native file providers supply readiness
+for their owned resources.
 `fdReady` uses this service; [waitRead# and waitWrite#](file-wait.md) additionally
 support resumable guest interruption. Opaque embedding streams have no readiness
 contract and return ENOTSUP.
@@ -10,10 +11,12 @@ and context disposal invalidate it and wake its waiters. Reusing the descriptor
 number cannot redirect a suspended wait to a new resource. Aliases have independent
 logical wait sets while sharing their open description.
 
-A physical wait owns a duplicated native lease and a private eventfd. Native
-`poll` waits for readiness or wakeup without busy polling. Safepoints and host
-cancellation wake it; resource cleanup closes both handles on every exit.
-No registry or IO monitor is held during the poll.
+A physical wait owns a duplicated native lease and a private wake descriptor:
+a Linux eventfd or a Darwin nonblocking pipe. Linux uses `poll`; Darwin uses
+`pselect$DARWIN_EXTSN` with dynamically sized descriptor sets because its `poll`
+and `kevent` can miss FIFO EOF. Neither path busy polls or imposes FD_SETSIZE. Safepoints and host
+cancellation wake it; resource cleanup closes the duplicate and every wake handle on exit.
+No registry or IO monitor is held during the native wait.
 
 Guest delivery is considered at a resumable blocking cut. Masked-interruptible
 waits permit delivery; uninterruptible masking defers it. Existing safe/unsafe
