@@ -1743,6 +1743,7 @@ def toolchain(root):
         "javaRelease": {"path": str(release), "sha256": digest(release)}}
     result["environment"] = {k: v for k, v in sorted(os.environ.items()) if k in
         ("THC_SOURCE_NOTES", "THC_CORE_OUT", "THC_GHC_OUT", "GHC", "GHC_PKG", "GHC_ENVIRONMENT",
+         "THC_INSTALLED_CORE_GHC", "THC_INSTALLED_CORE_GHC_PKG", "THC_INSTALLED_CORE_GHC_SOURCE",
          "GHCRTS", "CC", "CFLAGS", "CPATH", "LIBRARY_PATH", "LD_LIBRARY_PATH", "LANG", "LC_ALL")}
     return result
 

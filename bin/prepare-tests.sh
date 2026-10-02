@@ -5,8 +5,9 @@
 # Generate the real GHC inputs required by all JVM tests, from a fresh checkout.
 set -eu
 cd "$(dirname "$0")/.."
-cabal run exe:thc-primops -- coverage --check
-cabal run exe:thc-primops -- scalars
+. bin/toolchain.sh
+"${CABAL:-cabal}" run exe:thc-primops --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG" -- coverage --check
+"${CABAL:-cabal}" run exe:thc-primops --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG" -- scalars
 bin/build-compiler.sh
 python3 bin/prepare-io-main-pap.py
 python3 bin/prepare-floating-audit.py
@@ -25,8 +26,8 @@ python3 bin/prepare-empty-tuple-input-audit.py
 python3 bin/prepare-tuple-input-audit.py
 python3 bin/prepare-tuple-join-audit.py
 python3 bin/prepare-empty-join-input.py
-cabal build exe:thc-fixtures --offline
-fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
+"${CABAL:-cabal}" build exe:thc-fixtures --offline --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG"
+fixture_bin=$("${CABAL:-cabal}" list-bin exe:thc-fixtures --offline --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG")
 printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" backend-annotations
 "$fixture_bin" sum-join

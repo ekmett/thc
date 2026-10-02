@@ -38,7 +38,7 @@ def main():
     assert run([ghc,'--numeric-version'],text=True,capture_output=True).stdout.strip()=='9.14.1'
     assert run([pkg,'field','array','version','--simple-output'],text=True,capture_output=True).stdout.strip()=='0.5.8.0'
     run(['bin/build-compiler.sh'])
-    run(['cabal','run','exe:thc-primops','--','coverage'])
+    run([os.environ.get('CABAL','cabal'),'run','exe:thc-primops','--with-compiler='+ghc,'--with-hc-pkg='+pkg,'--','coverage'])
     inventory=json.loads((ROOT/'build/primop-coverage.json').read_text())
     signatures=[p for p in inventory['primitives'] if p['name'] in OPS]
     assert {p['name']:p['valueArity'] for p in signatures}=={'cloneArray#':3,'freezeArray#':4,'thawArray#':4}

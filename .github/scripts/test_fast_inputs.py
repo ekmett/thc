@@ -2191,7 +2191,10 @@ class ToolchainVersionTests(unittest.TestCase):
             release.write_text('JAVA_VERSION="25"\n')
             responses = ["9.14.1", "GHC package manager version 9.14.1", "",
                          repr([("Target platform", "x86_64-unknown-linux")]), str(libdir)]
-            with patch.dict(os.environ, {"JAVA_HOME": str(release.parent), "GHC_ENVIRONMENT": "-"}, clear=True), \
+            provider = {"THC_INSTALLED_CORE_GHC": "/full-core/bin/ghc",
+                        "THC_INSTALLED_CORE_GHC_PKG": "/full-core/bin/ghc-pkg",
+                        "THC_INSTALLED_CORE_GHC_SOURCE": "/configured-ghc"}
+            with patch.dict(os.environ, {"JAVA_HOME": str(release.parent), "GHC_ENVIRONMENT": "-", **provider}, clear=True), \
                     patch.object(cache, "command", side_effect=responses), \
                     patch.object(cache, "digest", wraps=cache.digest) as digest, \
                     patch.object(Path, "rglob", side_effect=AssertionError("Do not scan GHC")):
@@ -2200,6 +2203,7 @@ class ToolchainVersionTests(unittest.TestCase):
             self.assertEqual(result["version"], "9.14.1")
             self.assertEqual(result["target"], "x86_64-unknown-linux")
             self.assertNotIn("installedAbiSha256", result)
+            self.assertEqual(provider, {key: result["environment"].get(key) for key in provider})
 
     def test_wrong_ghc_version_fails_before_other_inspection(self):
         with patch.object(cache, "command", return_value="9.12.2") as command, \

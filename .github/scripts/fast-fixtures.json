@@ -263,25 +263,25 @@
   "groups": {
     "backend-annotations": {
       "junit": ["thc.CoreBackendPolicyTest"],
-      "commands": [{"argv": ["sh", "-c", "set -e; cabal build exe:thc-fixtures --offline; mkdir -p build; fixture_bin=$(cabal list-bin exe:thc-fixtures --offline); printf '%s\\n' \"$fixture_bin\" > build/thc-fixtures.path; \"$fixture_bin\" backend-annotations"]}],
+      "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; fixture_bin=$(\"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"); printf '%s\\n' \"$fixture_bin\" > build/thc-fixtures.path; \"$fixture_bin\" backend-annotations"]}],
       "outputs": ["build/thc-fixtures.path", "build/backend-annotations"],
       "sources": ["t/fixtures/compiler/BackendAnnotations.hs", "t/haskell-fixtures/BackendAnnotationFixtures.hs", "t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "src/compiler/THC/BackendAnnotations.hs", "src/compiler/THC/Plugin.hs", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/Encode.hs", "thc.cabal"]
     },
     "compact-model": {
       "junit": ["thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnixBatchTest", "thc.runtime.OriginalUnlinkTest"],
-      "commands": [{"argv": ["sh", "-c", "set -e; cabal build exe:thc-fixtures --offline; mkdir -p build; cabal list-bin exe:thc-fixtures --offline > build/thc-fixtures.path"]}],
+      "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; \"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
     },
     "process-lifecycle": {
       "junit": ["thc.runtime.CoreProcessForeignTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.ManagedProcessesTest", "thc.runtime.ProcessLifecycleCoreTest"],
-      "commands": [{"argv": ["sh", "-c", "case \"$(uname -s)-$(uname -m)\" in Linux-x86_64) cabal run exe:thc-fixtures --offline -- process-lifecycle ;; esac"]}],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -s)-$(uname -m)\" in Linux-x86_64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- process-lifecycle ;; esac"]}],
       "outputs": ["build/process-lifecycle/core"],
       "sources": ["t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c", "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java", "src/main/java/thc/runtime/ManagedProcessForeign.java", "src/main/java/thc/runtime/ManagedProcesses.java"]
     },
     "integer-simd": {
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
-      "commands": [{"argv": ["sh", "-c", "set -e; fixture_mode=; case \"$(uname -m)\" in arm64|aarch64) fixture_mode=--export-only ;; esac; cabal build exe:thc-fixtures --offline; fixture_bin=$(cabal list-bin exe:thc-fixtures --offline); for family in int8x16 int16x8 word16x8 word32x4; do \"$fixture_bin\" \"$family\" $fixture_mode; done"]}],
+      "commands": [{"argv": ["sh", "-c", "set -e; fixture_mode=; case \"$(uname -m)\" in arm64|aarch64) fixture_mode=--export-only ;; esac; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; fixture_bin=$(\"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"); for family in int8x16 int16x8 word16x8 word32x4; do \"$fixture_bin\" \"$family\" $fixture_mode; done"]}],
       "outputs": ["build/simd-int8x16", "build/simd-int16x8", "build/simd-word16x8", "build/simd-word32x4"],
       "sources": ["t/fixtures/compiler/SimdInt8X16.hs", "t/fixtures/compiler/SimdInt8X16Native.hs", "t/fixtures/compiler/SimdInt16X8.hs", "t/fixtures/compiler/SimdInt16X8Native.hs", "t/fixtures/compiler/SimdWord16X8.hs", "t/fixtures/compiler/SimdWord16X8Native.hs", "t/fixtures/compiler/SimdWord32X4.hs", "t/fixtures/compiler/SimdWord32X4Native.hs", "t/haskell-fixtures/IntegerSimdFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/test/java/thc/runtime/IntegerSimdModelTest.java", "src/test/java/thc/runtime/IntegerSimdModel.java"],
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int16x8/provenance.json').read_text())\nassert proof['nativeRows'] == 6032 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int8x16/provenance.json').read_text())\nassert proof['nativeRows'] == 9168 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word16x8/provenance.json').read_text())\nassert proof['nativeRows'] == 5116 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word32x4/provenance.json').read_text())\nassert proof['nativeRows'] == 4882 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
@@ -308,14 +308,14 @@
     },
     "simd-word32x4-bytearray": {
       "junit": ["thc.runtime.SimdWord32ByteArrayTest"],
-      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- word32x4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- word32x4-bytearray ;; esac"]}],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- word32x4-bytearray --export-only ;; *) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- word32x4-bytearray ;; esac"]}],
       "outputs": ["build/simd-word32x4-bytearray"],
       "sources": ["t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/SimdWord32X4ByteArray.hs", "t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs"],
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word32x4-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-int32x4-bytearray": {
       "junit": ["thc.runtime.SimdInt32ByteArrayTest"],
-      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- int32x4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- int32x4-bytearray ;; esac"]}],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- int32x4-bytearray --export-only ;; *) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- int32x4-bytearray ;; esac"]}],
       "outputs": ["build/simd-int32x4-bytearray"],
       "sources": ["t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/SimdInt32X4ByteArray.hs", "t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs"],
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int32x4-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
@@ -856,14 +856,14 @@
     },
     "simd-floatx4-bytearray": {
       "junit": ["thc.runtime.SimdFloatByteArrayTest"],
-      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- floatx4-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- floatx4-bytearray ;; esac"]}],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- floatx4-bytearray --export-only ;; *) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- floatx4-bytearray ;; esac"]}],
       "outputs": ["build/simd-floatx4-bytearray"],
       "sources": ["t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/SimdFloatX4ByteArray.hs", "t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs"],
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-floatx4-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 6720 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-doublex2-bytearray": {
       "junit": ["thc.runtime.SimdDoubleByteArrayTest"],
-      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) cabal run exe:thc-fixtures --offline -- doublex2-bytearray --export-only ;; *) cabal run exe:thc-fixtures --offline -- doublex2-bytearray ;; esac"]}],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- doublex2-bytearray --export-only ;; *) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- doublex2-bytearray ;; esac"]}],
       "outputs": ["build/simd-doublex2-bytearray"],
       "sources": ["t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/SimdDoubleX2ByteArray.hs", "t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs"],
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-doublex2-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 4384 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]

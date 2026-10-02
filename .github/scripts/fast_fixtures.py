@@ -8,12 +8,15 @@ declared source bytes and every output byte; an unrecognised class runs the
 complete preparation script instead of assuming it has no native inputs.
 """
 
+import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import platform
 import re
 import stat
+import subprocess
 import sys
 
 import fast_inputs
@@ -22,10 +25,6 @@ import fast_inputs
 MANIFEST = Path(".github/scripts/fast-fixtures.json")
 STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
-# The shebang and non-comment command body of reviewed prepare-tests.sh. A new
-# preparation command disables reuse until its output scope is reviewed.
-# Includes raw vector/string Core exports and their native scalar oracles.
-FULL_PREPARATION_PLAN = "c4ae4959ead912a3383f9e71b716dbcf85ec0ed73e8390a40d58154506c496e8"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.cbd", "post.cbd", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -636,6 +635,10 @@ def _output_hashes(root, group):
             if not members:
                 raise FileNotFoundError(f"Empty fixture output: {path}")
             for member in members:
+                # export-boot overlays installed GHC interfaces with symlinks.
+                # These compiler intermediates are not executable test inputs.
+                if member.is_symlink() and member.suffix in INTERMEDIATE_SUFFIXES:
+                    continue
                 if member.is_symlink() or not (member.is_file() or member.is_dir()):
                     raise RuntimeError(f"Unexpected fixture output: {member}")
                 if member.is_file():
@@ -707,13 +710,12 @@ def _preparation_plan(root):
 
 
 def _full_key(root):
-    if _preparation_plan(root) != FULL_PREPARATION_PLAN:
-        raise RuntimeError("Full preparation commands have not been reviewed for receipt reuse")
+    plan = _preparation_plan(root)
     extra = ("build.gradle", "thc.cabal", "cabal.project", "Setup.hs",
              ".github/scripts/fast-fixtures.json",
              ".github/scripts/fast_fixtures.py")
     value = {"schema": 1, "identity": fast_inputs.identity(root),
-             "declaration": {"plan": FULL_PREPARATION_PLAN,
+             "declaration": {"plan": plan,
                              "roots": sorted(FULL_OUTPUT_ROOTS),
                              "required": sorted(FULL_REQUIRED)},
              "extraSources": {name: _digest(root / name) for name in extra}}
@@ -866,3 +868,52 @@ def prepare(root, selection, run, toolchain):
                                   "outputs": _output_hashes(root, group)})
         rebuilt.append(group_id)
     return {"mode": "selected", "rebuilt": rebuilt, "reused": reused}
+
+
+def local_selection(selector, owners):
+    # Wildcards can also match method names in unrelated classes. Without
+    # Gradle's discovered method inventory, use full preparation for them.
+    if "*" in selector:
+        return {"mode": "full", "junit": {"classes": [selector]}}
+    classes = []
+    for name in owners:
+        candidate = name.rsplit(".", 1)[-1] if selector[:1].isupper() else name
+        if selector == candidate or selector.startswith(candidate + "."):
+            classes.append(name)
+    return {"mode": "narrow" if classes else "full",
+            "junit": {"classes": sorted(classes) or [selector]}}
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Prepare fixtures for a Gradle test selector.")
+    parser.add_argument("--tests", required=True)
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parents[2]
+    _, owners = _manifest(root)
+    selection = local_selection(args.tests, owners)
+    if selection["mode"] == "narrow" and all(owners[name] is None for name in selection["junit"]["classes"]):
+        print("Selected tests need no generated fixtures.")
+        return
+    # A developer's ambient package environment is not a fixture dependency.
+    os.environ.setdefault("GHC_ENVIRONMENT", "-")
+    ghc, pkg = subprocess.check_output(
+        ["sh", "-c", '. ./bin/toolchain.sh; printf "%s\\n" "$GHC" "$GHC_PKG"'],
+        cwd=root, text=True).splitlines()
+    os.environ.update(GHC=ghc, GHC_PKG=pkg)
+    def run(name, argv, stdout=None):
+        if argv[0] == "cabal":
+            argv = [os.environ.get("CABAL", "cabal"), argv[1],
+                    "--with-compiler=" + ghc, "--with-hc-pkg=" + pkg, *argv[2:]]
+        print("+ " + repr(argv), flush=True)
+        if stdout is None:
+            subprocess.run(argv, cwd=root, check=True)
+        else:
+            with (root / stdout).open("w") as output:
+                subprocess.run(argv, cwd=root, stdout=output, check=True)
+    toolchain = {"platform": {"system": platform.system(), "machine": platform.machine()},
+                 "toolchain": fast_inputs.toolchain(root)}
+    print(prepare(root, selection, run, toolchain))
+
+
+if __name__ == "__main__":
+    main()

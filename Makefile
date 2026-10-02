@@ -85,7 +85,11 @@ jar: check-java
 	./gradlew jar $(GRADLE_FLAGS)
 
 fixtures: check-java
+ifneq ($(strip $(TESTS)),)
+	GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' CABAL='$(CABAL)' python3 .github/scripts/fast_fixtures.py --tests '$(TESTS)'
+else
 	bin/prepare-tests.sh
+endif
 
 test: fixtures
 	./gradlew test $(GRADLE_FLAGS) $(if $(TESTS),--tests '$(TESTS)')

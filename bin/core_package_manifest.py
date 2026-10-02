@@ -36,7 +36,9 @@ def _compact_executable():
         if prepared.is_file():
             executable = prepared.read_text(encoding='utf-8').strip()
         else:
-            result = subprocess.run([os.environ.get('CABAL', 'cabal'), 'list-bin', 'exe:thc-compact', '--offline'],
+            result = subprocess.run([os.environ.get('CABAL', 'cabal'), 'list-bin', 'exe:thc-compact', '--offline',
+                                     '--with-compiler=' + os.environ.get('GHC', 'ghc'),
+                                     '--with-hc-pkg=' + os.environ.get('GHC_PKG', 'ghc-pkg')],
                                     cwd=root, capture_output=True, text=True, encoding='utf-8', timeout=60)
             if result.returncode:
                 raise ValueError('Cannot locate CBD inspector: ' + result.stderr.strip())
