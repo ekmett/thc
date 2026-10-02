@@ -22,11 +22,12 @@ import qualified Data.ByteString.Lazy as BL
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (isInfixOf)
 import System.Directory (createDirectory, createDirectoryIfMissing, createDirectoryLink,
-  doesDirectoryExist, doesFileExist, getTemporaryDirectory, removeFile, removePathForcibly)
-import System.Environment (getExecutablePath)
+  doesDirectoryExist, doesFileExist, getTemporaryDirectory, pathIsSymbolicLink, removeFile, removePathForcibly)
+import System.Environment (getEnvironment, getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>), takeDirectory)
 import System.IO (hClose, hPutStrLn, openTempFile, stderr)
+import System.Info (os)
 import qualified System.Process as Process
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
@@ -38,13 +39,26 @@ tests = TestLabel "driver test support" $ TestList
       projectPath <- newIORef ""
       let outside = root environment </> "outside"
       createDirectory outside
-      writeFile (outside </> "audit.json") "outside sentinel"
+      BL.writeFile (outside </> "audit.json") (encode (object
+        ["missingGlobals" .= [object ["id" .= ("outside sentinel" :: String)]]]))
       failure <- try $ withFixtureNamed environment "fixture" "project" $ \project -> do
         writeIORef projectPath project
         let output = takeDirectory project </> "output"
         createDirectory output
         BL.writeFile (output </> "audit.json") (encode audit)
-        createDirectoryLink outside (project </> "linked-store")
+        if os == "mingw32" then do
+          -- Junctions exercise the same no-traversal guard without requiring
+          -- Windows symlink privilege. Pass the path as data, not shell syntax.
+          variables <- getEnvironment
+          let process = (Process.proc "cmd.exe" ["/d", "/q", "/v:off"])
+                { Process.cwd = Just project
+                , Process.env = Just (("THC_TEST_AUDIT_STORE", outside) :
+                    filter ((/= "THC_TEST_AUDIT_STORE") . fst) variables) }
+          (status, _, diagnostic) <- Process.readCreateProcessWithExitCode process
+            "mklink /J linked-store \"%THC_TEST_AUDIT_STORE%\"\nexit\n"
+          assertEqual ("create external-store junction: " ++ diagnostic) ExitSuccess status
+        else createDirectoryLink outside (project </> "linked-store")
+        assertBool "external store is linked" =<< pathIsSymbolicLink (project </> "linked-store")
         assertFailure "original test failure"
       originalFailure failure
       project <- readIORef projectPath
