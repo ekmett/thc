@@ -263,9 +263,10 @@ ordinary `Test` action.
   symbol errors when those paths execute and do not restore retired overrides.
 - Genuine code-page Core uses the complete ordinary package provider, including
   GHC's MD5 imports. The isolated native ABI controls have their own fixture
-  provider. Keep both suites: the default-mode pre/AST wide conversion has exposed
-  an intermittent first-compiled-entry failure even with a valid compiled target.
-  An isolated diagnostic or dense-mode pass does not qualify that failed call.
+  provider. Keep both suites: the pre/AST wide conversion has exposed an
+  intermittent first-compiled-entry failure in default and dense modes, with a
+  valid compiled target before invocation. A pass in another run or handoff mode
+  does not qualify the failed call.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.
