@@ -117,6 +117,22 @@ class FastSelectionTest(unittest.TestCase):
         with self.assertRaisesRegex(select.SelectionError, "unmapped=.*NewTest"):
             select.groups(self.repo)
 
+    def test_group_repeats_only_mode_proof_and_keeps_full_suite_with_owner(self):
+        import fast_ci
+        handoff = "thc.runtime.HandoffTest"
+        proof = handoff + ".requestedModeReachesTestProcessAndContext"
+        with mock.patch.object(select, "groups", return_value={
+                "owner": [handoff, "example.SmokeTest"], "other": ["example.OtherTest"]}):
+            owner = select.group_selection(self.repo, "owner")
+            other = select.group_selection(self.repo, "other")
+        self.assertEqual(owner["junit"]["classes"], owner["junit"]["patterns"])
+        self.assertEqual(["example.OtherTest", handoff], other["junit"]["classes"])
+        self.assertEqual(["example.OtherTest", proof], other["junit"]["patterns"])
+        command = fast_ci.gradle_command(other)
+        self.assertEqual(2, command.count(proof))
+        self.assertNotIn(handoff, command)
+        self.assertEqual(2, fast_ci.gradle_command(owner).count(handoff))
+
     def test_no_diff_and_documentation_keep_nonempty_smoke(self):
         self.assertEqual("narrow", self.plan()["mode"])
         self.assertEqual([], self.plan()["haskell"]["suites"])

@@ -870,9 +870,13 @@ def group_selection(repo, name):
     selected = groups(repo)
     if name not in selected:
         raise SelectionError("Unknown CI group: " + name)
-    # This existing test independently proves each fork's actual handoff mode.
-    classes = sorted(set(selected[name]) | {"thc.runtime.HandoffTest"})
-    return dict(mode="narrow", runnable=True, junit=dict(classes=classes, patterns=classes))
+    # Repeat the process-mode proof, but run the full transport suite only in
+    # its owning group.
+    handoff = "thc.runtime.HandoffTest"
+    classes = sorted(set(selected[name]) | {handoff})
+    patterns = [c + ".requestedModeReachesTestProcessAndContext"
+                if c == handoff and c not in selected[name] else c for c in classes]
+    return dict(mode="narrow", runnable=True, junit=dict(classes=classes, patterns=patterns))
 
 
 def main():
