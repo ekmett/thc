@@ -226,11 +226,9 @@ jobs:
             bin/test-build-cbits.py \
             bin/test-core-managed-memory.py \
             bin/test-core-managed-files.py \
-            bin/test-core-md5-foreign.py \
             bin/test-core-package-manifest.py \
             bin/test-managed-mvar-fixtures.py \
             bin/test-managed-mvars.py \
-            bin/test-prepare-managed-md5.py \
             bin/test-synchronous-exception-fixtures.py; do
             python3 "$test"
             python3 -O "$test"
@@ -362,7 +360,6 @@ jobs:
             build/simd128-arrays/
             build/simd-wide-arrays/
             build/simd-arithmetic/
-            build/original-stack-formatter/
             build/original-posix-stat/
             build/original-posix-dup/
             build/original-rts-locks/

@@ -19,7 +19,7 @@ import Test.HUnit (Test (..), assertEqual)
 import TestSupport
 
 tests :: Env -> Test
-tests environment = TestLabel "public package arithmetic, text and memory" $ TestCase $ do
+tests environment = TestLabel "public package arithmetic, text, memory and lazy IO" $ TestCase $ do
   installedCore <- maybe "pinned" id <$> lookupEnv "THC_TEST_INSTALLED_CORE"
   installedGhc <- lookupEnv "THC_INSTALLED_CORE_GHC"
   installedPkg <- lookupEnv "THC_INSTALLED_CORE_GHC_PKG"
@@ -44,6 +44,7 @@ tests environment = TestLabel "public package arithmetic, text and memory" $ Tes
         -- Conversion keeps the low 64 bits; Int interprets the top bit as sign.
         , "([9223372036854775807,-9223372036854775808,-1,0,9223372036854775807,-9223372036854775808,65,-65],[0,18446744073709551615,0,65])"
         , "([233,128512,955,66,65],[128512,955,66],True)"
+        , "(0,17,1)"
         ]
   prepared <- runPreparation environment project command
   assertSuccess prepared

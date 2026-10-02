@@ -12,13 +12,11 @@ import org.graalvm.polyglot.io.ByteSequence;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.NativeContextExtension;
 import java.lang.foreign.MemorySegment;
-import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,12 +38,6 @@ public final class SulongCbits {
     private record ForeignLoad(ForeignBitcode declaration, FutureTask<Void> task) {}
     private final TruffleLanguage.Env env;
     private final InteropLibrary interop = InteropLibrary.getUncached();
-    private final boolean windows = System.getProperty("os.name").startsWith("Windows");
-    private final Object md5Lock = new Object();
-    private volatile Object library;
-    private volatile Object init;
-    private volatile Object update;
-    private volatile Object finish;
     private final FutureTask<Object> iconvTask;
     private final FutureTask<Object> waitStatusTask;
     private final CFinalizerFunction ownedFree = new CFinalizerFunction(this, "free", null);
@@ -131,21 +123,6 @@ public final class SulongCbits {
         String os = System.getProperty("os.name");
         if (!os.equals("Linux") && !os.startsWith("Mac")) throw fault("Original native iconv requires the Linux GNU or Darwin LP64 host ABI");
         return await(iconvTask);
-    }
-    private Object md5Function(String name) {
-        Object cached = switch (name) { case "init" -> init; case "update" -> update; case "finish" -> finish; default -> throw new AssertionError(name); };
-        if (cached != null) return cached;
-        synchronized (md5Lock) {
-            if (library == null) library = load("md5");
-            try {
-                return switch (name) {
-                    case "init" -> { if (init == null) init = interop.readMember(library, "thc_md5_init"); yield init; }
-                    case "update" -> { if (update == null) update = interop.readMember(library, "thc_md5_update"); yield update; }
-                    case "finish" -> { if (finish == null) finish = interop.readMember(library, "thc_md5_final"); yield finish; }
-                    default -> throw new AssertionError(name);
-                };
-            } catch (Exception failure) { throw rethrow(failure); }
-        }
     }
     private static boolean sameLink(ForeignBitcode first, ForeignBitcode second) {
         return first.getUnit().equals(second.getUnit()) && first.getModule().equals(second.getModule())
@@ -303,15 +280,6 @@ public final class SulongCbits {
         buffer = new CbitsBuffer(bytes, address.cbitsWritable(), () -> address.cbitsSize(), 0, image, nativeAddress);
         buffers.put(key, new WeakReference<>(buffer)); return buffer;
     }
-    private Object executeWithOwners(Object function, Object... arguments) {
-        try { return interop.execute(function, arguments); }
-        catch (Exception failure) { throw rethrow(failure); }
-        finally { for (Object argument : arguments) Reference.reachabilityFence(argument); }
-    }
-    private Object transport(ManagedAddress address) {
-        var pointer = NativeAddresses.current(null).transport(address);
-        return pointer != null ? pointer : buffer(address);
-    }
     public CbitsBuffer pointerTransport(ManagedAddress address) { return pointerTransport(address, true); }
     public CbitsBuffer pointerTransport(ManagedAddress address, boolean allowNativePointer) {
         address.requireByteRegion(0, false);
@@ -324,18 +292,6 @@ public final class SulongCbits {
         LongSupplier nativeAddress = allowNativePointer && owner != null && owner.hasNativeStorage() ? () -> address.toNativeBits() - address.cbitsOffset() : null;
         return new CbitsBuffer(address.cbitsBuffer(), address.cbitsWritable(),
             () -> address.cbitsSize(), address.cbitsOffset(), image, nativeAddress);
-    }
-    public void init(ManagedAddress context) {
-        if (windows) WindowsMd5.init(context);
-        else executeWithOwners(md5Function("init"), transport(context), context.cbitsOffset());
-    }
-    public void update(ManagedAddress context, ManagedAddress input, int length) {
-        if (windows) WindowsMd5.update(context, input, length);
-        else executeWithOwners(md5Function("update"), transport(context), context.cbitsOffset(), transport(input), input.cbitsOffset(), length);
-    }
-    public void finish(ManagedAddress output, ManagedAddress context) {
-        if (windows) WindowsMd5.finish(output, context);
-        else executeWithOwners(md5Function("finish"), transport(output), output.cbitsOffset(), transport(context), context.cbitsOffset());
     }
     public static SulongCbits current(Node node) { return Language.currentState(node).cbits(); }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }

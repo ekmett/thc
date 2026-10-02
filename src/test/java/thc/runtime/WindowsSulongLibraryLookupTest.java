@@ -100,7 +100,7 @@ class WindowsSulongLibraryLookupTest {
 
     @Test void packageDeclaredDllLoadingLeavesGuestFileAccessDenied() throws Exception {
         byte[] nativeLibrary;
-        try (var input = getClass().getResourceAsStream("/thc/cbits/md5.dll")) {
+        try (var input = getClass().getResourceAsStream("/thc/cbits/windows-malloc.dll")) {
             assertNotNull(input);
             nativeLibrary = input.readAllBytes();
         }

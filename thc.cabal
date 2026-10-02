@@ -434,8 +434,6 @@ extra-source-files:
   t/fixtures/compiler/OriginalStackDecoder.hs
   t/fixtures/compiler/OriginalStackDecoderNative.hs
   t/fixtures/compiler/OriginalStackProof.json
-  t/fixtures/compiler/OriginalStackFormatter.hs
-  t/fixtures/compiler/OriginalStackFormatterNative.hs
   t/fixtures/compiler/FileWaitAudit.hs
   t/fixtures/compiler/FileWaitNative.hs
   t/fixtures/compiler/OriginalFdReadyAudit.hs

@@ -13,15 +13,18 @@
 -- Executable for the @run-library-memory@ integration fixture.
 module Main (main) where
 
+import Control.Exception (evaluate)
 import Control.Monad.ST (ST, runST)
 import Data.Array.ST (STUArray, freeze, getElems, newListArray, thaw, writeArray)
 import Data.Array.Unboxed (UArray, elems)
 import Data.Char (chr, ord)
+import Data.IORef (modifyIORef', newIORef, readIORef)
 import qualified Data.ByteString as Bytes
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word8)
 import Foreign.Marshal.Array (withArray)
+import GHC.IO.Unsafe (unsafeDupableInterleaveIO)
 import Numeric.Natural (Natural)
 
 arrayCopies :: ([Word8], [Word8])
@@ -68,3 +71,12 @@ main = do
       middle = Text.take 3 (Text.drop 1 backwards)
   print (map ord (Text.unpack backwards), map ord (Text.unpack middle),
     Text.decodeUtf8 (Text.encodeUtf8 text) == text)
+  -- Discarding a lazy IO result must not perform its action; demanding another
+  -- result must perform its action. This is a single-thread demand check.
+  effects <- newIORef (0 :: Int)
+  _ <- unsafeDupableInterleaveIO (modifyIORef' effects (+ 100))
+  deferred <- unsafeDupableInterleaveIO (modifyIORef' effects (+ 1) >> pure (17 :: Int))
+  before <- readIORef effects
+  answer <- evaluate deferred
+  after <- readIORef effects
+  print (before, answer, after)

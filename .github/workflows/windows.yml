@@ -69,7 +69,6 @@ jobs:
             build/tuple-arithmetic/
             build/test-results/testDefault/
             build/test-results/testDense/
-            build/managed-md5-native*/
             build/generated/cbits/
             build/test-results/windows*SmokeTest/
             build/reports/tests/windows*SmokeTest/

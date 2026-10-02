@@ -37,7 +37,7 @@ public final class OriginalStdioChecks {
                 assertTrue(artifact.path().startsWith(base), "External executable CBD: " + artifact.path());
                 assertEquals(artifact.sha256(), artifactHashes.get(base.relativize(artifact.path()).toString()), "Uninventoried executable CBD");
             }
-            var owners = Set.of("GHC.Internal.Fingerprint", "GHC.Internal.System.Posix.Internals", "System.Posix.User");
+            var owners = Set.of("GHC.Internal.System.Posix.Internals", "System.Posix.User");
             var found = new HashSet<String>();
             var requiredUnits = new HashSet<String>();
             for (var record : directory.getModules()) if (owners.contains(record.getName())) {

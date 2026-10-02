@@ -105,14 +105,10 @@ class CompilerTargetTest(unittest.TestCase):
             root = Path(temporary) / "repo with spaces"
             reference = root / "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
             reference.mkdir(parents=True)
-            for name in build.PINNED:
-                path = reference / ("cbits" if name.endswith(".c") else "include") / name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes((build.ROOT / path.relative_to(root)).read_bytes())
-            source = root / "src/main/c/md5-api.c"
+            source = root / "src/main/c/package-pointer-api.c"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"/* synthetic ABI wrapper */\n")
-            for name in ("iconv-api.c", "package-pointer-api.c", "wait-status-api.c"):
+            for name in ("iconv-api.c", "wait-status-api.c"):
                 (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
             rts = root / "nih/pinned/ghc-9.14.1/rts"
             rts.mkdir(parents=True)

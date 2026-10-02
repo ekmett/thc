@@ -86,7 +86,6 @@ thc.runtime.Handoff
 thc.runtime.ManagedAddressRead
 thc.runtime.ManagedArray
 thc.runtime.ManagedMVar
-thc.runtime.ManagedMd5
 thc.runtime.ManagedMutVar
 thc.runtime.ManagedWeaks
 thc.runtime.PosixStat
@@ -197,7 +196,6 @@ thc.runtime.BytecodeProgram$3
 thc.runtime.BytecodeRoot$1
 thc.runtime.CompactExpression$1
 thc.runtime.CompactImageExpression$1
-thc.runtime.CoreMd5Foreign$1
 thc.runtime.CoreRepresentation$1
 thc.runtime.EnvironmentExpression$1
 thc.runtime.GuestThreadOps$1
@@ -208,7 +206,6 @@ thc.runtime.JavaScriptExpression$1
 thc.runtime.ManagedAllocation$1
 thc.runtime.ManagedFiles$1
 thc.runtime.ManagedMVars$1
-thc.runtime.Md5ForeignExpression$1
 thc.runtime.NativeUnix$1
 thc.runtime.PolyglotAccess$1
 thc.runtime.PolyglotExpression$1

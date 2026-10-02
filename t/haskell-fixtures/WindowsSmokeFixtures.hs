@@ -151,7 +151,7 @@ prepareWindowsBridge root = do
         "src/compiler/THC/Interface.hs","src/compiler/interface/Main.hs","etc/ghc/9.14.1/windows-ghc-internal.json",
         "src/driver/cbits/target-layout.c","bin/windows-common.ps1",
         "bin/audit-core.py","bin/core-capabilities.json","bin/core_original_foreign.py",
-        "bin/core_package_manifest.py","bin/core_md5_foreign.py",
+        "bin/core_package_manifest.py",
         "src/runtime/THC/Internal/Exception.hs","src/runtime/THC/Exception.hs"] ++
         ["src/driver/THC/Driver" </> path | path <- drivers,takeExtension path == ".hs"]
   inputHashes <- hashes root sources

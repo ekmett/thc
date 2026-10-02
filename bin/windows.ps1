@@ -37,9 +37,6 @@ try {
     if ($Action -in @('Fixtures', 'Test')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-smoke')
-        $python = if ($env:THC_PYTHON) { $env:THC_PYTHON } else { 'python' }
-        $clang = if ($env:THC_CLANG) { $env:THC_CLANG } else { 'clang' }
-        Invoke-ThcTool $python @('bin/prepare-managed-md5.py', '--cc', $clang)
     }
     if ($Action -in @('Test', 'NativeLinkTest')) {
         if (!$env:THC_TEST_ROOT) { $env:THC_TEST_ROOT = $root }

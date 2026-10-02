@@ -22,7 +22,6 @@ import shutil
 import sqlite3
 import tempfile
 import core_data_tags
-import core_md5_foreign
 import core_managed_files
 import core_original_foreign
 import core_package_manifest
@@ -1619,24 +1618,6 @@ class Audit:
             except ValueError as error:
                 self.issue('foreign-call', owner, path, str(error))
             return True
-        if isinstance(symbol, str) and symbol in core_md5_foreign.OPERATIONS:
-            try:
-                core_md5_foreign.validate(metadata, [self.expression_rep(arg) for arg in arguments],
-                                          expr[3], self.expression_rep(expr))
-                head = self.expression_rep(function)
-                if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or
-                        not function[1] or function[1] in bound or function[1] in self.bindings or
-                        not isinstance(head, dict) or set(head) != {'kind', 'primReps', 'evaluated'} or
-                        head['kind'] != 'closure' or head['primReps'] != ['BoxedRep (Just Lifted)'] or
-                        head['evaluated'] is not True):
-                    raise ValueError('Unresolved declared foreign variable required')
-                if symbol not in self.cap.get('managedForeignCalls', []):
-                    raise ValueError('Managed MD5 foreign-call capability disabled')
-                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
-            except ValueError as error:
-                self.issue('foreign-call', owner, path, str(error))
-            return True
-
         link = self.linked_foreign.get((target.get('unit'), symbol)) if isinstance(target, dict) else None
         if isinstance(link, dict) and symbol in link['symbols']:
             try:

@@ -2024,14 +2024,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
-    public static final class Md5Init {
-        @Specialization public static void apply(ManagedAddress context, Object state) {
-            ManagedByteArray.requireState(state);
-            ManagedMd5.init(context);
-        }
-    }
-
-    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalLocale {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
@@ -2313,22 +2305,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             long result = CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
             if (operation.getNarrowResult() != null) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
             else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-        }
-    }
-
-    @Operation
-    public static final class Md5Update {
-        @Specialization public static void apply(ManagedAddress context, ManagedAddress input, int length, Object state) {
-            ManagedByteArray.requireState(state);
-            ManagedMd5.update(context, input, length);
-        }
-    }
-
-    @Operation
-    public static final class Md5Final {
-        @Specialization public static void apply(ManagedAddress output, ManagedAddress context, Object state) {
-            ManagedByteArray.requireState(state);
-            ManagedMd5.finish(output, context);
         }
     }
 

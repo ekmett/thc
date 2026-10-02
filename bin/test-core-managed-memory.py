@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Precise pinned-memory, keepAlive and closed MD5 proof regressions; no guests."""
+"""Precise pinned-memory and keepAlive proof regressions; no guests."""
 import copy
 import importlib.util
 import json
@@ -50,9 +50,6 @@ PINNED = {
     'readIntOffAddr#': ([ADDRESS, INT, STATE], tup(STATE, INT)),
     'writeWord8OffAddr#': ([ADDRESS, INT, WORD8, STATE], STATE),
 }
-MD5 = {'__hsbase_MD5Init': [ADDRESS, STATE],
-       '__hsbase_MD5Update': [ADDRESS, ADDRESS, INT32, STATE],
-       '__hsbase_MD5Final': [ADDRESS, ADDRESS, STATE]}
 
 
 def binder(identity, proof):
@@ -129,18 +126,6 @@ def keep_alive(mode='direct', formal=STATE, returned=INT, result=INT, kept=ARRAY
     call = app(['prim', 'keepAlive#'], [var('kept', kept), var('state', STATE), expression], result,
                [kept['primReps'] == ['BoxedRep (Just Lifted)'], False, True])
     return wrapped(call, formals, result, extra), call, continuation
-
-
-def md5(symbol):
-    arguments = copy.deepcopy(MD5[symbol])
-    formals = [binder('p' + str(i), p) for i, p in enumerate(arguments)]
-    result = tup(STATE)
-    call = app(var('foreign-id', CLOSURE), [var(f['id'], f['rep']) for f in formals], result)
-    descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
-                      convention='ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
-                      argumentReps=[dict(p, evaluated=False) for p in arguments], resultRep=tup(STATE, evaluated=False))
-    call[6]['foreignCall'] = descriptor
-    return wrapped(call, formals, result), call, descriptor
 
 
 def check(module):
@@ -282,165 +267,6 @@ class ManagedMemoryProofTest(unittest.TestCase):
                 call[2].pop(); call[3].pop()
             self.rejected(module, 'primitive-arity')
 
-    def test_three_closed_md5_descriptors_accept_singleton_state_under_scalar_wrapper(self):
-        self.assertEqual(set(MD5), {name for name in CAP['managedForeignCalls']
-                                    if name.startswith('__hsbase_MD5')})
-        for symbol in MD5:
-            report = self.accepted(md5(symbol)[0])
-            self.assertEqual([], report['primitives'])
-            self.assertEqual(1, report['summary']['reachableBindings'])
-            self.assertEqual([], report['dependencies'])
-
-    def test_md5_capability_must_explicitly_enable_each_exact_symbol(self):
-        for symbol in MD5:
-            module, _, _ = md5(symbol)
-            self.accepted(module)
-            for missing_key in (False, True):
-                capabilities = copy.deepcopy(CAP)
-                if missing_key:
-                    del capabilities['managedForeignCalls']
-                else:
-                    capabilities['managedForeignCalls'].remove(symbol)
-                report = audit.Audit([('managed-memory.json', module)], capabilities).run(['root'])
-                self.assertFalse(report['accepted'], report)
-                self.assertEqual([], report['missingGlobals'], report)
-                self.assertTrue(any(i['code'] == 'foreign-call' and 'capability disabled' in str(i['detail'])
-                                    for i in report['issues']), report)
-
-    def test_forged_md5_descriptor_cannot_bypass_local_or_global_haskell_bindings(self):
-        for symbol in MD5:
-            self.accepted(md5(symbol)[0])
-            for scope in ('global', 'local', 'formal'):
-                module, call, _ = md5(symbol)
-                fields = [binder('arg' + str(i), p) for i, p in enumerate(MD5[symbol])]
-                body = app(['con', 'T1', 1, dict(rep=copy.deepcopy(CLOSURE))],
-                           [['void', dict(rep=copy.deepcopy(STATE))]], tup(STATE))
-                binding = dict(id='foreign-id', name=symbol, lifted=True, arity=len(fields),
-                               rep=copy.deepcopy(CLOSURE), expr=lam(fields, body, tup(STATE)))
-                if scope == 'global':
-                    module['bindings'].append(binding)
-                elif scope == 'local':
-                    root = module['bindings'][0]['expr']
-                    root[2] = ['let', False, [binding], root[2], dict(rep=copy.deepcopy(INT))]
-                else:
-                    module['bindings'][0]['expr'][1].append(binder('foreign-id', CLOSURE))
-                    module['bindings'][0]['arity'] += 1
-                descriptor = call[6].pop('foreignCall')
-                self.accepted(module)  # Genuine ordinary Haskell call is supported.
-                call[6]['foreignCall'] = descriptor
-                report = self.rejected(module, 'foreign-call')
-                self.assertTrue(any('Unresolved declared foreign variable' in str(i['detail'])
-                                    for i in report['issues']), report)
-                if scope == 'global':
-                    self.assertEqual(1, report['summary']['reachableBindings'])
-
-    def test_md5_heads_require_nonempty_unresolved_variables_with_exact_closure_proof(self):
-        for symbol in MD5:
-            self.accepted(md5(symbol)[0])
-            for proof in (None, LIFTED, ARRAY, dict(CLOSURE, evaluated=False), dict(CLOSURE, extra=True),
-                          dict(kind='unknown', primReps=None, evaluated=False), dict(CLOSURE, evaluated=1)):
-                module, call, _ = md5(symbol)
-                call[1] = ['var', 'foreign-id'] if proof is None else var('foreign-id', proof)
-                self.rejected(module, 'foreign-call')
-            module, call, _ = md5(symbol)
-            call[1][1] = ''
-            self.rejected(module, 'foreign-call')
-            module, call, _ = md5(symbol)
-            call[1][1] = None
-            report = check(module)
-            self.assertFalse(report['accepted'], report)
-            self.assertEqual([], report['missingGlobals'], report)
-            self.assertIn('foreign-call', {i['code'] for i in report['issues']}, report)
-            # A null Id also violates the ordinary expression grammar; it must
-            # still receive the closed-foreign diagnostic before that fallback.
-            module, call, _ = md5(symbol)
-            call[1] = ['lit', 'string-bytes', '00', dict(rep=copy.deepcopy(ADDRESS))]
-            self.rejected(module, 'foreign-call')
-
-    def test_md5_main_safe_and_descriptor_corruptions_are_specific_rejections(self):
-        for symbol in MD5:
-            self.accepted(md5(symbol)[0])
-            for mutation in ('main', 'safe', 'dynamic', 'data', 'schema-bool', 'schema-extra',
-                             'arity', 'supplied-arity', 'convention', 'declared-whnf'):
-                module, _, descriptor = md5(symbol)
-                if mutation == 'main': descriptor['target']['unit'] = 'main'
-                elif mutation == 'safe': descriptor['safety'] = 'safe'
-                elif mutation == 'dynamic': descriptor['target']['kind'] = 'dynamic'
-                elif mutation == 'data': descriptor['target']['isFunction'] = False
-                elif mutation == 'schema-bool': descriptor['schema'] = True
-                elif mutation == 'schema-extra': descriptor['unexpected'] = True
-                elif mutation == 'arity': descriptor['arity'] -= 1
-                elif mutation == 'supplied-arity': descriptor['suppliedArity'] -= 1
-                elif mutation == 'convention': descriptor['convention'] = 'stdcall'
-                else: descriptor['argumentReps'][0]['evaluated'] = True
-                self.rejected(module, 'foreign-call')
-
-    def test_md5_exact_actual_declared_and_singleton_state_shapes(self):
-        for symbol in MD5:
-            self.accepted(md5(symbol)[0])
-            for index in range(len(MD5[symbol])):
-                for site in ('actual', 'declared'):
-                    module, call, descriptor = md5(symbol)
-                    proof = call[2][index][2]['rep'] if site == 'actual' else descriptor['argumentReps'][index]
-                    proof['kind'] = 'unknown'
-                    self.rejected(module, 'foreign-call')
-                module, call, _ = md5(symbol)
-                call[3][index] = True
-                self.rejected(module, 'foreign-call')
-            for site in ('actual', 'declared'):
-                for wrong in (STATE, tup(), tup(STATE, STATE), tup(INT)):
-                    module, call, descriptor = md5(symbol)
-                    if site == 'actual': call[6]['rep'] = copy.deepcopy(wrong)
-                    else: descriptor['resultRep'] = dict(copy.deepcopy(wrong), evaluated=False)
-                    self.rejected(module, 'foreign-call')
-            for mutation in ('state-not-evaluated', 'declared-result-evaluated', 'declared-extra',
-                             'actual-extra', 'argument-metadata-missing', 'too-few', 'too-many'):
-                module, call, descriptor = md5(symbol)
-                if mutation == 'state-not-evaluated': call[6]['rep']['components'][0]['evaluated'] = False
-                elif mutation == 'declared-result-evaluated': descriptor['resultRep']['evaluated'] = True
-                elif mutation == 'declared-extra': descriptor['argumentReps'][0]['extra'] = 0
-                elif mutation == 'actual-extra': call[2][0][2]['rep']['extra'] = 0
-                elif mutation == 'argument-metadata-missing': call[2][0].pop()
-                elif mutation == 'too-few': call[2].pop(); call[3].pop()
-                else: call[2].append(literal()); call[3].append(False)
-                self.rejected(module, 'foreign-call')
-        for wrong in (INT, WORD, WORD8):
-            module, call, _ = md5('__hsbase_MD5Update')
-            call[2][2][2]['rep'] = copy.deepcopy(wrong)
-            self.rejected(module, 'foreign-call')
-
-    def test_unknown_and_missing_md5_descriptors_remain_exact_external_frontiers(self):
-        for symbol in MD5:
-            self.accepted(md5(symbol)[0])
-            for mode in ('missing', 'unknown', 'not-record'):
-                module, call, descriptor = md5(symbol)
-                if mode == 'missing': del call[6]['foreignCall']
-                elif mode == 'unknown': descriptor['target']['symbol'] = '__hsbase_MD5Other'
-                else: call[6]['foreignCall'] = None
-                report = check(module)
-                self.assertFalse(report['accepted'], report)
-                self.assertEqual(['foreign-id'], [g['id'] for g in report['missingGlobals']], report)
-                if mode == 'unknown':
-                    self.assertTrue(any(i['code'] == 'foreign-call' for i in report['issues']), report)
-                else:
-                    self.assertEqual([], report['issues'], report)
-
-    def test_ordinary_same_named_globals_are_traversed_not_intercepted(self):
-        for symbol in MD5:
-            # With no descriptor this is an ordinary user function, even if its
-            # exact id looks like one of the three C symbols.
-            call = app(var(symbol, CLOSURE), [literal()], INT)
-            target = dict(id=symbol, name=symbol, lifted=True, arity=1, rep=copy.deepcopy(CLOSURE),
-                          expr=lam([binder('x', INT)], literal(), INT))
-            module = wrapped(call, [], INT, [target])
-            report = self.accepted(module)
-            self.assertEqual(2, report['summary']['reachableBindings'])
-            self.assertEqual([symbol], [edge['dependency'] for edge in report['dependencies']])
-            target['expr'][2] = var('ordinary-body-missing', INT)
-            report = check(module)
-            self.assertFalse(report['accepted'], report)
-            self.assertEqual([], report['issues'], report)
-            self.assertEqual(['ordinary-body-missing'], [g['id'] for g in report['missingGlobals']], report)
 
 
 if __name__ == '__main__':
