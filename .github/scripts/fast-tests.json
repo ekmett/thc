@@ -1646,12 +1646,6 @@
     "t/haskell-fixtures/OriginalRtsLocksFixtures.hs": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"], "python": []
     },
-    "src/main/c/strerror-locale.c": {
-      "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": ["bin/test-build-cbits.py"]
-    },
-    "src/main/java/thc/runtime/ManagedStrerror.java": {
-      "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
-    },
     "t/fixtures/compiler/OriginalStrerrorNative.hs": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
     },

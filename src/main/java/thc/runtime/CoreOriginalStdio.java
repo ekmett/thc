@@ -32,7 +32,6 @@ public final class CoreOriginalStdio {
     public static NativeDirectoryStreams directories(Node node) { return NativeFileProvider.current().getDirectoryStreams(); }
     public static RtsFileLocks locks(Node node) { return Language.currentState(node).getRtsFileLocks(); }
     public static ManagedIconv iconv(Node node) { return Language.currentState(node).getIconv(); }
-    public static ManagedStrerror strerror(Node node) { return Language.currentState(node).getStrerror(); }
 
     private static void requireProof(boolean condition, String detail) {
         if (!condition) throw new RuntimeFault("Invalid original stdio call: " + detail);
@@ -43,7 +42,7 @@ public final class CoreOriginalStdio {
 
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     public static void validateScalarOperand(OriginalStdioOp operation, int index, CoreRepresentation lowered, CoreRepresentation stored) {
-        requireProof(operation.getUnixNative() || operation.getProcessIdentity() || operation == OriginalStdioOp.SET_ERRNO || operation.getEventDescriptor() || operation.getWaitStatus() || operation.getPathRemoval() || operation.getFlagConstant() || operation.getFcntl() || operation.getReadiness() || operation.getSeekConstant() || operation.getStat() || operation.getTermios() || operation.getSavedTermios() || operation.getReadImage() || operation.getPathStat() || operation.getPathMode() || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT || operation.getPathLink() || operation.getCurrentDirectory() || operation.getDirectoryStream() || operation == OriginalStdioOp.TCSETATTR || operation.getOpening() || operation.getIconv() || operation.getStrerror() || operation.getDuplication() || operation.getLocking(),
+        requireProof(operation.getUnixNative() || operation.getProcessIdentity() || operation == OriginalStdioOp.SET_ERRNO || operation.getEventDescriptor() || operation.getWaitStatus() || operation.getPathRemoval() || operation.getFlagConstant() || operation.getFcntl() || operation.getReadiness() || operation.getSeekConstant() || operation.getStat() || operation.getTermios() || operation.getSavedTermios() || operation.getReadImage() || operation.getPathStat() || operation.getPathMode() || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT || operation.getPathLink() || operation.getCurrentDirectory() || operation.getDirectoryStream() || operation == OriginalStdioOp.TCSETATTR || operation.getOpening() || operation.getIconv() || operation.getDuplication() || operation.getLocking(),
             "strict operand operation");
         var primitive = operation.getArguments().get(index);
         var kind = switch (primitive) { case null -> CoreKind.VOID; case "AddrRep" -> CoreKind.ADDRESS; default -> CoreKind.LONG; };

@@ -333,12 +333,6 @@ final class OriginalStdioExpression extends Expr {
             var outputCount = operands[4].executeRequiredAddress(frame);
             TupleResults.requireVoidCarrier(operands[5].execute(frame));
             result = CoreOriginalStdio.iconv(this).convert(handle, input, inputCount, output, outputCount);
-        } else if (operation == OriginalStdioOp.STRERROR) {
-            long error = readInteger(frame, 0);
-            var output = operands[1].executeRequiredAddress(frame);
-            long length = readInteger(frame, 2);
-            TupleResults.requireVoidCarrier(operands[3].execute(frame));
-            result = CoreOriginalStdio.strerror(this).call(error, output, length);
         } else if (operation.getProcessIdentity()) {
             TupleResults.requireVoidCarrier(operands[0].execute(frame));
             result = ProcessIdentity.query(this, operation);

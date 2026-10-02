@@ -7013,7 +7013,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     || originalStdio.getReadImage() || originalStdio.getPathStat() || originalStdio.getPathMode() || originalStdio == OriginalStdioOp.ACCESS
                     || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.getPathLink()
                     || originalStdio.getCurrentDirectory() || originalStdio.getDirectoryStream() || originalStdio == OriginalStdioOp.TCSETATTR
-                    || originalStdio.getOpening() || originalStdio.getIconv() || originalStdio.getStrerror() || originalStdio.getDuplication()
+                    || originalStdio.getOpening() || originalStdio.getIconv() || originalStdio.getDuplication()
                     || originalStdio.getLocking() || originalStdio.getUnixNative())
                 CoreOriginalStdio.validateScalarOperand(originalStdio, index, operand.proof(), lexicalProof(argument, scope));
             var integer = NarrowInteger.fromRep(originalStdio.getArguments().get(index));
@@ -7122,7 +7122,6 @@ public final class BytecodeProgram implements ExecutableProgram {
             else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result);
             else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.beginOriginalIconvClose(result);
             else if (originalStdio == OriginalStdioOp.ICONV) b.beginOriginalIconv(result, originalStdio);
-            else if (originalStdio == OriginalStdioOp.STRERROR) b.beginOriginalStrerror(result);
             else if (originalStdio.getEventPair() || originalStdio.getFcntl() || originalStdio.getReadiness() || originalStdio == OriginalStdioOp.LOCK) b.beginOriginalStdioReady(result, originalStdio);
             else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result);
             else if (originalStdio == OriginalStdioOp.TRUNCATE || originalStdio == OriginalStdioOp.DUP2) b.beginFileSetSize(result);
@@ -7184,7 +7183,6 @@ public final class BytecodeProgram implements ExecutableProgram {
             else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.endOriginalIconvOpen();
             else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.endOriginalIconvClose();
             else if (originalStdio == OriginalStdioOp.ICONV) b.endOriginalIconv();
-            else if (originalStdio == OriginalStdioOp.STRERROR) b.endOriginalStrerror();
             else if (originalStdio.getEventPair() || originalStdio.getFcntl() || originalStdio.getReadiness() || originalStdio == OriginalStdioOp.LOCK) b.endOriginalStdioReady();
             else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek();
             else if (originalStdio == OriginalStdioOp.TRUNCATE || originalStdio == OriginalStdioOp.DUP2) b.endFileSetSize();

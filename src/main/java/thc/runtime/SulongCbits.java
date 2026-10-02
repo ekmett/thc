@@ -45,8 +45,6 @@ public final class SulongCbits {
     private volatile Object update;
     private volatile Object finish;
     private final FutureTask<Object> iconvTask;
-    private final FutureTask<Object> strerrorTask;
-    private final FutureTask<Object> strerrorLocaleTask;
     private final FutureTask<Object> textTask;
     private final FutureTask<Object> waitStatusTask;
     private final FutureTask<Object> utf8Task;
@@ -70,8 +68,6 @@ public final class SulongCbits {
                 throw fault("Original C bitcode does not match this runtime platform");
         } catch (Exception failure) { throw rethrow(failure); }
         iconvTask = new FutureTask<>(() -> load("iconv"));
-        strerrorTask = new FutureTask<>(() -> load("strerror"));
-        strerrorLocaleTask = new FutureTask<>(() -> load("strerror-locale"));
         textTask = new FutureTask<>(() -> load("text"));
         waitStatusTask = new FutureTask<>(() -> load("wait-status"));
         utf8Task = new FutureTask<>(() -> load("bytestring-utf8"));
@@ -152,8 +148,6 @@ public final class SulongCbits {
         if (function.getSymbol().equals("free")) { Language.currentState(null).getNativeAllocations().free(address); return; }
         throw fault("Unsupported C finalizer");
     }
-    public Object strerrorLibrary() { return await(strerrorTask); }
-    public Object strerrorLocaleLibrary() { return await(strerrorLocaleTask); }
     public Object iconvLibrary() {
         if (!System.getProperty("os.name").equals("Linux")) throw fault("Original native iconv currently requires the Linux GNU LP64 host ABI");
         return await(iconvTask);

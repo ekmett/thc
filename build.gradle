@@ -1298,8 +1298,7 @@ def nativeExec = { Closure action ->
 }
 def compileCbits = tasks.register("compileCbits", Exec) {
     inputs.files("bin/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
-        "src/main/c/strerror-locale.c", "src/main/c/package-pointer-api.c",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c",
+        "src/main/c/package-pointer-api.c",
         "src/main/c/gmp-api.c", "src/main/c/windows-malloc.c",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/md5.c",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/md5.h")
@@ -1649,7 +1648,7 @@ if (windowsHost) {
         // Reject stale resources copied from a build for a different host, too.
         exclude { !it.isDirectory() && it.path.startsWith("thc/native/") &&
             it.path !in ["thc/native/windows-directory-abi.json", "thc/native/stdio-host-abi.json"].toSet() }
-        exclude("thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
+        exclude("thc/cbits/iconv.bc", "thc/cbits/*.so")
         exclude("thc/cbits/windows-malloc-probe.exe")
     }
 } else {

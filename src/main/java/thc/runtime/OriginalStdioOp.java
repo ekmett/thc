@@ -309,7 +309,6 @@ public enum OriginalStdioOp {
     public boolean getPathStat() { return this == STAT || this == LSTAT || this == UNIX_LSTAT; }
     public boolean getReadImage() { return this == FSTAT || this == TCGETATTR; }
     public boolean getIconv() { return this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV; }
-    public boolean getStrerror() { return this == STRERROR; }
     public boolean getTermios() { return this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC ||
         this == SIZEOF_TERMIOS || this == ECHO || this == ICANON || this == VMIN || this == VTIME || this == TCSANOW ||
         this == SIZEOF_SIGSET || this == SIGTTOU || this == SIG_BLOCK || this == SIG_SETMASK; }
