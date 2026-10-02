@@ -86,9 +86,35 @@ public final class ForeignExceptionFixtureSupport {
      * declarations, and only the reachable genuine exception helpers are added.
      * Link the native owners in the entered context, as Language.instantiate does. */
     public static Map<String, Object> nativeModules(List<Map<String, Object>> modules) throws Exception {
-        var available = new HashSet<String>();
         var directory = CoreUnitDirectory.read((Map<?, ?>) Json.parse(Files.readString(
             root.toPath().resolve((String) manifest().get("packageManifest")))));
+        return nativeModules(modules, directory, nativeRuntime());
+    }
+    /** Use the caller's acquired runtime instead of requiring the polyglot fixture corpus. */
+    public static Map<String, Object> nativeModules(List<Map<String, Object>> modules, java.nio.file.Path packageManifest) throws Exception {
+        var directory = CoreUnitDirectory.read((Map<?, ?>) Json.parse(Files.readString(packageManifest)));
+        var owners = directory.getModules().stream().filter(module -> module.name().equals("THC.Internal.Exception") &&
+            module.unit().equals(directory.getForeignExceptionBridgeUnit())).toList();
+        if (owners.size() != 1) throw new IllegalArgumentException("Missing or ambiguous acquired THC.Exception runtime owner");
+        Map<String, Object> proof;
+        try (var sources = directory.open(true, false)) {
+            var owner = owners.getFirst();
+            sources.verifyModule(owner);
+            proof = new CoreModuleAdmission(sources.metadata(owner), sources::binding).getBridge();
+        }
+        if (proof == null) throw new IllegalArgumentException("Acquired runtime has no genuine exception bridge");
+        String entry = (String) proof.get("box");
+        var request = (Map<String, Object>) Json.parse(CoreModules.request(List.of("@" + packageManifest),
+            entry, false, false, "ast", false, true, (String) proof.get("project"), null, true));
+        var selected = CoreModules.selectedModules(request, entry);
+        var runtime = new LinkedHashMap<>(CoreModules.merge((List<Map<String, Object>>) selected.get("modules")));
+        runtime.put("foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit());
+        runtime.put("targetLayout", directory.getTargetLayout().document());
+        return nativeModules(modules, directory, runtime);
+    }
+    private static Map<String, Object> nativeModules(List<Map<String, Object>> modules,
+            CoreUnitDirectory directory, Map<String, Object> runtime) throws Exception {
+        var available = new HashSet<String>();
         for (var original : directory.getModules()) available.add(original.unit() + ":" + original.name());
         var merger = new CoreModules.Merger(available);
         for (var original : directory.getModules()) if (original.packageScalarDeclarations()) {
@@ -100,7 +126,6 @@ public final class ForeignExceptionFixtureSupport {
                 if (admission != null) merger.addPackageProvenance(admission);
             }
         }
-        var runtime = nativeRuntime();
         var proof = CoreForeignExceptionBridge.select(runtime);
         var helpers = new LinkedHashMap<>(CoreModules.reachable(runtime,
             List.of((String) proof.get("box"), (String) proof.get("project")), true));

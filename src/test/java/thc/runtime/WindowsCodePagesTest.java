@@ -153,7 +153,8 @@ class WindowsCodePagesTest {
         catch (RuntimeException | Error failure) { context.leave(); throw failure; }
     }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> module) throws Exception {
-        module = ForeignExceptionFixtureSupport.nativeModules(List.of(module));
+        module = ForeignExceptionFixtureSupport.nativeModules(List.of(module),
+            root.toPath().resolve((String) receipt().get("packageManifest")));
         return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
     }
     private ManagedAddress buffer(int size, long fill, boolean pinned) {
@@ -530,6 +531,13 @@ class WindowsCodePagesTest {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             var language = enter(context);
             try {
+                var missingSupport = OriginalStdioChecks.rawModule(original("ansiPage"), source(), null);
+                missingSupport.put("packageScalarLinks", List.of(provider()));
+                var missing = assertThrows(RuntimeFault.class, () -> {
+                    if (backend.equals("ast")) new Program(language, missingSupport, false, false);
+                    else new BytecodeProgram(language, missingSupport);
+                });
+                assertTrue(missing.getMessage().contains("linked genuine THC.Exception runtime bundle"));
                 var target = program(language, backend, OriginalStdioChecks.rawModule(call, source(), null)).entryTarget("entry");
                 var output = buffer(18);
                 assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[] {0L, 932L, output, 7L}));

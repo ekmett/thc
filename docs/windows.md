@@ -179,6 +179,10 @@ access. Directory calls and encoding calls share the context's captured Windows
 last-error slot. The original errno slot remains separate.
 GetACP uses ordinary package linkage and requires its original native provider;
 extracting its declaration's Core alone does not supply that provider.
+The code-page producer also acquires the registered `thc:runtime` component
+through the driver's normal Windows acquisition path and records its package
+manifest and CBD hashes. The consumers link the validated exception helpers
+from that bundle; they do not depend on the separate polyglot fixture corpus.
 
 ~~~powershell
 ./bin/windows.ps1 -Action CodePageTest -Jobs 4

@@ -99,7 +99,7 @@ try {
         Invoke-ThcTool $fixture @('windows-codepages')
         $focusedTests += 'thc.runtime.WindowsCodePagesTest'
     }
-    if ($Action -in @('Test', 'CodePageTest', 'WindowsServicesTest')) {
+    if ($Action -in @('Test', 'WindowsServicesTest')) {
         Invoke-ThcTool $fixture @('foreign-exceptions')
     }
     if ($focusedTests.Count) {
