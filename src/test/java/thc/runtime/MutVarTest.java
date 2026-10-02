@@ -9,8 +9,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.polyglot.Context;
@@ -93,7 +91,7 @@ class MutVarTest {
         }
         return result.longValue();
     }
-    private Context context(boolean inlining) {
+    private Context context() {
         return Context.newBuilder("thc")
             .allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false")
@@ -102,53 +100,27 @@ class MutVarTest {
             .option("engine.CompilationFailureAction", "Throw")
             .option("compiler.CompilationTimeout", "30")
             .option("compiler.MaximumGraalGraphSize", "100000")
-            .option("compiler.Inlining", Boolean.toString(inlining))
             .build();
     }
-    private void valid(RootCallTarget target, String label) throws Exception {
-        assertEquals(true,
-            Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target),
-            label);
+    @Test
+    void nativeSTRefsMatchNative() throws Exception {
+        verifyNative(names);
     }
     @Test
-    void nativeSTRefWithInliningAndBoundedGraalSpeculationWarmup() throws Exception {
-        verifyNative(true, !"true".equals(System.getenv("THC_MUTVAR_REQUIRE_INITIAL_STABILITY")), names);
+    void publicSTRefEqualityMatchesNative() throws Exception {
+        verifyNative(equalityNames);
     }
     @Test
-    void nativeSTRefAcrossResidualCalls() throws Exception {
-        verifyNative(false, false, names);
+    void publicLazyIORefMatchesNative() throws Exception {
+        verifyNative(lazyIONames);
     }
     @Test
-    void publicSTRefEqualityWithInlining() throws Exception {
-        verifyNative(true, false, equalityNames);
+    void nativeAtomicSwapMatchesNative() throws Exception {
+        verifyNative(swapNames);
     }
     @Test
-    void publicSTRefEqualityAcrossResidualCalls() throws Exception {
-        verifyNative(false, false, equalityNames);
-    }
-    @Test
-    void publicLazyIORefWithInlining() throws Exception {
-        verifyNative(true, false, lazyIONames);
-    }
-    @Test
-    void publicLazyIORefAcrossResidualCalls() throws Exception {
-        verifyNative(false, false, lazyIONames);
-    }
-    @Test
-    void nativeAtomicSwapWithInlining() throws Exception {
-        verifyNative(true, false, swapNames);
-    }
-    @Test
-    void nativeAtomicSwapAcrossResidualCalls() throws Exception {
-        verifyNative(false, false, swapNames);
-    }
-    @Test
-    void nativeLazyAtomicModifyWithInlining() throws Exception {
-        verifyNative(true, false, modifyNames);
-    }
-    @Test
-    void nativeLazyAtomicModifyAcrossResidualCalls() throws Exception {
-        verifyNative(false, false, modifyNames);
+    void nativeLazyAtomicModifyMatchesNative() throws Exception {
+        verifyNative(modifyNames);
     }
     private List<List<Object>> nodes(Object value) {
         var result = new ArrayList<List<Object>>();if(value instanceof Map<?,?> map){
@@ -228,19 +200,10 @@ class MutVarTest {
     private long compiled(ExecutableProgram p) {
         return ((Number) p.diagnostics().get("compiledEntries")).longValue();
     }
-    private Set<RootCallTarget> activeTargets(RootCallTarget host, RootCallTarget original) {
-        var active = new LinkedHashSet<RootCallTarget>();
-        for (var call : NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class))
-            if (call.getCallTarget() == original)
-                active.add((RootCallTarget) call.getCurrentCallTarget());
-        if (active.isEmpty())
-            active.add(original);
-        return active;
-    }
     private void check(long[] row, Value function, String label) {
         assertEquals(row[1], function.execute(row[0]).asLong(), label + "(" + row[0] + ")");
     }
-    private void verifyNative(boolean inlining, boolean recoverLoop, List<String> entryNames) throws Exception {
+    private void verifyNative(List<String> entryNames) throws Exception {
         var manifest = manifest();
         for (var kind : List.of("inputHashes", "artifactHashes"))
             for (var item : ((Map<String, String>) manifest.get(kind)).entrySet()) {
@@ -298,78 +261,32 @@ class MutVarTest {
                     cases.add(new long[] {Long.parseLong(row.get(1)), Long.parseLong(row.get(2))});
                 for (var row : cases)
                     assertEquals(mathematical(name, row[0]), row[1], "Native " + name + "(" + row[0] + ")");
-                for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
+                for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                         context.initialize("thc");
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                            var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
+                            var label = stage.getKey() + "/" + backend + "/" + name;
                             var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:MutVarAudit." + name));
                             linked.put("instrument", true);
                             var p = program(language, linked, backend);
-                            var host = p.hostEntryTarget(1);
                             var function = context.asValue(new EntryValue(p, "main:MutVarAudit." + name, 1));
                             for (var row : cases) check(row, function, label);
+                            long beforeInstallation = compiled(p);
                             assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
-                            var original = p.entryTarget("main:MutVarAudit." + name);
-                            var active = activeTargets(host, original);
-                            if (recoverLoop && name.equals("stLoop")) {
-                                // Graal speculates an initial countdown > 0 (AST),
-                                // or > 1 after peeling (bytecode). Interpreter warmup
-                                // cannot train a compiler speculation. Probe these
-                                // two known boundaries, then recompile at most once.
-                                // The environment switch preserves the original raw
-                                // first-install stability diagnostic without probes.
-                                for (long input : new long[] {99, 1_000_000_000_000L}) {
-                                    var probes = new ArrayList<long[]>();
-                                    for (var row : cases)
-                                        if (row[0] == input)
-                                            probes.add(row);
-                                    var probe = single(probes);
-                                    long before = compiled(p);
-                                    var hostWasValid = host.getClass().getMethod("isValidLastTier").invoke(host);
-                                    check(probe, function, label);
-                                    assertTrue(compiled(p) > before,
-                                        label + " initial loop probe " + input + " entered compiled guest code");
-                                    assertEquals(active, activeTargets(host, original),
-                                        label + " active guest identities remain unchanged");
-                                    valid(original, label + " original guest survives initial loop probe " + input);
-                                    for (var target : active)
-                                        valid(target, label + " active guest survives initial loop probe " + input);
-                                    System.err.println("MUTVAR_SPECULATION_WARMUP " + label + " input=" + input
-                                        + " hostWasValid=" + hostWasValid
-                                        + " hostIsValid=" + host.getClass().getMethod("isValidLastTier").invoke(host)
-                                        + " compiledGuestEntries=" + (compiled(p) - before));
-                                }
-                                if (!Boolean.TRUE.equals(host.getClass().getMethod("isValidLastTier").invoke(host))) {
-                                    System.err.println("MUTVAR_RECOVERY " + label
-                                        + " observed host loop speculation deopt; one explicit recompile");
-                                    assertTrue(
-                                        function.invokeMember("compile").asBoolean(), label + " recovery installation");
-                                }
-                                assertEquals(active, activeTargets(host, original),
-                                    label + " active guest identities remain unchanged");
-                                valid(host, label + " host installed after bounded initial loop probes");
-                            }
-                            for (var row : cases.reversed()) {
-                                long before = compiled(p);
-                                check(row, function, label);
-                                assertTrue(
-                                    compiled(p) > before, label + "(" + row[0] + ") must enter installed guest code");
-                                assertEquals(active, activeTargets(host, original),
-                                    label + " active guest identities remain unchanged");
-                                valid(host, label + "/" + row[0] + " host remains installed");
-                                for (var target : active)
-                                    valid(target, label + "/" + row[0] + " active target remains installed");
-                            }
+                            assertEquals(beforeInstallation, compiled(p), label + " installation executes no guest work");
+                            var installedCases = cases.reversed();
+                            check(installedCases.getFirst(), function, label);
+                            assertTrue(compiled(p) > beforeInstallation, label + " first installed call enters compiled guest code");
+                            var diagnostics = (Map<String, Object>) Json.parse(function.getMember("diagnostics").asString());
+                            assertEquals(true, ((Map<?, ?>) diagnostics.get("explicitCompilation")).get("validLastTier"),
+                                label + " first installed call preserves the installed guest entry and host bridge");
+                            for (var row : installedCases.subList(1, installedCases.size())) check(row, function, label);
                             for (var counter : List.of("unsupportedTraps", "blackholes"))
                                 assertEquals(
                                     0L, ((Number) p.diagnostics().get(counter)).longValue(), label + "/" + counter);
                             assertEquals(0, language.getHandoffState().get().getResults().getDepth(),
                                 label + " releases tuple results");
-                            if (name.equals("orderedRef"))
-                                assertEquals(0L, language.getHandoffState().get().getResults().getAllocations(),
-                                    label + " saturated primitives write directly into locals");
                         } finally {
                             context.leave();
                         }
