@@ -306,7 +306,6 @@ public final class ManagedProcesses implements Closeable {
         }
         try {
             while (true) {
-                if (beforeBlock != null) beforeBlock.run();
                 int readiness = wait.await(node, -1, beforeBlock)[0];
                 synchronized (child) {
                     if (child.closed || (readiness & 32) != 0) throw propagate(new ClosedChannelException());
