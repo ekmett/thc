@@ -156,7 +156,7 @@ prepareOriginalRtsLocks root requireSupported = do
         adapted = optimized { mg_binds = [NonRec v body | (v,body) <- guests],
                               mg_exports = filter (\a -> availName a `elem` map (varName . fst) guests) (mg_exports optimized) }
         actualCalls = [v | (_,body) <- guests, v <- variables body, isFCallId v]
-    liftIO $ unless (length actualCalls == 2 && all (`elem` originals) actualCalls)
+    liftIO $ unless (all (`elem` actualCalls) originals && all (`elem` originals) actualCalls)
       (die "Specialized consumer lost original Id membership")
     liftIO $ serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
     (tidied, _) <- liftIO $ hscTidy current adapted

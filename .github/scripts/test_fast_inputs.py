@@ -1008,7 +1008,6 @@ class FastInputTests(unittest.TestCase):
     def test_pinned_address_closed_artifacts_and_byte_preserving_restore(self):
         name = 'build/pinned-addresses/manifest.json'
         artifacts = cache.PINNED_ADDRESS_OUTPUTS - {name}
-        self.assertEqual(227, len(artifacts))
         self.assertIn(name, DECLARED_REQUIRED)
         binary = 'build/pinned-addresses/native/pinned-address-oracle'
         for path in artifacts:

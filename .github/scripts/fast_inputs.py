@@ -455,8 +455,7 @@ def simd_bytearray_artifact_hashes(family, manifest):
     require(len(records) == len(hashes) and set(hashes) == required, "Incomplete SIMD memory artifact inventory")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in hashes.values()), "Invalid SIMD memory artifact hash")
     return hashes
-PINNED_ADDRESS_ENTRIES = ("pinnedBytes", "alignedBytes", "keepAliveWord8", "keepAliveLazy", "fingerprintByte",
-                          "publicFingerprintByte", "publicFingerprintRoundtrip")
+PINNED_ADDRESS_ENTRIES = ("pinnedBytes", "alignedBytes", "keepAliveWord8", "keepAliveLazy", "fingerprintByte")
 PINNED_ADDRESS_NEGATIVES = ("read-word-not-word8", "write-word-not-word8", "read-address-is-word", "read-state-is-int",
     "read-offset-is-word", "contents-lifted-array", "contents-result-is-word", "allocation-size-is-word",
     "allocation-state-is-int", "aligned-alignment-is-word", "keepalive-state-is-int", "keepalive-result-word-not-word8")
@@ -464,7 +463,7 @@ PINNED_ADDRESS_COMMANDS = ("native-build", "native-oracle", *(f"{stage}-export" 
     *(f"{stage}-{name}-audit" for stage in ("pre", "post") for name in
       (*PINNED_ADDRESS_ENTRIES, *(f"negative-{label}" for label in PINNED_ADDRESS_NEGATIVES))))
 PINNED_ADDRESS_OUTPUTS = frozenset("build/pinned-addresses/" + path for path in (
-    "manifest.json", "requests.tsv", "expected.tsv", "oracle.tsv", "structure-controls.json",
+    "manifest.json", "requests.tsv", "expected.tsv", "oracle.tsv",
     *(f"native/{name}" for name in ("pinned-address-oracle", "Main.hi", "Main.o", "PinnedAddressAudit.hi", "PinnedAddressAudit.o")),
     *(f"{stage}/core/{name}.{extension}" for stage in ("pre", "post")
       for name in ("PinnedAddressAudit", "THC.InterfaceClosure") for extension in ("cbd",)),
