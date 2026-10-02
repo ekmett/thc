@@ -119,10 +119,15 @@ public final class SignedNarrowPrimopsTest {
             assertEquals(0L, count(function, "compiledEntries"), backend + " must remain interpreted before explicit compile");
             assertTrue(function.invokeMember("compile").asBoolean(), backend + " composite installation");
             long before = count(function, "compiledEntries");
+            boolean first = true;
             for (var entry : entries.reversed()) for (long[] row : cases.get(entry.get("name")).reversed()) {
                 check(function, backend, entry, row);
-                before = installed(function, before, backend + " " + entry.get("name"));
+                if (first) {
+                    before = installed(function, before, backend + " first compiled call");
+                    first = false;
+                }
             }
+            installed(function, before, backend + " native batch");
             assertEquals(0L, count(function, "unsupportedTraps"));
             assertEquals(0L, count(function, "blackholes"));
         }
@@ -171,14 +176,19 @@ public final class SignedNarrowPrimopsTest {
                 for (int pass = 0; pass < 2; pass++) {
                     if (pass == 1) assertTrue(function.invokeMember("compile").asBoolean());
                     long before = count(function, "compiledEntries");
+                    boolean first = pass == 1;
                     for (long[] pair : pairs) {
                         // Word-to-Int inputs use their unsigned public range; the model observes the same low bits.
                         long input = name.startsWith("word") && name.contains("ToInt") ? pair[0] & ((1L << width) - 1) : pair[0];
                         Object[] args = arity == 1 ? new Object[] {input} : new Object[] {input, pair[1]};
                         assertEquals(mathematical(name, width, pair[0], pair[1]), function.execute(args).asLong(),
                             backend + " raw " + name + "(" + pair[0] + ", " + pair[1] + "), pass " + pass);
-                        if (pass == 1) before = installed(function, before, backend + " raw " + name);
+                        if (first) {
+                            before = installed(function, before, backend + " raw " + name + " first compiled call");
+                            first = false;
+                        }
                     }
+                    if (pass == 1) installed(function, before, backend + " raw " + name + " batch");
                 }
             }
         }
