@@ -32,6 +32,8 @@
     "thc.runtime.EnabledCapabilitiesTest",
     "thc.runtime.SavedTermiosTest",
     "thc.runtime.TermiosAbiTest",
+    "thc.runtime.PosixStatAbiTest",
+    "thc.runtime.OriginalUnixBatchTest",
     "thc.runtime.NativeFileProviderTest",
     "thc.runtime.NativeDirectoryFileSystemTest",
     "thc.runtime.NativeDirectoryStreamsTest",
@@ -268,7 +270,7 @@
       "sources": ["t/fixtures/compiler/BackendAnnotations.hs", "t/haskell-fixtures/BackendAnnotationFixtures.hs", "t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "src/compiler/THC/BackendAnnotations.hs", "src/compiler/THC/Plugin.hs", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/Encode.hs", "thc.cabal"]
     },
     "compact-model": {
-      "junit": ["thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnixBatchTest", "thc.runtime.OriginalUnlinkTest"],
+      "junit": ["thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnlinkTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; \"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
@@ -480,10 +482,10 @@
       "sources": ["t/fixtures/compiler/OriginalProcessIdentityAudit.hs", "t/fixtures/compiler/OriginalProcessIdentityNative.hs", "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/cbits/target-layout.c", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java", "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs"]
     },
     "original-termios": {
-      "junit": ["thc.runtime.OriginalSavedTermiosTest", "thc.runtime.OriginalTermiosTest"],
+      "junit": ["thc.runtime.OriginalSavedTermiosTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],
       "outputs": ["build/original-termios"],
-      "sources": ["t/fixtures/compiler/OriginalTermiosAudit.hs", "t/fixtures/compiler/OriginalTermiosNative.hs", "t/fixtures/compiler/OriginalSavedTermiosAudit.hs", "t/fixtures/compiler/OriginalSavedTermiosNative.hs", "t/haskell-fixtures/OriginalTermiosFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalSavedTermiosAudit.hs", "t/fixtures/compiler/OriginalSavedTermiosNative.hs", "t/haskell-fixtures/OriginalTermiosFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "native-addresses": {
       "junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"],
@@ -572,7 +574,7 @@
       ]
     },
     "original-posix-stat": {
-      "junit": ["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalDirectoryStreamsTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.PosixStatAbiTest"],
+      "junit": ["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalDirectoryStreamsTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalUnlinkAtTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-stat"]}],
       "outputs": ["build/original-posix-stat", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams", "build/original-directory-paths"],
       "sources": ["t/fixtures/compiler/OriginalPosixStatAudit.hs", "t/fixtures/compiler/OriginalPosixStatNative.hs", "t/fixtures/compiler/OriginalPathStatAudit.hs", "t/haskell-fixtures/OriginalPathStatFixtures.hs", "t/fixtures/compiler/OriginalPathModeAudit.hs", "t/haskell-fixtures/OriginalPathModeFixtures.hs", "t/fixtures/compiler/OriginalPathLinkAudit.hs", "t/haskell-fixtures/OriginalPathLinkFixtures.hs", "t/haskell-fixtures/OriginalPosixStatFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/OriginalPathAccessAudit.hs", "t/haskell-fixtures/OriginalPathAccessFixtures.hs", "t/fixtures/compiler/OriginalUnlinkAtAudit.hs", "t/haskell-fixtures/OriginalUnlinkAtFixtures.hs", "t/fixtures/compiler/OriginalFstatAtAudit.hs", "t/haskell-fixtures/OriginalFstatAtFixtures.hs", "t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs", "t/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs", "t/fixtures/compiler/OriginalDirectoryStreamsAudit.hs", "t/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs", "t/fixtures/compiler/OriginalDirectoryPathsAudit.hs", "t/haskell-fixtures/OriginalDirectoryPathsFixtures.hs"]
@@ -1444,14 +1446,6 @@
         "bin/simd-families.json",
         "bin/generate-simd-families.py"
       ]
-    },
-    "unix-wait-status": {
-      "junit": ["thc.runtime.UnixWaitStatusTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "unix-wait-status"]}],
-      "outputs": ["build/unix-wait-status"],
-      "sources": ["t/fixtures/compiler/UnixWaitStatusAudit.hs", "t/haskell-fixtures/UnixWaitStatusFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
-        "src/main/c/wait-status-api.c", "bin/build-cbits.py"]
     },
     "unix-libc": {
       "junit": ["thc.runtime.UnixLibcTest"],

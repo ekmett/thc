@@ -35,7 +35,6 @@ printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" proxy-void
 "$fixture_bin" selector-proof
 "$fixture_bin" unix-libc
-"$fixture_bin" unix-wait-status
 "$fixture_bin" text-cbits
 "$fixture_bin" integer
 "$fixture_bin" bit

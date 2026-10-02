@@ -117,7 +117,6 @@ import LibyamlNativeFixtures (prepareLibyamlNative)
 import WcwidthFixtures (prepareWcwidth)
 import TextCbitsFixtures (prepareTextCbits)
 import UnixLibcFixtures (prepareUnixLibc)
-import UnixWaitStatusFixtures (prepareUnixWaitStatus)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
@@ -1049,7 +1048,6 @@ main = do
     ["wcwidth"] -> prepareWcwidth root
     ["text-cbits"] -> prepareTextCbits root
     ["unix-libc"] -> prepareUnixLibc root
-    ["unix-wait-status"] -> prepareUnixWaitStatus root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["original-termios"] -> prepareOriginalTermios root
     ["original-tcsetattr"] -> prepareOriginalTcsetattr root

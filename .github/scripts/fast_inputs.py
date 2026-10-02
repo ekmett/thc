@@ -62,7 +62,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/VectorMemory.java",
                   "src/test/java/thc/runtime/IntegerSimdModelTest.java",
                   "src/test/java/thc/runtime/IntegerSimdModel.java")
-MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -74,14 +74,6 @@ GC_CARRIER_OUTPUTS = frozenset("build/package-native-gc-carriers/" + name for na
     "primitive/PackageNativePrimCarriers.cbd", "primitive/PackageNativeUnknownPrim.cbd",
     "primitive/objects/PackageNativePrimCarriers.hi"))
 UNIX_LIBC_ENTRIES = ("unixClose", "unixDup", "unixIsatty", "unixGetenv")
-UNIX_WAIT_ENTRIES = tuple("wait" + name for name in (
-    "WCOREDUMP", "WSTOPSIG", "WIFSTOPPED", "WTERMSIG", "WIFSIGNALED", "WEXITSTATUS", "WIFEXITED"))
-UNIX_WAIT_OUTPUTS = frozenset("build/unix-wait-status/" + name for name in (
-    "manifest.json", "pre.cbd", "post.cbd", "oracle.tsv",
-    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in UNIX_WAIT_ENTRIES),
-    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
-      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in UNIX_WAIT_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json"))))
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in UNIX_LIBC_ENTRIES),
@@ -582,7 +574,6 @@ REQUIRED = tuple(sorted({
     *PROXY_VOID_OUTPUTS,
     *WEAK_OUTPUTS,
     *UNIX_LIBC_OUTPUTS,
-    *UNIX_WAIT_OUTPUTS,
     *(ORIGINAL_PATH_STAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_MODE_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_LINK_OUTPUTS if platform.system() == "Linux" else []),
@@ -652,7 +643,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/original-fcntl/native/oracle",
     "build/original-errno/native/oracle",
     "build/original-process-identity/native/oracle",
-    "build/original-termios/native/oracle",
     "build/original-tcsetattr/native/oracle",
     "build/original-tcgetattr/native/oracle",
     "build/original-sigprocmask/native/oracle",
@@ -799,19 +789,11 @@ ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for nam
       for suffix in ("stdout", "stderr", "command.json")),
 ))
 
-ORIGINAL_TERMIOS_ENTRIES = ("originalTermiosSize", "originalEcho", "originalIcanon", "originalVmin", "originalVtime",
-                          "originalTcsanow", "originalSigsetSize", "originalSigttou", "originalSigBlock", "originalSigSetmask",
-                          "originalLflag", "originalPokeLflag", "originalCC")
 ORIGINAL_SAVED_TERMIOS_ENTRIES = ("originalGetSavedTermios", "originalSetSavedTermios")
 ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"logs/{label}.{suffix}" for label in (
-        "ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_TERMIOS_ENTRIES))
+    "manifest.json",
+    *(f"logs/{label}.{suffix}" for label in ("ghc-version", "ghc-info")
       for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalTermiosAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        *(f"{entry}.audit.json" for entry in ORIGINAL_TERMIOS_ENTRIES))),
     "saved/oracle.json", "saved/native/oracle",
     *(f"logs/{label}.{suffix}" for label in (
         "saved-native-build", "saved-native-run", "saved-pre-export", "saved-post-export",
@@ -907,10 +889,9 @@ ORIGINAL_SIGSET_OUTPUTS = frozenset("build/original-sigset/" + name for name in 
         *(f"{entry}.audit.json" for entry in ORIGINAL_SIGSET_ENTRIES))),
 ))
 
-ORIGINAL_POSIX_STAT_ENTRIES = ("originalStatSize", "originalStatDev", "originalStatIno",
-                             "originalStatMode", "originalStatLength", "originalStatTypes", "originalFstat", "originalFstatErrno")
+ORIGINAL_POSIX_STAT_ENTRIES = ("originalFstat", "originalFstatErrno")
 ORIGINAL_POSIX_STAT_OUTPUTS = frozenset("build/original-posix-stat/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle", "native/sample.bin",
+    "manifest.json", "oracle.json", "native/oracle",
     *(f"logs/{label}.{suffix}" for label in (
         "ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_POSIX_STAT_ENTRIES))
@@ -1225,20 +1206,6 @@ def rts_diagnostic_artifact_hashes(manifest):
     return artifacts
 
 
-def unix_wait_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
-            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and
-            ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) is not None and
-            manifest.get("entries") == list(UNIX_WAIT_ENTRIES) and manifest.get("strictAccepted") is True and
-            type(manifest.get("nativeRows")) is int and manifest["nativeRows"] == 280,
-            "Invalid original Unix wait-status proof")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) == UNIX_WAIT_OUTPUTS - {"build/unix-wait-status/manifest.json"},
-            "Incomplete/unreviewed Unix wait-status artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid wait-status hash")
-    return artifacts
-
-
 def rts_shutdown_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid RTS shutdown manifest")
@@ -1309,11 +1276,11 @@ def termios_artifact_hashes(manifest):
     if not GMP_NATIVE_HOST:
         require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported termios host")
         return {}
-    require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_TERMIOS_ENTRIES) and
+    require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_SAVED_TERMIOS_ENTRIES) and
             manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
             manifest.get("installedArtifactsHashed") is False and
-            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 6,
-            "Invalid original termios proof")
+            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 28,
+            "Invalid original saved-termios proof")
     artifacts = manifest.get("artifactHashes")
     require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_TERMIOS_OUTPUTS - {"build/original-termios/manifest.json"},
             "Incomplete/unreviewed original termios artifacts")
@@ -1975,8 +1942,6 @@ def allowed_payload(name):
         return name in GC_CARRIER_OUTPUTS
     if parts[1] == "unix-libc":
         return name in UNIX_LIBC_OUTPUTS
-    if parts[1] == "unix-wait-status":
-        return name in UNIX_WAIT_OUTPUTS
     if parts[1] == "original-path-stat":
         return name in ORIGINAL_PATH_STAT_OUTPUTS
     if parts[1] == "original-path-mode":
@@ -2344,8 +2309,6 @@ def inventory(root, current, read, core_files, verified=None):
             original_directory_streams_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":
             rts_diagnostic_artifact_hashes(doc)
-        if name == "build/unix-wait-status/manifest.json":
-            unix_wait_artifact_hashes(doc)
         if name == "build/rts-shutdown/manifest.json":
             rts_shutdown_artifact_hashes(doc)
         if name == "build/original-rts-locks/manifest.json":

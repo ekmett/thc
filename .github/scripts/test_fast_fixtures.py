@@ -415,42 +415,6 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path) for path in outputs))
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/unix-libc/ghc/UnixLibcAudit.o"))
 
-    def test_unix_wait_status_cache_preserves_all_original_proofs(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        group = manifest['groups']['unix-wait-status']
-        cache = fast_fixtures.fast_inputs
-        self.assertEqual('unix-wait-status', owners['thc.runtime.UnixWaitStatusTest'])
-        self.assertEqual(72, len(cache.UNIX_WAIT_OUTPUTS))
-        self.assertTrue(cache.UNIX_WAIT_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
-        self.assertIn('build/unix-wait-status', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('"$fixture_bin" unix-wait-status', (project / 'bin/prepare-tests.sh').read_text().splitlines())
-        name = 'build/unix-wait-status/manifest.json'
-        artifacts = {}
-        for item in cache.UNIX_WAIT_OUTPUTS - {name}:
-            self.assertTrue(cache.allowed_payload(item), item)
-            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
-        for item in ('ghc/UnixWaitStatusAudit.o', 'private-core.json', 'logs/extra.stdout'):
-            self.assertFalse(cache.allowed_payload('build/unix-wait-status/' + item), item)
-        receipt = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-460b', strictAccepted=True,
-                       entries=list(cache.UNIX_WAIT_ENTRIES), nativeRows=280, artifactHashes=artifacts)
-        path = self.root / name; path.write_text(json.dumps(receipt))
-        self.assertEqual(cache.UNIX_WAIT_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
-        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABCD'),
-                        dict(unixUnit='unix-2.8.7.0-460b'), dict(entries=[]), dict(nativeRows=279),
-                        dict(strictAccepted=False), dict(artifactHashes=dict(artifacts, extra='a' * 64))):
-            with self.assertRaises(cache.CacheMiss): cache.unix_wait_artifact_hashes(dict(receipt, **changes))
-        for suffix in ('logs/unit.stdout', 'post-waitWCOREDUMP.audit.json', 'oracle.tsv'):
-            item = 'build/unix-wait-status/' + suffix
-            missing = dict(artifacts); del missing[item]
-            with self.assertRaises(cache.CacheMiss): cache.unix_wait_artifact_hashes(dict(receipt, artifactHashes=missing))
-            artifact = self.root / item; artifact.write_text('changed')
-            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
-            artifact.unlink(); artifact.symlink_to(self.root / 'build/unix-wait-status/pre.cbd')
-            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
-            artifact.unlink(); artifact.write_text('fixture\n')
-
     def test_proxy_void_has_focused_preparation_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -1346,7 +1310,6 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['original-termios']
-        self.assertEqual('original-termios', owners['thc.runtime.OriginalTermiosTest'])
         self.assertEqual('original-termios', owners['thc.runtime.OriginalSavedTermiosTest'])
         self.assertIn('thc.runtime.TermiosAbiTest', manifest['fixtureFreeJunit'])
         self.assertIn('thc.runtime.SavedTermiosTest', manifest['fixtureFreeJunit'])
@@ -1363,8 +1326,8 @@ class FixturePreparationTest(unittest.TestCase):
                 path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
             receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-                           installedArtifactsHashed=False, nativeRows=6,
-                           entries=list(cache.ORIGINAL_TERMIOS_ENTRIES), artifactHashes=artifacts)
+                           installedArtifactsHashed=False, nativeRows=28,
+                           entries=list(cache.ORIGINAL_SAVED_TERMIOS_ENTRIES), artifactHashes=artifacts)
             path = self.root / name; path.write_text(json.dumps(receipt))
             self.assertEqual(cache.ORIGINAL_TERMIOS_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
             for bad in (dict(receipt, schema=True), dict(receipt, entries=[]),
@@ -1375,12 +1338,12 @@ class FixturePreparationTest(unittest.TestCase):
                 incomplete = dict(artifacts); del incomplete['build/original-termios/' + missing]
                 with self.assertRaises(cache.CacheMiss):
                     cache.termios_artifact_hashes(dict(receipt, artifactHashes=incomplete))
-            for relative in ('pre/core/OriginalTermiosAudit.cbd', 'saved/pre/core/OriginalSavedTermiosAudit.cbd',
+            for relative in ('saved/pre/core/OriginalSavedTermiosAudit.cbd',
                              'saved/native/oracle', 'logs/saved-native-run.stdout'):
                 artifact = self.root / 'build/original-termios' / relative
                 artifact.write_text('mutated')
                 with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
-                artifact.unlink(); artifact.symlink_to(self.root / 'build/original-termios/oracle.json')
+                artifact.unlink(); artifact.symlink_to(self.root / 'build/original-termios/saved/oracle.json')
                 with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
                 artifact.unlink(); artifact.write_text('fixture\n')
 
@@ -1388,7 +1351,7 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['original-posix-stat']
-        for name in ('OriginalPosixStatTest', 'PosixStatAbiTest', 'OriginalFstatTest', 'OriginalPathStatTest', 'OriginalPathModeTest', 'OriginalPathLinkTest', 'OriginalPathAccessTest', 'OriginalUnlinkAtTest', 'OriginalFstatAtTest', 'OriginalCurrentDirectoryTest', 'OriginalDirectoryStreamsTest', 'OriginalDirectoryPathsTest'):
+        for name in ('OriginalFstatTest', 'OriginalPathStatTest', 'OriginalPathModeTest', 'OriginalPathLinkTest', 'OriginalPathAccessTest', 'OriginalUnlinkAtTest', 'OriginalFstatAtTest', 'OriginalCurrentDirectoryTest', 'OriginalDirectoryStreamsTest', 'OriginalDirectoryPathsTest'):
             self.assertEqual('original-posix-stat', owners['thc.runtime.' + name])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-posix-stat']}], group['commands'])
         self.assertIn('"$fixture_bin" original-posix-stat', (project / 'bin/prepare-tests.sh').read_text())
@@ -1424,7 +1387,6 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_FSTATAT_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
             self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_CURRENT_DIRECTORY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         cache = fast_fixtures.fast_inputs
-        self.assertEqual(90, len(cache.ORIGINAL_POSIX_STAT_OUTPUTS))
         for path in cache.ORIGINAL_POSIX_STAT_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path), path)
         for suffix in ('native/unknown', 'logs/unknown.stdout', 'pre/core/Other.json', 'attempt-0/oracle.json'):
@@ -2798,7 +2760,8 @@ class FixturePreparationTest(unittest.TestCase):
         _, owners = fast_fixtures._manifest(project)
         names = ("thc.GuestExceptionsTest", "thc.runtime.ManagedFileCallTest",
                  "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedStdioTest",
-                 "thc.runtime.OriginalStdioCallTest", "thc.runtime.StdioHostAbiTest")
+                 "thc.runtime.OriginalStdioCallTest", "thc.runtime.StdioHostAbiTest",
+                 "thc.runtime.OriginalUnixBatchTest", "thc.runtime.PosixStatAbiTest")
         for name in names:
             with self.subTest(name=name):
                 self.assertIn(name, owners)

@@ -334,7 +334,6 @@ extra-source-files:
   nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c
   t/fixtures/compiler/TextCbitsAudit.hs
   t/fixtures/compiler/UnixLibcAudit.hs
-  t/fixtures/compiler/UnixWaitStatusAudit.hs
   t/fixtures/compiler/TextCbitsNative.hs
   nih/pinned/text-2.1.3/LICENSE
   nih/pinned/openbsd-memchr-1.8.c
@@ -472,10 +471,8 @@ extra-source-files:
   t/fixtures/compiler/OriginalProcessIdentityNative.hs
   t/fixtures/compiler/OriginalOpenAudit.hs
   t/fixtures/compiler/OriginalOpenNative.hs
-  t/fixtures/compiler/OriginalTermiosAudit.hs
   t/fixtures/compiler/OriginalSavedTermiosAudit.hs
   t/fixtures/compiler/OriginalSavedTermiosNative.hs
-  t/fixtures/compiler/OriginalTermiosNative.hs
   t/fixtures/compiler/OriginalTcsetattrAudit.hs
   t/fixtures/compiler/OriginalTcgetattrAudit.hs
   t/fixtures/compiler/OriginalTcsetattrNative.hs
@@ -1367,7 +1364,6 @@ executable thc-fixtures
     WcwidthFixtures
     TextCbitsFixtures
     UnixLibcFixtures
-    UnixWaitStatusFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures

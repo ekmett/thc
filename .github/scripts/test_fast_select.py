@@ -1276,7 +1276,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertIn("thc.runtime.TupleInputNativeTest", consumers)
         self.assertIn("thc.runtime.ManagedWeakTest", consumers)
         self.assertIn("thc.runtime.OriginalHandleReadinessNativeTest", consumers)
-        self.assertIn("thc.runtime.OriginalTermiosTest", consumers)
 
         self.assertIn("thc.runtime.Explicit64ArrayTest", consumers)
         self.assertIn("thc.runtime.OriginalPathStatTest", consumers)

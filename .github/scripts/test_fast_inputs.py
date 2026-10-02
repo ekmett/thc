@@ -1204,17 +1204,16 @@ class FastInputTests(unittest.TestCase):
         self.assertFalse(cache.allowed_payload('build/arithmetic-exceptions/native/other.zip'))
         with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
 
-    def test_termios_exact_image_and_saved_pointer_fixture_inventory(self):
-        self.assertEqual(163, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+    def test_saved_termios_fixture_artifact_scope(self):
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
-            if name in ('build/original-termios/native/oracle', 'build/original-termios/saved/native/oracle'):
+            if name == 'build/original-termios/saved/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
-                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalTermiosAudit.o',
+                       'attempt-0/oracle.json', 'pre/core/Other.json', 'saved/native/other.o',
                        'saved/native/other', 'saved/native/OriginalSavedTermiosNative.o',
                        'saved/pre/core/Other.json', 'logs/saved-extra.stdout'):
             self.assertFalse(cache.allowed_payload('build/original-termios/' + suffix), suffix)
@@ -1239,13 +1238,13 @@ class FastInputTests(unittest.TestCase):
     def test_termios_cache_round_trip_keeps_saved_pointer_provenance_and_native_mode(self):
         name = 'build/original-termios/manifest.json'
         artifacts = cache.ORIGINAL_TERMIOS_OUTPUTS - {name}
-        binaries = ('build/original-termios/native/oracle', 'build/original-termios/saved/native/oracle')
+        binaries = ('build/original-termios/saved/native/oracle',)
         for path in artifacts:
             self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
         for binary in binaries:
             (self.root / binary).chmod(0o755)
         original = json.dumps(dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-            installedArtifactsHashed=False, nativeRows=6, entries=list(cache.ORIGINAL_TERMIOS_ENTRIES),
+            installedArtifactsHashed=False, nativeRows=28, entries=list(cache.ORIGINAL_SAVED_TERMIOS_ENTRIES),
             inputHashes=self.manifest['inputHashes'],
             artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
         self.put(name, original)

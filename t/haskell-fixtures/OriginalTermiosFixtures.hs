@@ -10,7 +10,7 @@
 -- Stability   : experimental
 -- Portability : Native GHC; host filesystem/process services
 --
--- Fixture acquisition support for original termios.
+-- Fixture acquisition support for original saved termios pointers.
 module OriginalTermiosFixtures (prepareOriginalTermios) where
 
 import Control.Monad (forM, unless, when)
@@ -32,7 +32,7 @@ prepareOriginalTermios root
       inputHashes <- fixtureSources root >>= hashes root
       writeJson (root </> directory </> "manifest.json") $ object
         ["schema" .= (1 :: Int), "platform" .= os, "supported" .= False,
-         "reason" .= ("Original Linux x86_64 termios declarations only" :: String),
+         "reason" .= ("Original Linux x86_64 saved-termios declarations only" :: String),
          "inputHashes" .= inputHashes, "artifactHashes" .= object []]
       putStrLn "original-termios: explicitly excluded on this platform"
   | otherwise = prepareLinux root
@@ -44,8 +44,7 @@ fixtureSources :: FilePath -> IO [FilePath]
 fixtureSources root = do
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  pure $ sort $ ["t/fixtures/compiler/OriginalTermiosAudit.hs", "t/fixtures/compiler/OriginalTermiosNative.hs",
-    "t/fixtures/compiler/OriginalSavedTermiosAudit.hs", "t/fixtures/compiler/OriginalSavedTermiosNative.hs",
+  pure $ sort $ ["t/fixtures/compiler/OriginalSavedTermiosAudit.hs", "t/fixtures/compiler/OriginalSavedTermiosNative.hs",
     "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
     "t/haskell-fixtures/OriginalTermiosFixtures.hs", "bin/audit-core.py", "bin/core-capabilities.json",
     "src/main/resources/thc/scalar-primop-signatures.json", "bin/export-core.sh", "bin/build-compiler.sh",
@@ -55,11 +54,8 @@ fixtureSources root = do
 
 prepareLinux :: FilePath -> IO ()
 prepareLinux root = do
-  let entries = ["originalTermiosSize", "originalEcho", "originalIcanon", "originalVmin", "originalVtime",
-        "originalTcsanow", "originalSigsetSize", "originalSigttou", "originalSigBlock", "originalSigSetmask",
-        "originalLflag", "originalPokeLflag", "originalCC"]
-      execute = runLogged 180 root (directory </> "logs")
-  createDirectoryIfMissing True (root </> directory </> "native")
+  let execute = runLogged 180 root (directory </> "logs")
+  createDirectoryIfMissing True (root </> directory)
   let manifest = root </> directory </> "manifest.json"
   stale <- doesFileExist manifest
   when stale (removeFile manifest)
@@ -72,42 +68,17 @@ prepareLinux root = do
                   lookup "Target platform" target == lookup "Host platform" target,
                   lookup "target word size" target == Just "8" -> pure ()
     _ -> die "Original termios requires native Linux x86_64 GHC"
-  let binary = directory </> "native/oracle"
-  compiled <- execute "native-build" [] ghc ["--make", "-j2", "-O2", "-fforce-recomp", "-dcore-lint",
-    "-package", "ghc-internal", "-it/fixtures/compiler", "-odir", root </> directory </> "native",
-    "-hidir", root </> directory </> "native", "t/fixtures/compiler/OriginalTermiosNative.hs", "-o", root </> binary]
-  observed <- execute "native-run" [] (root </> binary) []
-  (constants, rows) <- maybe (die "Malformed original termios observations") pure
-    (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe ([Integer], [(Integer,Integer,Integer,Integer,[Int])]))
-  let oracle = directory </> "oracle.json"
-  writeJson (root </> oracle) $ object ["constants" .= constants, "rows" .= rows]
-  exports <- forM ["pre","post"] $ \stage -> do
-    let core = directory </> stage </> "core"
-        modules = [core </> "OriginalTermiosAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
-        options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-          ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
-    exported <- execute (stage ++ "-export")
-      [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ ["t/fixtures/compiler/OriginalTermiosAudit.hs"])
-    mapM_ (\path -> doesFileExist (root </> path) >>= \present -> unless present (die ("Missing original Core: " ++ path))) modules
-    audits <- forM entries $ \entry -> do
-      let path = directory </> stage </> entry ++ ".audit.json"
-      command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py", "--entry", "main:OriginalTermiosAudit." ++ entry, "--output", path] ++ modules)
-      pure (path,command)
-    pure (modules,exported,audits)
   (savedCommands, savedArtifacts) <- prepareSavedTermios root ghc
-  let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports] ++ savedCommands
-      artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++
-        savedArtifacts ++ concatMap commandArtifacts commands
+  let commands = [version,info] ++ savedCommands
+      artifacts = savedArtifacts ++ concatMap commandArtifacts commands
   inputHashes <- fixtureSources root >>= hashes root
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "platform" .= os, "supported" .= True,
-     "oracle" .= oracle, "entries" .= entries, "strictAccepted" .= True,
-     "runtimeVerified" .= False, "installedArtifactsHashed" .= False, "nativeRows" .= length rows, "inputHashes" .= inputHashes,
+     "entries" .= (["originalGetSavedTermios", "originalSetSavedTermios"] :: [String]), "strictAccepted" .= True,
+     "runtimeVerified" .= False, "installedArtifactsHashed" .= False, "nativeRows" .= (28 :: Int), "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "original-termios: six native images, 28 saved-pointer rows, and fifteen strict pre/post original helpers prepared"
+  putStrLn "original-termios: 28 native saved-pointer rows and strict pre/post originals prepared"
 
 -- Keep this oracle separate from the termios image layout: it only observes
 -- pointer retention, and its native bracket restores the preexisting RTS roots.
