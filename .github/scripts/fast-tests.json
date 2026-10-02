@@ -2447,7 +2447,7 @@
       ]
     },
     "bin/simd_family_model.py": {
-      "junit": [],
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
       "python": [
         "bin/test-simd-families.py"
       ]
