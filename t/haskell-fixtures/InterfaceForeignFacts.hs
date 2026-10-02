@@ -477,7 +477,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
           _ -> die "Original CAPI control lost its products"
       BS.writeFile (root </> directory </> "import-stubs" </> variant ++ ".cbd") compact
   audits <- forM [(variant, entryName, status) | (variant, _) <- labelVariants,
-      (entryName, status) <- [("probe", 0), ("unknownData", 1), ("unknownFunction", 1)]] $ \(variant, entryName, status) -> do
+      (entryName, status) <- [("probe", 0), ("unknownData", 1), ("unknownFunction", 0)]] $ \(variant, entryName, status) -> do
     let report = directory </> "import-stubs" </> variant ++ "-" ++ entryName ++ "-audit.json"
     result <- runLoggedExpect status 60 root (directory </> "logs") ("import-" ++ variant ++ "-" ++ entryName) [] "python3"
       ["bin/audit-core.py", directory </> "import-stubs" </> variant ++ ".cbd", "--entry",
@@ -488,9 +488,17 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
         field _ _ = Nothing
         issues = case field "issues" value of Just (Array values) -> toList values; _ -> []
         target = if entryName == "unknownData" then "thc_provenance_unknown_data" else "thc_provenance_unknown_function"
+        unresolved = case field "unresolvedNativeSymbols" value of Just (Array values) -> toList values; _ -> []
     check (field "accepted" value == Just (Bool (status == 0))) "Unexpected static-label reachability admission"
+    if entryName == "unknownFunction"
+      then check (case unresolved of
+        [symbol] -> field "symbol" symbol == Just (String target) &&
+          field "kind" symbol == Just (String "function-addr") &&
+          field "resolution" symbol == Just (String "required-on-expression-evaluation")
+        _ -> False) "Function address lost its demand-time native resolution obligation"
+      else check (null unresolved) "Unexpected unresolved native address"
     unless (status == 0) $ check (any (\issue -> field "code" issue == Just (String "unsupported-literal") &&
-      case field "detail" issue of Just (String detail) -> Text.pack target `Text.isInfixOf` detail; _ -> False) issues)
+      case field "detail" issue of Just (String detail) -> target `Text.isInfixOf` detail; _ -> False) issues)
       "Static address provenance bypassed the unknown-label rejection"
     pure result
   pure (concat commands ++ [built, native] ++ audits)

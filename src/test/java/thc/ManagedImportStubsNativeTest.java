@@ -3,6 +3,8 @@
 package thc;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.MessageDigest;
@@ -109,7 +111,15 @@ class ManagedImportStubsNativeTest {
                 var good = CoreModules.reachable(CoreModules.merge(list(wrapper)), id("callback"), true);
                 if (backend.equals("ast")) new Program(language, good, false, false); else new BytecodeProgram(language, good);
                 var bad = CoreModules.reachable(CoreModules.merge(list(malformedHelper)), id("callback"), true);
-                var error = assertThrows(RuntimeFault.class, () -> { if (backend.equals("ast")) new Program(language, bad, false, false); else new BytecodeProgram(language, bad); });
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, bad, false, false) : new BytecodeProgram(language, bad);
+                var target = program.hostEntryTarget(2);
+                var callback = new Closure(null, 2, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        throw new AssertionError("An unlinked wrapper helper must not invoke its callback");
+                    }
+                }.getCallTarget());
+                // Native labels resolve when the original wrapper is demanded.
+                var error = assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{program.entryValue(id("callback")), new Object[]{callback, Unit.INSTANCE}}));
                 assertEquals("Unlinked native data label: " + declaration.get("helper"), error.getMessage());
             } finally { context.leave(); }
         }
