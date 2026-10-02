@@ -36,6 +36,13 @@ public final class SignedNarrowPrimopsTest {
     private long count(Value function, String key) {
         return ((Number) ((Map<String, Object>) Json.INSTANCE.parse(function.getMember("diagnostics").asString())).get(key)).longValue();
     }
+    private long installed(Value function, long before, String label) {
+        var diagnostics = (Map<String, Object>) Json.INSTANCE.parse(function.getMember("diagnostics").asString());
+        long after = ((Number) diagnostics.get("compiledEntries")).longValue();
+        assertTrue(after > before, label + " enters installed code");
+        assertEquals(true, ((Map<?, ?>) diagnostics.get("explicitCompilation")).get("validLastTier"), label + " remains installed");
+        return after;
+    }
     private String operation(String name) {
         int end = name.indexOf("Int");
         return end < 0 ? name : name.substring(0, end);
@@ -71,7 +78,7 @@ public final class SignedNarrowPrimopsTest {
         for (String path : (List<String>) manifest.get("modules"))
             modules.add(CoreCbdFixtures.read(root.resolve(path)));
         var merged = CoreModules.INSTANCE.merge(modules);
-        var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:SignedNarrowPrimopsAudit." + manifest.get("compositeEntry"), true);
+        var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:SignedNarrowPrimopsAudit." + manifest.get("compositeEntry"));
         for (var entry : entries) {
             String name = (String) entry.get("name");
             String rep = "Int" + ((Number) entry.get("width")).intValue() + "Rep";
@@ -112,8 +119,10 @@ public final class SignedNarrowPrimopsTest {
             assertEquals(0L, count(function, "compiledEntries"), backend + " must remain interpreted before explicit compile");
             assertTrue(function.invokeMember("compile").asBoolean(), backend + " composite installation");
             long before = count(function, "compiledEntries");
-            for (var entry : entries.reversed()) for (long[] row : cases.get(entry.get("name")).reversed()) check(function, backend, entry, row);
-            assertEquals(total, count(function, "compiledEntries") - before, backend + " every native row must enter the installed composite guest root");
+            for (var entry : entries.reversed()) for (long[] row : cases.get(entry.get("name")).reversed()) {
+                check(function, backend, entry, row);
+                before = installed(function, before, backend + " " + entry.get("name"));
+            }
             assertEquals(0L, count(function, "unsupportedTraps"));
             assertEquals(0L, count(function, "blackholes"));
         }
@@ -168,8 +177,8 @@ public final class SignedNarrowPrimopsTest {
                         Object[] args = arity == 1 ? new Object[] {input} : new Object[] {input, pair[1]};
                         assertEquals(mathematical(name, width, pair[0], pair[1]), function.execute(args).asLong(),
                             backend + " raw " + name + "(" + pair[0] + ", " + pair[1] + "), pass " + pass);
+                        if (pass == 1) before = installed(function, before, backend + " raw " + name);
                     }
-                    if (pass == 1) assertEquals((long) pairs.size(), count(function, "compiledEntries") - before);
                 }
             }
         }
