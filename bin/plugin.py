@@ -42,7 +42,7 @@ def plugin_plan(root):
     if Path(library["pkg-src"]["path"]).resolve() != root:
         raise RuntimeError("Cabal plan belongs to another checkout")
     dist = Path(library["dist-dir"]).resolve()
-    if not dist.is_relative_to(root / "dist-newstyle/build"):
+    if not dist.is_relative_to((root / "dist-newstyle/build").resolve()):
         raise RuntimeError("Unexpected Cabal library build directory")
     units = {}
     for item in plan["install-plan"]:

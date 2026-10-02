@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 import thc.CoreCbdFixtures;
+import thc.ForeignExceptionFixtureSupport;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -48,7 +49,6 @@ class WindowsCodePagesTest {
     private Map<String, Object> receipt() throws Exception { return json("build/windows-codepages/manifest.json"); }
     private Map<String, Object> source(String stage) throws Exception {
         var module = new LinkedHashMap<>(cbd(receipt().get("logs") + "/" + stage + ".cbd"));
-        module.put("packageScalarLinks", List.of(provider()));
         return module;
     }
     private Map<String, Object> source() throws Exception { return source("post"); }
@@ -152,7 +152,9 @@ class WindowsCodePagesTest {
         try { return TruffleLanguage.LanguageReference.create(Language.class).get(null); }
         catch (RuntimeException | Error failure) { context.leave(); throw failure; }
     }
-    private ExecutableProgram program(Language language, String backend, Map<String, Object> module) {
+    private ExecutableProgram program(Language language, String backend, Map<String, Object> module) throws Exception {
+        module = ForeignExceptionFixtureSupport.nativeModules(List.of(module),
+            root.toPath().resolve((String) receipt().get("packageManifest")));
         return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
     }
     private ManagedAddress buffer(int size, long fill, boolean pinned) {
@@ -219,7 +221,8 @@ class WindowsCodePagesTest {
         assertEquals("902339d332fb4ce2b3c87dcac1ee6495d41ad886", ((Map<?, ?>) proof.get("upstream")).get("revision"));
         OriginalStdioChecks.hashes(root, proof.get("inputHashes"), Set.of("t/fixtures/compiler/WindowsCodePageAudit.hs",
             "t/haskell-fixtures/WindowsCodePageFixtures.hs", "bin/core_original_foreign.py"), null);
-        OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.cbd", logs + "/post.cbd", logs + "/oracle.json"), logs + "/");
+        OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.cbd", logs + "/post.cbd", logs + "/oracle.json",
+            logs + "/driver-build.command.json", logs + "/driver-build.stdout", logs + "/driver-build.stderr"), logs + "/");
         var upstream = "nih/pinned/ghc-9.14.1/libraries/ghc-internal/";
         var sourceHashes = new LinkedHashMap<String, String>();
         for (var entry : ((Map<String, String>) proof.get("sourceHashes")).entrySet()) {
@@ -255,7 +258,6 @@ class WindowsCodePagesTest {
                         .filter(entry -> !wideOnly || List.of("wideChar", "wideCharSafe", "windowsError").contains(entry)).toList();
                     var module = new LinkedHashMap<>(CoreModules.reachable(
                         cbd(logs + "/" + stage + ".cbd"), entries.stream().map(this::entryId).toList(), false));
-                    module.put("packageScalarLinks", List.of(provider()));
                     module.put("instrument", true);
                     var executable = program(language, backend, module);
                     var targets = new LinkedHashMap<String, RootCallTarget>();
@@ -530,6 +532,13 @@ class WindowsCodePagesTest {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             var language = enter(context);
             try {
+                var missingSupport = OriginalStdioChecks.rawModule(original("ansiPage"), source(), null);
+                missingSupport.put("packageScalarLinks", List.of(provider()));
+                var missing = assertThrows(RuntimeFault.class, () -> {
+                    if (backend.equals("ast")) new Program(language, missingSupport, false, false);
+                    else new BytecodeProgram(language, missingSupport);
+                });
+                assertTrue(missing.getMessage().contains("linked genuine THC.Exception runtime bundle"));
                 var target = program(language, backend, OriginalStdioChecks.rawModule(call, source(), null)).entryTarget("entry");
                 var output = buffer(18);
                 assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[] {0L, 932L, output, 7L}));

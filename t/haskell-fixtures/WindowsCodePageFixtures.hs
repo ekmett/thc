@@ -58,6 +58,7 @@ import qualified THC.Interface as Interface
 import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import THC.Compact.Module (readModuleValue)
 import THC.Driver.NativeDependencies (nativeLinkInputs, nativeSymbolArchives)
+import THC.Driver.Project (prepareWindowsRuntime)
 import THC.Driver.PackageNative (installedNativeSignatures, nativeWrapperSource)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -125,6 +126,13 @@ prepareWindowsCodePages root = do
   version <- execute "version" [] ghc ["--numeric-version"]
   unless (oneLine version == "9.14.1") (die "Windows code pages require pinned GHC 9.14.1")
   library <- execute "libdir" [] ghc ["--print-libdir"]
+  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  let driverSelection = ["exe:thc","--offline","--disable-shared","--with-compiler=" ++ ghc,"--with-hc-pkg=" ++ pkg]
+  built <- execute "driver-build" [] cabal ("build":driverSelection)
+  located <- execute "driver-location" [] cabal ("list-bin":driverSelection)
+  -- Ordinary foreign calls require the genuine exception bridge. Acquire the
+  -- declared thc:runtime component; do not inject its source into this consumer.
+  (_, packages) <- prepareWindowsRuntime root ghc pkg (oneLine located) (root </> logs)
   catalog <- either die pure . eitherDecodeStrict =<< Bytes.readFile (root </> "etc/ghc/9.14.1/windows-ghc-internal.json")
   upstreamIdentity <- field "upstream" catalog :: IO Value
   inventory <- field "files" catalog :: IO [Value]
@@ -265,16 +273,18 @@ prepareWindowsCodePages root = do
       "--output",logs </> stage ++ "-" ++ name ++ ".audit.json",logs </> stage ++ ".cbd"]
   afterHashes <- hashes root usedSources
   unless (sourceHashes == afterHashes) (die "Compiling declaration interfaces changed upstream sources")
-  let commands = [version,library,registration,rtsRegistration] ++ compiled ++ [adapterTarget,adapterBuilt,nativeLinked] ++ audits
+  let commands = [version,library,built,located,registration,rtsRegistration] ++ compiled ++ [adapterTarget,adapterBuilt,nativeLinked] ++ audits
       inputs = [source,"etc/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/WindowsCodePageFixtures.hs",
         "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
         "src/driver/THC/Driver/PackageNative.hs","src/driver/THC/Driver/NativeDependencies.hs","src/driver/THC/Driver/NativeLibrarySources.hs",
+        "src/driver/THC/Driver/Project.hs","src/runtime/THC/Exception.hs","src/runtime/THC/Internal/Exception.hs",
+        "src/test/java/thc/ForeignExceptionFixtureSupport.java","src/test/java/thc/runtime/WindowsCodePagesTest.java",
         "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
         "src/main/java/thc/runtime/OriginalStdioExpression.java","src/main/java/thc/runtime/BytecodeProgram.java",
         "src/main/java/thc/runtime/BytecodeRoot.java","src/main/java/thc/runtime/WindowsCodePages.java","src/main/c/windows-directory-abi.c"]
   inputHashes <- hashes root inputs
-  rawArtifacts <- hashes root ([logs </> file | file <- ["pre.cbd","post.cbd","oracle.json"]] ++
+  rawArtifacts <- hashes root (makeRelative root packages : [logs </> file | file <- ["pre.cbd","post.cbd","oracle.json"]] ++
     [makeRelative root (providers </> name ++ ".cbd") | name <- modules] ++
     map (makeRelative root) [adapterSource,adapter,exports,nativeLibrary] ++
     [makeRelative root (overlay </> relative name ++ ".hi") | name <- modules] ++ concatMap commandArtifacts commands ++
@@ -282,6 +292,7 @@ prepareWindowsCodePages root = do
   let artifactHashes = Map.mapKeys (map (\c -> if c == '\\' then '/' else c)) rawArtifacts
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"logs" .= logs,"entries" .= map fst operations,
+     "packageManifest" .= makeRelative root packages,
      "originalFCallIds" .= True,"upstream" .= upstreamIdentity,"sourceHashes" .= sourceHashes,
      "nativeArchiveHashes" .= nativeArchiveHashes,
      "nativeAbi" .= [object ["symbol" .= symbol,"entry" .= adapterEntry index,

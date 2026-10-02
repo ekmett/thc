@@ -15,7 +15,7 @@
 module BundleSelectionTests (tests) where
 
 import qualified Crypto.Hash.SHA256 as SHA
-import Control.Monad (forM)
+import Control.Monad (forM, forM_)
 import Data.Aeson (Value(..), encode, object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
@@ -195,7 +195,7 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
       BS.writeFile (path ++ ".bridge.json") "broken receipt"
       assertBool "corrupt bridge receipt falls back to archive" . isLeft
         =<< tryIOError (exceptionBridgeModules False [record])
-  , TestCase $ scratch "Windows projection" $ \directory -> do
+  , TestCase $ forM_ [True, False] $ \wiredRecipe -> scratch "Windows projection" $ \directory -> do
       let path = directory </> "full.zip"
           name = "GHC.Internal.Conc.Bound"
           excluded = [object ["module" .= name]]
@@ -208,8 +208,10 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
                   "module" .= name, "name" .= ("control-only-initializer" :: String)]],
                 "finalizers" .= ([] :: [String])]]) fields)
             _ -> error "object expected"
-          inputs = object ["compiler" .= object [], "component" .= object ["generatedSources" .= ([] :: [String])],
-            "generatedSources" .= ([] :: [Value])]
+          -- The ordinary installed recipe retains configured native inputs,
+          -- not the former wired recipe's top-level generated-source list.
+          inputs = object $ ["compiler" .= object [], "component" .= object ["generatedSources" .= ([] :: [String])]] ++
+            ["generatedSources" .= ([] :: [Value]) | wiredRecipe]
       full <- archive path "ghc-internal" [("A", core "ghc-internal" "A"), (name, registration)]
         (Just inputs) [("targetLayout", object [])]
       selected <- projectWindowsWiredBundle False directory full specification

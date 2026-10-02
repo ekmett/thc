@@ -47,6 +47,11 @@ installation can be selected directly with JAVA_HOME, GHC, GHC_PKG, CABAL,
 THC_CLANG, and THC_PYTHON; bootstrap is optional. CABAL_DIR and GRADLE_USER_HOME
 can point to task-local caches.
 
+Registered plugin lookup accepts Cabal build directories reached through directory
+junctions and checks containment against the resolved `dist-newstyle/build` root.
+Keep native fixture outputs physically inside the checkout's `build` directory:
+their strict provenance checks reject redirected artifact paths.
+
 For `thc run`, `--with-ghc` takes precedence over GHC, then PATH. The corresponding
 package tool uses `--with-ghc-pkg`, GHC_PKG, then compiler-relative discovery.
 Windows selects the pinned versioned binaries beside unversioned bindist
@@ -69,6 +74,11 @@ Windows `ghc-internal` is the bootstrap exception: its complete source graph
 compiles with `-fwrite-if-simplified-core` without loading a plugin that imports
 the unfinished home unit. The existing installed-interface helper then exports
 the genuine rebuilt Core and foreign metadata.
+Acquisition uses the selected Cabal registration's complete module and C/C++
+inventory. The genuine wired Core owner remains `ghc-internal`; its actual
+registered unit ID is retained separately for dependencies. The runtime
+projection excludes only the declared native-registration module and records
+the complete source bundle's hash.
 Other pinned Windows packages use Cabal's complete `--make -no-link` invocation after
 checking the full source graph, avoiding a new static-plugin link per module.
 
@@ -174,6 +184,12 @@ access. Directory calls and encoding calls share the context's captured Windows
 last-error slot. The original errno slot remains separate.
 GetACP uses ordinary package linkage and requires its original native provider;
 extracting its declaration's Core alone does not supply that provider.
+The code-page producer also acquires the registered `thc:runtime` component
+through the driver's normal Windows acquisition path and records its package
+manifest and CBD hashes. The consumers link the validated exception helpers
+from that bundle; they do not depend on the separate polyglot fixture corpus.
+Selected preparation builds its driver first; normal acquisition builds the
+interface helper. It does not require an earlier whole-project build.
 
 ~~~powershell
 ./bin/windows.ps1 -Action CodePageTest -Jobs 4
@@ -215,6 +231,10 @@ Native authority does not grant the guest current-directory or file access.
 Installed C adapters use the x64 MSVC LLVM ABI. Their native dependencies link
 against the original package archives and the matching GHC's registered native
 libraries. Haskell execution, scheduling and exceptions remain owned by THC.
+Configured MinGW C products retain their source, header and object observations
+in the ordinary bundle provenance. They execute through the existing private
+PE companion, alongside MSVC LLVM adapters; their MinGW LLVM is not admitted
+to Sulong or relabeled as MSVC LLVM.
 
 ## Current boundaries
 
@@ -264,6 +284,11 @@ fixtures prepared, run the owning checks directly:
   support bundle, which Windows project acquisition prepares automatically.
   `thc-fixtures.exe windows-driver` checks native-matching completion in both
   backends and handoff modes, with strict verification on its first run.
+- Exception audits record `libdwPoolRelease` and `backtraceFree` addresses reached
+  through GHC's default exception annotations as requiring resolution when their
+  expressions are evaluated. An accepted audit does not certify their native
+  availability. The optional Libdw backend is unsupported by THC; retain missing
+  symbol errors when those paths execute and do not restore retired overrides.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.
