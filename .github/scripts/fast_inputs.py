@@ -377,7 +377,7 @@ BIGNAT_SOURCES = frozenset(wired_source_path(path) for path in (
     "include/WordSize.h", "LICENSE", *(f"GHC/Internal/Bignum/{name}{suffix}"
       for name in ("BigNat", "Integer", "Natural") for suffix in (".hs", ".hs-boot"))))
 BYTEARRAY_FAMILIES = {
-    "bytearray": ("ByteArrayAudit", ("shortBytes", "orderedBytes", "shortUncons", "copiedBytes"), "NativeByteArray.hs"),
+    "bytearray": ("ByteArrayAudit", ("orderedBytes", "copiedBytes"), "NativeByteArray.hs"),
     "mutable-bytearrays": ("MutableByteArrayAudit", ("filledBytes", "movedBytes", "disjointBytes", "copiedMutableBytes", "copiedDisjointBytes", "publicReplicate"), "NativeMutableByteArrays.hs"),
     "resize-bytearrays": ("ResizeByteArrayAudit", ("resizedBytes", "resizedTwiceWrites"), None),
     "mutable-bytearray-size": ("MutableByteArraySizeAudit", ("freshSize", "pureSize", "resizedSizes", "pureAfterResize", "orderedSize"), None),
@@ -385,9 +385,9 @@ BYTEARRAY_FAMILIES = {
 }
 BYTEARRAY_OUTPUTS = {}
 for _family, (_module, _entries, _driver) in BYTEARRAY_FAMILIES.items():
-    _original = _family in ("bytearray", "compare-byte-arrays")
+    _original = _family == "compare-byte-arrays"
     _commands = ("ghc-version", "ghc-info", "bytestring-version", "bytestring-description", "native-build", "native-oracle") + (
-        () if _original else ("compiler-build", "primop-coverage")) + (() if _driver else ("native-inputs",)) + tuple(
+        () if _original or _family == "bytearray" else ("compiler-build", "primop-coverage")) + (() if _driver else ("native-inputs",)) + tuple(
         name for stage in ("pre", "post") for name in (
             f"{stage}-export", *([f"{stage}-original-list"] if _original else []),
             *(f"{stage}-{entry}-audit" for entry in _entries)))

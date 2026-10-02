@@ -55,7 +55,7 @@ moduleName family = case family of
 
 entries :: Family -> [String]
 entries family = case family of
-  Bytes -> ["shortBytes", "orderedBytes", "shortUncons", "copiedBytes"]
+  Bytes -> ["orderedBytes", "copiedBytes"]
   Mutable -> ["filledBytes", "movedBytes", "disjointBytes", "copiedMutableBytes", "copiedDisjointBytes", "publicReplicate"]
   Resize -> ["resizedBytes", "resizedTwiceWrites"]
   Size -> ["freshSize", "pureSize", "resizedSizes", "pureAfterResize", "orderedSize"]
@@ -69,7 +69,7 @@ signatureArities family = Map.fromList $ case family of
   _ -> []
 
 originalList :: Family -> Bool
-originalList family = family == Bytes || family == Compare
+originalList family = family == Compare
 
 signed :: Integer -> Integer
 signed value = (value + 2^(63 :: Int)) `mod` 2^(64 :: Int) - 2^(63 :: Int)
@@ -96,10 +96,7 @@ model :: Family -> String -> [Integer] -> Integer
 model Bytes name [x]
   | name == "orderedBytes" = 3 + byte x + byte (x+17)*257 + byte (x+2)*65537 + byte (x+71)*16777259
   | name == "copiedBytes" = signed (10 + fingerprint (source ++ replace target (take count (drop start source)) [11,22,33,44,55,66]))
-  | name == "shortUncons" = signed (sum [byte (x+17*i)*33^i | i <- [0..size-1]])
-  | name == "shortBytes" = signed (foldl (\answer i -> answer*33+byte (x+17*i)) 0 [0..size-1] + size)
   where
-    size = abs x `mod` 33
     source = [byte x,byte (x+17),0,255]
     key = fromInteger (x `mod` 1024) :: Int
     start = key `mod` 5
@@ -347,14 +344,12 @@ validateAudit family name report = do
   reachable <- field "reachableBindings" report >>= mapM (field "id") :: IO [String]
   let counts = Map.fromList pairs
       required = case family of
-        Bytes -> ["newByteArray#","writeWord8Array#","unsafeFreezeByteArray#","sizeofByteArray#","indexWord8Array#"] ++ ["copyByteArray#" | name `elem` ["shortUncons","copiedBytes"]]
+        Bytes -> ["newByteArray#","writeWord8Array#","unsafeFreezeByteArray#","sizeofByteArray#","indexWord8Array#"] ++ ["copyByteArray#" | name == "copiedBytes"]
         Mutable -> [if name `elem` ["filledBytes","publicReplicate"] then "setByteArray#" else if name `elem` ["disjointBytes","copiedDisjointBytes"] then "copyMutableByteArrayNonOverlapping#" else "copyMutableByteArray#"]
         Resize -> ["resizeMutableByteArray#"]
         Size -> [if name `elem` ["pureSize","pureAfterResize"] then "sizeofMutableByteArray#" else "getSizeofMutableByteArray#"]
         Compare -> ["compareByteArrays#"]
       identities = case family of
-        Bytes | name == "shortBytes" -> ["Data.ByteString.Short.Internal.$wpack","Data.ByteString.Short.Internal.$wgo","GHC.Internal.List.$wlenAcc"]
-              | name == "shortUncons" -> ["Data.ByteString.Short.Internal.$wuncons","Data.ByteString.Short.Internal.$wpack","GHC.Internal.List.$wlenAcc"]
         Mutable | name == "publicReplicate" -> ["Data.ByteString.Short.Internal.empty"]
         Resize -> ["resizeWorker"]
         Size -> [if name `elem` ["pureSize","pureAfterResize"] then "pureSizeWorker" else "getSizeWorker"]

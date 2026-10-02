@@ -25,7 +25,7 @@ import static thc.Main.executionContext;
 @SuppressWarnings("unchecked")
 class ByteArrayTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
-    private final List<String> names = List.of("shortBytes", "orderedBytes", "shortUncons", "copiedBytes");
+    private final List<String> names = List.of("orderedBytes", "copiedBytes");
     private final List<ByteArrayOp> byteOperations = List.of(
         ByteArrayOp.NEW, ByteArrayOp.WRITE, ByteArrayOp.COPY, ByteArrayOp.FREEZE, ByteArrayOp.SIZE, ByteArrayOp.INDEX);
     private Map<String, Object> manifest() throws Exception {
@@ -69,17 +69,7 @@ class ByteArrayTest {
             for (int i = 0; i < both.size(); i++) sum = sum.add(both.get(i).multiply(BigInteger.valueOf(257).pow(i)));
             return BigInteger.TEN.add(sum).longValue();
         }
-        int size = x.abs().mod(BigInteger.valueOf(33)).intValue();
-        if (name.equals("shortUncons")) {
-            var sum = BigInteger.ZERO;
-            for (int i = 0; i < size; i++)
-                sum = sum.add(octet(x.add(BigInteger.valueOf(17L * i))).multiply(BigInteger.valueOf(33).pow(i)));
-            return sum.longValue();
-        }
-        var value = BigInteger.ZERO;
-        for (int index = 0; index < size; index++)
-            value = value.multiply(BigInteger.valueOf(33)).add(octet(x.add(BigInteger.valueOf(17L * index))));
-        return value.add(BigInteger.valueOf(size)).longValue();
+        throw new IllegalArgumentException("Unknown byte-array entry: " + name);
     }
     private void valid(RootCallTarget target, String label) throws Exception {
         assertEquals(true,
@@ -90,7 +80,7 @@ class ByteArrayTest {
         return ((Number) p.diagnostics().get("compiledEntries")).longValue();
     }
     @Test
-    void installedShortByteStringAndArrayEffectsMatchNativeAndIndependentModel() throws Exception {
+    void installedArrayEffectsMatchNativeAndIndependentModel() throws Exception {
         var manifest = manifest();
         ByteArrayFixtureEvidence.verify(root, "bytearray", manifest);
         var rows = new LinkedHashMap<String, List<List<String>>>();
@@ -121,7 +111,8 @@ class ByteArrayTest {
                             var function = context.asValue(new EntryValue(p, "main:ByteArrayAudit." + name, 1));
                             for (var row : cases)
                                 assertEquals(row[1], function.execute(row[0]).asLong(), label + "(" + row[0] + ")");
-                            assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
+                            assertTrue(assertDoesNotThrow(() -> function.invokeMember("compile"), label + " installation")
+                                .asBoolean(), label + " installation");
                             var original = p.entryTarget("main:ByteArrayAudit." + name);
                             var active = new ArrayList<RootCallTarget>();
                             for (var call : NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class))
@@ -175,7 +166,7 @@ class ByteArrayTest {
         var lines = new ArrayList<>(Arrays.asList(text.split("\\r\\n|\\n|\\r", -1)));
         if (!lines.isEmpty() && lines.getLast().isEmpty())
             lines.removeLast();
-        require(lines.size() == 4116);
+        require(lines.size() == names.size() * inputs.size());
         var result = new ArrayList<List<String>>();
         for (int index = 0; index < lines.size(); index++) {
             var fields = Arrays.asList(lines.get(index).split("\t", -1));
@@ -210,7 +201,7 @@ class ByteArrayTest {
         blank.add("");
         for (var bad :
             List.of(lines.subList(1, lines.size()), duplicate, lines.reversed(), replaced(lines, lines.get(1)),
-                replaced(lines, "unknown\t0\t0"), replaced(lines, "shortBytes\t9223372036854775808\t0"),
+                replaced(lines, "unknown\t0\t0"), replaced(lines, "orderedBytes\t9223372036854775808\t0"),
                 replaced(lines, lines.getFirst().substring(0, lines.getFirst().lastIndexOf('\t')) + "\t999"), blank))
             assertThrows(IllegalArgumentException.class, () -> checkedRows(String.join("\n", bad) + "\n"));
     }

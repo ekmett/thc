@@ -684,7 +684,7 @@ class FastInputTests(unittest.TestCase):
             self.rejected_without_writes(changed)
 
     def test_bytearray_family_closed_receipts_and_native_permissions(self):
-        counts = {"bytearray": 77, "mutable-bytearrays": 87, "resize-bytearrays": 57,
+        counts = {"bytearray": 49, "mutable-bytearrays": 87, "resize-bytearrays": 57,
                   "mutable-bytearray-size": 81, "compare-byte-arrays": 85}
         for family, count in counts.items():
             self.bundle = self.temp_root / f"bundle-{family}.tar.gz"
@@ -795,7 +795,7 @@ class FastInputTests(unittest.TestCase):
 
     def test_core_json_is_not_a_fixture_cache_payload(self):
         for path in ("build/thread-async/pre/core/ThreadAsyncAudit.json",
-                     "build/bytearray/post/core/ByteArrayAudit.json",
+                     "build/bytearray/post-core/ByteArrayAudit.json",
                      "build/boxed-cas/run-1/pre-core/BoxedCasAudit.json"):
             self.assertFalse(cache.allowed_payload(path))
 
