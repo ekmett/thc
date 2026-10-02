@@ -293,9 +293,8 @@ HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
       for suffix in ("core/HintTraceAudit.cbd", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json"))))
 SIMD_ARITHMETIC_SHAPES = ["Int8X32","Word8X32","Int8X64","Word8X64","Int16X32","Word16X32","Word64X2","Word32X8","Int32X8","Int32X16","Int64X2","FloatX4","DoubleX2","FloatX8","DoubleX4","Int64X4","Int64X8","Word64X4","Word64X8","Word32X16","FloatX16","DoubleX8","Int8X16","Int16X8","Int32X4","Word8X16","Word16X8","Word32X4","Int16X16","Word16X16"]
-SIMD_ARITHMETIC_ENTRIES = tuple(op + shape + suffix for shape in SIMD_ARITHMETIC_SHAPES
-    for op in (("shuffle",) if shape.startswith(("Float", "Double")) else ("quot", "rem", "shuffle"))
-    for suffix in (("Pattern0", "Pattern1", "Pattern2") if op == "shuffle" else ("",)))
+SIMD_ARITHMETIC_ENTRIES = tuple("shuffle" + shape + suffix for shape in SIMD_ARITHMETIC_SHAPES
+    for suffix in ("Pattern1", "Pattern2"))
 SIMD_ARITHMETIC_COMMANDS = ("ghc-version", "native-build", "native-oracle", "pre-export",
     *(name + "-audit" for name in SIMD_ARITHMETIC_ENTRIES))
 SIMD_ARITHMETIC_OUTPUTS = frozenset("build/simd-arithmetic/" + name for name in (

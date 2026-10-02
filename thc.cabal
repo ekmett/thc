@@ -1283,8 +1283,6 @@ executable thc-fixtures
     FloatingAddressFixtures
     AtomicAddressFixtures
     FloatingByteOffsetFixtures
-    NarrowByteOffsetFixtures
-    Int32ByteOffsetFixtures
     UnalignedScalarMemoryFixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures

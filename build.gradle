@@ -401,8 +401,6 @@ tasks.withType(Test).configureEach {
             "wide-char-address/**/*.cbd", "wide-char-address/**/*.json", "wide-char-address/logs/*.stdout", "wide-char-address/native/**",
             "floating-address/**/*.cbd", "floating-address/**/*.json", "floating-address/*.tsv", "floating-address/native/**",
             "floating-byte-offset/**/*.cbd", "floating-byte-offset/**/*.json", "floating-byte-offset/*.tsv",
-            "narrow-byte-offset/**/*.cbd", "narrow-byte-offset/**/*.json", "narrow-byte-offset/*.tsv",
-            "int32-byte-offset/**/*.cbd", "int32-byte-offset/**/*.json", "int32-byte-offset/*.tsv",
             "atomic-address/**/*.cbd", "atomic-address/**/*.json", "atomic-address/*.tsv", "atomic-address/*.txt", "atomic-address/native/**", "atomic-address/logs/**",
             "explicit64-arrays/**/*.cbd", "explicit64-arrays/**/*.json", "explicit64-arrays/*.tsv", "explicit64-arrays/native/**",
             "managed-address-reads/**/*.cbd", "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",

@@ -101,7 +101,12 @@ class FastSelectionTest(unittest.TestCase):
 
     def test_grouped_jobs_cover_every_class_and_share_required_providers(self):
         import fast_fixtures
-        manifest = {"schema": 1, "fixtureFreeJunit": ["example.SmokeTest"], "groups": {
+        free = ["example.SmokeTest"]
+        for index in range(100):
+            name = f"Free{index:03d}Test"
+            free.append("example." + name)
+            self.write(f"src/test/java/example/{name}.java", java_fixture(name))
+        manifest = {"schema": 1, "fixtureFreeJunit": free, "groups": {
             "provider": {"junit": ["example.LeafTest"], "commands": [{"argv": ["provider"]}],
                          "outputs": ["build/provider"], "sources": ["README.md"]},
             "consumer": {"junit": ["example.OtherTest"], "commands": [{"argv": ["consumer"]}],
@@ -110,8 +115,25 @@ class FastSelectionTest(unittest.TestCase):
         self.commit()
         groups = select.groups(self.repo)
         self.assertEqual(["example.LeafTest", "example.OtherTest"], groups["consumer"])
-        self.assertEqual({"example.SmokeTest", "example.LeafTest", "example.OtherTest"},
-                         {name for classes in groups.values() for name in classes})
+        flattened = [name for classes in groups.values() for name in classes]
+        self.assertCountEqual([*free, "example.LeafTest", "example.OtherTest"], flattened)
+        batches = {name: classes for name, classes in groups.items() if name != "consumer"}
+        self.assertEqual((len(free) + 49) // 50, len(batches))
+        self.assertTrue(all(0 < len(classes) <= 50 for classes in batches.values()))
+        self.assertCountEqual(free, [name for classes in batches.values() for name in classes])
+        run = mock.Mock(side_effect=AssertionError("Fixture-free batches must not prepare fixtures"))
+        for classes in batches.values():
+            prepared = fast_fixtures.prepare(self.repo,
+                {"mode": "narrow", "junit": {"classes": classes}}, run, {})
+            self.assertEqual({"mode": "selected", "rebuilt": [], "reused": []}, prepared)
+        run.assert_not_called()
+        collision = copy.deepcopy(manifest)
+        collision["groups"][next(iter(batches))] = collision["groups"].pop("consumer")
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(collision))
+        self.commit()
+        with self.assertRaisesRegex(select.SelectionError, "Duplicate CI group"):
+            select.groups(self.repo)
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
         self.write("src/test/java/example/NewTest.java", java_fixture("NewTest"))
         self.commit()
         with self.assertRaisesRegex(select.SelectionError, "unmapped=.*NewTest"):
@@ -1264,7 +1286,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.stem != "ArrayCoreEvidence" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        for family in ("FloatingAddress", "FloatingByteOffset", "NarrowByteOffset", "Int32ByteOffset"):
+        for family in ("FloatingAddress", "FloatingByteOffset"):
             self.assertIn(f"thc.runtime.{family}Test", consumers)
         self.assertIn("thc.runtime.SumResultTest", consumers)
         self.assertIn("thc.runtime.TupleInputNativeTest", consumers)

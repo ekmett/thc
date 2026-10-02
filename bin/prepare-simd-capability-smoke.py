@@ -59,6 +59,9 @@ def inputs(generator):
             width = family['bits'] // family['lanes']
             pairs = ((7, -3), (-1, 2), ((1 << (width - 1)) - 1, 2),
                      (-(1 << (width - 1)), -1), ((1 << width) - 1, 1))
+            if operation in ('quot', 'rem'):
+                # Defined signed-minimum division and two negative operands.
+                pairs += ((-(1 << (width - 1)), 7), (-17, -7))
             if operation == 'minus':
                 # Signed subtraction crosses both limits; unsigned zero underflows.
                 pairs += ((-(1 << (width - 1)), 1), ((1 << (width - 1)) - 1, -1), (0, 1))

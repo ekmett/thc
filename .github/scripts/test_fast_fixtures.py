@@ -2517,7 +2517,7 @@ class FixturePreparationTest(unittest.TestCase):
 
     def test_remaining_scalar_memory_audits_use_cbd_inputs(self):
         project = Path(__file__).resolve().parents[2]
-        families = ("FloatingAddress", "FloatingByteOffset", "NarrowByteOffset", "Int32ByteOffset",
+        families = ("FloatingAddress", "FloatingByteOffset",
                     "Explicit64Array", "AtomicAddress", "AlignedScalarMemory", "UnalignedScalarMemory",
                     "ScalarMemoryUtilities")
         for family in families:

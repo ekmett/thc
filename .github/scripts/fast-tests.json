@@ -182,7 +182,7 @@
       "python": ["bin/test-core-vector-memory.py"]
     },
     "src/main/java/thc/runtime/VectorIntegerDivision.java": {
-      "junit": ["thc.runtime.SimdArithmeticTest"],
+      "junit": ["thc.runtime.SimdArithmeticTest", "thc.runtime.SimdCapabilitySmokeTest"],
       "python": []
     },
     "src/main/java/thc/runtime/ManagedNativeAllocations.java": {
@@ -1974,30 +1974,6 @@
       "junit": ["thc.runtime.FloatingByteOffsetTest"],
       "python": []
     },
-    "t/fixtures/compiler/NarrowByteOffsetAudit.hs": {
-      "junit": ["thc.runtime.NarrowByteOffsetTest"],
-      "python": []
-    },
-    "t/fixtures/compiler/NarrowByteOffsetNative.hs": {
-      "junit": ["thc.runtime.NarrowByteOffsetTest"],
-      "python": []
-    },
-    "t/haskell-fixtures/NarrowByteOffsetFixtures.hs": {
-      "junit": ["thc.runtime.NarrowByteOffsetTest"],
-      "python": []
-    },
-    "t/fixtures/compiler/Int32ByteOffsetAudit.hs": {
-      "junit": ["thc.runtime.Int32ByteOffsetTest"],
-      "python": []
-    },
-    "t/fixtures/compiler/Int32ByteOffsetNative.hs": {
-      "junit": ["thc.runtime.Int32ByteOffsetTest"],
-      "python": []
-    },
-    "t/haskell-fixtures/Int32ByteOffsetFixtures.hs": {
-      "junit": ["thc.runtime.Int32ByteOffsetTest"],
-      "python": []
-    },
     "t/fixtures/compiler/ThreadLabelAudit.hs": {
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "python": []
@@ -2108,8 +2084,6 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FloatingByteOffsetTest",
-        "thc.runtime.NarrowByteOffsetTest",
-        "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.ManagedWeakTest","thc.runtime.AddressIdentityNativeTest",
         "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
@@ -2706,8 +2680,6 @@
         "thc.runtime.ThreadInventoryNativeTest",
         "thc.runtime.ThreadLabelNativeTest",
         "thc.runtime.UncaughtSelfNativeTest",
-        "thc.runtime.Int32ByteOffsetTest",
-        "thc.runtime.NarrowByteOffsetTest",
         "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FloatingByteOffsetTest",

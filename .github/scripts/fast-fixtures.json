@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.Int32ByteOffsetTest",
+    "thc.runtime.NarrowByteOffsetTest",
     "thc.StaticExportStartupTest",
     "thc.HostInteropAbiTest",
     "thc.runtime.ExplicitInteropLibraryTest",
@@ -899,19 +901,6 @@
         "thc.cabal"
       ]
     },
-    "narrow-byte-offset": {
-      "junit": ["thc.runtime.NarrowByteOffsetTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "narrow-byte-offset"]}],
-      "outputs": ["build/narrow-byte-offset"],
-      "sources": [
-        "t/haskell-fixtures/NarrowByteOffsetFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "t/fixtures/compiler/NarrowByteOffsetAudit.hs",
-        "t/fixtures/compiler/NarrowByteOffsetNative.hs",
-        "thc.cabal"
-      ]
-    },
     "unaligned-scalar-memory": {
       "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "unaligned-scalar-memory"]}],
@@ -920,19 +909,6 @@
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs",
         "t/fixtures/compiler/UnalignedScalarMemoryAudit.hs",
         "t/fixtures/compiler/UnalignedScalarMemoryNative.hs", "thc.cabal"]
-    },
-    "int32-byte-offset": {
-      "junit": ["thc.runtime.Int32ByteOffsetTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int32-byte-offset"]}],
-      "outputs": ["build/int32-byte-offset"],
-      "sources": [
-        "t/haskell-fixtures/Int32ByteOffsetFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "t/fixtures/compiler/Int32ByteOffsetAudit.hs",
-        "t/fixtures/compiler/Int32ByteOffsetNative.hs",
-        "thc.cabal"
-      ]
     },
     "package-native-gc-carriers": {
       "junit": ["thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest"],

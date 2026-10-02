@@ -46,11 +46,13 @@ prepareUnalignedScalarMemory root = do
       manifest = output </> "manifest.json"
       source = "t/fixtures/compiler/UnalignedScalarMemoryAudit.hs"
       driver = "t/fixtures/compiler/UnalignedScalarMemoryNative.hs"
-      entries = map ("unaligned" ++) scalarTypes
+      entries = map ("unaligned" ++) (scalarTypes ++ ["Heap16","Heap32"])
       names = sort [verb ++ "Word8" ++ domain ++ "As" ++ scalar ++ "#" |
                     verb <- ["index","read","write"], domain <- ["Array","OffAddr"], scalar <- scalarTypes]
       rows = [(scalar,raw,offset) | scalar <- scalarTypes, raw <- rawInputs scalar,
-              offset <- [1,2,3,7,8,9,16,88]]
+              offset <- [1,2,3,7,8,9,16,88]] ++
+             [("Heap" ++ show bits,raw,1) | bits <- [16,32 :: Int],
+              raw <- [-2^(bits-1),2^(bits-1)-1,2^bits,2^bits+1]]
       inputs = unlines [unwords [scalar,show raw,show offset] | (scalar,raw,offset) <- rows]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest

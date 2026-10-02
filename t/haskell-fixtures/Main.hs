@@ -39,9 +39,7 @@ import PinnedAddressFixtures (preparePinnedAddresses)
 import FloatingAddressFixtures (prepareFloatingAddress)
 import AtomicAddressFixtures (prepareAtomicAddress)
 import FloatingByteOffsetFixtures (prepareFloatingByteOffset)
-import NarrowByteOffsetFixtures (prepareNarrowByteOffset)
 import UnalignedScalarMemoryFixtures (prepareUnalignedScalarMemory)
-import Int32ByteOffsetFixtures (prepareInt32ByteOffset)
 import Explicit64ArrayFixtures (prepareExplicit64Array)
 import FusedFloatingFixtures (prepareFusedFloating)
 import SimdCallFixtures (prepareSimdCalls)
@@ -999,8 +997,6 @@ main = do
     ["floating-address"] -> prepareFloatingAddress root
     ["atomic-address"] -> prepareAtomicAddress root
     ["floating-byte-offset"] -> prepareFloatingByteOffset root
-    ["narrow-byte-offset"] -> prepareNarrowByteOffset root
-    ["int32-byte-offset"] -> prepareInt32ByteOffset root
     ["unaligned-scalar-memory"] -> prepareUnalignedScalarMemory root
     ["explicit64-arrays"] -> prepareExplicit64Array root
     ["fused-floating"] -> prepareFusedFloating root
@@ -1133,4 +1129,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (compact-model INPUT_JSON OUTPUT_CBD|bytestring-utf8|rts-event|gc-stats|rubbish-literals|backend-annotations|rts-shutdown|interface-core|core-continuation|delimited-continuations|arithmetic-exceptions [--core-only]|mask-functions|deep-evaluation|live-async|thread-async|thread-status|thread-label|thread-inventory|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|boxed-cas|original-fcntl|original-errno|original-process-identity|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|file-wait|original-gmp [--require-supported]|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stm|stable-pointers|stable-names|weak-explicit|shrink-bytearrays|bytearray|mutable-bytearrays|resize-bytearrays|mutable-bytearray-size|compare-byte-arrays|int32x4-bytearray|word32x4-bytearray|floatx4-bytearray|doublex2-bytearray [--export-only] [--ghc-option=OPTION]|atomic-int-arrays|bit|integer|integer-completion|signed-narrow|explicit64|word-floating|scalar-bitcasts|bignat-literals [--check-only]|float-decode|floating-remainder|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|proxy-void|unsafe-equality [--check-only]|floating-address|atomic-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|unaligned-scalar-memory|aligned-scalar-memory|explicit64-arrays|tuple-arithmetic|pinned-addresses [--native-only|--export-only] [--allow-unsupported]|pinned-pointer-cells|managed-address-reads|graph-bfs|address-array-copy|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (compact-model INPUT_JSON OUTPUT_CBD|bytestring-utf8|rts-event|gc-stats|rubbish-literals|backend-annotations|rts-shutdown|interface-core|core-continuation|delimited-continuations|arithmetic-exceptions [--core-only]|mask-functions|deep-evaluation|live-async|thread-async|thread-status|thread-label|thread-inventory|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|boxed-cas|original-fcntl|original-errno|original-process-identity|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|file-wait|original-gmp [--require-supported]|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stm|stable-pointers|stable-names|weak-explicit|shrink-bytearrays|bytearray|mutable-bytearrays|resize-bytearrays|mutable-bytearray-size|compare-byte-arrays|int32x4-bytearray|word32x4-bytearray|floatx4-bytearray|doublex2-bytearray [--export-only] [--ghc-option=OPTION]|atomic-int-arrays|bit|integer|integer-completion|signed-narrow|explicit64|word-floating|scalar-bitcasts|bignat-literals [--check-only]|float-decode|floating-remainder|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|proxy-void|unsafe-equality [--check-only]|floating-address|atomic-address|floating-byte-offset|unaligned-scalar-memory|aligned-scalar-memory|explicit64-arrays|tuple-arithmetic|pinned-addresses [--native-only|--export-only] [--allow-unsupported]|pinned-pointer-cells|managed-address-reads|graph-bfs|address-array-copy|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

@@ -856,11 +856,11 @@ def groups(repo):
     result = {min(component): sorted({c for name in component for c in manifest["groups"][name]["junit"]})
               for component in components.values()}
     free = sorted(manifest["fixtureFreeJunit"])
-    for offset in range(0, len(free), 10):
+    for offset in range(0, len(free), 50):
         name = "fixture-free-" + free[offset].rsplit(".", 1)[-1].lower()
         if name in result:
             raise SelectionError("Duplicate CI group: " + name)
-        result[name] = free[offset:offset+10]
+        result[name] = free[offset:offset+50]
     if len(result) > 256:
         raise SelectionError("More than 256 groups: split the platform matrix before adding jobs")
     return result
