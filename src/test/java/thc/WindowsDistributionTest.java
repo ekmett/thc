@@ -105,8 +105,18 @@ class WindowsDistributionTest {
         var receipt = verifiedReceipt("build/windows-driver/provenance.json");
         assertEquals(4L, ((Number) receipt.get("runs")).longValue());
         var commands = (List<Map<String, Object>>) receipt.get("commands");
-        assertEquals(6, commands.size());
-        var runs = commands.subList(2, commands.size());
+        assertEquals(7, commands.size());
+        var rejected = commands.get(2);
+        assertEquals(1L, rejected.get("expectedExit"));
+        assertEquals(10L, rejected.get("timeoutSeconds"));
+        var rejectedEnvironment = (Map<String, String>) rejected.get("environment");
+        assertFalse(Files.exists(Path.of(rejectedEnvironment.get("GHC"))));
+        var rejectedDiagnostics = ((Map<String, String>) receipt.get("artifactHashes")).keySet().stream()
+            .filter(path -> Path.of(path).getFileName().toString().equals("missing-selected-ghc.stderr")).toList();
+        assertEquals(1, rejectedDiagnostics.size());
+        assertTrue(Files.readString(root.resolve(rejectedDiagnostics.getFirst()))
+            .contains("selected GHC compiler not found"));
+        var runs = commands.subList(3, commands.size());
         assertEquals(List.of(true, false, false, false), runs.stream()
             .map(command -> ((List<?>) command.get("argv")).contains("--verify-artifacts")).toList());
         var environments = new HashSet<List<String>>();
