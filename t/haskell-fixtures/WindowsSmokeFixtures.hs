@@ -306,6 +306,15 @@ prepareWindowsDriver root = do
   unless (BS.null (commandStdout observed)) (die "unexpected run-pure native output")
   driver <- oneLine <$> run root [] cabal (["list-bin", "exe:thc", "--disable-shared", "--with-compiler=" ++ ghc] ++
     ["--builddir=" ++ directory | Just directory <- [buildDirectory]]) ""
+  -- A selected compiler must fail at selection, before PATH or exporter
+  -- fallback can acquire unrelated support or start a guest.
+  let missingCompiler = root </> logs </> "missing-ghc.exe"
+  rejected <- runLoggedExpect 1 10 root logs "missing-selected-ghc"
+    [("GHC", missingCompiler)] driver
+    ["run", "--project-dir", root </> package, "completed", "--thc-root", root,
+     "--dist-dir", root </> logs </> "missing compiler output"]
+  unless ("selected GHC compiler not found" `BS.isInfixOf` commandStderr rejected)
+    (die "Windows CLI ignored the selected GHC compiler")
   -- The build script sets GHC_PKG, which would hide a broken .exe companion
   -- lookup. Exercise ordinary compiler-relative discovery, restoring our
   -- process environment even if a CLI regression throws.
@@ -315,13 +324,21 @@ prepareWindowsDriver root = do
       let label = backend ++ "-" ++ dense
           output = root </> logs </> ("dist with spaces " ++ label)
           verify = backend == "ast" && dense == "false"
+          explicitCompiler = backend == "bytecode" && dense == "false"
       -- The first run may build the pinned vanilla support graph from source;
       -- explicitly audit it, then exercise the default no-audit policy in the
       -- later modes while reusing that exact support cache.
-      result <- runLogged (if verify then 1800 else 180) root logs label
-        [("THC_BACKEND", backend), ("JAVA_OPTS", "-Dthc.diagnostics=true -Dthc.handoffSlabs=" ++ dense)]
-        driver (["run", "--project-dir", root </> package, "completed",
-                 "--thc-root", root, "--dist-dir", output] ++ ["--verify-artifacts" | verify])
+      let launch = runLogged (if verify then 1800 else 180) root logs label
+            ([("THC_BACKEND", backend), ("JAVA_OPTS", "-Dthc.diagnostics=true -Dthc.handoffSlabs=" ++ dense)] ++
+             [("GHC_PKG", "ghc-pkg") | backend == "ast" && dense == "true"] ++
+             concat [[("GHC", missingCompiler), ("GHC_PKG", missingCompiler)] | explicitCompiler])
+            driver (["run", "--project-dir", root </> package, "completed",
+                     "--thc-root", root, "--dist-dir", output] ++ ["--verify-artifacts" | verify] ++
+                    concat [["--with-ghc", ghc, "--with-ghc-pkg", "ghc-pkg"] | explicitCompiler])
+      result <- if backend == "bytecode" && dense == "true"
+        then bracket (lookupEnv "GHC" <* unsetEnv "GHC")
+          (maybe (unsetEnv "GHC") (setEnv "GHC")) (const launch)
+        else launch
       unless (commandStdout result == commandStdout observed) (die "driver output differs from native GHC")
       let diagnostics = [fields | line <- BSC.lines (commandStderr result),
             Right (Object fields) <- [eitherDecodeStrict line]]
@@ -329,7 +346,7 @@ prepareWindowsDriver root = do
         (die ("driver did not report selected backend: " ++ label))
       pure result
   drivers <- listDirectory (root </> "src/driver/THC/Driver")
-  let commands = [compiled, observed] ++ runs
+  let commands = [compiled, observed, rejected] ++ runs
       supportManifests = [logs </> ("dist with spaces " ++ backend ++ "-" ++ dense) </>
         "thc-run/completed/runtime-support/packages.json" | backend <- ["ast","bytecode"], dense <- ["false","true"]]
       auditedManifests = take 1 supportManifests

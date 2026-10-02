@@ -47,6 +47,12 @@ installation can be selected directly with JAVA_HOME, GHC, GHC_PKG, CABAL,
 THC_CLANG, and THC_PYTHON; bootstrap is optional. CABAL_DIR and GRADLE_USER_HOME
 can point to task-local caches.
 
+For `thc run`, `--with-ghc` takes precedence over GHC, then PATH. The corresponding
+package tool uses `--with-ghc-pkg`, GHC_PKG, then compiler-relative discovery.
+Windows selects the pinned versioned binaries beside unversioned bindist
+launchers when available, preserving wide arguments and one canonical tool
+identity through Cabal support acquisition and Core export.
+
 PowerShell helpers treat native exit codes as authoritative. An ordinary
 compiler message on stderr is not a failed native command. Failed commands
 still stop the workflow.
