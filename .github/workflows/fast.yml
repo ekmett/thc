@@ -25,7 +25,9 @@ concurrency:
   # Closed PRs share their open PR's number even after a merge changes GITHUB_REF
   # to main. Missing PR metadata stays in a run-specific PR group, never main's.
   group: fast-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number || github.run_id) || format('ref-{0}', github.ref) }}
-  cancel-in-progress: true
+  # Finish active main checks; GitHub keeps only the newest pending main run.
+  # PR updates (including close) and non-main refs still cancel their old run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
 
 jobs:
   automation:

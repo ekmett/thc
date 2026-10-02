@@ -91,7 +91,15 @@ class FastWorkflowGuardsTest(unittest.TestCase):
     def test_title_skip_preserves_normal_pr_gate(self):
         workflow = WORKFLOW.read_text()
         self.assertIn("!contains(github.event.pull_request.title, '[ci skip]')", workflow)
-        self.assertIn("cancel-in-progress: true", workflow)
+
+    def test_main_fast_run_finishes_while_pr_updates_still_cancel(self):
+        concurrency = WORKFLOW.read_text().split("\nconcurrency:\n", 1)[1].split("\njobs:", 1)[0]
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}", concurrency)
+        # A merged PR's close event can use main's ref: it must still cancel only
+        # its PR group, including when the event lacks a usable PR number.
+        self.assertIn("group: fast-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number || github.run_id) || format('ref-{0}', github.ref) }}", concurrency)
+        # Keep GitHub's default single pending slot: newest pending replaces old.
+        self.assertNotIn("queue:", concurrency)
 
     def check_case(self, kind, ref, event, trusted):
         with tempfile.TemporaryDirectory() as temporary:
