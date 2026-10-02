@@ -26,9 +26,9 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.String (fromString)
 import Data.Word (Word8, Word16)
-import FixtureSupport (CommandResult(..), hashFile, hashes, run, runLogged, runLoggedWithInput, writeJson)
+import FixtureSupport (CommandResult(..), hashes, run, runLogged, runLoggedWithInput, writeJson)
 import Foreign (Ptr, alloca, castPtr, peek, poke)
-import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..), die)
 import System.FilePath ((</>), takeExtension)
@@ -350,13 +350,7 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
       requestText = unlines [intercalate "\t" (name:map show args) | (name,args) <- requests]
       oracleText = unlines [intercalate "\t" (name:map show (args ++ [expected name args])) | (name,args) <- requests]
   present <- doesFileExist manifestPath
-  when present $ do
-    digest <- hashFile manifestPath
-    let archive = root </> directory </> "previous-manifests" </> digest ++ ".json"
-    createDirectoryIfMissing True (root </> directory </> "previous-manifests")
-    exists <- doesFileExist archive
-    unless exists (copyFile manifestPath archive)
-    removeFile manifestPath
+  when present (removeFile manifestPath)
   check (length requests == 7269 && length (nub requests) == 7269) "Changed pinned-address corpus"
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- run root [] ghc ["--numeric-version"] ""

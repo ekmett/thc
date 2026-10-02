@@ -5,6 +5,6 @@
 set -eu
 cd "$(dirname "$0")/.."
 . bin/toolchain.sh
-"${CABAL:-cabal}" build exe:thc-fixtures --offline
-fixture_bin=$("${CABAL:-cabal}" list-bin exe:thc-fixtures --offline)
+"${CABAL:-cabal}" build exe:thc-fixtures --offline --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG"
+fixture_bin=$("${CABAL:-cabal}" list-bin exe:thc-fixtures --offline --with-compiler="$GHC" --with-hc-pkg="$GHC_PKG")
 exec "$fixture_bin" original-stdio "$@"

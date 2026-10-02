@@ -157,7 +157,10 @@ def gradle_command(selection, *, install_dist=False, fail_fast=True):
     if install_dist:
         argv.append("installDist")
     if selection["mode"] == "narrow":
-        require(selection["junit"]["patterns"] == classes, "Narrow patterns must name entire selected classes")
+        patterns = selection["junit"]["patterns"]
+        proof = "thc.runtime.HandoffTest.requestedModeReachesTestProcessAndContext"
+        require(["thc.runtime.HandoffTest" if name == proof else name for name in patterns] == classes,
+                "Narrow patterns must name entire selected classes or the handoff mode proof")
     else:
         require(selection["junit"]["patterns"] == ["*"], "Full mode must run every test")
     for task in HANDOFF_TASKS.values():
@@ -165,7 +168,7 @@ def gradle_command(selection, *, install_dist=False, fail_fast=True):
         if fail_fast:
             argv.append("--fail-fast")
         if selection["mode"] == "narrow":
-            for name in classes:
+            for name in patterns:
                 argv.extend(["--tests", name])
     return argv
 

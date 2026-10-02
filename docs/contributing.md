@@ -23,6 +23,13 @@ Cabal build products; `make distclean` also removes the checkout's `.gradle` and
 `.gradle-user-home`. Neither removes an external cache. Use
 `GRADLE_FLAGS=--offline` or `CABAL_FLAGS=--offline` for an offline build.
 
+With `TESTS`, fixture preparation uses the same dependency map as CI and reuses
+unchanged inputs. Exact class and method selectors prepare only their dependencies;
+fixture-free classes do not run the Haskell producers. Wildcards and unrecognized
+selectors conservatively prepare the full corpus. Local preparation disables ambient GHC package environments;
+fixture dependencies must be declared by their producers. `GHC` selects the
+compiler and its companion package manager (`GHC_PKG` can override the latter).
+
 After preparing fixtures, run selected JVM tests without preparing them again:
 
 ```sh

@@ -684,7 +684,7 @@ class FastInputTests(unittest.TestCase):
             self.rejected_without_writes(changed)
 
     def test_bytearray_family_closed_receipts_and_native_permissions(self):
-        counts = {"bytearray": 77, "mutable-bytearrays": 87, "resize-bytearrays": 57,
+        counts = {"bytearray": 49, "mutable-bytearrays": 87, "resize-bytearrays": 57,
                   "mutable-bytearray-size": 81, "compare-byte-arrays": 85}
         for family, count in counts.items():
             self.bundle = self.temp_root / f"bundle-{family}.tar.gz"
@@ -795,7 +795,7 @@ class FastInputTests(unittest.TestCase):
 
     def test_core_json_is_not_a_fixture_cache_payload(self):
         for path in ("build/thread-async/pre/core/ThreadAsyncAudit.json",
-                     "build/bytearray/post/core/ByteArrayAudit.json",
+                     "build/bytearray/post-core/ByteArrayAudit.json",
                      "build/boxed-cas/run-1/pre-core/BoxedCasAudit.json"):
             self.assertFalse(cache.allowed_payload(path))
 
@@ -1616,8 +1616,6 @@ class FastInputTests(unittest.TestCase):
         for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS,
                      "bin/prepare-tests.sh", "t/fixtures/core/coverage.json",
                      "src/test/resources/core/original-unix-libc-descriptors.json",
-                     "src/test/resources/core/original-bytestring-sort-descriptor.json",
-                     "src/test/resources/core/original-bytestring-decimal-descriptors.json",
                      "src/main/resources/thc/scalar-primop-signatures.json", "src/tools/primops/PrimopTools.hs"):
             self.put(name, "source: " + name)
         self.put("src/main/java/thc/runtime/Program.java", "unrelated runtime\n")
@@ -2191,7 +2189,10 @@ class ToolchainVersionTests(unittest.TestCase):
             release.write_text('JAVA_VERSION="25"\n')
             responses = ["9.14.1", "GHC package manager version 9.14.1", "",
                          repr([("Target platform", "x86_64-unknown-linux")]), str(libdir)]
-            with patch.dict(os.environ, {"JAVA_HOME": str(release.parent), "GHC_ENVIRONMENT": "-"}, clear=True), \
+            provider = {"THC_INSTALLED_CORE_GHC": "/full-core/bin/ghc",
+                        "THC_INSTALLED_CORE_GHC_PKG": "/full-core/bin/ghc-pkg",
+                        "THC_INSTALLED_CORE_GHC_SOURCE": "/configured-ghc"}
+            with patch.dict(os.environ, {"JAVA_HOME": str(release.parent), "GHC_ENVIRONMENT": "-", **provider}, clear=True), \
                     patch.object(cache, "command", side_effect=responses), \
                     patch.object(cache, "digest", wraps=cache.digest) as digest, \
                     patch.object(Path, "rglob", side_effect=AssertionError("Do not scan GHC")):
@@ -2200,6 +2201,7 @@ class ToolchainVersionTests(unittest.TestCase):
             self.assertEqual(result["version"], "9.14.1")
             self.assertEqual(result["target"], "x86_64-unknown-linux")
             self.assertNotIn("installedAbiSha256", result)
+            self.assertEqual(provider, {key: result["environment"].get(key) for key in provider})
 
     def test_wrong_ghc_version_fails_before_other_inspection(self):
         with patch.object(cache, "command", return_value="9.12.2") as command, \
@@ -2216,13 +2218,6 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/test/c/native-process-signals-test.c",
                           "src/test/resources/core/original-signal-install-descriptor.json",
                           "src/test/resources/core/original-unix-signal-install-descriptor.json",
-                          "src/main/java/thc/runtime/CoreByteStringSort.java",
-                          "src/main/java/thc/runtime/ByteStringSort.java",
-                          "src/main/java/thc/runtime/ByteStringSortExpression.java",
-                          "src/main/java/thc/runtime/CoreByteStringDecimal.java",
-                          "src/main/java/thc/runtime/ByteStringDecimal.java",
-                          "src/main/java/thc/runtime/ByteStringDecimalOp.java",
-                          "src/main/java/thc/runtime/ByteStringDecimalExpression.java",
                           "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                           "src/main/java/thc/runtime/ProcessIdentity.java",
                           "src/main/c/bytestring-utf8-api.c",
@@ -2245,10 +2240,6 @@ class RenamedInputContractTests(unittest.TestCase):
         self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
         self.assertIn("t/haskell-fixtures/PinnedAddressFixtures.hs", sources)
         self.assertIn("src/tools/primops/PrimopTools.hs", sources)
-        sort = "src/test/resources/core/original-bytestring-sort-descriptor.json"
-        self.assertEqual(cache.digest(root / sort), sources[sort])
-        decimal = "src/test/resources/core/original-bytestring-decimal-descriptors.json"
-        self.assertEqual(cache.digest(root / decimal), sources[decimal])
         declaration = "src/test/resources/core/original-unix-libc-descriptors.json"
         self.assertEqual(cache.digest(root / declaration), sources[declaration])
         for name in ("generate-scalar-signatures.py", "primop-coverage.py", "test-primop-coverage.py"):

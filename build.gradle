@@ -272,8 +272,6 @@ tasks.withType(Test).configureEach {
             "bignat-literals/**/*.cbd", "bignat-literals/**/*.json", "bignat-literals/*.tsv", "bignat-literals/native/**", "bignat-literals/commands/**",
             "show-word-list/**/*.cbd", "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
             "short-bytes-slices/**/*.cbd", "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
-            "bytestring-sort/*.cbd", "bytestring-sort/*.json", "bytestring-sort/logs/*.stdout", "bytestring-sort/logs/*.stderr", "bytestring-sort/logs/*.command.json",
-            "bytestring-decimal/*.cbd", "bytestring-decimal/*.json", "bytestring-decimal/logs/*.stdout", "bytestring-decimal/logs/*.stderr", "bytestring-decimal/logs/*.command.json",
             "original-path-mode/**/*.cbd",
             "original-path-access/**/*.cbd",
             "original-path-link/**/*.cbd",

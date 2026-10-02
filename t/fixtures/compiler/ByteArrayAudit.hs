@@ -15,20 +15,8 @@
 module ByteArrayAudit where
 
 import GHC.Exts
-import Data.Word (Word8)
-import qualified Data.ByteString.Short as S
 
--- The installed bytestring pack/unpack workers must execute, including the
--- genuine GHC.Internal.List length worker used by pack.
-{-# OPAQUE shortBytes #-}
-shortBytes :: Int# -> Int#
-shortBytes raw = case S.length bytes + foldl (\a w -> a * 33 + fromIntegral w) 0 (S.unpack bytes) of
-  I# result -> result
-  where
-    seed = I# raw
-    n = abs (seed `rem` 33)
-    bytes = S.pack [fromIntegral (seed + i * 17) | i <- [0 .. n - 1]]
-
+-- Public ShortByteString packing and slicing are covered by ShortByteStringSliceAudit.
 -- Repeated writes to one location expose a stale final byte or wrong write order. A
 -- separate allocation with different contents exposes accidental shared storage.
 {-# OPAQUE orderedBytes #-}
@@ -49,23 +37,6 @@ orderedBytes seed = runRW# (\s0 ->
       word2Int# (word8ToWord# (indexWord8Array# aa 2#)) *# 65537# +#
       word2Int# (word8ToWord# (indexWord8Array# bb 0#)) *# 16777259#
   } } } } } } } } })
-
--- Keep the real public operation as an installed-library dependency. Repeated
--- uncons reconstructs every byte, including empty input, embedded NUL and 255.
-{-# NOINLINE publicUncons #-}
-publicUncons :: S.ShortByteString -> Maybe (Word8, S.ShortByteString)
-publicUncons = S.uncons
-
-{-# OPAQUE shortUncons #-}
-shortUncons :: Int# -> Int#
-shortUncons raw = case walk bytes of I# result -> result
-  where
-    seed = I# raw
-    n = abs (seed `rem` 33)
-    bytes = S.pack [fromIntegral (seed + i * 17) | i <- [0 .. n - 1]]
-    walk remaining = case publicUncons remaining of
-      Nothing -> 0
-      Just (byte, rest) -> fromIntegral byte + 33 * walk rest
 
 -- Distinct initialized source/destination arrays, dynamic contained subranges,
 -- and a zero-length copy at both ends. Check unchanged source and destination
@@ -89,9 +60,7 @@ copiedBytes seed = runRW# (\s0 ->
   case copyByteArray# aa sourceOffset b destinationOffset count s13 of { s14 ->
   case copyByteArray# aa 4# b 6# 0# s14 of { s15 ->
   case unsafeFreezeByteArray# b s15 of { (# _, bb #) ->
-    sizeofByteArray# aa +# sizeofByteArray# bb +# byte aa 0# +# 257# *# (byte aa 1# +# 257# *# (byte aa 2# +# 257# *# (byte aa 3# +#
-      257# *# (byte bb 0# +# 257# *# (byte bb 1# +# 257# *# (byte bb 2# +# 257# *#
-        (byte bb 3# +# 257# *# (byte bb 4# +# 257# *# byte bb 5#))))))))
+    sizeofByteArray# aa +# sizeofByteArray# bb +# checksum aa +# 4362470401# *# checksum bb
   } } } } } } } } } } } } } } } })
   where
     key = word2Int# (and# (int2Word# seed) 1023##)
@@ -100,4 +69,14 @@ copiedBytes seed = runRW# (\s0 ->
     requested = remInt# (quotInt# key 35#) 5#
     count = minInt requested (minInt (4# -# sourceOffset) (6# -# destinationOffset))
     minInt x y = case x <# y of 1# -> x; _ -> y
-    byte a i = word2Int# (word8ToWord# (indexWord8Array# a i))
+
+-- The checksum observes every byte; its size should not multiply the copy
+-- fixture's compiled graph. The native oracle checks the same polynomial.
+{-# OPAQUE checksum #-}
+checksum :: ByteArray# -> Int#
+checksum array = go 0# 1# 0#
+  where
+    go index weight total = case index ==# sizeofByteArray# array of
+      1# -> total
+      _ -> go (index +# 1#) (weight *# 257#)
+        (total +# weight *# word2Int# (word8ToWord# (indexWord8Array# array index)))

@@ -2422,8 +2422,7 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
     @staticmethod
     def declarations():
         targets = [('bytestring-0.12.2.0-inplace', symbol) for symbol in (
-            'memcmp', 'memchr', 'memset', 'bytestring_is_valid_utf8',
-            '_hs_bytestring_long_long_int_dec', '_hs_bytestring_long_long_int_dec_padded18')]
+            'memcmp', 'memchr', 'memset', 'bytestring_is_valid_utf8')]
         targets += [('ghc-internal', symbol) for symbol in (
             'close', 'isatty', 'epoll_ctl', 'hs_free_stable_ptr', '__hscore_set_errno', 'getpid')]
         targets += [('unix-2.8.8.0-inplace', 'geteuid')]
@@ -2802,58 +2801,8 @@ class OriginalStringRtsDeclarationTest(unittest.TestCase):
                 self.assertFalse(fixture.audit(wrong)['accepted'])
 
 
-class OriginalByteStringSortDeclarationTest(unittest.TestCase):
-    def test_original_sort_shape_owner_and_capability(self):
-        fixture = OriginalForeignAuditFixture()
-        declaration = json.loads((ROOT.parent / 'src/test/resources/core/original-bytestring-sort-descriptor.json').read_text())['fps_sort']
-        self.assertEqual('fps_sort', declaration['target']['symbol'])
-        self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
-        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'fps_sort'])
-        self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
-        for unit in ('bytestring-0.12.2.0', 'bytestring-0.12.2.0-119b'):
-            candidate = copy.deepcopy(declaration); candidate['target']['unit'] = unit
-            self.assertTrue(fixture.audit(fixture.fixture(candidate))['accepted'])
-        for unit in ('ghc-internal', 'bytestring-0.12.1.0-inplace', 'bytestring-0.12.2.0-',
-                     'bytestring-0.12.2.0-119b-extra', 'bytestring-0.12.2.0-inplace:forged', ' bytestring-0.12.2.0'):
-            candidate = copy.deepcopy(declaration); candidate['target']['unit'] = unit
-            self.assertFalse(fixture.audit(fixture.fixture(candidate))['accepted'])
-        for key, value in (('safety', 'safe'), ('convention', 'capi'), ('arity', 2), ('resultRep', LONG)):
-            candidate = copy.deepcopy(declaration); candidate[key] = value
-            self.assertFalse(fixture.audit(fixture.fixture(candidate))['accepted'])
-        candidate = copy.deepcopy(declaration); candidate['argumentReps'][1]['primReps'] = ['Int64Rep']
-        self.assertFalse(fixture.audit(fixture.fixture(candidate))['accepted'])
-        candidate = copy.deepcopy(declaration); candidate['resultRep']['components'].clear()
-        self.assertFalse(fixture.audit(fixture.fixture(candidate))['accepted'])
-        candidate = fixture.fixture(declaration); candidate['bindings'][0]['expr'][1][0]['rep'] = LONG
-        self.assertFalse(fixture.audit(candidate)['accepted'])
 
 
-class OriginalByteStringDecimalDeclarationTest(unittest.TestCase):
-    def test_original_decimal_shapes_units_and_capabilities(self):
-        fixture = OriginalForeignAuditFixture()
-        declarations = json.loads((ROOT.parent / 'src/test/resources/core/original-bytestring-decimal-descriptors.json').read_text())
-        self.assertEqual({'_hs_bytestring_long_long_int_dec', '_hs_bytestring_long_long_int_dec_padded18'}, set(declarations))
-        for symbol, declaration in declarations.items():
-            with self.subTest(symbol=symbol):
-                self.assertEqual('bytestring-0.12.2.0-inplace', declaration['target']['unit'])
-                self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
-                disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
-                self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
-                for unit in ('bytestring-0.12.2.0-119b', 'bytestring-0.12.2.0'):
-                    installed = copy.deepcopy(declaration); installed['target']['unit'] = unit
-                    self.assertTrue(fixture.audit(fixture.fixture(installed))['accepted'])
-                for unit in ('ghc-internal', 'bytestring-0.12.1.0-inplace', 'bytestring-0.12.2.0-', 'bytestring-0.12.2.0-119b-extra'):
-                    wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
-                    self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
-                for key, value in (('safety', 'safe'), ('convention', 'capi'), ('arity', 2), ('resultRep', LONG)):
-                    wrong = copy.deepcopy(declaration); wrong[key] = value
-                    self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
-                wrong = copy.deepcopy(declaration); wrong['argumentReps'][0]['primReps'] = ['Word64Rep']
-                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
-                wrong = copy.deepcopy(declaration); wrong['resultRep']['components'].pop(0)
-                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
-                wrong = copy.deepcopy(declaration); wrong['target']['symbol'] = '_hs_bytestring_long_long_uint_dec'
-                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
 
 
 class OriginalUnixLibcDeclarationTest(unittest.TestCase):

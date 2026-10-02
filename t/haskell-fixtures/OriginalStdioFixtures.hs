@@ -27,7 +27,7 @@ import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCoreUnits)
 import Foreign.C.Types (CInt, CLong)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (sizeOf)
-import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile, renameFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
@@ -63,11 +63,7 @@ prepareOriginalStdio root options = do
     die "Usage: thc-fixtures original-stdio [--native-only|--export-only] [--require-supported]"
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
-  when present $ do
-    digest <- hashFile manifest
-    let previous = output </> "previous-manifests"
-    createDirectoryIfMissing True previous
-    renameFile manifest (previous </> digest ++ ".json")
+  when present (removeFile manifest)
   -- Native execution domain, not a second semantic/foreign-proof checker.
   unless (Host.os `elem` ["linux","darwin"] && sizeOf (0 :: CInt) == 4 &&
           sizeOf (0 :: CLong) == 8 && sizeOf (nullPtr :: Ptr ()) == 8) $
@@ -351,11 +347,7 @@ prepareOriginalErrno root = do
       manifest = root </> output </> "manifest.json"
   createDirectoryIfMissing True (root </> output </> "native")
   stale <- doesFileExist manifest
-  when stale $ do
-    digest <- hashFile manifest
-    let previous = root </> output </> "previous-manifests"
-    createDirectoryIfMissing True previous
-    renameFile manifest (previous </> digest ++ ".json")
+  when stale (removeFile manifest)
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = sort $ [coreSource, nativeSource, "thc.cabal", "t/haskell-fixtures/Main.hs",
@@ -440,11 +432,7 @@ prepareOriginalProcessIdentity root = do
       manifest = root </> output </> "manifest.json"
   createDirectoryIfMissing True (root </> output </> "native")
   stale <- doesFileExist manifest
-  when stale $ do
-    digest <- hashFile manifest
-    let previous = root </> output </> "previous-manifests"
-    createDirectoryIfMissing True previous
-    renameFile manifest (previous </> digest ++ ".json")
+  when stale (removeFile manifest)
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = sort $ [coreSource, nativeSource, "thc.cabal", "t/haskell-fixtures/Main.hs",

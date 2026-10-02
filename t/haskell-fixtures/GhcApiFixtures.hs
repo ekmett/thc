@@ -38,11 +38,15 @@ prepareRecordFields root = do
         [value] -> pure (BS.unpack value)
         _ -> die "record-fields: expected one output line"
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
   plugin <- execute "plugin-build" [] "bin/build-compiler.sh" []
   pluginInfo <- readJson (root </> "build/compiler/plugin.json")
   packageDb <- field pluginInfo "packageDb"
   pluginUnit <- field pluginInfo "unitId"
-  helperLocation <- execute "helper-location" [] "cabal" ["list-bin", "exe:thc-interface", "--offline"]
+  let selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ ghcPkg]
+  helperBuild <- execute "helper-build" [] cabal ("build" : selection)
+  helperLocation <- execute "helper-location" [] cabal ("list-bin" : selection)
   helper <- single helperLocation
   library <- execute "libdir" [] ghc ["--print-libdir"]
   libdir <- single library
@@ -73,7 +77,7 @@ prepareRecordFields root = do
         "--output", directory </> stage </> entry ++ "-audit.json"] ++
        map (\name -> directory </> stage </> name ++ ".cbd") modules)
   inputs <- hashes root (sources ++ ["src/compiler/THC/Plugin.hs", "t/haskell-fixtures/GhcApiFixtures.hs"])
-  let records = [plugin, helperLocation, library] ++ commands ++ audits
+  let records = [plugin, helperBuild, helperLocation, library] ++ commands ++ audits
   artifacts <- hashes root (concatMap commandArtifacts records ++
     [directory </> stage </> name ++ ".cbd" | stage <- ["pre", "post", "installed"], name <- modules])
   writeJson (root </> directory </> "manifest.json") $ object

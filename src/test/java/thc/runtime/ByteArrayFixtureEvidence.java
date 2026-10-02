@@ -27,7 +27,7 @@ final class ByteArrayFixtureEvidence {
         "MutableByteArrayAudit", "resize-bytearrays", "ResizeByteArrayAudit", "mutable-bytearray-size",
         "MutableByteArraySizeAudit", "compare-byte-arrays", "CompareByteArraysAudit");
     private static final Map<String, List<String>> entries =
-        Map.of("bytearray", List.of("shortBytes", "orderedBytes", "shortUncons", "copiedBytes"), "mutable-bytearrays",
+        Map.of("bytearray", List.of("orderedBytes", "copiedBytes"), "mutable-bytearrays",
             List.of("filledBytes", "movedBytes", "disjointBytes", "copiedMutableBytes", "copiedDisjointBytes",
                 "publicReplicate"),
             "resize-bytearrays", List.of("resizedBytes", "resizedTwiceWrites"), "mutable-bytearray-size",
@@ -50,11 +50,11 @@ final class ByteArrayFixtureEvidence {
         throws Exception {
         String directory = "build/" + group, module = Objects.requireNonNull(modules.get(group));
         var names = Objects.requireNonNull(entries.get(group));
-        boolean original = List.of("bytearray", "compare-byte-arrays").contains(group),
+        boolean original = group.equals("compare-byte-arrays"),
                 generated = drivers.containsKey(group);
         var commands = new ArrayList<>(List.of("ghc-version", "ghc-info", "bytestring-version",
             "bytestring-description", "native-build", "native-oracle"));
-        if (!original)
+        if (!original && !group.equals("bytearray"))
             commands.addAll(List.of("compiler-build", "primop-coverage"));
         if (!generated)
             commands.add("native-inputs");
@@ -89,7 +89,7 @@ final class ByteArrayFixtureEvidence {
         if (original) {
             sourcePaths.add("bin/export-boot.py");
             sourcePaths.addAll(originalSources);
-        } else
+        } else if (!group.equals("bytearray"))
             sourcePaths.add("src/tools/primops/PrimopTools.hs");
         if (!generated)
             sourcePaths.addAll(List.of(
