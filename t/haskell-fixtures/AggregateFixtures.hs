@@ -19,11 +19,13 @@ import Data.Aeson (object, (.=))
 import Data.Bits ((.&.), xor, shiftL, shiftR)
 import Data.List (sort)
 import qualified Data.Set as Set
+import GHC.ResponseFile (escapeArgs)
 import FixtureSupport (run, hashes, writeJson, splitTab, readInteger)
-import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist, findExecutable, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import qualified System.Info as Host
 import Text.Read (readMaybe)
 
 directNames, callNames :: [String]
@@ -106,10 +108,13 @@ prepareTupleArithmetic root = do
       output = root </> directory
       manifest = output </> "manifest.json"
       source = "t/fixtures/compiler/TupleArithmeticAudit.hs"
+      windows = Host.os == "mingw32"
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  exporter <- if windows then maybe "powershell.exe" id <$> findExecutable "pwsh" else pure "bin/export-core.sh"
+  python <- if windows then maybe "python" id <$> lookupEnv "THC_PYTHON" else pure "python3"
   version <- run root [] ghc ["--numeric-version"] ""
   unless (takeWhile (/= '\n') version == "9.14.1") (die "Tuple arithmetic requires GHC 9.14.1")
   ghcInfo <- run root [] ghc ["--info"] ""
@@ -120,19 +125,24 @@ prepareTupleArithmetic root = do
     let core = directory </> stage ++ "-core"
         ghcOut = directory </> stage ++ "-ghc"
         options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
+    exportArgs <- if windows then do
+      let response = directory </> stage ++ "-export.args"
+      writeFile (root </> response) (escapeArgs (options ++ [source]))
+      pure ["-NoProfile", "-File", root </> "bin/export-core.ps1", "@" ++ (root </> response)]
+      else pure (options ++ [source])
     _ <- run root [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> ghcOut)]
-      "bin/export-core.sh" (options ++ [source]) ""
+      exporter exportArgs ""
     let modulePath = root </> core </> "TupleArithmeticAudit.cbd"
     exists <- doesFileExist modulePath
     unless exists (die ("Missing GHC Core export: " ++ modulePath))
     let audit = directory </> stage ++ "-audit.json"
         auditArgs = concatMap (\name -> ["--entry", "main:TupleArithmeticAudit." ++ name]) (directNames ++ callNames) ++
           ["--output",audit,core </> "TupleArithmeticAudit.cbd"]
-    _ <- run root [] "python3" ("bin/audit-core.py" : auditArgs) ""
+    _ <- run root [] python ("bin/audit-core.py" : auditArgs) ""
     pure ()
   let driver = directory </> "NativeTupleArithmetic.hs"
       native = directory </> "native"
-      executable = native </> "tuple-arithmetic-oracle"
+      executable = native </> ("tuple-arithmetic-oracle" ++ if windows then ".exe" else "")
   writeFile (root </> driver) oracleDriver
   createDirectoryIfMissing True (root </> native)
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
@@ -152,11 +162,12 @@ prepareTupleArithmetic root = do
         "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh",
         "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
         ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"] ++
+        (if windows then ["bin/export-core.ps1", "bin/windows-common.ps1"] else [])
       artifacts = [directory </> stage ++ suffix | stage <- ["pre","post"],
         suffix <- ["-core/TupleArithmeticAudit.cbd","-audit.json"]] ++
-        [directory </> file | file <- ["oracle.tsv","call-oracle.tsv","NativeTupleArithmetic.hs",
-          "native/tuple-arithmetic-oracle"]]
+        [directory </> file | file <- ["oracle.tsv","call-oracle.tsv","NativeTupleArithmetic.hs"]] ++
+        [executable] ++ [directory </> stage ++ "-export.args" | windows, stage <- ["pre","post"]]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson manifest (object
