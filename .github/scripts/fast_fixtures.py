@@ -762,9 +762,11 @@ def prepare(root, selection, run, toolchain):
     classes = selection["junit"]["classes"]
     if not isinstance(classes, list) or not classes or not all(isinstance(name, str) for name in classes):
         raise ValueError("Invalid selected JUnit classes")
-    if selection.get("mode") == "full" or any(name not in owners for name in classes):
+    # Complete selections still have declared owners and can reuse each group's
+    # verified products. Only unknown classes or wildcards need the fallback.
+    if any(name not in owners for name in classes):
         return _prepare_full(root, run)
-    if selection.get("mode") != "narrow":
+    if selection.get("mode") not in ("narrow", "full"):
         raise ValueError("Invalid selected test mode")
 
     groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None})
