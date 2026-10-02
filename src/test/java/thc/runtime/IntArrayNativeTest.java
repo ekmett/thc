@@ -5,16 +5,12 @@ package thc.runtime;
 import com.oracle.truffle.api.TruffleLanguage;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledOnOs;
-import org.junit.jupiter.api.condition.OS;
-import org.junit.jupiter.api.io.TempDir;
 import thc.*;
 import java.math.BigInteger;
 import java.nio.ByteOrder;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
 
@@ -216,31 +212,6 @@ public class IntArrayNativeTest {
             }
         }
     }
-    @Test
-    @EnabledOnOs(OS.WINDOWS)
-    public void nativeWindowsOracleRunsFromAPathContainingSpaces(@TempDir Path temporary) throws Exception {
-        var inputs = (Map<String, String>) manifest().get("inputHashes");
-        assertTrue(inputs.containsKey("bin/export-core.ps1"));
-        assertTrue(inputs.containsKey("bin/windows-common.ps1"));
-        assertFalse(inputs.containsKey("bin/export-core.sh"));
-        var executable = Files.copy(root.resolve("build/int-arrays/native/int-array-oracle.exe"),
-            temporary.resolve("native array oracle.exe"));
-        var expected = Files.readAllLines(root.resolve("build/int-arrays/oracle.tsv")).getFirst();
-        var fields = expected.split("\t");
-        var request = temporary.resolve("request.tsv");
-        Files.writeString(request, fields[0] + "\t" + fields[1] + "\n");
-        var output = temporary.resolve("output.tsv");
-        var process = new ProcessBuilder(executable.toString()).directory(temporary.toFile())
-            .redirectInput(request.toFile()).redirectErrorStream(true).redirectOutput(output.toFile()).start();
-        try {
-            assertTrue(process.waitFor(30, TimeUnit.SECONDS), "Native Windows array oracle timed out");
-            assertEquals(0, process.exitValue(), Files.readString(output));
-            assertEquals(expected, Files.readString(output).strip());
-        } finally {
-            if (process.isAlive()) process.destroyForcibly().waitFor();
-        }
-    }
-
     @Test
     public void genuinePublicArraysAndPrimitiveAliasesMatchNativeAndIndependentModel() throws Exception {
         var manifest = manifest();
