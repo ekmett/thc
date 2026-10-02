@@ -332,9 +332,16 @@ buildProject action opts target = do
   when (action == RunGuest) $ do
     requireFile runtime
     when (runVerifyArtifacts opts) $ requireFile (thcRoot </> "bin/audit-core.py")
+  compiler <- case ghcPath flags of
+    Just path -> do
+      requestedCompiler <- if takeFileName path == path then pure path else makeAbsolute path
+      findExecutable requestedCompiler >>= maybe (fail "selected GHC compiler not found") makeAbsolute
+    Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") makeAbsolute
+  packageTool <- selectedPackageTool compiler (ghcPkgPath flags)
   let buildPlugin = thcRoot </> "bin/build-compiler.sh"
-      overrides = maybe [] (\path -> [("GHC", path)]) (ghcPath flags) ++
-                  maybe [] (\path -> [("GHC_PKG", path)]) (ghcPkgPath flags)
+      -- Plugin publication and interface preparation share Cabal's build tree.
+      -- Pass the same selected invocation paths, including wrappers, to both.
+      overrides = [("GHC", compiler), ("GHC_PKG", packageTool)]
   requireFile buildPlugin
   inherited <- getEnvironment
   launchEnvironment <- runtimeDebugEnvironment Host.os opts inherited
@@ -361,16 +368,10 @@ buildProject action opts target = do
   createDirectoryIfMissing True requestedOutput
   output <- canonicalizePath requestedOutput
   let native = output </> "native"
-  compiler <- case ghcPath flags of
-    Just path -> do
-      requestedCompiler <- if takeFileName path == path then pure path else makeAbsolute path
-      findExecutable requestedCompiler >>= maybe (fail "selected GHC compiler not found") makeAbsolute
-    Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") makeAbsolute
-  packageTool <- Just <$> selectedPackageTool compiler (ghcPkgPath flags)
   source <- traverse canonicalizePath (runGhcSource opts)
   withProjectLock output $
     runBuiltProject action project working thcRoot runtime output native (runTarget opts) projectOptions
-                    pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
+                    pluginDb pluginUnit pluginLibrary compiler (Just packageTool) (runInstalledCore opts)
                     source registeredLibrary (runVerifyArtifacts opts) launchEnvironment (runArguments opts)
 
 resolveRunnable :: FilePath -> String -> [String] -> [(String, String)] -> FilePath -> IO Unit

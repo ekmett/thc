@@ -8,6 +8,10 @@ mkdir -p "$scratch/install A/bin" "$scratch/install B/bin" "$scratch/shim" "$scr
 
 cat > "$scratch/install A/bin/ghc-9.14.1" <<'SH'
 #!/bin/sh
+if [ "$0" != "$TEST_SELECTED_GHC" ]; then
+  echo 'compiler invocation spelling changed' >&2
+  exit 31
+fi
 case "$1" in
   --numeric-version) printf '9.14.1\n' ;;
   --print-global-package-db) printf '%s\n' "$TEST_DB_A" ;;
@@ -34,15 +38,15 @@ cp "$scratch/install A/bin/ghc-pkg" "$scratch/install B/bin/ghc-pkg-9.14.1"
 chmod +x "$scratch/install A/bin/"* "$scratch/install B/bin/"*
 ln -s "$scratch/install A/bin/ghc-9.14.1" "$scratch/shim/ghc"
 ln -s "$scratch/install A/bin/ghc-pkg-9.14.1" "$scratch/compatible pkg"
-export TEST_DB_A="$scratch/db A" TEST_DB_B="$scratch/db B"
+export TEST_DB_A="$scratch/db A" TEST_DB_B="$scratch/db B" TEST_SELECTED_GHC="$scratch/shim/ghc"
 
-# A selected symlink resolves to installation A; versioned sibling wins over
-# the deliberately incompatible unversioned sibling.
+# Preserve the selected compiler symlink while finding its companion in
+# installation A; the versioned sibling wins over the incompatible fallback.
 (
   unset GHC_PKG
   GHC="$scratch/shim/ghc"
   . bin/toolchain.sh
-  [ "$GHC" = "$(realpath "$scratch/install A/bin/ghc-9.14.1")" ]
+  [ "$GHC" = "$scratch/shim/ghc" ]
   [ "$GHC_PKG" = "$(realpath "$scratch/install A/bin/ghc-pkg-9.14.1")" ]
 )
 
@@ -82,7 +86,7 @@ grep -q 'could not list ghc-internal' "$scratch/output"
   GHC="$scratch/shim/ghc"
   GHC_PKG="$scratch/compatible pkg"
   . bin/toolchain.sh
-  [ "$GHC_PKG" = "$(realpath "$scratch/install A/bin/ghc-pkg-9.14.1")" ]
+  [ "$GHC_PKG" = "$scratch/compatible pkg" ]
 )
 
 cat > "$scratch/cabal stub" <<'SH'
@@ -96,6 +100,6 @@ if GHC="$scratch/shim/ghc" GHC_PKG= CABAL="$scratch/cabal stub" \
   echo 'Cabal stub unexpectedly succeeded' >&2
   exit 1
 fi
-grep -Fxq -e "--with-compiler=$(realpath "$scratch/install A/bin/ghc-9.14.1")" "$scratch/cabal-args"
+grep -Fxq -e "--with-compiler=$scratch/shim/ghc" "$scratch/cabal-args"
 grep -Fxq -e "--with-hc-pkg=$(realpath "$scratch/install A/bin/ghc-pkg-9.14.1")" "$scratch/cabal-args"
 printf '%s\n' 'Compiler toolchain selection controls passed'

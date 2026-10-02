@@ -130,6 +130,34 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
         check (after == before + 1) (label ++ " reused an indexed bundle")
         check (case result of Left _ -> True; Right (Left _) -> True; _ -> False)
           (label ++ " was accepted")
+  -- A bulk snapshot must preserve describe's exact selected records and
+  -- ignore unrelated packages whose declared interfaces are unavailable.
+  let unrelated = work </> "unrelated.conf"
+      duplicateDb = work </> "duplicate-package.conf.d"
+      recordCommand label arguments = do
+        result <- run label ghcPkg arguments
+        modifyIORef' extraCommands (++ [result])
+  writeFile unrelated $ unlines
+    ["name: thc-cache-unrelated", "version: 0.1", "id: thc-cache-unrelated-0.1-inplace",
+     "key: thc-cache-unrelated-0.1-inplace", "exposed: True", "exposed-modules: MissingInterface",
+     "import-dirs: " ++ show work]
+  recordCommand "unrelated-register" ["--package-db", database, "--force", "update", unrelated]
+  closure <- Installed.probeClosure context unit
+  described <- mapM (Installed.discoverInstalled context . Installed.registeredId) closure
+  check (closure == described) "Bulk registration snapshot differs from exact descriptions"
+  check (all (`elem` map Installed.registeredId closure) [target, dependency] &&
+         all ((/= "thc-cache-unrelated-0.1-inplace") . Installed.registeredId) closure)
+    "Registration snapshot did not select the requested transitive closure"
+  -- Exact unit IDs appearing in two selected databases must remain ambiguous.
+  duplicateExists <- doesDirectoryExist duplicateDb
+  unless duplicateExists $ recordCommand "duplicate-init" ["init", duplicateDb]
+  recordCommand "duplicate-register"
+    ["--package-db", database, "--package-db", duplicateDb, "update", work </> "InterfaceCacheRoot.conf"]
+  duplicate <- Exception.try (Installed.probeClosure
+    context {Installed.installedDatabases = Installed.installedDatabases context ++ [duplicateDb]} unit)
+      :: IO (Either IOException [Installed.InstalledUnit])
+  check (case duplicate of Left _ -> True; Right _ -> False)
+    "Registration snapshot accepted a duplicate selected unit ID"
   first <- cold "cold load"
   warm "unchanged warm load"
   let bundlePath = Project.bundlePath (Project.installedBundle first)

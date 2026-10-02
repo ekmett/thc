@@ -8,7 +8,12 @@ ghc_command=$(command -v "$selected_ghc") || {
   echo "Selected GHC executable not found: $selected_ghc" >&2
   exit 1
 }
-GHC=$(realpath "$ghc_command") || exit 1
+# Keep the selected invocation: wrappers and symlinks may use argv[0]. Cabal
+# also distinguishes this spelling from the target of the symlink.
+case "$ghc_command" in
+  /*|[A-Za-z]:/*|[A-Za-z]:'\'*|'\\'*) GHC=$ghc_command ;;
+  *) GHC="$(pwd)/$ghc_command" ;;
+esac
 version=$("$GHC" --numeric-version)
 if [ -n "${GHC_PKG:-}" ]; then
   pkg_command=$(command -v "$GHC_PKG") || {
@@ -16,7 +21,8 @@ if [ -n "${GHC_PKG:-}" ]; then
     exit 1
   }
 else
-  ghc_bin=$(dirname "$GHC")
+  ghc_install=$(realpath "$GHC") || exit 1
+  ghc_bin=$(dirname "$ghc_install")
   if [ -x "$ghc_bin/ghc-pkg-$version" ]; then
     pkg_command=$ghc_bin/ghc-pkg-$version
   elif [ -x "$ghc_bin/ghc-pkg" ]; then
@@ -26,7 +32,10 @@ else
     exit 1
   fi
 fi
-GHC_PKG=$(realpath "$pkg_command") || exit 1
+case "$pkg_command" in
+  /*|[A-Za-z]:/*|[A-Za-z]:'\'*|'\\'*) GHC_PKG=$pkg_command ;;
+  *) GHC_PKG="$(pwd)/$pkg_command" ;;
+esac
 pkg_version=$("$GHC_PKG" --version)
 if [ "$version" != 9.14.1 ] || [ "$pkg_version" != 'GHC package manager version 9.14.1' ]; then
   echo "THC requires GHC and ghc-pkg 9.14.1; found $version / $pkg_version" >&2

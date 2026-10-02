@@ -44,7 +44,7 @@ import System.IO (hClose, openTempFile, stderr, stdout)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 import Text.Read (readEither)
 import THC.Driver.Installed (InstalledContext(..), InstalledUnit(..), InterfaceWay(..),
-  boundedInterfaceProcess, packageGlobalArguments, installedViewIdentity)
+  boundedInterfaceProcess, packageGlobalArguments, installedProvenance, installedViewIdentity)
 import THC.Compact.Module (readModuleMetadata)
 import THC.Driver.InstalledForeign (createView, viewContext)
 import THC.Driver.PinnedFlags (pinnedLibraryFlags, pinnedConfigureOptions, pinnedPluginOptions)
@@ -448,7 +448,8 @@ pinnedRecipeIdentity = object
 -- Pinned interfaces are built by the selected GHC, not the native capture/link
 -- path. GhcProxy contributes only directPlugin's option formatting here. Keep
 -- native export changes out of this key while retaining every compilation/view
--- owner and Cabal's configuration implementation.
+-- owner and Cabal's configuration implementation. Installed discovery is
+-- represented by its consumed outputs in each preparation key below.
 pinnedInterfaceRecipeIdentity :: Value
 pinnedInterfaceRecipeIdentity = object
   ["sourceHash" .= recipeHash, "Cabal" .= (VERSION_Cabal :: String),
@@ -459,7 +460,7 @@ pinnedInterfaceRecipeIdentity = object
       source <- loc_filename <$> location
       let root = iterate takeDirectory source !! 5
           files = ["src/driver/THC/Driver/" ++ name | name <-
-            ["GhcProxy.hs", "Installed.hs", "InstalledForeign.hs", "Lock.hs", "PinnedFlags.hs", "PinnedSetup.hs", "Wired.hs"]]
+            ["GhcProxy.hs", "InstalledForeign.hs", "Lock.hs", "PinnedFlags.hs", "PinnedSetup.hs", "Wired.hs"]]
       records <- forM files $ \name -> do
         let path = root </> name
         addDependentFile path
@@ -502,9 +503,14 @@ preparePinnedInterfaces cache pluginDb pluginUnit pluginLibrary original units =
           let selectedFlags = flags ++ backend
               dynamic = installedInterfaceWay context == DynamicInterfaces
               suffixes = if dynamic then ["hi", "dyn_hi"] else ["hi"]
+              installedInputs = object
+                ["provenance" .= installedProvenance context unit,
+                 "packageGlobalArguments" .= packageGlobalArguments context,
+                 "ghc" .= installedGhc original, "packageTool" .= installedPackageTool context,
+                 "helper" .= installedHelper context, "packageDatabases" .= installedDatabases context]
               key = digest (BL.toStrict (encode
                 ("pinned-library-core-v9" :: String, pinnedReleaseIdentity, pinnedInterfaceRecipeIdentity, pluginDb, pluginUnit, pluginHash, helperHash,
-                 installedCompiler original, settings, selectedFlags, cppFlags, installedViewIdentity context, registration unit)))
+                 installedCompiler original, settings, selectedFlags, cppFlags, installedViewIdentity context, registration unit, installedInputs)))
               destination = cache </> "pinned-libraries/v1" </> key
               receipt = destination </> "complete"
           createDirectoryIfMissing True (takeDirectory destination)
@@ -524,7 +530,7 @@ preparePinnedInterfaces cache pluginDb pluginUnit pluginLibrary original units =
               BL.writeFile (destination </> "inputs.json") (encode (object
                 ["source" .= pinnedReleaseIdentity, "compiler" .= installedCompiler original,
                  "registration" .= registration unit, "dependencyView" .= installedViewIdentity context,
-                 "recipe" .= pinnedInterfaceRecipeIdentity, "pluginDb" .= pluginDb, "pluginHash" .= pluginHash, "helperHash" .= helperHash,
+                 "installedInputs" .= installedInputs, "recipe" .= pinnedInterfaceRecipeIdentity, "pluginDb" .= pluginDb, "pluginHash" .= pluginHash, "helperHash" .= helperHash,
                  "flags" .= selectedFlags, "cppFlags" .= cppFlags, "settings" .= settings]))
               let package = destination </> "source"
                   dist = destination </> "dist"

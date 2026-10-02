@@ -168,6 +168,10 @@ discoverInstalled context identifier = do
     (packageGlobalArguments context ++
      concatMap (\db -> ["--package-db", db]) (installedDatabases context) ++
      ["--ipid", "describe", identifier])
+  installedUnitFromDescription context identifier description
+
+installedUnitFromDescription :: InstalledContext -> String -> String -> IO InstalledUnit
+installedUnitFromDescription context identifier description = do
   info <- case parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack description)) of
     Left errors -> fail ("invalid registration for " ++ identifier ++ ": " ++ show errors)
     Right (_, value) -> pure value
@@ -318,25 +322,53 @@ probeSnapshot context units = forM paths $ \path -> withBinaryFile path ReadMode
   where
     paths = installedHelper context : concatMap (map snd . installedInterfaces) units
 
+-- Read one fresh registration snapshot. ghc-pkg dump uses the same expanded
+-- record format as describe; only selected records have their interfaces
+-- inspected. Keep duplicate IDs until selection so unrelated DB entries do not
+-- change the requested closure's admission contract.
+registrationSnapshot :: InstalledContext -> IO (String -> IO InstalledUnit)
+registrationSnapshot context = do
+  output <- command (installedPackageTool context)
+    (packageGlobalArguments context ++
+     concatMap (\db -> ["--package-db", db]) (installedDatabases context) ++ ["dump"])
+  records <- forM (descriptions (lines output)) $ \description -> do
+    info <- case parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack description)) of
+      Left errors -> fail ("invalid installed registration snapshot: " ++ show errors)
+      Right (_, value) -> pure value
+    pure (prettyShow (Package.installedUnitId info), [description])
+  let byId = Map.fromListWith (++) records
+  pure $ \identifier -> case Map.lookup identifier byId of
+    Just [description] -> installedUnitFromDescription context identifier description
+    _ -> fail ("expected exactly one installed registration for " ++ identifier)
+  where
+    descriptions [] = []
+    descriptions rows =
+      let (record, remaining) = break (`elem` ["---", "---\r"]) rows
+          description = stripNewlines (unlines record)
+      in [description | not (null description)] ++ descriptions (drop 1 remaining)
+    stripNewlines = reverse . dropWhile (`elem` ("\r\n" :: String)) . reverse
+
 probeClosure :: InstalledContext -> InstalledUnit -> IO [InstalledUnit]
 probeClosure context requested = do
-  units <- Map.elems <$> visit Set.empty Map.empty (registeredId requested)
+  discover <- registrationSnapshot context
+  units <- Map.elems <$> visit discover Set.empty Map.empty (registeredId requested)
   unless (lookup (registeredId requested) [(registeredId unit, unit) | unit <- units] == Just requested)
     (fail "installed registration changed before interface probe")
   validateReexports units
   pure units
   where
-    visit active found identifier
+    visit discover active found identifier
       | identifier `Set.member` active = fail "installed dependency cycle"
       | Map.member identifier found = pure found
       | otherwise = do
-          unit <- discoverInstalled context identifier
-          foldM (visit (Set.insert identifier active)) (Map.insert identifier unit found)
+          unit <- discover identifier
+          foldM (visit discover (Set.insert identifier active)) (Map.insert identifier unit found)
             (sort (installedDepends unit))
 
 checkProbeRegistrations :: InstalledContext -> [InstalledUnit] -> IO ()
 checkProbeRegistrations context units = do
-  current <- mapM (discoverInstalled context . registeredId) units
+  discover <- registrationSnapshot context
+  current <- mapM (discover . registeredId) units
   unless (current == units) (fail "installed registration changed during interface probe")
 
 -- The caller rechecks registrations after consuming the response and any
