@@ -751,7 +751,7 @@
       "junit": ["thc.runtime.ScalarBitCastTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}],
       "outputs": ["build/scalar-bitcasts"],
-      "sources": ["t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs"]
+      "sources": ["t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.ps1", "bin/windows-common.ps1", "t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs"]
     },
     "sum-results": {
       "junit": ["thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest", "thc.runtime.UnknownBoxedNativeTest"],

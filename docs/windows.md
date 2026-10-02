@@ -64,21 +64,26 @@ still stop the workflow.
 
 ## Native export and launch
 
-The word-floating producer prepares its plugin, genuine pre/post-tidy CBD,
-strict audits and native integer-bit oracle independently. After bootstrap,
-run only that fixture group and its tests in both handoff modes:
+The word-floating and scalar-bitcasts producers each prepare their plugin,
+genuine pre/post-tidy CBD, strict audits and native integer-bit oracle
+independently. After bootstrap, run these groups and their tests in both
+handoff modes:
 
 ~~~powershell
 $tools = Get-ThcGhc
 $env:GHC = $tools.Compiler
 $env:GHC_PKG = $tools.PackageTool
 $env:GHC_ENVIRONMENT = '-'
-Invoke-ThcTool $env:CABAL @('run', 'exe:thc-fixtures', '--offline', '--disable-shared',
-    '-fdevelopment', "--with-compiler=$($tools.Compiler)",
-    "--with-hc-pkg=$($tools.PackageTool)", '--', 'word-floating')
+foreach ($group in @('word-floating', 'scalar-bitcasts')) {
+    Invoke-ThcTool $env:CABAL @('run', 'exe:thc-fixtures', '--offline', '--disable-shared',
+        '-fdevelopment', "--with-compiler=$($tools.Compiler)",
+        "--with-hc-pkg=$($tools.PackageTool)", '--', $group)
+}
 Invoke-ThcTool ./gradlew.bat @('--no-daemon', '--max-workers=4', '--continue',
     'testDefault', '--tests', 'thc.runtime.WordFloatingTest',
-    'testDense', '--tests', 'thc.runtime.WordFloatingTest')
+    '--tests', 'thc.runtime.ScalarBitCastTest',
+    'testDense', '--tests', 'thc.runtime.WordFloatingTest',
+    '--tests', 'thc.runtime.ScalarBitCastTest')
 ~~~
 
 Shared fixture subprocesses select the existing PowerShell exporter on Windows,

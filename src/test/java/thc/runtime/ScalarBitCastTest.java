@@ -10,6 +10,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import org.graalvm.polyglot.Context;
@@ -91,6 +92,12 @@ class ScalarBitCastTest {
         assertEquals(arities, manifest.get("bitcastPrimitiveArities"));
         var keys = new HashSet<String>(); for (var stage : list("pre", "post")) for (var name : NAMES) keys.add(stage + "/" + name);
         assertEquals(keys, object(manifest.get("audits")).keySet());
+        assertTrue(object(manifest.get("inputHashes")).keySet().containsAll(list("bin/export-core.ps1", "bin/windows-common.ps1")), "Native exporter provenance");
+        for (var section : list("inputHashes", "artifactHashes")) {
+            var hashes = object(manifest.get(section)); assertFalse(hashes.isEmpty(), section);
+            for (var hash : hashes.entrySet()) assertEquals(hash.getValue(), HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(Files.readAllBytes(root.toPath().resolve(hash.getKey())))), "Stale fixture " + hash.getKey());
+        }
         for (var stage : list("pre", "post")) for (var name : NAMES) {
             var report = json(prefix + "/" + stage + "-" + name + "-audit.json");
             assertEquals(true, report.get("accepted")); assertEquals(list(), report.get("issues")); assertEquals(list(), report.get("missingGlobals"));
@@ -189,7 +196,7 @@ class ScalarBitCastTest {
             for (var mutation : list("valid", "argument", "result", "lexical", "partial", "over", "bare")) {
                 var module = synthetic(name); mutate(lambda(module), mutation); var label = name.substring(0, name.length() - 1) + "-" + mutation;
                 var source = thc.CoreCbdFixtures.write(directory.resolve(label + ".cbd"), without(module, "instrument")); var report = directory.resolve(label + "-report.json");
-                var process = new ProcessBuilder("python3", "bin/audit-core.py", source.toString(), "--entry", "entry", "--output", report.toString()).directory(root)
+                var process = new ProcessBuilder(System.getenv().getOrDefault("THC_PYTHON", "python3"), "bin/audit-core.py", source.toString(), "--entry", "entry", "--output", report.toString()).directory(root)
                     .redirectOutput(directory.resolve(label + ".stdout").toFile()).redirectError(directory.resolve(label + ".stderr").toFile()).start();
                 if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared bitcast auditor timed out: " + label); }
                 assertEquals(mutation.equals("valid") ? 0 : 1, process.exitValue(), label); var actual = object(Json.parse(Files.readString(report)));

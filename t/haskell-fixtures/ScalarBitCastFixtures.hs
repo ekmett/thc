@@ -29,6 +29,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import qualified System.Info as Host
 import Text.Read (readMaybe)
 
 entries :: [String]
@@ -81,7 +82,7 @@ prepareScalarBitCasts root = do
       manifest = output </> "manifest.json"
       logs = directory </> "commands"
       native = directory </> "native"
-      binary = native </> "scalar-bitcast-oracle"
+      binary = native </> "scalar-bitcast-oracle" ++ if Host.os == "mingw32" then ".exe" else ""
   createDirectoryIfMissing True (root </> native)
   present <- doesFileExist manifest
   when present (removeFile manifest)
@@ -106,7 +107,7 @@ prepareScalarBitCasts root = do
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         [source])
-    let corePath = directory </> stage ++ "-core/ScalarBitCastAudit.cbd"
+    let corePath = directory ++ "/" ++ stage ++ "-core/ScalarBitCastAudit.cbd"
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       -- The existing shared Python auditor remains the capability proof.
@@ -135,7 +136,7 @@ prepareScalarBitCasts root = do
         [name,x,result] -> (,,) name <$> readInteger x <*> readInteger result
         _ -> Nothing
   rows <- maybe (die "Malformed scalar bitcast native output") pure
-    (traverse parse (lines (BSC.unpack (commandStdout executed))))
+    (traverse (parse . BSC.unpack . BSC.dropWhileEnd (== '\r')) (BSC.lines (commandStdout executed)))
   unless ([(name,x) | (name,x,_) <- rows] == requests) (die "Incomplete scalar bitcast native corpus")
   forM_ rows $ \(name,x,result) -> unless
     (result == if "float" `isPrefixOf` name then x .&. 0xffffffff else signed64 x)
@@ -147,6 +148,7 @@ prepareScalarBitCasts root = do
         "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/ScalarBitCastFixtures.hs",
         "bin/core-capabilities.json","bin/audit-core.py","src/tools/primops/PrimopTools.hs",
         "src/main/resources/thc/scalar-primop-signatures.json","bin/build-compiler.sh","bin/export-core.sh",
+        "bin/export-core.ps1","bin/windows-common.ps1",
         "bin/toolchain.sh","bin/plugin.py"] ++
         ["src/compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
