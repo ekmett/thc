@@ -2225,10 +2225,11 @@ class FixturePreparationTest(unittest.TestCase):
         with mock.patch.object(fast_fixtures, "FULL_OUTPUT_ROOTS", frozenset()), \
              mock.patch.object(fast_fixtures, "FULL_REQUIRED", frozenset({pointer})), \
              mock.patch.object(fast_fixtures, "_full_key", return_value="encoder-fixture"):
-            for mode, group in (("narrow", "alpha"), ("full", "full")):
+            for mode, group, selector in (("narrow", "alpha", "thc.AlphaTest"),
+                                          ("full", "full", "thc.UnknownTest")):
                 with self.subTest(mode=mode):
                     def prepare():
-                        return fast_fixtures.prepare(self.root, self.selection("thc.AlphaTest", mode=mode),
+                        return fast_fixtures.prepare(self.root, self.selection(selector, mode=mode),
                                                      run, self.toolchain)
                     self.assertEqual([group], prepare()["rebuilt"])
                     self.assertEqual([group], prepare()["reused"])
@@ -2253,13 +2254,36 @@ class FixturePreparationTest(unittest.TestCase):
                 (self.root / name).write_text("changed plugin build input")
                 self.assertEqual(self.prepare("thc.AlphaTest")["rebuilt"], ["alpha"])
 
-    def test_unknown_or_full_selection_runs_complete_preparation(self):
-        self.assertEqual(self.prepare("thc.UnknownTest"),
-                         {"mode": "full", "rebuilt": ["full"], "reused": []})
-        self.assertEqual(self.calls, [("fixtures-full", ["bin/prepare-tests.sh"], None)])
+    def test_unknown_or_wildcard_selection_runs_complete_preparation(self):
+        for selector in ("thc.UnknownTest", "*Alpha*"):
+            with self.subTest(selector=selector):
+                self.calls.clear()
+                self.assertEqual(self.prepare(selector, mode="full"),
+                                 {"mode": "full", "rebuilt": ["full"], "reused": []})
+                self.assertEqual(self.calls, [("fixtures-full", ["bin/prepare-tests.sh"], None)])
+
+    def test_full_known_selection_prepares_dependencies_and_reuses_group_receipts(self):
+        self.manifest["groups"]["alpha"]["requires"] = ["beta"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        self.assertEqual(self.prepare("thc.AlphaTest", "thc.AlphaBackendTest", "thc.FreeTest", mode="full"),
+                         {"mode": "selected", "rebuilt": ["beta", "alpha"], "reused": []})
+        self.assertEqual([argv for _, argv, _ in self.calls], [
+            ["cabal", "run", "exe:thc-primops", "--", "scalars"],
+            ["bin/build-compiler.sh"], ["make-beta"], ["make-alpha"]])
+        preserved = self.root / "build/managed-md5-native.previous-attempt/failure.log"
+        preserved.parent.mkdir(parents=True)
+        preserved.write_text("retained failed evidence\n")
         self.calls.clear()
-        self.assertEqual(self.prepare("thc.AlphaTest", mode="full")["mode"], "full")
-        self.assertEqual(self.calls, [("fixtures-full", ["bin/prepare-tests.sh"], None)])
+        self.assertEqual(self.prepare("thc.AlphaTest", "thc.AlphaBackendTest", "thc.BetaTest", "thc.FreeTest", mode="full"),
+                         {"mode": "selected", "rebuilt": [], "reused": ["beta", "alpha"]})
+        self.assertEqual([], self.calls)
+        self.assertEqual("retained failed evidence\n", preserved.read_text())
+        (self.root / "build/beta/result.tsv").unlink()
+        self.assertEqual(self.prepare("thc.AlphaTest", mode="full"),
+                         {"mode": "selected", "rebuilt": ["beta"], "reused": ["alpha"]})
+        self.assertEqual([argv for _, argv, _ in self.calls], [
+            ["cabal", "run", "exe:thc-primops", "--", "scalars"],
+            ["bin/build-compiler.sh"], ["make-beta"]])
 
     def test_fixture_free_selection_runs_no_commands(self):
         self.assertEqual(self.prepare("thc.FreeTest"),
@@ -3198,11 +3222,11 @@ class FullFixtureReceiptTest(unittest.TestCase):
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_text(f"generated {self.prepared}\n")
 
-    def test_full_miss_then_hit_for_full_and_unknown_selection(self):
-        self.assertEqual(self.prepare("thc.AlphaTest", mode="full"),
+    def test_full_miss_then_hit_for_unknown_and_wildcard_selection(self):
+        self.assertEqual(self.prepare("thc.UnknownTest", mode="full"),
                          {"mode": "full", "rebuilt": ["full"], "reused": []})
         (self.root / "build/alpha/Main.o").write_text("compiler intermediate")
-        self.assertEqual(self.prepare("thc.UnknownTest"),
+        self.assertEqual(self.prepare("*Alpha*", mode="full"),
                          {"mode": "full", "rebuilt": [], "reused": ["full"]})
         self.assertEqual(self.prepared, 1)
 
