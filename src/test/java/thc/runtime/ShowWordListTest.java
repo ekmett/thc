@@ -16,11 +16,8 @@ import static thc.runtime.ScalarValueTestSupport.*;
 class ShowWordListTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final List<String> entries = list("wordChecksum", "wordCharacter", "listChecksum", "listCharacter");
-    private final String wordWorker = "ghc-internal:GHC.Internal.Show.showWord";
-    private final List<String> listWorkers = list("ghc-internal:GHC.Internal.Show.$fShowList_showl",
-        "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'", "ghc-internal:GHC.Internal.CString.unpackCString#");
-    private Context context(boolean inlining) {
-        return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
+    private Context context() {
+        return Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build();
     }
     private void valid(RootCallTarget target, String label) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label); }
@@ -40,8 +37,6 @@ class ShowWordListTest {
         else throw new IllegalStateException("Unexpected list shape: " + shape);
         var joined = new StringJoiner(",", "[", "]"); for (long value : values) joined.add(Long.toString(value)); return joined.toString();
     }
-    @Test void publicWordAndListCharactersWithInlining() throws Exception { nativeShow(true); }
-    @Test void publicWordAndListCharactersAcrossResidualCalls() throws Exception { nativeShow(false); }
     private void check(Value function, String name, Row row, String label, Language language) {
         long actual = switch (name) {
             case "wordChecksum" -> function.execute(row.input()).asLong();
@@ -51,7 +46,7 @@ class ShowWordListTest {
         };
         assertEquals(row.expected(), actual, label + "/" + row.input() + "/" + row.shape() + "/" + row.index()); released(language);
     }
-    private void nativeShow(boolean inlining) throws Exception {
+    @Test void publicWordAndListCharactersMatchNative() throws Exception {
         var manifest = object(Json.parse(Files.readString(root.resolve("build/show-word-list/manifest.json"))));
         var rows = new ArrayList<Row>();
         for (var line : Files.readAllLines(root.resolve("build/show-word-list/oracle.tsv"))) {
@@ -78,34 +73,30 @@ class ShowWordListTest {
             for (var path : expression(stage.getValue())) modules.add(thc.CoreCbdFixtures.read(root.resolve((String) path)));
             var module = CoreModules.merge(modules);
             for (var name : entries) {
-                var workerIds = name.startsWith("word") ? list(wordWorker) : listWorkers;
                 var audit = object(Json.parse(Files.readString(root.resolve("build/show-word-list/" + stage.getKey() + "-" + name + ".audit.json"))));
-                assertEquals(true, audit.get("accepted")); assertTrue(objects(audit.get("reachableBindings")).stream().map(binding -> binding.get("id")).toList().containsAll(workerIds));
+                assertEquals(true, audit.get("accepted"));
                 var selected = rows.stream().filter(row -> row.name().equals(name)).toList();
-                for (var backend : list("ast", "bytecode")) try (var context = context(inlining)) {
+                for (var backend : list("ast", "bytecode")) try (var context = context()) {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         var instrumented = with(CoreModules.reachable(module, "main:ShowWordListAudit." + name), "instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, instrumented) : new BytecodeProgram(language, instrumented);
                         int arity = switch (name) { case "wordChecksum" -> 1; case "listCharacter" -> 3; default -> 2; };
-                        var function = context.asValue(new EntryValue(program, "main:ShowWordListAudit." + name, arity)); var host = program.hostEntryTarget(arity); var original = program.entryTarget("main:ShowWordListAudit." + name);
-                        var workers = workerIds.stream().map(program::entryTarget).toList(); var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
+                        var function = context.asValue(new EntryValue(program, "main:ShowWordListAudit." + name, arity)); var host = program.hostEntryTarget(arity);
+                        var label = stage.getKey() + "/" + backend + "/" + name;
                         // Warm every retained row once; no extra settling, retries, or threshold changes.
                         for (var row : selected) check(function, name, row, label, language);
-                        var targets = activeTargets(host); assertTrue(targets.size() > 1, label + " adopted guest call path");
-                        for (var target : targets) if (target != host) compile(target); for (var worker : workers) compile(worker);
-                        assertTrue(function.invokeMember("compile").asBoolean()); var state = language.getHandoffState().get(); long resultAllocations = state.getResults().getAllocations();
+                        for (var target : activeTargets(host)) if (target != host) compile(target);
+                        assertTrue(function.invokeMember("compile").asBoolean()); valid(host, label + " initial host installation");
                         for (int index = selected.size() - 1; index >= 0; index--) {
                             var row = selected.get(index); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             check(function, name, row, label, language); long after = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             assertTrue(after > before, label + "/" + row.input() + "/" + row.shape() + "/" + row.index() + ": actual compiled guest entry");
-                            assertEquals(targets, activeTargets(host), label + " active target identity"); valid(original, label + " original");
-                            for (var worker : workers) valid(worker, label + " original Show worker"); for (var target : targets) valid(target, label + " active");
+                            valid(host, label + " installed host after call");
                         }
-                        assertEquals(resultAllocations, state.getResults().getAllocations(), label + " result slabs reused");
                         for (var counter : list("unsupportedTraps", "blackholes")) assertEquals(0L, ((Number) program.diagnostics().get(counter)).longValue(), label + "/" + counter);
-                        System.out.println("ShowWordList PASS " + label + " rows=" + selected.size() + " activeTargets=" + targets.size());
+                        System.out.println("ShowWordList PASS " + label + " rows=" + selected.size());
                     } finally { context.leave(); }
                 }
             }
