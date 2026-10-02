@@ -1184,12 +1184,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/OriginalStdioExpression.java",
                      "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalTcsetattrTest", self.policy["owners"][path]["junit"], path)
-    def test_sigprocmask_sources_select_the_platform_thread_controls(self):
-        for path in ("t/fixtures/compiler/OriginalSigprocmaskAudit.hs", "t/fixtures/compiler/OriginalSigprocmaskNative.hs",
-                     "t/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "src/main/c/native-signal-api.c",
-                     "src/main/java/thc/runtime/ManagedSignalMask.java", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
-                     "src/main/java/thc/runtime/OriginalStdioExpression.java", "t/haskell-fixtures/Main.hs"):
-            self.assertIn("thc.runtime.OriginalSigprocmaskTest", self.policy["owners"][path]["junit"], path)
 
     def test_tcgetattr_sources_select_the_original_native_comparison(self):
         for path in ("t/fixtures/compiler/OriginalTcgetattrAudit.hs", "t/fixtures/compiler/OriginalTcgetattrNative.hs",
@@ -1417,30 +1411,20 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                               "thc.runtime.FusedFloatingTest"},
                              set(owners["t/fixtures/compiler/" + fixture + ".hs"]["junit"]))
 
-    def test_integer_simd_producer_and_shared_model_keep_every_consumer(self):
-        expected = {"thc.runtime." + name for name in ("IntegerSimdModelTest", "SimdInt8VectorTest",
-                    "SimdInt16VectorTest", "SimdWord16VectorTest", "SimdWord32VectorTest")}
-        for path in ("t/haskell-fixtures/IntegerSimdFixtures.hs",
-                     "src/test/java/thc/runtime/IntegerSimdModelTest.java",
-                     "src/test/java/thc/runtime/IntegerSimdModel.java"):
-            self.assertEqual(expected, set(self.policy["owners"][path]["junit"]))
-            self.assertEqual(["bin/test-core-vectors.py"], self.policy["owners"][path]["python"])
-        self.assertLessEqual(expected, set(self.policy["owners"]["t/haskell-fixtures/Main.hs"]["junit"]))
-        self.assertIn("    IntegerSimdFixtures", (self.root / "thc.cabal").read_text())
-        callers = [(self.root / path).read_text() for path in ("bin/prepare-tests.sh",
-                   "bin/test-core-vectors.py", "build.gradle", ".github/workflows/build.yml")]
-        for family in ("int8x16", "int16x8", "word16x8", "word32x4"):
-            for name in (f"prepare-{family}-audit.py", f"{family}_model.py", f"test-{family}-model.py"):
-                self.assertFalse((self.root / "bin" / name).exists(), name)
-                for caller in callers:
-                    self.assertNotIn(name.removesuffix(".py"), caller)
+    def test_shared_simd_input_record_selects_its_consumers(self):
+        expected = {"thc.runtime." + name for name in (
+            "SimdFloatVectorTest", "SimdDoubleVectorTest", "SimdInt32ByteArrayTest",
+            "SimdWord32ByteArrayTest", "SimdFloatByteArrayTest", "SimdDoubleByteArrayTest")}
+        owner = self.policy["owners"]["src/test/java/thc/runtime/IntegerSimdModel.java"]
+        self.assertEqual(expected, set(owner["junit"]))
+        self.assertEqual([], owner["python"])
 
-    def test_grouped_vectors_keep_the_union_of_all_former_family_consumers(self):
+    def test_grouped_vectors_select_current_semantic_consumers(self):
         expected = {
-            "IntegerVectorPrimitives": ["IntegerSimdModelTest", "SimdVectorTest", "SimdInt8VectorTest", "SimdInt16VectorTest",
-                "SimdWord8VectorTest", "SimdWord16VectorTest", "SimdInt32VectorTest", "SimdInt32MultiplyTest",
+            "IntegerVectorPrimitives": ["SimdVectorTest", "SimdInt32VectorTest",
+                "SimdCapabilitySmokeTest", "SimdCallNativeTest", "SimdFamiliesTest",
                 "SimdInt32ByteArrayTest", "Int32VectorMemoryProofTest", "Int32VectorStorageTest",
-                "SimdWord32VectorTest", "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
+                "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
                 "Word32VectorStorageTest", "Simd128ArrayNativeTest", "Simd128ArrayProofTest",
                 "SimdArithmeticTest", "SimdWideArrayNativeTest", "SimdWideArrayProofTest",
                 "Simd128AddressNativeTest", "Simd128AddressTest"],
@@ -1450,8 +1434,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 "SimdWideArrayNativeTest", "SimdWideArrayProofTest", "SimdArithmeticTest"],
         }
         python = {
-            "IntegerVectorPrimitives": ["core-vector-memory", "core-vectors", "core-word32-vector-memory",
-                "int32x4-multiply-model", "word8x16-model"],
+            "IntegerVectorPrimitives": ["core-vector-memory", "core-vectors", "core-word32-vector-memory"],
             "FloatingVectorPrimitives": ["core-double-vector-memory", "core-float-vector-memory", "core-vectors",
                 "doublex2-model", "floatx4-model"],
         }

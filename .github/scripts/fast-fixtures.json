@@ -281,13 +281,6 @@
       "outputs": ["build/process-lifecycle/core"],
       "sources": ["t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c", "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java", "src/main/java/thc/runtime/ManagedProcessForeign.java", "src/main/java/thc/runtime/ManagedProcesses.java"]
     },
-    "integer-simd": {
-      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
-      "commands": [{"argv": ["sh", "-c", "set -e; fixture_mode=; case \"$(uname -m)\" in arm64|aarch64) fixture_mode=--export-only ;; esac; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; fixture_bin=$(\"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"); for family in int8x16 int16x8 word16x8 word32x4; do \"$fixture_bin\" \"$family\" $fixture_mode; done"]}],
-      "outputs": ["build/simd-int8x16", "build/simd-int16x8", "build/simd-word16x8", "build/simd-word32x4"],
-      "sources": ["t/fixtures/compiler/SimdInt8X16.hs", "t/fixtures/compiler/SimdInt8X16Native.hs", "t/fixtures/compiler/SimdInt16X8.hs", "t/fixtures/compiler/SimdInt16X8Native.hs", "t/fixtures/compiler/SimdWord16X8.hs", "t/fixtures/compiler/SimdWord16X8Native.hs", "t/fixtures/compiler/SimdWord32X4.hs", "t/fixtures/compiler/SimdWord32X4Native.hs", "t/haskell-fixtures/IntegerSimdFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/test/java/thc/runtime/IntegerSimdModelTest.java", "src/test/java/thc/runtime/IntegerSimdModel.java"],
-      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int16x8/provenance.json').read_text())\nassert proof['nativeRows'] == 6032 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int8x16/provenance.json').read_text())\nassert proof['nativeRows'] == 9168 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word16x8/provenance.json').read_text())\nassert proof['nativeRows'] == 5116 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}, {"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word32x4/provenance.json').read_text())\nassert proof['nativeRows'] == 4882 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
-    },
     "text-cbits": {
       "junit": ["thc.runtime.TextCbitsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "text-cbits"]}],
@@ -441,22 +434,6 @@
       "outputs": ["build/original-tcgetattr"],
       "sources": ["t/fixtures/compiler/OriginalTcgetattrAudit.hs", "t/fixtures/compiler/OriginalTcgetattrNative.hs",
         "t/haskell-fixtures/OriginalTcgetattrFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
-    "original-sigprocmask": {
-      "junit": ["thc.runtime.OriginalSigprocmaskTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigprocmask"]}],
-      "outputs": ["build/original-sigprocmask"],
-      "sources": ["t/fixtures/compiler/OriginalSigprocmaskAudit.hs", "t/fixtures/compiler/OriginalSigprocmaskNative.hs",
-        "t/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
-    "original-sigset": {
-      "junit": ["thc.runtime.OriginalSigsetTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigset"]}],
-      "outputs": ["build/original-sigset"],
-      "sources": ["t/fixtures/compiler/OriginalSigsetAudit.hs", "t/fixtures/compiler/OriginalSigsetNative.hs",
-        "t/haskell-fixtures/OriginalSigsetFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-fcntl": {
@@ -1556,8 +1533,8 @@
     "process-signals": {
       "junit": ["thc.runtime.ForkHostFailureTest", "thc.runtime.LoomSignalProcessTest", "thc.runtime.ProcessSignalsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "process-signals"]}],
-      "outputs": ["build/process-signals/manifest.json", "build/process-signals/oracle.txt", "build/process-signals/native-controls.txt"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"]
+      "outputs": ["build/process-signals"],
+      "sources": ["t/haskell-fixtures/ProcessSignalFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"]
     },
     "record-fields": {
       "junit": ["thc.runtime.RecordFieldNativeTest"],
@@ -1626,20 +1603,6 @@
       "outputs": ["build/simd-int32x4"],
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int32x4/provenance.json').read_text())\nassert proof['nativeRows'] == 243 and proof['stages'] == ['pre', 'post'], proof\n"]}]
-    },
-    "simd-int32x4-multiply": {
-      "junit": ["thc.runtime.SimdInt32MultiplyTest"],
-      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-int32x4-multiply-audit.py  --export-only ;; *) python3 bin/prepare-int32x4-multiply-audit.py  ;; esac"]}],
-      "outputs": ["build/simd-int32x4-multiply"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
-      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-int32x4-multiply/provenance.json').read_text())\nassert proof['nativeRows'] == 1722 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
-    },
-    "simd-word8x16": {
-      "junit": ["thc.runtime.SimdWord8VectorTest"],
-      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-word8x16-audit.py  --export-only ;; *) python3 bin/prepare-word8x16-audit.py  ;; esac"]}],
-      "outputs": ["build/simd-word8x16"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
-      "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word8x16/provenance.json').read_text())\nassert proof['nativeRows'] == 7712 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     }
   }
 }

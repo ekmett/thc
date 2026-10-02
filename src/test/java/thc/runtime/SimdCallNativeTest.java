@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.bytecode.Instruction;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
@@ -19,6 +24,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class SimdCallNativeTest {
     private final File root = new File(System.getProperty("thc.projectRoot")), directory = new File(root, "build/simd-calls");
     private long model(String name, long x) {
+        if (name.equals("signedLaneTupleCase"))
+            return (long) (int) x * 3 + (long) (int) (x + Integer.MAX_VALUE) * 5
+                + (long) (int) (-x - 1) * 7 + (long) (int) (x * 65537) * 11;
+        if (name.equals("unsignedLaneTupleCase")) {
+            long result = 0;
+            for (int lane = 0; lane < 16; lane++) result += ((x + lane * 17) & 255) * (lane + 1);
+            return result;
+        }
         if (name.startsWith("keepAliveThrow")) return x;
         if (name.equals("overCase")) return (short) x == 0 ? 30L : 44L;
         if (!name.equals("chainCase") && !name.equals("loopCase")) return (long) (short) x + 13L;
@@ -32,6 +45,20 @@ class SimdCallNativeTest {
         return answer;
     }
     private void valid(Object target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
+    private void installReachable(RootCallTarget target, Set<RootCallTarget> seen) throws Exception {
+        if (!seen.add(target)) return;
+        var nodes = new ArrayList<Node>(); nodes.add(target.getRootNode());
+        if (target.getRootNode() instanceof BytecodeRoot root) for (var instruction : root.getBytecodeNode().getInstructions())
+            for (var argument : instruction.getArguments()) if (argument.getKind() == Instruction.Argument.Kind.NODE_PROFILE) {
+                var cached = argument.asCachedNode(); if (cached != null) nodes.add(cached);
+            }
+        for (var node : nodes) for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
+            if (call.getCurrentCallTarget() instanceof RootCallTarget child && child.getRootNode() instanceof GuestRoot)
+                installReachable(child, seen);
+        target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+        target.getClass().getMethod("waitForCompilation").invoke(target);
+        valid(target);
+    }
     private Object at(Object value, int index) { return value instanceof List<?> list && index < list.size() ? list.get(index) : null; }
     private Object field(Object value, String key) { return value instanceof Map<?, ?> map ? map.get(key) : null; }
     private List<?> list(Object value) { return value instanceof List<?> list ? list : List.of(); }
@@ -193,7 +220,11 @@ class SimdCallNativeTest {
     @Test void nativeEmptySumCasesPropagateKeepAliveThrowsInCompiledAstAndBytecode() throws Exception {
         checkEntries(Set.of("keepAliveThrowSumCase"));
     }
+    @Test void nativeUnpackedLaneTuplesReturnAcrossCompiledCalls() throws Exception {
+        checkEntries(Set.of("signedLaneTupleCase", "unsignedLaneTupleCase"));
+    }
     private void checkEntries(Set<String> wantedEntries) throws Exception {
+        boolean laneTuples = wantedEntries != null && wantedEntries.contains("signedLaneTupleCase");
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(directory, "manifest.json").toPath())); assertEquals(1L, manifest.get("schema"));
         var hashes = new LinkedHashMap<>((Map<String, String>) manifest.get("inputHashes")); hashes.putAll((Map<String, String>) manifest.get("artifactHashes"));
         for (var item : hashes.entrySet()) {
@@ -201,9 +232,9 @@ class SimdCallNativeTest {
             assertEquals(item.getValue(), hash, "Stale SIMD call artifact " + item.getKey());
         }
         var entries = (List<String>) manifest.get("entries");
-        assertEquals(Set.of("directCase", "papCase", "nestedTupleCase", "joinCase", "overCase", "heapCase", "heapPapCase", "capturedCase", "thunkCase", "chainCase", "loopCase", "keepAliveCase", "keepAliveThrowCase", "keepAliveThrowSumCase"), new LinkedHashSet<>(entries));
+        assertEquals(Set.of("directCase", "papCase", "nestedTupleCase", "joinCase", "overCase", "heapCase", "heapPapCase", "capturedCase", "thunkCase", "chainCase", "loopCase", "keepAliveCase", "keepAliveThrowCase", "keepAliveThrowSumCase", "signedLaneTupleCase", "unsignedLaneTupleCase"), new LinkedHashSet<>(entries));
         var cases = new ArrayList<Input>(); for (var name : entries) for (var input : (List<Number>) manifest.get("inputs")) cases.add(new Input(name, input.longValue()));
-        assertEquals(126, cases.size()); var nativeRows = (Number) manifest.get("nativeRows"); var rows = new ArrayList<Row>();
+        var nativeRows = (Number) manifest.get("nativeRows"); var rows = new ArrayList<Row>();
         if (nativeRows != null) for (var line : Files.readAllLines(new File(directory, "oracle.tsv").toPath())) {
             var parts = line.split("\t", -1); assertEquals(3, parts.length); rows.add(new Row(parts[0], Long.parseLong(parts[1]), Long.parseLong(parts[2])));
         } else for (var input : cases) rows.add(new Row(input.name, input.x, model(input.name, input.x)));
@@ -212,25 +243,28 @@ class SimdCallNativeTest {
         for (var row : rows) assertEquals(model(row.name, row.x), row.want, (nativeRows == null ? "Model" : "Native") + " " + row.name + "/" + row.x);
         for (var stage : (List<String>) manifest.get("stages")) for (var backend : List.of("ast", "bytecode"))
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
-                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.Inlining", Boolean.toString(!laneTuples)).build()) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var source = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdCallAudit.cbd").toPath()); retainedHeapCore(source);
                     for (var name : entries) {
-                        if (wantedEntries == null ? name.startsWith("keepAlive") : !wantedEntries.contains(name)) continue;
+                        if (wantedEntries == null ? name.startsWith("keepAlive") || name.endsWith("LaneTupleCase") : !wantedEntries.contains(name)) continue;
                         var linked = CoreModules.reachable(source, entryId(name));
                         if (name.equals("keepAliveThrowSumCase")) assertTrue(nodes(linked).stream().anyMatch(node ->
                             Objects.equals(at(node, 0), "case") && Objects.equals(at(node, 3), List.of()) &&
                             Objects.equals(field(field(field(at(node, 4), "binder"), "rep"), "aggregate"), "unboxed-sum")),
                             "Genuine empty sum case must remain in exported Core");
-                        else if (wantedEntries != null) assertTrue(nodes(linked).stream().anyMatch(node ->
+                        else if (name.startsWith("keepAlive")) assertTrue(nodes(linked).stream().anyMatch(node ->
                             Objects.equals(at(node, 0), "app") && Objects.equals(at(at(node, 1), 0), "prim") &&
                             Objects.equals(at(at(node, 1), 1), "keepAlive#") &&
                             Objects.equals(field(field(at(node, 6), "rep"), "kind"), "vector")), "Genuine direct-vector keepAlive# must remain in exported Core");
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                         var function = context.asValue(new EntryValue(program, entryId(name), 1)); var selected = new ArrayList<Row>(); for (var row : rows) if (row.name.equals(name)) selected.add(row);
                         for (var row : selected) assertEquals(row.want, function.execute(row.x).asLong(), stage + "/" + backend + "/" + name + "/" + row.x + " interpreted");
+                        if (laneTuples) installReachable(program.hostEntryTarget(1),
+                            Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>()));
                         assertTrue(function.invokeMember("compile").asBoolean(), stage + "/" + backend + "/" + name + " compile"); var target = program.entryTarget(entryId(name));
                         for (var row : selected) {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();

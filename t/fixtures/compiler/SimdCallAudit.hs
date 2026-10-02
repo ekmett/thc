@@ -182,3 +182,57 @@ loopCase x = go (vectorSeed x) (andI# x 7# +# 1#)
       _ -> go (timesInt16X8#
         (plusInt16X8# value (broadcastInt16X8# (intToInt16# remaining)))
         (broadcastInt16X8# (intToInt16# 3#))) (remaining -# 1#)
+
+-- Return unpacked scalar lanes across a real call, with signed and unsigned
+-- narrowing and distinct lane weights observable in the caller.
+{-# OPAQUE signedLaneTuple #-}
+signedLaneTuple :: Int# -> (# Int32#, Int32#, Int32#, Int32# #)
+signedLaneTuple x = unpackInt32X4# (packInt32X4#
+  (# intToInt32# x, intToInt32# (x +# 2147483647#),
+     intToInt32# (0# -# x -# 1#), intToInt32# (x *# 65537#) #))
+
+signedLaneTupleCase :: Int# -> Int#
+signedLaneTupleCase x = case signedLaneTuple x of
+  (# a, b, c, d #) -> int32ToInt# a *# 3# +# int32ToInt# b *# 5# +#
+    int32ToInt# c *# 7# +# int32ToInt# d *# 11#
+
+{-# OPAQUE unsignedLaneTuple #-}
+unsignedLaneTuple :: Int# -> (# Word8#, Word8#, Word8#, Word8#, Word8#, Word8#, Word8#, Word8#,
+                              Word8#, Word8#, Word8#, Word8#, Word8#, Word8#, Word8#, Word8# #)
+unsignedLaneTuple x = unpackWord8X16# (packWord8X16#
+  (# wordToWord8# (int2Word# (x)),
+     wordToWord8# (int2Word# (x +# 17#)),
+     wordToWord8# (int2Word# (x +# 34#)),
+     wordToWord8# (int2Word# (x +# 51#)),
+     wordToWord8# (int2Word# (x +# 68#)),
+     wordToWord8# (int2Word# (x +# 85#)),
+     wordToWord8# (int2Word# (x +# 102#)),
+     wordToWord8# (int2Word# (x +# 119#)),
+     wordToWord8# (int2Word# (x +# 136#)),
+     wordToWord8# (int2Word# (x +# 153#)),
+     wordToWord8# (int2Word# (x +# 170#)),
+     wordToWord8# (int2Word# (x +# 187#)),
+     wordToWord8# (int2Word# (x +# 204#)),
+     wordToWord8# (int2Word# (x +# 221#)),
+     wordToWord8# (int2Word# (x +# 238#)),
+     wordToWord8# (int2Word# (x +# 255#)) #))
+
+unsignedLaneTupleCase :: Int# -> Int#
+unsignedLaneTupleCase x = case unsignedLaneTuple x of
+  (# a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p #) ->
+    word2Int# (word8ToWord# a) *# 1# +#
+    word2Int# (word8ToWord# b) *# 2# +#
+    word2Int# (word8ToWord# c) *# 3# +#
+    word2Int# (word8ToWord# d) *# 4# +#
+    word2Int# (word8ToWord# e) *# 5# +#
+    word2Int# (word8ToWord# f) *# 6# +#
+    word2Int# (word8ToWord# g) *# 7# +#
+    word2Int# (word8ToWord# h) *# 8# +#
+    word2Int# (word8ToWord# i) *# 9# +#
+    word2Int# (word8ToWord# j) *# 10# +#
+    word2Int# (word8ToWord# k) *# 11# +#
+    word2Int# (word8ToWord# l) *# 12# +#
+    word2Int# (word8ToWord# m) *# 13# +#
+    word2Int# (word8ToWord# n) *# 14# +#
+    word2Int# (word8ToWord# o) *# 15# +#
+    word2Int# (word8ToWord# p) *# 16#

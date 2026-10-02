@@ -24,7 +24,7 @@ those requests return ENOTSUP rather than inferring metadata from a path.
 Seek constants come from the build host's C ABI. Guest operations do not assume
 SEEK_SET/CUR/END are 0/1/2. Supported stat and terminal-image accessors validate
 complete caller-owned byte regions using the selected platform layout. See
-[terminal images](original-termios.md) and [signal-set images](original-sigset.md).
+[terminal images](original-termios.md).
 
 Logical [dup/dup2 aliases](original-posix-dup.md) share an open description.
 GHC's [RTS lock table](original-rts-file-locks.md) is separate bookkeeping;

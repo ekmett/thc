@@ -59,14 +59,12 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/VectorReadCase.java",
                   "src/main/java/thc/runtime/CoreVectorMemory.java",
                   "src/main/java/thc/runtime/VectorByteArrayExpression.java",
-                  "src/main/java/thc/runtime/VectorMemory.java",
-                  "src/test/java/thc/runtime/IntegerSimdModelTest.java",
-                  "src/test/java/thc/runtime/IntegerSimdModel.java")
+                  "src/main/java/thc/runtime/VectorMemory.java")
 MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating package-native-gc-carriers""".split()
 GC_CARRIER_OUTPUTS = frozenset("build/package-native-gc-carriers/" + name for name in (
     "manifest.json", "PackageNativeGcCarriers.cbd", "oracle.txt",
@@ -482,53 +480,10 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
     "manifest.json", "pre-core/GeneratedSimdSmoke.cbd", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
-INTEGER_SIMD_FAMILIES = {
-    "simd-int8x16": ("Int8X16", 9168), "simd-int16x8": ("Int16X8", 6032),
-    "simd-word16x8": ("Word16X8", 5116), "simd-word32x4": ("Word32X4", 4882),
-}
-
-
-def integer_simd_outputs(family, native):
-    shape, _ = INTEGER_SIMD_FAMILIES[family]
-    stages = ("pre", "post") if native else ("pre",)
-    entries = ("plusCase", "minusCase", "timesCase", *(("negateCase",) if shape.startswith("Int") else ()),
-               "packCase", "broadcastCase", "laneCase", "scalarHelperCase", "tupleHelperCase", "vectorArgument")
-    negatives = ("signedLaneTuple", "signedVectorOperand") if shape.startswith("Word") else ()
-    commands = ("ghc-version", "ghc-info", "plugin-build", *(f"{s}-export" for s in stages),
-                *(f"{s}-audit-{e}" for s in stages for e in entries),
-                *(f"{s}-{n}" for s in stages for n in negatives),
-                *(("native-build", "native-oracle") if native else ()))
-    return frozenset(f"build/{family}/{name}" for name in (
-        "provenance.json", "expected.tsv", "requests.tsv",
-        *(f"{s}-core/Simd{shape}.cbd" for s in stages), *(f"{s}-audit.json" for s in stages),
-        *(f"{s}-{e}-audit.json" for s in stages for e in entries),
-        *(f"{s}-MUTATED-{n}{suffix}" for s in stages for n in negatives for suffix in (".cbd", "-audit.json")),
-        *(f"commands/{c}.{suffix}" for c in commands for suffix in ("stdout", "stderr", "command.json")),
-        *(("oracle.tsv", f"native/{family.removeprefix('simd-')}-oracle") if native else ())))
-
-
-def integer_simd_artifact_hashes(family, manifest):
-    stages = manifest.get("stages")
-    require(stages in (["pre"], ["pre", "post"]), "Invalid integer SIMD stages")
-    native = len(stages) == 2
-    _, rows = INTEGER_SIMD_FAMILIES[family]
-    require(manifest.get("modelRows") == rows and manifest.get("nativeRows") == (rows if native else None)
-            and manifest.get("modelMatched") is (True if native else None)
-            and manifest.get("positiveAuditsAccepted") is True and manifest.get("proofNegativeControlsPassed") is True,
-            "Invalid integer SIMD evidence")
-    records = manifest.get("artifacts", [])
-    hashes = {record["path"]: record["sha256"] for record in records}
-    require(len(records) == len(hashes) and set(hashes) == integer_simd_outputs(family, native) - {f"build/{family}/provenance.json"},
-            "Incomplete/unreviewed integer SIMD artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in hashes.values()), "Invalid integer SIMD hash")
-    return hashes
-
-
 PROVENANCE_DIRS = """io-main-pap aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
-simd-doublex2 simd-int16x8 simd-int8x16 simd-word8x16 simd-word16x8 simd-word32x4
-simd-int32x4-multiply simd-int32x4-bytearray simd-word32x4-bytearray
+simd-doublex2 simd-int32x4-bytearray simd-word32x4-bytearray
 simd-floatx4-bytearray simd-doublex2-bytearray""".split()
 CHECK_DIRS = """aggregate-layout empty-join-input empty-tuple-input floating-tuple
 state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
@@ -645,8 +600,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/original-process-identity/native/oracle",
     "build/original-tcsetattr/native/oracle",
     "build/original-tcgetattr/native/oracle",
-    "build/original-sigprocmask/native/oracle",
-    "build/original-sigset/native/oracle",
     "build/original-termios/saved/native/oracle",
     "build/original-stdio-truncate/native/oracle",
     "build/original-strerror/native/oracle",
@@ -863,30 +816,6 @@ ORIGINAL_TCGETATTR_OUTPUTS = frozenset("build/original-tcgetattr/" + name for na
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalTcgetattrAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_TCGETATTR_ENTRIES))),
-))
-
-ORIGINAL_SIGPROCMASK_ENTRIES = ("originalSigprocmask",)
-ORIGINAL_SIGPROCMASK_OUTPUTS = frozenset("build/original-sigprocmask/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"logs/{label}.{suffix}" for label in (
-        "ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_SIGPROCMASK_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalSigprocmaskAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        *(f"{entry}.audit.json" for entry in ORIGINAL_SIGPROCMASK_ENTRIES))),
-))
-
-ORIGINAL_SIGSET_ENTRIES = ("originalSigEmpty", "originalSigAdd")
-ORIGINAL_SIGSET_OUTPUTS = frozenset("build/original-sigset/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"logs/{label}.{suffix}" for label in (
-        "ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_SIGSET_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalSigsetAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        *(f"{entry}.audit.json" for entry in ORIGINAL_SIGSET_ENTRIES))),
 ))
 
 ORIGINAL_POSIX_STAT_ENTRIES = ("originalFstat", "originalFstatErrno")
@@ -1392,39 +1321,7 @@ def tcgetattr_artifact_hashes(manifest):
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid tcgetattr hash")
     return artifacts
 
-def sigprocmask_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
-            "Invalid original sigprocmask manifest")
-    if not GMP_NATIVE_HOST:
-        require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported sigprocmask host")
-        return {}
-    require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_SIGPROCMASK_ENTRIES) and
-            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
-            manifest.get("installedArtifactsHashed") is False and
-            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 8,
-            "Invalid original sigprocmask proof")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_SIGPROCMASK_OUTPUTS - {"build/original-sigprocmask/manifest.json"},
-            "Incomplete/unreviewed original sigprocmask artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid sigprocmask hash")
-    return artifacts
 
-def sigset_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
-            "Invalid original sigset manifest")
-    if not GMP_NATIVE_HOST:
-        require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported sigset host")
-        return {}
-    require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_SIGSET_ENTRIES) and
-            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
-            manifest.get("installedArtifactsHashed") is False and
-            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 532,
-            "Invalid original sigset proof")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_SIGSET_OUTPUTS - {"build/original-sigset/manifest.json"},
-            "Incomplete/unreviewed original sigset artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid sigset hash")
-    return artifacts
 
 
 def gmp_artifact_hashes(manifest):
@@ -2012,8 +1909,6 @@ def allowed_payload(name):
             return True
         attempt = "/".join(parts[:3]) if parts[2].startswith("prepare-run-") else f"build/{parts[1]}/prepare-run-placeholder"
         return name in simd_bytearray_outputs(parts[1], attempt, True)
-    if parts[1] in INTEGER_SIMD_FAMILIES:
-        return name in integer_simd_outputs(parts[1], True)
     if parts[1] == "pinned-addresses":
         return name in PINNED_ADDRESS_OUTPUTS
     if parts[1] == "float-decode":
@@ -2113,10 +2008,6 @@ def allowed_payload(name):
         return name in ORIGINAL_TCSETATTR_OUTPUTS
     if parts[1] == "original-tcgetattr":
         return name in ORIGINAL_TCGETATTR_OUTPUTS
-    if parts[1] == "original-sigprocmask":
-        return name in ORIGINAL_SIGPROCMASK_OUTPUTS
-    if parts[1] == "original-sigset":
-        return name in ORIGINAL_SIGSET_OUTPUTS
     if parts[1] == "original-gmp":
         return name in ORIGINAL_GMP_OUTPUTS
     if parts[1] == "original-stack":
@@ -2236,8 +2127,6 @@ def inventory(root, current, read, core_files, verified=None):
             gc_carrier_artifact_hashes(root, doc)
         if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in SIMD_BYTEARRAY_FAMILIES:
             simd_bytearray_artifact_hashes(name.split("/")[1], doc)
-        if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in INTEGER_SIMD_FAMILIES:
-            integer_simd_artifact_hashes(name.split("/")[1], doc)
         if name == "build/io-main-pap/provenance.json":
             records = doc.get("artifacts")
             require(isinstance(records, list), "Missing IO-main PAP artifacts")
@@ -2327,10 +2216,6 @@ def inventory(root, current, read, core_files, verified=None):
             tcsetattr_artifact_hashes(doc)
         if name == "build/original-tcgetattr/manifest.json":
             tcgetattr_artifact_hashes(doc)
-        if name == "build/original-sigprocmask/manifest.json":
-            sigprocmask_artifact_hashes(doc)
-        if name == "build/original-sigset/manifest.json":
-            sigset_artifact_hashes(doc)
         # Core is data, not a provenance map: representation payloads must not be
         # interpreted as filesystem paths. All other preparation JSON is scanned.
         if isinstance(doc, dict) and "bindings" in doc and "module" in doc:

@@ -381,9 +381,7 @@ tasks.withType(Test).configureEach {
             "original-process-identity/native/observations.txt",
             "original-termios/**/*.json", "original-termios/**/*.cbd", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr",
             "original-tcsetattr/**/*.json", "original-tcsetattr/**/*.cbd", "original-tcsetattr/logs/*.stdout", "original-tcsetattr/logs/*.stderr", "original-tcsetattr/native/oracle",
-            "original-sigprocmask/**/*.json", "original-sigprocmask/**/*.cbd", "original-sigprocmask/logs/*.stdout", "original-sigprocmask/logs/*.stderr", "original-sigprocmask/native/oracle",
             "original-tcgetattr/**/*.json", "original-tcgetattr/**/*.cbd", "original-tcgetattr/logs/*.stdout", "original-tcgetattr/logs/*.stderr", "original-tcgetattr/native/oracle",
-            "original-sigset/**/*.json", "original-sigset/**/*.cbd", "original-sigset/logs/*.stdout", "original-sigset/logs/*.stderr", "original-sigset/native/oracle",
             "original-termios/saved/native/oracle",
             "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
             "original-iconv/**/*.json", "original-iconv/native/oracle",
@@ -449,7 +447,6 @@ tasks.withType(Test).configureEach {
             "simd-floatx4-fma/**/*.cbd", "simd-floatx4-fma/**/*.json", "simd-floatx4-fma/oracle.txt",
             "simd-wide-floating-fma/**/*.cbd", "simd-wide-floating-fma/**/*.json", "simd-wide-floating-fma/oracle.txt",
             "simd-doublex2/**/*.cbd", "simd-doublex2/**/*.json", "simd-doublex2/*.tsv",
-            "simd-int16x8/**/*.cbd", "simd-int16x8/**/*.json", "simd-int16x8/*.tsv", "simd-int16x8/native/int16x8-oracle",
             "simd-wide-arrays/manifest.json", "simd-wide-arrays/*.tsv", "simd-wide-arrays/*-core/*.cbd", "simd-wide-arrays/*-core/*.json",
             "simd-wide-arrays/*-audit.json", "simd-wide-arrays/native/oracle", "simd-wide-arrays/commands/*",
             "simd128-addresses/manifest.json", "simd128-addresses/*.tsv", "simd128-addresses/*-core/*.cbd", "simd128-addresses/*-core/*.json",
@@ -460,13 +457,6 @@ tasks.withType(Test).configureEach {
             "simd-address-families/*-core/*.cbd", "simd-address-families/*-core/*.json", "simd-address-families/*-audit.json", "simd-address-families/commands/*",
             "simd-address-families/scalar/oracle", "simd-address-families/vector128/oracle",
             "simd128-arrays/*-audit.json", "simd128-arrays/native/oracle", "simd128-arrays/commands/*",
-            "simd-int8x16/**/*.cbd", "simd-int8x16/**/*.json", "simd-int8x16/*.tsv", "simd-int8x16/native/int8x16-oracle",
-            "simd-word8x16/**/*.cbd", "simd-word8x16/**/*.json", "simd-word8x16/*.tsv", "simd-word8x16/native/word8x16-oracle",
-            "simd-word16x8/**/*.cbd", "simd-word16x8/**/*.json", "simd-word16x8/*.tsv", "simd-word16x8/native/word16x8-oracle",
-            "simd-word32x4/**/*.cbd", "simd-word32x4/**/*.json", "simd-word32x4/*.tsv", "simd-word32x4/native/word32x4-oracle",
-            "simd-int8x16/commands/*", "simd-int16x8/commands/*",
-            "simd-word16x8/commands/*", "simd-word32x4/commands/*",
-            "simd-int32x4-multiply/**/*.cbd", "simd-int32x4-multiply/**/*.json", "simd-int32x4-multiply/*.tsv", "simd-int32x4-multiply/native/int32x4-multiply-oracle",
             "simd-int32x4-bytearray/**/*.cbd", "simd-int32x4-bytearray/**/*.json", "simd-int32x4-bytearray/*.tsv", "simd-int32x4-bytearray/native/int32x4-bytearray-oracle",
             "simd-word32x4-bytearray/**/*.cbd", "simd-word32x4-bytearray/**/*.json", "simd-word32x4-bytearray/*.tsv", "simd-word32x4-bytearray/native/word32x4-bytearray-oracle",
             "simd-floatx4-bytearray/**/*.cbd", "simd-floatx4-bytearray/**/*.json", "simd-floatx4-bytearray/*.tsv", "simd-floatx4-bytearray/native/floatx4-bytearray-oracle",
@@ -510,8 +500,6 @@ tasks.withType(Test).configureEach {
             "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",
             "prepare-managed-address-reads.py",
             "prepare-data-to-tag.py", "test-core-data-tags.py",
-            "prepare-word8x16-audit.py", "word8x16_model.py", "test-word8x16-model.py",
-            "prepare-int32x4-multiply-audit.py", "int32x4_multiply_model.py", "test-int32x4-multiply-model.py",
             "test-core-vector-memory.py",
             "test-core-word32-vector-memory.py",
             "test-core-float-vector-memory.py",
@@ -1479,27 +1467,6 @@ def compileNativeOpenRequests = tasks.register("compileNativeOpenRequests") {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-open-requests")) }
 tasks.processResources { dependsOn(compileNativeOpenRequests) }
 
-// Partial original sigprocmask, loaded only with explicit native authority.
-def compileNativeSignals = tasks.register("compileNativeSignals") {
-    dependsOn("generateStdioAbi")
-    def source = layout.projectDirectory.file("src/main/c/native-signal-api.c")
-    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    def output = layout.buildDirectory.dir("generated/native-signals")
-    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
-    outputs.dir(output)
-    doLast {
-        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            def destination = output.get().asFile.toPath().resolve("thc/native/native-signal-api.so").toFile()
-            destination.parentFile.mkdirs()
-            nativeExec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
-        }
-    }
-}
-sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-signals")) }
-tasks.processResources { dependsOn(compileNativeSignals) }
 
 // POSIX asynchronous capture must execute machine code, never LLVM guest code.
 def compileNativeProcessSignals = tasks.register("compileNativeProcessSignals") {
@@ -1670,41 +1637,13 @@ def generateTermiosAbi = tasks.register("generateTermiosAbi") {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/termios-abi")) }
 tasks.processResources { dependsOn(generateTermiosAbi) }
 
-def generateSigsetAbi = tasks.register("generateSigsetAbi") {
-    dependsOn(generateStdioAbi)
-    def source = layout.projectDirectory.file("src/main/c/sigset-abi-probe.c").asFile
-    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    def output = layout.buildDirectory.dir("generated/sigset-abi")
-    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
-    outputs.dir(output); outputs.upToDateWhen { false }
-    doLast {
-        def run = { List<String> command -> nativeExec { commandLine(command) }.standardOutput.asText.get() }
-        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
-        def target = host["target"] as String
-        def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])
-        requireBuild(run(command + "-dumpmachine").trim() == target) { "Sigset compiler target changed" }
-        def executable = temporaryDir.toPath().resolve("sigset-abi-probe").toFile()
-        run(command + ["-std=c11", source.path, "-o", executable.path])
-        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
-        def manifest = ["schema": 1, "system": host["system"],
-            "architecture": host["architecture"], "target": target,
-            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes).encodeHex().toString(),
-            "sigset": probe]
-        def destination = output.get().asFile.toPath().resolve("thc/native/sigset-abi.json").toFile()
-        destination.parentFile.mkdirs()
-        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
-    }
-}
-sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/sigset-abi")) }
-tasks.processResources { dependsOn(generateSigsetAbi) }
 
 // These providers implement POSIX contracts, including LP64 CLong and termios.
 // Windows must not publish guessed POSIX ABI receipts. Managed Core and portable
 // original C resources are independent of these optional providers.
 if (windowsHost) {
-    ["generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
-        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals"]
+    ["generatePosixStatAbi", "generateTermiosAbi",
+        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeProcessSignals"]
         .each { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
     tasks.processResources {
         // Reject stale resources copied from a build for a different host, too.

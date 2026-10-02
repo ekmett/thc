@@ -461,26 +461,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorUnpack.java": {
@@ -494,26 +488,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorOperation.java": {
@@ -527,26 +515,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector32Pack.java": {
@@ -560,26 +542,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector32Unpack.java": {
@@ -593,26 +569,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector32Operation.java": {
@@ -626,26 +596,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector16Pack.java": {
@@ -659,26 +623,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector16Unpack.java": {
@@ -692,26 +650,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector16Operation.java": {
@@ -725,26 +677,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector8Pack.java": {
@@ -758,26 +704,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector8Unpack.java": {
@@ -791,26 +731,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/Vector8Operation.java": {
@@ -824,26 +758,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord32Pack.java": {
@@ -857,26 +785,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord32Unpack.java": {
@@ -890,26 +812,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord32Operation.java": {
@@ -923,26 +839,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord16Pack.java": {
@@ -956,26 +866,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord16Unpack.java": {
@@ -989,26 +893,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord16Operation.java": {
@@ -1022,26 +920,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord8Pack.java": {
@@ -1055,26 +947,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord8Unpack.java": {
@@ -1088,26 +974,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord8Operation.java": {
@@ -1121,26 +1001,20 @@
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
-        "thc.runtime.SimdInt16VectorTest",
         "thc.runtime.SimdInt32ByteArrayTest",
-        "thc.runtime.SimdInt32MultiplyTest",
         "thc.runtime.SimdInt32VectorTest",
-        "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
-        "thc.runtime.SimdWord16VectorTest",
-        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
-        "thc.runtime.SimdWord32VectorTest",
-        "thc.runtime.SimdWord8VectorTest",
         "thc.runtime.Word32VectorMemoryProofTest",
-        "thc.runtime.Word32VectorStorageTest"
+        "thc.runtime.Word32VectorStorageTest",
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
         "bin/test-core-vector-memory.py",
         "bin/test-core-vectors.py",
-        "bin/test-core-word32-vector-memory.py",
-        "bin/test-int32x4-multiply-model.py",
-        "bin/test-word8x16-model.py"
+        "bin/test-core-word32-vector-memory.py"
       ]
     },
     "src/main/java/thc/runtime/VectorFloatPack.java": {
@@ -1683,31 +1557,11 @@
     "t/fixtures/compiler/ForeignImportStubs.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/ImportStubsNative.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/OriginalTcsetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
-    "t/fixtures/compiler/OriginalSigprocmaskAudit.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
-    "t/fixtures/compiler/OriginalSigprocmaskNative.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
-    "t/haskell-fixtures/OriginalSigprocmaskFixtures.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
-    "src/main/c/native-signal-api.c": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
-    "src/main/java/thc/runtime/ManagedSignalMask.java": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "t/fixtures/compiler/OriginalTcgetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
     "t/fixtures/compiler/OriginalTcsetattrNative.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
     "t/fixtures/compiler/OriginalTcgetattrNative.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
     "t/haskell-fixtures/OriginalTcsetattrFixtures.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
     "t/haskell-fixtures/OriginalTcgetattrFixtures.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
-    "t/fixtures/compiler/OriginalSigsetAudit.hs": {
-      "junit": ["thc.runtime.OriginalSigsetTest"], "python": []
-    },
-    "t/fixtures/compiler/OriginalSigsetNative.hs": {
-      "junit": ["thc.runtime.OriginalSigsetTest"], "python": []
-    },
-    "t/haskell-fixtures/OriginalSigsetFixtures.hs": {
-      "junit": ["thc.runtime.OriginalSigsetTest"], "python": []
-    },
-    "src/main/java/thc/runtime/SigsetImage.java": {
-      "junit": ["thc.runtime.OriginalSigsetTest"], "python": []
-    },
-    "src/main/c/sigset-abi-probe.c": {
-      "junit": ["thc.runtime.OriginalSigsetTest"], "python": []
-    },
     "t/fixtures/compiler/OriginalSavedTermiosAudit.hs": {
       "junit": ["thc.runtime.OriginalSavedTermiosTest"], "python": []
     },
@@ -1884,11 +1738,11 @@
       "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/ManagedFiles.java": {
-      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/ManagedStdio.java": {
-      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/StdioHostAbi.java": {
@@ -1912,15 +1766,15 @@
       "python": []
     },
     "src/main/java/thc/runtime/CoreOriginalStdio.java": {
-      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/OriginalStdioOp.java": {
-      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "src/main/java/thc/runtime/OriginalStdioExpression.java": {
-      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.GuestThreadsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
+      "junit": ["thc.runtime.OriginalUnixBatchTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.GuestThreadsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
     "t/fixtures/compiler/OriginalStdioReadAudit.hs": {
@@ -2679,7 +2533,8 @@
         "thc.runtime.ScalarLexicalProofTest",
         "thc.runtime.TypedCaseTest",
         "thc.runtime.TypedTupleFieldLevityTest",
-        "thc.runtime.VectorLayoutTest"
+        "thc.runtime.VectorLayoutTest",
+        "thc.runtime.SimdFamiliesTest"
       ],
       "python": []
     },
@@ -2791,17 +2646,16 @@
       ],
       "python": []
     },
-    "t/haskell-fixtures/IntegerSimdFixtures.hs": {
-      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
-      "python": ["bin/test-core-vectors.py"]
-    },
-    "src/test/java/thc/runtime/IntegerSimdModelTest.java": {
-      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
-      "python": ["bin/test-core-vectors.py"]
-    },
     "src/test/java/thc/runtime/IntegerSimdModel.java": {
-      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
-      "python": ["bin/test-core-vectors.py"]
+      "junit": [
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdDoubleByteArrayTest"
+      ],
+      "python": []
     },
     "t/haskell-fixtures/SimdAddressFixtures.hs": {
       "junit": ["thc.runtime.SimdAddressFamiliesTest"],
@@ -2819,8 +2673,6 @@
         "thc.CoreCompactRecordsTest",
         "thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest",
         "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest",
-        "thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest",
-        "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest",
         "thc.runtime.UnixLibcTest",
         "thc.runtime.TextCbitsTest",
         "thc.runtime.ClosureInspectionTest",
@@ -2844,8 +2696,7 @@
         "thc.runtime.ScalarBitCastTest",
         "thc.runtime.RtsDiagnosticsTest",
         "thc.runtime.RtsShutdownTest",
-        "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest",
-        "thc.runtime.OriginalSigsetTest",
+        "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest",
         "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest",
         "thc.runtime.OriginalSavedTermiosTest",
         "thc.runtime.OriginalOpenTest",

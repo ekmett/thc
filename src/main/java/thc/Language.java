@@ -71,7 +71,6 @@ public final class Language extends TruffleLanguage<Language.State> {
         private WindowsDirectoryStreams windowsDirectories;
         private final WindowsCodePages windowsCodePages;
         private final ManagedStdio stdio;
-        private final ManagedSignalMask signalMask;
         private final ManagedSignals signals;
         private final SavedTermios savedTermios;
         private final ManagedIconv iconv;
@@ -135,7 +134,6 @@ public final class Language extends TruffleLanguage<Language.State> {
             windowsDirectories = null;
             windowsCodePages = new WindowsCodePages(this);
             stdio = new ManagedStdio(files);
-            signalMask = new ManagedSignalMask(this);
             signals = new ManagedSignals(this, language);
             savedTermios = new SavedTermios(this);
             iconv = new ManagedIconv(this::cbits, stdio, threads);
@@ -198,7 +196,6 @@ public final class Language extends TruffleLanguage<Language.State> {
         public void setWindowsDirectories(WindowsDirectoryStreams value) { windowsDirectories = value; }
         public WindowsCodePages getWindowsCodePages() { return windowsCodePages; }
         public ManagedStdio getStdio() { return stdio; }
-        public ManagedSignalMask getSignalMask() { return signalMask; }
         public ManagedSignals getSignals() { return signals; }
         public SavedTermios getSavedTermios() { return savedTermios; }
         public ManagedIconv getIconv() { return iconv; }

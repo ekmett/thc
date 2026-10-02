@@ -7008,8 +7008,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operand = compile(argument, scope, false);
             if (originalStdio.getProcessIdentity() || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.getEventDescriptor()
                     || originalStdio.getWaitStatus() || originalStdio.getPathRemoval() || originalStdio.getFlagConstant() || originalStdio.getFcntl()
-                    || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.getReadiness() || originalStdio.getSeekConstant()
-                    || originalStdio.getStat() || originalStdio.getTermios() || originalStdio.getSigset() || originalStdio.getSavedTermios()
+                    || originalStdio.getReadiness() || originalStdio.getSeekConstant()
+                    || originalStdio.getStat() || originalStdio.getTermios() || originalStdio.getSavedTermios()
                     || originalStdio.getReadImage() || originalStdio.getPathStat() || originalStdio.getPathMode() || originalStdio == OriginalStdioOp.ACCESS
                     || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.getPathLink()
                     || originalStdio.getCurrentDirectory() || originalStdio.getDirectoryStream() || originalStdio == OriginalStdioOp.TCSETATTR
@@ -7096,11 +7096,11 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
             boolean status = originalStdio.getProcessIdentity() || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio == OriginalStdioOp.PIPE
                 || originalStdio.getWaitStatus() || originalStdio.getPathRemoval() || originalStdio.getFlagConstant() || originalStdio.getTermios()
-                || originalStdio.getSigset() || originalStdio.getSavedTermios() || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY
+                || originalStdio.getSavedTermios() || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY
                 || originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.getReadImage()
                 || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.getSeekConstant() || originalStdio.getStat();
             BytecodeLocal imageAddress = null;
-            if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET) {
+            if (originalStdio == OriginalStdioOp.POKE_LFLAG) {
                 imageAddress = b.createLocal("original image address", "object");
                 b.beginStoreLocal(imageAddress); operands.get(0).emit(e); b.endStoreLocal();
             }
@@ -7121,7 +7121,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             else if (originalStdio.getPathStat()) b.beginOriginalPathStat(result, originalStdio);
             else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result);
             else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.beginOriginalIconvClose(result);
-            else if (originalStdio == OriginalStdioOp.ICONV || originalStdio == OriginalStdioOp.SIGPROCMASK) b.beginOriginalIconv(result, originalStdio);
+            else if (originalStdio == OriginalStdioOp.ICONV) b.beginOriginalIconv(result, originalStdio);
             else if (originalStdio == OriginalStdioOp.STRERROR) b.beginOriginalStrerror(result);
             else if (originalStdio.getEventPair() || originalStdio.getFcntl() || originalStdio.getReadiness() || originalStdio == OriginalStdioOp.LOCK) b.beginOriginalStdioReady(result, originalStdio);
             else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result);
@@ -7133,9 +7133,6 @@ public final class BytecodeProgram implements ExecutableProgram {
             } else if (originalStdio == OriginalStdioOp.TCSETATTR) {
                 b.emitLoadLocal(Objects.requireNonNull(termiosArguments).get(0)); operands.get(2).emit(e);
                 b.emitLoadLocal(termiosArguments.get(1)); operands.get(3).emit(e);
-            } else if (originalStdio == OriginalStdioOp.SIGPROCMASK) {
-                for (var operand : operands.subList(0, 3)) operand.emit(e);
-                b.emitLoadConstant(ManagedAddress.nullAddress()); b.emitLoadConstant(ManagedAddress.nullAddress()); operands.getLast().emit(e);
             } else if (originalStdio.getEventPair()) {
                 for (var operand : operands.subList(0, 2)) operand.emit(e);
                 b.emitLoadConstant(0L); b.emitLoadConstant(0L); operands.getLast().emit(e);
@@ -7147,10 +7144,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                 operands.get(0).emit(e);
                 if (originalStdio == OriginalStdioOp.SET_SAVED_TERMIOS) operands.get(1).emit(e); else b.emitLoadConstant(ManagedAddress.nullAddress());
                 operands.getLast().emit(e);
-            } else if (originalStdio.getTermios() || originalStdio.getSigset()) {
-                if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET) operands.get(1).emit(e); else b.emitLoadConstant(0L);
+            } else if (originalStdio.getTermios()) {
+                if (originalStdio == OriginalStdioOp.POKE_LFLAG) operands.get(1).emit(e); else b.emitLoadConstant(0L);
                 if (imageAddress != null) b.emitLoadLocal(imageAddress);
-                else if (originalStdio.getTermiosAddress() || originalStdio.getSigset()) operands.get(0).emit(e);
+                else if (originalStdio.getTermiosAddress()) operands.get(0).emit(e);
                 else b.emitLoadConstant(ManagedAddress.nullAddress());
                 operands.getLast().emit(e);
             } else if (status) {
@@ -7186,7 +7183,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             else if (originalStdio.getPathStat()) b.endOriginalPathStat();
             else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.endOriginalIconvOpen();
             else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.endOriginalIconvClose();
-            else if (originalStdio == OriginalStdioOp.ICONV || originalStdio == OriginalStdioOp.SIGPROCMASK) b.endOriginalIconv();
+            else if (originalStdio == OriginalStdioOp.ICONV) b.endOriginalIconv();
             else if (originalStdio == OriginalStdioOp.STRERROR) b.endOriginalStrerror();
             else if (originalStdio.getEventPair() || originalStdio.getFcntl() || originalStdio.getReadiness() || originalStdio == OriginalStdioOp.LOCK) b.endOriginalStdioReady();
             else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek();

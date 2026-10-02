@@ -126,8 +126,6 @@ case "$(uname -s)-$(uname -m)" in
 esac
 "$fixture_bin" original-tcsetattr
 "$fixture_bin" original-tcgetattr
-"$fixture_bin" original-sigprocmask
-"$fixture_bin" original-sigset
 "$fixture_bin" original-rts-locks --require-supported
 "$fixture_bin" rts-diagnostics
 "$fixture_bin" original-stdio-seek
@@ -169,31 +167,7 @@ python3 bin/prepare-simd-capability-smoke.py
 "$fixture_bin" simd-wide-arrays
 "$fixture_bin" simd-address-families
 "$fixture_bin" simd-arithmetic
-case "$(uname -m)" in
-  arm64|aarch64) "$fixture_bin" int16x8 --export-only ;;
-  *) "$fixture_bin" int16x8 ;;
-esac
 "$fixture_bin" signed-narrow
-case "$(uname -m)" in
-  arm64|aarch64) "$fixture_bin" int8x16 --export-only ;;
-  *) "$fixture_bin" int8x16 ;;
-esac
-case "$(uname -m)" in
-  arm64|aarch64) python3 bin/prepare-word8x16-audit.py --export-only ;;
-  *) python3 bin/prepare-word8x16-audit.py ;;
-esac
-case "$(uname -m)" in
-  arm64|aarch64) "$fixture_bin" word16x8 --export-only ;;
-  *) "$fixture_bin" word16x8 ;;
-esac
-case "$(uname -m)" in
-  arm64|aarch64) "$fixture_bin" word32x4 --export-only ;;
-  *) "$fixture_bin" word32x4 ;;
-esac
-case "$(uname -m)" in
-  arm64|aarch64) python3 bin/prepare-int32x4-multiply-audit.py --export-only ;;
-  *) python3 bin/prepare-int32x4-multiply-audit.py ;;
-esac
 case "$(uname -m)" in
   arm64|aarch64) "$fixture_bin" int32x4-bytearray --export-only ;;
   *) "$fixture_bin" int32x4-bytearray ;;

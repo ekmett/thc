@@ -67,9 +67,17 @@ python3 bin/prepare-simd-capability-smoke.py
 ./gradlew --no-daemon test --tests thc.runtime.SimdCapabilitySmokeTest --rerun
 ```
 
-The JVM checker requires actual compiled target identity/validity and exact
-entry counts. Floating extrema also have separate Java NaN/signed-zero controls.
-This finite smoke does not replace the larger edge corpus or graph inspection.
+The ordinary arithmetic suite observes every lane and includes signed and
+unsigned boundaries, addition/multiplication wraparound and subtraction across
+both signed limits. Floating extrema also have separate Java NaN/signed-zero
+controls. `SimdFamiliesTest` checks malformed literal, carrier and vector proofs
+without preparing Core fixtures.
+
+`SimdCallNativeTest` covers vector calls, PAPs, captures and unpacked scalar tuple
+returns. Its signed Int32 and unsigned Word8 tuple cases preserve a residual
+call and check the first installed execution against native/model results.
+The separate array/address suites own memory and state-token behavior. Graph
+inspection remains necessary for performance claims.
 
 Prepare the larger scalar-entry experiment without native code generation:
 

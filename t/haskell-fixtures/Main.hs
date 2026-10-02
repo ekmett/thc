@@ -30,7 +30,6 @@ import Simd128ArrayFixtures (prepareSimd128Arrays)
 import SimdWideArrayFixtures (prepareSimdWideArrays)
 import SimdAddressFixtures (prepareSimdAddresses)
 import SimdArithmeticFixtures (prepareSimdArithmetic)
-import IntegerSimdFixtures (prepareIntegerSimd)
 import WordFloatingFixtures (prepareWordFloating)
 import ScalarBitCastFixtures (prepareScalarBitCasts)
 import BigNatLiteralFixtures (prepareBigNatLiterals)
@@ -121,8 +120,6 @@ import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
 import OriginalTcgetattrFixtures (prepareOriginalTcgetattr)
-import OriginalSigprocmaskFixtures (prepareOriginalSigprocmask)
-import OriginalSigsetFixtures (prepareOriginalSigset)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
 import STMFixtures (prepareSTM)
@@ -990,7 +987,6 @@ main = do
     ["simd-wide-arrays"] -> prepareSimdWideArrays root
     ["simd-address-families"] -> prepareSimdAddresses root
     ["simd-arithmetic"] -> prepareSimdArithmetic root
-    family:options | family `elem` ["int8x16", "int16x8", "word16x8", "word32x4"] -> prepareIntegerSimd root family options
     ["bignat-literals"] -> prepareBigNatLiterals root False
     ["rubbish-literals"] -> prepareRubbishLiterals root
     ["backend-annotations"] -> prepareBackendAnnotations root
@@ -1052,8 +1048,6 @@ main = do
     ["original-termios"] -> prepareOriginalTermios root
     ["original-tcsetattr"] -> prepareOriginalTcsetattr root
     ["original-tcgetattr"] -> prepareOriginalTcgetattr root
-    ["original-sigprocmask"] -> prepareOriginalSigprocmask root
-    ["original-sigset"] -> prepareOriginalSigset root
     ["native-addresses"] -> prepareNativeAddress root
     ["process-signals"] -> prepareProcessSignals root
     ["process-lifecycle"] -> prepareProcessLifecycle root
