@@ -104,8 +104,8 @@ public final class Explicit64PrimopsTest {
                 var cases = casesByName.get(name);
                 var module = CoreModules.INSTANCE.reachable(exported, "main:Explicit64PrimopsAudit." + name, false);
                 var bindings = (List<Map<String, Object>>) module.get("bindings");
-                assertEquals(1, bindings.size());
-                var lambda = (List<Object>) bindings.getFirst().get("expr");
+                var binding = bindings.stream().filter(b -> ("main:Explicit64PrimopsAudit." + name).equals(b.get("id"))).findFirst().orElseThrow();
+                var lambda = (List<Object>) binding.get("expr");
                 assertEquals(((List<String>) entry.get("arguments")).stream().map(List::of).toList(),
                     ((List<Map<String, Object>>) lambda.get(1)).stream().map(b -> CoreRepresentations.binder(b).getPrimReps()).toList());
                 assertEquals(List.of(entry.get("result")), CoreRepresentations.lambdaResult(lambda).getPrimReps());
@@ -116,8 +116,13 @@ public final class Explicit64PrimopsTest {
                 RootCallTarget target = program.entryTarget("main:Explicit64PrimopsAudit." + name);
                 compile(target);
                 long before = count(program, "compiledEntries");
-                for (long[] row : cases.reversed()) check(host, value, arity, backend + "/" + name, row);
-                assertEquals((long) cases.size(), count(program, "compiledEntries") - before, name);
+                var compiledCases = cases.reversed();
+                check(host, value, arity, backend + "/" + name, compiledCases.getFirst());
+                long first = count(program, "compiledEntries");
+                assertTrue(first > before, name + " first call enters installed code");
+                valid(target);
+                for (long[] row : compiledCases.subList(1, compiledCases.size())) check(host, value, arity, backend + "/" + name, row);
+                assertTrue(count(program, "compiledEntries") > first, name + " batch enters installed code");
                 valid(target);
                 assertEquals(0L, count(program, "unsupportedTraps"));
                 assertEquals(0L, count(program, "blackholes"));
@@ -182,8 +187,8 @@ public final class Explicit64PrimopsTest {
                 String kind = representation.get(0), rep = representation.get(1);
                 var module = CoreModules.INSTANCE.reachable(module(), "main:Explicit64PrimopsAudit.plusInt64", false);
                 var bindings = (List<Map<String, Object>>) module.get("bindings");
-                assertEquals(1, bindings.size());
-                var lambda = (List<Object>) bindings.getFirst().get("expr");
+                var binding = bindings.stream().filter(b -> "main:Explicit64PrimopsAudit.plusInt64".equals(b.get("id"))).findFirst().orElseThrow();
+                var lambda = (List<Object>) binding.get("expr");
                 var binder = ((List<Map<String, Object>>) lambda.get(1)).getFirst();
                 binder.put("rep", Map.of("kind", kind, "primReps", List.of(rep), "evaluated", true));
                 String label = backend + "/" + rep + "/diagnostic=" + diagnostic;

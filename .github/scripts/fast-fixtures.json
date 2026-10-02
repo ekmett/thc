@@ -1149,6 +1149,9 @@
       "outputs": ["build/explicit64-primops"],
       "sources": [
         "t/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "bin/export-core.ps1",
+        "bin/windows-common.ps1",
         "t/fixtures/compiler/Explicit64PrimopsAudit.hs"
       ]
     },
