@@ -568,6 +568,8 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/floating-remainder/native/oracle",
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
+    "build/bit-primops/native/bit-primops-oracle",
+    "build/signed-narrow-primops/native/signed-narrow-primops-oracle",
     "build/hint-trace/native/oracle",
     "build/closure-inspection/native/oracle",
     "build/simd-wide-arrays/native/oracle",
@@ -869,6 +871,8 @@ def original_stack_artifact(name):
 
 
 def native_executable(name):
+    if name.endswith(".exe"):
+        name = name[:-4]
     return name in NATIVE_EXECUTABLES or name in BYTEARRAY_NATIVES or (
         original_stack_artifact(name) and name.endswith("/native/original-stack-native"))
 

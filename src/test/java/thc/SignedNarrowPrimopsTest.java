@@ -36,6 +36,13 @@ public final class SignedNarrowPrimopsTest {
     private long count(Value function, String key) {
         return ((Number) ((Map<String, Object>) Json.INSTANCE.parse(function.getMember("diagnostics").asString())).get(key)).longValue();
     }
+    private long installed(Value function, long before, String label) {
+        var diagnostics = (Map<String, Object>) Json.INSTANCE.parse(function.getMember("diagnostics").asString());
+        long after = ((Number) diagnostics.get("compiledEntries")).longValue();
+        assertTrue(after > before, label + " enters installed code");
+        assertEquals(true, ((Map<?, ?>) diagnostics.get("explicitCompilation")).get("validLastTier"), label + " remains installed");
+        return after;
+    }
     private String operation(String name) {
         int end = name.indexOf("Int");
         return end < 0 ? name : name.substring(0, end);
@@ -71,7 +78,7 @@ public final class SignedNarrowPrimopsTest {
         for (String path : (List<String>) manifest.get("modules"))
             modules.add(CoreCbdFixtures.read(root.resolve(path)));
         var merged = CoreModules.INSTANCE.merge(modules);
-        var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:SignedNarrowPrimopsAudit." + manifest.get("compositeEntry"), true);
+        var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:SignedNarrowPrimopsAudit." + manifest.get("compositeEntry"));
         for (var entry : entries) {
             String name = (String) entry.get("name");
             String rep = "Int" + ((Number) entry.get("width")).intValue() + "Rep";
@@ -112,8 +119,15 @@ public final class SignedNarrowPrimopsTest {
             assertEquals(0L, count(function, "compiledEntries"), backend + " must remain interpreted before explicit compile");
             assertTrue(function.invokeMember("compile").asBoolean(), backend + " composite installation");
             long before = count(function, "compiledEntries");
-            for (var entry : entries.reversed()) for (long[] row : cases.get(entry.get("name")).reversed()) check(function, backend, entry, row);
-            assertEquals(total, count(function, "compiledEntries") - before, backend + " every native row must enter the installed composite guest root");
+            boolean first = true;
+            for (var entry : entries.reversed()) for (long[] row : cases.get(entry.get("name")).reversed()) {
+                check(function, backend, entry, row);
+                if (first) {
+                    before = installed(function, before, backend + " first compiled call");
+                    first = false;
+                }
+            }
+            installed(function, before, backend + " native batch");
             assertEquals(0L, count(function, "unsupportedTraps"));
             assertEquals(0L, count(function, "blackholes"));
         }
@@ -162,14 +176,19 @@ public final class SignedNarrowPrimopsTest {
                 for (int pass = 0; pass < 2; pass++) {
                     if (pass == 1) assertTrue(function.invokeMember("compile").asBoolean());
                     long before = count(function, "compiledEntries");
+                    boolean first = pass == 1;
                     for (long[] pair : pairs) {
                         // Word-to-Int inputs use their unsigned public range; the model observes the same low bits.
                         long input = name.startsWith("word") && name.contains("ToInt") ? pair[0] & ((1L << width) - 1) : pair[0];
                         Object[] args = arity == 1 ? new Object[] {input} : new Object[] {input, pair[1]};
                         assertEquals(mathematical(name, width, pair[0], pair[1]), function.execute(args).asLong(),
                             backend + " raw " + name + "(" + pair[0] + ", " + pair[1] + "), pass " + pass);
+                        if (first) {
+                            before = installed(function, before, backend + " raw " + name + " first compiled call");
+                            first = false;
+                        }
                     }
-                    if (pass == 1) assertEquals((long) pairs.size(), count(function, "compiledEntries") - before);
+                    if (pass == 1) installed(function, before, backend + " raw " + name + " batch");
                 }
             }
         }

@@ -21,6 +21,18 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_numeric_oracles_keep_native_cache_permissions_on_windows(self):
+        for family in ('bit-primops', 'signed-narrow-primops'):
+            oracle = f'build/{family}/native/{family}-oracle'
+            for suffix in ('', '.exe'):
+                path = oracle + suffix
+                self.assertTrue(cache.allowed_payload(path), path)
+                self.assertEqual(0o755, cache.safe_mode(0o755, path))
+            for path in (oracle + '.exe.exe', f'build/{family}/native/unowned.exe'):
+                self.assertFalse(cache.allowed_payload(path), path)
+                with self.assertRaises(cache.CacheMiss):
+                    cache.safe_mode(0o755, path)
+
     def test_simd_audit_cbd_and_native_paths_are_closed(self):
         for family, module in (("simd", "SimdInt64X2"), ("simd-int32x4", "SimdInt32X4")):
             self.assertIn(f"build/{family}/provenance.json", DECLARED_REQUIRED)
