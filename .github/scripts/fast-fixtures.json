@@ -701,7 +701,7 @@
       "junit": ["thc.runtime.WordFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],
       "outputs": ["build/word-floating"],
-      "sources": ["t/haskell-fixtures/WordFloatingFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/WordFloatingAudit.hs", "t/fixtures/compiler/WordFloatingNative.hs"]
+      "sources": ["t/haskell-fixtures/WordFloatingFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "bin/export-core.ps1", "bin/windows-common.ps1", "t/fixtures/compiler/WordFloatingAudit.hs", "t/fixtures/compiler/WordFloatingNative.hs"]
     },
     "floating-tuples": {
       "junit": ["thc.runtime.FloatingTupleTest"],

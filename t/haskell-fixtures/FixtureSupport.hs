@@ -29,8 +29,9 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map.Strict as Map
 import Data.List (stripPrefix)
 import qualified Data.Text as Text
+import GHC.ResponseFile (escapeArgs)
 import Numeric (showHex)
-import System.Directory (copyFile, createDirectoryIfMissing)
+import System.Directory (copyFile, createDirectoryIfMissing, findExecutable)
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..), die)
 import System.FilePath ((</>), isPathSeparator, takeDirectory, takeFileName)
@@ -95,12 +96,27 @@ environmentWith overrides = do
   let replace key value rest = (key,value) : filter ((/= key) . fst) rest
   pure (foldr (uncurry replace) environment overrides)
 
+-- Select native tools at the subprocess boundary. GHC response files keep
+-- compiler flags (including post-tidy options) out of PowerShell's binding.
+fixtureCommand :: FilePath -> [(String,String)] -> FilePath -> [String] -> IO (FilePath,[String])
+fixtureCommand root environment program args
+  | Host.os == "mingw32", program == "bin/export-core.sh" = do
+      powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
+      let directory = maybe (root </> "build/ghc") id (lookup "THC_GHC_OUT" environment)
+          response = directory </> "export.args"
+      createDirectoryIfMissing True directory
+      writeFile response (escapeArgs args)
+      pure (powershell,["-NoProfile","-NonInteractive","-File",root </> "bin/export-core.ps1","@" ++ response])
+  | program == "python3", Just python <- lookup "THC_PYTHON" environment = pure (python,args)
+  | otherwise = pure (program,args)
+
 run :: FilePath -> [(String,String)] -> FilePath -> [String] -> String -> IO String
 run = runWithTimeout Nothing
 
 runWithTimeout :: Maybe Int -> FilePath -> [(String,String)] -> FilePath -> [String] -> String -> IO String
-runWithTimeout limit root overrides program args input = do
+runWithTimeout limit root overrides requestedProgram requestedArgs input = do
   environment <- environmentWith overrides
+  (program,args) <- fixtureCommand root environment requestedProgram requestedArgs
   let command = (proc program args) {cwd = Just root, env = Just environment}
       execute = readCreateProcessWithExitCode command input
   completed <- maybe (Just <$> execute) (\micros -> timeout micros execute) limit
@@ -136,9 +152,10 @@ runLoggedExpect :: Int -> Int -> FilePath -> FilePath -> String -> [(String,Stri
 runLoggedExpect = runLoggedExpectInput Nothing
 
 runLoggedExpectInput :: Maybe FilePath -> Int -> Int -> FilePath -> FilePath -> String -> [(String,String)] -> FilePath -> [String] -> IO CommandResult
-runLoggedExpectInput input expected seconds root logs label overrides program args = do
+runLoggedExpectInput input expected seconds root logs label overrides requestedProgram requestedArgs = do
   createDirectoryIfMissing True (root </> logs)
   environment <- environmentWith overrides
+  (program,args) <- fixtureCommand root environment requestedProgram requestedArgs
   let output = logs </> label ++ ".stdout"
       errors = logs </> label ++ ".stderr"
       recordPath = logs </> label ++ ".command.json"

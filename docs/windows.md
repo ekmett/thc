@@ -64,6 +64,27 @@ still stop the workflow.
 
 ## Native export and launch
 
+The word-floating producer prepares its plugin, genuine pre/post-tidy CBD,
+strict audits and native integer-bit oracle independently. After bootstrap,
+run only that fixture group and its tests in both handoff modes:
+
+~~~powershell
+$tools = Get-ThcGhc
+$env:GHC = $tools.Compiler
+$env:GHC_PKG = $tools.PackageTool
+$env:GHC_ENVIRONMENT = '-'
+Invoke-ThcTool $env:CABAL @('run', 'exe:thc-fixtures', '--offline', '--disable-shared',
+    '-fdevelopment', "--with-compiler=$($tools.Compiler)",
+    "--with-hc-pkg=$($tools.PackageTool)", '--', 'word-floating')
+Invoke-ThcTool ./gradlew.bat @('--no-daemon', '--max-workers=4', '--continue',
+    'testDefault', '--tests', 'thc.runtime.WordFloatingTest',
+    'testDense', '--tests', 'thc.runtime.WordFloatingTest')
+~~~
+
+Shared fixture subprocesses select the existing PowerShell exporter on Windows,
+passing compiler flags through GHC response files. `THC_PYTHON` selects the real
+interpreter for existing audit scripts; Unix export selection is unchanged.
+
 The official Windows GHC is a vanilla/static compiler. The exporter loads the
 real Cabal-registered plugin archive; it does not invent a Unix shared-library
 manifest or request an unavailable dynamic library way.

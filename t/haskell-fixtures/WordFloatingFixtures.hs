@@ -23,6 +23,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import qualified System.Info as Host
 import Text.Read (readMaybe)
 
 -- Enumerate inputs, not expected results. Include both tie parities, neighbors,
@@ -60,11 +61,12 @@ prepareWordFloating root = do
       "bin/export-core.sh" (options ++ [source]) ""
     pure ()
   let native = output </> "native"
+      binary = native </> "word-floating-oracle" ++ if Host.os == "mingw32" then ".exe" else ""
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
     "-i" ++ root </> "t/fixtures/compiler","-odir",native,"-hidir",native,
-    root </> driver,"-o",native </> "word-floating-oracle"] ""
-  actual <- run root [] (native </> "word-floating-oracle") [] (unlines (map show inputs))
+    root </> driver,"-o",binary] ""
+  actual <- run root [] binary [] (unlines (map show inputs))
   let parse line = case splitTab line of
         [x,f,d] -> do
           value <- readInteger x
@@ -84,7 +86,7 @@ prepareWordFloating root = do
   let sources = sort $ [source,driver,"thc.cabal","t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/WordFloatingFixtures.hs",
         "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json",
-        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        "bin/build-compiler.sh","bin/export-core.sh","bin/export-core.ps1","bin/windows-common.ps1","bin/toolchain.sh","bin/plugin.py"] ++
         ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = (directory </> "oracle.tsv") : [directory </> stage ++ suffix | stage <- ["pre","post"],
