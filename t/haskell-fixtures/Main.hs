@@ -484,7 +484,7 @@ inputPaths root family = do
   plugin <- listDirectory (root </> "src/compiler/THC")
   let source = "t/fixtures/compiler" </> fixtureModule family ++ ".hs"
   pure $ sort $ [source, "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
-    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/export-core.ps1", "bin/windows-common.ps1", "bin/toolchain.sh", "bin/plugin.py"] ++
     ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
 
 prepare :: FilePath -> Family -> IO ()
@@ -519,7 +519,7 @@ prepare root family = do
       requests = [(e,x,y) | e <- es, (x,y) <- operands family e]
       stdinText = requestText family requests
       nativeDir = directory </> "native"
-      executable = nativeDir </> oracleName family
+      executable = nativeDir </> oracleName family ++ if Host.os == "mingw32" then ".exe" else ""
       oracle = directory </> "oracle.tsv"
   writeFile (root </> driver) (oracleDriver family es)
   createDirectoryIfMissing True (root </> nativeDir)
@@ -546,7 +546,7 @@ prepare root family = do
   writeFile (root </> oracle) actual
   sources <- inputPaths root family
   let modules = concatMap snd stageArtifacts
-      artifacts = modules ++ [driver,oracle]
+      artifacts = modules ++ [driver,oracle,executable]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   ghcInfo <- if family == Explicit64 then run root [] ghc ["--info"] "" else pure ""
