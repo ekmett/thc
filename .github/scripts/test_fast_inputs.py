@@ -22,8 +22,10 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 class FastInputTests(unittest.TestCase):
     def test_numeric_oracles_keep_native_cache_permissions_on_windows(self):
-        for family in ('bit-primops', 'signed-narrow-primops'):
-            oracle = f'build/{family}/native/{family}-oracle'
+        for family, executable in (('bit-primops', 'bit-primops-oracle'),
+                                   ('signed-narrow-primops', 'signed-narrow-primops-oracle'),
+                                   ('explicit64-primops', 'explicit64-oracle')):
+            oracle = f'build/{family}/native/{executable}'
             for suffix in ('', '.exe'):
                 path = oracle + suffix
                 self.assertTrue(cache.allowed_payload(path), path)

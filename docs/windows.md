@@ -64,17 +64,17 @@ still stop the workflow.
 
 ## Native export and launch
 
-The word-floating, scalar-bitcasts, bit and signed-narrow producers each prepare
-their plugin, genuine CBD and native integer-bit oracle independently. The first
-three export pre/post-tidy Core; signed-narrow exports one Core stage. After
-bootstrap, run these groups and their tests in both handoff modes:
+The word-floating, scalar-bitcasts, bit, signed-narrow and explicit64 producers
+each prepare their plugin, genuine CBD and native integer-bit oracle independently.
+The first three export pre/post-tidy Core; signed-narrow and explicit64 export one
+Core stage. After bootstrap, run these groups and their tests in both handoff modes:
 
 ~~~powershell
 $tools = Get-ThcGhc
 $env:GHC = $tools.Compiler
 $env:GHC_PKG = $tools.PackageTool
 $env:GHC_ENVIRONMENT = '-'
-foreach ($group in @('word-floating', 'scalar-bitcasts', 'bit', 'signed-narrow')) {
+foreach ($group in @('word-floating', 'scalar-bitcasts', 'bit', 'signed-narrow', 'explicit64')) {
     Invoke-ThcTool $env:CABAL @('run', 'exe:thc-fixtures', '--offline', '--disable-shared',
         '-fdevelopment', "--with-compiler=$($tools.Compiler)",
         "--with-hc-pkg=$($tools.PackageTool)", '--', $group)
@@ -84,10 +84,12 @@ Invoke-ThcTool ./gradlew.bat @('--no-daemon', '--max-workers=4', '--continue',
     '--tests', 'thc.runtime.ScalarBitCastTest',
     '--tests', 'thc.runtime.BitPrimopsTest',
     '--tests', 'thc.SignedNarrowPrimopsTest',
+    '--tests', 'thc.runtime.Explicit64PrimopsTest',
     'testDense', '--tests', 'thc.runtime.WordFloatingTest',
     '--tests', 'thc.runtime.ScalarBitCastTest',
     '--tests', 'thc.runtime.BitPrimopsTest',
-    '--tests', 'thc.SignedNarrowPrimopsTest')
+    '--tests', 'thc.SignedNarrowPrimopsTest',
+    '--tests', 'thc.runtime.Explicit64PrimopsTest')
 ~~~
 
 Shared fixture subprocesses select the existing PowerShell exporter on Windows,

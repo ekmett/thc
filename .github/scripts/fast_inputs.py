@@ -570,6 +570,7 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/integer-completion/native/integer-completion-oracle",
     "build/bit-primops/native/bit-primops-oracle",
     "build/signed-narrow-primops/native/signed-narrow-primops-oracle",
+    "build/explicit64-primops/native/explicit64-oracle",
     "build/hint-trace/native/oracle",
     "build/closure-inspection/native/oracle",
     "build/simd-wide-arrays/native/oracle",
