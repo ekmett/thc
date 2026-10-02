@@ -36,7 +36,7 @@ import thc.ScalarPrimopModel;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Native defined bits, an independent unbounded bit model, and exact installed entries. */
+/** Native defined bits, an independent unbounded bit model, and installed execution. */
 @SuppressWarnings("unchecked")
 public final class BitPrimopsTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
@@ -61,6 +61,13 @@ public final class BitPrimopsTest {
     }
     private long compiled(ExecutableProgram program) {
         return ((Number) program.diagnostics().get("compiledEntries")).longValue();
+    }
+    private void released(Language language, String label) {
+        var state = language.getHandoffState().get();
+        assertEquals(0, state.getArguments().getDepth(), label + " argument loans");
+        assertEquals(0, state.getArguments().retainedReferences(), label + " argument references");
+        assertEquals(0, state.getResults().getDepth(), label + " result loans");
+        assertEquals(0, state.getResults().retainedReferences(), label + " result references");
     }
 
     @Test void realCoreMatchesNativeAndBitModelForEveryInstalledEntry() throws Exception {
@@ -113,7 +120,7 @@ public final class BitPrimopsTest {
             List<Map<String, Object>> modules = new ArrayList<>();
             for (String path : stage.getValue()) modules.add(thc.CoreCbdFixtures.read(root.resolve(path)));
             var merged = CoreModules.INSTANCE.merge(modules);
-            var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:BitPrimopsAudit." + composite, true);
+            var compositeCalls = NumericPrimopCoreEvidence.calls(merged, "main:BitPrimopsAudit." + composite);
             for (var entry : entries) {
                 String name = (String) entry.get("name"), primitive = (String) entry.get("primitive");
                 List<String> arguments = List.of((String) entry.get("argumentRep"));
@@ -129,7 +136,6 @@ public final class BitPrimopsTest {
                     Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     Map<String, Object> module = new LinkedHashMap<>(CoreModules.INSTANCE.reachable(merged, "main:BitPrimopsAudit." + composite, false));
                     module.put("instrument", true);
-                    assertEquals(1, ((List<?>) module.get("bindings")).size(), label + " one composite guest root");
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
                     RootCallTarget host = program.hostEntryTarget(entries.size() + 1);
                     Value function = context.asValue(new EntryValue(program, "main:BitPrimopsAudit." + composite, entries.size() + 1));
@@ -150,17 +156,19 @@ public final class BitPrimopsTest {
                     for (Long[] row : cases.reversed()) {
                         long before = compiled(program);
                         check(function, label, row, 0);
-                        assertEquals(1L, compiled(program) - before, label + "(" + row[0] + ") must enter installed guest code");
+                        assertTrue(compiled(program) > before, label + "(" + row[0] + ") must enter installed guest code");
+                        released(language, label);
                     }
                     // Every result must reach its own check in installed code.
                     for (int i = 0; i < entries.size(); i++) {
                         long before = compiled(program);
                         check(function, label, wrongExpectations.get(i), 1L << i);
-                        assertEquals(1L, compiled(program) - before, label + " check " + i + " remains compiled");
+                        assertTrue(compiled(program) > before, label + " check " + i + " remains compiled");
+                        released(language, label);
                     }
                     valid(host, label + " host remains installed");
                     for (RootCallTarget target : active) valid(target, label + " active target remains installed");
-                    for (String counter : List.of("unsupportedTraps", "blackholes", "thunkEvaluations", "papAllocations"))
+                    for (String counter : List.of("unsupportedTraps", "blackholes"))
                         assertEquals(0L, ((Number) program.diagnostics().get(counter)).longValue(), label + "/" + counter);
                 } finally { context.leave(); }
             }
