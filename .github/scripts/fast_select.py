@@ -13,6 +13,7 @@ import ast
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
@@ -836,7 +837,7 @@ def select(repo, base_ref, head_ref):
                 haskell=dict(suites=sorted(selected_haskell), count=len(selected_haskell), compileTargets=compile_targets))
 
 
-def groups(repo):
+def groups(repo, *, system=None):
     """Partition the complete ordinary inventory using its sole fixture manifest."""
     import fast_fixtures
     inventory = select(repo, "", "HEAD")
@@ -854,7 +855,9 @@ def groups(repo):
             for member in merged:
                 components[member] = merged
     result = {min(component): sorted({c for name in component for c in manifest["groups"][name]["junit"]})
-              for component in components.values()}
+              for component in components.values()
+              if system is None or any(system in manifest["groups"][name].get("ciPlatforms", [system])
+                                       for name in component)}
     free = sorted(manifest["fixtureFreeJunit"])
     for offset in range(0, len(free), 50):
         name = "fixture-free-" + free[offset].rsplit(".", 1)[-1].lower()
@@ -866,7 +869,7 @@ def groups(repo):
 
 def group_matrix(repo):
     """Share worker setup while keeping each original group independently runnable."""
-    names = list(groups(repo))
+    names = list(groups(repo, system=platform.system()))
     count = min(20, len(names))
     return {"include": [{"batch": f"batch-{index+1:02d}", "groups": names[index::count]}
                         for index in range(count)]}

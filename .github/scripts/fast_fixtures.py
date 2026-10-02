@@ -355,6 +355,11 @@ def _manifest(root):
             owners[name] = group_id
         for path in [*group["outputs"], *group["sources"]]:
             _relative(path)
+        systems = group.get("ciPlatforms", ["Linux", "Darwin", "Windows"])
+        if (not isinstance(systems, list) or not systems or
+                any(system not in ("Linux", "Darwin", "Windows") for system in systems) or
+                len(systems) != len(set(systems))):
+            raise ValueError(f"Invalid CI platforms: {group_id}")
         checks = group.get("ciChecks", [])
         if not isinstance(checks, list) or any(not isinstance(check, dict) or check.get("platform") != "Linux" for check in checks):
             raise ValueError(f"Invalid CI checks: {group_id}")

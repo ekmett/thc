@@ -139,6 +139,40 @@ class FastSelectionTest(unittest.TestCase):
         with self.assertRaisesRegex(select.SelectionError, "unmapped=.*NewTest"):
             select.groups(self.repo)
 
+    def test_worker_platforms_omit_only_wholly_unsupported_groups(self):
+        import fast_fixtures
+        manifest = {"schema": 1, "fixtureFreeJunit": ["example.SmokeTest"], "groups": {
+            "provider": {"junit": ["example.LeafTest"], "commands": [{"argv": ["provider"]}],
+                         "outputs": ["build/provider"], "sources": ["README.md"], "ciPlatforms": ["Linux"]},
+            "consumer": {"junit": ["example.OtherTest"], "commands": [{"argv": ["consumer"]}],
+                         "outputs": ["build/consumer"], "sources": ["README.md"]}}}
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        complete = select.groups(self.repo)
+        for system in ("Linux", "Darwin"):
+            with mock.patch.object(select.platform, "system", return_value=system):
+                matrix = select.group_matrix(self.repo)["include"]
+            selected = [name for batch in matrix for name in batch["groups"]]
+            self.assertCountEqual(set(complete) - ({"provider"} if system == "Darwin" else set()), selected)
+        # Explicit selection remains available; matrix filtering changes no owner.
+        self.assertIn("example.LeafTest", select.group_selection(self.repo, "provider")["junit"]["classes"])
+        # A portable consumer still needs its provider even when that provider's
+        # own tests are platform-specific. Never discard part of a connected group.
+        manifest["groups"]["consumer"]["requires"] = ["provider"]
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.assertEqual(["example.LeafTest", "example.OtherTest"],
+                         select.groups(self.repo, system="Darwin")["consumer"])
+        manifest["groups"]["consumer"]["ciPlatforms"] = ["Linux"]
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.assertNotIn("consumer", select.groups(self.repo, system="Darwin"))
+        self.assertIn("consumer", select.groups(self.repo, system="Linux"))
+        for invalid in ([], "Linux", ["unknown"], ["Linux", "Linux"], [1]):
+            with self.subTest(invalid=invalid):
+                manifest["groups"]["consumer"]["ciPlatforms"] = invalid
+                self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+                with self.assertRaisesRegex(ValueError, "Invalid CI platforms"):
+                    fast_fixtures._manifest(self.repo)
+
     def test_worker_batches_cover_original_groups_once_without_changing_selections(self):
         for size in (1, 19, 20, 21, 145, 300):
             original = {f"group-{index}": [f"example.Test{index}"] for index in range(size)}
