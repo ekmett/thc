@@ -450,7 +450,8 @@ def fixture_sources(fs):
 
 def smoke_operations(family):
     # The 128-bit integer foundations are handwritten, but share this oracle.
-    operations = list(family['operations'])
+    # The dedicated arithmetic suite owns shuffle patterns and index validation.
+    operations = [op for op in family['operations'] if op != 'shuffle']
     if (not family['newCarrier'] and family['laneRep'].startswith(('Int', 'Word'))
             and family['bits'] // family['lanes'] <= 32):
         operations += ['broadcast', 'plus', 'minus', 'times']
@@ -463,36 +464,8 @@ def smoke_entries(fs):
     return [(f, op) for f in fs for op in smoke_operations(f) if op not in ('pack', 'unpack')]
 
 
-def smoke_groups(fs):
-    """Keep unrelated families separate and bound each driver's lane work."""
-    groups = []
-    legacy = []
-    index = 0
-    for family in fs:
-        indices = []
-        standalone = []
-        for operation in smoke_operations(family):
-            if operation in ('pack', 'unpack'):
-                continue
-            (legacy if operation == 'insert' and not family['newCarrier'] else
-             standalone if operation in ('quot', 'rem', 'shuffle') else indices).append(index)
-            index += 1
-        # Wide floating lane observations include NaN canonicalization and bit
-        # casts. Keep each operation a natural entry rather than compiling a
-        # large switch containing several independent pack/unpack pipelines.
-        limit = (1 if family['laneRep'] in ('FloatRep', 'DoubleRep') and family['bits'] > 128
-                 else 112 // family['lanes'])
-        for start in range(0, len(indices), limit):
-            groups.append(indices[start:start + limit])
-        # Keep division and shuffling separate from the ordinary arithmetic drivers.
-        groups.extend([entry] for entry in standalone)
-    if legacy:
-        groups.append(legacy)
-    return {f'simdSmoke{i}': indices for i, indices in enumerate(groups)}
-
-
 def smoke_sources(fs):
-    """Bounded composite drivers; the native scalar oracle needs no SIMD ISA."""
+    """One public operation per entry; the scalar oracle needs no SIMD ISA."""
     convert = {
         'Int8Rep': lambda x: f'intToInt8# ({x})',
         'Word8Rep': lambda x: f'wordToWord8# (int2Word# ({x}))',
@@ -518,44 +491,38 @@ def smoke_sources(fs):
             return f'case {value} of v -> case neFloat# v v of {{ 1# -> 2143289344#; _ -> word2Int# (word32ToWord# (castFloatToWord32# v)) }}'
         return f'case {value} of v -> case v /=## v of {{ 1# -> 9221120237041090560#; _ -> word2Int# (word64ToWord# (castDoubleToWord64# v)) }}'
     def header(name):
-        extrema = [op + f['name'] + '#' for f in fs for op in f['operations'] if op in ('min', 'max', 'shuffle')]
+        extrema = [op + f['name'] + '#' for f in fs for op in smoke_operations(f) if op in ('min', 'max')]
         return [*HASKELL_HEADER, '{-# LANGUAGE MagicHash, UnboxedTuples #-}', f'module {name} where',
                 'import GHC.Exts', *(['import GHC.Prim (' + ', '.join(extrema) + ')'] if name == 'GeneratedSimdSmoke' and extrema else []), '']
-    def signature(entry):
-        return [f'{entry} :: Int# -> Int# -> Int# -> Int#',
-                f'{entry} selector a b = case quotInt# selector 4096# of']
-    groups = smoke_groups(fs)
-    owners = {index: name for name, indices in groups.items() for index in indices}
-    drivers = {name: signature(name) for name in groups}
-    scalar = header('GeneratedSimdSmokeScalar') + signature('scalarSmoke')
-    for index, (f, op) in enumerate(smoke_entries(fs)):
-        vector = drivers[owners[index]]
+    entries = smoke_entries(fs)
+    names = [op + f['name'] for f, op in entries]
+    vector = header('GeneratedSimdSmoke')
+    scalar = header('GeneratedSimdSmokeScalar') + [
+        'scalarSmoke :: Int# -> Int# -> Int# -> Int#',
+        'scalarSmoke selector a b = case quotInt# selector 4096# of']
+    for index, (f, op) in enumerate(entries):
         n, count, rep = f['name'], f['lanes'], f['laneRep']
+        name = op + n
+        vector += [f'{name} :: Int# -> Int# -> Int# -> Int#', f'{name} selector a b =']
         lane = f'remInt# selector {count}#'
         left = f'pack{n}# (# ' + ', '.join(convert[rep](f'a +# {i * 104729}#') for i in range(count)) + ' #)'
         right = f'pack{n}# (# ' + ', '.join(convert[rep](f'b -# {i * 7919}#') for i in range(count)) + ' #)'
         value = (f'broadcast{n}# ({convert[rep]("a")})' if op == 'broadcast' else
-                 f'{op}{n}# ({left})' + (f' ({right})' if op in BINARY or op == 'shuffle' else ''))
+                 f'{op}{n}# ({left})' + (f' ({right})' if op in BINARY else ''))
         inserted = f'remInt# (quotInt# selector 64#) {count}#'
-        if op == 'shuffle':
-            value += ' (# ' + ', '.join(f'{(count - 1 - i) + (count if i % 2 else 0)}#' for i in range(count)) + ' #)'
         if op == 'insert':
             value += f' ({convert[rep]("b")}) ({inserted})'
-        vector += [f'  {index}# -> case unpack{n}# ({value}) of',
+        vector += [f'  case unpack{n}# ({value}) of',
                    '    (# ' + ', '.join(f'p{i}' for i in range(count)) + f' #) -> case {lane} of']
-        vector += [f'      {str(i) + "#" if i < count - 1 else "_"} -> {observe(rep, f"p{i}", op in ("insert", "shuffle"))}' for i in range(count)]
+        vector += [f'      {str(i) + "#" if i < count - 1 else "_"} -> {observe(rep, f"p{i}", op == "insert")}' for i in range(count)]
+        vector.append('')
         left = convert[rep]('a' if op == 'broadcast' else f'a +# (({lane}) *# 104729#)')
         right = convert[rep](f'b -# (({lane}) *# 7919#)')
         stem = rep.removesuffix('Rep')
         primitive = (dict(plus='(+##)', minus='(-##)', times='(*##)', divide='(/##)', negate='negateDouble#').get(op)
                      if rep == 'DoubleRep' else
                      ('sub' if op == 'minus' and rep not in ('FloatRep', 'DoubleRep') else op) + stem + '#')
-        if op == 'shuffle':
-            selected = f'{count - 1}# -# ({lane})'
-            a = convert[rep](f'a +# (({selected}) *# 104729#)')
-            b = convert[rep](f'b -# (({selected}) *# 7919#)')
-            scalar.append(f'  {index}# -> case remInt# ({lane}) 2# of {{ 0# -> {observe(rep, a, True)}; _ -> {observe(rep, b, True)} }}')
-        elif op == 'insert':
+        if op == 'insert':
             scalar.append(f'  {index}# -> case ({lane}) ==# ({inserted}) of {{ 1# -> {observe(rep, convert[rep]("b"), True)}; _ -> {observe(rep, left, True)} }}')
         elif op in ('min', 'max'):
             # The native oracle compares scalar lanes. Floating extrema requests
@@ -565,11 +532,8 @@ def smoke_sources(fs):
             comparison = '(<##)' if rep == 'DoubleRep' else f'lt{stem}#'
             scalar.append(f'  {index}# -> case {comparison} ({left}) ({right}) of {{ 1# -> ({observe(rep, first)}); _ -> ({observe(rep, second)}) }}')
         else:
-            value = left if op == 'broadcast' else f'{primitive} ({left})' + (f' ({right})' if op in BINARY or op == 'shuffle' else '')
+            value = left if op == 'broadcast' else f'{primitive} ({left})' + (f' ({right})' if op in BINARY else '')
             scalar.append(f'  {index}# -> {observe(rep, value)}')
-    vector = header('GeneratedSimdSmoke')
-    for driver in drivers.values():
-        vector += driver + ['  _ -> 0#', '']
     scalar += ['  _ -> 0#']
     outputs = {'fixtures/GeneratedSimdSmoke.hs': '\n'.join(vector) + '\n',
                'fixtures/GeneratedSimdSmokeScalar.hs': '\n'.join(scalar) + '\n'}
@@ -584,11 +548,11 @@ def smoke_sources(fs):
                  '      let answer = I# (scalarSmoke k a b)']
         if compare_vector:
             main += ['          actual = case name of']
-            main += [f'            "{name}" -> I# ({name} k a b)' for name in groups]
+            main += [f'            "{name}" -> I# ({name} k a b)' for name in names]
             main += ['            _ -> error "Unknown SIMD smoke entry"', '      in',
                      '        if answer /= actual then error "Native SIMD/scalar mismatch" else']
         else:
-            main += ['      in', f'        if name `notElem` {json.dumps(list(groups))} then error "Unknown SIMD smoke entry" else']
+            main += ['      in', f'        if name `notElem` {json.dumps(names)} then error "Unknown SIMD smoke entry" else']
         main += ['          putStrLn (name ++ "\\t" ++ selector ++ "\\t" ++ left ++ "\\t" ++ right ++ "\\t" ++ show answer)',
                  'emit _ = error "Invalid SIMD smoke input"', 'main :: IO ()',
                  'main = if finiteBitSize (0 :: Int) /= 64 then error "Requires 64-bit Int"',

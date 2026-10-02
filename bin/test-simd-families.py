@@ -253,17 +253,6 @@ class SimdFamiliesTest(unittest.TestCase):
                 self.assertEqual(signed((high >> 1) + 17), result(family, 'min', lane, a, b))
                 self.assertEqual(signed((1 << (width - 1)) + 17), result(family, 'max', lane, a, b))
 
-    def test_smoke_composites_bound_compilation_work_and_cover_every_selector(self):
-        families = GEN.families()
-        entries = GEN.smoke_entries(families)
-        groups = GEN.smoke_groups(families)
-        self.assertEqual(list(range(len(entries))), sorted(i for group in groups.values() for i in group))
-        for group in groups.values():
-            self.assertLessEqual(sum(entries[i][0]['lanes'] for i in group), 112)
-            if any(entries[i][0]['laneRep'] in ('FloatRep', 'DoubleRep') and
-                   entries[i][0]['bits'] > 128 for i in group):
-                self.assertEqual(1, len(group))
-
     def test_contradictory_tables_are_rejected(self):
         original = json.loads(GEN.SPEC.read_text())
         variants = [dict(lanes=True), dict(lanes=4), dict(bits=512), dict(element='Word32ElemRep'),

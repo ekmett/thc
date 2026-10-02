@@ -1329,6 +1329,7 @@
       "sources": [
         "bin/prepare-simd-capability-smoke.py",
         "bin/simd-families.json",
+        "bin/simd_family_model.py",
         "bin/generate-simd-families.py"
       ]
     },

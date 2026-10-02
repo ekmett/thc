@@ -1596,7 +1596,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({'build/simd-capability-smoke'} | sources, set(group['outputs']))
         self.assertLessEqual(sources, fast_fixtures.FULL_REQUIRED)
         self.assertNotIn('bin/prepare-simd-families.py', group['sources'])
-        self.assertNotIn('bin/simd_family_model.py', group['sources'])
+        self.assertIn('bin/simd_family_model.py', group['sources'])
 
     def test_original_fd_ready_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]

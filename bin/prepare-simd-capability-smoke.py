@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Prepare bounded SIMD composites against native Haskell scalar lane arithmetic.
+"""Compare individual SIMD operations against native Haskell scalar arithmetic.
 
 The default native oracle contains no vectors and needs no AVX512. Enable the
 additional native vector comparison only on a host supporting the selected ISA.
@@ -37,12 +37,8 @@ def record(path):
 def inputs(generator):
     def signed(value):
         return (value + (1 << 63)) % (1 << 64) - (1 << 63)
-    groups = generator.smoke_groups(generator.families())
-    owners = {index: name for name, indices in groups.items()
-              for index in indices}
-    entries = generator.smoke_entries(generator.families())
-    for index in (index for indices in groups.values() for index in indices):
-        family, operation = entries[index]
+    for index, (family, operation) in enumerate(generator.smoke_entries(generator.families())):
+        name = operation + family['name']
         rep = family['laneRep']
         if rep in ('FloatRep', 'DoubleRep'):
             one, two, sign = ((0x3f800000, 0x40000000, 1 << 31) if rep == 'FloatRep'
@@ -72,7 +68,7 @@ def inputs(generator):
             for inserted in range(family['lanes']):
                 for lane in range(family['lanes']):
                     for left, right in pairs if inserted == lane else pairs[:1]:
-                        yield owners[index], index * 4096 + inserted * 64 + lane, signed(left - lane * 104729), signed(right)
+                        yield name, index * 4096 + inserted * 64 + lane, signed(left - lane * 104729), signed(right)
             continue
         # Every lane is observed once; first/last lanes also get wrap and sign edges.
         for lane in range(family['lanes']):
@@ -81,7 +77,7 @@ def inputs(generator):
                 b = signed(right + lane * 7919)
                 if operation in ('quot', 'rem') and not defined_division(family, a, b):
                     continue
-                yield owners[index], index * 4096 + lane, a, b
+                yield name, index * 4096 + lane, a, b
 
 
 def main():
@@ -108,14 +104,14 @@ def main():
     core = core_dir / 'GeneratedSimdSmoke.cbd'
     exported = inspect_cbd(core.read_bytes())
     auditor = module(ROOT / 'bin/audit-core.py', 'simd_auditor')
-    groups = generator.smoke_groups(generator.families())
-    audits = {name: auditor.Audit([(str(core), exported)], capabilities).run(['main:GeneratedSimdSmoke.' + name]) for name in groups}
+    names = [operation + family['name'] for family, operation in generator.smoke_entries(generator.families())]
+    audits = {name: auditor.Audit([(str(core), exported)], capabilities).run(['main:GeneratedSimdSmoke.' + name]) for name in names}
     used = {p['name'] for audit in audits.values() for p in audit['primitives']}
     for name, audit in audits.items():
         if not audit['accepted'] or audit['missingGlobals'] or audit['issues']:
-            raise RuntimeError(f'{name}: Composite SIMD audit failed: {audit["issues"]}')
+            raise RuntimeError(f'{name}: SIMD operation audit failed: {audit["issues"]}')
     if not set(contracts) <= used:
-        raise RuntimeError(f'Composite SIMD operations disappeared: {set(contracts) - used}')
+        raise RuntimeError(f'SIMD operations disappeared: {set(contracts) - used}')
     audits_path = OUT / 'audits.json'
     audits_path.write_text(json.dumps(audits, indent=2) + '\n')
     requests = ''.join('\t'.join(map(str, row)) + '\n' for row in inputs(generator))
@@ -140,7 +136,7 @@ def main():
     sources += sorted(GENERATED.glob('GeneratedSimdSmoke*.hs'))
     sources += [ROOT / 'src/main/resources/thc/scalar-primop-signatures.json']
     manifest = dict(schema=1, scope='local SIMD with exact lanes; no vector ABI or hardware-SIMD guarantee',
-                    ghcVersion='9.14.1', rows=len(actual.splitlines()), names=list(groups),
+                    ghcVersion='9.14.1', rows=len(actual.splitlines()), names=names,
                     nativeOracle='scalar-and-vector' if args.native_vector else 'scalar',
                     ghcOptions=args.ghc_option, operations=sorted(contracts),
                     selectors={str(index): operation + family['name'] + '#'

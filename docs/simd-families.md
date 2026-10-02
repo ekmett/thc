@@ -59,8 +59,9 @@ API, not printed Haskell types.
 ## Compact smoke and full experiment
 
 The compact smoke derives its operations from the family table and compares
-composite contracts with the canonical capability declaration. Its default
-native oracle uses scalar lanes and does not require native AVX512 code:
+their contracts with the canonical capability declaration. Each entry exercises
+one operation; `SimdArithmeticTest` separately owns shuffle patterns and invalid
+indices. The native oracle uses scalar lanes and does not require native AVX512 code:
 
 ```sh
 python3 bin/prepare-simd-capability-smoke.py

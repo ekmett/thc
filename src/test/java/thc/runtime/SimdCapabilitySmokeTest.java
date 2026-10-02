@@ -107,6 +107,7 @@ class SimdCapabilitySmokeTest {
         assertEquals("finite-without-mixed-zero-ties", manifest.get("nativeFloatingExtrema"));
         var selectors = (Map<String, String>) manifest.get("selectors");
         var allOperations = new LinkedHashSet<>(GeneratedVectors.operations);
+        allOperations.removeIf(operation -> operation.startsWith("shuffle"));
         for (var family : List.of("Int8X16", "Int16X8", "Int32X4", "Word8X16", "Word16X8", "Word32X4")) {
             for (var operation : List.of("broadcast", "plus", "minus", "times")) allOperations.add(operation + family + "#");
             if (family.startsWith("Int")) allOperations.add("negate" + family + "#");
