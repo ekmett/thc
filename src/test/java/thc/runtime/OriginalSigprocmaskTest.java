@@ -35,6 +35,7 @@ import thc.Json;
 import thc.Language;
 import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 @EnabledOnOs(OS.LINUX)
 @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
@@ -112,7 +113,7 @@ public class OriginalSigprocmaskTest {
                         for (int index = 0; index < calls.size(); index++) {
                             var call = calls.get(index); var current = snapshot(service); var bytes = canaries(); var old = call.output() ? address(bytes).plus(8) : nil();
                             var io = Language.currentState().getStdio(); assertEquals(-1L, io.close(-1)); long sticky = io.errno(); long count = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            assertEquals(rows.get(index).get(1), Calls.target(entry, new Object[]{0L, call.how(), call.set(), old}));
+                            assertEquals(rows.get(index).get(1), callScalarTestTarget(entry, new Object[]{0L, call.how(), call.set(), old}));
                             if (compiled) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > count);
                             assertEquals(index == 6 ? rows.get(index).get(2) : sticky, io.errno()); var expected = canaries();
                             if (index != 6 && call.output()) System.arraycopy(current, 0, expected, 8, 8);
@@ -136,17 +137,17 @@ public class OriginalSigprocmaskTest {
                 for (var backend : List.of("ast", "bytecode")) {
                     var target = load(language, backend, OriginalStdioChecks.rawModule(original, source, null)).entryTarget("entry");
                     class Runner {
-                        Object invoke(long how, ManagedAddress set, ManagedAddress old) { return invoke(how, set, old, thc.runtime.Unit.INSTANCE); }
-                        Object invoke(long how, ManagedAddress set, ManagedAddress old, Object state) { return Calls.target(target, new Object[]{0L, how, set, old, state}); }
+                        long invoke(Object how, ManagedAddress set, ManagedAddress old) { return invoke(how, set, old, thc.runtime.Unit.INSTANCE); }
+                        long invoke(Object how, ManagedAddress set, ManagedAddress old, Object state) { return ((Number) callScalarTestTarget(target, new Object[]{0L, how, set, old, state})).longValue(); }
                     }
                     var runner = new Runner();
                     // Existing non-SIGTTOU bits and unmaskable signals are
                     // legitimate no-ops: reject effective changes, not bytes.
-                    assertEquals(0L, runner.invoke(constant(OriginalStdioOp.SIG_BLOCK), address(baseline), nil()));
-                    for (long signal : new long[]{9L, 19L}) assertEquals(0L, runner.invoke(constant(OriginalStdioOp.SIG_BLOCK), address(token(signal)), nil()));
-                    assertEquals(0L, runner.invoke(constant(OriginalStdioOp.SIG_SETMASK), ManagedAddress.fromHex(OriginalStdioChecks.hex(baseline)), nil()));
+                    assertEquals(0L, runner.invoke(Math.toIntExact(constant(OriginalStdioOp.SIG_BLOCK)), address(baseline), nil()));
+                    for (long signal : new long[]{9L, 19L}) assertEquals(0L, runner.invoke(Math.toIntExact(constant(OriginalStdioOp.SIG_BLOCK)), address(token(signal)), nil()));
+                    assertEquals(0L, runner.invoke(Math.toIntExact(constant(OriginalStdioOp.SIG_SETMASK)), ManagedAddress.fromHex(OriginalStdioChecks.hex(baseline)), nil()));
                     assertThrows(RuntimeFault.class, () -> runner.invoke(0, nil(), valid, 9L)); assertThrows(RuntimeFault.class, () -> runner.invoke(2147483648L, nil(), valid));
-                    assertThrows(RuntimeFault.class, () -> runner.invoke(constant(OriginalStdioOp.SIG_SETMASK), address(other), valid));
+                    assertThrows(RuntimeFault.class, () -> runner.invoke(Math.toIntExact(constant(OriginalStdioOp.SIG_SETMASK)), address(other), valid));
                     var pointer = ManagedAddress.fromAllocation(PinnedMemory.allocate(size(), 8)); pointer.writeAddressElementIndex(0, valid);
                     for (var bad : List.of(address(new byte[size() - 1]), pointer, ManagedAddress.fromHex("00".repeat(size())))) assertThrows(RuntimeFault.class, () -> runner.invoke(0, nil(), bad));
                     assertThrows(RuntimeFault.class, () -> runner.invoke(0, valid, valid));
