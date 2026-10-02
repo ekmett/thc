@@ -66,6 +66,7 @@ jobs:
             build/native-addresses/
             build/native-malloc/
             build/*-arrays/
+            build/tuple-arithmetic/
             build/test-results/testDefault/
             build/test-results/testDense/
             build/managed-md5-native*/
