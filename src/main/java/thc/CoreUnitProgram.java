@@ -22,6 +22,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final Map<String,Map<String,Object>> constructors = new HashMap<>();
     private final Map<CoreUnitDirectory.ModuleRecord,Map<String,Object>> admittedModules = new HashMap<>();
     private final Map<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission> admissions = new HashMap<>();
+    private final Map<String,PackageScalarLink> components = new HashMap<>();
     private final Map<String,List<PackageScalarAdmission>> packageProvenance = new HashMap<>();
     private final Map<String,List<CoreBoxedForeignDeclarations>> boxedProvenance = new HashMap<>();
     private final Map<String,PackageScalarLink> startupLinks = new LinkedHashMap<>();
@@ -116,13 +117,13 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
                 CoreForeignArtifacts.validateArchive(module); CoreModules.admission(module, null); CoreForeignExceptionBridge.read(module);
             }
             var projected = new LinkedHashMap<>(module); projected.put("bindings", List.of());
-            admission = new CoreModuleAdmission(projected, this::binding); consumerAdmissions.put(module, admission);
+            admission = new CoreModuleAdmission(projected, this::binding, components); consumerAdmissions.put(module, admission);
         }
         return admission;
     }
     private CoreModuleAdmission admission(CoreUnitDirectory.ModuleRecord module) {
         var admission = admissions.get(module);
-        if (admission == null) { sources.verifyModule(module); admission = new CoreModuleAdmission(metadata(module), this::binding); admissions.put(module, admission); }
+        if (admission == null) { sources.verifyModule(module); admission = new CoreModuleAdmission(metadata(module), this::binding, components); admissions.put(module, admission); }
         return admission;
     }
     private ForeignBitcode capiProvenance(String unit, String name) {

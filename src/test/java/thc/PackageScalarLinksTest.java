@@ -157,8 +157,22 @@ class PackageScalarLinksTest {
             "packageNativeLink", with(link, "format", "llvm-bitcode")))).getLink().getNativeLibrary());
         var changed = with(link, "nativeLibrary", map("sha256", hash(new byte[]{1, 3}), "hex", "0103"));
         assertFalse(first.same(Objects.requireNonNull(PackageScalarLinks.read(with(nativeModule, "packageNativeLink", changed))).getLink()));
+        var components = new HashMap<String,PackageScalarLink>();
+        var one = new CoreModuleAdmission(nativeModule, id -> null, components).getPackageLink();
+        var two = new CoreModuleAdmission(nativeModule, id -> null, components).getPackageLink();
+        assertSame(one.link(), two.link());
+        assertEquals(one.proved(), two.proved());
+        assertNotSame(one.link(), new CoreModuleAdmission(nativeModule, id -> null).getPackageLink().link());
+        assertThrows(IllegalArgumentException.class, () -> new CoreModuleAdmission(
+            with(nativeModule, "packageNativeLink", changed), id -> null, components));
         assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule, "packageNativeLink",
             with(link, "nativeLibrary", with(dependency, "hex", "0103")))));
+        var letters = map("sha256", hash(new byte[]{(byte) 0xab, (byte) 0xff}), "hex", "abff");
+        assertArrayEquals(new byte[]{(byte) 0xab, (byte) 0xff}, Objects.requireNonNull(PackageScalarLinks.read(with(nativeModule,
+            "packageNativeLink", with(link, "nativeLibrary", letters)))).getLink().getNativeLibrary());
+        for (String hex : List.of("ABFF", "abFf", "abfg", "abf", ""))
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule, "packageNativeLink",
+                with(link, "nativeLibrary", with(letters, "hex", hex)))));
     }
     @Test void windowsAdmissionRejectsMinGwAndForeignCpuTargets() throws Exception {
         if (!System.getProperty("os.name").startsWith("Windows")) return;
@@ -172,8 +186,8 @@ class PackageScalarLinksTest {
     @Test void nativeProvidersDoNotInventHaskellAbisAndKeepTheirExactClosure() throws Exception {
         var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");
         var provider = map("schema", 1L, "profile", "thc-package-native-component-v1", "unit", "native-provider",
-            "target", scalar.get("target"), "componentSha256", "b".repeat(64), "bitcodeSha256", hash(new byte[]{1, 2}),
-            "bitcodeHex", "0102", "format", "llvm-bitcode", "exports", list("provider_next"), "dependencies", List.of());
+            "target", scalar.get("target"), "componentSha256", "b".repeat(64), "bitcodeSha256", hash(new byte[]{1, (byte) 0xab}),
+            "bitcodeHex", "01ab", "format", "llvm-bitcode", "exports", list("provider_next"), "dependencies", List.of());
         var link = with(scalar, "profile", "thc-package-c-ffi-v1", "exports", list("scalar_value"), "dependencies", list(provider),
             "abi", list(with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
         var nativeModule = with(without(base, "packageScalarLink"), "packageNativeLink", link);
@@ -183,7 +197,7 @@ class PackageScalarLinksTest {
         var component = admitted.getLink().getComponent().dependencies().getFirst();
         assertEquals("native-provider", component.unit());
         assertEquals(Set.of("provider_next"), component.exports());
-        for (var bad : list(with(provider, "bitcodeHex", "0103"), with(provider, "target", "other-target"),
+        for (var bad : list(with(provider, "bitcodeHex", "0103"), with(provider, "bitcodeHex", "01AB"), with(provider, "target", "other-target"),
                 with(provider, "exports", list("provider_next", "provider_next")), with(provider, "abi", List.of()),
                 with(provider, "unit", base.get("unit")), with(provider, "dependencies", list(provider))))
             assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule,
