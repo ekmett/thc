@@ -13,6 +13,8 @@
 #if defined(__linux__)
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
+#elif defined(__APPLE__)
+#include <sys/select.h>
 #endif
 #include <poll.h>
 #include <termios.h>
@@ -38,10 +40,19 @@ _Static_assert(sizeof(sigset_t) == 128 && sizeof(struct termios) == 60, "Unix si
 _Static_assert(sizeof(int) == 4 && sizeof(off_t) == 8 && sizeof(size_t) == 8 && sizeof(ssize_t) == 8 &&
                sizeof(void *) == 8 && (sizeof(mode_t) == 2 || sizeof(mode_t) == 4) && (mode_t)-1 > 0,
                "native files require the selected LP64 ABI");
+_Static_assert(sizeof(struct pollfd) == 8 && offsetof(struct pollfd, events) == 4 &&
+               offsetof(struct pollfd, revents) == 6 && POLLIN == 1 && POLLOUT == 4 && EINTR == 4,
+               "native readiness requires the selected poll ABI");
 #if defined(__linux__)
-_Static_assert(sizeof(struct epoll_event) == 12 && offsetof(struct epoll_event, data) == 4 &&
-               sizeof(struct pollfd) == 8 && offsetof(struct pollfd, revents) == 6,
+_Static_assert(sizeof(nfds_t) == 8 && EAGAIN == 11, "Linux native poll ABI");
+_Static_assert(sizeof(struct epoll_event) == 12 && offsetof(struct epoll_event, data) == 4,
                "native event images require the Linux x86_64 ABI");
+#elif defined(__APPLE__)
+_Static_assert(sizeof(nfds_t) == 4 && EAGAIN == 35, "Darwin native poll ABI");
+_Static_assert(sizeof(((fd_set *)0)->fds_bits[0]) == 4 && __DARWIN_NFDBITS == 32 &&
+               sizeof(struct timespec) == 16 && offsetof(struct timespec, tv_nsec) == 8 &&
+               sizeof(((struct timespec *)0)->tv_nsec) == 8,
+               "Darwin unlimited pselect uses 32-bit descriptor words and LP64 timespec");
 #endif
 
 int64_t thc_file_stat_size(void) { return sizeof(struct stat); }

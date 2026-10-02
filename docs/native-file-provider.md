@@ -1,7 +1,8 @@
 # Native files and descriptors
 
-On Linux x86_64, THC's command-line IO launcher uses a native file provider and
-grants stdin, stdout and stderr. Reads, writes and metadata come from the same
+On Linux x86_64 and Darwin x86_64/arm64, THC's command-line IO launcher
+uses a native file provider and grants stdin, stdout and stderr. Reads, writes
+and metadata come from the same
 opened resource, including after a path is renamed, replaced or unlinked.
 Guest descriptors belong to the context and never directly name host fds.
 
@@ -11,8 +12,11 @@ not a blanket POSIX permission. Darwin uses an opened search-capable directory
 and descriptor-relative acquisition; `F_GETPATH` is only an identity-verified name
 observation. Relative generic FileSystem callbacks without a descriptor-authority
 transport fail explicitly. Original raw open has its own Linux x86_64 and
-Darwin x86_64/arm64 resources. Linux subprocesses, poll/eventfd/epoll, terminal
-images and glibc directory streams remain separate capabilities;
+Darwin x86_64/arm64 resources. Darwin descriptor readiness uses libc
+`pselect$DARWIN_EXTSN` with dynamically sized descriptor sets and a private
+nonblocking pipe for wakeup; this preserves FIFO EOF readiness. Linux subprocesses, event-manager
+poll/eventfd/epoll, terminal images and glibc directory streams remain separate
+capabilities;
 the Darwin file provider does not admit them.
 
 ## Embedding authority

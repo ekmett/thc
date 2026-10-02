@@ -9,13 +9,13 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Private Linux readiness transport. A duplicate of an authenticated lease
- * prevents fd reuse from redirecting a wait. Logical close wakes a separate
- * eventfd; it never closes a descriptor underneath poll. All wake/cleanup calls
+/** Private native readiness transport. A duplicate of an authenticated lease
+ * prevents fd reuse from redirecting a wait. Logical close signals a private
+ * wake descriptor; it never closes a descriptor underneath the wait. Wake/cleanup calls
  * work without entering a possibly disposed LLVM context. */
 public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Interrupter {
     private final int descriptor;
-    private final int wakeFd;
+    private final NativePollApi.Wakeup wake;
     private final Arena arena;
     private final MemorySegment polls;
     private final MemorySegment one;
@@ -27,11 +27,11 @@ public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Inter
     private volatile boolean descriptorClosed;
     private boolean released;
 
-    private NativeFdWait(int descriptor, int wakeFd, Arena arena) {
+    private NativeFdWait(int descriptor, NativePollApi.Wakeup wake, Arena arena) {
         this.descriptor = descriptor;
-        this.wakeFd = wakeFd;
+        this.wake = wake;
         this.arena = arena;
-        polls = arena.allocate(16, 4); // Two Linux pollfd images.
+        polls = arena.allocate(16, 4); // Target/wake events in the selected-ABI pollfd layout.
         one = arena.allocate(ValueLayout.JAVA_LONG);
         one.set(ValueLayout.JAVA_LONG, 0, 1L);
         drained = arena.allocate(ValueLayout.JAVA_LONG);
@@ -39,7 +39,7 @@ public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Inter
         closeErrors = arena.allocate(NativePollApi.CAPTURE);
         drainErrors = arena.allocate(NativePollApi.CAPTURE);
         polls.set(ValueLayout.JAVA_INT, 0, descriptor);
-        polls.set(ValueLayout.JAVA_INT, 8, wakeFd);
+        polls.set(ValueLayout.JAVA_INT, 8, wake.read());
         polls.set(ValueLayout.JAVA_SHORT, 12, (short) 1);
     }
 
@@ -47,14 +47,14 @@ public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Inter
     public static NativeFdWait acquire(NativeFileLease lease) {
         var arena = Arena.ofShared();
         int descriptor = -1;
-        int wake = -1;
+        NativePollApi.Wakeup wake = null;
         try {
             descriptor = lease.duplicateForWait();
-            wake = NativePollApi.eventfd();
+            wake = NativePollApi.wake();
             return new NativeFdWait(descriptor, wake, arena);
         } catch (Throwable failure) {
-            if (wake >= 0) {
-                try { NativePollApi.close(wake); }
+            if (wake != null) {
+                try { wake.close(); }
                 catch (Throwable closing) { failure.addSuppressed(closing); }
             }
             if (descriptor >= 0) {
@@ -66,22 +66,22 @@ public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Inter
         }
     }
 
-    // Truffle holds internal locks: callbacks only perform nonblocking eventfd IO.
+    // Truffle holds internal locks: callbacks only perform nonblocking wake IO.
     @Override public void interrupt(Thread thread) {
         interrupted.set(true);
-        NativePollApi.signal(wakeFd, one, wakeErrors);
+        NativePollApi.signal(wake.write(), one, wakeErrors);
     }
 
     @Override public void resetInterrupted() {
         // Truffle 25.3.4.1 serializes interrupt/reset/unregister on its per-target
         // lock. The independent descriptorClosed flag stays sticky if drained.
-        NativePollApi.drain(wakeFd, drained, drainErrors);
+        NativePollApi.drain(wake.read(), drained, drainErrors);
         interrupted.set(false);
     }
 
     public void descriptorClosed() {
         descriptorClosed = true;
-        NativePollApi.signal(wakeFd, one, closeErrors);
+        NativePollApi.signal(wake.write(), one, closeErrors);
     }
 
     public int await(Node node, boolean writing, long milliseconds) { return await(node, writing, milliseconds, null); }
@@ -95,14 +95,14 @@ public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Inter
                 if (interrupted.get()) throw new InterruptedException();
                 if (descriptorClosed) return -2;
                 // Only genuine blocking is an interruptible Haskell cut.
-                int probe = NativePollApi.poll(polls, 0);
+                int probe = NativePollApi.readiness(polls, 0);
                 if (interrupted.get()) throw new InterruptedException();
                 if (descriptorClosed) return -2;
                 if (probe > 0 && polls.get(ValueLayout.JAVA_SHORT, 6) != 0) return 1;
                 if (milliseconds == 0) return 0;
                 if (beforeBlock != null) beforeBlock.run();
                 int timeout = remaining(started, milliseconds);
-                int ready = NativePollApi.poll(polls, timeout);
+                int ready = NativePollApi.readiness(polls, timeout);
                 if (interrupted.get()) throw new InterruptedException();
                 if (descriptorClosed) return -2;
                 if (polls.get(ValueLayout.JAVA_SHORT, 14) != 0) throw new InterruptedException();
@@ -123,7 +123,7 @@ public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Inter
     @Override public void close() {
         if (released) return;
         released = true;
-        try { NativePollApi.close(wakeFd); }
+        try { wake.close(); }
         finally { try { NativePollApi.close(descriptor); } finally { arena.close(); } }
     }
 
