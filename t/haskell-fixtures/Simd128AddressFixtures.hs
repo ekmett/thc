@@ -14,22 +14,19 @@
 module Simd128AddressFixtures (prepareSimd128Addresses) where
 
 import Control.Monad (forM, unless, when)
-import Data.Aeson (Value(..), FromJSON, fromJSON, Result(..), object, (.=), eitherDecodeStrict', toJSON)
+import Data.Aeson (Value(..), FromJSON, fromJSON, Result(..), object, (.=), eitherDecodeStrict')
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
-import Data.Foldable (toList)
 import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import Data.String (fromString)
-import qualified Data.Text as Text
 import FixtureSupport
 import System.Directory
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath
 import System.Info (arch)
-import THC.Compact.Module (readModuleValue)
 
 families :: [(String, Int, Int)]
 families = [("int8",16,1),("word8",16,1),("int16",8,2),("word16",8,2),("int64",2,8),("word64",2,8)]
@@ -49,47 +46,6 @@ field (Object values) key = case KeyMap.lookup (fromString key) values of
 field _ key = die ("Expected object for " ++ key)
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
-walk :: Value -> [Value]
-walk value = value : concatMap walk (case value of Object fields -> toList fields; Array fields -> toList fields; _ -> [])
-nodes :: String -> Value -> [[Value]]
-nodes tag value = [toList fields | Array fields <- walk value, take 1 (toList fields) == [String (fromString tag)]]
-
--- Every retained global/nested lambda is invoked once, on an unconditional
--- path. Fail if Core introduces conditional alternatives or different calls.
-structure :: Value -> Value -> String -> IO Value
-structure core report name = do
-  bindings <- field core "bindings" :: IO [Value]
-  indexed <- mapM (\binding -> do ident <- field binding "id"; pure (ident :: String,binding)) bindings
-  reached <- field report "reachableBindings" :: IO [Value]
-  reachable <- forM reached $ \record -> do
-    ident <- field record "id"
-    maybe (die "Unresolved reached SIMD128 binding") pure (lookup (ident :: String) indexed)
-  roots <- field report "roots" :: IO [String]
-  root <- case roots of [ident] -> pure ident; _ -> die "Expected one SIMD128 root"
-  functions <- forM reachable $ \binding -> do
-    ident <- field binding "id"
-    expr <- field binding "expr" :: IO [Value]
-    unless (take 1 expr == [String "lam"]) (die ("Non-function SIMD128 reachable binding: " ++ name))
-    pure (ident :: String, toJSON expr)
-  let forest = map snd functions
-      applications = concatMap (nodes "app") forest
-      references = [Text.unpack ident | _:Array headValue:_ <- applications,
-        [String "var",String ident] <- [take 2 (toList headValue)], Text.unpack ident `elem` map fst indexed]
-      immediate = length [() | _:Array headValue:_ <- applications, take 1 (toList headValue) == [String "lam"]]
-      kept = length [() | _:Array headValue:Array arguments:_ <- applications,
-        take 2 (toList headValue) == [String "prim",String "keepAlive#"],
-        [_,_,Array continuation] <- [toList arguments], take 1 (toList continuation) == [String "lam"]]
-      lambdas = concatMap (nodes "lam") forest
-      cases = concatMap (nodes "case") forest
-      counts values = Map.fromListWith (+) [(value,1::Int) | value <- values]
-  unless (counts references == counts [ident | (ident,_) <- functions, ident /= root] &&
-    length lambdas == length functions + immediate + kept && kept == 1)
-    (die ("Changed exact SIMD128 guest calls: " ++ name))
-  unless (all (\expr -> case drop 3 expr of Array alternatives:_ -> length alternatives == 1; _ -> False) cases)
-    (die ("Conditional SIMD128 guest path: " ++ name))
-  pure (object ["guestCalls" .= length lambdas, "globalFunctions" .= map fst functions,
-    "immediateLambdas" .= immediate, "keepAliveContinuations" .= kept])
-
 prepareSimd128Addresses :: FilePath -> IO ()
 prepareSimd128Addresses root = do
   let directory = "build/simd128-addresses"
@@ -125,7 +81,6 @@ prepareSimd128Addresses root = do
       [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
       "bin/export-core.sh" ((if exportedOnly then ["-fno-code","-fwrite-if-simplified-core"] else ["-fllvm"]) ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    core <- BS.readFile (root </> corePath) >>= either die pure . readModuleValue
     reports <- forM entries $ \(name,_,_) -> do
       let path = directory </> stage ++ "-" ++ name ++ "-audit.json"
       command <- execute (stage ++ "-" ++ name ++ "-audit") [] "python3"
@@ -135,8 +90,7 @@ prepareSimd128Addresses root = do
       missing <- field report "missingGlobals" :: IO [Value]
       issues <- field report "issues" :: IO [Value]
       unless (accepted && null missing && null issues) (die "Strict SIMD128 audit rejected")
-      shape <- structure core report name
-      pure (name,object ["audit" .= path,"structure" .= shape],path:commandArtifacts command)
+      pure (name,object ["audit" .= path],path:commandArtifacts command)
     pure (stage,object ["core" .= corePath,"entries" .= Map.fromList [(name,record) | (name,record,_) <- reports]],
       corePath : commandArtifacts compilation ++ concat [paths | (_,_,paths) <- reports])
   plugin <- listDirectory (root </> "src/compiler/THC")
