@@ -12,7 +12,7 @@ def wrap(n):
     return (n + (1 << 63)) % (1 << 64) - (1 << 63)
 
 def inputs():
-    values = set(range(-12, 13)) | {-(1 << 63), (1 << 63)-1}
+    values = set(range(-20, 21)) | {-(1 << 63), (1 << 63)-1}
     values.update(wrap(sign*((1 << bit)+delta))
                   for sign in (-1, 1) for bit in range(64) for delta in (-1, 0, 1))
     values.update(wrap(sign*(10**power+delta))

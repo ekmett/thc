@@ -56,7 +56,8 @@ class ShowWordListTest {
         var inputs = expression(manifest.get("inputs")).stream().map(value -> ((Number) value).longValue()).toList();
         var shapes = expression(manifest.get("listShapes")).stream().map(value -> ((Number) value).longValue()).toList();
         assertEquals(entries, manifest.get("entries")); assertEquals(list(0L, 1L, 3L), shapes);
-        assertEquals(530, inputs.size()); assertEquals(inputs.size(), new HashSet<>(inputs).size()); assertTrue(inputs.containsAll(list(Long.MIN_VALUE, Long.MAX_VALUE, -1L, 0L)));
+        assertEquals(inputs.size(), new HashSet<>(inputs).size()); assertTrue(inputs.containsAll(list(Long.MIN_VALUE, Long.MAX_VALUE, -1L, 0L)));
+        for (long input = -20; input <= 20; input++) assertTrue(inputs.contains(input), "Missing signed small value: " + input);
         var expectedRows = new ArrayList<Row>();
         for (var name : entries) for (long input : inputs) for (long shape : name.startsWith("word") ? list(0L) : shapes) {
             var formatted = text(name, input, shape);

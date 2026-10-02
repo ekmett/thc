@@ -16,6 +16,11 @@ class ShowWordListModelTest(unittest.TestCase):
         for bit in range(64):
             self.assertTrue({wrap(s*((1 << bit)+d)) for s in (-1, 1) for d in (-1, 0, 1)} <= values)
         self.assertTrue(all(0 <= int(formatted('wordChecksum', x, 0)) <= MASK for x in values))
+    def test_signed_extrema_small_values_and_decimal_boundaries(self):
+        values = set(inputs())
+        self.assertTrue(set(range(-20, 21)) | {-(1 << 63), (1 << 63)-1} <= values)
+        for power in range(19):
+            self.assertTrue({sign*(10**power+delta) for sign in (-1, 1) for delta in (-1, 0, 1)} <= values)
     def test_list_punctuation_and_wrapping_elements(self):
         self.assertEqual('[]', formatted('listChecksum', 99, 0))
         self.assertEqual('[-1]', formatted('listChecksum', -1, 1))

@@ -1,7 +1,10 @@
-# Format Word and lists with the original Show instances
+# Format signed integers, words and lists with the original Show instances
 
 The `ShowWordListAudit` example uses GHC's ordinary public `show` implementation.
-It observes every output character as well as a checksum. These examples need
+It observes every output character as well as a checksum. Singleton and
+multi-element lists exercise the public signed `Int` formatter, including both
+machine extrema, signs, decimal boundaries and small values from -20 through 20.
+Unsigned words additionally cover the full 64-bit range. These examples need
 complete original Show and CString dependencies; THC does not substitute Java
 formatting for a missing Haskell worker.
 

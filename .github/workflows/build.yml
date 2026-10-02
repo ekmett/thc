@@ -214,7 +214,6 @@ jobs:
           python3 bin/test-core-arrays.py
           python3 bin/test-address-fields.py
           python3 bin/test-core-data-tags.py
-          python3 bin/test-show-int-model.py
           python3 bin/test-show-word-list-model.py
           python3 bin/test-narrow-literal-proofs.py
           python3 bin/test-short-bytes-slices-model.py
@@ -306,13 +305,6 @@ jobs:
             build/array-slices/NativeArraySlices.hs
             build/array-slices/*-core/
             build/array-slices/native/array-slices-oracle
-            build/show-int/manifest.json
-            build/show-int/*.tsv
-            build/show-int/*.audit.json
-            build/show-int/*-core/
-            build/show-int/boot/core/
-            build/show-int/boot/boot-provenance.json
-            build/show-int/native/show-int-oracle
             build/narrow-literal-proofs/manifest.json
             build/narrow-literal-proofs/oracle.tsv
             build/narrow-literal-proofs/*-audit.json

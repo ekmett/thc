@@ -13,7 +13,6 @@ python3 bin/prepare-io-main-pap.py
 python3 bin/prepare-floating-audit.py
 python3 bin/prepare-floating-tuples.py
 python3 bin/prepare-tag-to-enum-audit.py
-python3 bin/prepare-show-int.py
 python3 bin/prepare-show-word-list.py
 python3 bin/prepare-narrow-literal-proofs.py
 python3 bin/prepare-short-bytes-slices.py

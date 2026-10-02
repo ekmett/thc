@@ -64,7 +64,7 @@ thread-status thread-label hint-trace closure-inspection thread-inventory thread
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
-show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating package-native-gc-carriers""".split()
+show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating package-native-gc-carriers""".split()
 GC_CARRIER_OUTPUTS = frozenset("build/package-native-gc-carriers/" + name for name in (
     "manifest.json", "PackageNativeGcCarriers.cbd", "oracle.txt",
     "original-v2/GHC.Internal.Stack.Decode.cbd", "original-v2/objects/GHC/Internal/Stack/Decode.hi",
