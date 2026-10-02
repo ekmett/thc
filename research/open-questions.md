@@ -73,6 +73,19 @@ compile cost or code growth? Fewer allocations alone does not establish that.
 Keep graph capture separate from timing, reject unstable measurement windows,
 and retain first-installed-call checks rather than warming away a failure.
 
+## Eventlog primops through Java Flight Recorder
+
+- [ ] Wire `traceEvent#`, `traceMarker#` and `traceBinaryEvent#` into Java Flight
+  Recorder, reusing the existing `THC.Trace` JFR machinery. Configure events to
+  be ignored by default. Guard the disabled path with a context-owned Graal/Truffle
+  assumption so compiled code can omit payload copying and output work; invalidate
+  it when configuration enables tracing so already-compiled code starts emitting
+  events. Make the tracing-enabled queries reflect that configuration. Verify the
+  first event after enabling in both backends, context isolation and disabling
+  again, and inspect compiler graphs to establish the cost of the disabled path.
+  The [current primop behavior](../docs/hints-and-tracing.md) is still synchronous
+  stderr output; this item describes planned work.
+
 ## Native Image beyond pure interpretation
 
 The [selected-Core cache](../docs/native-code-cache.md) compiles synchronous AST
