@@ -18,10 +18,13 @@ public final class CoreCompactModule implements AutoCloseable {
     private final Map<Long,Map<String,Object>> selected = new HashMap<>();
     private boolean verified;
     public CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts) {
+        this(module, targetLayout, verifyArtifacts, new HashMap<>());
+    }
+    CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts, Map<String,String> blobs) {
         this.module = module; this.targetLayout = targetLayout; this.verifyArtifacts = verifyArtifacts;
         var artifact = module.artifact();
         file = new CoreCompactFile(artifact.path(), artifact.sha256(), verifyArtifacts);
-        records = new CoreCompactRecords(file, artifact.sha256());
+        records = new CoreCompactRecords(file, artifact.sha256(), blobs);
     }
     public CoreCompactFile.Counters getCounters() { return file.getCounters(); }
     public Map<String,Object> metadata() {
@@ -52,21 +55,24 @@ public final class CoreCompactModule implements AutoCloseable {
         catch (Exception failure) { return rethrow(failure); }
     }
     private Map<String,Object> bindingAt(long offset) {
-        return selected.computeIfAbsent(offset, ignored -> {
-            var binding = records.binding(offset);
-            String id = (String) binding.get("id");
-            require(id.startsWith(module.getPrefix()) || module.mainAlias() && id.equals(CoreUnitDirectory.MAIN_ALIAS),
-                    "Compact Core binding has a different module owner: " + id);
-            synchronized (getCounters()) { getCounters().decodedBindings++; }
-            return binding;
-        });
+        return selected.computeIfAbsent(offset, ignored -> decodeBinding(records, offset));
+    }
+    private Map<String,Object> decodeBinding(CoreCompactRecords decoder, long offset) {
+        var binding = decoder.binding(offset);
+        String id = (String) binding.get("id");
+        require(id.startsWith(module.getPrefix()) || module.mainAlias() && id.equals(CoreUnitDirectory.MAIN_ALIAS),
+                "Compact Core binding has a different module owner: " + id);
+        synchronized (getCounters()) { getCounters().decodedBindings++; }
+        return binding;
     }
     public void verify() {
         if (!verifyArtifacts || verified) return;
         try {
             var facts = metadata();
             var bindings = new ArrayList<Map<String,Object>>();
-            file.verifyBindingOffsets(offset -> bindings.add(bindingAt(offset)));
+            // Complete verification must not retain cold bodies or their shape dictionaries.
+            var verifier = new CoreCompactRecords(file, module.artifact().sha256());
+            file.verifyBindingOffsets(offset -> bindings.add(decodeBinding(verifier, offset)));
             var original = new LinkedHashMap<>(facts); original.put("bindings", bindings);
             CoreForeignArtifacts.INSTANCE.validateArchive(original, true);
             CoreModules.admission(original, null);

@@ -71,6 +71,7 @@ public final class CoreUnitDirectory {
         private final Map<ModuleRecord,CoreCompactModule> compactReaders = new HashMap<>();
         private final List<CoreCompactFile> consumerReaders = new ArrayList<>();
         private final Set<ModuleRecord> verified = new HashSet<>();
+        private final Map<String,String> blobs = new HashMap<>();
         public Sources(CoreUnitDirectory directory, boolean verifyArtifacts, Consumer<CoreCompactFile.Counters> compactAdmitted) {
             this.directory = directory; this.verifyArtifacts = verifyArtifacts;
             targetLayout = directory.targetLayout;
@@ -78,7 +79,7 @@ public final class CoreUnitDirectory {
         }
         private CoreCompactModule compact(ModuleRecord module) {
             return compactReaders.computeIfAbsent(module, ignored -> {
-                var reader = new CoreCompactModule(module, directory.targetLayout, verifyArtifacts);
+                var reader = new CoreCompactModule(module, directory.targetLayout, verifyArtifacts, blobs);
                 compactAdmitted.accept(reader.getCounters());
                 return reader;
             });
@@ -90,7 +91,7 @@ public final class CoreUnitDirectory {
             consumerReaders.add(file);
             compactAdmitted.accept(file.getCounters());
             try {
-                var records = new CoreCompactRecords(file, sha256.isEmpty() ? path.toString() : sha256);
+                var records = new CoreCompactRecords(file, sha256.isEmpty() ? path.toString() : sha256, blobs);
                 var result = new LinkedHashMap<>(records.header());
                 if (result.get("targetLayout") != null) {
                     var candidate = TargetLayout.fromDocument(result.get("targetLayout"));
@@ -141,7 +142,7 @@ public final class CoreUnitDirectory {
                 compactReaders.clear();
                 try { for (var reader : consumerReaders) reader.close(); }
                 catch (Exception failure) { rethrow(failure); }
-                finally { consumerReaders.clear(); }
+                finally { consumerReaders.clear(); blobs.clear(); }
             }
         }
     }

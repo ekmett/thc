@@ -19,12 +19,24 @@ public final class CoreModuleAdmission {
     private final CoreBoxedForeignDeclarations boxedImports;
     private final List<Map<Object,Integer>> inventories = new ArrayList<>();
     public CoreModuleAdmission(Map<String,Object> module, Function<String,Map<String,Object>> binding) {
+        this(module, binding, new HashMap<>());
+    }
+    public CoreModuleAdmission(Map<String,Object> module, Function<String,Map<String,Object>> binding,
+            Map<String,PackageScalarLink> components) {
         this.module = module;
         exports = CoreModules.admission(module, binding::apply);
         CoreForeignArtifacts.validateArchive(module, false);
         archive = PackageNativeArchives.read(module, false);
         boxedImports = CoreBoxedForeignDeclarations.read(module, false);
-        packageLink = PackageScalarLinks.read(module, true, false);
+        var admitted = PackageScalarLinks.read(module, true, false);
+        if (admitted == null) packageLink = null;
+        else {
+            var link = admitted.link();
+            var previous = components.putIfAbsent(link.getUnit(), link);
+            if (previous != null && !previous.same(link))
+                throw new IllegalArgumentException("Conflicting package C component: " + link.getUnit());
+            packageLink = previous == null ? admitted : new PackageScalarAdmission(previous, admitted.proved());
+        }
         foreignLink = CoreForeignArtifacts.linked(module, false);
         imports = packageLink == null ? ManagedImportAdmission.read(module, false) : null;
         if (module.containsKey("foreignExceptionBridge")) {

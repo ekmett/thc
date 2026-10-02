@@ -30,6 +30,14 @@ public final class PackageScalarLinks {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
         catch (NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); }
     }
+    private static boolean canonicalHex(String encoded) {
+        if (encoded.length() % 2 != 0) return false;
+        for (int i = 0; i < encoded.length(); i++) {
+            char c = encoded.charAt(i);
+            if (!(c >= '0' && c <= '9' || c >= 'a' && c <= 'f')) return false;
+        }
+        return true;
+    }
     private static List<Object> calls(Object value) {
         var result = new ArrayList<Object>();
         if (value instanceof Map<?,?> fields) {
@@ -92,12 +100,12 @@ public final class PackageScalarLinks {
             check(format.equals("llvm-bitcode") || format.equals("llvm-embedded-elf") && System.getProperty("os.name").equals("Linux") ||
                 format.equals("llvm-embedded-mach-o") && System.getProperty("os.name").startsWith("Mac"), "native dependency format");
             String encoded = text(fields.get("bitcodeHex")); byte[] bytes = HexFormat.of().parseHex(encoded);
-            check(bytes.length != 0 && HexFormat.of().formatHex(bytes).equals(encoded) && digest(bytes).equals(bitcodeHash), "native dependency bitcode");
+            check(bytes.length != 0 && canonicalHex(encoded) && digest(bytes).equals(bitcodeHash), "native dependency bitcode");
             byte[] nativeLibrary = new byte[0];
             if (companion) {
                 var library = record(fields.get("nativeLibrary"), "sha256 hex");
                 String hex = text(library.get("hex")); nativeLibrary = HexFormat.of().parseHex(hex);
-                check(nativeLibrary.length != 0 && HexFormat.of().formatHex(nativeLibrary).equals(hex) &&
+                check(nativeLibrary.length != 0 && canonicalHex(hex) &&
                     digest(nativeLibrary).equals(text(library.get("sha256"))), "native dependency companion");
             }
             var component = new PackageNativeComponent(unit, target, componentHash, bitcodeHash, format, bytes, nativeLibrary,
@@ -139,18 +147,13 @@ public final class PackageScalarLinks {
         check(HASH.matcher(componentHash).matches() && HASH.matcher(bitcodeHash).matches(), "digest");
         check(fields.get("bitcodeHex") instanceof String, "bitcode encoding");
         String encoded = (String) fields.get("bitcodeHex");
-        boolean validEncoding = encoded.length() % 2 == 0;
-        if (validEncoding) for (int i = 0; i < encoded.length(); i++) {
-            char c = encoded.charAt(i);
-            if (!(c >= '0' && c <= '9' || c >= 'a' && c <= 'f')) { validEncoding = false; break; }
-        }
-        check(validEncoding, "bitcode encoding");
+        check(canonicalHex(encoded), "bitcode encoding");
         byte[] bytes = HexFormat.of().parseHex(encoded); check((demand || bytes.length != 0) && digest(bytes).equals(bitcodeHash), "bitcode digest");
         byte[] nativeLibrary = new byte[0];
         if (companion) {
             var dependency = record(fields.get("nativeLibrary"), "sha256 hex");
             String hex = text(dependency.get("hex")); nativeLibrary = HexFormat.of().parseHex(hex);
-            check(nativeLibrary.length != 0 && HexFormat.of().formatHex(nativeLibrary).equals(hex) &&
+            check(nativeLibrary.length != 0 && canonicalHex(hex) &&
                 digest(nativeLibrary).equals(text(dependency.get("sha256"))), "native dependency digest");
         }
         var dataSymbols = new HashSet<String>();
@@ -233,7 +236,7 @@ public final class PackageScalarLinks {
                 String entry = text(seed.get("entry")), seedHash = text(seed.get("bitcodeSha256")), seedHex = text(seed.get("bitcodeHex"));
                 byte[] seedBytes = HexFormat.of().parseHex(seedHex);
                 check(HASH.matcher(seedHash).matches() && seedBytes.length != 0 &&
-                    HexFormat.of().formatHex(seedBytes).equals(seedHex) && digest(seedBytes).equals(seedHash), "call seed digest");
+                    canonicalHex(seedHex) && digest(seedBytes).equals(seedHash), "call seed digest");
                 check(abi.stream().anyMatch(signature -> signature.entry().equals(entry) && signature.convention().equals("ccall")) &&
                     !dataSymbols.contains(entry) && !finalizers.contains(entry), "ordinary call seed ABI");
                 String providerUnit = null, providerHash = null, providerSymbol = null;

@@ -256,12 +256,16 @@ ordinary `Test` action.
   support bundle, which Windows project acquisition prepares automatically.
   `thc-fixtures.exe windows-driver` checks native-matching completion in both
   backends and handoff modes, with strict verification on its first run.
-- Exception-dependent fixture preparation currently fails its strict audit on
-  `libdwPoolRelease` and `backtraceFree` function-address literals reached through
-  GHC's default exception annotations. The optional Libdw backend is unsupported
-  by THC. A completed source/native bundle or a passing pure CLI example does
-  not qualify these foreign-call fixtures; retain the failed audit and do not
-  publish a replacement fixture manifest or restore retired overrides.
+- Exception audits record `libdwPoolRelease` and `backtraceFree` addresses reached
+  through GHC's default exception annotations as requiring resolution when their
+  expressions are evaluated. An accepted audit does not certify their native
+  availability. The optional Libdw backend is unsupported by THC; retain missing
+  symbol errors when those paths execute and do not restore retired overrides.
+- Genuine code-page Core uses the complete ordinary package provider, including
+  GHC's MD5 imports. The isolated native ABI controls have their own fixture
+  provider. Keep both suites: the default-mode pre/AST wide conversion has exposed
+  an intermittent first-compiled-entry failure even with a valid compiled target.
+  An isolated diagnostic or dense-mode pass does not qualify that failed call.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.

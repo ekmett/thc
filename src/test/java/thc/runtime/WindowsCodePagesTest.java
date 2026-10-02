@@ -49,7 +49,6 @@ class WindowsCodePagesTest {
     private Map<String, Object> receipt() throws Exception { return json("build/windows-codepages/manifest.json"); }
     private Map<String, Object> source(String stage) throws Exception {
         var module = new LinkedHashMap<>(cbd(receipt().get("logs") + "/" + stage + ".cbd"));
-        module.put("packageScalarLinks", List.of(provider()));
         return module;
     }
     private Map<String, Object> source() throws Exception { return source("post"); }
@@ -257,7 +256,6 @@ class WindowsCodePagesTest {
                         .filter(entry -> !wideOnly || List.of("wideChar", "wideCharSafe", "windowsError").contains(entry)).toList();
                     var module = new LinkedHashMap<>(CoreModules.reachable(
                         cbd(logs + "/" + stage + ".cbd"), entries.stream().map(this::entryId).toList(), false));
-                    module.put("packageScalarLinks", List.of(provider()));
                     module.put("instrument", true);
                     var executable = program(language, backend, module);
                     var targets = new LinkedHashMap<String, RootCallTarget>();

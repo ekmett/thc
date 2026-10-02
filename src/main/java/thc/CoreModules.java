@@ -383,6 +383,7 @@ public final class CoreModules {
             var pending = new ArrayDeque<String>(entries);
             class Selection {
                 final Set<String> foreignUnits = new HashSet<>();
+                final Map<String,PackageScalarLink> components = new HashMap<>();
                 Map<String,Object> binding(String id) {
                     var consumer = consumerBindings.get(id);
                     if (consumer != null) {
@@ -392,7 +393,7 @@ public final class CoreModules {
                 }
                 CoreModuleAdmission admit(Map<String,Object> module) {
                     var existing = consumerAdmissions.get(module); if (existing != null) return existing;
-                    var admitted = new CoreModuleAdmission(with(module, "bindings", List.of()), this::binding);
+                    var admitted = new CoreModuleAdmission(with(module, "bindings", List.of()), this::binding, components);
                     consumerAdmissions.put(module, admitted); selected.put(admitted, new ArrayList<>());
                     if (admitted.getExports() != null) for (var exported : admitted.getExports().getExports()) pending.add(exported.binder());
                     return admitted;

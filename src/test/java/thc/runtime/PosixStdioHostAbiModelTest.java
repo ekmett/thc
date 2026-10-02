@@ -47,8 +47,8 @@ class PosixStdioHostAbiModelTest {
             assertEquals(-1000L, abi.getAtFdcwd()); assertEquals(512L, abi.getAtRemoveDir());
             assertEquals(256L, abi.getAtSymlinkNoFollow()); assertEquals(128L, abi.getSiginfoBytes());
             assertEquals(system.equals("Linux") ? 4096L : 0L, abi.getAtEmptyPath());
-            if (system.equals("Linux")) assertDoesNotThrow(abi::requireOpenAbi);
-            else assertThrows(RuntimeFault.class, abi::requireOpenAbi);
+            assertDoesNotThrow(abi::requireOpenAbi);
+            assertEquals(system.equals("Linux") ? 4L : 2L, abi.openModeBytes());
             for (long flags : List.of(0L, 1L, 2L)) {
                 assertEquals(flags != 1, abi.openReadable(flags));
                 assertEquals(flags != 0, abi.openWritable(flags));

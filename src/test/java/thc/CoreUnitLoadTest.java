@@ -177,6 +177,24 @@ class CoreUnitLoadTest {
             assertEquals(0L, counts.debugBytesRead());
         }
     }
+    @Test void completeVerificationDoesNotRetainColdBindingRecords() throws Exception {
+        var module = CoreCbdFixtures.module(directory.resolve("V.cbd"), map("schema", 1, "ghc", "9.14.1",
+            "unit", "uV", "module", "V", "boundary", boundary, "constructors", List.of(),
+            "bindings", list(binding("uV:V.entry", literal(7)), binding("uV:V.cold", literal(11)))));
+        var index = CoreUnitDirectory.read(map("schema", 1L, "ghc", "9.14.1", "format", "thc-core-packages",
+            "units", list(map("id", "uV", "depends", List.of(), "modules", list(module)))));
+        try (var sources = index.open(true, false)) {
+            var record = index.getModules().getFirst();
+            sources.metadata(record);
+            var counts = sources.compactCounters().getFirst();
+            assertEquals(2L, counts.decodedBindings);
+            var selected = sources.binding("uV:V.entry");
+            assertEquals(3L, counts.decodedBindings);
+            assertSame(selected, sources.binding("uV:V.entry"));
+            sources.verifyModule(record);
+            assertEquals(3L, counts.decodedBindings);
+        }
+    }
     @Test void modulelessUnitsKeepDependencyIdentityWithoutStorage() throws Exception {
         var manifest = fixture(); var original = document(Files.readString(manifest));
         var empty = map("id", "reexports-only", "depends", list("uA"), "modules", List.of());

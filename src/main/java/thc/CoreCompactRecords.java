@@ -19,6 +19,7 @@ public final class CoreCompactRecords {
     private final String identity;
     private final CoreCompactDebug debug;
     private final boolean metadata;
+    private final Map<String,String> blobs;
     private long bindingOffset;
     private static final Object MISSING = new Object();
     private record Shape(Map<String,Object> fields) {}
@@ -26,9 +27,10 @@ public final class CoreCompactRecords {
     private final Map<Long,Shape> shapes = new HashMap<>();
     private final Set<Long> readingShapes = new HashSet<>();
     private final Map<StringSpan,String> strings = new HashMap<>();
-    public CoreCompactRecords(CoreCompactFile file, String identity) { this(file, identity, false); }
-    private CoreCompactRecords(CoreCompactFile file, String identity, boolean metadata) {
-        this.file = file; this.identity = identity; this.metadata = metadata; debug = new CoreCompactDebug(file);
+    public CoreCompactRecords(CoreCompactFile file, String identity) { this(file, identity, new HashMap<>()); }
+    CoreCompactRecords(CoreCompactFile file, String identity, Map<String,String> blobs) { this(file, identity, false, blobs); }
+    private CoreCompactRecords(CoreCompactFile file, String identity, boolean metadata, Map<String,String> blobs) {
+        this.file = file; this.identity = identity; this.metadata = metadata; this.blobs = blobs; debug = new CoreCompactDebug(file);
     }
     private Origin origin(long offset) { return new Origin(identity, offset, bindingOffset, debug); }
     private String text(CoreCompactCursor cursor) throws Throwable {
@@ -348,7 +350,7 @@ public final class CoreCompactRecords {
     }
     /** Header shapes are inline: metadata admission never reads an executable body. */
     public Map<String,Object> header() {
-        return new CoreCompactRecords(file, identity, true).readHeader();
+        return new CoreCompactRecords(file, identity, true, blobs).readHeader();
     }
     private Map<String,Object> readHeader() {
         try {
@@ -516,7 +518,10 @@ public final class CoreCompactRecords {
         }
         return result;
     }
-    private String blob(CoreCompactCursor cursor) { return HexFormat.of().formatHex(cursor.bytes(cursor.count())); }
+    private String blob(CoreCompactCursor cursor) {
+        String encoded = HexFormat.of().formatHex(cursor.bytes(cursor.count()));
+        return blobs.computeIfAbsent(encoded, value -> value);
+    }
     private Map<String,Object> foreignLink(CoreCompactCursor cursor) throws Throwable {
         var result = map("schema", cursor.unsigned());
         result.putAll(strings(cursor, "format", "unit", "module", "sourceSha256", "bitcodeSha256"));

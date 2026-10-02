@@ -191,6 +191,14 @@ class CoreCompactRecordsTest {
             module(new byte[0], id, concat(prefix, extras, suffix), (records, file) -> {
                 var link = (Map<?, ?>) records.header().get("packageNativeLink");
                 assertEquals(Map.of("sha256", "unit:M.f", "hex", "00ff427f"), link.get("nativeLibrary"));
+                var blobs = new HashMap<String,String>();
+                var first = (Map<?, ?>) new CoreCompactRecords(file, "codec-control", blobs).header().get("packageNativeLink");
+                var second = (Map<?, ?>) new CoreCompactRecords(file, "codec-control", blobs).header().get("packageNativeLink");
+                var firstLibrary = (Map<?, ?>) first.get("nativeLibrary");
+                var secondLibrary = (Map<?, ?>) second.get("nativeLibrary");
+                assertNotSame(firstLibrary, secondLibrary);
+                assertSame(firstLibrary.get("hex"), secondLibrary.get("hex"));
+                assertNotSame(firstLibrary.get("hex"), ((Map<?, ?>) link.get("nativeLibrary")).get("hex"));
                 assertEquals(List.of("unit:M.f"), link.get("dataSymbols"));
                 assertFalse(link.containsKey("availableEntries"));
                 if (inputs.length > 1) {
