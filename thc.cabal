@@ -925,10 +925,11 @@ executable thc-interface
   if flag(development)
     ghc-options: -Werror
 
-executable thc
-  main-is: Main.hs
+-- Shared Cabal driver implementation; not a public application API.
+library driver
+  visibility: private
   hs-source-dirs: src/driver
-  other-modules:
+  exposed-modules:
     THC.Driver.CoreIndex
     THC.Driver.CoreSymbols
     THC.Driver.Cabal
@@ -976,23 +977,29 @@ executable thc
   if flag(development)
     ghc-options: -Werror
 
+executable thc
+  main-is: Main.hs
+  hs-source-dirs: src/driver/cli
+  build-depends:
+    thc:driver,
+    base >= 4.22 && < 4.23,
+    Cabal == 3.16.*, Cabal-syntax == 3.16.*,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    process >= 1.6.26 && < 1.7
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
 test-suite driver-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
-  hs-source-dirs: t/haskell-driver, src/driver
+  hs-source-dirs: t/haskell-driver
   other-modules:
-    THC.Driver.CoreIndex
-    THC.Driver.CoreSymbols
     CoreIndexTests
     CoreSymbolsTests
     BundleSelectionTests
-    THC.Driver.Project
-    THC.Driver.Cache
-    THC.Driver.Wired
-    THC.Driver.PinnedFlags
-    THC.Driver.PinnedSetup
-    THC.Driver.ForeignBitcode
-    THC.Driver.Zip
     TestSupport
     TestSupportTests
     PlanTests
@@ -1012,23 +1019,9 @@ test-suite driver-tests
     RuntimeShimTests
     InstalledForeignTests
     InstalledHydrationTests
-    THC.Driver.Cabal
-    THC.Driver.Json
-    THC.Driver.Run
-    THC.Driver.GhcProxy
-    THC.Driver.Installed
-    THC.Driver.InstalledForeign
-    THC.Driver.Lock
-    THC.Driver.NativeCache
-    THC.Driver.NativeDependencies
-    THC.Driver.NativeRecipe
-    THC.Driver.PackageNative
-    THC.Driver.NativeLibrarySources
-    THC.Driver.NativeArgumentBridge
-    THC.Driver.ScalarBitcode
-    THC.Driver.RuntimeShim
   build-tool-depends: thc:thc, thc:thc-interface
   build-depends:
+    thc:driver,
     thc:core-symbols,
     thc:compact-core,
     base >= 4.22 && < 4.23,
@@ -1224,8 +1217,6 @@ test-suite unlink-full-core
 executable thc-fixtures
   main-is: Main.hs
   other-modules:
-    THC.Driver.CoreIndex
-    THC.Driver.CoreSymbols
     AggregateFixtures
     AggregateHeapFixtures
     FourWayAggregateFixtures
@@ -1357,35 +1348,14 @@ executable thc-fixtures
     StackFixtures
     StackDecoderFixtures
     InstalledCoreFixtures
-    THC.Driver.Wired
-    THC.Driver.PinnedFlags
-    THC.Driver.PinnedSetup
-    THC.Driver.Cabal
-    THC.Driver.Cache
-    THC.Driver.ForeignBitcode
-    THC.Driver.NativeCache
-    THC.Driver.NativeDependencies
-    THC.Driver.NativeRecipe
-    THC.Driver.PackageNative
-    THC.Driver.NativeLibrarySources
-    THC.Driver.NativeArgumentBridge
-    THC.Driver.ScalarBitcode
-    THC.Driver.Installed
-    THC.Driver.RuntimeShim
-    THC.Driver.InstalledForeign
-    THC.Driver.GhcProxy
-    THC.Driver.Lock
-    THC.Driver.Json
-    THC.Driver.Project
-    THC.Driver.Run
-    THC.Driver.Zip
     BoxedArrayExtensionsFixtures
     AlignedScalarMemoryFixtures
     BoxedCasFixtures
     WideCharAddressFixtures
     ManagedAddressReadFixtures
-  hs-source-dirs: t/haskell-fixtures, src/driver
+  hs-source-dirs: t/haskell-fixtures
   build-depends:
+    thc:driver,
     thc:compact-core,
     thc:core-symbols,
     base >= 4.22 && < 4.23,

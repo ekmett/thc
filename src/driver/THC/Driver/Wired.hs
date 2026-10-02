@@ -660,11 +660,11 @@ preparePinnedInterfaces cache pluginDb pluginUnit pluginLibrary original units =
                 let coreFlags = ["-O2", "-fwrite-if-simplified-core", "-dcore-lint", "-fforce-recomp"] ++
                       [option | name == "ghc-internal", option <- ["-package-id", registeredId unit]]
                     compileFlags = filter (`notElem` ("--make" : "-no-link" : map prettyShow selected)) rendered ++ ["-c"] ++ coreFlags
-                if Host.os == "mingw32" && name /= "ghc-internal"
+                if name /= "ghc-internal"
                   -- Cabal's non-boot module roots retain the complete validated
-                  -- graph while GHC loads the static plugin once per package.
-                  -- The wired ghc-internal home-unit bootstrap needs the
-                  -- explicit graph order: GHC 9.14.1 --make panics with <<loop>>.
+                  -- graph while GHC loads the plugin once per package.
+                  -- Keep the wired ghc-internal bootstrap in explicit graph
+                  -- order: GHC 9.14.1 --make panics with <<loop>> on Windows.
                   then checkedIn package (installedGhc original) (rendered ++ coreFlags ++ exportFlags)
                   else forM_ nodes $ \(_, path, boot) ->
                     checkedIn package (installedGhc original) (compileFlags ++ (if boot then [] else exportFlags) ++ [path])

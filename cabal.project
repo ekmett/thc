@@ -3,3 +3,6 @@
 
 packages: .
 shared: True
+
+package thc
+  flags: +development

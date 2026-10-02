@@ -176,7 +176,7 @@ preparePackageScalar root = do
   driverSources <- listDirectory (root </> "src/driver/THC/Driver")
   auditors <- listDirectory (root </> "bin")
   inputs <- hashes root $ sort $ [fixture </> source | source <- sources] ++
-    ["thc.cabal","src/driver/Main.hs","bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py","src/compiler/interface/Main.hs",
+    ["thc.cabal","src/driver/cli/Main.hs","bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py","src/compiler/interface/Main.hs",
      "t/haskell-fixtures/PackageScalarFixtures.hs","t/haskell-fixtures/FixtureSupport.hs",
      "t/haskell-fixtures/InstalledCoreFixtures.hs","t/haskell-fixtures/Main.hs",
      "bin/audit-core.py","bin/core-capabilities.json"] ++

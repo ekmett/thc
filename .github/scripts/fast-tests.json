@@ -2111,7 +2111,7 @@
         "bin/test-audit-core.py"
       ]
     },
-    "src/driver/Main.hs": {
+    "src/driver/cli/Main.hs": {
       "junit": [],
       "python": [],
       "haskell": ["driver-tests"]
