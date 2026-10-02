@@ -333,8 +333,6 @@ extra-source-files:
   t/fixtures/compiler/ByteStringUtf8Native.hs
   nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c
   t/fixtures/compiler/TextCbitsAudit.hs
-  t/fixtures/compiler/ByteStringSortAudit.hs
-  t/fixtures/compiler/ByteStringDecimalAudit.hs
   t/fixtures/compiler/UnixLibcAudit.hs
   t/fixtures/compiler/UnixWaitStatusAudit.hs
   t/fixtures/compiler/TextCbitsNative.hs
@@ -1368,8 +1366,6 @@ executable thc-fixtures
     LibyamlNativeFixtures
     WcwidthFixtures
     TextCbitsFixtures
-    ByteStringSortFixtures
-    ByteStringDecimalFixtures
     UnixLibcFixtures
     UnixWaitStatusFixtures
     HashableFfiFixtures

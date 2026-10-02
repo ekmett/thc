@@ -1468,62 +1468,6 @@
         "src/test/resources/core/original-unix-libc-descriptors.json"
       ]
     },
-    "bytestring-sort": {
-      "junit": [
-        "thc.runtime.ByteStringSortTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "cabal",
-            "run",
-            "exe:thc-fixtures",
-            "--offline",
-            "--",
-            "bytestring-sort"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/bytestring-sort"
-      ],
-      "sources": [
-        "t/fixtures/compiler/ByteStringSortAudit.hs",
-        "t/haskell-fixtures/ByteStringSortFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "src/test/resources/core/original-bytestring-sort-descriptor.json"
-      ]
-    },
-    "bytestring-decimal": {
-      "junit": [
-        "thc.runtime.ByteStringDecimalTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "cabal",
-            "run",
-            "exe:thc-fixtures",
-            "--offline",
-            "--",
-            "bytestring-decimal"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/bytestring-decimal"
-      ],
-      "sources": [
-        "t/fixtures/compiler/ByteStringDecimalAudit.hs",
-        "t/haskell-fixtures/ByteStringDecimalFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "src/test/resources/core/original-bytestring-decimal-descriptors.json"
-      ]
-    },
     "source-core": {
       "junit": ["thc.RealCoreJoinTest", "thc.runtime.CoreSourceTest"],
       "commands": [{"argv": ["env", "THC_SOURCE_NOTES=true", "THC_CORE_OUT=build/source-core", "THC_GHC_OUT=build/source-ghc", "bin/export-core.sh", "t/fixtures/compiler/SourceNotes.hs", "t/fixtures/compiler/RepresentationAudit.hs"]}, {"argv": ["python3", "bin/check-source-metadata.py", "--fixture", "build/source-core/SourceNotes.cbd", "build/source-core/RepresentationAudit.cbd"]}],

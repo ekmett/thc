@@ -26,6 +26,36 @@ import static thc.runtime.Unit.INSTANCE;
 /** Genuine declaration certificates in explicitly synthetic scalar consumers. */
 @SuppressWarnings("unchecked")
 public class NativeMallocTest {
+    @Test void borrowCleanupRetainsPrimarySuppressedAndCloseOnlyFailures() throws Exception {
+        inside(language -> {
+            var allocation = Language.currentState().getNativeAllocations().malloc(24);
+            var borrow = allocation.nativeAllocation().borrow();
+            var primary = new IllegalStateException("original writer failure");
+            var failure = new AtomicReference<Throwable>();
+            try {
+                var other = new Thread(() -> {
+                    try { borrow.closeAfter(primary); }
+                    catch (Throwable error) { failure.set(error); }
+                });
+                other.start(); other.join(); assertNull(failure.get());
+                assertEquals(1, primary.getSuppressed().length);
+                assertInstanceOf(RuntimeFault.class, primary.getSuppressed()[0]);
+                assertEquals("Native allocation borrow belongs to another thread", primary.getSuppressed()[0].getMessage());
+                assertThrows(RuntimeFault.class, () -> Language.currentState().getNativeAllocations().free(allocation));
+                var closeOnly = new Thread(() -> {
+                    try { borrow.closeAfter(null); }
+                    catch (Throwable error) { failure.set(error); }
+                });
+                closeOnly.start(); closeOnly.join();
+                assertInstanceOf(RuntimeFault.class, failure.get());
+                assertEquals("Native allocation borrow belongs to another thread", failure.get().getMessage());
+                borrow.closeAfter(primary);
+                assertEquals(1, primary.getSuppressed().length, "Successful close does not alter the primary failure");
+            } finally {
+                borrow.close(); Language.currentState().getNativeAllocations().free(allocation);
+            }
+        });
+    }
     private final Map<String, Object> closure =
         map("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
     private final Map<String, Object> longRep = map("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);

@@ -165,7 +165,6 @@ thc.runtime.STMCall$AsyncDestination
 # Literal enum descriptors and argument lists only, not their runtime operations.
 thc.runtime.ArrayOp
 thc.runtime.ByteArrayOp
-thc.runtime.ByteStringDecimalOp
 thc.runtime.CompactImageOp
 thc.runtime.CompactOp
 thc.runtime.EnvironmentOp

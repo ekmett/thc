@@ -50,13 +50,6 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/test/c/native-process-signals-test.c",
                   "src/test/resources/core/original-signal-install-descriptor.json",
                   "src/test/resources/core/original-unix-signal-install-descriptor.json",
-                  "src/main/java/thc/runtime/CoreByteStringSort.java",
-                  "src/main/java/thc/runtime/ByteStringSort.java",
-                  "src/main/java/thc/runtime/ByteStringSortExpression.java",
-                  "src/main/java/thc/runtime/CoreByteStringDecimal.java",
-                  "src/main/java/thc/runtime/ByteStringDecimal.java",
-                  "src/main/java/thc/runtime/ByteStringDecimalOp.java",
-                  "src/main/java/thc/runtime/ByteStringDecimalExpression.java",
                   "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                   "src/main/java/thc/runtime/ProcessIdentity.java",
                   "src/main/c/bytestring-utf8-api.c",
@@ -69,7 +62,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/VectorMemory.java",
                   "src/test/java/thc/runtime/IntegerSimdModelTest.java",
                   "src/test/java/thc/runtime/IntegerSimdModel.java")
-MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -80,20 +73,6 @@ GC_CARRIER_OUTPUTS = frozenset("build/package-native-gc-carriers/" + name for na
     "original-v2/GHC.Internal.Stack.Decode.cbd", "original-v2/objects/GHC/Internal/Stack/Decode.hi",
     "primitive/PackageNativePrimCarriers.cbd", "primitive/PackageNativeUnknownPrim.cbd",
     "primitive/objects/PackageNativePrimCarriers.hi"))
-BYTESTRING_SORT_ENTRIES = ("sortBytes",)
-BYTESTRING_SORT_OUTPUTS = frozenset("build/bytestring-sort/" + name for name in (
-    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
-    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in BYTESTRING_SORT_ENTRIES),
-    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
-      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in BYTESTRING_SORT_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json"))))
-BYTESTRING_DECIMAL_ENTRIES = ("decimal", "padded18")
-BYTESTRING_DECIMAL_OUTPUTS = frozenset("build/bytestring-decimal/" + name for name in (
-    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
-    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in BYTESTRING_DECIMAL_ENTRIES),
-    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
-      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in BYTESTRING_DECIMAL_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json"))))
 UNIX_LIBC_ENTRIES = ("unixClose", "unixDup", "unixIsatty", "unixGetenv")
 UNIX_WAIT_ENTRIES = tuple("wait" + name for name in (
     "WCOREDUMP", "WSTOPSIG", "WIFSTOPPED", "WTERMSIG", "WIFSIGNALED", "WEXITSTATUS", "WIFEXITED"))
@@ -613,8 +592,6 @@ REQUIRED = tuple(sorted({
     *(ORIGINAL_FSTATAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_CURRENT_DIRECTORY_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_DIRECTORY_STREAMS_OUTPUTS if platform.system() == "Linux" else []),
-    *BYTESTRING_SORT_OUTPUTS,
-    *BYTESTRING_DECIMAL_OUTPUTS,
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
     *(["build/original-gmp/manifest.json"] if GMP_NATIVE_HOST else []),
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
@@ -1752,9 +1729,7 @@ def identity(root):
     tracked = tracked_files(root)
     sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/core/", "t/fixtures/retained-core/", "t/fixtures/package-roots/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
     sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS,
-                    "src/test/resources/core/original-unix-libc-descriptors.json",
-                    "src/test/resources/core/original-bytestring-sort-descriptor.json",
-                    "src/test/resources/core/original-bytestring-decimal-descriptors.json"))
+                    "src/test/resources/core/original-unix-libc-descriptors.json"))
     if ".gitmodules" in tracked:
         sources.add(".gitmodules")
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
@@ -1998,10 +1973,6 @@ def allowed_payload(name):
         return name in INTEGER_COMPLETION_OUTPUTS
     if parts[1] == "package-native-gc-carriers":
         return name in GC_CARRIER_OUTPUTS
-    if parts[1] == "bytestring-sort":
-        return name in BYTESTRING_SORT_OUTPUTS
-    if parts[1] == "bytestring-decimal":
-        return name in BYTESTRING_DECIMAL_OUTPUTS
     if parts[1] == "unix-libc":
         return name in UNIX_LIBC_OUTPUTS
     if parts[1] == "unix-wait-status":

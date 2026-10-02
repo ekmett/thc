@@ -51,10 +51,6 @@ WAIT_STATUS_OPERATIONS = {
     for index, name in enumerate(('WCOREDUMP', 'WSTOPSIG', 'WIFSTOPPED', 'WTERMSIG',
                                   'WIFSIGNALED', 'WEXITSTATUS', 'WIFEXITED'))
 }
-BYTESTRING_DECIMAL_OPERATIONS = {
-    '_hs_bytestring_long_long_int_dec': ('ccall', 'unsafe', ('Int64Rep', 'AddrRep', None), (None, 'AddrRep')),
-    '_hs_bytestring_long_long_int_dec_padded18': ('ccall', 'unsafe', ('Int64Rep', 'AddrRep', None), (None,)),
-}
 TEXT_OPERATIONS = {
     '_hs_text_reverse': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', None), (None,)),
     '_hs_text_memchr': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', 'Word8Rep', None), (None, 'Int64Rep')),
@@ -187,8 +183,6 @@ OPERATIONS = {
     **WINDOWS_DIRECTORY_OPERATIONS,
     **WINDOWS_ENCODING_OPERATIONS,
     **TEXT_OPERATIONS,
-    **BYTESTRING_DECIMAL_OPERATIONS,
-    'fps_sort': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None,)),
     **WAIT_STATUS_OPERATIONS,
     **{'is' + precision + predicate: ('ccall', 'unsafe', (rep, None), (None, 'IntRep'))
        for precision, rep in (('Float', 'FloatRep'), ('Double', 'DoubleRep'))
@@ -725,9 +719,7 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(unix_libc_unit(unit), 'matching installed Unix native declaration owner')
     if symbol in PROCESS_OPERATIONS:
         require(process_unit(target.get('unit')), 'supported installed process unit')
-    if symbol in BYTESTRING_DECIMAL_OPERATIONS:
-        require(bytestring_unit(target.get('unit')), 'pinned original bytestring decimal unit')
-    if symbol in ('memchr', 'memset', 'bytestring_is_valid_utf8', 'fps_sort'):
+    if symbol in ('memchr', 'memset', 'bytestring_is_valid_utf8'):
         require(bytestring_unit(target.get('unit')), 'supported installed bytestring unit')
     if symbol in TEXT_OPERATIONS:
         require(text_unit(target.get('unit')), 'supported installed text unit')
@@ -779,7 +771,7 @@ def validate(metadata, argument_reps, flags, result_rep):
                  symbol in PROCESS_OPERATIONS and process_unit(target.get('unit')) or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
                  symbol in WINDOWS_DIRECTORY_OPERATIONS and win32_unit(target.get('unit')) or
-                 symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
+                 symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8') and bytestring_unit(target.get('unit')) or
                  symbol in ('close', 'dup', 'dup2', 'pipe', 'isatty', 'getenv', 'symlink', 'rename', 'readlink', 'chdir', 'getcwd', 'rmdir', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS, *DIRECTORY_STREAM_OPERATIONS) and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  symbol in ('unlinkat', DIRECTORY_FSTATAT) and directory_unit(target.get('unit')) or

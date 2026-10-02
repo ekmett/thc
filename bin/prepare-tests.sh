@@ -37,8 +37,6 @@ printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" unix-libc
 "$fixture_bin" unix-wait-status
 "$fixture_bin" text-cbits
-"$fixture_bin" bytestring-sort
-"$fixture_bin" bytestring-decimal
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" word-floating

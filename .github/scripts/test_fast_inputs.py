@@ -1616,8 +1616,6 @@ class FastInputTests(unittest.TestCase):
         for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS,
                      "bin/prepare-tests.sh", "t/fixtures/core/coverage.json",
                      "src/test/resources/core/original-unix-libc-descriptors.json",
-                     "src/test/resources/core/original-bytestring-sort-descriptor.json",
-                     "src/test/resources/core/original-bytestring-decimal-descriptors.json",
                      "src/main/resources/thc/scalar-primop-signatures.json", "src/tools/primops/PrimopTools.hs"):
             self.put(name, "source: " + name)
         self.put("src/main/java/thc/runtime/Program.java", "unrelated runtime\n")
@@ -2220,13 +2218,6 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/test/c/native-process-signals-test.c",
                           "src/test/resources/core/original-signal-install-descriptor.json",
                           "src/test/resources/core/original-unix-signal-install-descriptor.json",
-                          "src/main/java/thc/runtime/CoreByteStringSort.java",
-                          "src/main/java/thc/runtime/ByteStringSort.java",
-                          "src/main/java/thc/runtime/ByteStringSortExpression.java",
-                          "src/main/java/thc/runtime/CoreByteStringDecimal.java",
-                          "src/main/java/thc/runtime/ByteStringDecimal.java",
-                          "src/main/java/thc/runtime/ByteStringDecimalOp.java",
-                          "src/main/java/thc/runtime/ByteStringDecimalExpression.java",
                           "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                           "src/main/java/thc/runtime/ProcessIdentity.java",
                           "src/main/c/bytestring-utf8-api.c",
@@ -2249,10 +2240,6 @@ class RenamedInputContractTests(unittest.TestCase):
         self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
         self.assertIn("t/haskell-fixtures/PinnedAddressFixtures.hs", sources)
         self.assertIn("src/tools/primops/PrimopTools.hs", sources)
-        sort = "src/test/resources/core/original-bytestring-sort-descriptor.json"
-        self.assertEqual(cache.digest(root / sort), sources[sort])
-        decimal = "src/test/resources/core/original-bytestring-decimal-descriptors.json"
-        self.assertEqual(cache.digest(root / decimal), sources[decimal])
         declaration = "src/test/resources/core/original-unix-libc-descriptors.json"
         self.assertEqual(cache.digest(root / declaration), sources[declaration])
         for name in ("generate-scalar-signatures.py", "primop-coverage.py", "test-primop-coverage.py"):
