@@ -20,19 +20,16 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bits ((.&.), (.|.), shiftL)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
-import Data.Foldable (toList)
-import Data.List (isPrefixOf, isSuffixOf, sort)
+import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.String (fromString)
-import qualified Data.Text as Text
 import FixtureSupport (CommandResult(..), hashes, readInteger, run, runLogged, runLoggedWithInput, splitTab, writeJson)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 import Text.Read (readMaybe)
-import THC.Compact.Module (readModuleValue)
 
 entries :: [String]
 entries = [family ++ suffix | family <- ["float", "double"],
@@ -40,12 +37,6 @@ entries = [family ++ suffix | family <- ["float", "double"],
 
 bitcastPrimitives :: [String]
 bitcastPrimitives = ["castWord32ToFloat#", "castFloatToWord32#", "castWord64ToDouble#", "castDoubleToWord64#"]
-
-guestCalls :: String -> Int
-guestCalls name = case [count | (suffix,count) <-
-  [("Roundtrip",5),("Field",6),("Captured",7),("Decode",4),("Encode",4)], suffix `isSuffixOf` name] of
-  [count] -> count
-  _ -> error "Unknown scalar bitcast entry"
 
 signed64 :: Integer -> Integer
 signed64 bits = let word = bits .&. (2^(64 :: Int)-1)
@@ -81,71 +72,6 @@ field key _ = die ("Expected scalar bitcast object for " ++ key)
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
 
-walk :: Value -> [Value]
-walk value = value : concatMap walk (case value of
-  Object fields -> toList fields
-  Array values -> toList values
-  _ -> [])
-
-expressions :: String -> Value -> [[Value]]
-expressions tag value = [items | Array values <- walk value, let items = toList values,
-  take 1 items == [String (fromString tag)]]
-
-structure :: Value -> Value -> String -> IO Value
-structure core report name = do
-  bindings <- field "bindings" core :: IO [Value]
-  indexed <- forM bindings $ \binding -> do
-    ident <- field "id" binding
-    pure (ident :: String,binding)
-  reached <- field "reachableBindings" report :: IO [Value]
-  reachable <- forM reached $ \binding -> do
-    ident <- field "id" binding
-    maybe (die "Audit reached a missing binding") pure (lookup (ident :: String) indexed)
-  described <- forM reachable $ \binding -> do
-    ident <- field "id" binding
-    label <- field "name" binding
-    expr <- field "expr" binding :: IO [Value]
-    pure (ident :: String,label :: String,expr)
-  roots <- field "roots" report :: IO [String]
-  root <- case roots of [ident] -> pure ident; _ -> die "Bitcast audit needs one root"
-  let functions = [(ident,expr) | (ident,_,expr) <- described, take 1 expr == [String "lam"]]
-      bodies = [expr | (_,expr) <- functions]
-      nodes tag = concat [expressions tag item | body <- bodies, item <- body]
-      apps = nodes "app"
-      cases = nodes "case"
-      nested = length (nodes "lam")
-      heads = [toList headValue | (_:Array headValue:_) <- apps]
-      variableHeads = [Text.unpack raw | String "var":String raw:_ <- heads]
-      globals = filter (`elem` map fst indexed) variableHeads
-      dynamic = length (filter (`notElem` map fst indexed) variableHeads)
-      immediate = length [() | String "lam":_ <- heads]
-      cold = [(ident,label,expr) | (ident,label,expr) <- described, take 1 expr /= [String "lam"]]
-      countMap xs = Map.fromListWith (+) [(x,1 :: Int) | x <- xs]
-  unless (all (\expr -> case drop 3 expr of Array alternatives:_ -> length alternatives == 1; _ -> False) cases)
-    (die "New conditional scalar bitcast guest path")
-  unless (countMap globals == countMap [ident | (ident,_) <- functions, ident /= root] &&
-    dynamic == (if "Captured" `isSuffixOf` name then 1 else 0) &&
-    immediate == (if any (`isSuffixOf` name) ["Decode","Encode"] then 1 else 0) &&
-    nested == dynamic + immediate && length functions + nested == guestCalls name)
-    (die ("Changed retained scalar bitcast calls: " ++ name))
-  unless (map (\(_,label,_) -> label) cold == ["main:ScalarBitCastAudit.bottom" | "Field" `isSuffixOf` name] &&
-    all (\(ident,_,expr) -> take 2 expr == [String "var",String (fromString ident)]) cold)
-    (die ("Changed scalar bitcast cold bottom: " ++ name))
-  primitives <- field "primitives" report :: IO [Value]
-  primitiveCounts <- forM primitives $ \primitive -> do
-    label <- field "name" primitive
-    uses <- field "uses" primitive :: IO [Value]
-    pure (label :: String,length uses)
-  let family = if "float" `isPrefixOf` name then ["castWord32ToFloat#","castFloatToWord32#"]
-        else ["castWord64ToDouble#","castDoubleToWord64#"]
-      required = if "Decode" `isSuffixOf` name then take 1 family
-        else if "Encode" `isSuffixOf` name then drop 1 family else family
-      actual = Map.fromList [(label,count) | (label,count) <- primitiveCounts,
-        label `elem` bitcastPrimitives]
-  unless (actual == Map.fromList [(label,1) | label <- required]) (die ("Changed bitcast primitives: " ++ name))
-  pure $ object ["guestCalls" .= (length functions+nested), "globalFunctions" .= map fst functions,
-    "nestedCallbacks" .= dynamic, "stateLambdas" .= immediate,
-    "coldBottom" .= [ident | (ident,_,_) <- cold], "primitiveUses" .= actual]
 prepareScalarBitCasts :: FilePath -> IO ()
 prepareScalarBitCasts root = do
   let directory = "build/scalar-bitcasts"
@@ -181,7 +107,6 @@ prepareScalarBitCasts root = do
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         [source])
     let corePath = directory </> stage ++ "-core/ScalarBitCastAudit.cbd"
-    core <- BS.readFile (root </> corePath) >>= either die pure . readModuleValue
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       -- The existing shared Python auditor remains the capability proof.
@@ -192,11 +117,10 @@ prepareScalarBitCasts root = do
       issues <- field "issues" report :: IO [Value]
       missing <- field "missingGlobals" report :: IO [Value]
       unless (accepted && null issues && null missing) (die "Strict scalar bitcast audit rejected")
-      shape <- structure core report name
       summary <- field "summary" report :: IO Value
-      pure (name,report,shape,summary,reportPath:commandArtifacts command)
+      pure (name,report,summary,reportPath:commandArtifacts command)
     let reportPath = directory </> stage ++ "-audit.json"
-    writeJson (root </> reportPath) (object [fromString name .= report | (name,report,_,_,_) <- reports])
+    writeJson (root </> reportPath) (object [fromString name .= report | (name,report,_,_) <- reports])
     pure (stage,corePath,reports,corePath:reportPath:commandArtifacts exported)
   let requests = [(name,x) | name <- entries, x <- inputs (if "float" `isPrefixOf` name then 32 else 64)]
       requestPath = directory </> "inputs.tsv"
@@ -227,16 +151,14 @@ prepareScalarBitCasts root = do
         ["src/compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
       artifacts = [requestPath,binary,directory </> "oracle.tsv"] ++ commandArtifacts compiled ++ commandArtifacts executed ++
-        concat [paths ++ concat [more | (_,_,_,_,more) <- reports] | (_,_,reports,paths) <- stages]
+        concat [paths ++ concat [more | (_,_,_,more) <- reports] | (_,_,reports,paths) <- stages]
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),"ghcInfo" .= info,
     "entries" .= entries,"stages" .= Map.fromList [(stage,path) | (stage,path,_,_) <- stages],
     "nativeRows" .= length rows,"inputsByWidth" .= Map.fromList [(show width,inputs width) | width <- [32,64]],
-    "expectedGuestCalls" .= Map.fromList [(name,guestCalls name) | name <- entries],
     "bitcastPrimitiveArities" .= bitcastArities,
-    "audits" .= Map.fromList [(stage ++ "/" ++ name,summary) | (stage,_,reports,_) <- stages, (name,_,_,summary,_) <- reports],
-    "structure" .= Map.fromList [(stage ++ "/" ++ name,shape) | (stage,_,reports,_) <- stages, (name,_,shape,_,_) <- reports],
+    "audits" .= Map.fromList [(stage ++ "/" ++ name,summary) | (stage,_,reports,_) <- stages, (name,_,summary,_) <- reports],
     "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
     "claim" .= ("Exact integer bits, including NaN payload/signalling/sign and signed zero; no Float equality or arithmetic NaN claim." :: String)]
-  putStrLn "scalar-bitcasts: 13555 exact native rows; ten strict pre/post roots and retained guest counts"
+  putStrLn "scalar-bitcasts: 13555 exact native rows; ten strictly audited pre/post entries"

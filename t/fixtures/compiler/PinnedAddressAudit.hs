@@ -15,11 +15,6 @@
 module PinnedAddressAudit where
 
 import GHC.Exts
-import GHC.IO (IO(..))
-import GHC.Word (Word8(W8#))
-import GHC.Fingerprint.Type (Fingerprint(..))
-import Foreign.Marshal.Alloc (allocaBytesAligned)
-import Foreign.Storable (poke, peek, peekByteOff)
 
 -- The same freeze/contents/keepAlive pattern as original allocaBytes. All native
 -- accesses are defined: size=0 takes no memory access; other offsets are in range.
@@ -98,9 +93,7 @@ keepAliveLazy raw = runRW# (\s0 ->
     old *# 257# +# word2Int# (word8ToWord# now)
   } } } } } })
 
--- Primitive conformance to the original Storable Fingerprint layout, NOT a
--- replacement body or claim that the public Storable dictionary is executable.
--- The separate public roots below use that actual installed dictionary.
+-- The native observer checks this byte layout using public Storable Fingerprint.
 fingerprintByte :: Int# -> Int# -> Int# -> Int#
 fingerprintByte high low selector = runRW# (\s0 ->
   case newAlignedPinnedByteArray# 16# 8# s0 of { (# s1, mutable #) ->
@@ -119,23 +112,3 @@ fingerprintByte high low selector = runRW# (\s0 ->
          (# _, value #) -> word2Int# (word8ToWord# value)
        } } }
   } } })
-
--- Genuine installed public API native/control roots. Their original missing
--- Storable source workers remain an explicit strict frontier until supplied.
-publicFingerprintByte :: Int# -> Int# -> Int# -> Int#
-publicFingerprintByte high low selector =
-  case runRW# (\s -> case action of IO f -> f s) of
-    (# _, W8# value #) -> word2Int# (word8ToWord# value)
-  where
-    action = allocaBytesAligned 16 8 (\pointer -> do
-      poke pointer (Fingerprint (fromIntegral (I# high)) (fromIntegral (I# low)))
-      peekByteOff pointer (I# selector) :: IO Word8)
-
-publicFingerprintRoundtrip :: Int# -> Int# -> Int# -> Int#
-publicFingerprintRoundtrip high low selector =
-  case runRW# (\s -> case action of IO f -> f s) of (# _, I# answer #) -> answer
-  where
-    action = allocaBytesAligned 16 8 (\pointer -> do
-      poke pointer (Fingerprint (fromIntegral (I# high)) (fromIntegral (I# low)))
-      Fingerprint first second <- peek pointer
-      pure (fromIntegral (if isTrue# (selector ==# 0#) then first else second)))

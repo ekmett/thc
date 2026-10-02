@@ -57,8 +57,7 @@ prepareLinux root = do
   let directory = "build/original-posix-stat"
       source = "t/fixtures/compiler/OriginalPosixStatAudit.hs"
       driver = "t/fixtures/compiler/OriginalPosixStatNative.hs"
-      entries = ["originalStatSize", "originalStatDev", "originalStatIno", "originalStatMode", "originalStatLength", "originalStatTypes",
-        "originalFstat", "originalFstatErrno"]
+      entries = ["originalFstat", "originalFstatErrno"]
       execute = runLogged 180 root (directory </> "logs")
   createDirectoryIfMissing True (root </> directory </> "native")
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
@@ -75,10 +74,10 @@ prepareLinux root = do
     "-package", "ghc-internal", "-it/fixtures/compiler", "-odir", root </> directory </> "native",
     "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
   observed <- execute "native-run" [] (root </> binary) [root </> directory </> "native"]
-  (size,images,modes,fstats) <- maybe (die "Malformed original stat observations") pure
-    (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe (Integer, [([Int],[Integer])], [(Integer,Integer)], [(String,Integer,Integer,[Integer],Bool)]))
+  (size,fstats) <- maybe (die "Malformed original stat observations") pure
+    (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe (Integer, [(String,Integer,Integer,[Integer],Bool)]))
   let oracle = directory </> "oracle.json"
-  writeJson (root </> oracle) $ object ["size" .= size, "images" .= images, "modes" .= modes, "fstats" .= fstats]
+  writeJson (root </> oracle) $ object ["size" .= size, "fstats" .= fstats]
   exports <- forM ["pre","post"] $ \stage -> do
     let core = directory </> stage </> "core"
         modules = [core </> "OriginalPosixStatAudit.cbd",core </> "THC.InterfaceClosure.cbd"]
@@ -97,11 +96,11 @@ prepareLinux root = do
       pure (path,command)
     pure (modules,exported,audits)
   let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports]
-      artifacts = [binary,oracle,directory </> "native/sample.bin"] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++ concatMap commandArtifacts commands
+      artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root fixtureSources
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "platform" .= os, "supported" .= True,
      "oracle" .= oracle, "stages" .= (["pre","post"] :: [String]),
      "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "original-posix-stat: native stat images, predicates and strict pre/post originals prepared"
+  putStrLn "original-posix-stat: native descriptor observations and strict pre/post originals prepared"

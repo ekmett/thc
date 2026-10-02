@@ -96,8 +96,8 @@ class WindowsDistributionTest {
             assertEquals(2L, abi.get("schema"));
             assertEquals(digest(root.resolve("src/main/c/windows-stdio-abi-probe.c")), abi.get("sourceSha256"));
         }
-        for (var path : List.of("/thc/cbits/iconv.bc", "/thc/cbits/strerror.bc", "/thc/cbits/strerror-locale.bc",
-            "/thc/native/posix-stat-abi.json", "/thc/native/termios-abi.json", "/thc/native/sigset-abi.json"))
+        for (var path : List.of("/thc/cbits/iconv.bc",
+            "/thc/native/posix-stat-abi.json", "/thc/native/termios-abi.json"))
             assertNull(getClass().getResource(path), path);
     }
 

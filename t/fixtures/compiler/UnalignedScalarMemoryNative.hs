@@ -28,6 +28,8 @@ main = do
         [kind,rawText,offsetText] -> case (read rawText, read offsetText) of
           (I# raw,I# offset) ->
             let at (I# selector) = I# (case kind of {
+                  "Heap16" -> Audit.unalignedHeap16 raw offset selector;
+                  "Heap32" -> Audit.unalignedHeap32 raw offset selector;
                   "Char" -> Audit.unalignedChar raw offset selector;
                   "WideChar" -> Audit.unalignedWideChar raw offset selector;
                   "Int" -> Audit.unalignedInt raw offset selector;

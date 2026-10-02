@@ -77,8 +77,6 @@ public enum OriginalStdioOp {
     WIFEXITED("ghczuwrapperZC6ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFEXITED", "capi", "unsafe", Arrays.asList("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     GET_SAVED_TERMIOS("__hscore_get_saved_termios", "ccall", "unsafe", Arrays.asList("Int32Rep", null), "AddrRep"),
     SET_SAVED_TERMIOS("__hscore_set_saved_termios", "ccall", "unsafe", Arrays.asList("Int32Rep", "AddrRep", null), null),
-    SIGPROCMASK("ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask", "capi", "unsafe",
-        Arrays.asList("Int32Rep", "AddrRep", "AddrRep", null), "Int32Rep"),
     TCGETATTR("ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr", "capi", "unsafe",
         Arrays.asList("Int32Rep", "AddrRep", null), "Int32Rep"),
     TCSETATTR("ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcsetattr", "capi", "unsafe",
@@ -96,10 +94,6 @@ public enum OriginalStdioOp {
     SIGTTOU("__hscore_sigttou", "ccall", "unsafe", Arrays.asList((String) null), "Int32Rep"),
     SIG_BLOCK("__hscore_sig_block", "ccall", "unsafe", Arrays.asList((String) null), "Int32Rep"),
     SIG_SETMASK("__hscore_sig_setmask", "ccall", "unsafe", Arrays.asList((String) null), "Int32Rep"),
-    SIGEMPTYSET("ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset", "capi", "unsafe",
-        Arrays.asList("AddrRep", null), "Int32Rep"),
-    SIGADDSET("ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset", "capi", "unsafe",
-        Arrays.asList("AddrRep", "Int32Rep", null), "Int32Rep"),
     READ_SAFE("ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "safe",
         Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     READ_UNSAFE("ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "unsafe",
@@ -315,12 +309,10 @@ public enum OriginalStdioOp {
     public boolean getPathStat() { return this == STAT || this == LSTAT || this == UNIX_LSTAT; }
     public boolean getReadImage() { return this == FSTAT || this == TCGETATTR; }
     public boolean getIconv() { return this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV; }
-    public boolean getStrerror() { return this == STRERROR; }
     public boolean getTermios() { return this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC ||
         this == SIZEOF_TERMIOS || this == ECHO || this == ICANON || this == VMIN || this == VTIME || this == TCSANOW ||
         this == SIZEOF_SIGSET || this == SIGTTOU || this == SIG_BLOCK || this == SIG_SETMASK; }
     public boolean getTermiosAddress() { return this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC; }
-    public boolean getSigset() { return this == SIGEMPTYSET || this == SIGADDSET; }
     public boolean getSavedTermios() { return this == GET_SAVED_TERMIOS || this == SET_SAVED_TERMIOS; }
     public boolean getOpening() { return this == OPEN || this == OPEN_SAFE || this == OPEN_INTERRUPTIBLE ||
         this == OPEN_WORD16 || this == OPEN_WORD16_SAFE || this == OPEN_WORD16_INTERRUPTIBLE; }

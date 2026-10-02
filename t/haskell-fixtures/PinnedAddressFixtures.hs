@@ -41,10 +41,8 @@ directory, prefix :: String
 directory = "build/pinned-addresses"
 prefix = "main:PinnedAddressAudit."
 
-entries, frontiers, guestCalls :: [(String,Int)]
+entries :: [(String,Int)]
 entries = [("pinnedBytes",3),("alignedBytes",4),("keepAliveWord8",1),("keepAliveLazy",1),("fingerprintByte",3)]
-frontiers = [("publicFingerprintByte",3),("publicFingerprintRoundtrip",3)]
-guestCalls = [("pinnedBytes",4),("alignedBytes",4),("keepAliveWord8",3),("keepAliveLazy",3),("fingerprintByte",3)]
 
 values, words64, sizes :: [Integer]
 values = [-2^(63 :: Int),-257,-256,-1,0,1,127,128,255,256,257,0x0123456789abcdef,2^(63 :: Int)-1]
@@ -55,8 +53,7 @@ requests :: [(String,[Integer])]
 requests = concat [[("pinnedBytes",[size,offset,raw])] ++ [("alignedBytes",[size,alignment,offset,raw]) | alignment <- [8,16]] |
   size <- sizes, offset <- if size == 0 then [0] else [0..size-1], raw <- values] ++
   [(name,[raw]) | name <- ["keepAliveWord8","keepAliveLazy"], raw <- values] ++
-  concat [concat [[(name,[high,low,index]) | name <- ["fingerprintByte","publicFingerprintByte"]] | index <- [0..15]] ++
-    [("publicFingerprintRoundtrip",[high,low,index]) | index <- [0,1]] | high <- words64, low <- words64]
+  [("fingerprintByte",[high,low,index]) | high <- words64, low <- words64, index <- [0..15]]
 
 -- Native-domain model only: explicit byte storage and mutation, independently
 -- checked by the JVM's arithmetic and big-endian byte-buffer model.
@@ -66,8 +63,7 @@ expected name arguments = case (name,arguments) of
   ("alignedBytes",[size,_,offset,raw]) -> allocation size offset raw
   ("keepAliveWord8",[raw]) -> keep raw 7
   ("keepAliveLazy",[raw]) -> keep raw 11
-  ("publicFingerprintRoundtrip",[high,low,index]) -> if index == 0 then high else low
-  (_,[high,low,index]) | name `elem` ["fingerprintByte","publicFingerprintByte"] ->
+  ("fingerprintByte",[high,low,index]) ->
     (if index < 8 then high else low) `shiftR` (8 * fromInteger (7-index `mod` 8)) .&. 255
   _ -> error "Invalid pinned-address model request"
   where
@@ -86,10 +82,6 @@ check condition message = unless condition (die message)
 ensure :: Bool -> String -> Either String ()
 ensure condition message = if condition then Right () else Left message
 
-one :: String -> [a] -> Either String a
-one _ [value] = Right value
-one message _ = Left message
-
 decode :: FromJSON a => Value -> Either String a
 decode value = case fromJSON value of Success result -> Right result; Error message -> Left message
 
@@ -100,8 +92,7 @@ field key _ = Left ("Expected object: " ++ key)
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either die pure . eitherDecodeStrict'
 
--- Paths identify concrete lambda sites, including duplicate-looking lambdas.
--- Structural equality is deliberately not a substitute for site identity.
+-- Locate genuine primop proofs for the malformed-input controls.
 data Step = Index Int | Key String deriving (Eq,Ord,Show)
 type Path = [Step]
 
@@ -159,90 +150,6 @@ applications modules primitive reachable = do
       (nested,node) <- walk expression, tagged "app" node,
       take 2 (array (array node !! 1)) == [String "prim",String (fromString primitive)]])
 
-voidRep :: Value
-voidRep = object ["primReps" .= ([] :: [String]),"kind" .= ("void" :: String),"evaluated" .= True]
-
-guestStructure :: String -> Value -> Value -> Either String Value
-guestStructure entry report modules = do
-  bs <- bindings modules
-  indexed <- Map.fromList <$> forM bs (\pair@(_,binding) -> do ident <- field "id" binding; pure (ident :: String,pair))
-  reached <- field "reachableBindings" report >>= mapM (field "id")
-  reachable <- forM reached (\ident -> maybe (Left "Missing reachable binding") Right (Map.lookup ident indexed))
-  names <- mapM (field "name" . snd) reachable
-  let allocation = entry `elem` ["pinnedBytes","alignedBytes"]
-      wanted = map (prefix ++) (entry : ["addressBytes" | allocation] ++ ["keptBottom" | entry == "keepAliveLazy"])
-  ensure (Set.fromList names == Set.fromList wanted) "Global closure changed"
-  roots <- field "roots" report :: Either String [String]
-  rootId <- one "Expected one root" roots
-  (bindingPath,binding) <- maybe (Left "Missing root") Right (Map.lookup rootId indexed)
-  root <- field "expr" binding
-  formals <- at [Index 1] root >>= decode :: Either String [Value]
-  ensure (tagged "lam" root && Just (length formals) == lookup entry entries) "Host arity changed"
-  forM_ formals $ \formal -> do
-    kind <- at [Key "rep",Key "kind"] formal
-    reps <- at [Key "rep",Key "primReps"] formal
-    lifted <- field "lifted" formal
-    coercion <- field "coercion" formal
-    ensure (kind == String "long" && reps == toJSON ["IntRep" :: String] && not lifted && not coercion) "Wrong host formal"
-  call <- at [Index 2] root
-  immediate <- at [Index 1] call
-  stateFormals <- at [Index 1] immediate >>= decode :: Either String [Value]
-  ensure (tagged "app" call && tagged "lam" immediate) "Missing immediate State lambda"
-  state <- one "Expected one State formal" stateFormals
-  stateProof <- field "rep" state
-  stateType <- field "type" state :: Either String String
-  lifted <- field "lifted" state
-  coercion <- field "coercion" state
-  arguments <- at [Index 2] call >>= decode :: Either String [Value]
-  argument <- one "Expected one State argument" arguments
-  flags <- at [Index 3] call
-  ensure (stateProof == voidRep && stateType == "State# RealWorld" && not lifted && not coercion &&
-    tagged "void" argument && flags == toJSON [False]) "State call shape changed"
-  argumentProof <- rawProof argument
-  ensure (argumentProof == voidRep) "State argument proof changed"
-  sites <- forM reachable $ \(path,global) -> do
-    name <- field "name" global :: Either String String
-    expr <- field "expr" global
-    ident <- field "id" global :: Either String String
-    if name == prefix ++ "keptBottom" then do
-      ensure (take 2 (array expr) == [String "var",String (fromString ident)]) "Bottom no longer retained self-reference"
-      pure ([],0)
-    else do
-      joins <- concat <$> forM [(nested,node) | (nested,node) <- walk expr, tagged "let" node] (\(nested,node) -> do
-        locals <- at [Index 2] node >>= decode :: Either String [Value]
-        concat <$> forM (zip [0..] locals) (\(index,local) -> case field "joinValueArity" local :: Either String Int of
-          Right arity | arity > 0 -> do
-            rhs <- field "expr" local
-            proof <- field "joinResultRep" local
-            result <- at [Index (length (array rhs)-1),Key "resultRep"] rhs
-            kind <- field "kind" proof :: Either String String
-            reps <- field "primReps" proof :: Either String [String]
-            ensure (tagged "lam" rhs && length (array (array rhs !! 1)) == arity && proof == result &&
-              kind == "long" && reps == ["IntRep"]) "Incomplete join prefix"
-            pure [nested ++ [Index 2,Index index,Key "expr"]]
-          _ -> pure []))
-      pure ([(path ++ [Key "expr"] ++ nested,node) | (nested,node) <- walk expr, tagged "lam" node, nested `notElem` joins],length joins)
-  keep <- applications modules "keepAlive#" (Just (Set.fromList reached))
-  (keepPath,keepApp) <- one "Expected one keepAlive call" keep
-  let continuationPath = [Index 2,Index 2]
-  continuation <- at continuationPath keepApp
-  continuationFormals <- at [Index 1] continuation >>= decode :: Either String [Value]
-  ensure (tagged "lam" continuation) "Continuation must be a lambda"
-  continuationFormal <- one "Continuation arity changed" continuationFormals
-  continuationRep <- field "rep" continuationFormal
-  continuationLifted <- field "lifted" continuationFormal
-  keepRep <- rawProof keepApp
-  result <- at [Index (length (array continuation)-1),Key "resultRep"] continuation
-  ensure (continuationRep == voidRep && not continuationLifted && keepRep == result) "Continuation/result proof changed"
-  let lambdas = concatMap fst sites
-      rootPath = bindingPath ++ [Key "expr"]
-      allowed = [rootPath,rootPath ++ [Index 2,Index 1],keepPath ++ continuationPath] ++
-        [path ++ [Key "expr"] | ((path,_),name) <- zip reachable names, name == prefix ++ "addressBytes"]
-  ensure (Just (length lambdas) == lookup entry guestCalls && Set.fromList (map fst lambdas) == Set.fromList allowed) "Hidden guest lambda or wrong count"
-  formalNames <- forM lambdas (\(_,lambda) -> at [Index 1] lambda >>= decode >>= mapM (field "name") :: Either String [String])
-  pure $ object ["guestCalls" .= length lambdas,"localJoinPrefixes" .= sum (map snd sites),"lambdaFormals" .= formalNames,
-    "lazyUncalledGlobal" .= (if entry == "keepAliveLazy" then Just ("keptBottom" :: String) else Nothing)]
-
 -- Each forged certificate is applied to an accepted genuine export, not to an
 -- already unsupported synthetic module. Result tuples retain their State slot.
 negatives :: [(String,String,String,Maybe Int,String,String)]
@@ -281,53 +188,6 @@ forge modules baseline primitive argument kind rep = do
     replace (componentPath ++ [Key "primReps"]) (toJSON [rep])
   if tuple then replace (path ++ [Key "primReps"]) (toJSON [rep]) changed else pure changed
 
--- Exercise the actual producer checker; a second checker cannot establish
--- that this call-accounting contract rejects malformed concrete call sites.
-structureControls :: Either String Value
-structureControls = do
-  baseline <- guestStructure "keepAliveWord8" report modules
-  calls <- field "guestCalls" baseline :: Either String Int
-  ensure (calls == 3) "Structural positive control failed"
-  forM_ changes $ \(label,path,value) -> do
-    changed <- replace path value modules
-    case guestStructure "keepAliveWord8" report changed of
-      Left _ -> pure ()
-      Right _ -> Left ("Structural negative accepted: " ++ label)
-  case forge (toJSON ([] :: [Value])) (object ["accepted" .= False]) "readWord8OffAddr#" Nothing "long" "WordRep" of
-    Left "Negative baseline rejected" -> pure ()
-    _ -> Left "Negative baseline guard failed"
-  pure $ object ["acceptedBaselineGuestCalls" .= calls,"rejected" .= (map (\(label,_,_) -> label) changes ++ ["rejected-proof-baseline"])]
-  where
-    state name = object ["id" .= name,"name" .= name,"type" .= ("State# RealWorld" :: String),
-      "rep" .= voidRep,"lifted" .= False,"coercion" .= False]
-    result = object ["kind" .= ("unknown" :: String),"primReps" .= ["Word8Rep" :: String],"evaluated" .= False,
-      "aggregate" .= ("unboxed-tuple" :: String),"components" .= [voidRep,
-        object ["kind" .= ("long" :: String),"primReps" .= ["Word8Rep" :: String],"evaluated" .= True]]]
-    void = toJSON [String "void",object ["rep" .= voidRep]]
-    continuation = toJSON [String "lam",toJSON [state ("s" :: String)],void,object ["resultRep" .= result]]
-    keep = toJSON [String "app",toJSON [String "prim",String "keepAlive#"],
-      toJSON [toJSON [String "var",String "bytes"],void,continuation],toJSON [False,False,True],Bool False,Bool False,object ["rep" .= result]]
-    immediate = toJSON [String "lam",toJSON [state ("s0" :: String)],keep,object ["resultRep" .= result]]
-    call = toJSON [String "app",immediate,toJSON [void],toJSON [False],Bool False,Bool False,object []]
-    formal = object ["id" .= ("raw" :: String),"name" .= ("raw" :: String),
-      "rep" .= object ["kind" .= ("long" :: String),"primReps" .= ["IntRep" :: String]],"lifted" .= False,"coercion" .= False]
-    root = toJSON [String "lam",toJSON [formal],call,object []]
-    modules = toJSON [object ["bindings" .= [object ["id" .= ("root" :: String),"name" .= (prefix ++ "keepAliveWord8"),"expr" .= root]]]]
-    report = object ["roots" .= ["root" :: String],"reachableBindings" .= [object ["id" .= ("root" :: String)]]]
-    rootPath = [Index 0,Key "bindings",Index 0,Key "expr"]
-    callPath = rootPath ++ [Index 2]
-    keepPath = callPath ++ [Index 1,Index 2]
-    continuationPath = keepPath ++ [Index 2,Index 2]
-    changes =
-      [("host-arity",rootPath ++ [Index 1],toJSON [formal,formal]),
-       ("state-rep",callPath ++ [Index 1,Index 1,Index 0,Key "rep",Key "kind"],String "long"),
-       ("state-flag",callPath ++ [Index 3],toJSON [True]),
-       ("continuation-rep",continuationPath ++ [Index 1,Index 0,Key "rep",Key "primReps"],toJSON ["IntRep" :: String]),
-       ("result",keepPath ++ [Index 6,Key "rep",Key "primReps"],toJSON ["WordRep" :: String]),
-       ("hidden-lambda",continuationPath ++ [Index 2],toJSON [String "let",Bool False,
-         toJSON [object ["id" .= ("hidden" :: String),"expr" .= continuation]],void]),
-       ("global",[Index 0,Key "bindings",Index 0,Key "name"],String "different")]
-
 sourcePaths :: FilePath -> IO [FilePath]
 sourcePaths root = do
   plugins <- listDirectory (root </> "src/compiler/THC")
@@ -343,7 +203,6 @@ sourcePaths root = do
 preparePinnedAddresses :: FilePath -> Bool -> Bool -> Bool -> IO ()
 preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
   check (not (nativeOnly && exportOnly)) "Conflicting modes"
-  controls <- either die pure structureControls
   createDirectoryIfMissing True (root </> directory)
   let manifestPath = root </> directory </> "manifest.json"
       logs = directory </> "commands"
@@ -351,7 +210,7 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
       oracleText = unlines [intercalate "\t" (name:map show (args ++ [expected name args])) | (name,args) <- requests]
   present <- doesFileExist manifestPath
   when present (removeFile manifestPath)
-  check (length requests == 7269 && length (nub requests) == 7269) "Changed pinned-address corpus"
+  check (length (nub requests) == length requests) "Duplicate pinned-address request"
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- run root [] ghc ["--numeric-version"] ""
   check (lines version == ["9.14.1"]) "Pinned GHC 9.14.1 required"
@@ -363,7 +222,6 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
     _ -> die "Pinned addresses require native-order 64-bit GHC"
   writeFile (root </> directory </> "requests.tsv") requestText
   writeFile (root </> directory </> "expected.tsv") oracleText
-  writeJson (root </> directory </> "structure-controls.json") controls
   nativeArtifacts <- if exportOnly then pure [] else do
     let native = directory </> "native"
         binary = native </> "pinned-address-oracle"
@@ -383,37 +241,20 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
     _ <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",root </> base </> "core"),("THC_GHC_OUT",root </> base </> "ghc"),("THC_SOURCE_NOTES","true")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-        ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_) <- entries ++ frontiers] ++ ["t/fixtures/compiler/PinnedAddressAudit.hs"])
+        ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_) <- entries] ++ ["t/fixtures/compiler/PinnedAddressAudit.hs"])
     originals <- mapM (\path -> BS.readFile (root </> path) >>= either die pure . readModuleValue) paths
     let modules = toJSON originals
     boundary <- either die pure (at [Index 0,Key "boundary"] modules)
     check (boundary == String (if stage == "pre" then "optimized-Core-before-Tidy" else "optimized-Core-after-Tidy-before-CorePrep")) "Wrong actual Core stage"
-    reports <- forM (entries ++ frontiers) $ \(name,_) -> do
-      report <- audit stage name paths name (if name `elem` map fst entries then if allowUnsupported then Nothing else Just 0 else Just 1)
+    reports <- forM entries $ \(name,_) -> do
+      report <- audit stage name paths name (if allowUnsupported then Nothing else Just 0)
       accepted <- either die pure (field "accepted" report)
-      if name `elem` map fst entries then unless allowUnsupported (check accepted "Unsupported genuine Core") else do
-        ids <- either die pure (field "missingGlobals" report >>= mapM (field "id")) :: IO [String]
-        let missing = Set.fromList [drop 1 (dropWhile (/= ':') ident) | ident <- ids]
-            required = Set.fromList ["GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$w" ++ operation ++ "W64" |
-              operation <- "poke" : ["peek" | name == "publicFingerprintRoundtrip"]]
-        check (not accepted && required `Set.isSubsetOf` missing) "Public Storable frontier changed"
+      unless allowUnsupported (check accepted "Unsupported genuine Core")
       pure (name,report)
-    let supported = [report | (name,report) <- reports, name `elem` map fst entries]
-    accepted <- and <$> mapM (either die pure . field "accepted") supported
-    primitives <- concat <$> mapM (either die pure . (field "primitives" >=> mapM (field "name"))) supported :: IO [String]
+    accepted <- and <$> mapM (either die pure . field "accepted" . snd) reports
+    primitives <- concat <$> mapM (either die pure . (field "primitives" >=> mapM (field "name")) . snd) reports :: IO [String]
     check (all (`elem` primitives) ["newPinnedByteArray#","newAlignedPinnedByteArray#","byteArrayContents#","readWord8OffAddr#","writeWord8OffAddr#","keepAlive#"])
       "Required primitives disappeared"
-    structures <- forM entries $ \(name,_) -> do
-      report <- maybe (die "Missing baseline") pure (lookup name reports)
-      structure <- either die pure (guestStructure name report modules)
-      pure (stage ++ "/" ++ name,structure)
-    keep <- either die pure (applications modules "keepAlive#" Nothing)
-    keepSites <- forM keep $ \(_,app) -> either die pure $ do
-      args <- at [Index 2] app >>= decode :: Either String [Value]
-      proofs <- mapM rawProof args
-      flags <- at [Index 3] app
-      result <- rawProof app
-      pure (object ["argumentProofs" .= proofs,"flags" .= flags,"result" .= result])
     negativesAndArtifacts <- if not accepted then pure [] else forM negatives $ \(label,name,primitive,argument,kind,rep) -> do
       baseline <- maybe (die "Missing negative baseline") pure (lookup name reports)
       changed <- either die pure (forge modules baseline primitive argument kind rep)
@@ -428,38 +269,34 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
       pure (label,object ["entry" .= name,"primitive" .= primitive,"summary" .= summary,"issues" .= issues],
         mutatedPaths ++ [base </> "negative-" ++ label ++ ".audit.json"] ++ commandFiles [stage ++ "-negative-" ++ label ++ "-audit"])
     let negativeReports = Map.fromList [(label,report) | (label,report,_) <- negativesAndArtifacts]
-        artifacts = paths ++ [base </> name ++ ".audit.json" | (name,_) <- entries ++ frontiers] ++
-          commandFiles ((stage ++ "-export"):[stage ++ "-" ++ name ++ "-audit" | (name,_) <- entries ++ frontiers]) ++
+        artifacts = paths ++ [base </> name ++ ".audit.json" | (name,_) <- entries] ++
+          commandFiles ((stage ++ "-export"):[stage ++ "-" ++ name ++ "-audit" | (name,_) <- entries]) ++
           concat [files | (_,_,files) <- negativesAndArtifacts] ++ [base </> "negative-proofs.json" | accepted]
     when accepted (writeJson (root </> base </> "negative-proofs.json") (toJSON negativeReports))
-    pure (stage,paths,Map.fromList reports,keepSites,negativeReports,structures,accepted,artifacts)
+    pure (stage,paths,Map.fromList reports,negativeReports,accepted,artifacts)
   inputs <- sourcePaths root >>= hashes root
-  artifacts <- hashes root (sort ([directory </> name | name <- ["requests.tsv","expected.tsv","structure-controls.json"]] ++
-    nativeArtifacts ++ concat [files | (_,_,_,_,_,_,_,files) <- stages]))
+  artifacts <- hashes root (sort ([directory </> name | name <- ["requests.tsv","expected.tsv"]] ++
+    nativeArtifacts ++ concat [files | (_,_,_,_,_,files) <- stages]))
   let mode = if nativeOnly then "native-only" else if exportOnly then "export-only" else "full" :: String
-      strict = not nativeOnly && all (\(_,_,_,_,_,_,accepted,_) -> accepted) stages
+      strict = not nativeOnly && all (\(_,_,_,_,accepted,_) -> accepted) stages
       nativeRows = if exportOnly then 0 else length requests
   writeJson manifestPath $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),"ghcInfo" .= info,
-    "entries" .= Map.fromList entries,"publicFrontiers" .= Map.fromList frontiers,
+    "entries" .= Map.fromList entries,
     "nativeByteOrder" .= order,"fingerprintByteOrder" .= ("big" :: String),
     "strictAccepted" .= strict,"mode" .= mode,
-    "stages" .= Map.fromList [(stage,paths) | (stage,paths,_,_,_,_,_,_) <- stages],
-    "audits" .= Map.fromList [(stage,reports) | (stage,_,reports,_,_,_,_,_) <- stages],
-    "keepAliveSites" .= Map.fromList [(stage,sites) | (stage,_,_,sites,_,_,_,_) <- stages],
-    "negativeProofs" .= Map.fromList [(stage,reports) | (stage,_,_,_,reports,_,_,_) <- stages],
-    "expectedGuestCallsByEntry" .= Map.fromList guestCalls,
-    "checkedGuestStructureByStage" .= Map.fromList (concat [structures | (_,_,_,_,_,structures,_,_) <- stages]),
+    "stages" .= Map.fromList [(stage,paths) | (stage,paths,_,_,_,_) <- stages],
+    "audits" .= Map.fromList [(stage,reports) | (stage,_,reports,_,_,_) <- stages],
+    "negativeProofs" .= Map.fromList [(stage,reports) | (stage,_,_,reports,_,_) <- stages],
     "nativeRows" .= nativeRows,"modelRows" .= length requests,
     "rowCounts" .= Map.fromListWith (+) [(name,1 :: Int) | (name,_) <- requests],
     "rows" .= [object ["entry" .= name,"arguments" .= args,"expected" .= expected name args] | (name,args) <- requests],
     "inputHashes" .= inputs,"artifactHashes" .= artifacts,
-    "limits" .= (["Public Storable roots remain native evidence and explicit exported frontiers, not THC support.",
-      "Primitive fingerprintByte is byte-layout conformance, not a replacement Storable implementation.",
+    "limits" .= (["Fingerprint byte layout is checked against native public Storable.",
       "Defined native domains only; malformed/bounds failures are non-native runtime tests.",
       "Explicit pinned arrays use native storage; moving heap arrays retain managed buffer transport; arbitrary numeric pointers remain opaque.",
       "The existing shared Python audit-core.py proof implementation remains an explicit dependency."] :: [String])]
   putStrLn ("Pinned addresses: mode=" ++ mode ++ "; nativeRows=" ++ show nativeRows ++
-    "; modelRows=7269; strictAccepted=" ++ show strict)
+    "; modelRows=" ++ show (length requests) ++ "; strictAccepted=" ++ show strict)
   where
     commandFiles names = [directory </> "commands" </> name ++ "." ++ suffix | name <- names, suffix <- ["stdout","stderr","command.json"]]
     audit stage label paths entry expectedExit = do

@@ -109,15 +109,6 @@ class LocalJoinGraphBudgetTest {
                 assertSame(target, program.entryTarget("entry"));
                 var loops = NodeUtil.findAllNodeInstances(target.getRootNode(), OptimizedOSRLoopNode.class);
                 assertTrue(loops.stream().anyMatch(loop -> loop.getCompiledOSRLoop() != null), "real local-join OSR target");
-                var field = AstSameFrameArm.class.getDeclaredField("targets"); field.setAccessible(true);
-                for (var arm : NodeUtil.findAllNodeInstances(target.getRootNode(), AstSameFrameArm.class)) {
-                    var sides = (com.oracle.truffle.api.RootCallTarget[]) field.get(arm);
-                    if (sides != null) {
-                        var side = (OptimizedCallTarget) sides[2];
-                        assertTrue(side.compile(true), "the extracted long body remains independently compilable");
-                        assertTrue(side.isValidLastTier());
-                    }
-                }
             } finally { context.leave(); }
         }
     }

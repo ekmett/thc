@@ -15,62 +15,24 @@
 module Simd128ArrayAudit where
 import GHC.Exts
 
-{-# NOINLINE initialize #-}
+{-# OPAQUE initialize #-}
 initialize :: MutableByteArray# s -> Int# -> State# s -> State# s
-initialize bytes seed s0 =
-  case writeWord8Array# bytes 0# (wordToWord8# (int2Word# (seed +# 0#))) s0 of { s1 ->
-  case writeWord8Array# bytes 1# (wordToWord8# (int2Word# (seed +# 37#))) s1 of { s2 ->
-  case writeWord8Array# bytes 2# (wordToWord8# (int2Word# (seed +# 74#))) s2 of { s3 ->
-  case writeWord8Array# bytes 3# (wordToWord8# (int2Word# (seed +# 111#))) s3 of { s4 ->
-  case writeWord8Array# bytes 4# (wordToWord8# (int2Word# (seed +# 148#))) s4 of { s5 ->
-  case writeWord8Array# bytes 5# (wordToWord8# (int2Word# (seed +# 185#))) s5 of { s6 ->
-  case writeWord8Array# bytes 6# (wordToWord8# (int2Word# (seed +# 222#))) s6 of { s7 ->
-  case writeWord8Array# bytes 7# (wordToWord8# (int2Word# (seed +# 259#))) s7 of { s8 ->
-  case writeWord8Array# bytes 8# (wordToWord8# (int2Word# (seed +# 296#))) s8 of { s9 ->
-  case writeWord8Array# bytes 9# (wordToWord8# (int2Word# (seed +# 333#))) s9 of { s10 ->
-  case writeWord8Array# bytes 10# (wordToWord8# (int2Word# (seed +# 370#))) s10 of { s11 ->
-  case writeWord8Array# bytes 11# (wordToWord8# (int2Word# (seed +# 407#))) s11 of { s12 ->
-  case writeWord8Array# bytes 12# (wordToWord8# (int2Word# (seed +# 444#))) s12 of { s13 ->
-  case writeWord8Array# bytes 13# (wordToWord8# (int2Word# (seed +# 481#))) s13 of { s14 ->
-  case writeWord8Array# bytes 14# (wordToWord8# (int2Word# (seed +# 518#))) s14 of { s15 ->
-  case writeWord8Array# bytes 15# (wordToWord8# (int2Word# (seed +# 555#))) s15 of { s16 ->
-  case writeWord8Array# bytes 16# (wordToWord8# (int2Word# (seed +# 592#))) s16 of { s17 ->
-  case writeWord8Array# bytes 17# (wordToWord8# (int2Word# (seed +# 629#))) s17 of { s18 ->
-  case writeWord8Array# bytes 18# (wordToWord8# (int2Word# (seed +# 666#))) s18 of { s19 ->
-  case writeWord8Array# bytes 19# (wordToWord8# (int2Word# (seed +# 703#))) s19 of { s20 ->
-  case writeWord8Array# bytes 20# (wordToWord8# (int2Word# (seed +# 740#))) s20 of { s21 ->
-  case writeWord8Array# bytes 21# (wordToWord8# (int2Word# (seed +# 777#))) s21 of { s22 ->
-  case writeWord8Array# bytes 22# (wordToWord8# (int2Word# (seed +# 814#))) s22 of { s23 ->
-  case writeWord8Array# bytes 23# (wordToWord8# (int2Word# (seed +# 851#))) s23 of { s24 ->
-  case writeWord8Array# bytes 24# (wordToWord8# (int2Word# (seed +# 888#))) s24 of { s25 ->
-  case writeWord8Array# bytes 25# (wordToWord8# (int2Word# (seed +# 925#))) s25 of { s26 ->
-  case writeWord8Array# bytes 26# (wordToWord8# (int2Word# (seed +# 962#))) s26 of { s27 ->
-  case writeWord8Array# bytes 27# (wordToWord8# (int2Word# (seed +# 999#))) s27 of { s28 ->
-  case writeWord8Array# bytes 28# (wordToWord8# (int2Word# (seed +# 1036#))) s28 of { s29 ->
-  case writeWord8Array# bytes 29# (wordToWord8# (int2Word# (seed +# 1073#))) s29 of { s30 ->
-  case writeWord8Array# bytes 30# (wordToWord8# (int2Word# (seed +# 1110#))) s30 of { s31 ->
-  case writeWord8Array# bytes 31# (wordToWord8# (int2Word# (seed +# 1147#))) s31 of { s32 ->
-  case writeWord8Array# bytes 32# (wordToWord8# (int2Word# (seed +# 1184#))) s32 of { s33 ->
-  case writeWord8Array# bytes 33# (wordToWord8# (int2Word# (seed +# 1221#))) s33 of { s34 ->
-  case writeWord8Array# bytes 34# (wordToWord8# (int2Word# (seed +# 1258#))) s34 of { s35 ->
-  case writeWord8Array# bytes 35# (wordToWord8# (int2Word# (seed +# 1295#))) s35 of { s36 ->
-  case writeWord8Array# bytes 36# (wordToWord8# (int2Word# (seed +# 1332#))) s36 of { s37 ->
-  case writeWord8Array# bytes 37# (wordToWord8# (int2Word# (seed +# 1369#))) s37 of { s38 ->
-  case writeWord8Array# bytes 38# (wordToWord8# (int2Word# (seed +# 1406#))) s38 of { s39 ->
-  case writeWord8Array# bytes 39# (wordToWord8# (int2Word# (seed +# 1443#))) s39 of { s40 ->
-  case writeWord8Array# bytes 40# (wordToWord8# (int2Word# (seed +# 1480#))) s40 of { s41 ->
-  case writeWord8Array# bytes 41# (wordToWord8# (int2Word# (seed +# 1517#))) s41 of { s42 ->
-  case writeWord8Array# bytes 42# (wordToWord8# (int2Word# (seed +# 1554#))) s42 of { s43 ->
-  case writeWord8Array# bytes 43# (wordToWord8# (int2Word# (seed +# 1591#))) s43 of { s44 ->
-  case writeWord8Array# bytes 44# (wordToWord8# (int2Word# (seed +# 1628#))) s44 of { s45 ->
-  case writeWord8Array# bytes 45# (wordToWord8# (int2Word# (seed +# 1665#))) s45 of { s46 ->
-  case writeWord8Array# bytes 46# (wordToWord8# (int2Word# (seed +# 1702#))) s46 of { s47 ->
-  case writeWord8Array# bytes 47# (wordToWord8# (int2Word# (seed +# 1739#))) s47 of { s48 ->
-  s48 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } }
+initialize bytes seed = go 0#
+  where
+    go index state = case index ==# 48# of
+      1# -> state
+      _ -> case writeWord8Array# bytes index
+                  (wordToWord8# (int2Word# (seed +# index *# 37#))) state of
+        next -> go (index +# 1#) next
 
-{-# NOINLINE checksum #-}
+{-# OPAQUE checksum #-}
 checksum :: ByteArray# -> Int#
-checksum bytes = (word2Int# (word8ToWord# (indexWord8Array# bytes 0#)) *# 1#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 1#)) *# 3#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 2#)) *# 5#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 3#)) *# 7#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 4#)) *# 9#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 5#)) *# 11#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 6#)) *# 13#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 7#)) *# 15#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 8#)) *# 17#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 9#)) *# 19#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 10#)) *# 21#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 11#)) *# 23#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 12#)) *# 25#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 13#)) *# 27#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 14#)) *# 29#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 15#)) *# 31#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 16#)) *# 33#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 17#)) *# 35#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 18#)) *# 37#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 19#)) *# 39#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 20#)) *# 41#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 21#)) *# 43#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 22#)) *# 45#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 23#)) *# 47#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 24#)) *# 49#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 25#)) *# 51#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 26#)) *# 53#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 27#)) *# 55#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 28#)) *# 57#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 29#)) *# 59#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 30#)) *# 61#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 31#)) *# 63#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 32#)) *# 65#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 33#)) *# 67#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 34#)) *# 69#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 35#)) *# 71#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 36#)) *# 73#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 37#)) *# 75#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 38#)) *# 77#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 39#)) *# 79#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 40#)) *# 81#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 41#)) *# 83#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 42#)) *# 85#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 43#)) *# 87#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 44#)) *# 89#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 45#)) *# 91#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 46#)) *# 93#) +# (word2Int# (word8ToWord# (indexWord8Array# bytes 47#)) *# 95#)
+checksum bytes = go 0# 0#
+  where
+    go index total = case index ==# 48# of
+      1# -> total
+      _ -> go (index +# 1#)
+        (total +# word2Int# (word8ToWord# (indexWord8Array# bytes index)) *# (2# *# index +# 1#))
 
 {-# NOINLINE int8X16IndexPacked #-}
 int8X16IndexPacked :: Int# -> Int# -> Int#

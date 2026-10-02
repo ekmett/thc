@@ -16,6 +16,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs(OS.LINUX)
@@ -76,7 +77,7 @@ class OriginalTcgetattrTest {
                         class Exercise { void run(boolean compiled) throws Exception {
                             for (int fill : new int[]{0,90,165,255}) for (long descriptor : new long[]{fd,regular,-1L}) {
                                 var nativeImage = descriptor == fd ? oracle.observe(fill) : null; var bytes = image(fill); assertEquals(-1L,io.close(-1)); long sticky = io.errno(); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                                var result = Calls.target(entry,new Object[]{0L,descriptor,ManagedAddress.fromByteArray(bytes).plus(8)}); if (compiled) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before);
+                                var result = callScalarTestTarget(entry,new Object[]{0L,descriptor,ManagedAddress.fromByteArray(bytes).plus(8)}); if (compiled) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before);
                                 if (nativeImage != null) { assertEquals(0L,result); assertEquals(List.of(0L,0L),nativeImage.subList(0,2)); assertArrayEquals(bytes(nativeImage.subList(2,nativeImage.size())),bytes); assertEquals(sticky,io.errno()); }
                                 else { assertEquals(-1L,result); assertEquals(descriptor == regular ? abi.notTerminal() : abi.error(4),io.errno()); assertArrayEquals(image(fill),bytes); }
                                 assertEquals(0,language.getHandoffState().get().getArguments().getDepth()); assertEquals(0,language.getHandoffState().get().getResults().getDepth());
@@ -95,10 +96,10 @@ class OriginalTcgetattrTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var target = load(language,backend,rawModule(original,source)).entryTarget("entry"); var io = Language.currentState().getStdio(); var bytes = image(90); var valid = ManagedAddress.fromByteArray(bytes).plus(8);
-                assertEquals(-1L,io.close(-1)); long sticky = io.errno(); assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,-1L,valid,9L}));
-                for (long bad : new long[]{Long.MIN_VALUE,2147483648L}) assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,bad,valid,thc.runtime.Unit.INSTANCE}));
+                assertEquals(-1L,io.close(-1)); long sticky = io.errno(); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,-1,valid,9L}));
+                for (long bad : new long[]{Long.MIN_VALUE,2147483648L}) assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,bad,valid,thc.runtime.Unit.INSTANCE}));
                 var pointerCell = ManagedAddress.fromAllocation(PinnedMemory.allocate(size(),8)); pointerCell.writeAddressElementIndex(0,valid);
-                for (var bad : List.of(ManagedAddress.nullAddress(),valid.plus(9),pointerCell,ManagedAddress.fromByteArray(new byte[size() - 1]),ManagedAddress.fromHex("00".repeat(size())))) assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,-1L,bad,thc.runtime.Unit.INSTANCE}));
+                for (var bad : List.of(ManagedAddress.nullAddress(),valid.plus(9),pointerCell,ManagedAddress.fromByteArray(new byte[size() - 1]),ManagedAddress.fromHex("00".repeat(size())))) assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,-1,bad,thc.runtime.Unit.INSTANCE}));
                 assertArrayEquals(image(90),bytes); assertEquals(sticky,io.errno()); assertSame(valid,pointerCell.readAddressElementIndex(0));
                 for (int i = 0; i <= 2; i++) { int index = i; assertThrows(RuntimeFault.class,() -> load(language,backend,rawModule(original,source,index))); }
                 for (var edit : List.of(list("convention","ccall"),list("safety","safe"),list("arity",2L))) { var changed = (List<Object>) Json.parse(Json.stringify(original)); ((Map<String,Object>) ((Map<?,?>) changed.get(6)).get("foreignCall")).put((String) edit.get(0),edit.get(1)); assertThrows(RuntimeFault.class,() -> validate(changed)); }

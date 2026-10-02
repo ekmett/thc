@@ -32,6 +32,8 @@ entry "capturedCase" = capturedCase
 entry "thunkCase" = thunkCase
 entry "chainCase" = chainCase
 entry "loopCase" = loopCase
+entry "signedLaneTupleCase" = signedLaneTupleCase
+entry "unsignedLaneTupleCase" = unsignedLaneTupleCase
 entry _ = error "Unknown SIMD call entry"
 
 emit :: String -> Int -> IO ()

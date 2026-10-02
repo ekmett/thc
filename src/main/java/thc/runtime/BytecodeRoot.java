@@ -1868,7 +1868,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             }
             long result;
             if (operation.getWaitStatus()) result = CoreOriginalStdio.waitStatus(node, operation, fd);
-            else if (operation.getSigset()) result = SigsetImage.execute(operation, address, fd, CoreOriginalStdio.current(node));
             else if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
             else if (operation == OriginalStdioOp.TCGETATTR) result = CoreOriginalStdio.current(node).tcgetattr(fd, address);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
@@ -2353,29 +2352,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
-    // SIGPROCMASK shares the primitive handle/two-address prefix. Its remaining
-    // address lanes are constant nulls, avoiding another DSL instruction family.
     public static final class OriginalIconv {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, OriginalStdioOp operation,
                 long handle, ManagedAddress input, ManagedAddress inputCount,
                 ManagedAddress output, ManagedAddress outputCount, Object state, @Bind("$node") Node node) {
             TupleResults.requireVoidCarrier(state);
-            long result = operation == OriginalStdioOp.SIGPROCMASK
-                ? ManagedSignalMask.execute(node, handle, input, inputCount)
-                : CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
+            long result = CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
             if (operation.getNarrowResult() != null) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
             else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalStrerror {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                long error, ManagedAddress output, long length, Object state, @Bind("$node") Node node) {
-            TupleResults.requireVoidCarrier(state);
-            long result = CoreOriginalStdio.strerror(node).call(error, output, length);
-            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 

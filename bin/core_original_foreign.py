@@ -98,12 +98,6 @@ TERMIOS_OPERATIONS = {
        for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow', 'sigttou', 'sig_block', 'sig_setmask')},
 }
 TERMIOS_SYMBOLS = frozenset(TERMIOS_OPERATIONS)
-SIGSET_OPERATIONS = {
-    'ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset':
-        (('AddrRep', None), (None, 'Int32Rep')),
-    'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset':
-        (('AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
-}
 SEEK_CONSTANTS = frozenset((
     'ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET',
     'ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR',
@@ -194,8 +188,6 @@ OPERATIONS = {
     'stg_sig_install': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
     TCSETATTR_SYMBOL:
         ('capi', 'unsafe', ('Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
-    'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask':
-        ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     TCGETATTR_SYMBOL:
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
 
@@ -214,8 +206,6 @@ OPERATIONS = {
     'putenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     '__hsbase_unsetenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     '__hscore_environ': ('ccall', 'unsafe', (None,), (None, 'AddrRep')),
-    **{symbol: ('capi', 'unsafe', arguments, output)
-       for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     # These observe THC-owned guest lifetimes; no native TSO pointer ABI is admitted.
     'rts_getThreadId': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None, 'Word64Rep')),

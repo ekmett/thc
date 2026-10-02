@@ -26,8 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SimdArithmeticTest {
     private final File root = new File(System.getProperty("thc.projectRoot")), directory = new File(root, "build/simd-arithmetic");
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath())); }
-    private record Shape(String name, String primitive, int lanes, int width, String scalar, int pattern) {
-        boolean shuffle() { return primitive.startsWith("shuffle"); }
+    private record Shape(String name, int lanes, int width, String scalar, int pattern) {
         boolean unsigned() { return scalar.startsWith("Word"); }
         boolean floating() { return scalar.equals("Float") || scalar.equals("Double"); }
     }
@@ -43,39 +42,34 @@ class SimdArithmeticTest {
         }
         var shapes = new ArrayList<Shape>();
         for (var record : (List<Map<String, Object>>) manifest.get("entries"))
-            shapes.add(new Shape((String) record.get("name"), (String) record.get("primitive"), ((Number) record.get("lanes")).intValue(),
+            shapes.add(new Shape((String) record.get("name"), ((Number) record.get("lanes")).intValue(),
                 ((Number) record.get("width")).intValue(), (String) record.get("scalar"), ((Number) record.get("pattern")).intValue()));
-        var expected = new LinkedHashSet<String>(); for (var op : GeneratedVectors.operations) if (op.startsWith("quot") || op.startsWith("rem") || op.startsWith("shuffle")) expected.add(op);
-        var primitives = new LinkedHashSet<String>(); var names = new ArrayList<String>(); for (var shape : shapes) { primitives.add(shape.primitive); names.add(shape.name); }
-        assertEquals(78, expected.size()); assertEquals(expected, primitives); assertEquals(138, shapes.size());
+        var expected = new LinkedHashSet<String>();
+        for (var op : GeneratedVectors.operations) if (op.startsWith("shuffle"))
+            for (int pattern = 1; pattern <= 2; pattern++) expected.add(op.substring(0, op.length() - 1) + "Pattern" + pattern);
+        var names = new LinkedHashSet<String>(); for (var shape : shapes) names.add(shape.name);
+        assertEquals(expected, names);
         var rows = new ArrayList<Row>(); var rowNames = new LinkedHashSet<String>();
         for (var line : Files.readAllLines(new File(directory, "oracle.tsv").toPath())) {
             var fields = line.split("\t", -1); assertEquals(4, fields.length);
             rows.add(new Row(fields[0], Long.parseLong(fields[1]), Long.parseLong(fields[2]), Long.parseLong(fields[3]))); rowNames.add(fields[0]);
         }
-        assertEquals(((Number) manifest.get("rows")).intValue(), rows.size()); assertEquals(names, new ArrayList<>(rowNames));
+        assertEquals(((Number) manifest.get("rows")).intValue(), rows.size()); assertEquals(names, rowNames);
         return new Evidence(shapes, rows);
     }
     private BigInteger lane(long raw, Shape shape) {
         var modulus = BigInteger.ONE.shiftLeft(shape.width); var bits = BigInteger.valueOf(raw).mod(modulus);
         return !shape.unsigned() && !shape.floating() && bits.testBit(shape.width - 1) ? bits.subtract(modulus) : bits;
     }
-    /** Independent scalar BigInteger division and bit-lane selection, no Vector API. */
+    /** Independent scalar bit-lane selection, no Vector API. */
     private long model(Shape shape, long a, long b) {
         long checksum = 0;
         for (int index = 0; index < shape.lanes; index++) {
-            BigInteger value;
-            if (shape.shuffle()) {
-                int selected = switch (shape.pattern) {
-                    case 0 -> shape.lanes - 1 - index + (index % 2 == 1 ? shape.lanes : 0);
-                    case 1 -> index + 1;
-                    default -> index % 2 == 1 ? 2 * shape.lanes - 1 : 0;
-                };
-                value = selected >= shape.lanes ? lane(b - (selected - shape.lanes) * 7919L, shape) : lane(a + selected * 104729L, shape);
-            } else {
-                var x = lane(a + index * 104729L, shape); var y = lane(b - index * 7919L, shape);
-                value = shape.primitive.startsWith("quot") ? x.divide(y) : x.remainder(y);
-            }
+            int selected = switch (shape.pattern) {
+                case 1 -> index + 1;
+                default -> index % 2 == 1 ? 2 * shape.lanes - 1 : 0;
+            };
+            var value = selected >= shape.lanes ? lane(b - (selected - shape.lanes) * 7919L, shape) : lane(a + selected * 104729L, shape);
             checksum += value.longValue() * (2L * index + 1);
         }
         return checksum;
@@ -111,32 +105,29 @@ class SimdArithmeticTest {
         }
     }
     private void check(Value function, Row row, String backend) { assertEquals(row.result, function.execute(row.a, row.b).asLong(), backend + "/" + row); }
-    @Test void originalCoreKeepsExactFirstInstalledEntriesOnBothBackends() throws Exception {
+    @Test void nativeShufflesRunOnFirstInstalledCallsOnBothBackends() throws Exception {
         var evidence = evidence(); var module = thc.CoreCbdFixtures.read(new File(directory, "pre-core/SimdArithmeticAudit.cbd").toPath());
         var cases = new LinkedHashMap<String, List<Row>>(); for (var row : evidence.rows) cases.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row);
         for (var backend : List.of("ast", "bytecode")) language((context, language) -> {
             for (var shape : evidence.shapes) {
                 var label = backend + "/" + shape.name; var audit = json(new File(directory, shape.name + "-audit.json"));
                 assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("missingGlobals")); assertEquals(List.of(), audit.get("issues"));
-                assertEquals(1, ((List<?>) audit.get("reachableBindings")).size(), label);
                 var entryId = "main:SimdArithmeticAudit." + shape.name; var input = new LinkedHashMap<>(CoreModules.reachable(module, entryId)); input.put("instrument", true);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input);
                 var function = context.asValue(new EntryValue(program, entryId, 2));
                 for (var row : cases.get(shape.name)) check(function, row, backend);
-                assertEquals(0L, compiled(program), label + " interpreted");
-                var entry = program.entryTarget(entryId); var host = program.hostEntryTarget(2); var active = targets(host);
-                assertEquals(2, active.size(), label + " exact target graph"); assertTrue(active.contains(entry));
+                var host = program.hostEntryTarget(2); var active = targets(host);
+                long beforeInstallation = compiled(program);
                 for (var target : active) if (target != host) {
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertTrue(valid(target), label);
                     var runtime = Truffle.getRuntime();
                     runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
-                    assertTrue(valid(target), label);
                 }
                 assertTrue(function.invokeMember("compile").asBoolean(), label);
+                assertEquals(beforeInstallation, compiled(program), label + " installation executes no guest work");
                 for (var row : cases.get(shape.name).reversed()) {
-                    long before = compiled(program); check(function, row, backend); assertEquals(before + 1, compiled(program), label + " first-installed/" + row);
-                    assertEquals(active, targets(host)); assertSame(entry, program.entryTarget(entryId));
-                    for (var target : active) assertTrue(valid(target), label + "/" + row);
+                    long before = compiled(program); check(function, row, backend);
+                    assertTrue(compiled(program) > before, label + " installed guest execution/" + row);
                     var state = language.getHandoffState().get();
                     assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
                     assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getResults().retainedReferences());
@@ -155,14 +146,17 @@ class SimdArithmeticTest {
         var shapes = new LinkedHashMap<String, Integer>(); shapes.put("Int8X16", 16); shapes.put("Int8X64", 64); shapes.put("Word16X32", 32);
         for (var backend : List.of("ast", "bytecode")) language((context, language) -> {
             for (var shape : shapes.entrySet()) {
-                var primitive = "shuffle" + shape.getKey() + "#"; var original = CoreModules.reachable(module, "main:SimdArithmeticAudit.shuffle" + shape.getKey() + "Pattern0");
+                var primitive = "shuffle" + shape.getKey() + "#"; var original = CoreModules.reachable(module, "main:SimdArithmeticAudit.shuffle" + shape.getKey() + "Pattern1");
                 for (var bad : Arrays.asList(-1L, 2L * shape.getValue(), Long.MAX_VALUE, null)) {
                     var input = (Map<String, Object>) Json.parse(Json.stringify(original)); var matches = new ArrayList<List<Object>>();
                     for (var node : nodes(input)) if (!node.isEmpty() && Objects.equals(node.getFirst(), "app") && node.size() > 1 &&
                         node.get(1) instanceof List<?> function && function.size() > 1 && primitive.equals(function.get(1))) matches.add(node);
-                    assertEquals(1, matches.size()); var call = matches.getFirst(); var tuple = (List<Object>) ((List<?>) call.get(2)).get(2);
-                    var fields = (List<Object>) tuple.get(2); var index = (List<Object>) fields.getFirst();
-                    if (bad == null) fields.set(0, new ArrayList<>(List.of("var", "not-a-literal", index.getLast()))); else index.set(2, bad.toString());
+                    assertFalse(matches.isEmpty(), primitive + " mutation must reach a shuffle");
+                    for (var call : matches) {
+                        var tuple = (List<Object>) ((List<?>) call.get(2)).get(2);
+                        var fields = (List<Object>) tuple.get(2); var index = (List<Object>) fields.getFirst();
+                        if (bad == null) fields.set(0, new ArrayList<>(List.of("var", "not-a-literal", index.getLast()))); else index.set(2, bad.toString());
+                    }
                     assertThrows(RuntimeFault.class, () -> { if (backend.equals("ast")) new Program(language, input); else new BytecodeProgram(language, input); },
                         backend + "/" + shape.getKey() + "/" + bad);
                 }

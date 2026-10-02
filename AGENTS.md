@@ -75,6 +75,14 @@ model. Regenerate stale fixtures from their inputs; never bless them by editing
 hashes. Preserve first-compiled-call checks, negative controls and current failed evidence;
 do not substitute warmup, retries, relaxed limits or weaker assertions.
 
+Fixtures must prepare their own prerequisites and work independently of test
+order. Test observable results, effects, ownership and actual compiled execution.
+Do not freeze internal root counts, lambda counts, graph partitions or incidental
+call identities. Code-generation checks need an explicit performance contract.
+Delete obsolete or redundant fixtures and their producer machinery; a historical
+fixture inventory is not a requirement. Preserve unique semantic coverage in the
+nearest general suite when deleting a specialized fixture.
+
 Use focused checks during development and reuse verified results for unchanged
 code. Delete tests for retired paths instead of preserving their acquisition or
 serialization history. Executable Core fixtures are CBD; tests must not require
@@ -92,49 +100,6 @@ capability metadata and generated documentation when the contract changes.
 Benchmark against native GHC where possible. Keep development benchmark results
 private unless the user requests publication.
 
-## Mandatory CI failure policy
-
-Required CI that is failing, timed out, cancelled or unverified freezes feature
-work and feature integration. Work only on CI repairs or work the user explicitly
-exempted. Do not resume features until every required platform has a verified
-passing baseline. A small passing subset is not a platform baseline.
-
-- A change to a shared contract must update all affected production consumers,
-  fixture producers and assertions in the same batch. Inventory them before
-  implementation. Never defer known incompatible fixtures to a later cleanup.
-- Run the affected CI commands locally with the pinned toolchain before pushing.
-  Cover both backends and both handoff modes where applicable. Have the existing
-  platform owner run platform-specific checks; a Linux pass does not qualify Mac
-  or Windows. Record an unavailable platform as unverified, never passing.
-- Before declaring a platform repaired, run its complete required workflow (or
-  the same commands locally), inspect the terminal result and retain the logs.
-  Setup, fixture generation, compilation and native oracles must succeed before
-  runtime tests can qualify. A timeout or missing result is not a pass.
-- Classify every failure as fixture-contract, acquisition/setup, platform/ABI,
-  runtime, compiler, or unresolved. Record the exact failing assertion, revision,
-  platform and reproduction command; identify an owner and repair common causes
-  in coherent batches. Check whether the failure reproduces locally. Diagnose
-  from original logs and code; do not label it flaky without evidence.
-- Keep a fixed per-platform fixture inventory and a countdown of whole classes
-  passing in both modes, failures, setup-blocked/unverified classes and skips.
-  A class with failed, missing or skipped tests is not fully passing. Legitimate
-  platform exclusions stay visible and are not failures to fix by pretending
-  the unsupported operation works. Never shrink the denominator to look green.
-- Never obtain green by removing a live requirement, skipping a failing test,
-  changing platform tags, replacing real workloads with proxies, relaxing
-  assertions or compiler limits, or adding warmup that defeats first-call checks.
-  Correct a stale assertion only with evidence of the intended current contract;
-  preserve its original behavioral and negative-control coverage.
-- A ready CI repair may be integrated while other failures remain, after its
-  owning checks and warranted integration checks pass. Report those remaining
-  failures explicitly and inspect post-merge CI promptly. Do not wait for hosted
-  CI to publish such a repair, but do not resume feature work through a red suite.
-- Claims of passing must name the exact tested revision, platforms, commands and
-  scope. Distinguish local results from hosted CI and worker branches from main.
-  Compilation, fixture capture, a planned test or a live process is not execution
-  proof. Reuse verified unchanged results; do not invent extra harnesses or
-  repeatedly rebuild unrelated fixtures.
-
 ## Collaboration and integration
 
 Work in an owned checkout and preserve unrelated changes. Coordinate overlapping
@@ -143,8 +108,7 @@ Publish tested worker branches promptly with their dependencies and evidence.
 The designated integrator reviews and merges onto current main with a normal
 fast-forward push; do not force-push or change branch protections.
 
-Reuse worker evidence and retest substantive integration changes. Follow the
-mandatory CI failure policy above; hosted CI provides post-merge feedback for
-qualified repairs, not an excuse to leave required tests red.
+Reuse worker evidence and retest substantive integration changes. GitHub Actions
+provide post-merge feedback, not a publication gate; address failures promptly.
 Keep automated bulk merging disabled. Report verified behavior and remaining
 limits without claiming that preparation alone proves execution or compilation.

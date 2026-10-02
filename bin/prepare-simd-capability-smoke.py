@@ -59,6 +59,12 @@ def inputs(generator):
             width = family['bits'] // family['lanes']
             pairs = ((7, -3), (-1, 2), ((1 << (width - 1)) - 1, 2),
                      (-(1 << (width - 1)), -1), ((1 << width) - 1, 1))
+            if operation in ('quot', 'rem'):
+                # Defined signed-minimum division and two negative operands.
+                pairs += ((-(1 << (width - 1)), 7), (-17, -7))
+            if operation == 'minus':
+                # Signed subtraction crosses both limits; unsigned zero underflows.
+                pairs += ((-(1 << (width - 1)), 1), ((1 << (width - 1)) - 1, -1), (0, 1))
             if operation == 'insert':
                 pairs = ((7, -3), (-1, 2), (7, (1 << (width - 1)) - 1),
                          (7, -(1 << (width - 1))), (7, (1 << width) - 1))
@@ -87,7 +93,8 @@ def main():
     if subprocess.check_output([ghc, '--numeric-version'], text=True).strip() != '9.14.1':
         raise RuntimeError('Local SIMD capability smoke requires GHC 9.14.1')
     generator = module(ROOT / 'bin/generate-simd-families.py', 'simd_generator')
-    contracts = generator.contracts(generator.families())
+    contracts = generator.contracts([dict(family, operations=generator.smoke_operations(family))
+                                     for family in generator.families()])
     capabilities = json.loads((ROOT / 'bin/core-capabilities.json').read_text())
     if {name: capabilities['primitives'].get(name) for name in contracts} != {
             name: contract['arity'] for name, contract in contracts.items()}:

@@ -448,8 +448,19 @@ def fixture_sources(fs):
             'fixtures/GeneratedSimdFamiliesNative.hs': '\n'.join(native)+'\n'}
 
 
+def smoke_operations(family):
+    # The 128-bit integer foundations are handwritten, but share this oracle.
+    operations = list(family['operations'])
+    if (not family['newCarrier'] and family['laneRep'].startswith(('Int', 'Word'))
+            and family['bits'] // family['lanes'] <= 32):
+        operations += ['broadcast', 'plus', 'minus', 'times']
+        if family['laneRep'].startswith('Int'):
+            operations.append('negate')
+    return operations
+
+
 def smoke_entries(fs):
-    return [(f, op) for f in fs for op in f['operations'] if op not in ('pack', 'unpack')]
+    return [(f, op) for f in fs for op in smoke_operations(f) if op not in ('pack', 'unpack')]
 
 
 def smoke_groups(fs):
@@ -460,7 +471,7 @@ def smoke_groups(fs):
     for family in fs:
         indices = []
         standalone = []
-        for operation in family['operations']:
+        for operation in smoke_operations(family):
             if operation in ('pack', 'unpack'):
                 continue
             (legacy if operation == 'insert' and not family['newCarrier'] else

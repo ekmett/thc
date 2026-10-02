@@ -206,8 +206,6 @@ jobs:
           python3 bin/test-simd-families.py
           python3 bin/test-floatx4-model.py
           python3 bin/test-doublex2-model.py
-          python3 bin/test-word8x16-model.py
-          python3 bin/test-int32x4-multiply-model.py
           python3 bin/test-core-vector-memory.py
           python3 bin/test-core-word32-vector-memory.py
           python3 bin/test-core-float-vector-memory.py
@@ -401,8 +399,6 @@ jobs:
             build/original-termios/
             build/original-tcsetattr/
             build/original-tcgetattr/
-            build/original-sigprocmask/
-            build/original-sigset/
             build/native-addresses/manifest.json
             build/native-addresses/oracle.json
             build/native-addresses/logs/
@@ -494,12 +490,6 @@ jobs:
             build/simd-floatx4-fma/
             build/simd-wide-floating-fma/
             build/simd-doublex2/
-            build/simd-int16x8/
-            build/simd-int8x16/
-            build/simd-word8x16/
-            build/simd-word16x8/
-            build/simd-word32x4/
-            build/simd-int32x4-multiply/
             build/simd-int32x4-bytearray/
             build/simd-word32x4-bytearray/
             build/simd-floatx4-bytearray/

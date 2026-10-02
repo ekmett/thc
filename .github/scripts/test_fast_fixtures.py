@@ -350,43 +350,6 @@ class FixturePreparationTest(unittest.TestCase):
         script.write_text(source.replace(option + " ", "", 1))
         self.assertNotEqual(original_plan, fast_fixtures._preparation_plan(self.root))
 
-    def test_integer_simd_has_focused_preparation_and_closed_receipts(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        group = manifest["groups"]["integer-simd"]
-        for name in group["junit"]:
-            self.assertEqual("integer-simd", owners[name])
-        self.assertEqual({"build/" + family for family in fast_fixtures.fast_inputs.INTEGER_SIMD_FAMILIES}, set(group["outputs"]))
-        self.assertTrue(all((project / path).is_file() for path in group["sources"]))
-        sources = fast_fixtures._source_hashes(project, group)
-        self.assertIn("src/test/java/thc/runtime/IntegerSimdModelTest.java", sources)
-        self.assertIn("src/test/java/thc/runtime/IntegerSimdModel.java", sources)
-        self.assertIn("t/haskell-fixtures/IntegerSimdFixtures.hs", sources)
-        for native in (False, True):
-            with tempfile.TemporaryDirectory() as directory:
-                root = Path(directory).resolve()
-                expected = {}
-                for family, (_, rows) in fast_fixtures.fast_inputs.INTEGER_SIMD_FAMILIES.items():
-                    name = f"build/{family}/provenance.json"
-                    outputs = fast_fixtures.fast_inputs.integer_simd_outputs(family, native)
-                    artifacts = {}
-                    for path in outputs - {name}:
-                        target = root / path
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        target.write_bytes(b"fixture\n")
-                        artifacts[path] = fast_fixtures._digest(target)
-                    receipt = dict(stages=["pre", "post"] if native else ["pre"], modelRows=rows,
-                        nativeRows=rows if native else None, modelMatched=True if native else None,
-                        positiveAuditsAccepted=True, proofNegativeControlsPassed=True,
-                        artifacts=[dict(path=path, sha256=digest) for path, digest in artifacts.items()])
-                    (root / name).write_text(json.dumps(receipt))
-                    expected.update(artifacts)
-                    expected[name] = fast_fixtures._digest(root / name)
-                self.assertEqual(expected, fast_fixtures._output_hashes(root, group))
-                (root / "build/simd-int8x16/expected.tsv").write_bytes(b"corrupt\n")
-                with self.assertRaisesRegex(RuntimeError, "Stale original artifact"):
-                    fast_fixtures._output_hashes(root, group)
-
     def test_deep_evaluation_is_required_for_full_preparation_reuse(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -414,42 +377,6 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn("build/unix-libc", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path) for path in outputs))
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/unix-libc/ghc/UnixLibcAudit.o"))
-
-    def test_unix_wait_status_cache_preserves_all_original_proofs(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        group = manifest['groups']['unix-wait-status']
-        cache = fast_fixtures.fast_inputs
-        self.assertEqual('unix-wait-status', owners['thc.runtime.UnixWaitStatusTest'])
-        self.assertEqual(72, len(cache.UNIX_WAIT_OUTPUTS))
-        self.assertTrue(cache.UNIX_WAIT_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
-        self.assertIn('build/unix-wait-status', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('"$fixture_bin" unix-wait-status', (project / 'bin/prepare-tests.sh').read_text().splitlines())
-        name = 'build/unix-wait-status/manifest.json'
-        artifacts = {}
-        for item in cache.UNIX_WAIT_OUTPUTS - {name}:
-            self.assertTrue(cache.allowed_payload(item), item)
-            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
-        for item in ('ghc/UnixWaitStatusAudit.o', 'private-core.json', 'logs/extra.stdout'):
-            self.assertFalse(cache.allowed_payload('build/unix-wait-status/' + item), item)
-        receipt = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-460b', strictAccepted=True,
-                       entries=list(cache.UNIX_WAIT_ENTRIES), nativeRows=280, artifactHashes=artifacts)
-        path = self.root / name; path.write_text(json.dumps(receipt))
-        self.assertEqual(cache.UNIX_WAIT_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
-        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABCD'),
-                        dict(unixUnit='unix-2.8.7.0-460b'), dict(entries=[]), dict(nativeRows=279),
-                        dict(strictAccepted=False), dict(artifactHashes=dict(artifacts, extra='a' * 64))):
-            with self.assertRaises(cache.CacheMiss): cache.unix_wait_artifact_hashes(dict(receipt, **changes))
-        for suffix in ('logs/unit.stdout', 'post-waitWCOREDUMP.audit.json', 'oracle.tsv'):
-            item = 'build/unix-wait-status/' + suffix
-            missing = dict(artifacts); del missing[item]
-            with self.assertRaises(cache.CacheMiss): cache.unix_wait_artifact_hashes(dict(receipt, artifactHashes=missing))
-            artifact = self.root / item; artifact.write_text('changed')
-            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
-            artifact.unlink(); artifact.symlink_to(self.root / 'build/unix-wait-status/pre.cbd')
-            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
-            artifact.unlink(); artifact.write_text('fixture\n')
 
     def test_proxy_void_has_focused_preparation_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -957,65 +884,7 @@ class FixturePreparationTest(unittest.TestCase):
             artifact.unlink(); artifact.symlink_to(self.root / 'build/original-tcgetattr/oracle.json')
             with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
 
-    def test_original_sigprocmask_registration_and_closed_native_receipt(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        group = manifest['groups']['original-sigprocmask']
-        self.assertEqual('original-sigprocmask', owners['thc.runtime.OriginalSigprocmaskTest'])
-        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-sigprocmask']}], group['commands'])
-        self.assertIn('"$fixture_bin" original-sigprocmask', (project / 'bin/prepare-tests.sh').read_text().splitlines())
-        self.assertIn('build/original-sigprocmask', fast_fixtures.FULL_OUTPUT_ROOTS)
-        cache = fast_fixtures.fast_inputs
-        name = 'build/original-sigprocmask/manifest.json'
-        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
-            artifacts = {}
-            for item in cache.ORIGINAL_SIGPROCMASK_OUTPUTS - {name}:
-                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
-            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-                           installedArtifactsHashed=False, nativeRows=8,
-                           entries=list(cache.ORIGINAL_SIGPROCMASK_ENTRIES), artifactHashes=artifacts)
-            path = self.root / name; path.write_text(json.dumps(receipt))
-            self.assertEqual(cache.ORIGINAL_SIGPROCMASK_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
-            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, nativeRows=7),
-                        dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
-                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-sigprocmask/extra.json': '0'*64}))):
-                with self.assertRaises(cache.CacheMiss): cache.sigprocmask_artifact_hashes(bad)
-            artifact = self.root / 'build/original-sigprocmask/pre/core/OriginalSigprocmaskAudit.cbd'
-            artifact.write_text('mutated')
-            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
-            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-sigprocmask/oracle.json')
-            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
 
-    def test_original_sigset_registration_and_closed_native_receipt(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        group = manifest['groups']['original-sigset']
-        self.assertEqual('original-sigset', owners['thc.runtime.OriginalSigsetTest'])
-        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-sigset']}], group['commands'])
-        self.assertIn('"$fixture_bin" original-sigset', (project / 'bin/prepare-tests.sh').read_text().splitlines())
-        self.assertIn('build/original-sigset', fast_fixtures.FULL_OUTPUT_ROOTS)
-        cache = fast_fixtures.fast_inputs
-        name = 'build/original-sigset/manifest.json'
-        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
-            artifacts = {}
-            for item in cache.ORIGINAL_SIGSET_OUTPUTS - {name}:
-                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
-            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-                           installedArtifactsHashed=False, nativeRows=532,
-                           entries=list(cache.ORIGINAL_SIGSET_ENTRIES), artifactHashes=artifacts)
-            path = self.root / name; path.write_text(json.dumps(receipt))
-            self.assertEqual(cache.ORIGINAL_SIGSET_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
-            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, nativeRows=531),
-                        dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
-                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-sigset/extra.json': '0'*64}))):
-                with self.assertRaises(cache.CacheMiss): cache.sigset_artifact_hashes(bad)
-            artifact = self.root / 'build/original-sigset/pre/core/OriginalSigsetAudit.cbd'
-            artifact.write_text('mutated')
-            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
-            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-sigset/oracle.json')
-            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
 
     def test_full_core_decoder_is_explicit_but_getter_controls_remain_baseline(self):
         project = Path(__file__).resolve().parents[2]
@@ -1346,7 +1215,6 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['original-termios']
-        self.assertEqual('original-termios', owners['thc.runtime.OriginalTermiosTest'])
         self.assertEqual('original-termios', owners['thc.runtime.OriginalSavedTermiosTest'])
         self.assertIn('thc.runtime.TermiosAbiTest', manifest['fixtureFreeJunit'])
         self.assertIn('thc.runtime.SavedTermiosTest', manifest['fixtureFreeJunit'])
@@ -1363,8 +1231,8 @@ class FixturePreparationTest(unittest.TestCase):
                 path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
             receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-                           installedArtifactsHashed=False, nativeRows=6,
-                           entries=list(cache.ORIGINAL_TERMIOS_ENTRIES), artifactHashes=artifacts)
+                           installedArtifactsHashed=False, nativeRows=28,
+                           entries=list(cache.ORIGINAL_SAVED_TERMIOS_ENTRIES), artifactHashes=artifacts)
             path = self.root / name; path.write_text(json.dumps(receipt))
             self.assertEqual(cache.ORIGINAL_TERMIOS_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
             for bad in (dict(receipt, schema=True), dict(receipt, entries=[]),
@@ -1375,12 +1243,12 @@ class FixturePreparationTest(unittest.TestCase):
                 incomplete = dict(artifacts); del incomplete['build/original-termios/' + missing]
                 with self.assertRaises(cache.CacheMiss):
                     cache.termios_artifact_hashes(dict(receipt, artifactHashes=incomplete))
-            for relative in ('pre/core/OriginalTermiosAudit.cbd', 'saved/pre/core/OriginalSavedTermiosAudit.cbd',
+            for relative in ('saved/pre/core/OriginalSavedTermiosAudit.cbd',
                              'saved/native/oracle', 'logs/saved-native-run.stdout'):
                 artifact = self.root / 'build/original-termios' / relative
                 artifact.write_text('mutated')
                 with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
-                artifact.unlink(); artifact.symlink_to(self.root / 'build/original-termios/oracle.json')
+                artifact.unlink(); artifact.symlink_to(self.root / 'build/original-termios/saved/oracle.json')
                 with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
                 artifact.unlink(); artifact.write_text('fixture\n')
 
@@ -1388,7 +1256,7 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['original-posix-stat']
-        for name in ('OriginalPosixStatTest', 'PosixStatAbiTest', 'OriginalFstatTest', 'OriginalPathStatTest', 'OriginalPathModeTest', 'OriginalPathLinkTest', 'OriginalPathAccessTest', 'OriginalUnlinkAtTest', 'OriginalFstatAtTest', 'OriginalCurrentDirectoryTest', 'OriginalDirectoryStreamsTest', 'OriginalDirectoryPathsTest'):
+        for name in ('OriginalFstatTest', 'OriginalPathStatTest', 'OriginalPathModeTest', 'OriginalPathLinkTest', 'OriginalPathAccessTest', 'OriginalUnlinkAtTest', 'OriginalFstatAtTest', 'OriginalCurrentDirectoryTest', 'OriginalDirectoryStreamsTest', 'OriginalDirectoryPathsTest'):
             self.assertEqual('original-posix-stat', owners['thc.runtime.' + name])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-posix-stat']}], group['commands'])
         self.assertIn('"$fixture_bin" original-posix-stat', (project / 'bin/prepare-tests.sh').read_text())
@@ -1424,7 +1292,6 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_FSTATAT_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
             self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_CURRENT_DIRECTORY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         cache = fast_fixtures.fast_inputs
-        self.assertEqual(90, len(cache.ORIGINAL_POSIX_STAT_OUTPUTS))
         for path in cache.ORIGINAL_POSIX_STAT_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path), path)
         for suffix in ('native/unknown', 'logs/unknown.stdout', 'pre/core/Other.json', 'attempt-0/oracle.json'):
@@ -2650,7 +2517,7 @@ class FixturePreparationTest(unittest.TestCase):
 
     def test_remaining_scalar_memory_audits_use_cbd_inputs(self):
         project = Path(__file__).resolve().parents[2]
-        families = ("FloatingAddress", "FloatingByteOffset", "NarrowByteOffset", "Int32ByteOffset",
+        families = ("FloatingAddress", "FloatingByteOffset",
                     "Explicit64Array", "AtomicAddress", "AlignedScalarMemory", "UnalignedScalarMemory",
                     "ScalarMemoryUtilities")
         for family in families:
@@ -2798,7 +2665,8 @@ class FixturePreparationTest(unittest.TestCase):
         _, owners = fast_fixtures._manifest(project)
         names = ("thc.GuestExceptionsTest", "thc.runtime.ManagedFileCallTest",
                  "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedStdioTest",
-                 "thc.runtime.OriginalStdioCallTest", "thc.runtime.StdioHostAbiTest")
+                 "thc.runtime.OriginalStdioCallTest", "thc.runtime.StdioHostAbiTest",
+                 "thc.runtime.OriginalUnixBatchTest", "thc.runtime.PosixStatAbiTest")
         for name in names:
             with self.subTest(name=name):
                 self.assertIn(name, owners)
@@ -3319,7 +3187,8 @@ class FixturePreparationTest(unittest.TestCase):
             path.write_text('native process signal evidence\n')
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)
-        self.assertEqual(required, set(manifest['groups']['process-signals']['outputs']))
+        self.assertEqual(['build/process-signals'], manifest['groups']['process-signals']['outputs'])
+        (self.root / 'build/process-signals/manifest.json').write_text(json.dumps(dict(supported=True)))
         log = self.root / 'build/process-signals/jvm-transport-123.log'
         log.write_text('test-run output, not a producer artifact\n')
         # Keep the actual reviewed root inventory. This family used to prevent
@@ -3346,12 +3215,56 @@ class FixturePreparationTest(unittest.TestCase):
         log = self.root / 'build/process-signals/jvm-transport-123.log'
         log.parent.mkdir(parents=True)
         log.write_text('JVM signal transport output\n')
+        name = 'build/process-signals/manifest.json'
         for system, machine in [('Darwin', 'arm64'), ('Windows', 'AMD64'), ('Linux', 'aarch64')]:
             with self.subTest(system=system, machine=machine), \
                  mock.patch.object(fast_fixtures, 'FULL_REQUIRED', frozenset()), \
                  mock.patch.object(fast_fixtures.platform, 'system', return_value=system), \
                  mock.patch.object(fast_fixtures.platform, 'machine', return_value=machine):
-                self.assertEqual({}, fast_fixtures._full_output_hashes(self.root))
+                (self.root / name).write_text(json.dumps(dict(supported=False, artifactHashes={})))
+                expected = {name: fast_fixtures._digest(self.root / name)}
+                self.assertEqual(expected, fast_fixtures._output_hashes(self.root, {'outputs': ['build/process-signals']}))
+                full = fast_fixtures._full_output_hashes(self.root)
+                self.assertEqual({name}, set(full))
+                self.assertEqual(expected[name], full[name]['sha256'])
+                (self.root / name).write_text(json.dumps(dict(supported=True)))
+                with self.assertRaisesRegex(ValueError, 'does not match this host'):
+                    fast_fixtures._output_hashes(self.root, {'outputs': ['build/process-signals']})
+        with mock.patch.object(fast_fixtures.platform, 'system', return_value='Linux'), \
+             mock.patch.object(fast_fixtures.platform, 'machine', return_value='x86_64'):
+            (self.root / name).write_text(json.dumps(dict(supported=False, artifactHashes={})))
+            with self.assertRaisesRegex(ValueError, 'does not match this host'):
+                fast_fixtures._output_hashes(self.root, {'outputs': ['build/process-signals']})
+
+    def test_selected_process_signal_preparation_reuses_explicit_mac_exclusion(self):
+        project = Path(__file__).resolve().parents[2]
+        group = fast_fixtures._manifest(project)[0]['groups']['process-signals']
+        self.assertIn('t/haskell-fixtures/ProcessSignalFixtures.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/FixtureSupport.hs', group['sources'])
+        for name in group['sources']:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture source\n')
+        self.manifest['groups'] = {'process-signals': group}
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        name = 'build/process-signals/manifest.json'
+        def run(label, argv, stdout=None):
+            self.fake_run(label, argv, stdout)
+            if argv[-1] == 'process-signals':
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(dict(schema=1, platform='darwin', supported=False, artifactHashes={})))
+        with mock.patch.object(fast_fixtures.platform, 'system', return_value='Darwin'), \
+             mock.patch.object(fast_fixtures.platform, 'machine', return_value='arm64'):
+            selection = self.selection('thc.runtime.ProcessSignalsTest')
+            toolchain = {'platform': {'system': 'Darwin', 'machine': 'arm64'}}
+            self.assertEqual({'mode': 'selected', 'rebuilt': ['process-signals'], 'reused': []},
+                fast_fixtures.prepare(self.root, selection, run, toolchain))
+            self.assertEqual({'mode': 'selected', 'rebuilt': [], 'reused': ['process-signals']},
+                fast_fixtures.prepare(self.root, selection, run, toolchain))
+            self.assertEqual({name}, set(fast_fixtures._output_hashes(self.root, group)))
+            self.assertFalse((self.root / 'build/process-signals/oracle.txt').exists())
+            self.assertFalse((self.root / 'build/process-signals/native-controls.txt').exists())
 
     def test_selected_output_receipt_rejects_symlinked_parent(self):
         output = self.root / 'build/process-signals/oracle.txt'

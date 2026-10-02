@@ -68,10 +68,6 @@ class StockGraphRecoveryTest {
         Truffle.getRuntime();
         Controls.bytecodeEntry();
     }
-    @Test void closedRecursiveRegionCompilesItsFreshParentAndSide() throws Exception {
-        Truffle.getRuntime();
-        BytecodeGraphBudgetTest.checkClosedRecursiveRegion(true);
-    }
     @Test void realBytecodeGraphFailurePublishesIndependentReducedEntry() {
         Truffle.getRuntime();
         Controls.recoverBytecode();

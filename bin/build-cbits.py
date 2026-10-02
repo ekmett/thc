@@ -16,7 +16,6 @@ import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 PINNED = {"md5.c": "4fa83bda7aacc8a1656d7e2d78251bbe70a04b56",
           "md5.h": "a87296687a2f3dc6748264ff2a8a0c919518db55"}
-STRERROR_SHA256 = "bf3a2129e508a108611b734864b63b234fae319c544c1cc500a53a2b7a91953b"
 TEXT_SHA256 = {
     "cbits/reverse.c": "912cc8bd4684ef5913c1694f1cda73d36c6d200f1a58ff9b6e661d7d8490ea90",
     "cbits/utils.c": "4e2e096101ccfc7585cb06177fa9d4f523979aed584feb6814e92a868d234f5d",
@@ -98,9 +97,6 @@ def main():
     config = list(libdir.rglob("HsBaseConfig.h"))
     if len(config) != 1:
         raise SystemExit(f"Expected one pinned ghc-internal HsBaseConfig.h, got {config}")
-    strerror = ROOT / "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c"
-    if hashlib.sha256(strerror.read_bytes()).hexdigest() != STRERROR_SHA256:
-        raise SystemExit("Original GHC 9.14.1 strerror.c changed")
     rts = ROOT / "nih/pinned/ghc-9.14.1/rts"
     for name, expected in RTS_FLOAT_SHA256.items():
         if hashlib.sha256((rts / name).read_bytes()).hexdigest() != expected:
@@ -114,6 +110,9 @@ def main():
     if hashlib.sha256(bytestring_source.read_bytes()).hexdigest() != BYTESTRING_UTF8_SHA256:
         raise SystemExit("Original ByteString 0.12.2.0 is-valid-utf8.c changed")
     output = args.output.resolve() / "thc/cbits"
+    # This producer owns only thc/cbits, not sibling generated resources.
+    if output.exists():
+        shutil.rmtree(output)
     output.mkdir(parents=True, exist_ok=True)
     commands = []
     pointer_compiler, pointer_target = compiler, target
@@ -134,11 +133,6 @@ def main():
             raise SystemExit("Windows cbits require llvm-dis beside Clang, on PATH, or selected by THC_LLVM_DIS")
     sources = {"package-pointer": ROOT / "src/main/c/package-pointer-api.c",
                "md5": ROOT / "src/main/c/md5-api.c"}
-    # The locale scope is POSIX-specific. Windows errno/locale interoperability
-    # needs its own proof; compiling strerror_s alone would not provide it.
-    if system != "Windows":
-        sources["strerror"] = strerror
-        sources["strerror-locale"] = ROOT / "src/main/c/strerror-locale.c"
     if system == "Linux":
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
         if arch == "x86_64":

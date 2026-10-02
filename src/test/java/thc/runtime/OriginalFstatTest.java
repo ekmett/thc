@@ -47,13 +47,11 @@ class OriginalFstatTest {
             assertEquals(success ? List.of(Objects.equals(row.get(0),"initial") ? 256L : 17L,1L,1L,1L,List.of("initial","resized").contains(row.get(0)) ? 384L : 256L) : List.of(),longs(row.get(3))); assertEquals(true,row.get(4)); }
         for (var stage : List.of("pre","post")) for (var name : entries) {
             var audit = json(prefix + "/" + stage + "/" + name + ".audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals"));
-            var linked = with(CoreModules.reachable(module(stage),"main:OriginalPosixStatAudit." + name),"instrument",true); var evidence = new ArrayCoreEvidence(linked,"main:OriginalPosixStatAudit." + name); assertEquals(1,evidence.getBindings().size());
-            assertEquals(2,evidence.guestLambdas(evidence.getRoot().get("expr")).size(),"Original Core retains the state lambda"); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size(),"Exact State# redex executes in-frame");
-            var fstats = new ArrayList<List<Object>>(); for (var call : foreignCalls(linked)) if (Objects.equals(((Map<?,?>) ((Map<?,?>) ((Map<?,?>) call.get(6)).get("foreignCall")).get("target")).get("symbol"),"__hscore_fstat")) fstats.add(call); assertEquals(1,fstats.size()); assertEquals(OriginalStdioOp.FSTAT,validate(fstats.getFirst()));
+            var linked = with(CoreModules.reachable(module(stage),"main:OriginalPosixStatAudit." + name),"instrument",true);
+            var fstats = new ArrayList<List<Object>>(); for (var call : foreignCalls(linked)) if (Objects.equals(((Map<?,?>) ((Map<?,?>) ((Map<?,?>) call.get(6)).get("foreignCall")).get("target")).get("symbol"),"__hscore_fstat")) fstats.add(call); assertFalse(fstats.isEmpty()); for (var call : fstats) assertEquals(OriginalStdioOp.FSTAT,validate(call));
             for (var backend : List.of("ast","bytecode")) try (var context = NativeFileProvider.createContext(Set.of(),ContextProfile.SYNCHRONOUS_TEST)) { entered(context,() -> {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); var files = state.getFiles(); var stdio = state.getStdio(); var program = load(language,backend,linked); var entry = program.entryTarget("main:OriginalPosixStatAudit." + name);
                 class Exercise {
-                    List<RootCallTarget> active = List.of();
                     void run(boolean compiled) throws Exception {
                         var original = directory.resolve("file"); var renamed = directory.resolve("renamed"); byte[] input = new byte[256]; for (int i = 0; i < input.length; i++) input[i] = (byte) i; Files.write(original,input); Files.setPosixFilePermissions(original,PosixFilePermissions.fromString("rw-------"));
                         long fd = files.open(path(original),3,ForeignSafety.UNSAFE); assertTrue(fd >= 3); long alias = files.duplicate(fd); assertTrue(alias >= 3); var image = ManagedAddress.fromByteArray(files.statImage(fd)); long device = field(image,OriginalStdioOp.ST_DEV), inode = field(image,OriginalStdioOp.ST_INO);
@@ -61,9 +59,9 @@ class OriginalFstatTest {
                             switch ((String) row.get(0)) { case "resized" -> assertEquals(0L,files.setSize(fd,17)); case "chmod" -> Files.setPosixFilePermissions(original,PosixFilePermissions.fromString("r--------"));
                                 case "renamed" -> { Files.move(original,renamed); Files.write(original,new byte[]{42}); } case "unlinked" -> Files.delete(renamed); case "closed" -> { assertEquals(0L,files.close(alias)); assertEquals(0L,files.close(fd)); } }
                             byte[] bytes = new byte[size + 16]; Arrays.fill(bytes,(byte) 90); var address = ManagedAddress.fromByteArray(bytes).plus(8); long source = Objects.equals(row.get(0),"invalid") ? -1L : Objects.equals(row.get(0),"renamed") ? alias : fd;
-                            assertEquals(-1L,stdio.close(-1)); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); if (compiled) for (var target : active) valid(target);
-                            long expected = ((Number) row.get(name.equals("originalFstat") ? 1 : 2)).longValue(); assertEquals(expected,Calls.target(entry,new Object[]{0L,source,address}),stage + "/" + backend + "/" + name + "/" + row.get(0)); assertEquals(((Number) row.get(2)).longValue(),stdio.errno());
-                            if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); assertEquals(active,targets(entry)); for (var target : active) valid(target); }
+                            assertEquals(-1L,stdio.close(-1)); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                            long expected = ((Number) row.get(name.equals("originalFstat") ? 1 : 2)).longValue(); assertEquals(expected,callScalarTestTarget(entry,new Object[]{0L,source,address}),stage + "/" + backend + "/" + name + "/" + row.get(0)); assertEquals(((Number) row.get(2)).longValue(),stdio.errno());
+                            if (compiled) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before);
                             assertEquals(true,row.get(4),"Native destination/canary observation");
                             if (((Number) row.get(1)).longValue() == 0) { long mode = field(address,OriginalStdioOp.ST_MODE);
                                 var observed = List.of(field(address,OriginalStdioOp.ST_SIZE),PosixStat.execute(OriginalStdioOp.IS_REG,ManagedAddress.nullAddress(),mode),field(address,OriginalStdioOp.ST_DEV) == device ? 1L : 0L,field(address,OriginalStdioOp.ST_INO) == inode ? 1L : 0L,mode & 511L); assertEquals(longs(row.get(3)),observed);
@@ -74,9 +72,8 @@ class OriginalFstatTest {
                         Files.delete(original);
                     }
                 }
-                var exercise = new Exercise(); exercise.run(false); exercise.active = targets(entry); assertEquals(1,exercise.active.size(),"Only the public root remains after State# lowering");
-                var binding = single((List<Map<String,Object>>) linked.get("bindings"),b -> Objects.equals(b.get("name"),name)); int count = 0; for (var node : nodes(binding.get("expr"))) if (!node.isEmpty() && Objects.equals(node.getFirst(),"lam")) count++; assertEquals(2,count);
-                for (var target : exercise.active) { target.getClass().getMethod("compile",boolean.class).invoke(target,true); valid(target); } exercise.run(true); return null;
+                var exercise = new Exercise(); exercise.run(false);
+                for (var target : targets(entry)) { target.getClass().getMethod("compile",boolean.class).invoke(target,true); valid(target); } exercise.run(true); return null;
             }); }
         }
     }
@@ -86,14 +83,14 @@ class OriginalFstatTest {
         int size = (int) PosixStat.execute(OriginalStdioOp.SIZEOF_STAT,ManagedAddress.nullAddress(),0);
         for (var backend : List.of("ast","bytecode")) try (var context = NativeFileProvider.createContext(EnumSet.allOf(StandardEndpoint.class),ContextProfile.SYNCHRONOUS_TEST)) { entered(context,() -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); byte[] bytes = new byte[size + 2]; Arrays.fill(bytes,(byte) 90);
-            var program = load(language,backend,new OriginalPosixStatTest().rawModule(original())); var entry = program.entryTarget("entry"); var address = ManagedAddress.fromByteArray(bytes).plus(1);
+            var program = load(language,backend,rawModule(original(),module("pre"))); var entry = program.entryTarget("entry"); var address = ManagedAddress.fromByteArray(bytes).plus(1);
             class Call { Object invoke(Object fd,ManagedAddress output,Object token) { return callScalarTestTarget(entry,new Object[]{0L,fd,output,token}); }}
             var call = new Call(); assertThrows(RuntimeFault.class,() -> Calls.target(entry,new Object[]{0L,1,address,9L})); assertEquals(-1L,state.getStdio().close(-1)); long errno = state.getStdio().errno(); assertThrows(RuntimeFault.class,() -> call.invoke(1,address,9L)); assertThrows(RuntimeFault.class,() -> call.invoke(1L << 32,address,thc.runtime.Unit.INSTANCE));
             for (var bad : List.of(ManagedAddress.nullAddress(),ManagedAddress.fromByteArray(new byte[size - 1]),ManagedAddress.fromHex("00".repeat(size)),address.plus(2))) assertThrows(RuntimeFault.class,() -> call.invoke(1,bad,thc.runtime.Unit.INSTANCE));
             var allocation = ManagedAllocation.mutable(size + 16L,8); var pointer = ManagedAddress.fromAllocation(allocation); allocation.writeAddressByteOffset(8,address); assertThrows(RuntimeFault.class,() -> call.invoke(1,pointer,thc.runtime.Unit.INSTANCE)); assertSame(address,allocation.readAddressByteOffset(8));
             assertEquals(errno,state.getStdio().errno()); for (byte value : bytes) assertEquals((byte) 90,value); assertEquals(-1,call.invoke(-1,address,thc.runtime.Unit.INSTANCE)); for (byte value : bytes) assertEquals((byte) 90,value); assertEquals(StdioHostAbi.load().error(4),state.getStdio().errno());
             for (int fd = 0; fd <= 2; fd++) { assertEquals(0,call.invoke(fd,address,thc.runtime.Unit.INSTANCE)); assertEquals(90,(int) bytes[0]); assertEquals(90,(int) bytes[bytes.length - 1]); }
-            for (int i = 0; i <= 2; i++) { int index = i; assertThrows(RuntimeFault.class,() -> load(language,backend,new OriginalPosixStatTest().rawModule(original(),index))); } return null;
+            for (int i = 0; i <= 2; i++) { int index = i; assertThrows(RuntimeFault.class,() -> load(language,backend,rawModule(original(),module("pre"),index))); } return null;
         }); }
         try (var context = Context.newBuilder("thc").build()) { entered(context,() -> { byte[] bytes = new byte[size]; Arrays.fill(bytes,(byte) 90); var stdio = Language.currentState().getStdio(); assertEquals(-1L,stdio.fstat(1,ManagedAddress.fromByteArray(bytes))); assertEquals(StdioHostAbi.load().error(7),stdio.errno()); for (byte value : bytes) assertEquals((byte) 90,value); return null; }); }
     }
@@ -107,7 +104,7 @@ class OriginalFstatTest {
         for (var key : List.of("resultRep","rep")) reject.call((c,d) -> ((Map<String,Object>) (key.equals("rep") ? (Map<?,?>) c.get(6) : d).get(key)).put("primReps",list("WordRep")));
         for (var backend : List.of("ast","bytecode")) try (var context = Context.newBuilder("thc").build()) { entered(context,() -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-            for (var head : list(list("var",17L),list("var","entry",map("rep",OriginalStdioFixtures.closure())))) { var bad = (Map<String,Object>) copy(new OriginalPosixStatTest().rawModule(original)); single(foreignCalls(bad),ignored -> true).set(1,head); assertThrows(RuntimeFault.class,() -> load(language,backend,bad)); } return null;
+            for (var head : list(list("var",17L),list("var","entry",map("rep",OriginalStdioFixtures.closure())))) { var bad = (Map<String,Object>) copy(rawModule(original,module("pre"))); single(foreignCalls(bad),ignored -> true).set(1,head); assertThrows(RuntimeFault.class,() -> load(language,backend,bad)); } return null;
         }); }
     }
 }

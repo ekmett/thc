@@ -23,9 +23,22 @@ import System.Exit (die)
 import System.FilePath ((</>))
 import System.Info (os, arch)
 
+fixtureSources :: [FilePath]
+fixtureSources = ["t/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c",
+  "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json",
+  "src/test/resources/core/original-unix-signal-install-descriptor.json",
+  "t/haskell-fixtures/ProcessSignalFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs"]
+
 prepareProcessSignals :: FilePath -> IO ()
-prepareProcessSignals _ | os /= "linux" || arch /= "x86_64" =
-  putStrLn "process-signals: Linux x86_64 native capture boundary only"
+prepareProcessSignals root | os /= "linux" || arch /= "x86_64" = do
+  let directory = root </> "build/process-signals"
+  createDirectoryIfMissing True directory
+  inputHashes <- hashes root fixtureSources
+  writeJson (directory </> "manifest.json") $ object
+    ["schema" .= (1 :: Int), "platform" .= os, "architecture" .= arch, "supported" .= False,
+     "reason" .= ("Linux x86_64 native capture boundary only" :: String),
+     "inputHashes" .= inputHashes, "artifactHashes" .= object []]
+  putStrLn "process-signals: native capture explicitly excluded on this platform"
 prepareProcessSignals root = do
   let directory = "build/process-signals"
       native = directory </> "native"
@@ -54,11 +67,9 @@ prepareProcessSignals root = do
   unless (commandStdout captured == "41 isolated native signal controls passed\n" && BS.null (commandStderr captured))
     (die "Native signal capture child controls failed")
   BS.writeFile (root </> controls) (commandStdout captured)
-  inputHashes <- hashes root [source, "src/main/c/native-process-signal-api.c",
-    "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json",
-    "src/test/resources/core/original-unix-signal-install-descriptor.json",
-    "t/haskell-fixtures/ProcessSignalFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs"]
+  inputHashes <- hashes root fixtureSources
   artifactHashes <- hashes root [oracle, controls]
   writeJson (root </> manifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
+    "platform" .= os, "architecture" .= arch, "supported" .= True,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
   putStrLn "process-signals: eight native GHC action oracles and 41 isolated machine capture controls"

@@ -21,6 +21,7 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.RepresentationTestSupport.*;
 
 @SuppressWarnings("unchecked")
 class SimdFamiliesTest {
@@ -239,6 +240,131 @@ class SimdFamiliesTest {
             assertThrows(RuntimeFault.class, () -> ArgumentLayout.validate(input, 0, ArgumentLayout.fromProofs(List.of(tuple)), 0, 1));
         }
         for (var flags : List.of(List.of(true), Collections.singletonList(null), List.of(0L))) assertThrows(RuntimeFault.class, () -> CoreVectors.validateFlags(flags));
+    }
+    private record NarrowFamily(String scalar, int lanes, long minimum, long maximum) {
+        String vector() { return scalar + "X" + lanes; }
+        String literal() { return scalar.toLowerCase(Locale.ROOT); }
+        Map<String, Object> laneProof() { return map("kind", "long", "primReps", list(scalar + "Rep"), "evaluated", true); }
+        Map<String, Object> vectorProof() {
+            return map("kind", "vector", "primReps", list("VecRep " + lanes + " " + scalar + "ElemRep"),
+                "vector", map("lanes", lanes, "element", scalar + "ElemRep"), "evaluated", true);
+        }
+    }
+    private static final List<NarrowFamily> NARROW_FAMILIES = List.of(
+        new NarrowFamily("Int8", 16, Byte.MIN_VALUE, Byte.MAX_VALUE),
+        new NarrowFamily("Int16", 8, Short.MIN_VALUE, Short.MAX_VALUE),
+        new NarrowFamily("Int32", 4, Integer.MIN_VALUE, Integer.MAX_VALUE),
+        new NarrowFamily("Word8", 16, 0, 255), new NarrowFamily("Word16", 8, 0, 65535),
+        new NarrowFamily("Word32", 4, 0, 0xffff_ffffL));
+    private Map<String, Object> narrowVectorModule(NarrowFamily family, List<?> operand, Object flag,
+                                                  Map<String, Object> vector, String alternative) {
+        var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var integer = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
+        var one = list("lit", "int", "1", map("rep", integer));
+        var broadcast = list("app", list("prim", "broadcast" + family.vector() + "#"), list(operand),
+            list(flag), false, true, map("rep", vector));
+        Object body = list("case", broadcast, "v", list(list("default", null, List.of(), one, map("binders", List.of()))),
+            map("rep", integer, "binder", map("id", "v", "lifted", false, "rep", vector)));
+        if (alternative != null) {
+            var machine = list("var", "x", map("rep", integer));
+            String conversion = "intTo";
+            if (family.scalar.startsWith("Word")) {
+                machine = list("app", list("prim", "int2Word#"), list(machine), list(false), false, true,
+                    map("rep", map("kind", "long", "primReps", list("WordRep"), "evaluated", true)));
+                conversion = "wordTo";
+            }
+            var narrowed = list("app", list("prim", conversion + family.scalar + "#"), list(machine), list(false),
+                false, true, map("rep", family.laneProof()));
+            body = list("case", narrowed, "n", list(
+                list("lit", list(family.literal(), alternative), List.of(), one),
+                list("default", null, List.of(), list("lit", "int", "0", map("rep", integer)))),
+                map("rep", integer, "binder", map("id", "n", "lifted", false, "rep", family.laneProof())));
+        }
+        return map("schema", 1, "ghc", "9.14.1", "constructors", List.of(), "bindings", list(
+            map("id", "root", "name", "root", "arity", 1, "lifted", true, "rep", closure,
+                "expr", list("lam", list(map("id", "x", "name", "x", "lifted", false, "rep", integer)),
+                    body, map("rep", closure, "resultRep", integer)))));
+    }
+    private ExecutableProgram narrowProgram(Language language, String backend, boolean diagnostic, Map<String, Object> input) {
+        var source = with(input, "instrument", true, "diagnosticUnsupported", diagnostic);
+        return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source);
+    }
+    private Object narrowCall(ExecutableProgram program, long input) {
+        return Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("root"), new Object[]{input}});
+    }
+    @Test void narrowVectorLiteralsAndAlternativesRequireCanonicalText() {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (var family : NARROW_FAMILIES) for (boolean diagnostic : List.of(false, true)) {
+                    for (long value : List.of(family.minimum, 0L, 1L, family.maximum)) {
+                        var text = Long.toString(value);
+                        var operand = list("lit", family.literal(), text, map("rep", family.laneProof()));
+                        for (String alternative : Arrays.asList(null, text))
+                            assertEquals(1L, narrowCall(narrowProgram(language, backend, diagnostic,
+                                narrowVectorModule(family, operand, false, family.vectorProof(), alternative)), value));
+                    }
+                    for (var text : List.of(Long.toString(family.minimum - 1), Long.toString(family.maximum + 1),
+                            "", "+1", "01", "-0", " 1", "1.0", "18446744073709551616")) {
+                        var operand = list("lit", family.literal(), text, map("rep", family.laneProof()));
+                        for (String alternative : Arrays.asList(null, text))
+                            assertThrows(RuntimeFault.class, () -> narrowProgram(language, backend, diagnostic,
+                                narrowVectorModule(family, operand, false, family.vectorProof(), alternative)));
+                    }
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void narrowVectorLoadersRetainCarrierAndUnliftedOperandChecks() {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var unknown = map("kind", "unknown", "primReps", null, "evaluated", false);
+                for (var family : NARROW_FAMILIES) for (boolean diagnostic : List.of(false, true)) {
+                    var lane = family.laneProof(); var vector = family.vectorProof();
+                    var exact = list("lit", family.literal(), "1", map("rep", lane));
+                    for (var operand : List.of(exact, list("lit", family.literal(), "1"),
+                            list("lit", family.literal(), "1", map("rep", unknown))))
+                        assertEquals(1L, narrowCall(narrowProgram(language, backend, diagnostic,
+                            narrowVectorModule(family, operand, false, vector, null)), 0));
+                    // Narrow integers share an Int carrier after lowering; literal tags retain their interpretation.
+                    for (var shared : NARROW_FAMILIES) {
+                        var operand = list("lit", family.literal(), "1", map("rep", shared.laneProof()));
+                        assertEquals(1L, narrowCall(narrowProgram(language, backend, diagnostic,
+                            narrowVectorModule(family, operand, false, vector, null)), 0));
+                    }
+                    for (var flag : list(true, null, 0L, "false"))
+                        assertThrows(RuntimeFault.class, () -> narrowProgram(language, backend, diagnostic,
+                            narrowVectorModule(family, exact, flag, vector, null)));
+                    for (var wrong : List.of(with(lane, "kind", "unknown"), with(lane, "primReps", list("IntRep")),
+                            with(lane, "kind", "float", "primReps", list("FloatRep")),
+                            with(lane, "kind", "double", "primReps", list("DoubleRep")),
+                            with(lane, "kind", "closure", "primReps", list("BoxedRep (Just Lifted)")),
+                            with(lane, "aggregate", "unboxed-tuple", "components", list(lane))))
+                        assertThrows(RuntimeFault.class, () -> narrowProgram(language, backend, diagnostic,
+                            narrowVectorModule(family, list("lit", family.literal(), "1", map("rep", wrong)), false, vector, null)));
+                    var opposite = family.literal().startsWith("word") ? family.literal().replace("word", "int") : family.literal().replace("int", "word");
+                    assertThrows(RuntimeFault.class, () -> narrowProgram(language, backend, diagnostic,
+                        narrowVectorModule(family, list("lit", opposite, "1"), false, vector, null)));
+                    for (var wrong : List.of(without(vector, "vector"),
+                            with(vector, "vector", map("lanes", family.lanes * 2, "element", family.scalar + "ElemRep"))))
+                        assertThrows(RuntimeFault.class, () -> narrowProgram(language, backend, diagnostic,
+                            narrowVectorModule(family, exact, false, wrong, null)));
+                }
+                // Unresolved aggregate metadata must remain a diagnostic trap, never become a scalar.
+                var family = NARROW_FAMILIES.get(3);
+                var operand = list("lit", family.literal(), "1", map("rep", with(unknown, "aggregate", "unboxed-tuple")));
+                var input = narrowVectorModule(family, operand, false, family.vectorProof(), null);
+                assertThrows(UnsupportedCore.class, () -> narrowProgram(language, backend, false, input));
+                var deferred = narrowProgram(language, backend, true, input);
+                assertEquals(0L, ((Number) deferred.diagnostics().get("unsupportedTraps")).longValue());
+                assertThrows(RuntimeFault.class, () -> narrowCall(deferred, 0));
+                assertEquals(1L, ((Number) deferred.diagnostics().get("unsupportedTraps")).longValue());
+                released(language);
+            } finally { context.leave(); }
+        }
     }
     @Test void insertRejectsInvalidMachineIndicesBeforeAnyNarrowing() {
         var original = LongVector.broadcast(LongVector.SPECIES_128, 1L).withLane(1, 2L);

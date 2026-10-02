@@ -206,21 +206,6 @@ final class OriginalStdioExpression extends Expr {
             if (operation.getResult() != null) writeInteger(frame, slots[offset], result);
             return null;
         }
-        if (operation == OriginalStdioOp.SIGPROCMASK) {
-            long how = readInteger(frame, 0);
-            var set = operands[1].executeRequiredAddress(frame);
-            var oldset = operands[2].executeRequiredAddress(frame);
-            TupleResults.requireVoidCarrier(operands[3].execute(frame));
-            writeInteger(frame, slots[offset], ManagedSignalMask.execute(this, how, set, oldset));
-            return null;
-        }
-        if (operation.getSigset()) {
-            var address = operands[0].executeRequiredAddress(frame);
-            long signal = operation == OriginalStdioOp.SIGADDSET ? readInteger(frame, 1) : 0L;
-            TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
-            writeInteger(frame, slots[offset], SigsetImage.execute(operation, address, signal, CoreOriginalStdio.current(this)));
-            return null;
-        }
         if (operation.getSavedTermios()) {
             long fd = readInteger(frame, 0);
             var address = operation == OriginalStdioOp.SET_SAVED_TERMIOS ? operands[1].executeRequiredAddress(frame) : ManagedAddress.nullAddress();
@@ -348,12 +333,6 @@ final class OriginalStdioExpression extends Expr {
             var outputCount = operands[4].executeRequiredAddress(frame);
             TupleResults.requireVoidCarrier(operands[5].execute(frame));
             result = CoreOriginalStdio.iconv(this).convert(handle, input, inputCount, output, outputCount);
-        } else if (operation == OriginalStdioOp.STRERROR) {
-            long error = readInteger(frame, 0);
-            var output = operands[1].executeRequiredAddress(frame);
-            long length = readInteger(frame, 2);
-            TupleResults.requireVoidCarrier(operands[3].execute(frame));
-            result = CoreOriginalStdio.strerror(this).call(error, output, length);
         } else if (operation.getProcessIdentity()) {
             TupleResults.requireVoidCarrier(operands[0].execute(frame));
             result = ProcessIdentity.query(this, operation);

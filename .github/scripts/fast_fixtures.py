@@ -46,14 +46,15 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
-    "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset", "build/unaligned-scalar-memory",
+    "build/floating-byte-offset", "build/unaligned-scalar-memory",
     "build/explicit64-arrays", "build/mask-functions", "build/scalar-exception-results", "build/exception-result-layouts", "build/deep-evaluation", "build/interface-core",
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields", "build/selector-proof",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/backend-annotations/pre/BackendAnnotations.cbd", "build/backend-annotations/post/BackendAnnotations.cbd", "build/backend-annotations/interface.cbd",
     "build/thc-fixtures.path",
-    *(PROCESS_SIGNAL_OUTPUTS if (platform.system(), platform.machine()) == ("Linux", "x86_64") else ()),
+    *(PROCESS_SIGNAL_OUTPUTS if (platform.system(), platform.machine()) == ("Linux", "x86_64")
+      else ("build/process-signals/manifest.json",)),
     *(PROCESS_CORE_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else ()),
     *TEXT_CBITS_OUTPUTS,
     *fast_inputs.BYTESTRING_UTF8_OUTPUTS,
@@ -237,20 +238,12 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/floating-byte-offset/pre/audit.json", "build/floating-byte-offset/post/audit.json",
     "build/floating-byte-offset/pre/core/FloatingByteOffsetAudit.cbd",
     "build/floating-byte-offset/post/core/FloatingByteOffsetAudit.cbd",
-    "build/narrow-byte-offset/manifest.json", "build/narrow-byte-offset/oracle.tsv",
-    "build/narrow-byte-offset/pre/audit.json", "build/narrow-byte-offset/post/audit.json",
-    "build/narrow-byte-offset/pre/core/NarrowByteOffsetAudit.cbd",
-    "build/narrow-byte-offset/post/core/NarrowByteOffsetAudit.cbd",
     "build/unaligned-scalar-memory/manifest.json", "build/unaligned-scalar-memory/oracle.tsv",
     "build/unaligned-scalar-memory/inputs.txt",
     "build/unaligned-scalar-memory/logs/ghc-inventory.stdout",
     "build/unaligned-scalar-memory/pre/audit.json", "build/unaligned-scalar-memory/post/audit.json",
     "build/unaligned-scalar-memory/pre/core/UnalignedScalarMemoryAudit.cbd",
     "build/unaligned-scalar-memory/post/core/UnalignedScalarMemoryAudit.cbd",
-    "build/int32-byte-offset/manifest.json", "build/int32-byte-offset/oracle.tsv",
-    "build/int32-byte-offset/pre/audit.json", "build/int32-byte-offset/post/audit.json",
-    "build/int32-byte-offset/pre/core/Int32ByteOffsetAudit.cbd",
-    "build/int32-byte-offset/post/core/Int32ByteOffsetAudit.cbd",
     "build/explicit64-arrays/manifest.json", "build/explicit64-arrays/oracle.tsv",
     "build/shrink-bytearrays/manifest.json", "build/shrink-bytearrays/oracle.tsv",
     "build/shrink-bytearrays/pre/core/ShrinkMutableByteArrayAudit.cbd",
@@ -288,8 +281,6 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-termios/manifest.json"}),
     *(fast_inputs.ORIGINAL_TCSETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcsetattr/manifest.json"}),
     *(fast_inputs.ORIGINAL_TCGETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcgetattr/manifest.json"}),
-    *(fast_inputs.ORIGINAL_SIGPROCMASK_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-sigprocmask/manifest.json"}),
-    *(fast_inputs.ORIGINAL_SIGSET_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-sigset/manifest.json"}),
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
@@ -441,6 +432,16 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/process-signals"]:
+        name = "build/process-signals/manifest.json"
+        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+        native = (platform.system(), platform.machine()) == ("Linux", "x86_64")
+        if manifest.get("supported") is not native:
+            raise ValueError("Process signal capture manifest does not match this host")
+        if not native and manifest.get("artifactHashes") != {}:
+            raise ValueError("Unsupported process signal capture must not claim native artifacts")
+        outputs = PROCESS_SIGNAL_OUTPUTS if native else {name}
+        return _output_hashes(root, {"outputs": sorted(outputs)})
     if group["outputs"] == ["build/package-native-gc-carriers"]:
         name = "build/package-native-gc-carriers/manifest.json"
         expected = fast_inputs.gc_carrier_artifact_hashes(root, json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -457,15 +458,6 @@ def _output_hashes(root, group):
         if source.get("archiveSha256") != "b431d2ba77607986fa84b42ff3021505b8637b8d638ff664be3292dd44aba8f0":
             raise ValueError("Wrong original process source archive")
         return _manifest_output_hashes(root, name, expected)
-    families = [output.removeprefix("build/") for output in group["outputs"]]
-    if families and all(family in fast_inputs.INTEGER_SIMD_FAMILIES for family in families):
-        result = {}
-        for family in families:
-            name = f"build/{family}/provenance.json"
-            manifest = json.loads(fast_inputs.file_path(root, name).read_text())
-            expected = fast_inputs.integer_simd_artifact_hashes(family, manifest)
-            result.update(_manifest_output_hashes(root, name, expected))
-        return result
     for output, validator in (
             ("build/original-path-stat", fast_inputs.original_path_stat_artifact_hashes),
             ("build/original-path-mode", fast_inputs.original_path_mode_artifact_hashes),
@@ -570,10 +562,6 @@ def _output_hashes(root, group):
         name = "build/rts-diagnostics/manifest.json"
         expected = fast_inputs.rts_diagnostic_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
-    if group["outputs"] == ["build/unix-wait-status"]:
-        name = "build/unix-wait-status/manifest.json"
-        expected = fast_inputs.unix_wait_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/rts-shutdown"]:
         name = "build/rts-shutdown/manifest.json"
         expected = fast_inputs.rts_shutdown_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -613,14 +601,6 @@ def _output_hashes(root, group):
     if group["outputs"] == ["build/original-tcgetattr"]:
         name = "build/original-tcgetattr/manifest.json"
         expected = fast_inputs.tcgetattr_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
-    if group["outputs"] == ["build/original-sigprocmask"]:
-        name = "build/original-sigprocmask/manifest.json"
-        expected = fast_inputs.sigprocmask_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
-    if group["outputs"] == ["build/original-sigset"]:
-        name = "build/original-sigset/manifest.json"
-        expected = fast_inputs.sigset_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
     files = set()
     for output in group["outputs"]:
@@ -737,8 +717,7 @@ def _full_output_hashes(root):
         if path.is_symlink() or not path.is_dir():
             raise RuntimeError(f"Unexpected full fixture root: {name}")
         if name == "build/process-signals":
-            if (platform.system(), platform.machine()) == ("Linux", "x86_64"):
-                files.update(_output_hashes(root, {"outputs": sorted(PROCESS_SIGNAL_OUTPUTS)}))
+            files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         if name == "build/package-native-gc-carriers":
             files.update(_output_hashes(root, {"outputs": [name]}))
@@ -753,10 +732,10 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams", "build/unix-wait-status"):
+        if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
-        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES | fast_inputs.INTEGER_SIMD_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-fd-ready", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
+        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-fd-ready", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

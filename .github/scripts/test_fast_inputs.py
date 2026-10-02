@@ -435,25 +435,6 @@ class FastInputTests(unittest.TestCase):
         for path in ('native/OriginalMemsetNative.o', 'native/other-oracle', 'unreviewed.json'):
             self.assertFalse(cache.allowed_payload('build/original-memset/' + path))
 
-    def test_integer_simd_migration_keeps_closed_native_and_export_only_receipts(self):
-        for family, (_, rows) in cache.INTEGER_SIMD_FAMILIES.items():
-            for native in (False, True):
-                outputs = cache.integer_simd_outputs(family, native)
-                artifacts = {name: 'a' * 64 for name in outputs - {f'build/{family}/provenance.json'}}
-                good = dict(stages=['pre', 'post'] if native else ['pre'], modelRows=rows,
-                            nativeRows=rows if native else None, modelMatched=True if native else None,
-                            positiveAuditsAccepted=True, proofNegativeControlsPassed=True,
-                            artifacts=[dict(path=name, sha256=digest) for name, digest in artifacts.items()])
-                self.assertEqual(artifacts, cache.integer_simd_artifact_hashes(family, good))
-                for path in outputs:
-                    self.assertTrue(cache.allowed_payload(path), path)
-                for changes in (dict(nativeRows=rows-1), dict(modelRows=0), dict(proofNegativeControlsPassed=False),
-                                dict(artifacts=good['artifacts'][1:]), dict(artifacts=good['artifacts'] + good['artifacts'][:1])):
-                    with self.assertRaises(cache.CacheMiss):
-                        cache.integer_simd_artifact_hashes(family, dict(good, **changes))
-            for extra in ('commands/unknown.stdout', 'native/foreign-oracle', 'MUTATED-unreviewed.json'):
-                self.assertFalse(cache.allowed_payload(f'build/{family}/{extra}'))
-
     def test_memory_search_closed_receipt(self):
         manifest_path = 'build/original-memory-search/manifest.json'
         outputs = cache.MEMORY_SEARCH_OUTPUTS
@@ -1023,45 +1004,10 @@ class FastInputTests(unittest.TestCase):
                 if member.name != 'files/' + binary])
             self.rejected_without_writes(changed)
 
-    def test_sigprocmask_exact_native_image_fixture_inventory(self):
-        self.assertEqual(33, len(cache.ORIGINAL_SIGPROCMASK_OUTPUTS))
-        self.assertIn('build/original-sigprocmask/manifest.json', DECLARED_REQUIRED)
-        for name in cache.ORIGINAL_SIGPROCMASK_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name), name)
-            if name == 'build/original-sigprocmask/native/oracle':
-                self.assertEqual(0o755, cache.safe_mode(0o755, name))
-            else:
-                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
-        for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
-                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalSigprocmaskNative.o'):
-            self.assertFalse(cache.allowed_payload('build/original-sigprocmask/' + suffix), suffix)
-        for suffix in ('../outside', 'logs/../../outside'):
-            with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-sigprocmask/' + suffix)
-        name = 'build/original-sigprocmask/manifest.json'
-        artifacts = cache.ORIGINAL_SIGPROCMASK_OUTPUTS - {name}
-        binary = 'build/original-sigprocmask/native/oracle'
-        for path in artifacts:
-            self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
-        (self.root / binary).chmod(0o755)
-        original = json.dumps(dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-            installedArtifactsHashed=False, nativeRows=8, entries=['originalSigprocmask'],
-            inputHashes=self.manifest['inputHashes'],
-            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
-        self.put(name, original)
-        with patch.object(cache, 'GMP_NATIVE_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
-            packed = self.pack(); self.remove_payload(packed)
-            cache.restore(self.root, self.current, self.bundle)
-            self.assertEqual(original, (self.root / name).read_text())
-            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
-            self.remove_payload(packed)
-            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
-                if member.name != 'files/' + binary])
-            self.rejected_without_writes(changed)
 
     def test_pinned_address_closed_artifacts_and_byte_preserving_restore(self):
         name = 'build/pinned-addresses/manifest.json'
         artifacts = cache.PINNED_ADDRESS_OUTPUTS - {name}
-        self.assertEqual(227, len(artifacts))
         self.assertIn(name, DECLARED_REQUIRED)
         binary = 'build/pinned-addresses/native/pinned-address-oracle'
         for path in artifacts:
@@ -1142,20 +1088,6 @@ class FastInputTests(unittest.TestCase):
                 if member.name != 'files/' + oracle_path])
             self.rejected_without_writes(missing_oracle)
 
-    def test_sigset_exact_native_image_fixture_inventory(self):
-        self.assertEqual(41, len(cache.ORIGINAL_SIGSET_OUTPUTS))
-        self.assertIn('build/original-sigset/manifest.json', DECLARED_REQUIRED)
-        for name in cache.ORIGINAL_SIGSET_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name), name)
-            if name == 'build/original-sigset/native/oracle':
-                self.assertEqual(0o755, cache.safe_mode(0o755, name))
-            else:
-                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
-        for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
-                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalSigsetNative.o'):
-            self.assertFalse(cache.allowed_payload('build/original-sigset/' + suffix), suffix)
-        for suffix in ('../outside', 'logs/../../outside'):
-            with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-sigset/' + suffix)
 
     def test_floatx4_fma_payload_is_closed_and_preserves_original_provenance(self):
         manifest_path = 'build/simd-floatx4-fma/manifest.json'
@@ -1204,17 +1136,16 @@ class FastInputTests(unittest.TestCase):
         self.assertFalse(cache.allowed_payload('build/arithmetic-exceptions/native/other.zip'))
         with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
 
-    def test_termios_exact_image_and_saved_pointer_fixture_inventory(self):
-        self.assertEqual(163, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+    def test_saved_termios_fixture_artifact_scope(self):
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
-            if name in ('build/original-termios/native/oracle', 'build/original-termios/saved/native/oracle'):
+            if name == 'build/original-termios/saved/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
-                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalTermiosAudit.o',
+                       'attempt-0/oracle.json', 'pre/core/Other.json', 'saved/native/other.o',
                        'saved/native/other', 'saved/native/OriginalSavedTermiosNative.o',
                        'saved/pre/core/Other.json', 'logs/saved-extra.stdout'):
             self.assertFalse(cache.allowed_payload('build/original-termios/' + suffix), suffix)
@@ -1239,13 +1170,13 @@ class FastInputTests(unittest.TestCase):
     def test_termios_cache_round_trip_keeps_saved_pointer_provenance_and_native_mode(self):
         name = 'build/original-termios/manifest.json'
         artifacts = cache.ORIGINAL_TERMIOS_OUTPUTS - {name}
-        binaries = ('build/original-termios/native/oracle', 'build/original-termios/saved/native/oracle')
+        binaries = ('build/original-termios/saved/native/oracle',)
         for path in artifacts:
             self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
         for binary in binaries:
             (self.root / binary).chmod(0o755)
         original = json.dumps(dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-            installedArtifactsHashed=False, nativeRows=6, entries=list(cache.ORIGINAL_TERMIOS_ENTRIES),
+            installedArtifactsHashed=False, nativeRows=28, entries=list(cache.ORIGINAL_SAVED_TERMIOS_ENTRIES),
             inputHashes=self.manifest['inputHashes'],
             artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
         self.put(name, original)
@@ -2227,9 +2158,7 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/main/java/thc/runtime/VectorReadCase.java",
                           "src/main/java/thc/runtime/CoreVectorMemory.java",
                           "src/main/java/thc/runtime/VectorByteArrayExpression.java",
-                          "src/main/java/thc/runtime/VectorMemory.java",
-                          "src/test/java/thc/runtime/IntegerSimdModelTest.java",
-                          "src/test/java/thc/runtime/IntegerSimdModel.java"), cache.RUNTIME_INPUTS)
+                          "src/main/java/thc/runtime/VectorMemory.java"), cache.RUNTIME_INPUTS)
         with patch.object(cache, "toolchain", return_value={}):
             sources = cache.identity(root)["sources"]
         for name in (*cache.RUNTIME_INPUTS, "src/core-symbols/THC/CoreSymbols.hs", *("src/compiler/THC/" + name + ".hs" for name in

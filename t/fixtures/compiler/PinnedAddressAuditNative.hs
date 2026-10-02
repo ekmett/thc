@@ -13,25 +13,28 @@
 --
 -- Native GHC observer for the pinned address audit fixture.
 module Main where
+import Data.Word (Word8)
+import Foreign.Marshal.Alloc (allocaBytesAligned)
+import Foreign.Storable (poke, peekByteOff)
 import GHC.Exts (Int(I#))
+import GHC.Fingerprint.Type (Fingerprint(..))
 import qualified PinnedAddressAudit as P
 
 dispatch :: [String] -> IO ()
 dispatch tokens = do
-  let answer = case tokens of
-        ["pinnedBytes", n, i, x] -> case (read n, read i, read x) of
-          (I# a, I# b, I# c) -> I# (P.pinnedBytes a b c)
-        ["alignedBytes", n, a, i, x] -> case (read n, read a, read i, read x) of
-          (I# b, I# c, I# d, I# e) -> I# (P.alignedBytes b c d e)
-        ["keepAliveWord8", x] -> case read x of I# a -> I# (P.keepAliveWord8 a)
-        ["keepAliveLazy", x] -> case read x of I# a -> I# (P.keepAliveLazy a)
-        ["fingerprintByte", x, y, i] -> case (read x, read y, read i) of
-          (I# a, I# b, I# c) -> I# (P.fingerprintByte a b c)
-        ["publicFingerprintByte", x, y, i] -> case (read x, read y, read i) of
-          (I# a, I# b, I# c) -> I# (P.publicFingerprintByte a b c)
-        ["publicFingerprintRoundtrip", x, y, i] -> case (read x, read y, read i) of
-          (I# a, I# b, I# c) -> I# (P.publicFingerprintRoundtrip a b c)
-        _ -> error "invalid pinned-address request"
+  answer <- case tokens of
+    ["fingerprintByte", x, y, i] -> allocaBytesAligned 16 8 (\pointer -> do
+      poke pointer (Fingerprint (fromIntegral (read x :: Int)) (fromIntegral (read y :: Int)))
+      byte <- peekByteOff pointer (read i) :: IO Word8
+      pure (fromIntegral byte))
+    _ -> pure $ case tokens of
+      ["pinnedBytes", n, i, x] -> case (read n, read i, read x) of
+        (I# a, I# b, I# c) -> I# (P.pinnedBytes a b c)
+      ["alignedBytes", n, a, i, x] -> case (read n, read a, read i, read x) of
+        (I# b, I# c, I# d, I# e) -> I# (P.alignedBytes b c d e)
+      ["keepAliveWord8", x] -> case read x of I# a -> I# (P.keepAliveWord8 a)
+      ["keepAliveLazy", x] -> case read x of I# a -> I# (P.keepAliveLazy a)
+      _ -> error "invalid pinned-address request"
   putStrLn (concatMap (++ "\t") tokens ++ show answer)
 
 main :: IO ()

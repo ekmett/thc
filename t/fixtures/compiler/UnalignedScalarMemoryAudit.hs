@@ -353,3 +353,45 @@ unalignedStablePtr initial replacement offset selector = runRW# (\s0 ->
   }) of { result ->
   case touch# mutable s7 of { _ -> result }
   } } } } } } } } } })
+
+-- Heap storage reaches the same byte-offset primops without native promotion.
+-- Signed and unsigned values occupy separate unaligned cells; guards detect overlap.
+{-# OPAQUE unalignedHeap16 #-}
+unalignedHeap16 :: Int# -> Int# -> Int# -> Int#
+unalignedHeap16 raw offset selector = runRW# (\s0 ->
+  case newByteArray# 32# s0 of { (# s1, mutable #) ->
+  case setByteArray# mutable 0# 32# 165# s1 of { s2 ->
+  case writeWord8ArrayAsInt16# mutable offset (intToInt16# raw) s2 of { s3 ->
+  case writeWord8ArrayAsWord16# mutable (offset +# 4#)
+         (wordToWord16# (int2Word# (notI# raw))) s3 of { s4 ->
+  case unsafeFreezeByteArray# mutable s4 of { (# s5, bytes #) ->
+    case selector of {
+      0# -> int16ToInt# (indexWord8ArrayAsInt16# bytes offset);
+      1# -> case readWord8ArrayAsInt16# mutable offset s5 of { (# _, value #) -> int16ToInt# value };
+      2# -> word2Int# (word16ToWord# (indexWord8ArrayAsWord16# bytes (offset +# 4#)));
+      3# -> case readWord8ArrayAsWord16# mutable (offset +# 4#) s5 of { (# _, value #) ->
+        word2Int# (word16ToWord# value) };
+      4# -> word2Int# (word8ToWord# (indexWord8Array# bytes (offset -# 1#)));
+      _ -> word2Int# (word8ToWord# (indexWord8Array# bytes (offset +# 6#)))
+    }
+  } } } } })
+
+{-# OPAQUE unalignedHeap32 #-}
+unalignedHeap32 :: Int# -> Int# -> Int# -> Int#
+unalignedHeap32 raw offset selector = runRW# (\s0 ->
+  case newByteArray# 32# s0 of { (# s1, mutable #) ->
+  case setByteArray# mutable 0# 32# 165# s1 of { s2 ->
+  case writeWord8ArrayAsInt32# mutable offset (intToInt32# raw) s2 of { s3 ->
+  case writeWord8ArrayAsWord32# mutable (offset +# 8#)
+         (wordToWord32# (int2Word# (notI# raw))) s3 of { s4 ->
+  case unsafeFreezeByteArray# mutable s4 of { (# s5, bytes #) ->
+    case selector of {
+      0# -> int32ToInt# (indexWord8ArrayAsInt32# bytes offset);
+      1# -> case readWord8ArrayAsInt32# mutable offset s5 of { (# _, value #) -> int32ToInt# value };
+      2# -> word2Int# (word32ToWord# (indexWord8ArrayAsWord32# bytes (offset +# 8#)));
+      3# -> case readWord8ArrayAsWord32# mutable (offset +# 8#) s5 of { (# _, value #) ->
+        word2Int# (word32ToWord# value) };
+      4# -> word2Int# (word8ToWord# (indexWord8Array# bytes (offset -# 1#)));
+      _ -> word2Int# (word8ToWord# (indexWord8Array# bytes (offset +# 12#)))
+    }
+  } } } } })

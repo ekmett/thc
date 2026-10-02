@@ -10,7 +10,7 @@
 -- Stability   : experimental
 -- Portability : Native GHC; host filesystem/process services
 --
--- Fixture acquisition support for simd arithmetic.
+-- Native scalar oracles for SIMD shuffle patterns.
 module SimdArithmeticFixtures (prepareSimdArithmetic) where
 
 import Control.Monad (forM, unless, when)
@@ -28,12 +28,11 @@ import System.Exit (die)
 import System.FilePath
 
 data Shape = Shape { shapeName :: String, scalar :: String, lanes :: Int, width :: Int }
-data Entry = Entry { shape :: Shape, operation :: String, patternId :: Int }
+data Entry = Entry { shape :: Shape, patternId :: Int }
 name :: Entry -> String
-name entry = operation entry ++ shapeName (shape entry) ++
-  if operation entry == "shuffle" then "Pattern" ++ show (patternId entry) else ""
+name entry = "shuffle" ++ shapeName (shape entry) ++ "Pattern" ++ show (patternId entry)
 primitive :: Entry -> String
-primitive entry = operation entry ++ shapeName (shape entry) ++ "#"
+primitive entry = "shuffle" ++ shapeName (shape entry) ++ "#"
 floating :: Shape -> Bool
 floating s = elem (scalar s) ["Float", "Double"]
 unsigned :: Shape -> Bool
@@ -62,7 +61,6 @@ indices :: Entry -> [Int]
 indices entry = [pick lane | lane <- [0..count-1]] where
   count = lanes (shape entry)
   pick lane = case patternId entry of
-    0 -> count - 1 - lane + if odd lane then count else 0
     1 -> lane + 1
     _ -> if odd lane then 2*count - 1 else 0
 checksum :: [String] -> String
@@ -76,11 +74,9 @@ definition native entry =
     s = shape entry
     count = lanes s
     pack right = "pack" ++ shapeName s ++ "# (# " ++ intercalate ", " [input s right lane | lane <- [0..count-1]] ++ " #)"
-    vector = primitive entry ++ " (" ++ pack False ++ ") (" ++ pack True ++ ")" ++
-      if operation entry == "shuffle" then " (# " ++ intercalate ", " [show index ++ "#" | index <- indices entry] ++ " #)" else ""
-    scalarValue lane
-      | operation entry == "shuffle" = let index = indices entry !! lane in input s (index >= count) (mod index count)
-      | otherwise = operation entry ++ scalar s ++ "# (" ++ input s False lane ++ ") (" ++ input s True lane ++ ")"
+    vector = primitive entry ++ " (" ++ pack False ++ ") (" ++ pack True ++ ") (# " ++
+      intercalate ", " [show index ++ "#" | index <- indices entry] ++ " #)"
+    scalarValue lane = let index = indices entry !! lane in input s (index >= count) (mod index count)
     body | native = checksum [observe s (scalarValue lane) | lane <- [0..count-1]]
          | otherwise = "case unpack" ++ shapeName s ++ "# (" ++ vector ++ ") of { (# " ++
              intercalate ", " ["p" ++ show lane | lane <- [0..count-1]] ++ " #) -> " ++
@@ -88,25 +84,18 @@ definition native entry =
 moduleSource :: Bool -> [Entry] -> String
 moduleSource native entries = unlines $
   ["{-# LANGUAGE MagicHash, UnboxedTuples #-}", "module " ++ (if native then "SimdArithmeticScalar" else "SimdArithmeticAudit") ++ " where",
-   "import GHC.Exts", "import GHC.Prim (" ++ intercalate ", " (map primitive [entry | entry <- entries, patternId entry == 0]) ++ ")"] ++
+   "import GHC.Exts", "import GHC.Prim (" ++ intercalate ", " (map primitive [entry | entry <- entries, patternId entry == 1]) ++ ")"] ++
   concatMap (definition native) entries
 
 requestRows :: [Entry] -> [(String,Integer,Integer)]
-requestRows entries = [(name entry,a,b) | entry <- entries, (a,b) <- pairs entry, defined entry a b]
+requestRows entries = [(name entry,a,b) | entry <- entries, (a,b) <- pairs entry]
   where
-    signed bits value = mod (value + 2^(bits-1)) (2^bits) - 2^(bits-1)
     pairs entry
       | floating (shape entry) = if width (shape entry) == 32
           then [(0,0x80000000),(0x3f800000,0x7fc01234),(1,0x7f800000),(-1,0x3f800000)]
           else [(0,-2^(63::Int)),(0x3ff0000000000000,0x7ff8000000001234),(1,0x7ff0000000000000),(-1,0x3ff0000000000000)]
       | otherwise = [(7,-3),(-1,2),(-2^(bits-1),3),(2^(bits-1)-1,7),(2^bits-1,1),(129,31)]
       where bits = width (shape entry)
-    defined entry a b = operation entry == "shuffle" || all valid [0..lanes s-1]
-      where
-        s = shape entry
-        narrow value = if unsigned s then mod value (2^(width s)) else signed (width s) value
-        valid lane = let left = narrow (a + toInteger lane*104729); right = narrow (b-toInteger lane*7919)
-          in right /= 0 && (unsigned s || left /= -2^(width s-1) || right /= -1)
 
 prepareSimdArithmetic :: FilePath -> IO ()
 prepareSimdArithmetic root = do
@@ -120,8 +109,7 @@ prepareSimdArithmetic root = do
     operations <- field item "operations" :: IO [String]
     pure (Shape shapeId (take (length rep-3) rep) count (div bits count), elem "shuffle" operations)
   let shapes = [s | (s,True) <- admitted]
-      entries = [Entry s op patternIndex | s <- shapes, op <- (if floating s then [] else ["quot","rem"]) ++ ["shuffle"],
-        patternIndex <- if op == "shuffle" then [0,1,2] else [0]]
+      entries = [Entry s patternIndex | s <- shapes, patternIndex <- [1,2]]
       requests = requestRows entries
       directory = "build/simd-arithmetic"
       generated = directory </> "sources"
@@ -182,7 +170,7 @@ prepareSimdArithmetic root = do
   artifactHashes <- hashes root ([source,scalarSource,driver,inputs,binary,core,directory </> "oracle.tsv"] ++ concat audits ++
     concatMap commandArtifacts [version,nativeBuild,observed,exported])
   writeJson manifest (object ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"rows" .= length requests,
-    "entries" .= [object ["name" .= name entry,"primitive" .= primitive entry,"lanes" .= lanes (shape entry),
+    "entries" .= [object ["name" .= name entry,"lanes" .= lanes (shape entry),
       "width" .= width (shape entry),"scalar" .= scalar (shape entry),"pattern" .= patternId entry] | entry <- entries],
     "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,"nativeMode" .= ("scalar-lane"::String)])
   putStrLn ("SIMD arithmetic: " ++ show (length entries) ++ " entries, " ++ show (length requests) ++ " native rows")

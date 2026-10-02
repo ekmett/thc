@@ -3459,15 +3459,10 @@ class OriginalDupAuditTest(unittest.TestCase):
         **{f'__hscore_{name}': ((None,), 'Int32Rep')
            for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow', 'sigttou', 'sig_block', 'sig_setmask')},
     }
-    sigset = {
-        'ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset': (('AddrRep', None), 'Int32Rep'),
-        'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset': (('AddrRep', 'Int32Rep', None), 'Int32Rep'),
-        'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask': (('Int32Rep', 'AddrRep', 'AddrRep', None), 'Int32Rep'),
-    }
     process_identities = {'getpid': ((None,), 'Int32Rep'), 'geteuid': ((None,), 'Word32Rep')}
     errno = {'__hscore_set_errno': (('Int32Rep', None), None)}
     open_flags = {f'__hscore_o_{name}': ((None,), 'Int32Rep') for name in ('excl', 'binary', 'trunc')}
-    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset, *event_descriptors, *open_flags, *errno, *process_identities)
+    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *event_descriptors, *open_flags, *errno, *process_identities)
     def fixture(self, symbol):
         arguments = (('Int32Rep', 'Int32Rep', 'AddrRep', None) if symbol == core_original_foreign.TCSETATTR_SYMBOL else
                      ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
@@ -3475,7 +3470,7 @@ class OriginalDupAuditTest(unittest.TestCase):
                      ('Int32Rep', 'AddrRep', None) if symbol in ('__hscore_fstat', core_original_foreign.TCGETATTR_SYMBOL) else
                      ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
-        arguments, output = (self.termios | self.sigset | self.event_descriptors | self.open_flags | self.errno | self.process_identities).get(symbol, (arguments, 'Int32Rep'))
+        arguments, output = (self.termios | self.event_descriptors | self.open_flags | self.errno | self.process_identities).get(symbol, (arguments, 'Int32Rep'))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
@@ -3483,7 +3478,7 @@ class OriginalDupAuditTest(unittest.TestCase):
         result['evaluated'] = False
         descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol,
             unit='unix-2.8.8.0-inplace' if symbol == 'geteuid' else 'ghc-internal', isFunction=True),
-            convention='capi' if symbol in self.sigset or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
+            convention='capi' if symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
             argumentReps=[scalar(p, False) for p in arguments], resultRep=copy.deepcopy(result))
         call = ['app', ['var', 'original-foreign', dict(rep=CLOSURE)],
             [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
@@ -3595,7 +3590,7 @@ class OriginalDupAuditTest(unittest.TestCase):
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
         for symbol in self.symbols:
             mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
-                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'ccall' if symbol in self.sigset or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'capi'), ('safety', 'unknown'), ('extra', None)] + ([] if symbol == '__hscore_open' else [('safety', 'safe'), ('safety', 'interruptible')])
+                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'ccall' if symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'capi'), ('safety', 'unknown'), ('extra', None)] + ([] if symbol == '__hscore_open' else [('safety', 'safe'), ('safety', 'interruptible')])
             for key, value in mutations:
                 module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
                 self.assertFalse(self.audit(module)['accepted'], (symbol, key, value))
@@ -3628,9 +3623,7 @@ class OriginalDupAuditTest(unittest.TestCase):
 
     def test_termios_state_only_result_and_excluded_terminal_calls(self):
         self.assertEqual(set(self.termios), core_original_foreign.TERMIOS_SYMBOLS)
-        self.assertEqual(set(self.sigset), set(core_original_foreign.SIGSET_OPERATIONS) | {
-            "ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask"})
-        for symbol, (_, output) in (self.termios | self.sigset).items():
+        for symbol, (_, output) in (self.termios).items():
             if output is not None:
                 # A mutually consistent descriptor/call-site forgery still
                 # cannot change the original declaration's result width.
@@ -3653,8 +3646,7 @@ class OriginalDupAuditTest(unittest.TestCase):
                     if mutation == 'sum': result['aggregate'] = 'unboxed-sum'
                     self.assertFalse(self.audit(module)['accepted'])
         for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', 'sigprocmask', 'sigemptyset', 'sigaddset',
-                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', 'prefix__hscore_get_saved_termios', 'prefix__hscore_set_saved_termios',
-                       *('prefix' + name for name in self.sigset)):
+                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', 'prefix__hscore_get_saved_termios', 'prefix__hscore_set_saved_termios'):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
             module = self.fixture('__hscore_lflag')
             self.call(module)[6]['foreignCall']['target']['symbol'] = symbol

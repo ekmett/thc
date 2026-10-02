@@ -35,7 +35,6 @@ printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" proxy-void
 "$fixture_bin" selector-proof
 "$fixture_bin" unix-libc
-"$fixture_bin" unix-wait-status
 "$fixture_bin" text-cbits
 "$fixture_bin" integer
 "$fixture_bin" bit
@@ -48,8 +47,6 @@ printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" floating-address
 "$fixture_bin" atomic-address
 "$fixture_bin" floating-byte-offset
-"$fixture_bin" narrow-byte-offset
-"$fixture_bin" int32-byte-offset
 "$fixture_bin" unaligned-scalar-memory
 "$fixture_bin" explicit64-arrays
 "$fixture_bin" fused-floating
@@ -127,8 +124,6 @@ case "$(uname -s)-$(uname -m)" in
 esac
 "$fixture_bin" original-tcsetattr
 "$fixture_bin" original-tcgetattr
-"$fixture_bin" original-sigprocmask
-"$fixture_bin" original-sigset
 "$fixture_bin" original-rts-locks --require-supported
 "$fixture_bin" rts-diagnostics
 "$fixture_bin" original-stdio-seek
@@ -170,31 +165,7 @@ python3 bin/prepare-simd-capability-smoke.py
 "$fixture_bin" simd-wide-arrays
 "$fixture_bin" simd-address-families
 "$fixture_bin" simd-arithmetic
-case "$(uname -m)" in
-  arm64|aarch64) "$fixture_bin" int16x8 --export-only ;;
-  *) "$fixture_bin" int16x8 ;;
-esac
 "$fixture_bin" signed-narrow
-case "$(uname -m)" in
-  arm64|aarch64) "$fixture_bin" int8x16 --export-only ;;
-  *) "$fixture_bin" int8x16 ;;
-esac
-case "$(uname -m)" in
-  arm64|aarch64) python3 bin/prepare-word8x16-audit.py --export-only ;;
-  *) python3 bin/prepare-word8x16-audit.py ;;
-esac
-case "$(uname -m)" in
-  arm64|aarch64) "$fixture_bin" word16x8 --export-only ;;
-  *) "$fixture_bin" word16x8 ;;
-esac
-case "$(uname -m)" in
-  arm64|aarch64) "$fixture_bin" word32x4 --export-only ;;
-  *) "$fixture_bin" word32x4 ;;
-esac
-case "$(uname -m)" in
-  arm64|aarch64) python3 bin/prepare-int32x4-multiply-audit.py --export-only ;;
-  *) python3 bin/prepare-int32x4-multiply-audit.py ;;
-esac
 case "$(uname -m)" in
   arm64|aarch64) "$fixture_bin" int32x4-bytearray --export-only ;;
   *) "$fixture_bin" int32x4-bytearray ;;

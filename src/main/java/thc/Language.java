@@ -71,11 +71,9 @@ public final class Language extends TruffleLanguage<Language.State> {
         private WindowsDirectoryStreams windowsDirectories;
         private final WindowsCodePages windowsCodePages;
         private final ManagedStdio stdio;
-        private final ManagedSignalMask signalMask;
         private final ManagedSignals signals;
         private final SavedTermios savedTermios;
         private final ManagedIconv iconv;
-        private final ManagedStrerror strerror;
         private final ManagedStackRegistry stackSnapshots;
         public final ClosureInfoTables closureInfo;
         private final CapturedAsyncRequests capturedAsyncRequests;
@@ -135,11 +133,9 @@ public final class Language extends TruffleLanguage<Language.State> {
             windowsDirectories = null;
             windowsCodePages = new WindowsCodePages(this);
             stdio = new ManagedStdio(files);
-            signalMask = new ManagedSignalMask(this);
             signals = new ManagedSignals(this, language);
             savedTermios = new SavedTermios(this);
             iconv = new ManagedIconv(this::cbits, stdio, threads);
-            strerror = new ManagedStrerror(this::cbits, threads);
             stackSnapshots = new ManagedStackRegistry();
             closureInfo = new ClosureInfoTables();
             capturedAsyncRequests = new CapturedAsyncRequests();
@@ -198,11 +194,9 @@ public final class Language extends TruffleLanguage<Language.State> {
         public void setWindowsDirectories(WindowsDirectoryStreams value) { windowsDirectories = value; }
         public WindowsCodePages getWindowsCodePages() { return windowsCodePages; }
         public ManagedStdio getStdio() { return stdio; }
-        public ManagedSignalMask getSignalMask() { return signalMask; }
         public ManagedSignals getSignals() { return signals; }
         public SavedTermios getSavedTermios() { return savedTermios; }
         public ManagedIconv getIconv() { return iconv; }
-        public ManagedStrerror getStrerror() { return strerror; }
         public ManagedStackRegistry getStackSnapshots() { return stackSnapshots; }
         public CapturedAsyncRequests getCapturedAsyncRequests() { return capturedAsyncRequests; }
         public ForeignExceptionRegistry getForeignExceptionRegistry() { return foreignExceptionRegistry; }

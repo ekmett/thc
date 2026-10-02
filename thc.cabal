@@ -25,9 +25,6 @@ extra-source-files:
   t/fixtures/retained-core/int32x4-bytearray/native/provenance.json.gz
   t/fixtures/retained-core/int32x4-bytearray/post-core.json.gz
   t/fixtures/retained-core/int32x4-bytearray/pre-core.json.gz
-  t/fixtures/retained-core/int32x4-multiply/input-provenance.json
-  t/fixtures/retained-core/int32x4-multiply/post-core.json.gz
-  t/fixtures/retained-core/int32x4-multiply/pre-core.json.gz
   t/fixtures/retained-core/word32x4-bytearray/native/provenance.json.gz
   t/fixtures/retained-core/word32x4-bytearray/post-core.json.gz
   t/fixtures/retained-core/word32x4-bytearray/pre-core.json.gz
@@ -334,7 +331,6 @@ extra-source-files:
   nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c
   t/fixtures/compiler/TextCbitsAudit.hs
   t/fixtures/compiler/UnixLibcAudit.hs
-  t/fixtures/compiler/UnixWaitStatusAudit.hs
   t/fixtures/compiler/TextCbitsNative.hs
   nih/pinned/text-2.1.3/LICENSE
   nih/pinned/openbsd-memchr-1.8.c
@@ -472,18 +468,12 @@ extra-source-files:
   t/fixtures/compiler/OriginalProcessIdentityNative.hs
   t/fixtures/compiler/OriginalOpenAudit.hs
   t/fixtures/compiler/OriginalOpenNative.hs
-  t/fixtures/compiler/OriginalTermiosAudit.hs
   t/fixtures/compiler/OriginalSavedTermiosAudit.hs
   t/fixtures/compiler/OriginalSavedTermiosNative.hs
-  t/fixtures/compiler/OriginalTermiosNative.hs
   t/fixtures/compiler/OriginalTcsetattrAudit.hs
   t/fixtures/compiler/OriginalTcgetattrAudit.hs
   t/fixtures/compiler/OriginalTcsetattrNative.hs
   t/fixtures/compiler/OriginalTcgetattrNative.hs
-  t/fixtures/compiler/OriginalSigprocmaskAudit.hs
-  t/fixtures/compiler/OriginalSigprocmaskNative.hs
-  t/fixtures/compiler/OriginalSigsetAudit.hs
-  t/fixtures/compiler/OriginalSigsetNative.hs
   t/fixtures/compiler/OriginalFdReadyAuditNative.hs
   t/fixtures/compiler/OriginalIconvAudit.hs
   t/fixtures/compiler/OriginalIconvAuditNative.hs
@@ -529,7 +519,6 @@ extra-source-files:
   t/fixtures/run-runtime-services/Main.hs
   docs/original-posix-dup.md
   docs/original-termios.md
-  docs/original-sigset.md
   etc/ghc/9.14.1/core.settings
   nih/patches/ghc-9.14.1/ghc-libraries-simplified-core.patch
   nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Arr.hs
@@ -1294,8 +1283,6 @@ executable thc-fixtures
     FloatingAddressFixtures
     AtomicAddressFixtures
     FloatingByteOffsetFixtures
-    NarrowByteOffsetFixtures
-    Int32ByteOffsetFixtures
     UnalignedScalarMemoryFixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
@@ -1308,7 +1295,6 @@ executable thc-fixtures
     SimdWideArrayFixtures
     SimdAddressFixtures
     SimdArithmeticFixtures
-    IntegerSimdFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
     SqrtFixtures
@@ -1367,13 +1353,10 @@ executable thc-fixtures
     WcwidthFixtures
     TextCbitsFixtures
     UnixLibcFixtures
-    UnixWaitStatusFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures
     OriginalTcgetattrFixtures
-    OriginalSigprocmaskFixtures
-    OriginalSigsetFixtures
     OriginalIconvFixtures
     MutVarFixtures
     STMFixtures
