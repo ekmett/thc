@@ -845,8 +845,8 @@ ORIGINAL_FD_READY_LOGS = (
 ) + tuple(f"audit-{entry}" for entry in ORIGINAL_FD_READY_ENTRIES) + tuple(
     f"negative-{label}-{entry}" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES)
 ORIGINAL_FD_READY_OUTPUTS = frozenset("build/original-fd-ready/" + name for name in (
-    "manifest.json", "oracle.json", "OriginalFDDeclarations.cbd", "Template.cbd",
-    "OriginalFdReadyAudit.cbd", "facts.json", "native/oracle", "native/private-file",
+    "manifest.json", "oracle.json", "OriginalFDDeclarations.cbd",
+    "OriginalFdReadyAudit.cbd", "native/oracle", "native/private-file",
     *(f"{entry}.audit.json" for entry in ORIGINAL_FD_READY_ENTRIES),
     *(f"negative/{label}.cbd" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES),
     *(f"negative/{label}-{entry}.audit.json" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES),

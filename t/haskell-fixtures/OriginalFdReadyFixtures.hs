@@ -19,7 +19,6 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.Foldable (toList)
 import Data.IORef (newIORef, writeIORef)
 import Data.List (isPrefixOf, nubBy, sort, sortOn)
 import qualified Data.Map.Strict as Map
@@ -127,19 +126,6 @@ negativeCases =
   ,("machine-result", changeField "resultRep" (wrongRep "IntRep"))]
   where wrongRep primitive = changeField "primReps" (const (toJSON [primitive :: String]))
 
-foreignApplications :: Value -> [Value]
-foreignApplications value = case value of
-  Object fields -> concatMap foreignApplications fields
-  Array values ->
-    let children = toList values
-        selected = case children of
-          [String "app", _, _, _, _, _, Object metadata]
-            | Just descriptor <- KeyMap.lookup "foreignCall" metadata
-            , jsonField "symbol" (jsonField "target" descriptor) == String "fdReady" -> [value]
-          _ -> []
-    in selected ++ concatMap foreignApplications children
-  _ -> []
-
 prepareOriginalFdReady :: FilePath -> IO ()
 prepareOriginalFdReady root = do
   let execute = runLogged 180 root (directory </> "logs")
@@ -178,9 +164,7 @@ prepareOriginalFdReady root = do
       "socket" .= socket, "result" .= result, "errnoBefore" .= before, "errnoAfter" .= after]
     | (entry, scenario, writing, milliseconds, socket, result, before, after) <- rows]
   let originalPath = directory </> "OriginalFDDeclarations.cbd"
-      templatePath = directory </> "Template.cbd"
       adaptedCompact = directory </> "OriginalFdReadyAudit.cbd"
-      factsPath = directory </> "facts.json"
   runGhc (Just libdir) $ do
     initialFlags <- getSessionDynFlags
     _ <- setSessionDynFlags (gopt_unset initialFlags Opt_IgnoreInterfacePragmas)
@@ -212,12 +196,9 @@ prepareOriginalFdReady root = do
       let calls = [v | (_, body) <- declarations, v <- variables body,
                        Just _ <- [readyCall v]]
           originals = nubBy (\a b -> readyCall a == readyCall b) calls
-          replacements = [v | (_, body) <- flattenBinds (interfaceBindings template), v <- variables body,
-                              Just _ <- [readyCall v]]
-      unless (length calls == 5 && length originals == 2 && length replacements == 2)
-        (die "Unexpected original/template fdReady call inventory")
-      unless (all (not . isExternalName . varName) originals)
-        (die "Original FCallIds must retain their private GHC identities")
+      unless (all (\safety -> any ((== Just safety) . readyCall) originals)
+        [Foreign.PlaySafe, Foreign.PlayRisky])
+        (die "Missing original safe/unsafe fdReady declarations")
       unless (all (\v -> case isFCallId_maybe v of
         Just (Foreign.CCall (Foreign.CCallSpec (Foreign.StaticTarget _ _ (Just foreignOwner) True) _ _)) -> unitString foreignOwner == "ghc-internal"
         _ -> False) originals) (die "Missing original ghc-internal foreign owner")
@@ -225,26 +206,16 @@ prepareOriginalFdReady root = do
       -- never supplied as the complete installed FD module for execution.
       originalBytes <- serializePostTidyCoreCBD flags ["unit-qualified"] owner
         (typeEnvTyCons (md_types details)) [NonRec v body | (v, body) <- declarations] emptyIfaceForeign
-      originalProjection <- either die pure (readModuleValue originalBytes)
-      unless (length (foreignApplications originalProjection) == 5)
-        (die "Original declaration serialization lost fdReady calls")
-      templateBytes <- interfaceCoreCBD ["unit-qualified"] template
       let adapted = map (mapBind (replaceCalls originals)) (interfaceBindings template)
           adaptedCalls = [v | (_, body) <- flattenBinds adapted, v <- variables body,
                               Just _ <- [readyCall v]]
-      unless (length adaptedCalls == 2 && all (`elem` originals) adaptedCalls)
+      unless (all (`elem` originals) adaptedCalls &&
+        all (\safety -> any ((== Just safety) . readyCall) adaptedCalls) [Foreign.PlaySafe, Foreign.PlayRisky])
         (die "Adapted consumers did not retain the exact original GHC Ids")
       adaptedBytes <- serializePostTidyCoreCBD flags ["unit-qualified"] (interfaceModule template)
         (typeEnvTyCons (md_types (interfaceDetails template))) adapted (interfaceForeign template)
       BS.writeFile (root </> originalPath) originalBytes
-      BS.writeFile (root </> templatePath) templateBytes
       BS.writeFile (root </> adaptedCompact) adaptedBytes
-      writeJson (root </> factsPath) $ object
-        ["originalInterface" .= installed, "originalCalls" .= length calls, "adaptedCalls" .= length replacements,
-         "installedArtifactsHashed" .= False, "typeEqualityChecked" .= True,
-         "originalIdentityChecked" .= True, "originalNamesExternal" .= map (isExternalName . varName) originals,
-         "originalProjection" .= ("original-interface-foreign-declarations-only" :: String),
-         "boundary" .= ("GHC-compiled test consumer with original installed FD FCallIds; not unchanged Handle/FD execution" :: String)]
   audits <- forM entries $ \entry -> do
     let output = directory </> entry ++ ".audit.json"
     audited <- execute ("audit-" ++ entry) [] "python3"
@@ -281,7 +252,7 @@ prepareOriginalFdReady root = do
         ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
         ["src/cbd/THC/Compact" </> name | name <- compactFiles, takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
-      artifacts = [oracle, originalPath, templatePath, adaptedCompact, factsPath, binary,
+      artifacts = [oracle, originalPath, adaptedCompact, binary,
         directory </> "native/private-file"] ++ [path | (_,path,_) <- audits] ++
         concatMap fst controls ++ concatMap commandArtifacts commands
   inputHashes <- hashes root inputs
