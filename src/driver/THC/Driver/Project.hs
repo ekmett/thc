@@ -16,7 +16,7 @@
 -- Plan project components and acquire reproducible, dependency-closed Core bundles.
 module THC.Driver.Project
   ( runProject, acquireProject, buildTargetsProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
-  , prepareInstalledBundle, installedRecords
+  , prepareInstalledBundle, prepareInstalledBundleWithVerification, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
   , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
   , selectedPackageTool
@@ -872,7 +872,38 @@ prepareInstalledBundleWithVerification :: Bool -> Value -> FilePath -> FilePath 
                           IO (Either MissingCore InstalledBundle)
 prepareInstalledBundleWithVerification verify nativeTools cache staging recipe context registrationUnit = do
   let producer = object ["recipe" .= installedBundleRecipeIdentity, "nativeTools" .= nativeTools]
-  probeCurrent <- prepareInstalledProbe context registrationUnit
+  fullProbe <- prepareInstalledProbe context registrationUnit
+  -- Ordinary builds reuse the exact validated inventory while its helper and
+  -- raw interfaces retain their file observations. Verification always probes
+  -- the contents; source text and native artifacts are validated below either way.
+  let probeCurrent
+        | verify = fullProbe
+        | otherwise = do
+            units <- probeClosure context registrationUnit
+            let registrations = map (installedProvenance context) units
+                paths = installedHelper context : concatMap (map snd . installedInterfaces) units
+                request = object ["producer" .= producer, "helper" .= installedHelper context,
+                  "requested" .= registeredId registrationUnit, "registrations" .= registrations]
+                receipt = cache </> "installed-probes/v1/selections" </>
+                  shaHex (BL.toStrict (encode request)) ++ ".json"
+                checkInventory probe = require (jsonField probe "registrations" == Just registrations)
+                  "installed probe registration inventory changed"
+                validate = do
+                  (helperHash, probe) <- fullProbe
+                  -- The inner probe rediscovers registrations. Never record a
+                  -- newer closure under the outer request's earlier identity.
+                  checkInventory probe
+                  pure (Just (BS.unpack helperHash, probe))
+            -- File metadata does not reflect access changes. Keep the full
+            -- probe's read-access requirement without rereading its contents.
+            forM_ paths $ \path -> withBinaryFile path ReadMode (const (pure ()))
+            selected <- rememberSelection False receipt paths request validate
+            (helperHash, probe) <- maybe (fail "installed probe selection unavailable") pure selected
+            require (length helperHash == 32) "invalid installed probe helper digest"
+            checkInventory probe
+            after <- probeClosure context registrationUnit
+            require (after == units) "installed registrations changed while selecting probe"
+            pure (BS.pack helperHash, probe)
   evidence <- optionalIO $ do
     recipeHash <- digestFile recipe
     (rtsRegistration, _) <- installedLayoutHeaders context registrationUnit

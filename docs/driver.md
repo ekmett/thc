@@ -218,9 +218,12 @@ their GHC build recipe separately from native linking and Core publication.
 Installed Core bundles track their producing code and native tools separately
 from the driver executable. CLI-only edits reuse both; native-link changes
 rebuild affected bundles while reusing the GHC interfaces. Local component
-exports still track the driver executable. `--verify-artifacts` bypasses selection
-shortcuts and checks source archives and published hashes. Do not edit cache metadata to bypass a
-mismatch.
+exports still track the driver executable. Normal builds also reuse installed
+interface probes while the exact package registrations, helper and raw interface
+file sizes and modification times are unchanged. Source text and native artifacts
+still undergo content validation. `--verify-artifacts` bypasses selection shortcuts
+and checks raw interfaces, source archives and published hashes. Do not edit cache
+metadata to bypass a mismatch.
 
 Missing store exports are captured in a private Cabal build while their sources
 and generated headers exist. Successful publication removes its temporary

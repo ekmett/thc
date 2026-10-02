@@ -28,12 +28,16 @@ import GHC.Unit.Module.Deps
 import qualified GHC.Unit.Module.WholeCoreBindings as Foreign
 import FixtureSupport (CommandResult(..), runLogged, writeJson)
 import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, getPermissions,
-                         listDirectory, removeFile, removePathForcibly, setPermissions, executable, withCurrentDirectory)
+                         listDirectory, removeFile, removePathForcibly, setPermissions, executable, readable, withCurrentDirectory,
+                         getModificationTime, setModificationTime)
 import System.FilePath ((</>))
+import System.IO (IOMode(ReadMode), hPutStrLn, stderr, withBinaryFile)
+import System.IO.Error (isPermissionError)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import qualified System.Info as Info
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
+import THC.Driver.NativeCache (nativeToolIdentity)
 
 -- Two tiny genuine packages, with mutable -inplace IDs and a real imported
 -- dependency. The counting wrapper observes production helper calls; no export
@@ -148,7 +152,68 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
       warm "unchanged native tool environment")
     `finally` maybe (unsetEnv "SOURCE_DATE_EPOCH") (setEnv "SOURCE_DATE_EPOCH") epoch
   warm "restored native tool environment"
+  -- The ordinary build path may reuse probe metadata. It must still respond
+  -- to changed observations, and explicit verification must read actual bytes.
+  nativeTools <- nativeToolIdentity
+  let incremental = Project.prepareInstalledBundleWithVerification False nativeTools cache
+        (work </> "staging") (root </> "src/driver/cbits/target-layout.c") context unit
+      incrementalProbes label expectedProbes = do
+        before <- probeCount
+        result <- incremental >>= either (fail . show) pure
+        after <- probeCount
+        check (after == before + expectedProbes) (label ++ " used an unexpected interface probe")
+        pure result
+      selections = cache </> "installed-probes/v1/selections"
+  _ <- incrementalProbes "first normal selection" 1
+  _ <- incrementalProbes "unchanged normal selection" 0
+  warm "verification bypasses normal selection"
+  selectionNames <- listDirectory selections
+  selection <- case selectionNames of
+    [name] -> pure (selections </> name)
+    _ -> fail "Expected one normal probe selection"
+  BS.writeFile selection "corrupt selection"
+  _ <- incrementalProbes "corrupt normal selection" 1
+  removeFile selection
+  _ <- incrementalProbes "missing normal selection" 1
+  helperBytes <- BS.readFile wrapper
+  (do BS.appendFile wrapper "\n# changed helper for normal probe selection\n"
+      _ <- incrementalProbes "changed normal helper" 1
+      pure ()) `finally` BS.writeFile wrapper helperBytes
+  _ <- incrementalProbes "restored normal helper" 1
+  interfacePermissions <- getPermissions (hi "InterfaceCacheRoot")
+  (do setPermissions (hi "InterfaceCacheRoot") interfacePermissions {readable = False}
+      denied <- Exception.try (withBinaryFile (hi "InterfaceCacheRoot") ReadMode (const (pure ()))) :: IO (Either IOException ())
+      case denied of
+        Left problem | isPermissionError problem -> do
+          result <- Exception.try incremental :: IO (Either IOException (Either Installed.MissingCore Project.InstalledBundle))
+          check (case result of Left _ -> True; Right (Left _) -> True; _ -> False)
+            "Normal selection accepted an unreadable interface"
+        Left problem -> Exception.throwIO problem
+        Right () -> hPutStrLn stderr
+          "Unreadable-interface control unavailable: this host still permits reads after permission revocation")
+    `finally` setPermissions (hi "InterfaceCacheRoot") interfacePermissions
+  rawInterface <- BS.readFile (hi "InterfaceCacheRoot")
+  interfaceTime <- getModificationTime (hi "InterfaceCacheRoot")
+  (do BS.writeFile (hi "InterfaceCacheRoot") (BS.replicate (BS.length rawInterface) '\0')
+      setModificationTime (hi "InterfaceCacheRoot") interfaceTime
+      _ <- incrementalProbes "normal selection uses unchanged file observations" 0
+      invalid "verification rejects same-observation interface corruption")
+    `finally` (BS.writeFile (hi "InterfaceCacheRoot") rawInterface >>
+               setModificationTime (hi "InterfaceCacheRoot") interfaceTime)
+  incrementalDependency <- BS.readFile (hi "InterfaceCacheDependency")
+  (do BS.writeFile (hi "InterfaceCacheDependency") "corrupt dependency interface"
+      result <- Exception.try incremental :: IO (Either IOException (Either Installed.MissingCore Project.InstalledBundle))
+      check (case result of Left _ -> True; Right (Left _) -> True; _ -> False)
+        "Normal selection accepted a changed dependency interface")
+    `finally` BS.writeFile (hi "InterfaceCacheDependency") incrementalDependency
+  _ <- incrementalProbes "restored normal dependency" 1
   originalSource <- BS.readFile (source "InterfaceCacheRoot")
+  (do removeFile (source "InterfaceCacheRoot")
+      changed <- incrementalProbes "normal selection checks source absence" 0
+      check (Project.bundleHash (Project.installedBundle changed) /= Project.bundleHash (Project.installedBundle first))
+        "Normal selection retained unavailable source text")
+    `finally` BS.writeFile (source "InterfaceCacheRoot") originalSource
+  _ <- incrementalProbes "restored normal source" 0
   (do BS.appendFile (source "InterfaceCacheRoot") "\n-- changed source text only\n"
       changed <- cold "source text"
       check (Project.bundleHash (Project.installedBundle changed) /= Project.bundleHash (Project.installedBundle first))

@@ -16,7 +16,7 @@ module THC.Driver.Installed
   ( InstalledContext(..), InterfaceWay(..), interfaceWayName, packageGlobalArguments, helperDatabases, installedViewIdentity
   , InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
-  , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe
+  , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe, probeClosure
   , emptyRegistration, modulelessRegistration
   , boundedInterfaceProcess, boundedInterfaceProcessIn, boundedInterfaceProcessInput
   ) where
