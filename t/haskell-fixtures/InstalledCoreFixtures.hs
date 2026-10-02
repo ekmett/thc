@@ -152,7 +152,7 @@ prepareInstalledCoreProfile requestedSource root directory libraries = do
           pluginDb <- field plugin "packageDb"
           pluginUnit <- field plugin "unitId"
           pluginLibrary <- field plugin "sharedLibrary"
-          Wired.preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary initialContext originalUnits
+          Wired.preparePinnedInterfaces cache pluginDb pluginUnit pluginLibrary initialContext originalUnits
     Just source -> do
       plugin <- readJson (root </> "build/compiler/plugin.json")
       pluginDb <- field plugin "packageDb"
