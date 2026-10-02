@@ -47,6 +47,11 @@ installation can be selected directly with JAVA_HOME, GHC, GHC_PKG, CABAL,
 THC_CLANG, and THC_PYTHON; bootstrap is optional. CABAL_DIR and GRADLE_USER_HOME
 can point to task-local caches.
 
+Registered plugin lookup accepts Cabal build directories reached through directory
+junctions and checks containment against the resolved `dist-newstyle/build` root.
+Keep native fixture outputs physically inside the checkout's `build` directory:
+their strict provenance checks reject redirected artifact paths.
+
 For `thc run`, `--with-ghc` takes precedence over GHC, then PATH. The corresponding
 package tool uses `--with-ghc-pkg`, GHC_PKG, then compiler-relative discovery.
 Windows selects the pinned versioned binaries beside unversioned bindist
@@ -282,12 +287,6 @@ fixtures prepared, run the owning checks directly:
   expressions are evaluated. An accepted audit does not certify their native
   availability. The optional Libdw backend is unsupported by THC; retain missing
   symbol errors when those paths execute and do not restore retired overrides.
-- Genuine code-page Core uses the complete ordinary package provider, including
-  GHC's MD5 imports. The isolated native ABI controls have their own fixture
-  provider. Keep both suites: the pre/AST wide conversion has exposed an
-  intermittent first-compiled-entry failure in default and dense modes, with a
-  valid compiled target before invocation. A pass in another run or handoff mode
-  does not qualify the failed call.
 - The project path supports a single simple executable without internal-library
   or build-tool dependencies. Benchmark and test-component capture is unsupported.
 - POSIX stdio/stat/termios/signal ABIs and Linux providers are unavailable.

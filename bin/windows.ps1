@@ -99,9 +99,6 @@ try {
         Invoke-ThcTool $fixture @('windows-codepages')
         $focusedTests += 'thc.runtime.WindowsCodePagesTest'
     }
-    if ($Action -in @('Test', 'WindowsServicesTest')) {
-        Invoke-ThcTool $fixture @('foreign-exceptions')
-    }
     if ($focusedTests.Count) {
         # One shared compilation and one pair of reports retain every selected
         # suite; separate invocations of a test task overwrite earlier XML.

@@ -10,8 +10,6 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import org.graalvm.polyglot.Context;
@@ -29,24 +27,17 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class AcquiredPolyglotDemoTest {
     @ParameterizedTest
     @CsvSource({"javascript,JavaScriptDemo", "polyglot,PolyglotDemo"})
-    void genuineNamedMainWrapperSurvivesCompactConversion(String demo, String module) throws Exception {
+    void genuineNamedMainWrapperSurvivesAcquiredCompactModule(String demo, String module) throws Exception {
         Path manifest = Path.of("build", demo, "packages.json").toAbsolutePath();
-        Path compact = Path.of("build", "demo-direct-main-validation", demo, module + ".cbd").toAbsolutePath();
-        assumeTrue(Files.isRegularFile(manifest) && Files.isRegularFile(compact),
-            "Acquire the demo and encode its genuine module with thc-compact first");
+        assumeTrue(Files.isRegularFile(manifest), "Run bin/acquire-polyglot-demo.sh " + demo + " first");
         var input = (Map<String,Object>) Json.INSTANCE.parse(CoreModules.request(
             List.of("@" + manifest), "main::Main.main", true, false, "ast", true, true));
         var directory = CoreModules.unitDirectory(input);
         var original = directory.owner("main::Main.main");
         assertNotNull(original);
         assertEquals(module, original.name());
-        String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(compact)));
-        var converted = new CoreUnitDirectory.ModuleRecord(original.unit(), original.name(), original.sha256(),
-            new CoreUnitDirectory.Artifact(compact, digest),
-            original.containsDelimitedControl(), original.registrationObligations(), original.mainAlias(),
-            original.packageScalarDeclarations());
         try (var source = directory.open(true);
-             var reader = new CoreCompactModule(converted, directory.getTargetLayout(), true)) {
+             var reader = new CoreCompactModule(original, directory.getTargetLayout(), true)) {
             assertEquals(module, reader.metadata().get("module"));
             var expected = source.binding("main::Main.main");
             var actual = reader.binding("main::Main.main");

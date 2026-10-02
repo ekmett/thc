@@ -19,6 +19,36 @@ from plugin import one_package_path
 
 
 class RegisteredPathTest(unittest.TestCase):
+    def test_relocated_build_directory_keeps_ownership_boundary(self):
+        with TemporaryDirectory(prefix="plugin relocated ") as directory:
+            root = Path(directory).resolve()
+            storage = root / "storage"
+            storage.mkdir()
+            dist = root / "dist-newstyle"
+            if os.name == "nt":
+                import _winapi
+                # CreateJunction constructs its own native target prefix.
+                _winapi.CreateJunction(str(storage).removeprefix("\\\\?\\"), str(dist).removeprefix("\\\\?\\"))
+            else:
+                dist.symlink_to(storage, target_is_directory=True)
+            try:
+                build = dist / "build/thc"
+                build.mkdir(parents=True)
+                cache = dist / "cache"
+                cache.mkdir()
+                library = {"id": "thc-unit", "pkg-name": "thc", "component-name": "lib",
+                           "style": "local", "pkg-src": {"path": str(root)}, "dist-dir": str(build)}
+                plan = {"compiler-id": "ghc-9.14.1", "install-plan": [library]}
+                path = cache / "plan.json"
+                path.write_text(json.dumps(plan))
+                self.assertEqual(plugin.plugin_plan(root)[0], library)
+                library["dist-dir"] = str(root / "outside")
+                path.write_text(json.dumps(plan))
+                with self.assertRaisesRegex(RuntimeError, "Unexpected Cabal library build directory"):
+                    plugin.plugin_plan(root)
+            finally:
+                dist.rmdir() if os.name == "nt" else dist.unlink()
+
     def test_ghc_pkg_quoted_path_with_spaces(self):
         self.assertEqual(one_package_path('"/checkout with spaces/dist-newstyle/build"'),
                          "/checkout with spaces/dist-newstyle/build")
@@ -130,7 +160,7 @@ class PluginRegistryTest(unittest.TestCase):
         self.assertEqual(arguments[-3:-1], ["--ipid", "describe"])
         if "--package-db" not in arguments:
             self.assertEqual(arguments[-1], "base-unit")
-            root, record = Path("/boot"), self.boot
+            root, record = self.root / "boot", self.boot
         else:
             database = Path(arguments[arguments.index("--package-db") + 1])
             root, record = database.parent, (database / (arguments[-1] + ".conf")).read_text()

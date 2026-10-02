@@ -17,8 +17,7 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-2025
-    # The required native producers take over 40 minutes even with warm tools.
-    timeout-minutes: 120
+    timeout-minutes: 45
     # Upstream submodules do not inherit the root .gitattributes file.
     env:
       GIT_CONFIG_COUNT: '1'

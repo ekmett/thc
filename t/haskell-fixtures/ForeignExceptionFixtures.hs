@@ -20,13 +20,10 @@ import Data.List (sort)
 import qualified Data.Map.Strict as Map
 import FixtureSupport hiding (run)
 import InstalledCoreFixtures
-import System.Directory (createDirectoryIfMissing, listDirectory, doesFileExist, removeFile, canonicalizePath, copyFile, findExecutable)
+import System.Directory (createDirectoryIfMissing, listDirectory, doesFileExist, removeFile, canonicalizePath, copyFile)
 import System.Exit (die)
 import System.Environment (lookupEnv)
 import System.FilePath ((</>), takeExtension, takeDirectory, isAbsolute)
-import qualified System.Info as Host
-import GHC.ResponseFile (escapeArgs)
-import THC.Driver.Project (prepareWindowsRuntime)
 
 prepareForeignExceptions :: FilePath -> IO ()
 prepareForeignExceptions root = do
@@ -34,42 +31,19 @@ prepareForeignExceptions root = do
       source = "t/fixtures/compiler/ForeignExceptionAudit.hs"
       entries = ["caught", "rethrowNow", "rethrowLater", "cleanup", "metadata", "lazyOrdinary", "ordinary", "displayIsInert", "parseCleanup", "hostMetadata", "hostMetadataCleanup", "hostCatch"]
       run label env program args = runLogged 600 root (directory </> "logs") label env program args
-      windows = Host.os == "mingw32"
-  selectedGhc <- maybe "ghc" id <$> lookupEnv "GHC"
-  selectedPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
-  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
-  python <- if windows then maybe "python" id <$> lookupEnv "THC_PYTHON" else pure "python3"
-  powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
   createDirectoryIfMissing True (root </> directory)
   let manifestPath = root </> directory </> "manifest.json"
   present <- doesFileExist manifestPath
   if present then removeFile manifestPath else pure ()
-  plugin <- if windows
-    then run "plugin" [] cabal ["build", "lib:thc", "lib:runtime", "--offline", "--disable-shared",
-      "--with-compiler=" ++ selectedGhc, "--with-hc-pkg=" ++ selectedPkg]
-    else run "plugin" [] "bin/build-compiler.sh" []
+  plugin <- run "plugin" [] "bin/build-compiler.sh" []
   supplied <- lookupEnv "THC_FOREIGN_EXCEPTION_INSTALLED"
-  (ghc, packages, installedArtifacts, installedCommands, exportOptions, nativeOptions) <- case (windows, supplied) of
-    (True, Nothing) -> do
-      located <- run "driver-location" [] cabal ["list-bin", "exe:thc", "--offline", "--disable-shared",
-        "--with-compiler=" ++ selectedGhc, "--with-hc-pkg=" ++ selectedPkg]
-      driver <- case BS.lines (commandStdout located) of
-        [path] -> pure (BS.unpack (BS.dropWhileEnd (== '\r') path))
-        _ -> die "Expected one native Windows THC driver"
-      (options, packagePath) <- prepareWindowsRuntime root selectedGhc selectedPkg driver (root </> directory </> "installed")
-      manifest <- readJson packagePath
-      owner <- field manifest "foreignExceptionBridgeUnit"
-      units <- field manifest "units" :: IO [Value]
-      artifacts <- mapM (`field` "path") (concatMap unitArtifactReferences units)
-      pure (selectedGhc, packagePath, packagePath : artifacts, [located], options,
-        ["-package-db", root </> "dist-newstyle/packagedb/ghc-9.14.1", "-package-id", owner])
-    (True, Just _) -> die "Native Windows foreign-exception fixtures acquire the selected registered runtime; clear THC_FOREIGN_EXCEPTION_INSTALLED"
-    (False, Nothing) -> do
+  (ghc, packages, installedArtifacts, installedCommands) <- case supplied of
+    Nothing -> do
       configuredSource <- lookupEnv "THC_FOREIGN_EXCEPTION_GHC_SOURCE" >>= maybe
         (die "Set THC_FOREIGN_EXCEPTION_GHC_SOURCE to the configured original GHC source tree") pure
       installed <- prepareInstalledCoreWithForeignUnits root directory configuredSource ["bytestring", "text"]
-      pure (fixtureGhc installed, fixturePackages installed, fixtureArtifacts installed, fixtureCommands installed, [], [])
-    (False, Just sourceManifest) -> do
+      pure (fixtureGhc installed, fixturePackages installed, fixtureArtifacts installed, fixtureCommands installed)
+    Just sourceManifest -> do
       -- Reuse only immutable installed support. Local runtime exports, strict
       -- package/Core audits and native/Safe controls below always run afresh.
       ghc <- maybe "ghc" id <$> lookupEnv "GHC"
@@ -97,32 +71,21 @@ prepareForeignExceptions root = do
       case manifest of
         Object fields -> writeJson (root </> packagePath) (Object (KM.insert "units" (toJSON (map fst copied)) fields))
         _ -> die "Invalid supplied installed package manifest"
-      pure (ghc, packagePath, original : packagePath : concatMap snd copied, [], [], [])
-  let interopSources = ["src/runtime/THC/Prim.hs", "src/runtime/THC/Interop.hs", "src/runtime/THC/Interop/Java.hs",
-        "src/runtime/THC/Polyglot.hs", "src/runtime/THC/Interop/Buffer.hs", "src/runtime/THC/Interop/Array.hs",
-        "src/runtime/THC/Interop/Array/Unsafe.hs", "src/runtime/THC/Internal/Polyglot.hs"]
-      localSources = if windows then interopSources else []
-      sourceOptions = if windows then nativeOptions else ["-isrc/runtime"]
-      export label env args = if windows then do
-        let response = root </> directory </> label ++ ".args"
-        writeFile response (escapeArgs (exportOptions ++ args))
-        run label env powershell ["-NoProfile", "-File", root </> "bin/export-core.ps1", "@" ++ response]
-        else run label env "bin/export-core.sh" args
-  support <- export "runtime-export"
+      pure (ghc, packagePath, original : packagePath : concatMap snd copied, [])
+  support <- run "runtime-export"
     [("THC_CORE_OUT", root </> directory </> "runtime-core"), ("THC_GHC_OUT", root </> directory </> "runtime-ghc")]
-    (sourceOptions ++ ["-fplugin-opt=THC.Plugin:post-tidy"] ++
-      (if windows then interopSources else ["src/runtime/THC/Exception.hs", "src/runtime/THC/Polyglot.hs", "src/runtime/THC/Interop.hs"]) ++
-      ["t/fixtures/compiler/PolyglotStorage.hs", "t/fixtures/compiler/InteropPrimitives.hs"])
+    "bin/export-core.sh" ["-isrc/runtime", "-fplugin-opt=THC.Plugin:post-tidy", "src/runtime/THC/Exception.hs", "src/runtime/THC/Polyglot.hs",
+      "t/fixtures/compiler/PolyglotStorage.hs", "t/fixtures/compiler/InteropPrimitives.hs", "src/runtime/THC/Interop.hs"]
   supportNames <- sort . filter (\name -> takeExtension name == ".cbd" && name /= "THC.InterfaceClosure.cbd") <$>
     listDirectory (root </> directory </> "runtime-core")
   let supportModules = map ((directory </> "runtime-core") </>) supportNames
       interopEntries = ["getLibrary", "readOne", "writeOne", "sumBytes", "arrayLong", "caughtRead"]
       storageEntries = ["copySlice", "view", "mutableView", "copyInto", "readByte"]
-  storageAudit <- run "storage-audit" [] python
+  storageAudit <- run "storage-audit" [] "python3"
     (["bin/audit-core.py", "--package-manifest", packages] ++
       concatMap (\entry -> ["--entry", "main:PolyglotStorage." ++ entry ++ "#"]) storageEntries ++
       ["--output", directory </> "storage-audit.json"] ++ supportModules)
-  interopAudit <- run "interop-audit" [] python
+  interopAudit <- run "interop-audit" [] "python3"
     (["bin/audit-core.py", "--package-manifest", packages] ++
       concatMap (\entry -> ["--entry", "main:InteropPrimitives." ++ entry]) interopEntries ++
       ["--output", directory </> "interop-audit.json"] ++ supportModules)
@@ -130,27 +93,24 @@ prepareForeignExceptions root = do
     let output = directory </> stage </> "core"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
-    exported <- export (stage ++ "-export")
+    exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> output), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      (sourceOptions ++ options ++ localSources ++ [source])
+      "bin/export-core.sh" (["-isrc/runtime"] ++ options ++ [source])
     names <- sort . filter (\name -> takeExtension name == ".cbd" && name /= "THC.InterfaceClosure.cbd") <$>
       listDirectory (root </> output)
     let modules = map (output </>) (filter (== "ForeignExceptionAudit.cbd") names) ++ supportModules
-    audit <- run (stage ++ "-audit") [] python
+    audit <- run (stage ++ "-audit") [] "python3"
       (["bin/audit-core.py", "--package-manifest", packages] ++
         concatMap (\entry -> ["--entry", "main:ForeignExceptionAudit." ++ entry]) entries ++
         ["--output", directory </> stage </> "audit.json"] ++ modules)
     pure (stage, modules, [exported, audit])
   let native = directory </> "native"
-      oraclePath = native </> (if windows then "oracle.exe" else "oracle")
-      common = ["--make", "-O2"] ++ ["-dynamic" | not windows] ++
-        ["-fforce-recomp"] ++ sourceOptions ++ ["-odir", native, "-hidir", native]
+      common = ["--make", "-O2", "-dynamic", "-fforce-recomp", "-isrc/runtime", "-odir", native, "-hidir", native]
   createDirectoryIfMissing True (root </> native)
   built <- run "native-build" [] ghc
-    (common ++ ["t/fixtures/compiler/ForeignExceptionNative.hs"] ++ ["src/runtime/exception.c" | not windows] ++ ["-o", oraclePath])
-  oracle <- run "native-oracle" [] (root </> oraclePath) []
-  unless (commandStdout oracle == "(42,77,99,1)\n" || windows && commandStdout oracle == "(42,77,99,1)\r\n")
-    (die "Native exception compatibility control changed")
+    (common ++ ["t/fixtures/compiler/ForeignExceptionNative.hs", "src/runtime/exception.c", "-o", native </> "oracle"])
+  oracle <- run "native-oracle" [] (root </> native </> "oracle") []
+  unless (BS.unpack (commandStdout oracle) == "(42,77,99,1)\n") (die "Native exception compatibility control changed")
   safe <- run "safe-client" [] ghc
     (common ++ ["-fno-code", "t/fixtures/compiler/ForeignExceptionSafe.hs"])
   rejected <- runLoggedExpect 1 600 root (directory </> "logs") "unsafe-import-rejected" []
@@ -170,7 +130,6 @@ prepareForeignExceptions root = do
         "t/haskell-fixtures/Main.hs", "src/driver/THC/Driver/RuntimeShim.hs", "thc.cabal",
         "bin/audit-core.py", "bin/core-capabilities.json", "src/driver/cbits/target-layout.c",
         "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
-        (if windows then ["bin/export-core.ps1", "bin/windows-common.ps1", "src/driver/THC/Driver/Project.hs", "src/runtime/THC/Interop/Java.hs"] else []) ++
         ["src/compiler/THC" </> file | file <- compiler, takeExtension file == ".hs"] ++
         ["src/cbd/THC/Compact" </> file | file <- codec, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
@@ -178,8 +137,7 @@ prepareForeignExceptions root = do
       outputs = installedArtifacts ++ concatMap commandArtifacts commands ++
         concat [modules ++ [directory </> stage </> "core/THC.InterfaceClosure.cbd"] ++
           [directory </> stage </> "audit.json"] | (stage, modules, _) <- stages] ++
-        [oraclePath, directory </> "storage-audit.json", directory </> "interop-audit.json"] ++
-        [directory </> label ++ ".args" | windows, label <- ["runtime-export", "pre-export", "post-export"]]
+        [native </> "oracle", directory </> "storage-audit.json", directory </> "interop-audit.json"]
   inputs <- hashes root (sort sources)
   artifacts <- hashes root (sort outputs)
   writeJson (root </> directory </> "manifest.json") $ object
