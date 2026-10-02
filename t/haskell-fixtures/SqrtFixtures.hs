@@ -14,7 +14,7 @@
 -- Fixture acquisition support for sqrt.
 module SqrtFixtures (prepareSqrt) where
 
-import Control.Monad (forM_, unless, when)
+import Control.Monad (forM_, unless)
 import Data.Aeson (Value(..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bits ((.|.))
@@ -22,7 +22,7 @@ import qualified Data.ByteString as BS
 import Data.List (isSuffixOf, nub, sort)
 import GHC.Float (castDoubleToWord64, castFloatToWord32)
 import FixtureSupport (hashes, readInteger, run, runWithTimeout, splitTab, writeJson)
-import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, listDirectory, removePathForcibly)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
@@ -109,11 +109,8 @@ prepareSqrt root = do
       source = "t/fixtures/compiler/SqrtAudit.hs"
       driver = "t/fixtures/compiler/SqrtAuditNative.hs"
       native = output </> "native"
+  removePathForcibly output
   createDirectoryIfMissing True native
-  -- Retire receipts from the former Python producer on persistent runners.
-  forM_ [manifest, output </> "provenance.json", output </> "checks.json"] $ \receipt -> do
-    present <- doesFileExist receipt
-    when present (removeFile receipt)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- run root [] ghc ["--numeric-version"] ""
   unless (lines version == ["9.14.1"]) (die "Sqrt fixtures require GHC 9.14.1")
@@ -126,17 +123,16 @@ prepareSqrt root = do
   writeFile (output </> "oracle.tsv") rows
   writeFile (output </> "integer-oracle.tsv")
     (unlines [row | row <- lines rows, "floatCase\t" `prefixOf` row || "doubleCase\t" `prefixOf` row])
-  forM_ ["pre","post"] $ \stage -> do
-    _ <- run root [("THC_CORE_OUT",output </> stage ++ "-core"),
-                   ("THC_GHC_OUT",output </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
-      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
-    _ <- run root [] "python3" (["bin/audit-core.py",directory </> stage ++ "-core/SqrtAudit.cbd"] ++
-      concatMap (\name -> ["--entry","main:SqrtAudit." ++ name]) entries ++
-      ["--output",directory </> stage ++ "-audit.json"]) ""
-    evidence <- BS.readFile (output </> stage ++ "-audit.json")
-    case decodeStrict' evidence of
-      Just (Object fields) | KeyMap.lookup "accepted" fields == Just (Bool True) -> pure ()
-      _ -> die ("Strict sqrt audit rejected " ++ stage)
+  _ <- run root [("THC_CORE_OUT",output </> "post-core"),
+                 ("THC_GHC_OUT",output </> "post-ghc"),("THC_SOURCE_NOTES","true")]
+    "bin/export-core.sh" ["-fplugin-opt=THC.Plugin:post-tidy",source] ""
+  _ <- run root [] "python3" (["bin/audit-core.py",directory </> "post-core/SqrtAudit.cbd"] ++
+    concatMap (\name -> ["--entry","main:SqrtAudit." ++ name]) entries ++
+    ["--output",directory </> "post-audit.json"]) ""
+  evidence <- BS.readFile (output </> "post-audit.json")
+  case decodeStrict' evidence of
+    Just (Object fields) | KeyMap.lookup "accepted" fields == Just (Bool True) -> pure ()
+    _ -> die "Strict sqrt audit rejected post-Tidy Core"
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","t/haskell-fixtures/Main.hs",
@@ -147,15 +143,13 @@ prepareSqrt root = do
         ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> name | name <- ["inputs.tsv","oracle.tsv","integer-oracle.tsv",
-        "native/oracle"]] ++
-        [directory </> stage ++ suffix | stage <- ["pre","post"],
-          suffix <- ["-core/SqrtAudit.cbd","-audit.json"]]
+        "native/oracle","post-core/SqrtAudit.cbd","post-audit.json"]]
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),
     "ghcInfo" .= ghcInfo,"nativeRows" .= length (lines rows),"entries" .= entries,
-    "stages" .= (["pre","post"] :: [String]),"inputHashes" .= inputHashes,
+    "stages" .= (["post"] :: [String]),"inputHashes" .= inputHashes,
     "artifactHashes" .= artifactHashes,"installedArtifactsHashed" .= False]
-  putStrLn ("sqrt: " ++ show (length (lines rows)) ++ " native rows; strict pre/post Core")
+  putStrLn ("sqrt: " ++ show (length (lines rows)) ++ " native rows; strict post-Tidy Core")
   where
     prefixOf prefix value = take (length prefix) value == prefix

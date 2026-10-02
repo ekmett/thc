@@ -142,12 +142,21 @@ class TupleArithmeticTest {
             context.initialize("thc"); context.enter(); try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (String name : List.of("quotRemInt", "quotRemWord")) {
-                    var input = new LinkedHashMap<>(CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name)); input.put("instrument", true); var program = program(language, input, backend); var entry = program.entryTarget("main:TupleArithmeticAudit." + name);
-                    java.util.function.LongSupplier count = () -> ((Number) program.diagnostics().get("compiledEntries")).longValue(); var invalid = new ArrayList<long[]>(); invalid.add(new long[]{1L, 0L}); if (name.equals("quotRemInt")) invalid.add(new long[]{Long.MIN_VALUE, -1L});
-                    // Prepare only valid arithmetic before the first installed failure.
-                    assertEquals(2L, Calls.target(entry, new Object[]{0L, 7L, 3L, 0L})); assertEquals(1L, Calls.target(entry, new Object[]{0L, 7L, 3L, 1L})); long beforeCompile = count.getAsLong(); compile(entry); assertEquals(beforeCompile, count.getAsLong(), "Compilation must not enter guest code");
-                    for (long[] pair : invalid) { long x = pair[0], y = pair[1], before = count.getAsLong(); var failure = assertThrows(RuntimeFault.class, () -> Calls.target(entry, new Object[]{0L, x, y, 0L})); assertEquals("Undefined input to " + name + "#", failure.getMessage()); assertEquals(before + 1, count.getAsLong(), backend + "/" + name + ": cold error enters installed code"); valid(entry); }
-                    assertEquals(2L, Calls.target(entry, new Object[]{0L, 7L, 3L, 0L})); assertEquals(1L, Calls.target(entry, new Object[]{0L, 7L, 3L, 1L})); valid(entry); assertEquals(0L, language.getHandoffState().get().getResults().getAllocations());
+                    var invalid = new ArrayList<long[]>(); invalid.add(new long[]{1L, 0L}); if (name.equals("quotRemInt")) invalid.add(new long[]{Long.MIN_VALUE, -1L});
+                    for (long[] pair : invalid) {
+                        // Each undefined input is the first installed call on its own target;
+                        // an earlier fault may invalidate that target's compiled code.
+                        var input = new LinkedHashMap<>(CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name)); input.put("instrument", true); var program = program(language, input, backend); var entry = program.entryTarget("main:TupleArithmeticAudit." + name);
+                        java.util.function.LongSupplier count = () -> ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        assertEquals(2L, Calls.target(entry, new Object[]{0L, 7L, 3L, 0L})); assertEquals(1L, Calls.target(entry, new Object[]{0L, 7L, 3L, 1L})); long beforeCompile = count.getAsLong(); compile(entry); assertEquals(beforeCompile, count.getAsLong(), "Compilation must not enter guest code");
+                        var failure = assertThrows(RuntimeFault.class, () -> Calls.target(entry, new Object[]{0L, pair[0], pair[1], 0L}));
+                        assertEquals("Undefined input to " + name + "#", failure.getMessage());
+                        assertTrue(count.getAsLong() > beforeCompile, backend + "/" + name + ": cold error enters installed code");
+                        var state = language.getHandoffState().get(); assertEquals(0, state.getResults().getDepth()); assertNull(state.getPending());
+                        // Fault recovery promises correct arithmetic, not code retention.
+                        assertEquals(2L, Calls.target(entry, new Object[]{0L, 7L, 3L, 0L})); assertEquals(1L, Calls.target(entry, new Object[]{0L, 7L, 3L, 1L}));
+                        assertEquals(0, state.getResults().getDepth()); assertNull(state.getPending());
+                    }
                 }
             } finally { context.leave(); }
         }

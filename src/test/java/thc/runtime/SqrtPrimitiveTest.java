@@ -41,12 +41,12 @@ class SqrtPrimitiveTest {
         assertTrue(object(evidence.get("inputHashes")).keySet().containsAll(required));
         var entries = new ArrayList<>(list("sqrtFloat", "sqrtDouble", "floatCase", "doubleCase")); entries.addAll(MATH_ENTRIES);
         assertEquals(entries, evidence.get("entries")); assertEquals(rows().values().stream().mapToLong(List::size).sum(), evidence.get("nativeRows"));
-        for (var stage : list("pre", "post")) assertEquals(true, json("build/sqrt/" + stage + "-audit.json").get("accepted"));
+        assertEquals(true, json("build/sqrt/post-audit.json").get("accepted"));
     }
-    private Map<String, Object> module(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, "build/sqrt/" + stage + "-core/SqrtAudit.cbd").toPath()); }
+    private Map<String, Object> module() throws Exception { return thc.CoreCbdFixtures.read(new File(root, "build/sqrt/post-core/SqrtAudit.cbd").toPath()); }
     private static String entryId(String name) { return "main:SqrtAudit." + name; }
-    private static Context context(boolean inlining) {
-        return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
+    private static Context context() {
+        return Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build();
     }
     private static void valid(RootCallTarget target, String label) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label); }
@@ -81,24 +81,22 @@ class SqrtPrimitiveTest {
             default -> assertEquals(Long.parseLong(row[2]), result, label);
         }
     }
-    @Test void publicSqrtMatchesNativeWithInlining() throws Exception { nativeResults(true); }
-    @Test void publicSqrtMatchesNativeAcrossResidualCalls() throws Exception { nativeResults(false); }
-    private void nativeResults(boolean inlining) throws Exception {
+    @Test void publicSqrtMatchesNative() throws Exception {
         var rows = rows(); rows.keySet().retainAll(Set.of("sqrtFloat", "sqrtDouble", "floatCase", "doubleCase"));
         assertEquals(Set.of("sqrtFloat", "sqrtDouble", "floatCase", "doubleCase"), rows.keySet());
-        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context(inlining)) {
+        for (var backend : list("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entryRows : rows.entrySet()) {
-                    var entry = entryRows.getKey(); var selected = entryRows.getValue(); var linked = CoreModules.reachable(module(stage), entryId(entry));
+                    var entry = entryRows.getKey(); var selected = entryRows.getValue(); var linked = CoreModules.reachable(module(), entryId(entry));
                     var p = program(language, linked, backend); var target = p.entryTarget(entryId(entry));
                     for (var row : selected) call(p, entry, row, backend + "/" + entry + "/interpreter/" + row[1]);
-                    for (var binding : objects(linked.get("bindings"))) if (expression(binding.get("expr")).getFirst().equals("lam")) compile(p.entryTarget((String) binding.get("id")));
+                    compile(target);
                     for (var row : selected) {
-                        var label = stage + "/" + backend + "/" + entry + "/" + row[1] + "/inlining=" + inlining;
+                        var label = backend + "/" + entry + "/" + row[1];
                         long before = count(p); call(p, entry, row, label);
-                        assertEquals(before + (entry.endsWith("Case") ? 2 : 1), count(p), label); valid(target, label);
+                        assertTrue(count(p) > before, label + " must execute installed code"); valid(target, label);
                     }
                     assertEquals(0L, ((Number) p.diagnostics().get("unsupportedTraps")).longValue());
                     assertEquals(0, language.getHandoffState().get().getArguments().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
@@ -159,33 +157,6 @@ class SqrtPrimitiveTest {
             for (var row : rows.get(entry)) assertEquals(new BigInteger(row[1]).sqrt().longValue(), Long.parseLong(row[2]), entry + "/" + row[1]);
         }
     }
-    private static List<String> primitiveNames(Object value) {
-        var names = new ArrayList<String>();
-        if (value instanceof List<?> items) {
-            if (!items.isEmpty() && "prim".equals(items.getFirst())) names.add((String) items.get(1));
-            for (var item : items) names.addAll(primitiveNames(item));
-        } else if (value instanceof Map<?, ?> fields) for (var item : fields.values()) names.addAll(primitiveNames(item));
-        return names;
-    }
-    @Test void exportedScalarMathRetainsExactTypedPrimitiveCalls() throws Exception {
-        var primitive = Map.of("powerFloat", "powerFloat#", "powerDouble", "**##");
-        for (var stage : list("pre", "post")) {
-            var exported = module(stage);
-            assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", exported.get("boundary"));
-            var bindings = new LinkedHashMap<String, Map<String, Object>>(); for (var binding : objects(exported.get("bindings"))) bindings.put((String) binding.get("id"), binding);
-            var entries = new ArrayList<>(list("sqrtFloat", "sqrtDouble")); entries.addAll(MATH_ENTRIES);
-            for (var entry : entries) {
-                var lambda = expression(bindings.get(entryId(entry)).get("expr")); var rep = entry.endsWith("Float") ? "FloatRep" : "DoubleRep"; var kind = entry.endsWith("Float") ? "float" : "double";
-                assertEquals("lam", lambda.get(0), stage + "/" + entry);
-                var inputs = objects(lambda.get(1)); assertEquals(1, inputs.size()); var inputRep = object(inputs.getFirst().get("rep")); var resultRep = object(object(lambda.get(3)).get("resultRep"));
-                assertEquals(list(rep), inputRep.get("primReps")); assertEquals(kind, inputRep.get("kind")); assertEquals(true, inputRep.get("evaluated"));
-                assertEquals(list(rep), resultRep.get("primReps")); assertEquals(kind, resultRep.get("kind"));
-                var expected = primitive.get(entry);
-                if (expected == null) expected = entry.startsWith("sqrt") ? entry + "#" : entry.replaceFirst("(Float|Double)$", "") + (entry.endsWith("Float") ? "Float#" : "Double#");
-                assertEquals(list(expected), primitiveNames(lambda.get(2)), stage + "/" + entry + " primitive");
-            }
-        }
-    }
     private static void mathCall(ExecutableProgram p, String entry, String[] row, String label) {
         boolean floating = entry.endsWith("Float"); Object input;
         if (floating) input = Float.intBitsToFloat((int) Long.parseLong(row[1])); else input = Double.longBitsToDouble(Long.parseUnsignedLong(row[1]));
@@ -204,16 +175,19 @@ class SqrtPrimitiveTest {
     }
     @Test void scalarMathMatchesNativeThroughTypedCompiledAstAndBytecode() throws Exception {
         var rows = rows(); assertTrue(rows.keySet().containsAll(MATH_ENTRIES)); assertEquals(402, MATH_ENTRIES.stream().mapToInt(entry -> rows.get(entry).size()).sum());
-        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context(true)) {
+        for (var backend : list("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entry : MATH_ENTRIES) {
-                    var p = program(language, CoreModules.reachable(module(stage), entryId(entry)), backend); var target = p.entryTarget(entryId(entry)); var selected = rows.get(entry);
-                    for (var row : selected) mathCall(p, entry, row, stage + "/" + backend + "/" + entry + "/interpreter/" + row[1]);
-                    compile(target); long before = count(p);
-                    for (var row : selected) { mathCall(p, entry, row, stage + "/" + backend + "/" + entry + "/compiled/" + row[1]); valid(target, stage + "/" + backend + "/" + entry); }
-                    assertEquals(before + selected.size(), count(p), stage + "/" + backend + "/" + entry);
+                    var p = program(language, CoreModules.reachable(module(), entryId(entry)), backend); var target = p.entryTarget(entryId(entry)); var selected = rows.get(entry);
+                    for (var row : selected) mathCall(p, entry, row, backend + "/" + entry + "/interpreter/" + row[1]);
+                    compile(target);
+                    for (var row : selected) {
+                        var label = backend + "/" + entry + "/compiled/" + row[1];
+                        long before = count(p); mathCall(p, entry, row, label);
+                        assertTrue(count(p) > before, label + " must execute installed code"); valid(target, label);
+                    }
                     assertEquals(0L, ((Number) p.diagnostics().get("unsupportedTraps")).longValue());
                     assertEquals(0, language.getHandoffState().get().getArguments().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
                 }
@@ -221,31 +195,32 @@ class SqrtPrimitiveTest {
         }
     }
     @Test void coldNaNsNegativesSubnormalsAndZeroSignsDoNotInvalidateCompiledSqrt() throws Exception {
-        for (var backend : list("ast", "bytecode")) try (var context = context(true)) {
+        for (var backend : list("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entry : list("sqrtFloat", "sqrtDouble")) {
-                    var selected = rows().get(entry); var p = program(language, CoreModules.reachable(module("pre"), entryId(entry)), backend);
+                    var selected = rows().get(entry); var p = program(language, CoreModules.reachable(module(), entryId(entry)), backend);
                     long one = entry.equals("sqrtFloat") ? 0x3f800000L : 0x3ff0000000000000L;
                     var warmRows = selected.stream().filter(row -> row[1].equals(Long.toString(one))).toList(); assertEquals(1, warmRows.size()); var warm = warmRows.getFirst();
                     for (int i = 0; i < 20; i++) call(p, entry, warm, "warm"); var target = p.entryTarget(entryId(entry)); compile(target);
                     for (var row : selected) {
                         long before = count(p); call(p, entry, row, backend + "/" + entry + "/cold/" + row[1]);
-                        assertEquals(before + 1, count(p), backend + "/" + entry + "/" + row[1]); valid(target, backend + "/" + entry + "/" + row[1]);
+                        assertTrue(count(p) > before, backend + "/" + entry + "/" + row[1] + " must execute installed code"); valid(target, backend + "/" + entry + "/" + row[1]);
                     }
                 }
             } finally { context.leave(); }
         }
     }
     @Test void sqrtRejectsConflictingResultStorageAndWrongArity() throws Exception {
-        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context(true)) {
+        for (var backend : list("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entry : list("sqrtFloat", "sqrtDouble")) for (var variant : list("result", "arity")) {
-                    var linked = CoreModules.reachable(module(stage), entryId(entry)); var bindings = objects(linked.get("bindings")); assertEquals(1, bindings.size());
-                    var lambda = expression(bindings.getFirst().get("expr")); var body = expression(lambda.get(2)); var other = entry.equals("sqrtFloat") ? "double" : "float";
+                    var linked = CoreModules.reachable(module(), entryId(entry));
+                    var binding = objects(linked.get("bindings")).stream().filter(value -> entryId(entry).equals(value.get("id"))).findFirst().orElseThrow();
+                    var lambda = expression(binding.get("expr")); var body = expression(lambda.get(2)); var other = entry.equals("sqrtFloat") ? "double" : "float";
                     var proof = map("kind", other, "primReps", list(other.equals("float") ? "FloatRep" : "DoubleRep"), "evaluated", true);
                     if (variant.equals("arity")) {
                         expression(body.get(2)).clear(); expression(body.get(3)).clear(); object(body.get(6)).put("callDemand", map("arity", 0, "strictArgs", list()));

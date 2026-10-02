@@ -1799,10 +1799,12 @@ def allowed_payload(name):
                                                 ("managed-address-reads", "{stage}-core", "ManagedAddressReadAudit"))
                 for stage in ("pre", "post") for module in (fixture, "THC.InterfaceClosure")}:
         return True
+    if name == "build/sqrt/post-core/SqrtAudit.cbd":
+        return True
     if name in {f"build/{family}/{stage}-core/{module}.cbd"
                 for family, module in (("word-floating", "WordFloatingAudit"),
                                        ("scalar-bitcasts", "ScalarBitCastAudit"),
-                                       ("fused-floating", "FloatingAudit"), ("sqrt", "SqrtAudit"))
+                                       ("fused-floating", "FloatingAudit"))
                 for stage in ("pre", "post")}:
         return True
     if name in {f"build/{family}/{stage}/core/{module}.cbd"

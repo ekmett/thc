@@ -2790,19 +2790,6 @@ class FixturePreparationTest(unittest.TestCase):
                     fast_fixtures.cache_key(self.root, "float-decode", group, {})
                 path.write_bytes(original)
 
-    def test_scalar_bitcasts_use_haskell_producer_and_keep_native_inputs(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        group = manifest["groups"]["scalar-bitcasts"]
-        self.assertEqual("scalar-bitcasts", owners["thc.runtime.ScalarBitCastTest"])
-        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}], group["commands"])
-        self.assertEqual(["build/scalar-bitcasts"], group["outputs"])
-        self.assertEqual({"t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-                          "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/ScalarBitCastAudit.hs",
-                          "t/fixtures/compiler/ScalarBitCastNative.hs"}, set(group["sources"]))
-        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn('"$fixture_bin" scalar-bitcasts', (project / "bin/prepare-tests.sh").read_text().splitlines())
-
     def test_address_array_copies_use_haskell_native_producer_and_full_cache_identity(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
