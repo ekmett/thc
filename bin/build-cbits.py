@@ -117,9 +117,9 @@ def main():
             raise SystemExit("Windows cbits require llvm-dis beside Clang, on PATH, or selected by THC_LLVM_DIS")
     sources = {"package-pointer": ROOT / "src/main/c/package-pointer-api.c",
                "md5": ROOT / "src/main/c/md5-api.c"}
-    if system == "Linux":
+    if system in ("Linux", "Darwin"):
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
-        if arch == "x86_64":
+        if system == "Linux" and arch == "x86_64":
             sources["wait-status"] = ROOT / "src/main/c/wait-status-api.c"
     unix_headers = list(libdir.rglob("HsUnix.h")) if "wait-status" in sources else []
     if "wait-status" in sources and len(unix_headers) != 1:

@@ -59,7 +59,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/CoreVectorMemory.java",
                   "src/main/java/thc/runtime/VectorByteArrayExpression.java",
                   "src/main/java/thc/runtime/VectorMemory.java")
-MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -352,20 +352,7 @@ SIMD128_ARRAY_OUTPUTS = frozenset("build/simd128-arrays/" + name for name in (
     *(stage + "-" + name + "-audit.json" for stage in ("pre", "post") for name in SIMD128_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD128_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
-BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
-                  "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
-BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "missing-source")
-BIGNAT_COMMANDS = ("plugin-build", "boot-export", "native-build", "native-oracle",
-                   *(f"{stage}-export" for stage in ("pre", "post")),
-                   *(f"{stage}-{name}-audit" for stage in ("pre", "post") for name in BIGNAT_AUDITS))
-BIGNAT_OUTPUTS = frozenset("build/bignat-literals/" + path for path in (
-    "manifest.json", "requests.tsv", "oracle.tsv", "boot/boot-provenance.json",
-    *(f"boot/core/GHC.Internal.Bignum.{name}{suffix}" for name in ("BigNat", "Integer", "Natural") for suffix in (".cbd",)),
-    *(f"native/{name}" for name in ("bignat-literal-oracle", "Main.hi", "Main.o", "BigNatLiteralAudit.hi", "BigNatLiteralAudit.o")),
-    *(f"{stage}-core/{name}.cbd" for stage in ("pre", "post") for name in ("BigNatLiteralAudit", "THC.InterfaceClosure")),
-    *(f"{stage}-{name}.audit.json" for stage in ("pre", "post") for name in BIGNAT_AUDITS),
-    *(f"commands/{name}.{suffix}" for name in BIGNAT_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
-BIGNAT_SOURCES = frozenset(wired_source_path(path) for path in (
+BIGNUM_SOURCES = frozenset(wired_source_path(path) for path in (
     "include/WordSize.h", "LICENSE", *(f"GHC/Internal/Bignum/{name}{suffix}"
       for name in ("BigNat", "Integer", "Natural") for suffix in (".hs", ".hs-boot"))))
 BYTEARRAY_FAMILIES = {
@@ -1531,17 +1518,6 @@ def ghc_source_pins(root):
     return result
 
 
-def bignat_artifact_hashes(manifest):
-    records = manifest.get("artifacts")
-    require(isinstance(records, list) and all(isinstance(item, dict) and set(item) == {"path", "sha256"} for item in records),
-            "Invalid BigNat artifact records")
-    artifacts = {item["path"]: item["sha256"] for item in records}
-    require(len(artifacts) == len(records) and set(artifacts) == BIGNAT_OUTPUTS - {"build/bignat-literals/manifest.json"},
-            "Incomplete BigNat artifact inventory")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid BigNat artifact hash")
-    return artifacts
-
-
 def pinned_address_artifact_hashes(manifest):
     artifacts = manifest.get("artifactHashes")
     require(isinstance(artifacts, dict) and set(artifacts) == PINNED_ADDRESS_OUTPUTS - {"build/pinned-addresses/manifest.json"},
@@ -1786,8 +1762,6 @@ def allowed_payload(name):
         return name in BCO_OUTPUTS
     if parts[1] == "simd-address-families":
         return name in SIMD_ADDRESS_OUTPUTS
-    if parts[1] == "bignat-literals":
-        return name in BIGNAT_OUTPUTS
     if parts[1] in BYTEARRAY_OUTPUTS:
         return name in BYTEARRAY_OUTPUTS[parts[1]]
     if parts[1] in SIMD_BYTEARRAY_FAMILIES:
@@ -2038,8 +2012,6 @@ def inventory(root, current, read, core_files, verified=None):
             simd_address_artifact_hashes(doc)
         if name == "build/stable-names/manifest.json":
             stable_name_artifact_hashes(doc)
-        if name == "build/bignat-literals/manifest.json":
-            bignat_artifact_hashes(doc)
         if name == "build/pinned-addresses/manifest.json":
             pinned_address_artifact_hashes(doc)
         if name == "build/float-decode/manifest.json":

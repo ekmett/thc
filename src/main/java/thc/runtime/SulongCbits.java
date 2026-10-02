@@ -9,6 +9,8 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import org.graalvm.polyglot.io.ByteSequence;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.NativeContextExtension;
 import java.lang.foreign.MemorySegment;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
@@ -65,7 +67,19 @@ public final class SulongCbits {
             if (!system.equals(manifest.get("system")) || !architecture((String) manifest.get("architecture")).equals(architecture(System.getProperty("os.arch"))))
                 throw fault("Original C bitcode does not match this runtime platform");
         } catch (Exception failure) { throw rethrow(failure); }
-        iconvTask = new FutureTask<>(() -> load("iconv"));
+        iconvTask = new FutureTask<>(() -> {
+            if (System.getProperty("os.name").startsWith("Mac")) {
+                // Darwin supplies iconv outside libc. Keep its ordinary native
+                // linkage in Sulong's context registry, not the global namespace.
+                env.initializeLanguage(env.getInternalLanguages().get("llvm"));
+                var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
+                if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
+                Object handle = env.parseInternal(Source.newBuilder("nfi",
+                    "load(RTLD_LAZY|RTLD_LOCAL) \"/usr/lib/libiconv.2.dylib\"", "iconv-native").build()).call();
+                nativeContext.addLibraryHandles(handle);
+            }
+            return load("iconv");
+        });
         waitStatusTask = new FutureTask<>(() -> load("wait-status"));
     }
     private static String architecture(String value) {
@@ -114,7 +128,8 @@ public final class SulongCbits {
         throw fault("Unsupported C finalizer");
     }
     public Object iconvLibrary() {
-        if (!System.getProperty("os.name").equals("Linux")) throw fault("Original native iconv currently requires the Linux GNU LP64 host ABI");
+        String os = System.getProperty("os.name");
+        if (!os.equals("Linux") && !os.startsWith("Mac")) throw fault("Original native iconv requires the Linux GNU or Darwin LP64 host ABI");
         return await(iconvTask);
     }
     private Object md5Function(String name) {

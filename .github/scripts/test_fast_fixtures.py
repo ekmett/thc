@@ -2506,7 +2506,6 @@ class FixturePreparationTest(unittest.TestCase):
             "thc.runtime.FloatingTupleTest": ("floating-tuples", ["floating-tuple"]),
             "thc.runtime.SqrtPrimitiveTest": ("sqrt", ["sqrt"]),
             "thc.runtime.ScalarBitCastTest": ("scalar-bitcasts", ["scalar-bitcasts"]),
-            "thc.runtime.BigNatLiteralTest": ("bignat-literals", ["bignat-literals"]),
             "thc.runtime.SimdFloatVectorTest": ("simd-floatx4", ["simd-floatx4"]),
             "thc.runtime.SimdDoubleVectorTest": ("simd-doublex2", ["simd-doublex2"]),
             "thc.runtime.SimdFloatByteArrayTest": ("simd-floatx4-bytearray", ["simd-floatx4-bytearray"]),
@@ -2689,48 +2688,11 @@ class FixturePreparationTest(unittest.TestCase):
         corrupt.unlink(); corrupt.symlink_to(archive)
         with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
 
-    def test_bignat_uses_haskell_and_tracks_original_source_inputs(self):
+    def test_bignat_loader_controls_are_fixture_free(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
-        group = manifest["groups"]["bignat-literals"]
-        self.assertEqual("bignat-literals", owners["thc.runtime.BigNatLiteralTest"])
-        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bignat-literals"]}], group["commands"])
-        originals = fast_fixtures.fast_inputs.BIGNAT_SOURCES
-        self.assertEqual({"build/bignat-literals"}, set(group["outputs"]))
-        self.assertEqual({"t/haskell-fixtures/BigNatLiteralFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-                          "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/BigNatLiteralAudit.hs",
-                          "t/fixtures/compiler/BigNatLiteralAuditNative.hs", "bin/export-boot.py"} | originals, set(group["sources"]))
-        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn('"$fixture_bin" bignat-literals', (project / "bin/prepare-tests.sh").read_text().splitlines())
-        for name in ("prepare-bignat-literals.py", "bignat_literal_model.py", "test-bignat-literals.py"):
-            self.assertFalse((project / "bin" / name).exists())
-        cache = fast_fixtures.fast_inputs
-        records = []
-        manifest_path = 'build/bignat-literals/manifest.json'
-        for name in cache.BIGNAT_OUTPUTS - {manifest_path}:
-            path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('{}\n' if name.endswith('.json') else 'fixture\n')
-            records.append({'path': name, 'sha256': fast_fixtures._digest(path)})
-        (self.root / manifest_path).write_text(json.dumps({'artifacts': records}))
-        # Installed-interface overlays are not reusable fixture payload.
-        overlay = self.root / 'build/bignat-literals/boot/interfaces/unused.hi'
-        overlay.parent.mkdir(parents=True); overlay.symlink_to(self.root / 'not-present')
-        # Rechecks retain their own diagnostics, including fresh audit catalogue
-        # paths, without replacing the original manifest-bound command evidence.
-        verification = 'build/bignat-literals/verification-control/commands/pre-integerRoundTrip-audit.stderr'
-        recheck = self.root / verification
-        recheck.parent.mkdir(parents=True); recheck.write_text('Audit working catalogue: fresh/catalogue.sqlite\n')
-        self.assertFalse(cache.allowed_payload(verification))
-        self.assertEqual(cache.BIGNAT_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
-        original_log = self.root / 'build/bignat-literals/commands/pre-integerRoundTrip-audit.stderr'
-        original_bytes = original_log.read_bytes()
-        original_log.write_bytes(recheck.read_bytes())
-        with self.assertRaisesRegex(RuntimeError, 'Stale original artifact'):
-            fast_fixtures._output_hashes(self.root, group)
-        original_log.write_bytes(original_bytes)
-        corrupted = self.root / 'build/bignat-literals/oracle.tsv'
-        corrupted.write_text('corrupt\n')
-        with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+        self.assertIn("thc.runtime.BigNatLiteralTest", manifest["fixtureFreeJunit"])
+        self.assertIsNone(owners["thc.runtime.BigNatLiteralTest"])
 
     def test_floating_remainder_has_native_haskell_preparation(self):
         project = Path(__file__).resolve().parents[2]
@@ -2760,7 +2722,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({"build/float-decode"}, set(group["outputs"]))
         self.assertEqual({"t/haskell-fixtures/FloatDecodeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
                           "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatDecodeAudit.hs",
-                          "t/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "t/fixtures/core/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNAT_SOURCES, set(group["sources"]))
+                          "t/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "t/fixtures/core/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNUM_SOURCES, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" float-decode', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"float-decode/commands/**"', (project / "build.gradle").read_text())
@@ -2777,15 +2739,15 @@ class FixturePreparationTest(unittest.TestCase):
             path.write_text("fixture\n")
             artifacts[item] = fast_fixtures._digest(path)
         (self.root / name).write_text(json.dumps({"artifactHashes": artifacts}))
-        for item in cache.BIGNAT_SOURCES:
+        for item in cache.BIGNUM_SOURCES:
             path = self.root / item
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("pinned original\n")
-        group = {"outputs": ["build/float-decode"], "sources": sorted(cache.BIGNAT_SOURCES)}
+        group = {"outputs": ["build/float-decode"], "sources": sorted(cache.BIGNUM_SOURCES)}
         self.assertEqual(cache.FLOAT_DECODE_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
         with mock.patch.object(fast_fixtures, "COMMON_SOURCES", ()):
             original_key = fast_fixtures.cache_key(self.root, "float-decode", group, {})
-            for item in sorted(cache.BIGNAT_SOURCES):
+            for item in sorted(cache.BIGNUM_SOURCES):
                 path = self.root / item
                 original = path.read_bytes()
                 path.write_text("changed original\n")

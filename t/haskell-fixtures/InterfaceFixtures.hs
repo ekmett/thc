@@ -296,7 +296,7 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
         [root </> directory </> mode </> "package.conf.d"] compiler
       acquire selected unit = Project.prepareInstalledBundle cache
         (root </> directory </> "native/staging") (root </> "src/driver/cbits/target-layout.c")
-        "fixture-driver" selected unit
+        selected unit
       loaded result = case result of Right value -> pure value; Left missing -> die (show missing)
       rejected label expected action = do
         result <- Exception.try action :: IO (Either Exception.IOException (Either Installed.MissingCore Project.InstalledBundle))

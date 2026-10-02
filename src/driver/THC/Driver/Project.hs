@@ -1,7 +1,9 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- |
 -- Module      : THC.Driver.Project
@@ -41,6 +43,8 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Error (lenientDecode)
 import Numeric (showHex)
+import Language.Haskell.TH.Syntax (addDependentFile, lift, loc_filename, runIO)
+import qualified Language.Haskell.TH.Syntax as TH
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
                          doesDirectoryExist, doesFileExist, findExecutable, getPermissions,
                          listDirectory, makeAbsolute, removeFile, removePathForcibly,
@@ -78,7 +82,7 @@ import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Compact.Core (Presence(..))
 import THC.Compact.Debug (SourceFile(..))
 import THC.Compact.Module (readModuleMetadata, readModuleMetadataFile, readModuleSources)
-import THC.Driver.Wired (probeTargetLayout, preparePinnedInterfaces)
+import THC.Driver.Wired (probeTargetLayout, preparePinnedInterfaces, pinnedRecipeIdentity)
 
 -- Cabal performs the project solve, preprocessing, host-tool/TH execution and
 -- native build. Its machine-readable plan and per-component build-info, rather
@@ -614,8 +618,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
             (Map.lookup (registeredId registrationUnit) byId)
           require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
             ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-          result <- prepareInstalledBundleWithVerification verifyArtifacts cacheRoot (native </> "cache/thc/staging")
-            (thcRoot </> "src/driver/cbits/target-layout.c") driverHash helperContext registrationUnit
+          result <- prepareInstalledBundleWithVerification verifyArtifacts (contextNativeTools context)
+            cacheRoot (native </> "cache/thc/staging") (thcRoot </> "src/driver/cbits/target-layout.c") helperContext registrationUnit
           bundle <- either (\missing -> fail
             ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
              " (dynamic interface " ++ missingInterface missing ++ ").")) pure result
@@ -787,8 +791,9 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
             registrationUnit <- discoverInstalled helper (unitId unit)
             require (sort (unitDepends unit) == sort (installedDepends registrationUnit))
               "runtime sidecar installed dependencies differ from its plan"
-            result <- prepareInstalledBundleWithVerification (contextVerifyArtifacts context) (contextCache context) (native </> "cache/thc/staging")
-              (root </> "src/driver/cbits/target-layout.c") (contextDriverHash context) helper registrationUnit
+            result <- prepareInstalledBundleWithVerification (contextVerifyArtifacts context) (contextNativeTools context)
+              (contextCache context) (native </> "cache/thc/staging")
+              (root </> "src/driver/cbits/target-layout.c") helper registrationUnit
             bundle <- either (\failure -> fail ("runtime sidecar lacks complete Core: " ++ show failure)) pure result
             pure (installedRecords registrationUnit bundle)
       bundle <- exportUnit context roots Map.empty runtime
@@ -832,31 +837,55 @@ prepareInterfaceHelper context root = do
      "platform" .= contextPlatform context, "way" .= (exportInterfaceWay ++ "-nonprofiling")])
   pure (maybe original id (contextCoreView context))
 
+-- This path adds installed bundle assembly to the pinned recipe's native/Core
+-- dependencies. Main and Run do not construct these artifacts. Keep native
+-- tools, interfaces, source observations and target-layout inputs separate.
+installedBundleRecipeIdentity :: Value
+installedBundleRecipeIdentity = object
+  ["pinnedRecipe" .= pinnedRecipeIdentity, "sourceHash" .= recipeHash,
+   "zip-archive" .= (VERSION_zip_archive :: String)]
+  where
+    recipeHash :: String
+    recipeHash = $(do
+      source <- loc_filename <$> TH.location
+      let root = iterate takeDirectory source !! 5
+          files = ["src/driver/THC/Driver/" ++ name | name <- ["Project.hs", "CoreIndex.hs", "CoreSymbols.hs", "Zip.hs"]]
+      records <- forM files $ \name -> do
+        let path = root </> name
+        addDependentFile path
+        bytes <- runIO (BS.readFile path)
+        pure (name, BS.unpack (SHA.hash bytes))
+      let bytes = SHA.hash (BL.toStrict (encode records))
+      lift (concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value)
+            (BS.unpack bytes)))
+
 -- The probe retains complete installed source/native identities. A successful
 -- selection receipt can then avoid reopening an unchanged archive; explicit
 -- verification and misses still run the complete original validation.
-prepareInstalledBundle :: FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
+prepareInstalledBundle :: FilePath -> FilePath -> FilePath -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
-prepareInstalledBundle = prepareInstalledBundleWithVerification True
+prepareInstalledBundle cache staging recipe context registrationUnit = do
+  nativeTools <- nativeToolIdentity
+  prepareInstalledBundleWithVerification True nativeTools cache staging recipe context registrationUnit
 
-prepareInstalledBundleWithVerification :: Bool -> FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
+prepareInstalledBundleWithVerification :: Bool -> Value -> FilePath -> FilePath -> FilePath -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
-prepareInstalledBundleWithVerification verify cache staging recipe driverHash context registrationUnit = do
+prepareInstalledBundleWithVerification verify nativeTools cache staging recipe context registrationUnit = do
+  let producer = object ["recipe" .= installedBundleRecipeIdentity, "nativeTools" .= nativeTools]
   probeCurrent <- prepareInstalledProbe context registrationUnit
   evidence <- optionalIO $ do
-    helperHash <- digestFile (installedHelper context)
     recipeHash <- digestFile recipe
     (rtsRegistration, _) <- installedLayoutHeaders context registrationUnit
-    probe <- probeCurrent
-    let identity = object ["schema" .= (1 :: Int), "helperHash" .= helperHash,
-          "driverHash" .= driverHash, "recipeHash" .= recipeHash,
+    before@(helperHash, _) <- probeCurrent
+    let identity = object ["schema" .= (1 :: Int), "helperHash" .= digestHex helperHash,
+          "producer" .= producer, "recipeHash" .= recipeHash,
           "rtsRegistration" .= rtsRegistration,
           "registration" .= installedProvenance context registrationUnit]
         index = cache </> "installed-probes/v1" </> shaHex (BL.toStrict (encode identity)) ++ ".json"
-    pure (identity, probe, index)
+    pure (identity, before, index)
   case evidence of
-    Nothing -> acquireInstalledBundle verify cache staging recipe driverHash context registrationUnit (\_ _ _ -> pure ())
-    Just (identity, probe, index) -> do
+    Nothing -> acquireInstalledBundle verify cache staging recipe producer context registrationUnit (\_ _ _ -> pure ())
+    Just (identity, before@(_, probe), index) -> do
       hit <- optionalIO $ do
         envelope <- readJson index
         record <- field envelope "record"
@@ -885,18 +914,18 @@ prepareInstalledBundleWithVerification verify cache staging recipe driverHash co
         bundle <- maybe (fail "invalid indexed installed bundle") pure loaded
         require (jsonField record "bundleSha256" == Just (bundleHash bundle)) "changed indexed installed bundle"
         after <- probeCurrent
-        require (after == probe) "installed payload changed while validating cached bundle"
+        require (after == before) "installed payload changed while validating cached bundle"
         validateSourceObservations sources
         validateNativeArtifacts
         pure (InstalledBundle owner bundle)
       case hit of
         Just bundle -> pure (Right bundle)
-        Nothing -> acquireInstalledBundle verify cache staging recipe driverHash context registrationUnit $ \bundle inputs modules -> do
+        Nothing -> acquireInstalledBundle verify cache staging recipe producer context registrationUnit $ \bundle inputs modules -> do
           _ <- optionalIO $ do
             sources <- installedSourceObservations modules
             validateSourceObservations sources
             after <- probeCurrent
-            require (after == probe) "installed payload changed during acquisition"
+            require (after == before) "installed payload changed during acquisition"
             let record = object ["identity" .= identity, "probe" .= probe,
                   "sources" .= sources, "inputs" .= inputs,
                   "bundleSha256" .= bundleHash (installedBundle bundle)]
@@ -1002,11 +1031,11 @@ validateSourceObservations sources = forM_ sources $ \expected -> do
   require (actual == expected) "installed source observation changed"
 
 -- Ordinary acquisition remains authoritative, including when the optional
--- probe cannot establish complete evidence. Compiler binaries are not hashed.
-acquireInstalledBundle :: Bool -> FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
+-- probe cannot establish complete evidence. GHC compiler binaries are not hashed.
+acquireInstalledBundle :: Bool -> FilePath -> FilePath -> FilePath -> Value -> InstalledContext -> InstalledUnit ->
                           (InstalledBundle -> Value -> [(String, BS.ByteString)] -> IO ()) ->
                           IO (Either MissingCore InstalledBundle)
-acquireInstalledBundle verify cache staging recipe driverHash context registrationUnit remember = do
+acquireInstalledBundle verify cache staging recipe producer context registrationUnit remember = do
   acquired <- acquireInstalled context registrationUnit
   case acquired of
     Left missing -> pure (Left missing)
@@ -1072,7 +1101,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
               "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
               "dependencies" .= installedDepends registrationUnit]
             buildKey = shaHex (BL.toStrict (encode (object inputFields)))
-            exporter = object ["helperHash" .= helperHash, "driverHash" .= driverHash,
+            exporter = object ["helperHash" .= helperHash, "producer" .= producer,
               "options" .= (["post-tidy", "unit-qualified", "source-notes", interfaceWayName (installedInterfaceWay context)] :: [String]),
               "foreignLinkRecipe" .= ("installed-native-fcall-v1" :: String)]
             exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v2" :: String, buildKey, exporter)))
@@ -1157,9 +1186,9 @@ wiredGhcInternal context root registeredUnit = do
     (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context)
     original [registered]
   selected <- discoverInstalled prepared (registeredId registered)
-  result <- prepareInstalledBundleWithVerification (contextVerifyArtifacts context)
+  result <- prepareInstalledBundleWithVerification (contextVerifyArtifacts context) (contextNativeTools context)
     (contextCache context) (contextNative context </> "cache/thc/staging")
-    (root </> "src/driver/cbits/target-layout.c") (contextDriverHash context) prepared selected
+    (root </> "src/driver/cbits/target-layout.c") prepared selected
   artifact <- either (fail . show) pure result
   require (installedOwner artifact == "ghc-internal")
     "Pinned native source acquisition changed the genuine wired Core owner"

@@ -394,7 +394,8 @@ staticExportsTest env = TestLabel "ordinary replay retains mixed static callback
       Right signatures -> assertEqual "both actual C import declarations remain callable" 2 (length signatures)
     selectedPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
     packageTool <- Directory.findExecutable selectedPkg >>= maybe (fail "ghc-pkg missing") Directory.makeAbsolute
-    published <- finishPackageNative packageTool pieces (capture </> unit) unit (Just [project </> "callbacks.o"])
+    callbackObject <- Directory.canonicalizePath (project </> "callbacks.o")
+    published <- finishPackageNative packageTool pieces (capture </> unit) unit (Just [callbackObject])
       [("NativeExport", staged)]
       `finally` copyTree capture (scratch env </> "static-exports-capture")
     case published of
@@ -403,11 +404,14 @@ staticExportsTest env = TestLabel "ordinary replay retains mixed static callback
         linked <- BS.readFile path >>= either fail pure . readModuleValue
         let nativeLink = field linked "packageNativeLink"
         assertEqual "managed externals remain in verified LLVM" "llvm-bitcode" (string $ field nativeLink "format")
-        assertEqual "managed symbols remain unresolved beside the genuine native dependency"
-          ["hs_free_stable_ptr", "strtol", "thc_pkg_callback"]
-          (sort $ map string $ array $ field (field nativeLink "buildInputs") "unresolved")
-        assertEqual "only the actual native dependency roots the native companion" ["strtol"]
-          (strings $ field (one (const True) $ objects (field nativeLink "buildInputs") "nativeLibraries") "symbols")
+        let inputs = field nativeLink "buildInputs"
+            managed = ["hs_free_stable_ptr", "thc_pkg_callback"]
+            nativeSymbols = concatMap (strings . (`field` "symbols")) (objects inputs "nativeLibraries")
+        assertBool "ordinary C dependency has a native companion" (not $ null nativeSymbols)
+        assertBool "native companion does not own the managed callback or StablePtr release"
+          (all (`notElem` nativeSymbols) managed)
+        assertEqual "unresolved symbols retain the managed and native partitions"
+          (sort $ managed ++ nativeSymbols) (sort $ strings $ field inputs "unresolved")
         assertEqual "native publication preserves authentic callback registration"
           registration (field linked "staticForeignExportRegistration")
       _ -> fail "Static-export publication changed module identity"

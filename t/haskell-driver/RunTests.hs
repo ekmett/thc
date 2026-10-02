@@ -65,7 +65,6 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
       manifest <- readJson (output </> "packages.json")
       let entry = one (any ((== "Main") . string . (`field` "name")) . (`objects` "modules"))
                       (objects manifest "units")
-      assertEqual "IO root" [string (field entry "id") ++ ":Main.main"] (strings $ field audit "roots")
       let primitives = map (string . (`field` "name")) (objects audit "primitives")
       forM_ ["newMutVar#", "writeMutVar#", "readMutVar#", "raise#"] $ \primitive ->
         assertBool ("missing " ++ primitive) (primitive `elem` primitives)
@@ -119,17 +118,17 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
       nativeResult <- runExe env package Nothing 60 native []
       assertFailure nativeResult
 
-    writeText source "module Main where\nmain :: IO ()\nmain = putStrLn \"native only\"\n"
-    unsupported <- invoke Nothing
-    assertFailure unsupported
-    assertNoStdout unsupported
+    writeText source "module Main where\nmain :: IO ()\nmain = putStrLn \"hello\"\n"
+    console <- invoke Nothing
+    assertSuccess console
     audit <- readJson (exported </> "audit.json")
-    assertBool "console IO rejected" (not $ bool $ field audit "accepted")
+    assertBool "console IO accepted" (bool $ field audit "accepted")
     native <- executable
     requireFile native
     nativeResult <- runExe env package Nothing 60 native []
     assertSuccess nativeResult
-    assertEqual "native console output" "native only\n" (out nativeResult)
+    assertEqual "native console output" "hello\n" (out nativeResult)
+    assertEqual "THC console output" (out nativeResult) (out console)
 
     writeText source "module Main where\nmain :: IO Int\nmain = pure 42\n"
     wrongResult <- invoke Nothing

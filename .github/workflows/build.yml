@@ -318,14 +318,6 @@ jobs:
             build/narrow-literal-proofs/*-audit.json
             build/narrow-literal-proofs/*-core/
             build/narrow-literal-proofs/native/narrow-literal-oracle
-            build/bignat-literals/manifest.json
-            build/bignat-literals/*.tsv
-            build/bignat-literals/*.audit.json
-            build/bignat-literals/*-core/
-            build/bignat-literals/boot/core/
-            build/bignat-literals/boot/boot-provenance.json
-            build/bignat-literals/native/
-            build/bignat-literals/commands/
             build/show-word-list/manifest.json
             build/show-word-list/*.tsv
             build/show-word-list/*.audit.json

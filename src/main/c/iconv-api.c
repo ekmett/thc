@@ -15,8 +15,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if !defined(__linux__) || !defined(__GLIBC__)
-#error Original native iconv currently requires Linux glibc
+#if defined(__APPLE__)
+#include <xlocale.h>
+#elif !defined(__linux__) || !defined(__GLIBC__)
+#error Original native iconv requires Darwin or Linux glibc
 #endif
 
 _Static_assert(CHAR_BIT == 8 && sizeof(void *) == 8 && sizeof(long) == 8 &&

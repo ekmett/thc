@@ -30,6 +30,8 @@ import qualified Data.Vector as Vector
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort)
+import Data.Word (Word64)
+import GHC.Clock (getMonotonicTimeNSec)
 import System.Directory
   ( copyFileWithMetadata, createDirectory, createDirectoryIfMissing, doesDirectoryExist
   , doesFileExist, findExecutable, getCurrentDirectory, getTemporaryDirectory
@@ -157,12 +159,14 @@ run env cwd backend seconds = runExe env cwd backend seconds (driver env)
 runPreparation :: Env -> FilePath -> [String] -> IO Result
 runPreparation env cwd arguments = do
   process <- testProcess env cwd Nothing (driver env) arguments
+  started <- getMonotonicTimeNSec
   result <- Process.readCreateProcessWithExitCode process ""
-  recordResult env cwd (driver env) arguments result
+  recordResult started env cwd (driver env) arguments result
 
 runExe :: Env -> FilePath -> Maybe String -> Int -> FilePath -> [String] -> IO Result
 runExe env cwd backend seconds executable arguments = do
   process <- testProcess env cwd backend executable arguments
+  started <- getMonotonicTimeNSec
   completed <- timeout (seconds * 1000000) (Process.readCreateProcessWithExitCode process "")
   case completed of
     Nothing -> do
@@ -170,7 +174,7 @@ runExe env cwd backend seconds executable arguments = do
         (unlines ["$ " ++ unwords (executable : arguments), "cwd: " ++ cwd,
                   "timed out after " ++ show seconds ++ " seconds"])
       HUnit.assertFailure ("timed out: " ++ unwords arguments) >> fail "unreachable"
-    Just result -> recordResult env cwd executable arguments result
+    Just result -> recordResult started env cwd executable arguments result
 
 testProcess :: Env -> FilePath -> Maybe String -> FilePath -> [String] -> IO Process.CreateProcess
 testProcess env cwd backend executable arguments = do
@@ -188,11 +192,14 @@ testProcess env cwd backend executable arguments = do
         else withBackend
   pure $ (Process.proc executable arguments) { Process.cwd = Just cwd, Process.env = Just extra }
 
-recordResult :: Env -> FilePath -> FilePath -> [String] -> (ExitCode, String, String) -> IO Result
-recordResult env cwd executable arguments (status, stdout, stderr) = do
+recordResult :: Word64 -> Env -> FilePath -> FilePath -> [String] -> (ExitCode, String, String) -> IO Result
+recordResult started env cwd executable arguments (status, stdout, stderr) = do
+  finished <- getMonotonicTimeNSec
+  let elapsed = fromIntegral (finished - started) / 1000000000 :: Double
   appendFile (scratch env </> "commands.log")
     (unlines ["$ " ++ unwords (executable : arguments), "cwd: " ++ cwd,
-              "exit: " ++ show status, "stdout: " ++ stdout, "stderr: " ++ stderr])
+              "seconds: " ++ show elapsed, "exit: " ++ show status,
+              "stdout: " ++ stdout, "stderr: " ++ stderr])
   pure (Result status stdout stderr)
 
 checked :: Env -> FilePath -> Maybe String -> Int -> [String] -> IO Result

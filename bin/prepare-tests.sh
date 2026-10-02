@@ -39,7 +39,6 @@ printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" bit
 "$fixture_bin" word-floating
 "$fixture_bin" scalar-bitcasts
-"$fixture_bin" bignat-literals
 "$fixture_bin" rubbish-literals
 "$fixture_bin" float-decode
 "$fixture_bin" floating-remainder

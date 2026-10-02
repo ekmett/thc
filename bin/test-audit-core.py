@@ -849,7 +849,7 @@ class AuditTest(unittest.TestCase):
 
     def test_bignat_intrinsic_representation_api_retains_exact_evaluated_proof(self):
         # This is an assertion on the retained Python auditor's own API. The
-        # Haskell/Java BigNat fixture owns corpus and CLI admission controls.
+        # Fixture-free Java BigNat tests own CBD CLI admission controls.
         exact = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         for value in ('0', '1', str((1 << 255) + (1 << 128) + 3)):
             for proof in (exact, None, dict(kind='unknown', primReps=None, evaluated=False)):

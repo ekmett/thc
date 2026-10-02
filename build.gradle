@@ -271,7 +271,6 @@ tasks.withType(Test).configureEach {
             "tag-to-enum/**/*.cbd", "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
             "show-int/**/*.cbd", "show-int/**/*.json", "show-int/*.tsv", "show-int/native/**",
             "narrow-literal-proofs/**/*.json", "narrow-literal-proofs/**/*.cbd", "narrow-literal-proofs/*.tsv", "narrow-literal-proofs/native/**",
-            "bignat-literals/**/*.cbd", "bignat-literals/**/*.json", "bignat-literals/*.tsv", "bignat-literals/native/**", "bignat-literals/commands/**",
             "show-word-list/**/*.cbd", "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
             "short-bytes-slices/**/*.cbd", "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
             "original-path-mode/**/*.cbd",
