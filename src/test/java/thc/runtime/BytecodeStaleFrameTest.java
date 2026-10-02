@@ -26,7 +26,7 @@ class BytecodeStaleFrameTest {
         return java.util.Arrays.copyOf(carriers(), 5);
     }
 
-    @ParameterizedTest @MethodSource("carriers")
+    @ParameterizedTest(name = "[{index}]") @MethodSource("carriers")
     void matchingSavedTagsEnterCompiledSuffix(Object value) throws Exception {
         exercise(value, false, false);
     }
