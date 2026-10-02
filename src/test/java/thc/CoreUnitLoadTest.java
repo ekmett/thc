@@ -110,7 +110,8 @@ class CoreUnitLoadTest {
             var manifest = directory.resolve("bad-label-packages.json");
             Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, nativeUnit, other, corrupt))));
             for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
-                var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request(manifest, backend)));
+                // Native labels resolve at their first guest use.
+                var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request(manifest, backend)).execute(0));
                 assertTrue(failure.getMessage().contains(expected.get(i)), failure.getMessage());
             }
         }
