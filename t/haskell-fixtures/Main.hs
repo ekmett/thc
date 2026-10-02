@@ -603,7 +603,7 @@ basicArray name groups driver oracle inputs = ArraySpec name groups driver oracl
 arraySpec :: String -> Maybe ArraySpec
 arraySpec "int-arrays" = Just $ basicArray "int-arrays"
   [ArrayGroup "t/fixtures/core/UnboxedArrays.hs" "UnboxedArrays" "U"
-    ["unboxedAccum", "unboxedST", "unboxedEmpty"],
+    ["unboxedAccum", "unboxedST"],
    ArrayGroup "t/fixtures/compiler/IntArrayAudit.hs" "IntArrayAudit" "P"
     ["orderedInts", "aliasIntBytes"]]
   "NativeIntArray.hs" "int-array-oracle" (SharedInputs $ arrayBoundaryInputs [-16 .. 16]

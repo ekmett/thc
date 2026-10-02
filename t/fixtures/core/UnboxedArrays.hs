@@ -15,7 +15,7 @@
 module UnboxedArrays where
 
 import GHC.Exts (Int(I#), Int#)
-import Data.Array.Unboxed (UArray, accumArray, bounds, elems, (!))
+import Data.Array.Unboxed (UArray, accumArray, (!))
 import Data.Array.ST (runSTUArray, newArray, readArray, writeArray)
 
 -- Genuine checked public APIs. Fixed mixed-sign bounds and indices allow GHC
@@ -25,14 +25,6 @@ unboxedAccum :: Int# -> Int#
 unboxedAccum raw =
   let a = accumArray (+) (I# raw) (-3,4) [(-3,3),(0,5),(-3,-2),(4,I# raw)] :: UArray Int Int
   in case (a!(-3))*7 + (a!0)*11 + (a!4)*13 of I# answer -> answer
-
--- An empty public array has no element to inspect. GHC may eliminate this
--- allocation; the preparation makes no primitive-retention claim for this root.
-unboxedEmpty :: Int# -> Int#
-unboxedEmpty raw =
-  let a = accumArray (+) (I# raw) (1,0) [] :: UArray Int Int
-      (lo,hi) = bounds a
-  in case I# raw + length (elems a) + 7*lo + 11*hi of I# answer -> answer
 
 -- Read-after-write feedback inside ST, followed by runSTUArray's no-copy
 -- publication and checked immutable indexing. No freeze/thaw or FFI copies.

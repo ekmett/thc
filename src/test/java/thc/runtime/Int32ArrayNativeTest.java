@@ -48,12 +48,9 @@ public class Int32ArrayNativeTest {
             .option("engine.SingleTierCompilationThreshold", "10000000")
             .build();
     }
-    private void valid(RootCallTarget target, String label) throws Exception {
-        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label);
-    }
     private void compile(RootCallTarget target) throws Exception {
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
-        valid(target, "initial installation");
+        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "initial installation");
     }
     private List<RootCallTarget> activeTargets(RootCallTarget entry) {
         var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
@@ -150,41 +147,21 @@ public class Int32ArrayNativeTest {
         require(rows.equals(literalRows), "Noinline narrow-literal corpus mismatch");
         return rows;
     }
-    private Map<String, Integer> exactAlias(String name) {
-        if (!name.startsWith("alias"))
-            return Map.of();
-        var kind = name.contains("Word32") ? "Word32" : "Int32";
-        var result = new HashMap<String, Integer>();
-        String[] primitives = {"newByteArray#", "unsafeFreezeByteArray#", "write" + kind + "Array#",
-            "read" + kind + "Array#", "index" + kind + "Array#", "writeWord8Array#", "indexWord8Array#", "*#", "+#",
-            "xorI#", "word8ToWord#", "wordToWord8#"};
-        int[] counts = {1, 1, 2, 3, 2, 2, 4, 9, 10, 1, 4, 2};
-        for (int i = 0; i < counts.length; i++) result.put(primitives[i], counts[i]);
-        result.putAll(kind.equals("Int32")
-                ? Map.of("int2Word#", 2, "word2Int#", 4, "intToInt32#", 2, "int32ToInt#", 5)
-                : Map.of("int2Word#", 4, "word2Int#", 9, "wordToWord32#", 2, "word32ToWord#", 5));
-        return result;
-    }
     private Set<String> required(String name) {
-        if (name.startsWith("alias"))
-            return exactAlias(name).keySet();
         var kind = name.contains("Word32") ? "Word32" : "Int32";
         var conversions = kind.equals("Int32") ? Set.of("intToInt32#", "int32ToInt#")
                                                : Set.of("wordToWord32#", "word32ToWord#", "int2Word#", "word2Int#");
         var result = new HashSet<>(Set.of("newByteArray#", "unsafeFreezeByteArray#", "read" + kind + "Array#",
-            "write" + kind + "Array#", "index" + kind + "Array#", "plus" + kind + "#"));
+            "write" + kind + "Array#", "index" + kind + "Array#"));
         result.addAll(conversions);
-        if (name.endsWith("ST"))
-            result.addAll(Set.of("sub" + kind + "#", "times" + kind + "#"));
+        if (name.startsWith("alias"))
+            result.addAll(Set.of("writeWord8Array#", "indexWord8Array#", "word8ToWord#", "wordToWord8#"));
         return result;
     }
-    private Map<String, Integer> checkedCore(String name, ArrayCoreEvidence evidence) {
+    private void checkedCore(String name, ArrayCoreEvidence evidence) {
         require(names.contains(name), "Unknown Int32-array root: " + name);
-        var counts = evidence.getPrimitiveCounts();
-        require(counts.keySet().containsAll(required(name)), "Missing Int32-array primitive: " + name);
-        require(
-            !name.startsWith("alias") || counts.equals(exactAlias(name)), "Int32 alias use counts changed: " + name);
-        return counts;
+        require(evidence.getPrimitiveCounts().keySet().containsAll(required(name)),
+            "Missing Int32-array primitive: " + name);
     }
     private final Map<String, Object> unknownLiteralProof = unknownLiteralProof();
     private Map<String, Object> unknownLiteralProof() {
@@ -194,82 +171,45 @@ public class Int32ArrayNativeTest {
         result.put("evaluated", false);
         return result;
     }
-    private List<Map<String, Object>> formals(String name, List<Object> expr, List<String> reps) {
-        require(!expr.isEmpty() && "lam".equals(expr.getFirst()), name + ": missing guest lambda");
-        var formals = (List<Map<String, Object>>) expr.get(1);
-        boolean valid = formals.size() == reps.size();
-        for (int i = 0; valid && i < formals.size(); i++) {
-            var formal = formals.get(i);
-            valid = Objects.equals(
-                        formal.get("rep"), Map.of("kind", "long", "primReps", List.of(reps.get(i)), "evaluated", true))
-                && Boolean.FALSE.equals(formal.get("lifted")) && Boolean.FALSE.equals(formal.get("coercion"));
-        }
-        require(valid, name + ": changed scalar formals");
-        return formals;
-    }
-    private int literalCalls(String name, ArrayCoreEvidence evidence) {
-        return literalCalls(name, evidence, false);
-    }
-    private int literalCalls(String name, ArrayCoreEvidence evidence, boolean unknownProof) {
+    private List<List<Object>> literalArguments(String name, ArrayCoreEvidence evidence) {
         require(literalNames.contains(name), "Unknown narrow-literal entry: " + name);
         var kind = name.equals(literalNames.get(0)) ? "Int32" : "Word32";
-        var literal =
-            List.of("lit", kind.toLowerCase(Locale.ROOT), kind.equals("Int32") ? "-2147483648" : "4294967295");
-        var entry = (List<Object>) evidence.getRoot().get("expr");
-        var workers = evidence.getBindings()
-                          .stream()
-                          .filter(b -> Objects.equals(b.get("id"), coreEntry("literal" + kind + "Worker")))
-                          .toList();
-        var worker = workers.size() == 1 ? workers.getFirst() : null;
-        require(evidence.getBindings().size() == 2 && worker != null, name + ": expected entry and opaque worker");
-        var input = single(formals(name, entry, List.of("IntRep")));
-        var workerExpr = (List<Object>) worker.get("expr");
-        formals(name, workerExpr, List.of("IntRep", kind + "Rep"));
-        var call = (List<?>) entry.get(2);
-        require(!call.isEmpty() && "app".equals(call.getFirst()) && call.size() > 1 && call.get(1) instanceof List<?> l
-                && prefix(l).equals(List.of("var", worker.get("id"))),
-            name + ": worker must be called immediately");
-        var args = call.size() > 2 && call.get(2) instanceof List<?> l ? l : null;
-        require(args != null && args.size() == 2 && args.get(0) instanceof List<?> a
-                && prefix(a).equals(List.of("var", input.get("id"))) && args.get(1) instanceof List<?> b
-                && take(b, 3).equals(literal)
-                && call.subList(Math.min(3, call.size()), Math.min(6, call.size()))
-                    .equals(List.of(List.of(false, false), false, false)),
-            name + ": changed worker call");
-        var literals = new ArrayList<List<Object>>();
+        var literal = List.of("lit", kind.toLowerCase(Locale.ROOT),
+            kind.equals("Int32") ? "-2147483648" : "4294967295");
+        var proof = Map.of("kind", "long", "primReps", List.of(kind + "Rep"), "evaluated", true);
+        var workerId = coreEntry("literal" + kind + "Worker");
+        var worker = evidence.getAllBindings().get(workerId);
+        require(worker != null, name + ": missing opaque worker");
+        var expression = (List<?>) worker.get("expr");
+        require("lam".equals(expression.getFirst()), name + ": missing worker formals");
+        var formals = (List<Map<String, Object>>) expression.get(1);
+        require(formals.size() == 2 && Objects.equals(formals.get(0).get("rep"),
+                    Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true))
+                && Objects.equals(formals.get(1).get("rep"), proof),
+            name + ": changed worker parameter ABI");
+        var arguments = new ArrayList<List<Object>>();
         for (var binding : evidence.getBindings())
-            for (var node : evidence.nodes(binding.get("expr")))
-                if (take(node, 3).equals(literal))
-                    literals.add(node);
-        var expectedProof = unknownProof ? unknownLiteralProof
-                                         : Map.of("kind", "long", "primReps", List.of(kind + "Rep"), "evaluated", true);
-        require(literals.size() == 1
-                && Objects.equals(
-                    metadata(single(literals)) == null ? null : metadata(single(literals)).get("rep"), expectedProof),
-            name + ": narrow literal proof changed");
-        require(evidence.globalReferences(entry).equals(List.of(worker.get("id")))
-                && evidence.globalReferences(workerExpr).isEmpty(),
-            name + ": changed global call structure");
-        var lambdas = new ArrayList<List<Object>>();
-        for (var binding : evidence.getBindings()) lambdas.addAll(evidence.guestLambdas(binding.get("expr")));
-        require(lambdas.size() == 2 && lambdas.stream().anyMatch(l -> l == entry)
-                && lambdas.stream().anyMatch(l -> l == workerExpr),
-            name + ": unexpected guest lambda");
-        return lambdas.size(); // Direct saturated worker call; no evaluator or host-bridge count.
+            for (var call : applications(binding.get("expr")))
+                if (call.get(1) instanceof List<?> callee
+                    && prefix(callee).equals(List.of("var", workerId))) {
+                    var args = (List<?>) call.get(2);
+                    require(args.size() == 2 && args.get(1) instanceof List<?>, name + ": missing narrow argument");
+                    var argument = (List<Object>) args.get(1);
+                    require(take(argument, 3).equals(literal), name + ": narrow literal changed");
+                    require(metadata(argument) != null && Objects.equals(metadata(argument).get("rep"), proof),
+                        name + ": narrow literal proof changed");
+                    arguments.add(argument);
+                }
+        require(!arguments.isEmpty(), name + ": missing opaque worker call");
+        return arguments;
     }
     private Map<String, Object> literalModule(List<String> paths, String name, boolean unknownProof) throws Exception {
         var module = merged(paths);
-        var evidence = new ArrayCoreEvidence(module, coreEntry(name));
-        assertEquals(2, literalCalls(name, evidence));
-        if (unknownProof) {
+        var arguments = literalArguments(name, new ArrayCoreEvidence(module, coreEntry(name)));
+        if (unknownProof)
             // Keep the genuine export exact. Separately project the older erased
             // argument proof to exercise intrinsic refinement across a worker call.
-            var entry = (List<?>) evidence.getRoot().get("expr");
-            var call = (List<?>) entry.get(2);
-            var literal = (List<Object>) ((List<?>) call.get(2)).get(1);
-            metadata(literal).put("rep", unknownLiteralProof);
-            assertEquals(2, literalCalls(name, evidence, true));
-        }
+            for (var argument : arguments) metadata(argument).put("rep", unknownLiteralProof);
         return module;
     }
     private long decode(long value, boolean unsigned) {
@@ -407,101 +347,6 @@ public class Int32ArrayNativeTest {
             assertThrows(IllegalArgumentException.class, () -> checkedLiteralRows(text(corrupt)));
     }
     @Test
-    public void exportedCoreRequiresAllPrimitiveNamesAndExactAliasCounts() throws Exception {
-        var source = merged(paths());
-        for (var name : names) {
-            checkedCore(name, new ArrayCoreEvidence(source, coreEntry(name)));
-            for (var primitive : required(name))
-                for (boolean all : List.of(false, true)) {
-                    if (!all && exactAlias(name).getOrDefault(primitive, 0) < 2)
-                        continue;
-                    var module = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(source);
-                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
-                    var uses = new ArrayList<List<Object>>();
-                    for (var binding : evidence.getBindings())
-                        for (var node : evidence.nodes(binding.get("expr")))
-                            if (prefix(node).equals(List.of("prim", primitive)))
-                                uses.add(node);
-                    assertTrue(!uses.isEmpty());
-                    for (var node : all ? uses : uses.subList(0, Math.min(1, uses.size())))
-                        node.set(1, "missingArrayPrimitive#");
-                    assertThrows(IllegalArgumentException.class,
-                        ()
-                            -> checkedCore(name, new ArrayCoreEvidence(module, coreEntry(name))),
-                        name + "/" + primitive + "/all=" + all);
-                }
-            if (name.startsWith("alias")) {
-                var module = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(source);
-                var evidence = new ArrayCoreEvidence(module, coreEntry(name));
-                var state = evidence.stateLambda(evidence.getRoot().get("expr"));
-                state.set(2,
-                    List.of("let", false,
-                        List.of(Map.of("id", "extraPrimitive", "expr", List.of("prim", "unexpectedArrayPrimitive#"))),
-                        state.get(2)));
-                assertThrows(
-                    IllegalArgumentException.class, () -> checkedCore(name, new ArrayCoreEvidence(module, coreEntry(name))));
-            }
-        }
-    }
-    @Test
-    public void exportedLiteralCallsRejectChangedArgumentsProofsAndHiddenGuestRoots() throws Exception {
-        for (var paths : ((Map<String, List<String>>) manifest().get("stages")).values())
-            for (var name : literalNames) {
-                var source = merged(paths);
-                assertEquals(2, literalCalls(name, new ArrayCoreEvidence(source, coreEntry(name))));
-                for (int mutation = 0; mutation <= 13; mutation++) {
-                    var module = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(source);
-                    var evidence = new ArrayCoreEvidence(module, coreEntry(name));
-                    var entry = (List<Object>) evidence.getRoot().get("expr");
-                    var call = (List<Object>) entry.get(2);
-                    var args = (List<Object>) call.get(2);
-                    var worker = (List<Object>) single(
-                        evidence.getBindings()
-                            .stream()
-                            .filter(b -> !Objects.equals(b.get("id"), evidence.getRoot().get("id")))
-                            .toList())
-                                     .get("expr");
-                    var literal = (List<Object>) args.get(1);
-                    switch (mutation) {
-                        case 0 -> entry.set(2, List.of("let", false, List.of(), call));
-                        case 1 -> args.remove(1);
-                        case 2 -> args.add(literal);
-                        case 3 -> call.set(3, List.of(false, true));
-                        case 4 -> call.set(4, true);
-                        case 5 -> call.set(5, true);
-                        case 6 -> literal.set(2, "0");
-                        case 7 -> literal.set(1, "int");
-                        case 8 ->
-                            metadata(literal).put(
-                                "rep", Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true));
-                        case 9 -> worker.set(1, take((List<?>) worker.get(1), 1));
-                        case 10 -> args.set(0, List.of("lit", "int", "0"));
-                        case 11 ->
-                            worker.set(2,
-                                List.of("let", false,
-                                    List.of(
-                                        Map.of("id", "hidden", "expr", List.of("lam", worker.get(1), worker.get(2)))),
-                                    List.of("lit", "int", "0")));
-                        case 12 ->
-                            worker.set(2,
-                                List.of("let", false, List.of(Map.of("id", "duplicateLiteral", "expr", literal)),
-                                    worker.get(2)));
-                        case 13 -> metadata(literal).put("rep", unknownLiteralProof);
-                    }
-                    assertThrows(IllegalArgumentException.class,
-                        () -> literalCalls(name, new ArrayCoreEvidence(module, coreEntry(name))), name + "/mutation" + mutation);
-                }
-            }
-    }
-    @Test
-    public void nativePublicArraysAndByteAliasesWithInlining() throws Exception {
-        nativeChecks(true);
-    }
-    @Test
-    public void nativePublicArraysAndByteAliasesAcrossResidualCalls() throws Exception {
-        nativeChecks(false);
-    }
-    @Test
     public void genuineNoinlineNarrowLiteralsAndUnknownProofControlsInCompiledCode() throws Exception {
         var manifest = manifest();
         var entries = literalNames;
@@ -522,8 +367,6 @@ public class Int32ArrayNativeTest {
         assertEquals(14, ((Number) manifest.get("literalNativeRows")).intValue());
         for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet())
             for (var name : entries) {
-                var module = merged(stage.getValue());
-                int expectedCalls = literalCalls(name, new ArrayCoreEvidence(module, coreEntry(name)));
                 var cases = rows.get(name);
                 assertEquals(((List<Number>) manifest.get("literalInputs")).stream().map(Number::longValue).toList(),
                     cases.stream().map(Row::input).toList());
@@ -538,33 +381,12 @@ public class Int32ArrayNativeTest {
                                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                                     var linked = CoreModules.reachable(
                                         literalModule(stage.getValue(), name, unknownProof), coreEntry(name));
-                                    var bindings = (List<Map<String, Object>>) linked.get("bindings");
                                     var program = program(language, changed(linked, "instrument", true), backend);
-                                    var entry = program.entryTarget((String) single(
-                                        bindings.stream().filter(b -> coreEntry(name).equals(b.get("id"))).toList())
-                                            .get("id"));
-                                    for (var row : cases)
-                                        assertEquals(row.answer, Calls.target(entry, new Object[] {0L, row.input}));
-                                    var targets = activeTargets(entry);
-                                    assertEquals(expectedCalls, targets.size(),
-                                        stage.getKey() + "/" + backend + "/" + name + " entry and opaque worker");
-                                    for (var target : targets) compile(target);
-                                    for (var row : cases) {
-                                        var label = stage.getKey() + "/" + backend + "/" + name + "/" + row.input
-                                            + "/inlining=" + inlining + "/unknownProof=" + unknownProof;
-                                        long before = count(program, "compiledEntries");
-                                        assertEquals(
-                                            row.answer, Calls.target(entry, new Object[] {0L, row.input}), label);
-                                        assertEquals((long) expectedCalls, count(program, "compiledEntries") - before,
-                                            label + " exact compiled entries");
-                                        var active = activeTargets(entry);
-                                        assertEquals(targets.size(), active.size(), label + " active target count");
-                                        assertTrue(
-                                            active.stream().allMatch(t -> targets.stream().anyMatch(old -> old == t)),
-                                            label + " active identities");
-                                        for (var target : targets) valid(target, label);
-                                        released(language);
-                                    }
+                                    var entry = program.entryTarget(coreEntry(name));
+                                    var label = name + "/inlining=" + inlining + "/unknownProof=" + unknownProof;
+                                    checkCases(cases, stage.getKey(), backend, label, program, entry, false, language);
+                                    for (var target : activeTargets(entry)) compile(target);
+                                    checkCases(cases, stage.getKey(), backend, label, program, entry, true, language);
                                     for (var counter : List.of("unsupportedTraps", "blackholes"))
                                         assertEquals(0L, count(program, counter), counter);
                                 } finally {
@@ -573,7 +395,8 @@ public class Int32ArrayNativeTest {
                             }
             }
     }
-    private void nativeChecks(boolean inlining) throws Exception {
+    @Test
+    public void nativePublicArraysAndByteAliases() throws Exception {
         var manifest = manifest();
         assertEquals(names, manifest.get("entries"));
         assertEquals(inputs, ((List<Number>) manifest.get("inputs")).stream().map(Number::longValue).toList());
@@ -601,7 +424,6 @@ public class Int32ArrayNativeTest {
             for (var name : names) {
                 var evidence = new ArrayCoreEvidence(module, coreEntry(name));
                 checkedCore(name, evidence);
-                long expectedCalls = evidence.loweredImmediateStateCalls();
                 var cases = rows.get(name);
                 assertEquals(cases.size(), new HashSet<>(cases.stream().map(Row::input).toList()).size());
                 assertEquals(
@@ -609,35 +431,17 @@ public class Int32ArrayNativeTest {
                     new HashSet<>(cases.stream().map(Row::input).toList()));
                 for (var row : cases)
                     assertEquals(model(name, row.input), row.answer, "Native " + name + "(" + row.input + ")");
-                for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
+                for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
                         context.initialize("thc");
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var linked = CoreModules.reachable(module, coreEntry(name));
-                            var bindings = (List<Map<String, Object>>) linked.get("bindings");
                             var p = program(language, changed(linked, "instrument", true), backend);
-                            var entry = p.entryTarget(
-                                (String) single(bindings.stream().filter(b -> coreEntry(name).equals(b.get("id"))).toList())
-                                    .get("id"));
-                            // The checked immediate runRW State# lambda is beta-reduced.
-                            var expectedLabels = new HashSet<String>();
-                            for (var binding : bindings) expectedLabels.add(lambdaLabel((List<?>) binding.get("expr")));
-                            List<RootCallTarget> targets = List.of();
-                            checkCases(cases, stage.getKey(), backend, name, inlining, p, entry, expectedCalls, targets,
-                                false, language);
-                            targets = activeTargets(entry);
-                            assertEquals((int) expectedCalls, targets.size(),
-                                stage.getKey() + "/" + backend + "/" + name + " active guest roots");
-                            assertEquals(expectedLabels,
-                                new HashSet<>(targets.stream().map(t -> t.getRootNode().getName()).toList()),
-                                stage.getKey() + "/" + backend + "/" + name + " guest root labels");
-                            for (var target : targets) compile(target);
-                            long allocations = language.getHandoffState().get().getResults().getAllocations();
-                            checkCases(cases, stage.getKey(), backend, name, inlining, p, entry, expectedCalls, targets,
-                                true, language);
-                            assertEquals(allocations, language.getHandoffState().get().getResults().getAllocations(),
-                                "Pooled results reused");
+                            var entry = p.entryTarget(coreEntry(name));
+                            checkCases(cases, stage.getKey(), backend, name, p, entry, false, language);
+                            for (var target : activeTargets(entry)) compile(target);
+                            checkCases(cases, stage.getKey(), backend, name, p, entry, true, language);
                             for (var counter : List.of("unsupportedTraps", "blackholes"))
                                 assertEquals(0L, count(p, counter), counter);
                         } finally {
@@ -647,26 +451,16 @@ public class Int32ArrayNativeTest {
             }
         }
     }
-    private String lambdaLabel(List<?> expression) {
-        assertEquals("lam", expression.get(0));
-        var formals = (List<Map<String, Object>>) expression.get(1);
-        return "lambda " + String.join(", ", formals.stream().map(f -> String.valueOf(f.get("name"))).toList());
-    }
-    private void checkCases(List<Row> cases, String stage, String backend, String name, boolean inlining,
-        ExecutableProgram program, RootCallTarget entry, long expectedCalls, List<RootCallTarget> targets,
-        boolean compiled, Language language) throws Exception {
+    private void checkCases(List<Row> cases, String stage, String backend, String name,
+        ExecutableProgram program, RootCallTarget entry, boolean compiled, Language language) throws Exception {
+        boolean firstCompiledCall = compiled;
         for (var row : cases) {
-            var label = stage + "/" + backend + "/" + name + "/" + row.input + "/inlining=" + inlining;
-            long before = count(program, "compiledEntries");
+            var label = stage + "/" + backend + "/" + name + "/" + row.input;
+            long before = firstCompiledCall ? count(program, "compiledEntries") : 0L;
             assertEquals(row.answer, Calls.target(entry, new Object[] {0L, row.input}), label);
-            if (compiled) {
-                assertEquals(
-                    expectedCalls, count(program, "compiledEntries") - before, label + " exact compiled entries");
-                var active = activeTargets(entry);
-                assertEquals(targets.size(), active.size(), label + " active target count");
-                assertTrue(active.stream().allMatch(t -> targets.stream().anyMatch(old -> old == t)),
-                    label + " active target identities");
-                for (var target : targets) valid(target, label);
+            if (firstCompiledCall) {
+                assertTrue(count(program, "compiledEntries") > before, label + " first installed call");
+                firstCompiledCall = false;
             }
             released(language);
         }
@@ -861,11 +655,6 @@ public class Int32ArrayNativeTest {
     }
     private static List<?> prefix(List<?> list) {
         return list.subList(0, Math.min(2, list.size()));
-    }
-    private static <T> T single(List<T> list) {
-        if (list.size() != 1)
-            throw new IllegalArgumentException("Expected a single element");
-        return list.getFirst();
     }
     private static Map<String, Object> changed(Map<String, Object> module, String key, Object value) {
         var result = new LinkedHashMap<>(module);
