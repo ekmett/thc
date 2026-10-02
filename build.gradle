@@ -169,9 +169,11 @@ def memoryOptionNames = ["UseCompressedOops", "MaxRAM", "MinRAM", "InitialRAM", 
 def defaultRuntimeOptions = { JavaForkOptions options ->
     def explicit = (options.jvmArgs ?: []) + inheritedJvmOptions.collect { options.environment[it]?.toString() ?: "" }
     def defaults = explicit.any { option -> memoryOptionNames.any { option.contains(it) } } ? [] : ["-XX:+UseCompressedOops"]
+    // The global switch also disables explicit Vector API intrinsics and lowering.
     if (!options.systemProperties.containsKey("jdk.graal.Vectorization") &&
-        !explicit.any { it.contains("jdk.graal.Vectorization=") || it.contains("@") }) {
-        defaults.add("-Djdk.graal.Vectorization=false")
+        !options.systemProperties.containsKey("jdk.graal.VectorizeLoops") &&
+        !explicit.any { it.contains("jdk.graal.Vectorization=") || it.contains("jdk.graal.VectorizeLoops=") || it.contains("@") }) {
+        defaults.add("-Djdk.graal.VectorizeLoops=false")
     }
     return defaults
 }
@@ -192,8 +194,8 @@ tasks.startScripts {
     // Query these variables rather than expanding their contents into cmd syntax:
     // an otherwise valid quoted -D property can contain shell metacharacters.
     def windowsMemoryPolicy = "(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | \"%SystemRoot%\\System32\\findstr.exe\" /L /C:\"UseCompressedOops\" /C:\"MaxRAM\" /C:\"MinRAM\" /C:\"InitialRAM\" /C:\"@\" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% \"-XX:+UseCompressedOops\""
-    def unixVectorPolicy = 'case "${JAVA_TOOL_OPTIONS-} ${JDK_JAVA_OPTIONS-} ${_JAVA_OPTIONS-} ${JAVA_OPTS-} ${THC_OPTS-}" in\n  *jdk.graal.Vectorization=*|*@*) ;;\n  *) DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS \\"-Djdk.graal.Vectorization=false\\"" ;;\nesac'
-    def windowsVectorPolicy = '(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | "%SystemRoot%\\System32\\findstr.exe" /L /C:"jdk.graal.Vectorization=" /C:"@" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% "-Djdk.graal.Vectorization=false"'
+    def unixVectorPolicy = 'case "${JAVA_TOOL_OPTIONS-} ${JDK_JAVA_OPTIONS-} ${_JAVA_OPTIONS-} ${JAVA_OPTS-} ${THC_OPTS-}" in\n  *jdk.graal.Vectorization=*|*jdk.graal.VectorizeLoops=*|*@*) ;;\n  *) DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS \\"-Djdk.graal.VectorizeLoops=false\\"" ;;\nesac'
+    def windowsVectorPolicy = '(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | "%SystemRoot%\\System32\\findstr.exe" /L /C:"jdk.graal.Vectorization=" /C:"jdk.graal.VectorizeLoops=" /C:"@" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% "-Djdk.graal.VectorizeLoops=false"'
     inputs.property("linuxSignalPolicy", policy)
     inputs.property("unixMemoryPolicy", unixMemoryPolicy)
     inputs.property("windowsMemoryPolicy", windowsMemoryPolicy)

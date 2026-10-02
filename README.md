@@ -162,9 +162,9 @@ The [bytecode backend](docs/bytecode.md) is the default. To use the AST backend:
 THC_BACKEND=ast bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
 ```
 
-THC launchers disable Graal's automatic vectorization by default. Explicit JDK
-Vector API operations remain enabled. To enable automatic vectorization for a
-run, set `JAVA_OPTS=-Djdk.graal.Vectorization=true`. This is a JVM-wide compiler
+THC launchers disable Graal's automatic loop vectorization by default. Explicit JDK
+Vector API operations remain enabled. To enable automatic loop vectorization for a
+run, set `JAVA_OPTS=-Djdk.graal.VectorizeLoops=true`. This is a JVM-wide compiler
 setting, so it applies to both backends. Gradle application and test JVMs use the
 same default and respect explicit JVM properties; embedders choose their own JVM
 options.
@@ -197,8 +197,8 @@ THC_DIAGNOSTIC_UNSUPPORTED=true make -C bench map OUT="$PWD/work/bench-map"
 THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true make -C bench map OUT="$PWD/work/bench-ast"
 ```
 
-Direct benchmark JVMs also disable automatic vectorization by default. Set
-`JDK_JAVA_OPTIONS=-Djdk.graal.Vectorization=true` for an explicit comparison
+Direct benchmark JVMs also disable automatic loop vectorization by default. Set
+`JDK_JAVA_OPTIONS=-Djdk.graal.VectorizeLoops=true` for an explicit comparison
 with it enabled; inherited JVM options preserve caller choices.
 `bash bin/test-benchmark-entrypoints.sh` checks paths and launch defaults without
 preparing fixtures or measuring.

@@ -5,8 +5,8 @@
 # caller choices and opaque argument files. Source from Bash before launching.
 THC_BENCH_JVM_OPTIONS=()
 case "${JAVA_TOOL_OPTIONS-} ${JDK_JAVA_OPTIONS-} ${_JAVA_OPTIONS-}" in
-  *jdk.graal.Vectorization=*|*@*) ;;
-  *) THC_BENCH_JVM_OPTIONS+=(-Djdk.graal.Vectorization=false) ;;
+  *jdk.graal.Vectorization=*|*jdk.graal.VectorizeLoops=*|*@*) ;;
+  *) THC_BENCH_JVM_OPTIONS+=(-Djdk.graal.VectorizeLoops=false) ;;
 esac
 case "${JAVA_TOOL_OPTIONS-} ${JDK_JAVA_OPTIONS-} ${_JAVA_OPTIONS-}" in
   *UseCompactObjectHeaders*|*@*) ;;

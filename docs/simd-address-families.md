@@ -29,8 +29,8 @@ carrier aliases are accepted; address carriers, vector species and aggregate
 shape remain checked. Null, opaque and unowned numeric addresses are not
 byte-addressable. Fully overwritten managed pointer cells lose their references.
 
-On macOS ARM64 with pinned GraalVM 25.3.4.1, cold AST compilation of the
-original `int16X8WritePacked` entry currently fails with recursive inlining in
-Vector API reinterpretation. The reproducer uses `Short128Vector` and a constant
-`ByteSpecies`. The pinned Word64X2 roundtrip also hits recursive inlining
-during vector reinterpretation. No compiler or runtime workaround is applied.
+Cold vector compilation requires Graal's explicit Vector API intrinsics and
+vector lowering. Launchers disable automatic loop vectorization with
+`VectorizeLoops=false`, preserving those facilities. The broader
+`Vectorization=false` switch also disables them and can cause recursive-inlining
+bailouts in Vector API fallback code; an explicit caller setting is respected.

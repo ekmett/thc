@@ -7,11 +7,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 unset JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS
 . bin/benchmark-jvm-options.sh
-[[ "${THC_BENCH_JVM_OPTIONS[*]}" == '-Djdk.graal.Vectorization=false -XX:+UseCompactObjectHeaders -XX:+UseCompressedOops' ]]
+[[ "${THC_BENCH_JVM_OPTIONS[*]}" == '-Djdk.graal.VectorizeLoops=false -XX:+UseCompactObjectHeaders -XX:+UseCompressedOops' ]]
 for variable in JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS; do
-  export "$variable=-Djdk.graal.Vectorization=true -XX:-UseCompactObjectHeaders -XX:-UseCompressedOops"
-  . bin/benchmark-jvm-options.sh
-  [[ ${#THC_BENCH_JVM_OPTIONS[@]} == 0 ]]
+  for setting in Vectorization=true Vectorization=false VectorizeLoops=true VectorizeLoops=false; do
+    export "$variable=-Djdk.graal.$setting -XX:-UseCompactObjectHeaders -XX:-UseCompressedOops"
+    . bin/benchmark-jvm-options.sh
+    [[ ${#THC_BENCH_JVM_OPTIONS[@]} == 0 ]]
+  done
   export "$variable=@caller-options"
   . bin/benchmark-jvm-options.sh
   [[ ${#THC_BENCH_JVM_OPTIONS[@]} == 0 ]]
@@ -19,7 +21,7 @@ for variable in JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS; do
 done
 JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75
 . bin/benchmark-jvm-options.sh
-[[ "${THC_BENCH_JVM_OPTIONS[*]}" == '-Djdk.graal.Vectorization=false -XX:+UseCompactObjectHeaders' ]]
+[[ "${THC_BENCH_JVM_OPTIONS[*]}" == '-Djdk.graal.VectorizeLoops=false -XX:+UseCompactObjectHeaders' ]]
 unset JAVA_TOOL_OPTIONS
 kernel=$(make --no-print-directory -n -C bench kernels -o prepare-kernels)
 map=$(make --no-print-directory -n -C bench map -o prepare-map)

@@ -38,9 +38,9 @@ annotation covers the remaining roots in that module. Backend annotations on
 types and conflicting choices are rejected. The AST-only native code cache
 rejects reachable bytecode selections.
 
-Automatic vectorization remains a global compiler option. It cannot be selected
+Automatic loop vectorization remains a global compiler option. It cannot be selected
 with a declaration or module annotation. The launcher defaults it off; set
-`JAVA_OPTS=-Djdk.graal.Vectorization=true` to enable it for the JVM.
+`JAVA_OPTS=-Djdk.graal.VectorizeLoops=true` to enable it for the JVM.
 
 ## Executable schema
 
