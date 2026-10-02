@@ -48,7 +48,7 @@ import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMis
 import qualified System.Directory as Directory
 import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
-import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories,
+import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories, equalFilePath,
                         takeDirectory, takeFileName, takeExtension, joinPath, replaceExtension)
 import System.IO (IOMode(ReadMode), hClose, hGetContents, hPutStrLn,
                   hSetEncoding, openTempFile, stderr, utf8, withBinaryFile, withFile)
@@ -139,12 +139,15 @@ runWindowsProject :: RunOptions -> FilePath -> IO ()
 runWindowsProject opts working = do
   require (not (null (runThcRoot opts))) "run requires --thc-root DIR"
   let flags = runPlan opts
-  compiler <- case ghcPath flags of
+  requestedCompiler <- maybe (lookupEnv "GHC") (pure . Just) (ghcPath flags)
+  locatedCompiler <- case requestedCompiler of
     Just path -> do
-      requestedCompiler <- if takeFileName path == path then pure path else makeAbsolute path
-      findExecutable requestedCompiler >>= maybe (fail "selected GHC compiler not found") makeAbsolute
+      requestedPath <- if takeFileName path == path then pure path else makeAbsolute path
+      findExecutable requestedPath >>= maybe (fail "selected GHC compiler not found") makeAbsolute
     Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") makeAbsolute
-  packageTool <- selectedPackageTool compiler (ghcPkgPath flags)
+  compiler <- actualTool "ghc" locatedCompiler
+  requestedPkg <- maybe (lookupEnv "GHC_PKG") (pure . Just) (ghcPkgPath flags)
+  packageTool <- actualTool "ghc-pkg" =<< selectedPackageTool compiler requestedPkg
   output <- makeAbsolute (distDirectory flags)
   let native = output </> "selection"
       configuration = cabalProjectOptions opts ++ ["--builddir", native,
@@ -168,6 +171,14 @@ runWindowsProject opts working = do
       selectedFlags = [(mkFlagName name, value) | (name, value) <- Map.toList selectedPackageFlags]}}
     working cabalFile (prepareWindowsRuntimeWithVerification (runVerifyArtifacts opts)
       (runThcRoot opts) compiler packageTool driver)
+  where
+    -- Match the PowerShell exporter: bindist launchers narrow wide argv.
+    -- Keep one actual tool identity through Cabal acquisition and export.
+    actualTool name path = do
+      let versioned = takeDirectory path </> (name ++ "-9.14.1.exe")
+      available <- doesFileExist versioned
+      canonicalizePath (if equalFilePath (takeFileName path) (name ++ ".exe") && available
+        then versioned else path)
 
 -- Windows retains the simple-package raw-Core route. Acquire its support from
 -- the same real Cabal runtime unit and checked native/bundle cache as project
