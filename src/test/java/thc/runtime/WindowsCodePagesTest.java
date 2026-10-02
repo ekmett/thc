@@ -221,7 +221,8 @@ class WindowsCodePagesTest {
         assertEquals("902339d332fb4ce2b3c87dcac1ee6495d41ad886", ((Map<?, ?>) proof.get("upstream")).get("revision"));
         OriginalStdioChecks.hashes(root, proof.get("inputHashes"), Set.of("t/fixtures/compiler/WindowsCodePageAudit.hs",
             "t/haskell-fixtures/WindowsCodePageFixtures.hs", "bin/core_original_foreign.py"), null);
-        OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.cbd", logs + "/post.cbd", logs + "/oracle.json"), logs + "/");
+        OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.cbd", logs + "/post.cbd", logs + "/oracle.json",
+            logs + "/driver-build.command.json", logs + "/driver-build.stdout", logs + "/driver-build.stderr"), logs + "/");
         var upstream = "nih/pinned/ghc-9.14.1/libraries/ghc-internal/";
         var sourceHashes = new LinkedHashMap<String, String>();
         for (var entry : ((Map<String, String>) proof.get("sourceHashes")).entrySet()) {

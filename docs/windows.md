@@ -188,6 +188,8 @@ The code-page producer also acquires the registered `thc:runtime` component
 through the driver's normal Windows acquisition path and records its package
 manifest and CBD hashes. The consumers link the validated exception helpers
 from that bundle; they do not depend on the separate polyglot fixture corpus.
+Selected preparation builds its driver first; normal acquisition builds the
+interface helper. It does not require an earlier whole-project build.
 
 ~~~powershell
 ./bin/windows.ps1 -Action CodePageTest -Jobs 4

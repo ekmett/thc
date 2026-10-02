@@ -127,8 +127,9 @@ prepareWindowsCodePages root = do
   unless (oneLine version == "9.14.1") (die "Windows code pages require pinned GHC 9.14.1")
   library <- execute "libdir" [] ghc ["--print-libdir"]
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
-  located <- execute "driver-location" [] cabal
-    ["list-bin","exe:thc","--offline","--disable-shared","--with-compiler=" ++ ghc,"--with-hc-pkg=" ++ pkg]
+  let driverSelection = ["exe:thc","--offline","--disable-shared","--with-compiler=" ++ ghc,"--with-hc-pkg=" ++ pkg]
+  built <- execute "driver-build" [] cabal ("build":driverSelection)
+  located <- execute "driver-location" [] cabal ("list-bin":driverSelection)
   -- Ordinary foreign calls require the genuine exception bridge. Acquire the
   -- declared thc:runtime component; do not inject its source into this consumer.
   (_, packages) <- prepareWindowsRuntime root ghc pkg (oneLine located) (root </> logs)
@@ -272,7 +273,7 @@ prepareWindowsCodePages root = do
       "--output",logs </> stage ++ "-" ++ name ++ ".audit.json",logs </> stage ++ ".cbd"]
   afterHashes <- hashes root usedSources
   unless (sourceHashes == afterHashes) (die "Compiling declaration interfaces changed upstream sources")
-  let commands = [version,library,located,registration,rtsRegistration] ++ compiled ++ [adapterTarget,adapterBuilt,nativeLinked] ++ audits
+  let commands = [version,library,built,located,registration,rtsRegistration] ++ compiled ++ [adapterTarget,adapterBuilt,nativeLinked] ++ audits
       inputs = [source,"etc/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/WindowsCodePageFixtures.hs",
         "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
