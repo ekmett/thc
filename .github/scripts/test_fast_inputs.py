@@ -2212,6 +2212,10 @@ class RenamedInputContractTests(unittest.TestCase):
     def test_recorded_runtime_and_compiler_sources_use_actual_published_paths(self):
         root = Path(__file__).resolve().parents[2]
         self.assertEqual(("src/main/c/stdio-abi-probe.c",
+                          "src/main/c/native-process-signal-api.c",
+                          "src/test/c/native-process-signals-test.c",
+                          "src/test/resources/core/original-signal-install-descriptor.json",
+                          "src/test/resources/core/original-unix-signal-install-descriptor.json",
                           "src/main/java/thc/runtime/CoreByteStringSort.java",
                           "src/main/java/thc/runtime/ByteStringSort.java",
                           "src/main/java/thc/runtime/ByteStringSortExpression.java",

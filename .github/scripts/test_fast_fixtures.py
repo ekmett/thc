@@ -3326,6 +3326,60 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(["build/int16-arrays"], group["outputs"])
 
 
+    def test_process_signal_outputs_are_retained_by_full_receipts(self):
+        required = {'build/process-signals/' + name for name in
+                    ('manifest.json', 'oracle.txt', 'native-controls.txt')}
+        for name in required:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('native process signal evidence\n')
+        project = Path(__file__).resolve().parents[2]
+        manifest, _ = fast_fixtures._manifest(project)
+        self.assertEqual(required, set(manifest['groups']['process-signals']['outputs']))
+        log = self.root / 'build/process-signals/jvm-transport-123.log'
+        log.write_text('test-run output, not a producer artifact\n')
+        # Keep the actual reviewed root inventory. This family used to prevent
+        # every complete preparation from publishing a reusable receipt.
+        with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', required), \
+             mock.patch.object(fast_fixtures.platform, 'system', return_value='Linux'), \
+             mock.patch.object(fast_fixtures.platform, 'machine', return_value='x86_64'):
+            original = fast_fixtures._full_output_hashes(self.root)
+            self.assertEqual(required, set(original))
+            log.write_text('another test-run output\n')
+            self.assertEqual(original, fast_fixtures._full_output_hashes(self.root))
+            oracle = self.root / 'build/process-signals/oracle.txt'
+            oracle.write_text('changed native signal result\n')
+            self.assertNotEqual(original, fast_fixtures._full_output_hashes(self.root))
+            controls = self.root / 'build/process-signals/native-controls.txt'
+            controls.unlink()
+            with self.assertRaises(FileNotFoundError):
+                fast_fixtures._full_output_hashes(self.root)
+            controls.symlink_to(oracle)
+            with self.assertRaises(FileNotFoundError):
+                fast_fixtures._full_output_hashes(self.root)
+
+    def test_process_signal_receipt_ignores_logs_on_unsupported_hosts(self):
+        log = self.root / 'build/process-signals/jvm-transport-123.log'
+        log.parent.mkdir(parents=True)
+        log.write_text('JVM signal transport output\n')
+        for system, machine in [('Darwin', 'arm64'), ('Windows', 'AMD64'), ('Linux', 'aarch64')]:
+            with self.subTest(system=system, machine=machine), \
+                 mock.patch.object(fast_fixtures, 'FULL_REQUIRED', frozenset()), \
+                 mock.patch.object(fast_fixtures.platform, 'system', return_value=system), \
+                 mock.patch.object(fast_fixtures.platform, 'machine', return_value=machine):
+                self.assertEqual({}, fast_fixtures._full_output_hashes(self.root))
+
+    def test_selected_output_receipt_rejects_symlinked_parent(self):
+        output = self.root / 'build/process-signals/oracle.txt'
+        target = self.root / 'signal-artifacts'
+        target.mkdir()
+        (target / 'oracle.txt').write_text('native oracle\n')
+        output.parent.parent.mkdir(parents=True)
+        output.parent.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, 'Symlink/noncanonical destination'):
+            fast_fixtures._output_hashes(self.root, {'outputs': ['build/process-signals/oracle.txt']})
+
+
 class FullFixtureReceiptTest(unittest.TestCase):
     prepare = FixturePreparationTest.prepare
     selection = staticmethod(FixturePreparationTest.selection)

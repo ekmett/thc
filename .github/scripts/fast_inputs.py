@@ -46,6 +46,10 @@ def wired_source_path(name):
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
+                  "src/main/c/native-process-signal-api.c",
+                  "src/test/c/native-process-signals-test.c",
+                  "src/test/resources/core/original-signal-install-descriptor.json",
+                  "src/test/resources/core/original-unix-signal-install-descriptor.json",
                   "src/main/java/thc/runtime/CoreByteStringSort.java",
                   "src/main/java/thc/runtime/ByteStringSort.java",
                   "src/main/java/thc/runtime/ByteStringSortExpression.java",

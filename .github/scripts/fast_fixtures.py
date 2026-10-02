@@ -32,13 +32,16 @@ PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name
       ("version", "libdir", "source-extract", "source-build", "unit", "imports", "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")],
 ))
+PROCESS_SIGNAL_OUTPUTS = frozenset('build/process-signals/' + name for name in (
+    'manifest.json', 'oracle.txt', 'native-controls.txt',
+))
 TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/text-cbits-oracle", "exposed-text.conf",
     "logs/original-registration.stdout", "logs/native-oracle.command.json", "logs/native-build.command.json",
     *[f"{stage}-{suffix}" for stage in ("pre", "post") for suffix in ("core/TextCbitsAudit.cbd", "audit.json")],
 ))
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
-    "build/backend-annotations",
+    "build/backend-annotations", "build/process-signals",
     "build/process-lifecycle/core",
     "build/text-cbits", "build/vector-api", "build/truffle-strings",
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
@@ -51,6 +54,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/backend-annotations/pre/BackendAnnotations.cbd", "build/backend-annotations/post/BackendAnnotations.cbd", "build/backend-annotations/interface.cbd",
     "build/thc-fixtures.path",
+    *(PROCESS_SIGNAL_OUTPUTS if (platform.system(), platform.machine()) == ("Linux", "x86_64") else ()),
     *(PROCESS_CORE_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else ()),
     *TEXT_CBITS_OUTPUTS,
     *fast_inputs.BYTESTRING_UTF8_OUTPUTS,
@@ -624,6 +628,7 @@ def _output_hashes(root, group):
         path = root / _relative(output)
         if path.is_symlink() or not path.exists():
             raise FileNotFoundError(f"Missing fixture output: {path}")
+        path = fast_inputs.file_path(root, output)
         if path.is_file():
             files.add(path.relative_to(root))
         elif path.is_dir():
@@ -729,6 +734,10 @@ def _full_output_hashes(root):
             continue
         if path.is_symlink() or not path.is_dir():
             raise RuntimeError(f"Unexpected full fixture root: {name}")
+        if name == "build/process-signals":
+            if (platform.system(), platform.machine()) == ("Linux", "x86_64"):
+                files.update(_output_hashes(root, {"outputs": sorted(PROCESS_SIGNAL_OUTPUTS)}))
+            continue
         if name == "build/package-native-gc-carriers":
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
