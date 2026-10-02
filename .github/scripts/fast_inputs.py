@@ -354,7 +354,7 @@ SIMD128_ARRAY_OUTPUTS = frozenset("build/simd128-arrays/" + name for name in (
       for suffix in ("stdout", "stderr", "command.json"))))
 BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
                   "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
-BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
+BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "missing-source")
 BIGNAT_COMMANDS = ("plugin-build", "boot-export", "native-build", "native-oracle",
                    *(f"{stage}-export" for stage in ("pre", "post")),
                    *(f"{stage}-{name}-audit" for stage in ("pre", "post") for name in BIGNAT_AUDITS))

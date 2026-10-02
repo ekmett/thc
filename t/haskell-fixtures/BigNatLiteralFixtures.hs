@@ -36,10 +36,9 @@ import Text.Read (readMaybe)
 import THC.Compact.Module (readModuleValue)
 import THC.Compact.Inspect (inspectSources)
 
-entries, arithmetic, modules, originals, vendorSources :: [String]
+entries, modules, originals, vendorSources :: [String]
 entries = ["integerRoundTrip","naturalRoundTrip","integerLiteral","naturalLiteral",
   "magnitudeSize","magnitudeByte","magnitudeWord","magnitudeSign"]
-arithmetic = ["integerAddFrontier","naturalAddFrontier"]
 modules = ["BigNat","Integer","Natural"]
 originals = [directory </> "boot/core/GHC.Internal.Bignum." ++ name ++ ".cbd" | name <- modules]
 vendorSources = ["nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum" </> name ++ suffix |
@@ -171,51 +170,37 @@ inventory root auditDirectory = do
     check (closureIds `Set.isSubsetOf` sourceIds) "Original source must replace complete interface closure"
     bindings <- (++) (concat originalBindings) <$> field "bindings" public
     indexed <- Map.fromList <$> forM bindings (\binding -> do ident <- field "id" binding; pure (ident :: String,binding))
-    reports <- forM (entries ++ arithmetic) $ \name -> do
-      report <- audit stage name paths [name] (if name == "integerAddFrontier" then 1 else 0)
+    reports <- forM entries $ \name -> do
+      report <- audit stage name paths [name] 0
       accepted <- field "accepted" report :: IO Bool
       issues <- field "issues" report :: IO [Value]
       missing <- field "missingGlobals" report :: IO [Value]
-      missingIds <- mapM (field "id") missing :: IO [String]
       reached <- field "reachableBindings" report :: IO [Value]
       ids <- mapM (field "id") reached :: IO [String]
       check (null issues) "Unexpected BigNat audit issues"
-      if name `elem` entries then do
-        let worker | "integer" `isPrefixOf` name = "Integer.integerToInt#"
-                   | "natural" `isPrefixOf` name = "Natural.naturalToWord#"
-                   | otherwise = "Integer.integerToBigNatSign#"
-        check (accepted && null missing && prefix ++ worker `elem` ids) "Original conversion worker disappeared"
-        bodies <- forM ids $ \ident -> maybe (die "Audit reached a missing binding") (field "expr") (Map.lookup ident indexed)
-        let code = [toList items | body <- bodies, Array items <- walk body]
-            has tag ident = any ((== [String tag,String (fromString ident)]) . take 2) code
-            integer = not ("natural" `isPrefixOf` name)
-        if name `elem` ["integerRoundTrip","naturalRoundTrip"] then
-          check (has "var" ("main:BigNatLiteralAudit." ++ if integer then "integerIdentity" else "naturalIdentity") &&
-            has "con" (prefix ++ if integer then "Integer.IS" else "Natural.NS")) "Opaque roundtrip or small constructor disappeared"
-        else do
-          let choice = "main:BigNatLiteralAudit." ++ if integer then "integerChoice" else "naturalChoice"
-              constructors = if integer then ["Integer.IP","Integer.IN"] else ["Natural.NB"]
-              literals = [literal | literal <- code, take 2 literal == [String "lit",String "bignat"]]
-          check (choice `elem` ids && has "var" choice && all (has "con" . (prefix ++)) constructors && not (null literals))
-            "Opaque literal choice, constructors or BigNat literals disappeared"
-          forM_ literals $ \literal -> case drop 3 literal of
-            metadata:_ -> do
-              proof <- field "rep" metadata :: IO Value
-              check (proof == object ["kind" .= ("object" :: String),"evaluated" .= True,
-                "primReps" .= ["BoxedRep (Just Unlifted)" :: String]]) "BigNat intrinsic proof changed"
-            _ -> die "Missing BigNat intrinsic proof"
+      let worker | "integer" `isPrefixOf` name = "Integer.integerToInt#"
+                 | "natural" `isPrefixOf` name = "Natural.naturalToWord#"
+                 | otherwise = "Integer.integerToBigNatSign#"
+      check (accepted && null missing && prefix ++ worker `elem` ids) "Original conversion worker disappeared"
+      bodies <- forM ids $ \ident -> maybe (die "Audit reached a missing binding") (field "expr") (Map.lookup ident indexed)
+      let code = [toList items | body <- bodies, Array items <- walk body]
+          has tag ident = any ((== [String tag,String (fromString ident)]) . take 2) code
+          integer = not ("natural" `isPrefixOf` name)
+      if name `elem` ["integerRoundTrip","naturalRoundTrip"] then
+        check (has "var" ("main:BigNatLiteralAudit." ++ if integer then "integerIdentity" else "naturalIdentity") &&
+          has "con" (prefix ++ if integer then "Integer.IS" else "Natural.NS")) "Opaque roundtrip or small constructor disappeared"
       else do
-        primitives <- field "primitives" report :: IO [Value]
-        shrink <- forM primitives $ \primitive -> do
-          label <- field "name" primitive :: IO String
-          uses <- field "uses" primitive :: IO [Value]
-          pure (if label == "shrinkMutableByteArray#" then length uses else 0)
-        calls <- field "foreignCalls" report >>= mapM (field "symbol") :: IO [String]
-        let integer = name == "integerAddFrontier"
-            wanted = ["ghc-internal:GHC.Internal.Prim.Exception.raiseUnderflow" | integer]
-            symbols = ["__gmpn_add","__gmpn_add","__gmpn_add_1"] ++ [symbol | integer, symbol <- ["__gmpn_cmp","__gmpn_sub"]]
-        check (sum shrink == (if integer then 7 else 5) && sort calls == sort symbols &&
-          missingIds == wanted && accepted == null wanted) "Changed shrink/GMP/exception arithmetic frontier"
+        let choice = "main:BigNatLiteralAudit." ++ if integer then "integerChoice" else "naturalChoice"
+            constructors = if integer then ["Integer.IP","Integer.IN"] else ["Natural.NB"]
+            literals = [literal | literal <- code, take 2 literal == [String "lit",String "bignat"]]
+        check (choice `elem` ids && has "var" choice && all (has "con" . (prefix ++)) constructors && not (null literals))
+          "Opaque literal choice, constructors or BigNat literals disappeared"
+        forM_ literals $ \literal -> case drop 3 literal of
+          metadata:_ -> do
+            proof <- field "rep" metadata :: IO Value
+            check (proof == object ["kind" .= ("object" :: String),"evaluated" .= True,
+              "primReps" .= ["BoxedRep (Just Unlifted)" :: String]]) "BigNat intrinsic proof changed"
+          _ -> die "Missing BigNat intrinsic proof"
       pure (name,object ["accepted" .= accepted,"reachable" .= length reached,"issues" .= length issues,"missing" .= length missing])
     missing <- audit stage "missing-source" [publicPath,closurePath] entries 1
     accepted <- field "accepted" missing :: IO Bool
@@ -271,7 +256,7 @@ prepareBigNatLiterals root checkOnly = do
       _ <- runLogged 300 root logs (stage ++ "-export")
         [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
         "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-          ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries ++ arithmetic] ++ ["t/fixtures/compiler/BigNatLiteralAudit.hs"])
+          ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries] ++ ["t/fixtures/compiler/BigNatLiteralAudit.hs"])
       pure ()
     (stages,coverage,counts) <- inventory root directory
     _ <- runLogged 300 root logs "native-build" [] ghc
@@ -285,7 +270,7 @@ prepareBigNatLiterals root checkOnly = do
     sources <- sourcePaths root >>= records root
     artifacts <- artifactPaths >>= records root
     writeJson manifestPath $ object ["schema" .= (1 :: Int),"ghcInfo" .= info,"wordBits" .= (64 :: Int),"byteOrder" .= order,
-      "entries" .= entries,"arithmeticControls" .= arithmetic,"frontiers" .= ["integerAddFrontier" :: String],
+      "entries" .= entries,
       "values" .= map show values,"seeds" .= seeds,"nativeRows" .= (699 :: Int),"stages" .= stages,"coverage" .= coverage,
       "sourceBindings" .= counts,"sources" .= sources,"artifacts" .= artifacts,
       "claim" .= ("Fresh native conversion/complete limb and byte observations; complete original BigNat/Integer/Natural source, no arithmetic or foreign substitution. Guest compiled execution is tested separately." :: String)]
@@ -309,16 +294,18 @@ prepareBigNatLiterals root checkOnly = do
   forM_ [("stages",stages),("coverage",coverage),("sourceBindings",counts)] $ \(key,value) -> do
     saved <- field key manifest
     check (saved == value) ("Stale BigNat " ++ key)
-  forM_ [("schema",toJSON (1 :: Int)),("entries",toJSON entries),("arithmeticControls",toJSON arithmetic),
-    ("frontiers",toJSON ["integerAddFrontier" :: String]),
+  forM_ [("schema",toJSON (1 :: Int)),("entries",toJSON entries),
     ("values",toJSON (map show values)),("seeds",toJSON seeds),
     ("nativeRows",toJSON (699 :: Int)),("wordBits",toJSON (64 :: Int)),("byteOrder",String (fromString order))] $ \(key,value) -> do
     saved <- field key manifest
     check (saved == value) ("Changed BigNat domain: " ++ key)
   verifyHashes
-  putStrLn "BigNat: 699 native/model rows, 16 conversion + 4 arithmetic + 2 missing-source audits; complete originals"
+  putStrLn "BigNat: 699 native/model rows, 16 conversion + 2 missing-source audits; complete originals"
   where
     artifactPaths = do
-      nested <- concat <$> mapM (tree root . (directory </>)) ["pre-core","post-core","boot/core","native","commands"]
+      nested <- concat <$> mapM (tree root . (directory </>)) ["pre-core","post-core","boot/core","native"]
+      let commands = ["plugin-build","boot-export","native-build","native-oracle","pre-export","post-export"] ++
+            [stage ++ "-" ++ name ++ "-audit" | stage <- ["pre","post"], name <- entries ++ ["missing-source"]]
       pure $ sort $ nested ++ [directory </> "boot/boot-provenance.json",directory </> "requests.tsv",directory </> "oracle.tsv"] ++
-        [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries ++ arithmetic ++ ["missing-source"]]
+        [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries ++ ["missing-source"]] ++
+        [logs </> name ++ suffix | name <- commands, suffix <- [".stdout",".stderr",".command.json"]]

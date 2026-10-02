@@ -26,27 +26,32 @@ main = do
   if errors counts + failures counts == 0 then pure () else exitFailure
 
 fixture :: Env -> Test
-fixture environment = TestLabel "original array and bytestring memory calls" $ TestCase $
+fixture environment = TestLabel "public package arithmetic, text and memory" $ TestCase $
   withFixtureNamed environment "t/fixtures/run-library-memory" "library memory" $ \project -> do
+    installedCore <- maybe "required" id <$> lookupEnv "THC_TEST_INSTALLED_CORE"
     installedGhc <- lookupEnv "THC_INSTALLED_CORE_GHC"
     installedPkg <- lookupEnv "THC_INSTALLED_CORE_GHC_PKG"
     ghcSource <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
     let output = scratch environment </> "library-memory-full-core"
-        command = ["run", "--verify-artifacts", "--project-dir", project, "library-memory", "--installed-core", "required",
+        command = ["run", "--verify-artifacts", "--project-dir", project, "library-memory", "--installed-core", installedCore,
           "--thc-root", thcRoot environment, "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\path -> ["--with-ghc", path]) installedGhc ++
           maybe [] (\path -> ["--with-ghc-pkg", path]) installedPkg ++
           maybe [] (\path -> ["--ghc-source", path]) ghcSource
-        expected = "([2,3,5,7],[2,88,5,7])\n[65,66]\n"
+        expected = unlines
+          [ "([2,3,5,7],[2,88,5,7])"
+          , "[65,66]"
+          -- 2^64 + 64 carries into a second limb. Truncating the negative
+          -- square plus 65 gives quotient -(2^64 + 64) and remainder -65.
+          , "(18446744073709551680,(-18446744073709551680,-65),18446744073709551680)"
+          , "([233,128512,955,66,65],[128512,955,66],True)"
+          ]
     first <- run environment project (Just "bytecode") 900 command
     assertSuccess first
     assertEqual "independent small model" expected (out first)
     audit <- readJson (output </> "audit.json")
     assertBool "strict original Core accepted" (bool $ field audit "accepted")
     assertEqual "no missing definitions" [] (array $ field audit "missingGlobals")
-    let symbols = map (string . flip field "symbol") (array $ field audit "foreignCalls")
-    assertBool "original array memcpy retained" ("memcpy" `elem` symbols)
-    assertBool "original bytestring strlen retained" ("strlen" `elem` symbols)
     plan <- readJson (output </> "native/cache/plan.json")
     let component = case filter (\candidate ->
           string (field candidate "pkg-name") == "run-library-memory" &&

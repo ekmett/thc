@@ -1066,6 +1066,7 @@ test-suite library-memory-full-core
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
@@ -1090,6 +1091,7 @@ test-suite arguments-full-core
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
@@ -1114,6 +1116,7 @@ test-suite file-lifecycle-full-core
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
@@ -1139,6 +1142,7 @@ test-suite binary-buffers-full-core
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
@@ -1165,6 +1169,7 @@ test-suite executable-failure-full-core
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
@@ -1190,6 +1195,7 @@ test-suite environment-full-core
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
@@ -1214,6 +1220,7 @@ test-suite unlink-full-core
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,

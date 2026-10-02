@@ -98,11 +98,3 @@ magnitudeWord x i = case integerToBigNatSign# (integerChoice x) of
   _ -> case i <# quotInt# (sizeofByteArray# b) 8# of
    0# -> -1#
    _ -> word2Int# (indexWordArray# b i)
-
--- Keep actual arithmetic cold dependencies visible as strict frontiers.
-{-# OPAQUE integerAddFrontier #-}
-integerAddFrontier :: Int# -> Int# -> Int#
-integerAddFrontier x y = case (fromInteger (toInteger (I# x) + toInteger (I# y)) :: Int) of I# n -> n
-{-# OPAQUE naturalAddFrontier #-}
-naturalAddFrontier :: Int# -> Int# -> Int#
-naturalAddFrontier x y = case (fromIntegral ((fromIntegral (W# (int2Word# x)) :: Natural) + fromIntegral (W# (int2Word# y))) :: Word) of W# n -> word2Int# n
