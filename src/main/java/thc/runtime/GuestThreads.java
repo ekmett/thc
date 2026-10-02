@@ -4,7 +4,6 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ThreadLocalAction;
-import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
 import java.util.ArrayDeque;
@@ -114,14 +113,17 @@ public final class GuestThreads {
         if (carriers.length != 0) env.submitThreadLocal(carriers, new ThreadLocalAction(true, false) {
             @Override protected void perform(Access access) { throw new Stopped(); }
         });
-        boolean[] interrupted = {Thread.interrupted()};
+        // Finalization must join the Java carriers even after Truffle has cancelled the
+        // context or deregistered its guest threads. A blocking safepoint could cancel
+        // this join itself and mistake its notification interrupt for a host interrupt.
+        boolean interrupted = Thread.interrupted();
         try {
-            for (var thread : carriers) TruffleSafepoint.setBlockedThreadInterruptible(null, waiting -> {
-                try { waiting.join(); }
-                catch (InterruptedException failure) { interrupted[0] = true; throw failure; }
-            }, thread);
+            for (var thread : carriers) for (;;) {
+                try { thread.join(); break; }
+                catch (InterruptedException failure) { interrupted = true; }
+            }
             synchronized (this) { platformCarriers.clear(); }
-        } finally { if (interrupted[0]) Thread.currentThread().interrupt(); }
+        } finally { if (interrupted) Thread.currentThread().interrupt(); }
     }
     @SuppressWarnings("removal") private static final class Stopped extends ThreadDeath { }
     public static final class GuestThread {

@@ -26,6 +26,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -151,6 +152,61 @@ class ForkHostFailureTest {
     }
     @ParameterizedTest @MethodSource("variants") void bytecodeEncodingFailureUnwindsBlockedParent(String backend, String hosting) throws Exception {
         fatal(backend, hosting, BytecodeEncodingException.create("fork compiler failure"));
+    }
+    @ParameterizedTest @CsvSource({"false,false", "true,false", "false,true"})
+    void cancellingContextJoinsCarrierAndPreservesHostInterrupt(boolean initiallyInterrupted, boolean interruptWhileClosing) throws Exception {
+        var handlerEntered = new CompletableFuture<Void>();
+        var handlerFinished = new CompletableFuture<Void>();
+        var finishHandler = new CountDownLatch(1);
+        var failure = BytecodeEncodingException.create("fork compiler failure");
+        failure.initCause(new IllegalArgumentException("original compiler cause"));
+        try {
+            exercise("bytecode", "platform", _ -> {
+                Thread.currentThread().setUncaughtExceptionHandler((_, caught) -> {
+                    // Truffle has deregistered this child, but its Java carrier is still alive.
+                    handlerEntered.complete(null);
+                    try { finishHandler.await(); handlerFinished.complete(null); }
+                    catch (InterruptedException interrupted) { handlerFinished.completeExceptionally(interrupted); }
+                });
+                throw failure;
+            }, (context, parent, cell, release, child, errors) -> {
+                release.countDown();
+                assertParentFailure(parent, "fork compiler failure", "original compiler cause");
+                handlerEntered.get(5, TimeUnit.SECONDS);
+                assertTrue(child.get().isAlive());
+                var closed = new CompletableFuture<Boolean>();
+                var closer = new Thread(() -> {
+                    try {
+                        if (initiallyInterrupted) Thread.currentThread().interrupt();
+                        context.close(true);
+                        closed.complete(Thread.currentThread().isInterrupted());
+                    } catch (Throwable caught) { closed.completeExceptionally(caught); }
+                }, "thc-context-closer");
+                closer.start();
+                try {
+                    // Hold the Java carrier past Truffle deregistration so an abandoned join
+                    // cannot pass merely because the child happens to finish quickly.
+                    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                    while (!closed.isDone()) {
+                        if (closer.getState() == Thread.State.WAITING && Stream.of(closer.getStackTrace()).anyMatch(frame ->
+                                frame.getClassName().equals(GuestThreads.class.getName()) && frame.getMethodName().equals("stopHostedThreads"))) break;
+                        if (System.nanoTime() >= deadline) fail("Context closer neither joined the child nor completed");
+                        Thread.yield();
+                    }
+                    assertFalse(closed.isDone(), "Context close returned before its Java carrier terminated");
+                    if (interruptWhileClosing) closer.interrupt();
+                    finishHandler.countDown();
+                    assertEquals(initiallyInterrupted || interruptWhileClosing, closed.get(5, TimeUnit.SECONDS),
+                        "Context close must preserve host interrupts without publishing safepoint wakeups");
+                    assertFalse(child.get().isAlive(), "Context close must join its Java carrier");
+                } finally {
+                    finishHandler.countDown();
+                    closer.join(5000); assertFalse(closer.isAlive());
+                    child.get().join(5000); assertFalse(child.get().isAlive());
+                }
+                handlerFinished.get(5, TimeUnit.SECONDS);
+            });
+        } finally { finishHandler.countDown(); }
     }
     private void fatal(String backend, String hosting, RuntimeException failure) throws Exception {
         failure.initCause(new IllegalArgumentException("original compiler cause"));
