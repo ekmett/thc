@@ -421,7 +421,8 @@
       "junit": ["thc.runtime.OriginalFcntlTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fcntl"]}],
       "outputs": ["build/original-fcntl"],
-      "sources": ["t/fixtures/compiler/OriginalFcntlAudit.hs", "t/fixtures/compiler/OriginalFcntlNative.hs",
+      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
+        "t/fixtures/compiler/OriginalFcntlAudit.hs", "t/fixtures/compiler/OriginalFcntlNative.hs",
         "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
@@ -429,7 +430,8 @@
       "junit": ["thc.runtime.OriginalErrnoTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-errno"]}],
       "outputs": ["build/original-errno"],
-      "sources": ["t/fixtures/compiler/OriginalErrnoAudit.hs", "t/fixtures/compiler/OriginalErrnoNative.hs",
+      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
+        "t/fixtures/compiler/OriginalErrnoAudit.hs", "t/fixtures/compiler/OriginalErrnoNative.hs",
         "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
@@ -477,7 +479,8 @@
       "junit": ["thc.runtime.RubbishLiteralTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rubbish-literals"]}],
       "outputs": ["build/rubbish-literals"],
-      "sources": ["t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
+      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
+        "t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-rts-locks": {
@@ -563,7 +566,7 @@
       "junit": ["thc.runtime.OriginalStdioReadTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-read"]}],
       "outputs": ["build/original-stdio-read"],
-      "sources": [
+      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
         "t/fixtures/compiler/OriginalStdioReadAudit.hs",
         "t/fixtures/compiler/OriginalStdioReadNative.hs",
         "t/haskell-fixtures/Main.hs",
@@ -858,7 +861,7 @@
       "junit": ["thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "package-native-gc-carriers"]}],
       "outputs": ["build/package-native-gc-carriers"],
-      "sources": [
+      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
         "t/fixtures/compiler/PackageNativeGcCarriers.hs",
         "t/fixtures/compiler/PackageNativePrimCarriers.hs",
         "t/fixtures/compiler/PackageNativeUnknownPrim.hs",
@@ -927,7 +930,7 @@
       "junit": ["thc.runtime.OriginalStdioNativeTest"],
       "commands": [{"argv": ["bin/prepare-original-stdio.sh", "--require-supported"]}],
       "outputs": ["build/original-stdio"],
-      "sources": [
+      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
         "t/fixtures/compiler/OriginalStdioAudit.hs",
         "t/fixtures/compiler/OriginalStdioAuditNative.hs",
         "bin/prepare-original-stdio.sh",
@@ -1393,7 +1396,8 @@
       "junit": ["thc.runtime.IntrinsicOperandContinuationTest", "thc.runtime.TruffleStringTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "truffle-strings"]}],
       "outputs": ["build/truffle-strings"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json",
+      "sources": ["t/haskell-fixtures/TruffleStringFixtures.hs",
+        "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json",
         "src/examples/StringPrimitives.hs", "src/runtime/THC/Prim.hs",
         "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs"]
     },
@@ -1407,7 +1411,8 @@
       "junit": ["thc.runtime.TupleArithmeticTest", "thc.runtime.WordCarryTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "tuple-arithmetic"]}],
       "outputs": ["build/tuple-arithmetic"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+      "sources": ["t/haskell-fixtures/AggregateFixtures.hs",
+        "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "tuple-join": {
       "junit": ["thc.runtime.TupleJoinResultTest"],
@@ -1419,7 +1424,8 @@
       "junit": ["thc.runtime.VectorApiTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "vector-api"]}],
       "outputs": ["build/vector-api"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json",
+      "sources": ["t/haskell-fixtures/VectorApiFixtures.hs",
+        "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json",
         "src/examples/VectorLoops.hs", "src/runtime/THC/Prim.hs"]
     },
     "empty-tuple-input": {
@@ -1463,7 +1469,8 @@
       "junit": ["thc.runtime.RecordFieldNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "record-fields"]}],
       "outputs": ["build/record-fields"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+      "sources": ["t/haskell-fixtures/GhcApiFixtures.hs", "t/haskell-fixtures/GhcApiAudit.hs", "t/haskell-fixtures/InstalledCoreFixtures.hs",
+        "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "managed-mvars": {
       "junit": ["thc.runtime.ManagedMVarContextTest", "thc.runtime.ManagedMVarNativeTest"],
@@ -1475,7 +1482,8 @@
       "junit": ["thc.runtime.UnsafeEqualityTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "unsafe-equality"]}],
       "outputs": ["build/unsafe-equality"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+      "sources": ["t/haskell-fixtures/UnsafeEqualityFixtures.hs",
+        "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "show-int": {
       "junit": ["thc.runtime.ShowIntTest"],
@@ -1499,7 +1507,8 @@
       "junit": ["thc.runtime.SumJoinResultTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "sum-join"]}],
       "outputs": ["build/sum-join"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+      "sources": ["t/haskell-fixtures/SumJoinFixtures.hs",
+        "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "narrow-literal-proofs": {
       "junit": ["thc.runtime.NarrowLiteralProofTest"],

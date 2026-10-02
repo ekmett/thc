@@ -301,7 +301,10 @@ COMMON_SOURCES = (
     "bin/export-core.sh",
     "bin/toolchain.sh",
     "bin/plugin.py",
-    "t/haskell-fixtures/**/*.hs",
+    # Shared dispatch and support; family producers belong to manifest sources.
+    "t/haskell-fixtures/Main.hs",
+    "t/haskell-fixtures/FixtureSupport.hs",
+    "t/haskell-fixtures/AggregateFixtures.hs",
     "bin/audit-core.py",
     "bin/core_*.py",
     "bin/core-capabilities.json",

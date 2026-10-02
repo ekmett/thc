@@ -2303,8 +2303,10 @@ class FixturePreparationTest(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("fixture input\n")
         for name, sources in (
-                ("vector-api", ("src/examples/VectorLoops.hs", "src/runtime/THC/Prim.hs")),
-                ("truffle-strings", ("src/examples/StringPrimitives.hs", "src/runtime/THC/Prim.hs",
+                ("vector-api", ("t/haskell-fixtures/VectorApiFixtures.hs",
+                                "src/examples/VectorLoops.hs", "src/runtime/THC/Prim.hs")),
+                ("truffle-strings", ("t/haskell-fixtures/TruffleStringFixtures.hs",
+                                     "src/examples/StringPrimitives.hs", "src/runtime/THC/Prim.hs",
                                      "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs"))):
             group = manifest["groups"][name]
             for source in sources:
@@ -2330,6 +2332,25 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
         self.assertEqual(self.prepare("thc.AlphaTest")["reused"], ["alpha"])
         self.assertEqual(self.calls, [])
+
+    def test_haskell_producer_changes_only_rebuild_its_owners(self):
+        directory = self.root / "t/haskell-fixtures"
+        for name in ("AlphaFixtures.hs", "BetaFixtures.hs", "InstalledCoreFixtures.hs"):
+            (directory / name).write_text(name)
+        for group, producer in (("alpha", "AlphaFixtures.hs"), ("beta", "BetaFixtures.hs")):
+            self.manifest["groups"][group]["sources"] += [
+                "t/haskell-fixtures/" + producer, "t/haskell-fixtures/InstalledCoreFixtures.hs"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        self.prepare("thc.AlphaTest", "thc.BetaTest")
+        for source, rebuilt, reused in (
+                ("BetaFixtures.hs", ["beta"], ["alpha"]),
+                ("AlphaFixtures.hs", ["alpha"], ["beta"]),
+                ("InstalledCoreFixtures.hs", ["alpha", "beta"], []),
+                ("FixtureSupport.hs", ["alpha", "beta"], [])):
+            with self.subTest(source=source):
+                (directory / source).write_text("changed " + source)
+                self.assertEqual({"mode": "selected", "rebuilt": rebuilt, "reused": reused},
+                                 self.prepare("thc.AlphaTest", "thc.BetaTest"))
 
     def test_word_and_fused_floating_have_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]
@@ -2874,7 +2895,8 @@ class FixturePreparationTest(unittest.TestCase):
                           "t/fixtures/compiler/OriginalStdioAuditNative.hs",
                           "bin/prepare-original-stdio.sh", "t/haskell-fixtures/Main.hs",
                           "t/haskell-fixtures/FixtureSupport.hs",
-                          "t/haskell-fixtures/OriginalStdioFixtures.hs", "thc.cabal"}, set(group["sources"]))
+                          "t/haskell-fixtures/OriginalStdioFixtures.hs",
+                          "t/haskell-fixtures/InstalledCoreFixtures.hs", "thc.cabal"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" original-stdio --require-supported',
                       (project / "bin/prepare-tests.sh").read_text().splitlines())
