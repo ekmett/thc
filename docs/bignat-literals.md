@@ -8,5 +8,5 @@ Negative Integers use GHC's `IN` constructor around a nonnegative magnitude. `IP
 
 Malformed decimal and contradictory representation proofs are rejected. GHC Core lint forbids BigNat literal alternatives (`litIsLifted LitNumBigNat`), so both loaders and the auditor reject those explicitly; reference identity is never substituted for a BigNat pattern.
 
-See [GMP operations](gmp-limb-provider.md) for arithmetic support. Literal
-and conversion support alone does not imply a complete Integer/Natural library.
+Literal and conversion support alone does not imply a complete Integer/Natural
+library.

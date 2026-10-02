@@ -99,7 +99,6 @@ public final class Language extends TruffleLanguage<Language.State> {
         // they read this irreversible runtime admission state instead.
         private volatile boolean guestConcurrencyAdmitted;
         private final AtomicReference<FutureTask<SulongCbits>> nativeCbits;
-        private final AtomicReference<FutureTask<LimbProvider>> nativeLimbs;
         public State(Env env, Language language) {
             this.env = env;
             nativeByteArrays = switch (env.getOptions().get(BYTE_ARRAY_STORAGE)) {
@@ -155,7 +154,6 @@ public final class Language extends TruffleLanguage<Language.State> {
             weaks = new ManagedWeaks();
             singleThreadedAssumption = Truffle.getRuntime().createAssumption("THC single-threaded context");
             nativeCbits = new AtomicReference<>();
-            nativeLimbs = new AtomicReference<>();
         }
         public Env getEnv() { return env; }
         public boolean getNativeByteArrays() { return nativeByteArrays; }
@@ -233,25 +231,6 @@ public final class Language extends TruffleLanguage<Language.State> {
             singleGuestOriginAssumption.invalidate("Another guest thread or admission origin was admitted");
         }
 
-        @TruffleBoundary public LimbProvider limbs() {
-            if (!env.isNativeAccessAllowed()) throw new RuntimeFault("Native GMP arithmetic requires native access");
-            var task = nativeLimbs.get();
-            if (task == null) {
-                var candidate = new FutureTask<LimbProvider>(() -> new SulongLimbProvider(env));
-                if (nativeLimbs.compareAndSet(null, candidate)) {
-                    task = candidate;
-                    candidate.run(); // Parse LLVM without holding a monitor across guest code.
-                } else task = nativeLimbs.get();
-            }
-            try {
-                var selected = Objects.requireNonNull(task);
-                return selected.isDone() ? selected.get() : TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
-                    waiting -> { try { return waiting.get(); } catch (ExecutionException failure) { return Language.<RuntimeException, LimbProvider>rethrow(failure); } }, selected);
-            } catch (ExecutionException failure) {
-                nativeLimbs.compareAndSet(task, null);
-                return Language.<RuntimeException, LimbProvider>rethrow(failure.getCause() == null ? failure : failure.getCause());
-            } catch (InterruptedException failure) { return Language.<RuntimeException, LimbProvider>rethrow(failure); }
-        }
         @TruffleBoundary public SulongCbits cbits() {
             if (!env.isNativeAccessAllowed()) throw new RuntimeFault("C bitcode requires native access for the Sulong runtime");
             var task = nativeCbits.get();

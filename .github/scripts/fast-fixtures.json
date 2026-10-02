@@ -53,9 +53,7 @@
     "thc.runtime.StdioHostAbiTest",
     "thc.GuestExceptionsTest",
     "thc.runtime.ManagedDescriptorDupTest",
-    "thc.runtime.CoreGmpForeignTest",
     "thc.runtime.CoreMainThreadForeignTest",
-    "thc.runtime.SulongLimbProviderTest",
     "thc.runtime.AstContinuationTest",
     "thc.runtime.AstStackTest",
     "thc.runtime.GuestThreadsTest",
@@ -283,18 +281,6 @@
       "outputs": ["build/process-lifecycle/core"],
       "sources": ["t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c", "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java", "src/main/java/thc/runtime/ManagedProcessForeign.java", "src/main/java/thc/runtime/ManagedProcesses.java"]
     },
-    "text-cbits": {
-      "junit": ["thc.runtime.TextCbitsTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "text-cbits"]}],
-      "outputs": ["build/text-cbits"],
-      "sources": ["t/fixtures/compiler/TextCbitsAudit.hs", "t/fixtures/compiler/TextCbitsNative.hs",
-        "t/haskell-fixtures/TextCbitsFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/core_original_foreign.py",
-        "bin/audit-core.py", "bin/core-capabilities.json", "bin/build-cbits.py",
-        "src/main/c/text-api.c", "nih/pinned/text-2.1.3/cbits/utils.c",
-        "nih/pinned/text-2.1.3/cbits/measure_off.c", "nih/pinned/text-2.1.3/cbits/reverse.c",
-        "nih/pinned/text-2.1.3/LICENSE", "nih/pinned/openbsd-memchr-1.8.c"]
-    },
     "proxy-void": {
       "junit": ["thc.runtime.ProxyVoidTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "proxy-void"]}],
@@ -509,41 +495,6 @@
       "outputs": ["build/original-strerror"],
       "sources": ["t/fixtures/compiler/OriginalStrerrorNative.hs", "t/haskell-fixtures/OriginalStrerrorFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"],
       "requires": ["original-process-identity"]
-    },
-    "bytestring-utf8": {
-      "junit": ["thc.runtime.ByteStringUtf8Test"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bytestring-utf8"]}],
-      "outputs": ["build/bytestring-utf8"],
-      "sources": ["t/fixtures/compiler/ByteStringUtf8Audit.hs", "t/fixtures/compiler/ByteStringUtf8Native.hs",
-        "t/haskell-fixtures/ByteStringUtf8Fixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c", "src/main/c/bytestring-utf8-api.c", "bin/build-cbits.py",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
-    "original-memset": {
-      "junit": ["thc.runtime.OriginalMemsetTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-memset"]}],
-      "outputs": ["build/original-memset"],
-      "sources": ["t/fixtures/compiler/OriginalMemsetAudit.hs", "t/fixtures/compiler/OriginalMemsetNative.hs",
-        "t/haskell-fixtures/MemsetFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
-    "original-memory-search": {
-      "junit": ["thc.runtime.OriginalMemorySearchTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-memory-search"]}],
-      "outputs": ["build/original-memory-search"],
-      "sources": ["t/fixtures/compiler/OriginalMemorySearchAudit.hs", "t/fixtures/compiler/OriginalMemorySearchNative.hs",
-        "t/haskell-fixtures/MemorySearchFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
-    "original-gmp": {
-      "junit": ["thc.runtime.OriginalGmpTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-gmp", "--require-supported"]}],
-      "outputs": ["build/original-gmp"],
-      "sources": [
-        "t/fixtures/compiler/OriginalGmpAudit.hs", "t/fixtures/compiler/OriginalGmpNative.hs",
-        "t/haskell-fixtures/OriginalGmpFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"
-      ]
     },
     "original-posix-stat": {
       "junit": ["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalDirectoryStreamsTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalUnlinkAtTest"],

@@ -35,7 +35,6 @@ printf '%s\n' "$fixture_bin" > build/thc-fixtures.path
 "$fixture_bin" proxy-void
 "$fixture_bin" selector-proof
 "$fixture_bin" unix-libc
-"$fixture_bin" text-cbits
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" word-floating
@@ -103,15 +102,8 @@ python3 bin/prepare-synchronous-exceptions.py
 python3 bin/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 "$fixture_bin" original-stdio-read
-"$fixture_bin" bytestring-utf8
-"$fixture_bin" original-memset
-"$fixture_bin" original-memory-search
 "$fixture_bin" original-handle-readiness
 "$fixture_bin" original-posix-stat
-# Genuine GMP fixture and managed provider are currently Linux x86_64 only.
-case "$(uname -s)-$(uname -m)" in
-  Linux-x86_64) "$fixture_bin" original-gmp --require-supported ;;
-esac
 "$fixture_bin" original-stdio-close
 "$fixture_bin" original-posix-dup
 "$fixture_bin" original-open

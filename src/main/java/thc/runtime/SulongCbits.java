@@ -45,9 +45,7 @@ public final class SulongCbits {
     private volatile Object update;
     private volatile Object finish;
     private final FutureTask<Object> iconvTask;
-    private final FutureTask<Object> textTask;
     private final FutureTask<Object> waitStatusTask;
-    private final FutureTask<Object> utf8Task;
     private final CFinalizerFunction ownedFree = new CFinalizerFunction(this, "free", null);
     private final WeakHashMap<Object, WeakReference<CbitsBuffer>> buffers = new WeakHashMap<>();
     private final ConcurrentHashMap<Key, Object> foreign = new ConcurrentHashMap<>();
@@ -68,9 +66,7 @@ public final class SulongCbits {
                 throw fault("Original C bitcode does not match this runtime platform");
         } catch (Exception failure) { throw rethrow(failure); }
         iconvTask = new FutureTask<>(() -> load("iconv"));
-        textTask = new FutureTask<>(() -> load("text"));
         waitStatusTask = new FutureTask<>(() -> load("wait-status"));
-        utf8Task = new FutureTask<>(() -> load("bytestring-utf8"));
     }
     private static String architecture(String value) {
         return switch (value.toLowerCase(java.util.Locale.ROOT)) { case "arm64" -> "aarch64"; case "amd64" -> "x86_64"; default -> value; };
@@ -98,37 +94,6 @@ public final class SulongCbits {
             Object result = interop.execute(interop.readMember(await(waitStatusTask), "thc_wait_" + operation.name()), status);
             if (!interop.fitsInInt(result)) throw fault("Original unix wait-status result is not CInt");
             return interop.asInt(result);
-        } catch (Exception failure) { throw rethrow(failure); }
-    }
-    public Object textFunction(TextForeignOp operation) {
-        if (!System.getProperty("os.name").equals("Linux") || !Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")))
-            throw fault("Original text cbits currently require Linux x86_64");
-        try { return interop.readMember(await(textTask), operation.getSymbol()); }
-        catch (Exception failure) { throw rethrow(failure); }
-    }
-    public long text(Object function, TextForeignOp operation, CbitsBuffer bytes, long offset, long length, long count) {
-        Object argument;
-        if (operation == TextForeignOp.MEMCHR) argument = (byte) count; else argument = count;
-        Object result = executeWithOwners(function, bytes, offset, length, argument);
-        if (!interop.fitsInLong(result)) throw fault("Original text result is not ssize_t");
-        try { return interop.asLong(result); } catch (Exception failure) { throw rethrow(failure); }
-    }
-    public void textReverse(Object function, CbitsBuffer destination, CbitsBuffer source, long offset, long length) {
-        executeWithOwners(function, destination, source, offset, length);
-    }
-    public Object utf8Function() {
-        if (!System.getProperty("os.name").equals("Linux") || !Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")))
-            throw fault("Original ByteString UTF-8 cbits currently require Linux x86_64");
-        try { return interop.readMember(await(utf8Task), "bytestring_is_valid_utf8"); }
-        catch (Exception failure) { throw rethrow(failure); }
-    }
-    public long utf8Validate(Object function, Object bytes, long length) {
-        Object result = executeWithOwners(function, bytes, length);
-        if (!interop.fitsInInt(result)) throw fault("Original ByteString UTF-8 result is not CInt");
-        try {
-            int value = interop.asInt(result);
-            if (value < 0 || value > 1) throw fault("Original ByteString UTF-8 result is not boolean");
-            return value;
         } catch (Exception failure) { throw rethrow(failure); }
     }
     public ManagedAddress finalizerLabel(String symbol) {

@@ -397,63 +397,6 @@ class FastInputTests(unittest.TestCase):
                 for member, data in entries])
             self.rejected_without_writes(corrupt)
 
-    def test_bytestring_utf8_closed_receipt(self):
-        manifest_path = 'build/bytestring-utf8/manifest.json'
-        outputs = cache.BYTESTRING_UTF8_OUTPUTS
-        self.assertEqual(48, len(outputs))
-        self.assertIn(manifest_path, DECLARED_REQUIRED)
-        artifacts = {name: 'a' * 64 for name in outputs - {manifest_path}}
-        good = dict(schema=1, entries=['validateUnsafe', 'validateSafe'], nativeRows=800,
-                    strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
-        self.assertEqual(artifacts, cache.bytestring_utf8_artifact_hashes(good))
-        for path in outputs:
-            self.assertTrue(cache.allowed_payload(path), path)
-        for changes in (dict(nativeRows=799), dict(strictAccepted=False), dict(runtimeVerified=True),
-                        dict(entries=['validateSafe']), dict(artifactHashes={}),
-                        dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
-            with self.assertRaises(cache.CacheMiss):
-                cache.bytestring_utf8_artifact_hashes(dict(good, **changes))
-        for path in ('native/ByteStringUtf8Native.o', 'native/other-oracle', 'unreviewed.json'):
-            self.assertFalse(cache.allowed_payload('build/bytestring-utf8/' + path))
-
-    def test_memset_closed_receipt(self):
-        manifest_path = 'build/original-memset/manifest.json'
-        outputs = cache.MEMSET_OUTPUTS
-        self.assertEqual(30, len(outputs))
-        self.assertIn(manifest_path, DECLARED_REQUIRED)
-        artifacts = {name: 'a' * 64 for name in outputs - {manifest_path}}
-        good = dict(schema=1, entries=['originalFill'], nativeRows=198,
-                    strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
-        self.assertEqual(artifacts, cache.memset_artifact_hashes(good))
-        for path in outputs:
-            self.assertTrue(cache.allowed_payload(path), path)
-        for changes in (dict(nativeRows=197), dict(strictAccepted=False), dict(runtimeVerified=True),
-                        dict(entries=['wrongEntry']), dict(artifactHashes={}),
-                        dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
-            with self.assertRaises(cache.CacheMiss):
-                cache.memset_artifact_hashes(dict(good, **changes))
-        for path in ('native/OriginalMemsetNative.o', 'native/other-oracle', 'unreviewed.json'):
-            self.assertFalse(cache.allowed_payload('build/original-memset/' + path))
-
-    def test_memory_search_closed_receipt(self):
-        manifest_path = 'build/original-memory-search/manifest.json'
-        outputs = cache.MEMORY_SEARCH_OUTPUTS
-        self.assertEqual(38, len(outputs))
-        self.assertIn(manifest_path, DECLARED_REQUIRED)
-        artifacts = {name: 'a' * 64 for name in outputs - {manifest_path}}
-        good = dict(schema=1, entries=['originalCompare', 'originalFind'], nativeRows=392,
-                    strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
-        self.assertEqual(artifacts, cache.memory_search_artifact_hashes(good))
-        for path in outputs:
-            self.assertTrue(cache.allowed_payload(path), path)
-        for changes in (dict(nativeRows=391), dict(strictAccepted=False), dict(runtimeVerified=True),
-                        dict(entries=['originalFind']), dict(artifactHashes={}),
-                        dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
-            with self.assertRaises(cache.CacheMiss):
-                cache.memory_search_artifact_hashes(dict(good, **changes))
-        for path in ('native/OriginalMemorySearchNative.o', 'native/other-oracle', 'unreviewed.json'):
-            self.assertFalse(cache.allowed_payload('build/original-memory-search/' + path))
-
     def test_simd_memory_closed_receipts_and_export_only_archives(self):
         for family in cache.SIMD_BYTEARRAY_FAMILIES:
             for native in (False, True):
@@ -959,7 +902,7 @@ class FastInputTests(unittest.TestCase):
             inputHashes=self.manifest['inputHashes'],
             artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
         self.put(name, original)
-        with patch.object(cache, 'GMP_NATIVE_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+        with patch.object(cache, 'LINUX_X86_64_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
             packed = self.pack(); self.remove_payload(packed)
             cache.restore(self.root, self.current, self.bundle)
             self.assertEqual(original, (self.root / name).read_text())
@@ -994,7 +937,7 @@ class FastInputTests(unittest.TestCase):
             inputHashes=self.manifest['inputHashes'],
             artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
         self.put(name, original)
-        with patch.object(cache, 'GMP_NATIVE_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+        with patch.object(cache, 'LINUX_X86_64_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
             packed = self.pack(); self.remove_payload(packed)
             cache.restore(self.root, self.current, self.bundle)
             self.assertEqual(original, (self.root / name).read_text())
@@ -1180,7 +1123,7 @@ class FastInputTests(unittest.TestCase):
             inputHashes=self.manifest['inputHashes'],
             artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
         self.put(name, original)
-        with patch.object(cache, 'GMP_NATIVE_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+        with patch.object(cache, 'LINUX_X86_64_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
             packed = self.pack()
             self.assertLessEqual(cache.ORIGINAL_TERMIOS_OUTPUTS, packed['payload'].keys())
             self.remove_payload(packed)
@@ -1258,86 +1201,6 @@ class FastInputTests(unittest.TestCase):
                            'build/generated/simd/fixtures/Unexpected.hs',
                            'build/simd-capability-smoke/native/unreviewed'):
             self.assertFalse(cache.allowed_payload(unexpected))
-
-    def gmp_fixture(self):
-        manifest_path = 'build/original-gmp/manifest.json'
-        artifacts = cache.ORIGINAL_GMP_OUTPUTS - {manifest_path}
-        for name in artifacts:
-            self.put(name, b'{}\n' if name.endswith('.json') else b'\x00\x80\xff\n')
-        (self.root / 'build/original-gmp/native/oracle').chmod(0o755)
-        manifest = {'schema': 1, 'strictAccepted': True, 'installedArtifactsHashed': False,
-                    'inputHashes': self.manifest['inputHashes'],
-                    'artifactHashes': {name: cache.digest(self.root / name) for name in artifacts}}
-        self.put(manifest_path, json.dumps(manifest))
-        # These intermediates must not enter the cache, even when present.
-        self.put('build/original-gmp/package-db-0/package.cache', 'test-local registration database')
-        self.put('build/original-gmp/native/OriginalGmpNative.o', 'native object')
-        return manifest_path, artifacts, manifest
-
-    def test_gmp_exact_payload_and_executable_scope(self):
-        self.assertEqual(227, len(cache.ORIGINAL_GMP_OUTPUTS))
-        self.assertEqual(cache.GMP_NATIVE_HOST, 'build/original-gmp/manifest.json' in DECLARED_REQUIRED)
-        self.assertIn('original-gmp', cache.BUILD_DIRS)
-        for name in cache.ORIGINAL_GMP_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name), name)
-            if name == 'build/original-gmp/native/oracle':
-                self.assertEqual(0o755, cache.safe_mode(0o755, name))
-            else:
-                with self.assertRaises(cache.CacheMiss):
-                    cache.safe_mode(0o755, name)
-        for name in ('package-db-0/package.cache', 'package-db-1/ghc-internal.conf',
-                     'another.conf', 'native/other-oracle', 'native/OriginalGmpNative.o',
-                     'logs/extra.stdout', 'pre/core/Other.json', 'attempt-0/oracle.json',
-                     'logs/pre-audit-other.stdout', 'test-results/pass.json'):
-            self.assertFalse(cache.allowed_payload('build/original-gmp/' + name), name)
-        for name in ('../original-stdio/manifest.json', 'native/../../outside'):
-            with self.assertRaises(cache.CacheMiss):
-                cache.allowed_payload('build/original-gmp/' + name)
-
-    def test_gmp_archive_roundtrip_retains_metadata_not_package_database(self):
-        path, artifacts, original = self.gmp_fixture()
-        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, path)):
-            manifest = self.pack()
-            self.assertTrue(cache.ORIGINAL_GMP_OUTPUTS <= manifest['payload'].keys())
-            self.assertFalse(any('package-db-' in name or name.endswith('.o') for name in manifest['payload']))
-            self.remove_payload(manifest)
-            cache.restore(self.root, self.current, self.bundle)
-            self.assertEqual(original, json.loads((self.root / path).read_text()))
-            self.assertEqual(0o755, (self.root / 'build/original-gmp/native/oracle').stat().st_mode & 0o7777)
-            for name in artifacts:
-                self.assertEqual(manifest['payload'][name], cache.digest(self.root / name))
-            self.remove_payload(manifest)
-            for missing in ('logs/package-register.command.json', 'exposed-ghc-internal.conf',
-                            'pre/originalCmp.audit.json', 'post/core/THC.InterfaceClosure.cbd'):
-                changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
-                    if member.name != 'files/build/original-gmp/' + missing])
-                self.rejected_without_writes(changed)
-            changed = self.rewrite(lambda entries: [(member, data + b'changed' if member.name ==
-                'files/build/original-gmp/exposed-ghc-internal.conf' else data) for member, data in entries])
-            self.rejected_without_writes(changed)
-
-    def test_gmp_rejects_missing_forged_rejected_and_linked_receipts(self):
-        path, _, original = self.gmp_fixture()
-        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, path)):
-            for change in ('missing', 'forged', 'rejected', 'bad-hash'):
-                changed = copy.deepcopy(original)
-                if change == 'missing':
-                    del changed['artifactHashes']['build/original-gmp/logs/ghc-version.stdout']
-                elif change == 'forged':
-                    changed['artifactHashes']['build/original-gmp/package-db-0/package.cache'] = '0' * 64
-                elif change == 'rejected':
-                    changed['strictAccepted'] = False
-                else:
-                    changed['artifactHashes']['build/original-gmp/oracle.json'] = 123
-                self.put(path, json.dumps(changed))
-                with self.assertRaises(cache.CacheMiss, msg=change):
-                    self.pack()
-            self.put(path, json.dumps(original))
-            registration = self.root / 'build/original-gmp/exposed-ghc-internal.conf'
-            registration.unlink()
-            registration.symlink_to(self.root / 'build/original-gmp/package-db-0/package.cache')
-            with self.assertRaises(cache.CacheMiss):
-                self.pack()
 
     def formatter_fixture(self):
         project = Path(__file__).resolve().parents[2]
@@ -2151,7 +2014,6 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/test/resources/core/original-unix-signal-install-descriptor.json",
                           "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                           "src/main/java/thc/runtime/ProcessIdentity.java",
-                          "src/main/c/bytestring-utf8-api.c",
                           "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java",
                           "src/main/java/thc/runtime/VectorMemoryFamily.java",
                           "src/main/java/thc/runtime/VectorMemoryOp.java",

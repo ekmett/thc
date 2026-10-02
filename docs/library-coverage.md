@@ -15,8 +15,8 @@ The repository includes focused examples of:
 | Formatting | Public `Show Int`, `Show Word` and `Show [Int]` through original GHC Show/CString bodies |
 | Mutable references | [STRef/MutVar](mutvars.md), [atomic updates](boxed-cas.md), [MVars](managed-mvars.md), [STM](stm.md) |
 | Boxed arrays | [Lazy storage](core-evidence.md#lifted-boxed-array-storage), [shallow slices](array-slices.md), [small arrays](small-arrays.md) |
-| ByteString | [ShortByteString storage](bytearrays.md), [mutable byte operations](mutable-bytearray-ops.md), [UTF-8 validation](bytestring-utf8.md) |
-| Integer and Natural | [Literal representation](bignat-literals.md), [GMP limb operations](gmp-limb-provider.md) |
+| ByteString | [ShortByteString storage](bytearrays.md), [mutable byte operations](mutable-bytearray-ops.md) |
+| Integer and Natural | [Literal representation](bignat-literals.md) |
 
 The library suite distinguishes accepted consumers from explicit rejection
 controls. Those controls describe their prepared bundle, not a permanent

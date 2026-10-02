@@ -324,14 +324,8 @@ extra-source-files:
   t/fixtures/run-native-archive/provider/native-archive-provider.cabal
   t/fixtures/run-native-archive/provider/native.c
   t/fixtures/run-native-archive/provider/Provider.hs
-  t/fixtures/compiler/OriginalMemsetAudit.hs
-  t/fixtures/compiler/OriginalMemsetNative.hs
-  t/fixtures/compiler/ByteStringUtf8Audit.hs
-  t/fixtures/compiler/ByteStringUtf8Native.hs
   nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c
-  t/fixtures/compiler/TextCbitsAudit.hs
   t/fixtures/compiler/UnixLibcAudit.hs
-  t/fixtures/compiler/TextCbitsNative.hs
   nih/pinned/text-2.1.3/LICENSE
   nih/pinned/openbsd-memchr-1.8.c
   nih/pinned/text-2.1.3/cbits/utils.c
@@ -477,8 +471,6 @@ extra-source-files:
   t/fixtures/compiler/OriginalFdReadyAuditNative.hs
   t/fixtures/compiler/OriginalIconvAudit.hs
   t/fixtures/compiler/OriginalIconvAuditNative.hs
-  t/fixtures/compiler/OriginalGmpAudit.hs
-  t/fixtures/compiler/OriginalGmpNative.hs
   t/fixtures/compiler/OriginalPosixDupAudit.hs
   t/fixtures/compiler/OriginalPosixDupAuditNative.hs
   t/fixtures/compiler/TopHandlerMainThreadAbi.hs
@@ -1321,10 +1313,6 @@ executable thc-fixtures
     WindowsCodePageFixtures
     OriginalPathStatFixtures
     OriginalPosixStatFixtures
-    OriginalGmpFixtures
-    ByteStringUtf8Fixtures
-    MemsetFixtures
-    MemorySearchFixtures
     NativeAddressFixtures
     ProcessSignalFixtures
     ProcessLifecycleFixtures
@@ -1350,7 +1338,6 @@ executable thc-fixtures
     GetEntropyFixtures
     LibyamlNativeFixtures
     WcwidthFixtures
-    TextCbitsFixtures
     UnixLibcFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures

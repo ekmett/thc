@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-
 package thc.runtime;
 
 import jdk.incubator.vector.ByteVector;
@@ -513,7 +512,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-
     @Operation
     @ConstantOperand(type = CaptureLayout.class, name = "layout")
     @ConstantOperand(type = int.class, name = "index")
@@ -548,7 +546,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return layout.readLong(environment, index);
         }
     }
-
 
     @Operation
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1753,56 +1750,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalMemcmp {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                ManagedAddress left, ManagedAddress right, long count, Object state, @Bind("$node") Node node) {
-            TupleResults.requireVoidCarrier(state);
-            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    (int) left.compareBytes(right, count));
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalMemchr {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                ManagedAddress source, int needle, long count, Object state, @Bind("$node") Node node) {
-            TupleResults.requireVoidCarrier(state);
-            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    source.findByte(needle, count));
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalUtf8Validate {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                ManagedAddress source, long count, Object state, @Bind("$node") Node node) {
-            TupleResults.requireVoidCarrier(state);
-            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    (int) ManagedByteStringUtf8.validate(source, count));
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalMemmove {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress target, ManagedAddress source, long count, Object state, @Bind("$node") Node node) {
             TupleResults.requireVoidCarrier(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     source.moveTo(target, count));
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalMemset {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                ManagedAddress target, int value, long count, Object state, @Bind("$node") Node node) {
-            TupleResults.requireVoidCarrier(state);
-            target.fill(count, value);
-            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, target);
         }
     }
 
@@ -2360,25 +2313,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             long result = CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
             if (operation.getNarrowResult() != null) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
             else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    @ConstantOperand(type = GmpForeignOp.class, name = "operation")
-    public static final class OriginalGmpCall {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                GmpForeignOp operation, Object first, Object second, Object third, Object fourth,
-                long a, long b, long c, Object state, @Bind("$node") Node node) {
-            TupleResults.requireVoidCarrier(state);
-            if (operation == GmpForeignOp.GET_DOUBLE || operation == GmpForeignOp.ENCODE_DOUBLE) {
-                double result = ManagedGmp.invokeDouble(node, operation, first, a, b);
-                destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-            } else {
-                long result = ManagedGmp.invoke(node, operation, first, second, third, fourth, a, b, c);
-                if (operation.getResult() != null)
-                    destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-            }
         }
     }
 
@@ -4133,34 +4067,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             StablePointers.current(node).free(address);
         }
         @Fallback public static void invalid(Object address, Object state) { throw fail("Expected opaque StablePtr#"); }
-    }
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    @ConstantOperand(type = TextForeignOp.class, name = "operation")
-    public static final class OriginalTextCall {
-        @Specialization(guards = "!operation.getByteNeedle()") public static void apply(VirtualFrame frame, LocalAccessor destination,
-                TextForeignOp operation, Object bytes, long offset, long length, long count, Object state,
-                @Bind Node node) {
-            TupleResults.requireVoidCarrier(state);
-            long result = ManagedText.invoke(operation, bytes, offset, length, count);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-        }
-
-        @Specialization(guards = "operation.getByteNeedle()")
-        public static void byteNeedle(VirtualFrame frame, LocalAccessor destination,
-                TextForeignOp operation, Object bytes, long offset, long length, int needle, Object state,
-                @Bind Node node) {
-            TupleResults.requireVoidCarrier(state);
-            long result = ManagedText.invoke(operation, bytes, offset, length, needle);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-        }
-    }
-    @Operation
-    public static final class OriginalTextReverse {
-        @Specialization public static void apply(Object destination, Object source, long offset, long length, Object state) {
-            TupleResults.requireVoidCarrier(state);
-            ManagedText.reverse(destination, source, offset, length);
-        }
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")

@@ -1304,11 +1304,11 @@
     "src/test/java/thc/runtime/ExplicitInteropProbeRoot.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
     "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
     "src/test/java/thc/runtime/ScalarTestCalls.java": {
-      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.Md5ForeignCallTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.OriginalFcntlTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalMemorySearchTest","thc.runtime.OriginalMemsetTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalStrerrorNativeTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
+      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.Md5ForeignCallTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.OriginalFcntlTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalStrerrorNativeTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
       "python": []
     },
     "src/test/java/thc/runtime/ScalarValueTestSupport.java": {
-      "junit": ["thc.runtime.ArithmeticExceptionLazinessTest","thc.runtime.BigNatLiteralTest","thc.runtime.ByteStringUtf8Test","thc.runtime.CoreFloatingLiteralTest","thc.runtime.CoreKeepAliveTest","thc.runtime.CoreTouchTest","thc.runtime.DataToTagTest","thc.runtime.EmptyArgumentRuntimeTest","thc.runtime.FloatDecodeTest","thc.runtime.FloatingPrimitiveTest","thc.runtime.FloatingRemainderTest","thc.runtime.FloatingTupleTest","thc.runtime.FusedFloatingTest","thc.runtime.IntegerCompletionTest","thc.runtime.NarrowIntegerCarrierTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.ProxyVoidTest","thc.runtime.RubbishLiteralTest","thc.runtime.ScalarBitCastTest","thc.runtime.ScalarExceptionResultsNativeTest","thc.runtime.ShowIntTest","thc.runtime.ShowWordListTest","thc.runtime.SqrtPrimitiveTest","thc.runtime.TagToEnumTest","thc.runtime.TextCbitsTest","thc.runtime.UnsafeEqualityTest","thc.runtime.WordCarryTest","thc.runtime.WordFloatingTest"],
+      "junit": ["thc.runtime.ArithmeticExceptionLazinessTest","thc.runtime.BigNatLiteralTest","thc.runtime.CoreFloatingLiteralTest","thc.runtime.CoreKeepAliveTest","thc.runtime.CoreTouchTest","thc.runtime.DataToTagTest","thc.runtime.EmptyArgumentRuntimeTest","thc.runtime.FloatDecodeTest","thc.runtime.FloatingPrimitiveTest","thc.runtime.FloatingRemainderTest","thc.runtime.FloatingTupleTest","thc.runtime.FusedFloatingTest","thc.runtime.IntegerCompletionTest","thc.runtime.NarrowIntegerCarrierTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.ProxyVoidTest","thc.runtime.RubbishLiteralTest","thc.runtime.ScalarBitCastTest","thc.runtime.ScalarExceptionResultsNativeTest","thc.runtime.ShowIntTest","thc.runtime.ShowWordListTest","thc.runtime.SqrtPrimitiveTest","thc.runtime.TagToEnumTest","thc.runtime.UnsafeEqualityTest","thc.runtime.WordCarryTest","thc.runtime.WordFloatingTest"],
       "python": []
     },
 
@@ -1316,23 +1316,6 @@
     "src/test/resources/core/original-unix-libc-descriptors.json": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["bin/test-audit-core.py"]},
     "t/haskell-fixtures/UnixLibcFixtures.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/UnixLibcAudit.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/CoreTextForeign.java": {
-      "junit": ["thc.runtime.TextCbitsTest"], "python": ["bin/test-audit-core.py"]
-    },
-    "src/main/java/thc/runtime/TextForeignOp.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/TextForeignExpression.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ManagedText.java": {
-      "junit": ["thc.runtime.TextCbitsTest"], "python": []
-    },
-    "t/fixtures/compiler/TextCbitsAudit.hs": {
-      "junit": ["thc.runtime.TextCbitsTest"], "python": ["bin/test-audit-core.py"]
-    },
-    "t/fixtures/compiler/TextCbitsNative.hs": {
-      "junit": ["thc.runtime.TextCbitsTest"], "python": []
-    },
-    "t/haskell-fixtures/TextCbitsFixtures.hs": {
-      "junit": ["thc.runtime.TextCbitsTest"], "python": []
-    },
     "t/haskell-fixtures/ProxyVoidFixtures.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "t/fixtures/compiler/ProxyVoidAudit.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "t/fixtures/compiler/ProxyVoidAuditNative.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
@@ -2113,7 +2096,6 @@
         "thc.runtime.DoubleArrayNativeTest",
         "thc.runtime.FloatWordArrayNativeTest",
         "thc.runtime.PinnedPointerCellsTest",
-        "thc.runtime.OriginalMemsetTest",
         "thc.runtime.OriginalUnlinkAtTest",
         "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"
       ],
@@ -2641,7 +2623,6 @@
         "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest",
         "thc.runtime.ProcessSignalsTest",
         "thc.runtime.UnixLibcTest",
-        "thc.runtime.TextCbitsTest",
         "thc.runtime.ClosureInspectionTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.ThreadSchedulingTest",
@@ -2669,7 +2650,6 @@
         "thc.runtime.OriginalOpenTest",
         "thc.runtime.OriginalRtsLocksTest",
         "thc.runtime.OriginalPosixDupNativeTest",
-        "thc.runtime.OriginalGmpTest",
         "thc.runtime.NativeAddressTest",
         "thc.runtime.NativeMallocTest",
         "thc.runtime.OriginalFdReadyNativeTest",
@@ -2706,7 +2686,6 @@
         "thc.runtime.OriginalStdioSeekNativeTest",
         "thc.runtime.OriginalStdioTruncateNativeTest",
         "thc.runtime.OriginalStrerrorNativeTest",
-        "thc.runtime.ByteStringUtf8Test", "thc.runtime.OriginalMemsetTest", "thc.runtime.OriginalMemorySearchTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest",
         "thc.runtime.MutVarTest",
@@ -2750,49 +2729,6 @@
     "src/main/java/thc/runtime/NativeAddresses.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "src/main/java/thc/runtime/NativeReadOnlyImage.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "src/main/java/thc/runtime/NativeReadOnlyPointer.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
-    "t/haskell-fixtures/ByteStringUtf8Fixtures.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "t/fixtures/compiler/ByteStringUtf8Audit.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "t/fixtures/compiler/ByteStringUtf8Native.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/CoreByteStringUtf8Foreign.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ByteStringUtf8Expression.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ManagedByteStringUtf8.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "src/main/c/bytestring-utf8-api.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "t/haskell-fixtures/MemsetFixtures.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
-    "t/fixtures/compiler/OriginalMemsetAudit.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
-    "t/fixtures/compiler/OriginalMemsetNative.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
-    "src/main/java/thc/runtime/CoreMemsetForeign.java": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/MemsetExpression.java": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["bin/test-audit-core.py"]},
-    "t/haskell-fixtures/MemorySearchFixtures.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
-    "t/fixtures/compiler/OriginalMemorySearchAudit.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
-    "t/fixtures/compiler/OriginalMemorySearchNative.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
-    "src/main/java/thc/runtime/CoreMemorySearchForeign.java": {"junit": ["thc.runtime.OriginalMemorySearchTest", "thc.runtime.OriginalMemsetTest", "thc.runtime.OriginalStringRtsTest", "thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/MemorySearchOp.java": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/MemorySearchExpression.java": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["bin/test-audit-core.py"]},
-    "t/haskell-fixtures/OriginalGmpFixtures.hs": {
-      "junit": ["thc.runtime.OriginalGmpTest"], "python": []
-    },
-    "t/fixtures/compiler/OriginalGmpAudit.hs": {
-      "junit": ["thc.runtime.OriginalGmpTest"], "python": []
-    },
-    "t/fixtures/compiler/OriginalGmpNative.hs": {
-      "junit": ["thc.runtime.OriginalGmpTest"], "python": []
-    },
-    "src/main/java/thc/runtime/CoreGmpForeign.java": {
-      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["bin/test-audit-core.py"]
-    },
-    "src/main/java/thc/runtime/GmpForeignOp.java": {
-      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["bin/test-audit-core.py"]
-    },
-    "src/main/java/thc/runtime/GmpForm.java": {
-      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["bin/test-audit-core.py"]
-    },
-    "src/main/java/thc/runtime/ManagedGmp.java": {
-      "junit": ["thc.runtime.SulongLimbProviderTest", "thc.runtime.OriginalGmpTest"], "python": []
-    },
-    "src/main/java/thc/runtime/GmpForeignExpression.java": {
-      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": []
-    },
     "t/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest", "thc.runtime.LargeLiteralCaseNativeTest"],
       "python": []

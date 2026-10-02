@@ -107,17 +107,8 @@ class CompilerTargetTest(unittest.TestCase):
             source = root / "src/main/c/md5-api.c"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"/* synthetic ABI wrapper */\n")
-            for name in ("iconv-api.c", "gmp-api.c", "package-pointer-api.c",
-                         "text-api.c", "wait-status-api.c", "bytestring-utf8-api.c"):
+            for name in ("iconv-api.c", "package-pointer-api.c", "wait-status-api.c"):
                 (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
-            text_source = root / "nih/pinned/text-2.1.3"
-            for name in build.TEXT_SHA256:
-                path = root / "nih/pinned/openbsd-memchr-1.8.c" if name == "openbsd-memchr.c" else text_source / name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes((build.ROOT / path.relative_to(root)).read_bytes())
-            utf8 = root / "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c"
-            utf8.parent.mkdir(parents=True)
-            utf8.write_bytes((build.ROOT / utf8.relative_to(root)).read_bytes())
             rts = root / "nih/pinned/ghc-9.14.1/rts"
             rts.mkdir(parents=True)
             for name in build.RTS_FLOAT_SHA256:
@@ -138,12 +129,6 @@ class CompilerTargetTest(unittest.TestCase):
             default, target = "x86_64-pc-linux-gnu", "x86_64-unknown-linux-gnu"
 
             def query(command, **kwargs):
-                if "-S" in command and command[-3].endswith("bytestring-utf8.bc"):
-                    return "define i32 @bytestring_is_valid_utf8(ptr %src, i64 %len) { ret i32 1 }\n"
-                if "-S" in command:
-                    self.assertEqual(["/clang", "--target=" + target, "-S", "-emit-llvm",
-                                      str(output.resolve() / "thc/cbits/text.bc"), "-o", "-"], command)
-                    return "define ptr @thc_text_memchr(ptr %src, i32 %byte, i64 %len) { ret ptr null }\n"
                 replies = {("/clang", "-dumpmachine"): default,
                            ("/clang", "--target=" + target, "-dumpmachine"): target,
                            ("/clang", "--version"): "synthetic clang 20",
@@ -177,10 +162,6 @@ class CompilerTargetTest(unittest.TestCase):
             float_command = next(c for c in manifest["commands"] if str(rts / "StgPrimFloat.c") in c)
             self.assertIn("-shared", float_command)
             self.assertNotIn("-emit-llvm", float_command)
-            utf8_command = next(c for c in manifest["commands"] if str(Path("src/main/c/bytestring-utf8-api.c")) in c)
-            self.assertIn("-D__STDC_NO_ATOMICS__=1", utf8_command)
-            self.assertEqual(build.BYTESTRING_UTF8_SHA256, hashlib.sha256(
-                (output / "thc/cbits/bytestring-utf8-LICENSE").read_bytes()).hexdigest())
             for entry in manifest["sources"] + manifest["artifacts"]:
                 self.assertEqual(hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest(), entry["sha256"])
 

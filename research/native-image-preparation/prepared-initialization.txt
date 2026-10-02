@@ -81,7 +81,6 @@ thc.runtime.VectorMemory
 # Only primitive tag constants.
 # No instance Field, property, shape, frame, guest context or thread is created.
 thc.runtime.DataLayout$Field
-thc.runtime.GmpForeignOp
 thc.runtime.GuestThreadOps
 thc.runtime.Handoff
 thc.runtime.ManagedAddressRead
@@ -189,7 +188,6 @@ thc.runtime.RuntimeServiceCall
 thc.runtime.STMOp
 thc.runtime.SmallArrayOp
 thc.runtime.StringRtsOp
-thc.runtime.TextForeignOp
 thc.runtime.WeakOp
 
 # Exact javac ordinal-table holders. Only enum values/ordinals and private int
@@ -209,7 +207,6 @@ thc.runtime.JavaScriptAccess$1
 thc.runtime.JavaScriptExpression$1
 thc.runtime.ManagedAllocation$1
 thc.runtime.ManagedFiles$1
-thc.runtime.ManagedGmp$1
 thc.runtime.ManagedMVars$1
 thc.runtime.Md5ForeignExpression$1
 thc.runtime.NativeUnix$1
@@ -222,5 +219,4 @@ thc.runtime.STMCall$1
 thc.runtime.STMExpression$2
 thc.runtime.SavedTermios$1
 thc.runtime.StdioHostAbi$1
-thc.runtime.SulongLimbProvider$1
 thc.runtime.TermiosImage$1

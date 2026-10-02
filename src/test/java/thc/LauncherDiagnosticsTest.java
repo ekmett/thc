@@ -39,8 +39,6 @@ public class LauncherDiagnosticsTest {
         assertTrue(resources.contains("thc/cbits/package-pointer.bc"));
         if (manifest.get("system").equals("Linux"))
             assertTrue(resources.contains("thc/cbits/iconv.bc")); // Actual ELF stdout initialization failure.
-        if (resources.contains("thc/cbits/text.bc")) resources.addAll(List.of("thc/cbits/text-LICENSE", "thc/cbits/text-memchr-LICENSE"));
-        if (resources.contains("thc/cbits/bytestring-utf8.bc")) resources.add("thc/cbits/bytestring-utf8-LICENSE");
         for (var resource : resources) {
             assertNotNull(getClass().getResource("/" + resource), resource);
             assertTrue(patterns.stream().anyMatch(pattern -> pattern.matcher(resource).matches()), resource);

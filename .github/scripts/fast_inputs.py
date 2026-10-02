@@ -26,7 +26,7 @@ import tarfile
 import zlib
 
 SCHEMA = 1
-GMP_NATIVE_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
+LINUX_X86_64_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
 ORIGINAL_OPEN_HOST = (platform.system(), platform.machine()) in {
     ("Linux", "x86_64"), ("Darwin", "x86_64"), ("Darwin", "arm64"), ("Darwin", "aarch64")}
 ERRNO_NATIVE_HOST = platform.system() in ("Linux", "Darwin") and sys.maxsize > 2**32
@@ -52,7 +52,6 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/test/resources/core/original-unix-signal-install-descriptor.json",
                   "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                   "src/main/java/thc/runtime/ProcessIdentity.java",
-                  "src/main/c/bytestring-utf8-api.c",
                   "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java",
                   "src/main/java/thc/runtime/VectorMemoryFamily.java",
                   "src/main/java/thc/runtime/VectorMemoryOp.java",
@@ -61,7 +60,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/VectorByteArrayExpression.java",
                   "src/main/java/thc/runtime/VectorMemory.java")
 MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
-bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
+thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
@@ -541,7 +540,6 @@ REQUIRED = tuple(sorted({
     *(ORIGINAL_CURRENT_DIRECTORY_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_DIRECTORY_STREAMS_OUTPUTS if platform.system() == "Linux" else []),
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
-    *(["build/original-gmp/manifest.json"] if GMP_NATIVE_HOST else []),
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
     *(f"build/{d}/checks.json" for d in CHECK_DIRS),
     "build/floating/checks.json", "build/primop-coverage.json",
@@ -550,7 +548,7 @@ REQUIRED = tuple(sorted({
     "build/map/boot-provenance.json", "build/corpus/corpus.json",
 
 }))
-BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-directory-paths", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
+BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-path-stat", "original-path-mode", "original-path-link", "original-directory-paths", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 FLOAT_DECODE_ENTRIES = (*tuple(family + suffix for family in ("float", "double") for suffix in ("Direct", "Call", "Exponent")),
@@ -607,10 +605,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/original-fd-ready/native/oracle",
     "build/original-handle-readiness/native/oracle",
     "build/original-posix-stat/native/oracle",
-    "build/original-gmp/native/oracle",
-    "build/bytestring-utf8/native/oracle",
-    "build/original-memset/native/oracle",
-    "build/original-memory-search/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
 # The original stdio manifest fingerprints its commands, raw streams and numeric
@@ -658,55 +652,6 @@ ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/"
         "core/OriginalHandleReadinessAudit.cbd", "core/THC.InterfaceClosure.cbd",
         "originalIsTerminal.audit.json", "originalIsTerminalErrno.audit.json")),
 ))
-
-# One native oracle, two original Core stages and their exact logged commands.
-# The exposed registration is evidence only: no package-db directory is cached.
-ORIGINAL_GMP_ENTRIES = ("originalAdd", "originalAddWord", "originalCmp", "originalDivWord",
-                        "originalModWord", "originalMul", "originalMulWord", "originalSub",
-                        "originalQuotRem", "originalQuot", "originalRem", "originalRShift", "originalRShiftNegative",
-                        "originalGetDouble", "originalEncodeDouble", "originalGcdWords", "originalGcdWord", "originalGcd",
-                        "originalLShift", "originalAnd", "originalAndNot", "originalOr", "originalXor", "originalPopCount")
-ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle", "exposed-ghc-internal.conf",
-    *(f"logs/{label}.{suffix}" for label in (
-        "ghc-version", "ghc-info", "original-registration", "package-init", "package-register",
-        "native-build", "native-observations", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_GMP_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalGmpAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        *(f"{entry}.audit.json" for entry in ORIGINAL_GMP_ENTRIES))),
-))
-
-BYTESTRING_UTF8_OUTPUTS = frozenset("build/bytestring-utf8/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle", "exposed-bytestring.conf",
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/ByteStringUtf8Audit.cbd", "core/THC.InterfaceClosure.cbd",
-        "validateUnsafe.audit.json", "validateSafe.audit.json")),
-    *(f"logs/{label}.{suffix}" for label in (
-        "version", "original-registration", "package-init", "package-register", "native-build", "native-observations", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ("validateUnsafe", "validateSafe")))
-      for suffix in ("stdout", "stderr", "command.json"))))
-
-MEMSET_OUTPUTS = frozenset("build/original-memset/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalMemsetAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        "originalFill.audit.json")),
-    *(f"logs/{label}.{suffix}" for label in (
-        "version", "native-build", "native-observations", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ("originalFill",)))
-      for suffix in ("stdout", "stderr", "command.json"))))
-
-MEMORY_SEARCH_OUTPUTS = frozenset("build/original-memory-search/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalMemorySearchAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        "originalCompare.audit.json", "originalFind.audit.json")),
-    *(f"logs/{label}.{suffix}" for label in (
-        "version", "native-build", "native-observations", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ("originalCompare", "originalFind")))
-      for suffix in ("stdout", "stderr", "command.json"))))
 
 RTS_DIAGNOSTIC_OUTPUTS = frozenset("build/rts-diagnostics/" + name for name in (
     "manifest.json", "oracle.json",
@@ -1203,7 +1148,7 @@ def original_open_artifact_hashes(manifest):
 def termios_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid original termios manifest")
-    if not GMP_NATIVE_HOST:
+    if not LINUX_X86_64_HOST:
         require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported termios host")
         return {}
     require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_SAVED_TERMIOS_ENTRIES) and
@@ -1221,7 +1166,7 @@ def termios_artifact_hashes(manifest):
 def fcntl_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid original fcntl manifest")
-    if not GMP_NATIVE_HOST:
+    if not LINUX_X86_64_HOST:
         require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported fcntl host")
         return {}
     require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_FCNTL_ENTRIES) and
@@ -1291,7 +1236,7 @@ def process_identity_artifact_hashes(manifest):
 def tcsetattr_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid original tcsetattr manifest")
-    if not GMP_NATIVE_HOST:
+    if not LINUX_X86_64_HOST:
         require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported tcsetattr host")
         return {}
     require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_TCSETATTR_ENTRIES) and
@@ -1308,7 +1253,7 @@ def tcsetattr_artifact_hashes(manifest):
 def tcgetattr_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid original tcgetattr manifest")
-    if not GMP_NATIVE_HOST:
+    if not LINUX_X86_64_HOST:
         require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported tcgetattr host")
         return {}
     require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_TCGETATTR_ENTRIES) and
@@ -1323,60 +1268,6 @@ def tcgetattr_artifact_hashes(manifest):
     return artifacts
 
 
-
-
-def gmp_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and manifest.get("strictAccepted") is True,
-            "Missing accepted GMP fixture receipt")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) ==
-            ORIGINAL_GMP_OUTPUTS - {"build/original-gmp/manifest.json"},
-            "Incomplete/unreviewed GMP artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
-            "Invalid GMP artifact hash")
-    return artifacts
-
-
-def bytestring_utf8_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and manifest.get("schema") == 1 and
-            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
-            manifest.get("nativeRows") == 800 and manifest.get("entries") == ["validateUnsafe", "validateSafe"],
-            "Invalid original UTF-8 validation fixture receipt")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) ==
-            BYTESTRING_UTF8_OUTPUTS - {"build/bytestring-utf8/manifest.json"},
-            "Incomplete/unreviewed UTF-8 validation artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
-            "Invalid UTF-8 validation artifact hash")
-    return artifacts
-
-
-def memset_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and manifest.get("schema") == 1 and
-            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
-            manifest.get("nativeRows") == 198 and manifest.get("entries") == ["originalFill"],
-            "Invalid original memset fixture receipt")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) ==
-            MEMSET_OUTPUTS - {"build/original-memset/manifest.json"},
-            "Incomplete/unreviewed memset artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
-            "Invalid memset artifact hash")
-    return artifacts
-
-
-def memory_search_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and manifest.get("schema") == 1 and
-            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
-            manifest.get("nativeRows") == 392 and manifest.get("entries") == ["originalCompare", "originalFind"],
-            "Invalid original memory search fixture receipt")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) ==
-            MEMORY_SEARCH_OUTPUTS - {"build/original-memory-search/manifest.json"},
-            "Incomplete/unreviewed memory search artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
-            "Invalid memory search artifact hash")
-    return artifacts
 
 
 def original_path_stat_artifact_hashes(manifest):
@@ -1875,12 +1766,6 @@ def allowed_payload(name):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
-    if parts[1] == "bytestring-utf8":
-        return name in BYTESTRING_UTF8_OUTPUTS
-    if parts[1] == "original-memset":
-        return name in MEMSET_OUTPUTS
-    if parts[1] == "original-memory-search":
-        return name in MEMORY_SEARCH_OUTPUTS
     if name in {f"build/thread-label/{stage}/core/ThreadLabelAudit.cbd" for stage in ("pre", "post")}:
         return True
     if parts[1] == "thread-inventory":
@@ -2007,8 +1892,6 @@ def allowed_payload(name):
         return name in ORIGINAL_TCSETATTR_OUTPUTS
     if parts[1] == "original-tcgetattr":
         return name in ORIGINAL_TCGETATTR_OUTPUTS
-    if parts[1] == "original-gmp":
-        return name in ORIGINAL_GMP_OUTPUTS
     if parts[1] == "original-stack":
         return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
     if parts[1] == "original-stack-formatter":
@@ -2169,14 +2052,6 @@ def inventory(root, current, read, core_files, verified=None):
                     "Incomplete floating remainder fixture inventory")
         if name == "build/original-stack-formatter/manifest.json":
             formatter_artifact_hashes(root, doc)
-        if name == "build/original-gmp/manifest.json":
-            gmp_artifact_hashes(doc)
-        if name == "build/bytestring-utf8/manifest.json":
-            bytestring_utf8_artifact_hashes(doc)
-        if name == "build/original-memset/manifest.json":
-            memset_artifact_hashes(doc)
-        if name == "build/original-memory-search/manifest.json":
-            memory_search_artifact_hashes(doc)
         if name == "build/original-path-stat/manifest.json":
             original_path_stat_artifact_hashes(doc)
         if name == "build/original-path-mode/manifest.json":

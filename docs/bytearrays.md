@@ -45,14 +45,10 @@ them. Each allocation incurs native-memory/FFM cleanup bookkeeping instead of a
 JVM byte array.
 
 Package C functions that require native pointers also require this storage policy
-for their ordinary byte-array arguments. This currently includes the original
-GMP limb and Text cbits calls. Their Haskell declarations accept ordinary
-`ByteArray#` and `MutableByteArray#`; heap storage does not yet support
-those native calls. Selecting native storage covers guest allocations, including
-Text's result arrays. Embedders must also supply native-backed allocation owners
-for array arguments instead of raw host `byte[]` values. Pointer-based imports
-such as ByteString's UTF-8 validator and libc searches require live native or
-static-image addresses. No safe/unsafe annotation promotes heap storage.
+for ordinary `ByteArray#` and `MutableByteArray#` arguments. Embedders must
+also supply native-backed allocation owners for array arguments instead of raw
+host `byte[]` values. Pointer-based imports require live native or static-image
+addresses. No safe/unsafe annotation promotes heap storage.
 
 Writes and copies evaluate all their operands, including the state expression, before the
 effect. Core case evaluation preserves ordering. Freeze returns the same object

@@ -16,14 +16,6 @@ import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 PINNED = {"md5.c": "4fa83bda7aacc8a1656d7e2d78251bbe70a04b56",
           "md5.h": "a87296687a2f3dc6748264ff2a8a0c919518db55"}
-TEXT_SHA256 = {
-    "cbits/reverse.c": "912cc8bd4684ef5913c1694f1cda73d36c6d200f1a58ff9b6e661d7d8490ea90",
-    "cbits/utils.c": "4e2e096101ccfc7585cb06177fa9d4f523979aed584feb6814e92a868d234f5d",
-    "cbits/measure_off.c": "fd5c712c6d93dc9b1121cd6a890a2eb47a0afd96c5e796877e370cfd8a226985",
-    "LICENSE": "cf522e3d53b8d1768695fe5b66438baf4514fcd64b7a95739960f2f5b50c6ee8",
-    "openbsd-memchr.c": "6058dd440eacf8f9929437d8f6bacc593066c3032407e4428ea5f0e6bccff053",
-}
-BYTESTRING_UTF8_SHA256 = "d25c2ce0260fe4509c59ad400cba5df33dfafb9935ef3099ba04b26a2ce36e65"
 RTS_FLOAT_SHA256 = {
     "StgPrimFloat.c": "9cf152e52641b332634c9a9a0a24114f7d4640b08d17a35a020abb7bde4cf8c0",
     "StgPrimFloat.h": "486279f796cfc733a7d371e2445201a21b66a82a08ed501fdb82491c473b8f13",
@@ -101,14 +93,6 @@ def main():
     for name, expected in RTS_FLOAT_SHA256.items():
         if hashlib.sha256((rts / name).read_bytes()).hexdigest() != expected:
             raise SystemExit(f"Original GHC 9.14.1 {name} changed")
-    text_source = ROOT / "nih/pinned/text-2.1.3"
-    text_sources = {name: ROOT / "nih/pinned/openbsd-memchr-1.8.c" if name == "openbsd-memchr.c" else text_source / name for name in TEXT_SHA256}
-    for name, expected in TEXT_SHA256.items():
-        if hashlib.sha256(text_sources[name].read_bytes()).hexdigest() != expected:
-            raise SystemExit(f"Original text 2.1.3 {name} changed")
-    bytestring_source = ROOT / "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c"
-    if hashlib.sha256(bytestring_source.read_bytes()).hexdigest() != BYTESTRING_UTF8_SHA256:
-        raise SystemExit("Original ByteString 0.12.2.0 is-valid-utf8.c changed")
     output = args.output.resolve() / "thc/cbits"
     # This producer owns only thc/cbits, not sibling generated resources.
     if output.exists():
@@ -136,8 +120,6 @@ def main():
     if system == "Linux":
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
         if arch == "x86_64":
-            sources["bytestring-utf8"] = ROOT / "src/main/c/bytestring-utf8-api.c"
-            sources["text"] = ROOT / "src/main/c/text-api.c"
             sources["wait-status"] = ROOT / "src/main/c/wait-status-api.c"
     unix_headers = list(libdir.rglob("HsUnix.h")) if "wait-status" in sources else []
     if "wait-status" in sources and len(unix_headers) != 1:
@@ -150,11 +132,6 @@ def main():
                    "-I", str(reference / "cbits"), "-I", str(reference / "include"), "-I", str(headers[0].parent), "-I", str(config[0].parent),
                    str(source.relative_to(ROOT)),
                    "-o", str(output / (name + ".bc"))]
-        if name == "text":
-            command.insert(1, "-D__STDC_NO_ATOMICS__=1")
-            command.insert(1, "-fno-builtin-memchr")
-        if name == "bytestring-utf8":
-            command.insert(1, "-D__STDC_NO_ATOMICS__=1")
         if name == "wait-status":
             command[1:1] = ["-I", str(unix_headers[0].parent)]
         subprocess.run(command, cwd=ROOT, check=True)
@@ -162,29 +139,7 @@ def main():
         expected_target = pointer_target if name == "package-pointer" else target
         artifact = output / (name + ".bc")
         bitcode_targets[artifact.name] = bitcode_target(disassembler, artifact, expected_target) if disassembler else expected_target
-        if name == "text":
-            # Inspect the compiled artifact, not only source spelling. The
-            # managed buffer must never escape to native libc's memchr.
-            inspect = [*compiler, "-S", "-emit-llvm", str(output / "text.bc"), "-o", "-"]
-            ir = subprocess.check_output(inspect, cwd=ROOT, text=True)
-            commands.append(inspect)
-            if (re.search(r'^declare .*@(?:memchr|thc_text_memchr)\(', ir, re.M) or
-                    not re.search(r'^define .*@thc_text_memchr\(', ir, re.M)):
-                raise SystemExit("text memchr dependency is not defined in the original managed bitcode")
-            (output / "text-LICENSE").write_bytes((text_source / "LICENSE").read_bytes())
-            (output / "text-memchr-LICENSE").write_bytes(text_sources["openbsd-memchr.c"].read_bytes())
-        if name == "bytestring-utf8":
-            # Never let a managed buffer escape to native libc via an unresolved
-            # memcpy; the original small load must stay within LLVM execution.
-            inspect = [*compiler, "-S", "-emit-llvm", str(output / "bytestring-utf8.bc"), "-o", "-"]
-            ir = subprocess.check_output(inspect, cwd=ROOT, text=True)
-            commands.append(inspect)
-            if (re.search(r'^declare .*@memcpy\(', ir, re.M) or
-                    not re.search(r'^define .*@bytestring_is_valid_utf8\(', ir, re.M)):
-                raise SystemExit("ByteString UTF-8 dependency is not defined in managed bitcode")
-            (output / "bytestring-utf8-LICENSE").write_bytes(bytestring_source.read_bytes())
     source_files = list(md5_sources.values()) + list(sources.values())
-    source_files += list(text_sources.values()) + [bytestring_source]
     source_files += unix_headers + [p.parent / "HsUnixConfig.h" for p in unix_headers]
     artifacts = [output / (name + ".bc") for name in sources]
     # The original RTS floating helpers contain no GHC heap state. Supply the
@@ -233,19 +188,6 @@ def main():
                    str(ROOT / "src/main/c/md5-api.c"), "-o", str(artifact)]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
-        artifacts.append(artifact)
-    # The first native limb provider is intentionally Linux x86_64 only. Keep
-    # the embedded LLVM container's DT_NEEDED entry: GMP receives real native
-    # arena pointers, not the managed buffers used by original MD5.
-    if system == "Linux" and arch == "x86_64":
-        source = ROOT / "src/main/c/gmp-api.c"
-        artifact = output / "gmp-api.so"
-        command = [*compiler, "-O1", "-g", "-fembed-bitcode", "-shared", "-fPIC",
-                   f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
-                   str(source.relative_to(ROOT)), "-lgmp", "-lm", "-o", str(artifact)]
-        subprocess.run(command, cwd=ROOT, check=True)
-        commands.append(command)
-        source_files.append(source)
         artifacts.append(artifact)
     record = lambda p: {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
     manifest = {"schema": 1, "target": target, "compilerDefaultTarget": default_target,

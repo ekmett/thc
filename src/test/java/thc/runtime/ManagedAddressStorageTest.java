@@ -314,4 +314,60 @@ class ManagedAddressStorageTest {
         assertNull(literalField.get(pinned));
         assertNull(mutableField.get(pinned));
     }
+    @Test
+    void searchPreservesBoundsOpaqueCellsAndNativeOwnerLifetime() throws Exception {
+        var nullAddress = ManagedAddress.nullAddress();
+        assertEquals(0L, nullAddress.compareBytes(nullAddress, 0));
+        assertSame(nullAddress, nullAddress.findByte(0, 0));
+        var base = ManagedAddress.fromByteArray(new byte[] {0, -128, -1, 0, -1});
+        assertTrue(base.findByte(-1, 5).sameLocation(base.plus(2)));
+        assertTrue(base.findByte(511, 5).sameLocation(base.plus(2)));
+        assertTrue(base.findByte(256, 5).sameLocation(base));
+        assertTrue(base.plus(1).compareBytes(base, 1) > 0);
+        for (long count : new long[] {-1L, 6L, Long.MAX_VALUE}) {
+            assertThrows(RuntimeFault.class, () -> base.findByte(0, count));
+            assertThrows(RuntimeFault.class, () -> base.compareBytes(base, count));
+        }
+        assertThrows(RuntimeFault.class, () -> nullAddress.findByte(0, 1));
+        var cells = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8));
+        cells.writeAddressElementIndex(1, base);
+        assertThrows(RuntimeFault.class, () -> cells.findByte(0, 16));
+        assertThrows(RuntimeFault.class, () -> cells.compareBytes(cells, 16));
+        var literal = ManagedAddress.fromHex("00ff00");
+        assertThrows(RuntimeFault.class, () -> literal.findByte(255, 3).writeWord8(0, 7));
+        if (System.getProperty("os.name").equals("Linux")
+            && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"))) {
+            ManagedAddress[] stale = {null};
+            try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                context.initialize("thc");
+                context.enter();
+                try {
+                    var allocation = Language.currentState().getNativeAllocations().malloc(8);
+                    for (int i = 0; i < 8; i++) allocation.writeWord8(i, i);
+                    var found = allocation.findByte(5, 8);
+                    assertTrue(found.sameLocation(allocation.plus(5)));
+                    found.writeWord8(0, 44);
+                    assertEquals(44L, allocation.readWord8(5));
+                    assertEquals(
+                        0L, allocation.compareBytes(ManagedAddress.fromByteArray(new byte[] {0, 1, 2, 3, 4, 44, 6, 7}), 8));
+                    stale[0] = found;
+                    try (var other = org.graalvm.polyglot.Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                        other.initialize("thc");
+                        other.enter();
+                        try { assertThrows(RuntimeFault.class, () -> found.findByte(44, 1)); }
+                        finally { other.leave(); }
+                    }
+                    Language.currentState().getNativeAllocations().free(allocation);
+                    assertThrows(RuntimeFault.class, () -> found.findByte(44, 0));
+                    assertThrows(RuntimeFault.class, () -> found.compareBytes(base, 0));
+                } finally { context.leave(); }
+            }
+            try (var other = org.graalvm.polyglot.Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                other.initialize("thc");
+                other.enter();
+                try { assertThrows(RuntimeFault.class, () -> stale[0].readWord8(0)); }
+                finally { other.leave(); }
+            }
+        }
+    }
 }

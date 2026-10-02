@@ -404,8 +404,6 @@ jobs:
             build/native-malloc/manifest.json
             build/native-malloc/oracle.txt
             build/native-malloc/logs/
-            build/original-gmp/
-            build/original-memory-search/
             build/address-fields/
             build/data-to-tag/
             build/scalar-bitcasts/

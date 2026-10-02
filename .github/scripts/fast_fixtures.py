@@ -34,15 +34,10 @@ PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name
 PROCESS_SIGNAL_OUTPUTS = frozenset('build/process-signals/' + name for name in (
     'manifest.json', 'oracle.txt', 'native-controls.txt',
 ))
-TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
-    "manifest.json", "inputs.tsv", "oracle.tsv", "native/text-cbits-oracle", "exposed-text.conf",
-    "logs/original-registration.stdout", "logs/native-oracle.command.json", "logs/native-build.command.json",
-    *[f"{stage}-{suffix}" for stage in ("pre", "post") for suffix in ("core/TextCbitsAudit.cbd", "audit.json")],
-))
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/backend-annotations", "build/process-signals",
     "build/process-lifecycle/core",
-    "build/text-cbits", "build/vector-api", "build/truffle-strings",
+    "build/vector-api", "build/truffle-strings",
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
@@ -55,11 +50,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/thc-fixtures.path",
     *(PROCESS_SIGNAL_OUTPUTS if (platform.system(), platform.machine()) == ("Linux", "x86_64")
       else ("build/process-signals/manifest.json",)),
-    *(PROCESS_CORE_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else ()),
-    *TEXT_CBITS_OUTPUTS,
-    *fast_inputs.BYTESTRING_UTF8_OUTPUTS,
-    *fast_inputs.MEMSET_OUTPUTS,
-    *fast_inputs.MEMORY_SEARCH_OUTPUTS,
+    *(PROCESS_CORE_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else ()),
     *fast_inputs.RUBBISH_OUTPUTS,
     "build/vector-api/core/THC.Prim.cbd", "build/vector-api/core/VectorLoops.cbd",
     "build/vector-api/oracle.tsv",
@@ -274,13 +265,13 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS,
     *fast_inputs.RTS_DIAGNOSTIC_OUTPUTS,
     *fast_inputs.RTS_SHUTDOWN_OUTPUTS,
-    *(fast_inputs.ORIGINAL_OPEN_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-open/manifest.json"}),
-    *(fast_inputs.ORIGINAL_FCNTL_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-fcntl/manifest.json"}),
+    *(fast_inputs.ORIGINAL_OPEN_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-open/manifest.json"}),
+    *(fast_inputs.ORIGINAL_FCNTL_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-fcntl/manifest.json"}),
     *(fast_inputs.ORIGINAL_ERRNO_OUTPUTS if fast_inputs.ERRNO_NATIVE_HOST else {"build/original-errno/manifest.json"}),
     *(fast_inputs.ORIGINAL_PROCESS_IDENTITY_OUTPUTS if fast_inputs.ERRNO_NATIVE_HOST else {"build/original-process-identity/manifest.json"}),
-    *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-termios/manifest.json"}),
-    *(fast_inputs.ORIGINAL_TCSETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcsetattr/manifest.json"}),
-    *(fast_inputs.ORIGINAL_TCGETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcgetattr/manifest.json"}),
+    *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-termios/manifest.json"}),
+    *(fast_inputs.ORIGINAL_TCSETATTR_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-tcsetattr/manifest.json"}),
+    *(fast_inputs.ORIGINAL_TCGETATTR_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-tcgetattr/manifest.json"}),
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
@@ -447,7 +438,7 @@ def _output_hashes(root, group):
         expected = fast_inputs.gc_carrier_artifact_hashes(root, json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/process-lifecycle/core"]:
-        if not fast_inputs.GMP_NATIVE_HOST:
+        if not fast_inputs.LINUX_X86_64_HOST:
             return {}
         name = "build/process-lifecycle/core/manifest.json"
         manifest = json.loads(fast_inputs.file_path(root, name).read_text())
@@ -479,13 +470,6 @@ def _output_hashes(root, group):
             expected = validator(json.loads(fast_inputs.file_path(root, name).read_text()))
             result.update(_manifest_output_hashes(root, name, expected))
         return result
-    if group["outputs"] == ["build/text-cbits"]:
-        name = "build/text-cbits/manifest.json"
-        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
-        expected = manifest.get("artifactHashes")
-        fast_inputs.require(isinstance(expected, dict) and set(expected) == TEXT_CBITS_OUTPUTS - {name},
-                            "Incomplete original text artifact inventory")
-        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/thread-scheduling"]:
         name = "build/thread-scheduling/manifest.json"
         expected = fast_inputs.thread_scheduling_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -544,20 +528,6 @@ def _output_hashes(root, group):
         return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-stack-formatter"]:
         return _formatter_output_hashes(root)
-    if group["outputs"] == ["build/original-gmp"]:
-        return _gmp_output_hashes(root)
-    if group["outputs"] == ["build/bytestring-utf8"]:
-        name = "build/bytestring-utf8/manifest.json"
-        expected = fast_inputs.bytestring_utf8_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
-    if group["outputs"] == ["build/original-memset"]:
-        name = "build/original-memset/manifest.json"
-        expected = fast_inputs.memset_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
-    if group["outputs"] == ["build/original-memory-search"]:
-        name = "build/original-memory-search/manifest.json"
-        expected = fast_inputs.memory_search_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/rts-diagnostics"]:
         name = "build/rts-diagnostics/manifest.json"
         expected = fast_inputs.rts_diagnostic_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -654,16 +624,6 @@ def _formatter_output_hashes(root):
     return result
 
 
-def _gmp_output_hashes(root):
-    # Never traverse or fingerprint the test-local package database or installed
-    # interfaces. The receipt names every consumed artifact, including the
-    # exposed registration as inert provenance, with an exact closed inventory.
-    name = "build/original-gmp/manifest.json"
-    path = fast_inputs.file_path(root, name)
-    expected = fast_inputs.gmp_artifact_hashes(json.loads(path.read_text()))
-    return _manifest_output_hashes(root, name, expected)
-
-
 def _manifest_output_hashes(root, name, expected):
     path = fast_inputs.file_path(root, name)
     result = {name: _digest(path)}
@@ -728,11 +688,7 @@ def _full_output_hashes(root):
         if name == "build/process-lifecycle/core":
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
-        if name == "build/original-gmp":
-            if fast_inputs.GMP_NATIVE_HOST:
-                files.update(_gmp_output_hashes(root))
-            continue
-        if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams"):
+        if name in ("build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-fd-ready", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr"):
@@ -808,8 +764,7 @@ def prepare(root, selection, run, toolchain):
     if selection.get("mode") != "narrow":
         raise ValueError("Invalid selected test mode")
 
-    groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None
-                     and (owners[name] != "original-gmp" or fast_inputs.GMP_NATIVE_HOST)})
+    groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None})
     def classify():
         state = []
         for group_id in groups:

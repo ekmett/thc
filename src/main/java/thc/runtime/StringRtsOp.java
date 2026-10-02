@@ -57,6 +57,6 @@ public enum StringRtsOp {
     }
 
     public boolean acceptsUnit(Object value) {
-        return this == STRLEN_CSIZE ? CoreMemorySearchForeign.isOriginalByteStringUnit(value) : unit.equals(value);
+        return this == STRLEN_CSIZE ? value instanceof String name && name.matches("bytestring-0\\.12\\.2\\.0(?:-[A-Za-z0-9]+)?") : unit.equals(value);
     }
 }
