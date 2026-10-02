@@ -26,7 +26,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import FixtureSupport (CommandResult(..), hashFile, hashes, readInteger, runLogged,
                        runLoggedWithInput, splitTab, writeJson)
-import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
@@ -184,11 +184,7 @@ prepareByteArrayFamily root command = do
       logRun label env executable args = runLogged 300 root logs label env executable args
   createDirectoryIfMissing True (root </> directory)
   old <- doesFileExist manifest
-  when old $ do
-    digest <- hashFile manifest
-    createDirectoryIfMissing True (root </> directory </> "previous-manifests")
-    copyFile manifest (root </> directory </> "previous-manifests" </> digest ++ ".json")
-    removeFile manifest
+  when old (removeFile manifest)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   version <- logRun "ghc-version" [] ghc ["--numeric-version"]
