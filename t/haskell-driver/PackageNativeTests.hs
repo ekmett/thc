@@ -491,6 +491,31 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       assertEqual "Darwin libc linker prefix" "access" (nativeIrSymbol target "_access")
       assertEqual "Darwin preserves genuine GMP underscores" "__gmpn_add" (nativeIrSymbol target "___gmpn_add")
       assertEqual "Darwin managed symbol remains recognizable" "hs_free_stable_ptr" (nativeIrSymbol target "_hs_free_stable_ptr")
+  , TestLabel "native archive roots preserve LLVM function versus data declarations" $ TestCase $ do
+      let candidates = ["same_label", "__gmpn_add_1", "quoted.label", "asm_label$special", "defined", "alias", "missing"]
+          source declaration = unlines
+            [declaration, "declare i64 @__gmpn_add_1(ptr, ptr, i64, i64)",
+             "declare void @\"quoted\\2Elabel\"()",
+             "declare void @\"\\01_asm_label$special\"()",
+             "define void @defined() { ret void }",
+             "@alias = alias void (), ptr @defined",
+             "; declare void @missing()"]
+      assertEqual "an archive T symbol is callable only when LLVM declares a function"
+        ["same_label", "__gmpn_add_1", "quoted.label", "asm_label$special"]
+        (nativeFunctionExternals "arm64-apple-macosx15.0.0" candidates
+          (source "declare i64 @same_label(ptr, i64)"))
+      assertEqual "the same T symbol cannot satisfy an LLVM data/address reference"
+        ["__gmpn_add_1", "quoted.label", "asm_label$special"]
+        (nativeFunctionExternals "arm64-apple-macosx15.0.0" candidates
+          (source "@same_label = external constant i8"))
+      assertEqual "quoted return types cannot turn data references into function roots"
+        ["actual"]
+        (nativeFunctionExternals "arm64-apple-macosx15.0.0" ["same_label", "actual"]
+          "declare %\"type@same_label(\" @actual()\n@same_label = external constant i8")
+      assertEqual "asm labels on ELF retain their literal leading underscore"
+        ["_asm_label$special"]
+        (nativeFunctionExternals "x86_64-unknown-linux-gnu" ["_asm_label$special"]
+          "declare void @\"\\01_asm_label$special\"()")
   , TestCase $ do
       assertEqual "ELF symbol remains unchanged" "__gmpn_add" (nativeIrSymbol "aarch64-linux-gnu" "__gmpn_add")
       assertEqual "ELF ordinary symbol remains unchanged" "access" (nativeIrSymbol "x86_64-linux-gnu" "access")

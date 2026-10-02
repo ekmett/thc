@@ -96,6 +96,11 @@ class CompilerTargetTest(unittest.TestCase):
                 build.compiler_target("clang", "Linux", "x86_64")
 
     def test_main_records_effective_target_command_and_source_hashes(self):
+        for system in ("Linux", "Darwin"):
+            with self.subTest(system=system):
+                self.check_main_manifest(system)
+
+    def check_main_manifest(self, system):
         with tempfile.TemporaryDirectory(prefix="thc-cbits-test-") as temporary:
             root = Path(temporary) / "repo with spaces"
             reference = root / "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
@@ -126,7 +131,7 @@ class CompilerTargetTest(unittest.TestCase):
             sibling = output / "thc/native/other-task.txt"
             sibling.parent.mkdir(parents=True)
             sibling.write_bytes(b"other task output")
-            default, target = "x86_64-pc-linux-gnu", "x86_64-unknown-linux-gnu"
+            default, target = ("x86_64-pc-linux-gnu", "x86_64-unknown-linux-gnu") if system == "Linux" else ("x86_64-apple-darwin24.6.0",) * 2
 
             def query(command, **kwargs):
                 replies = {("/clang", "-dumpmachine"): default,
@@ -138,14 +143,17 @@ class CompilerTargetTest(unittest.TestCase):
 
             def compile_bitcode(command, **kwargs):
                 self.assertEqual("/clang", command[0])
-                self.assertEqual(["--target=" + target], [arg for arg in command if arg.startswith("--target=")])
+                self.assertEqual(["--target=" + target] if system == "Linux" else [],
+                                 [arg for arg in command if arg.startswith("--target=")])
+                if system == "Darwin":
+                    self.assertIn("--sysroot=/sdk", command)
                 self.assertEqual({"cwd": root, "check": True}, kwargs)
                 Path(command[command.index("-o") + 1]).write_bytes(b"synthetic LLVM bitcode")
 
             with (patch.object(build, "ROOT", root),
-                  patch.object(build.platform, "system", return_value="Linux"),
+                  patch.object(build.platform, "system", return_value=system),
                   patch.object(build.platform, "machine", return_value="x86_64"),
-                  patch.dict(build.os.environ, {"THC_CLANG": "clang", "GHC": "ghc"}),
+                  patch.dict(build.os.environ, {"THC_CLANG": "clang", "GHC": "ghc", "SDKROOT": "/sdk"}),
                   patch.object(build.shutil, "which", side_effect=lambda name: "/" + name),
                   patch.object(build.subprocess, "check_output", side_effect=query),
                   patch.object(build.subprocess, "run", side_effect=compile_bitcode) as compile_call,
@@ -157,7 +165,10 @@ class CompilerTargetTest(unittest.TestCase):
             manifest = json.loads((output / "thc/cbits/manifest.json").read_text())
             self.assertEqual(default, manifest["compilerDefaultTarget"])
             self.assertEqual(target, manifest["target"])
-            self.assertEqual("Linux", manifest["system"])
+            self.assertEqual(system, manifest["system"])
+            artifact_names = {Path(entry["path"]).name for entry in manifest["artifacts"]}
+            self.assertIn("iconv.bc", artifact_names)
+            self.assertEqual(system == "Linux", "wait-status.bc" in artifact_names)
             self.assertEqual("x86_64", manifest["architecture"])
             float_command = next(c for c in manifest["commands"] if str(rts / "StgPrimFloat.c") in c)
             self.assertIn("-shared", float_command)

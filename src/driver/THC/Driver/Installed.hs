@@ -287,25 +287,27 @@ probeInstalled context requested = do
 -- raw interfaces and helper, and freshly discovered registrations. Do not
 -- share rows across inventories: the helper checks retained-Core providers
 -- against the complete request, not just each row's module/ordinary hash.
+-- Return the helper digest from that same checked snapshot so cache identity
+-- cannot use helper bytes observed independently of its validated inventory.
 -- This state is invocation-local, not a persistent or process-global cache.
-prepareInstalledProbe :: InstalledContext -> InstalledUnit -> IO (IO Value)
+prepareInstalledProbe :: InstalledContext -> InstalledUnit -> IO (IO (BS.ByteString, Value))
 prepareInstalledProbe context requested = do
   previous <- newIORef Nothing
   pure $ do
     units <- probeClosure context requested
-    before <- probeSnapshot context units
+    before@(helperHash : _) <- probeSnapshot context units
     cached <- readIORef previous
     case cached of
       Just (oldUnits, oldSnapshot, value) | units == oldUnits && before == oldSnapshot -> do
         checkProbeRegistrations context units
-        pure value
+        pure (helperHash, value)
       _ -> do
         value <- probeInstalledUnits context requested units
         after <- probeSnapshot context units
         unless (before == after) (fail "installed probe inputs changed during interface probe")
         checkProbeRegistrations context units
         writeIORef previous (Just (units, after, value))
-        pure value
+        pure (helperHash, value)
 
 -- Stream raw contents: ordinary interface hashes omit retained Core, foreign
 -- payloads and annotations. Size/mtime alone cannot establish reusable evidence.

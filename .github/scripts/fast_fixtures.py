@@ -524,11 +524,6 @@ def _output_hashes(root, group):
         name = "build/pinned-addresses/manifest.json"
         expected = fast_inputs.pinned_address_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
-    if group["outputs"][0] == "build/bignat-literals":
-        name = "build/bignat-literals/manifest.json"
-        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
-        expected = fast_inputs.bignat_artifact_hashes(manifest)
-        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-stack-formatter"]:
         return _formatter_output_hashes(root)
     if group["outputs"] == ["build/rts-diagnostics"]:
@@ -694,7 +689,7 @@ def _full_output_hashes(root):
         if name in ("build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
-        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-fd-ready", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr"):
+        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-fd-ready", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

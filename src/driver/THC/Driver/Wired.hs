@@ -2,6 +2,8 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- |
 -- Module      : THC.Driver.Wired
@@ -14,7 +16,7 @@
 -- Produce wired-module and source artifacts used by project Core acquisition.
 module THC.Driver.Wired
   ( WiredArtifacts(..), bootSources, moduleSources, sourceHashes, pinnedSourcePath
-  , exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout, preparePinnedInterfaces, pinnedDependencyOrder ) where
+  , exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout, preparePinnedInterfaces, pinnedDependencyOrder, pinnedRecipeIdentity ) where
 
 import Control.Monad (filterM, foldM, forM, forM_, unless, when)
 import Control.Exception (bracket, finally)
@@ -66,6 +68,7 @@ import Distribution.Utils.NubList (toNubListR)
 import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
 import Distribution.Verbosity (normal, silent)
 import Numeric (showHex)
+import Language.Haskell.TH.Syntax (addDependentFile, lift, loc_filename, location, runIO)
 
 
 -- These are the original GHC 9.14.1 sources. Boot interfaces are compiled
@@ -417,12 +420,61 @@ pinnedDependencyOrder units
     ordered (AcyclicSCC unit) = Right unit
     ordered (CyclicSCC members) = Left ("pinned installed dependency cycle: " ++ show (map registeredId members))
 
+-- | Core/native acquisition code shared with installed bundle assembly. The
+-- plugin, interface helper, selected compiler and installed view are separate
+-- inputs. Pinned source compilation below uses its narrower operation recipe.
+pinnedRecipeIdentity :: Value
+pinnedRecipeIdentity = object
+  ["sourceHash" .= recipeHash, "Cabal" .= (VERSION_Cabal :: String),
+   "Cabal-syntax" .= (VERSION_Cabal_syntax :: String)]
+  where
+    recipeHash :: String
+    recipeHash = $(do
+      source <- loc_filename <$> location
+      let root = iterate takeDirectory source !! 5
+          files = ["src/cbd/THC/Compact/" ++ name | name <- ["Annotations.hs", "Compression.hs", "Core.hs", "Debug.hs", "Decode.hs", "Encode.hs", "Facts.hs", "Inspect.hs", "JSON.hs", "Module.hs", "Wire.hs", "Writer.hs", "Zip.hs"]] ++
+            ["src/core-symbols/THC/" ++ name | name <- ["CoreSymbols.hs"]] ++
+            ["src/driver/THC/Driver/" ++ name | name <- ["GhcProxy.hs", "Installed.hs", "InstalledForeign.hs", "Lock.hs", "NativeArgumentBridge.hs", "NativeCache.hs", "NativeDependencies.hs", "NativeLibrarySources.hs", "NativeRecipe.hs", "PackageNative.hs", "PinnedFlags.hs", "PinnedSetup.hs", "RuntimeShim.hs", "ScalarBitcode.hs", "Wired.hs"]] ++
+            ["src/main/resources/thc/" ++ name | name <- ["core-native-overrides.json"]]
+      records <- forM files $ \name -> do
+        let path = root </> name
+        addDependentFile path
+        bytes <- runIO (BS.readFile path)
+        pure (name, BS.unpack (SHA.hash bytes))
+      let bytes = SHA.hash (BL.toStrict (encode records))
+      lift (concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value)
+            (BS.unpack bytes)))
+
+-- Pinned interfaces are built by the selected GHC, not the native capture/link
+-- path. GhcProxy contributes only directPlugin's option formatting here. Keep
+-- native export changes out of this key while retaining every compilation/view
+-- owner and Cabal's configuration implementation.
+pinnedInterfaceRecipeIdentity :: Value
+pinnedInterfaceRecipeIdentity = object
+  ["sourceHash" .= recipeHash, "Cabal" .= (VERSION_Cabal :: String),
+   "Cabal-syntax" .= (VERSION_Cabal_syntax :: String)]
+  where
+    recipeHash :: String
+    recipeHash = $(do
+      source <- loc_filename <$> location
+      let root = iterate takeDirectory source !! 5
+          files = ["src/driver/THC/Driver/" ++ name | name <-
+            ["GhcProxy.hs", "Installed.hs", "InstalledForeign.hs", "Lock.hs", "PinnedFlags.hs", "PinnedSetup.hs", "Wired.hs"]]
+      records <- forM files $ \name -> do
+        let path = root </> name
+        addDependentFile path
+        bytes <- runIO (BS.readFile path)
+        pure (name, BS.unpack (SHA.hash bytes))
+      let bytes = SHA.hash (BL.toStrict (encode records))
+      lift (concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value)
+            (BS.unpack bytes)))
+
 -- | Rebuild the selected boot-library closure from the exact GHC release,
 -- retaining Cabal identities and native registrations in a private interface
 -- view, leaving the selected compiler and its package database untouched.
-preparePinnedInterfaces :: FilePath -> FilePath -> FilePath -> String -> FilePath ->
+preparePinnedInterfaces :: FilePath -> FilePath -> String -> FilePath ->
                            InstalledContext -> [InstalledUnit] -> IO InstalledContext
-preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary original units = do
+preparePinnedInterfaces cache pluginDb pluginUnit pluginLibrary original units = do
   ordered <- either fail pure (pinnedDependencyOrder units)
   settings <- either fail pure . readEither =<< readProcess (installedGhc original) ["--info"] ""
   source <- pinnedRelease cache
@@ -451,7 +503,7 @@ preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary origi
               dynamic = installedInterfaceWay context == DynamicInterfaces
               suffixes = if dynamic then ["hi", "dyn_hi"] else ["hi"]
               key = digest (BL.toStrict (encode
-                ("pinned-library-core-v8" :: String, pinnedReleaseIdentity, driverHash, pluginDb, pluginUnit, pluginHash, helperHash,
+                ("pinned-library-core-v9" :: String, pinnedReleaseIdentity, pinnedInterfaceRecipeIdentity, pluginDb, pluginUnit, pluginHash, helperHash,
                  installedCompiler original, settings, selectedFlags, cppFlags, installedViewIdentity context, registration unit)))
               destination = cache </> "pinned-libraries/v1" </> key
               receipt = destination </> "complete"
@@ -472,7 +524,7 @@ preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary origi
               BL.writeFile (destination </> "inputs.json") (encode (object
                 ["source" .= pinnedReleaseIdentity, "compiler" .= installedCompiler original,
                  "registration" .= registration unit, "dependencyView" .= installedViewIdentity context,
-                 "driverHash" .= driverHash, "pluginDb" .= pluginDb, "pluginHash" .= pluginHash, "helperHash" .= helperHash,
+                 "recipe" .= pinnedInterfaceRecipeIdentity, "pluginDb" .= pluginDb, "pluginHash" .= pluginHash, "helperHash" .= helperHash,
                  "flags" .= selectedFlags, "cppFlags" .= cppFlags, "settings" .= settings]))
               let package = destination </> "source"
                   dist = destination </> "dist"

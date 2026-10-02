@@ -6,6 +6,6 @@ license: BSD-3-Clause
 
 executable library-memory
   main-is: Main.hs
-  build-depends: base >= 4.22 && < 4.23, array == 0.5.8.0, bytestring == 0.12.2.0
+  build-depends: base >= 4.22 && < 4.23, array == 0.5.8.0, bytestring == 0.12.2.0, text == 2.1.3
   default-language: Haskell2010
   ghc-options: -O1 -Wall

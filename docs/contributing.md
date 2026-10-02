@@ -45,6 +45,20 @@ Selectors apply to the preceding task. Results are in
 under `build/reports/tests`. See [handoff storage](handoff-slabs.md) for the
 mode distinction.
 
+The driver suite's public-package smoke compares Integer, Text, ByteString and
+memory operations with native GHC on both backends and in both handoff modes.
+Build the runtime before running it directly:
+
+```sh
+make runtime
+cabal test driver-tests -fdevelopment --test-options=--public-packages-only --test-show-details=direct
+```
+
+It prepares pinned Core by default. Set `THC_TEST_INSTALLED_CORE=required` to
+require complete installed Core; `THC_INSTALLED_CORE_GHC`,
+`THC_INSTALLED_CORE_GHC_PKG` and `THC_INSTALLED_CORE_GHC_SOURCE` select its compiler,
+package tool and configured GHC sources when needed.
+
 `bin/try.sh --handoff-modes` compares the Core corpus against native GHC;
 `bin/try-libraries.sh` checks library examples. Foreign-call changes can also
 need `make foreign-exception-test-modes`, which requires complete installed

@@ -166,8 +166,8 @@ class NativeByteArrayPolicyTest {
         }
     }
     @ParameterizedTest @ValueSource(strings = {"heap", "native"})
-    @EnabledOnOs(OS.LINUX)
-    @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64|aarch64|arm64")
     void localeNameCreationPolicyPreservesNativeContentsAndCachedIdentity(String policy) {
         try (var context = Context.newBuilder("thc", "llvm").allowIO(IOAccess.ALL).allowNativeAccess(true)
                 .allowExperimentalOptions(true).option("thc.ByteArrayStorage", policy).build()) {

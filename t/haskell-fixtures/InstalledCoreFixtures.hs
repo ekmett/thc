@@ -144,7 +144,7 @@ prepareInstalledCoreProfile requestedSource root directory libraries = do
         let missing [] = pure False
             missing (unit:rest) = do
               result <- Project.prepareInstalledBundle cache (root </> directory </> "installed/staging")
-                (root </> "src/driver/cbits/target-layout.c") driverHash initialContext unit
+                (root </> "src/driver/cbits/target-layout.c") initialContext unit
               case result of Left _ -> pure True; Right _ -> missing rest
         needed <- missing originalUnits
         if not needed then pure initialContext else do
@@ -152,7 +152,7 @@ prepareInstalledCoreProfile requestedSource root directory libraries = do
           pluginDb <- field plugin "packageDb"
           pluginUnit <- field plugin "unitId"
           pluginLibrary <- field plugin "sharedLibrary"
-          Wired.preparePinnedInterfaces cache driverHash pluginDb pluginUnit pluginLibrary initialContext originalUnits
+          Wired.preparePinnedInterfaces cache pluginDb pluginUnit pluginLibrary initialContext originalUnits
     Just source -> do
       plugin <- readJson (root </> "build/compiler/plugin.json")
       pluginDb <- field plugin "packageDb"
@@ -171,7 +171,7 @@ prepareInstalledCoreProfile requestedSource root directory libraries = do
   createDirectoryIfMissing True (root </> directory </> "installed/bundles")
   bundles <- forM units $ \unit -> do
     acquired <- Project.prepareInstalledBundle cache (root </> directory </> "installed/staging")
-      (root </> "src/driver/cbits/target-layout.c") driverHash selected unit
+      (root </> "src/driver/cbits/target-layout.c") selected unit
     original <- case acquired of
       Right value -> pure value
       Left missing -> die ("Fixture requires complete-interface-core from the selected GHC: " ++

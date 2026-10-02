@@ -1,8 +1,9 @@
 # Build and run Cabal programs
 
-THC uses Cabal to build a selected component, acquires its optimized GHC Core,
-and executes it on the JVM. Native GHC still runs Setup programs, preprocessors
-and Template Haskell. THC does not launch the application's native executable.
+THC uses Cabal to build selected components and acquires their optimized GHC
+Core. `thc build` stops after acquisition; `thc run` then executes one runnable
+component on the JVM. Native GHC still runs Setup programs, preprocessors and
+Template Haskell. THC does not launch the application's native executable.
 
 ## Build the tools
 
@@ -16,16 +17,16 @@ cabal run thc -- run completed --project-dir t/fixtures/run-pure \
   --dist-dir "$PWD/build/run-package"
 ```
 
-The included example returns `()` without printing. It works with the limited
-installed-library provider. Ordinary console and file applications need the
-complete-Core setup below.
+The included example returns `()` without printing. The default provider acquires
+its library Core from the pinned GHC release; the alternative installed-Core
+provider is described below.
 
 ## Bash completion and external commands
 
 Enable completion in the current Bash session:
 
 ```bash
-source <(thc --bash-completion-script)
+eval "$(thc --bash-completion-script)"
 ```
 
 For automatic loading with `bash-completion`, install the generated script:
@@ -48,9 +49,27 @@ hook returns no candidates.
 ## Choose a target and pass arguments
 
 ```sh
+thc build
+thc build all
+thc build my-package:lib:my-package other-package:exe:my-program
 thc run my-package:exe:my-program -- --help
-thc acquire my-package:exe:my-program
 ```
+
+`build` uses Cabal's build target selection: omit targets for the package in the
+current directory, use `all` for enabled project components, or name one or more
+libraries, executables, tests or benchmarks. Module and file targets select
+their complete owning component. Cabal resolves names, package paths, flags,
+ambiguities and disabled components. The selected dependency closure is built
+and published once in `DIST/packages.json`; earlier builds of unrelated
+components do not add them to that manifest.
+
+Build does not require a runtime launcher or execute an application. It does
+not audit reachable Core, so successful acquisition does not establish runtime
+support. Native Windows project acquisition, foreign-library components and
+detailed-library test suites are not supported; these fail explicitly.
+Backpack executable targets use Cabal's concrete instantiations. Direct Backpack
+library selection, including through `build all`, has not been qualified and
+may be rejected as ambiguous.
 
 `run` accepts executables, `exitcode-stdio-1.0` test suites and benchmarks.
 Use `PACKAGE:exe:NAME`, `PACKAGE:test:NAME`, `PACKAGE:bench:NAME`, or a shorter
@@ -68,8 +87,8 @@ missing and ambiguous targets fail explicitly.
 | `--ghc-source DIR` | Supply the matching configured GHC source tree for required foreign annotations. |
 | `--verify-artifacts` | On `run`, audit the reachable Core before launch and verify artifact hashes. |
 | `--dap-port PORT` | On `run`, listen for Graal DAP on `127.0.0.1:PORT` (1..65535), configure attachment waiting and first-statement suspension. |
-| `--dap-no-suspend` | Disable first-statement suspension; requires `--dap-port`. |
-| `--dap-no-wait-attached` | Allow execution before attachment; requires `--dap-port`. |
+| `--dap-suspend`, `--dap-no-suspend` | Enable or disable first-statement suspension (enabled by default with `--dap-port`). |
+| `--dap-wait-attached`, `--dap-no-wait-attached` | Enable or disable waiting for debugger attachment (enabled by default with `--dap-port`). |
 | `--runtime PATH` | Override `<thc-root>/build/install/thc/bin/thc`. |
 
 The driver finds its THC checkout from its executable location, following
@@ -81,18 +100,22 @@ after the literal `--`; `thc run TARGET ... -- --help` asks the guest for help.
 Arguments retain their boundaries, empty strings and option-looking values.
 `getProgName` starts with the selected component's bare name.
 
-`acquire` uses the same target and build options, then atomically publishes
+`acquire` retains its existing single-runnable target selection for compatibility,
+using the same acquisition path as `build` and `run`. It atomically publishes
 `DIST/packages.json`. It does not audit or execute the guest. Runtime-only
-options (`--runtime`, `--verify-artifacts`, and the DAP options) and guest arguments are rejected. An existing
+options (`--runtime`, `--verify-artifacts`, and the DAP options) and guest arguments
+are rejected by both `build` and `acquire`. An existing
 `audit.json` is not refreshed by acquisition or by a run without
 `--verify-artifacts`.
 
 ## Installed library Core
 
-The default `--installed-core pinned` provider supplies a limited boot-library
-subset. It is enough for small examples, not ordinary `putStrLn` or general
-application closures. Select `--installed-core required` for an installation
-built with complete simplified Core; thin interfaces fail without a fallback.
+The default `--installed-core pinned` provider rebuilds selected GHC 9.14.1
+bundled libraries from the pinned release and caches their complete Core.
+Versions, modules and dependencies must match the selected installation.
+Select `--installed-core required` to read complete simplified Core already
+retained in installed interfaces; missing Core fails without a fallback.
+Acquisition alone does not establish runtime support.
 See [GHC library Core](ghc-core.md) to check or build that installation.
 
 For the supported native x86_64/aarch64 Linux setup, `--ghc-source DIR` supplies
@@ -116,10 +139,9 @@ eagerly. Guest forks, signal-handler installation and different-origin public
 entries enable it automatically. The admission contract is described in
 [asynchronous exceptions](async-exceptions.md).
 
-The complete installed-Core provider runs GHC's generated `main::Main.main`
-and, on normal completion, `flushStdHandles` in the same program. The limited
-pinned provider runs the raw IO action. Relative guest file paths use the launch
-working directory; `--project-dir` does not change it.
+Both library providers run GHC's generated `main::Main.main` and, on normal
+completion, `flushStdHandles` in the same program. Relative guest file paths use
+the launch working directory; `--project-dir` does not change it.
 
 The command-line context grants its native filesystem and standard streams.
 Guest environment changes and working-directory changes belong to the context,
@@ -157,7 +179,9 @@ By default the instrument waits for configuration and requests suspension on
 the first instrumented statement. Use `--dap-no-suspend` to retain the attachment wait
 without first-statement suspension, or `--dap-no-wait-attached` to allow the
 guest to start before the client connects. A short guest may finish before
-attachment when waiting is disabled.
+attachment when waiting is disabled. `--dap-suspend` and `--dap-wait-attached`
+restore the defaults; the last flag for each setting wins. Flags after `--`
+are guest arguments and do not configure DAP.
 
 The driver appends `-Dpolyglot.dap=127.0.0.1:PORT`,
 `-Dpolyglot.dap.Suspend=true|false` and
@@ -181,7 +205,7 @@ instrument limitation; THC does not suppress the closure failure.
 
 ## Caching and failures
 
-The driver exports only the selected component's dependency closure. Local
+The driver exports the union of the selected components' dependency closures. Local
 component bundles live under `<dist-dir>/native/cache/thc/core-bundles/v1`.
 Dependency bundles use the OS application cache, overridden by `THC_CACHE_HOME`.
 The published manifest selects directly seekable unit artifacts; see
@@ -189,9 +213,14 @@ The published manifest selects directly seekable unit artifacts; see
 
 Cache keys include sources, compiler/exporter configuration, native products and
 dependency identities. Native packages also track LLVM tools and headers.
-Changing those inputs triggers acquisition again. `--verify-artifacts` bypasses
-selection shortcuts and checks source archives and published hashes. Do not edit
-cache metadata to bypass a mismatch.
+Changing those inputs triggers acquisition again. Pinned interface builds track
+their GHC build recipe separately from native linking and Core publication.
+Installed Core bundles track their producing code and native tools separately
+from the driver executable. CLI-only edits reuse both; native-link changes
+rebuild affected bundles while reusing the GHC interfaces. Local component
+exports still track the driver executable. `--verify-artifacts` bypasses selection
+shortcuts and checks source archives and published hashes. Do not edit cache metadata to bypass a
+mismatch.
 
 Missing store exports are captured in a private Cabal build while their sources
 and generated headers exist. Successful publication removes its temporary
@@ -240,8 +269,7 @@ reach unsupported operations. See the [example collection](../src/examples/stand
 Start in a built THC checkout with the complete-Core GHC 9.14.1 installation
 and matching `ghc-pkg` on `PATH`. Set `GHC_SOURCE` to its matching configured
 source tree as described in [GHC library Core](ghc-core.md). These are ordinary
-project-directory runs; the default partial installed-library provider is not
-enough for these programs.
+project-directory runs qualified with the required provider.
 
 ```sh
 export THC_ROOT="$PWD"

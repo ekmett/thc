@@ -1526,9 +1526,6 @@
     "t/fixtures/compiler/PinnedAddressAudit.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
     "t/fixtures/compiler/PinnedAddressAuditNative.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
     "src/test/java/thc/runtime/PinnedAddressTest.java": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
-    "t/haskell-fixtures/BigNatLiteralFixtures.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
-    "t/fixtures/compiler/BigNatLiteralAudit.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
-    "t/fixtures/compiler/BigNatLiteralAuditNative.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
     "src/test/java/thc/runtime/BigNatLiteralTest.java": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/ScalarBitCastAudit.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "t/fixtures/compiler/ScalarBitCastNative.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
@@ -2636,7 +2633,6 @@
         "thc.runtime.AddressArrayCopyTest",
         "thc.runtime.HintTraceTest",
         "thc.runtime.DelimitedContinuationsTest",
-        "thc.runtime.BigNatLiteralTest",
         "thc.runtime.RubbishLiteralTest",
         "thc.runtime.ProxyVoidTest",
         "thc.runtime.FloatDecodeTest",
@@ -3051,6 +3047,26 @@
       "haskell": ["driver-tests"]
     },
     "t/haskell-driver/StoreProjectTests.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "t/haskell-driver/PublicPackageTests.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "t/fixtures/run-library-memory/cabal.project": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "t/fixtures/run-library-memory/run-library-memory.cabal": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "t/fixtures/run-library-memory/Main.hs": {
       "junit": [],
       "python": [],
       "haskell": ["driver-tests"]

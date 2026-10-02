@@ -18,7 +18,7 @@ module THC.Driver.PackageNative
   , finishPackageNativeWithDependencies
   , linkInstalledNative, linkInstalledNativeWithProduct, installedNativeSignatures, nativeCapiSource
   , nativeIrSymbol, nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, nativeDeferredLinkArguments, nativeRootArguments, tool
-  , nativeCallSeedWitness
+  , nativeCallSeedWitness, nativeFunctionExternals
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -28,7 +28,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.Char (isAlpha, isAlphaNum)
+import Data.Char (digitToInt, isAlpha, isAlphaNum, isHexDigit, isSpace)
 import Data.List (groupBy, isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -41,7 +41,7 @@ import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (readDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge, nativeCallWitness, nativeProviderForwarding, nativeModuleLayout)
-import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchivesWithProduct, nativeWindowsRtsInputs)
+import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives, nativeSymbolArchivesWithProduct, nativeWindowsRtsInputs)
 import THC.Driver.Installed (boundedInterfaceProcess)
 import THC.Driver.NativeCache (nativeObjcopySelection, nativeCompilerEnvironment, nativeCompilerFlags)
 import THC.Driver.RuntimeShim (coreNativeOverride, coreNativeImport)
@@ -1287,7 +1287,25 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
       _ -> fail "native compiler did not report one library directory"
     externalArguments <- nativeLinkInputs packageTool libdir root publishedDatabases (Just unit) originalArguments
     dataLibraries <- maybe (pure []) (either fail pure . parseValue) (member record "dataLibraries") :: IO [FilePath]
-    let linkArguments = dataLibraries ++ externalArguments
+    -- Installed packages may bundle native dependencies in their registered
+    -- archive rather than extra-libraries. Resolve only calls still external
+    -- after captured LLVM and managed/peer callbacks have claimed their bodies;
+    -- raw Core address labels must not select native Haskell closures here.
+    nativeArchives <- if member record "installed" == Just (Bool True) && not (null nativeExternals)
+      then do
+        -- Inspect the final module: source providers can introduce declarations
+        -- after linkedSource was read. nm alone does not distinguish undefined
+        -- functions from data references to native text, such as info tables.
+        let finalIR = directory </> "native/package.ll"
+        _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
+        finalSource <- readFile finalIR
+        nativeSymbolArchives packageTool libdir root unit originalArguments
+          [(symbol,True) | symbol <- nativeFunctionExternals target nativeExternals finalSource]
+      else pure []
+    nativeArchiveInputs <- forM (map fst nativeArchives) $ \path -> do
+      hash <- sha <$> BS.readFile path
+      pure (object ["path" .= path,"sha256" .= hash])
+    let linkArguments = dataLibraries ++ map fst nativeArchives ++ externalArguments
     clang <- tool "THC_CLANG" "clang"
     sdkFlags <- nativeCompilerFlags
     (artifact,format,libraries,nativeLibrary,runtimeInputs) <- if null nativeExternals
@@ -1329,9 +1347,14 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
         -- calls retain the component's lazy policy without loading a native RTS.
         rooted <- if member record "installed" == Just (Bool True)
           then do
-            definitions <- concat <$> forM (nub (filter ((== ".a") . takeExtension) linkArguments)) (\archive -> do
-              output <- command directory nm ["--defined-only","--extern-only","--format=posix",archive]
-              pure [nativeIrSymbol target name | line <- lines output, name:_ <- [words line]])
+            definitions <- concat <$> forM (nub (filter ((== ".a") . takeExtension) linkArguments)) (\archive ->
+              case lookup archive nativeArchives of
+                -- A fallback mixed archive contributes only its selected C
+                -- function roots, never additional native Haskell data labels.
+                Just roots | archive `notElem` dataLibraries -> pure (map fst roots)
+                _ -> do
+                  output <- command directory nm ["--defined-only","--extern-only","--format=posix",archive]
+                  pure [nativeIrSymbol target name | line <- lines output, name:_ <- [words line]])
             pure (filter (`elem` definitions) nativeExternals)
           else pure nativeExternals
         let dependency = directory </> if windows then "native/dependencies.dll"
@@ -1405,15 +1428,15 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
           ["finalizers" .= finalizers | not (null finalizers)] ++
           ["dataSymbols" .= dataSymbols | not (null dataSymbols)] ++
           maybe [] (\library -> ["nativeLibrary" .= library]) nativeLibrary
-    -- Native archives are linker inputs, not C translation units. Their hashes
-    -- already participate in sourceIdentity/component identity; retain them in
-    -- the local cache-observation receipt without inventing compile metadata.
+    -- Native archives are linker inputs, not C translation units. Retain their
+    -- hashes in the installed bundle's build identity and cache observations.
     archiveInputs <- maybe (pure []) (either fail pure . parseValue) (member identity "dataLibraries") :: IO [Value]
     -- Durable registered archives survive temporary acquisition cleanup; their
     -- observations invalidate cached Core if the private support bytes change.
+    let archiveFiles = archiveInputs ++ nativeArchiveInputs ++ runtimeInputs
     writeJson (directory </> "native/inputs.json") (object
-      ["sources" .= (inputs ++ [object ["files" .= (archiveInputs ++ runtimeInputs)] |
-        not (null (archiveInputs ++ runtimeInputs))]),"unresolved" .= externals])
+      ["sources" .= (inputs ++ [object ["files" .= archiveFiles] |
+        not (null archiveFiles)]),"unresolved" .= externals])
     pure proof
    dependencyClosure :: Value -> IO [Value]
    dependencyClosure value = do
@@ -1575,6 +1598,35 @@ sha :: BS.ByteString -> String
 sha = hex . SHA.hash
 hex :: BS.ByteString -> String
 hex = concatMap (\byte -> let value = showHex byte "" in if length value == 1 then '0':value else value) . BS.unpack
+
+-- | Callable unresolved symbols in verified, disassembled LLVM. Native symbol
+-- tables alone cannot distinguish function declarations from data references
+-- whose providers happen to live in an executable section. Only decode the
+-- declaration's global name; the LLVM verifier owns its signature grammar.
+nativeFunctionExternals :: String -> [String] -> String -> [String]
+nativeFunctionExternals target externals source = filter (`elem` declarations) externals
+  where
+    declarations = [normalize name | line <- lines source, "declare " `isPrefixOf` line,
+      Just (name,suffix) <- [functionName line],
+      "(" `isPrefixOf` dropWhile isSpace suffix]
+    normalize ('\SOH':name) = nativeIrSymbol target name
+    normalize name = name
+    functionName ('@':rest) = globalName rest
+    functionName ('"':rest) = quotedName [] rest >>= functionName . snd
+    functionName (_:rest) = functionName rest
+    functionName [] = Nothing
+    globalName ('"':rest) = quotedName [] rest
+    globalName rest = case span (\c -> isAlphaNum c || c `elem` ("$._-" :: String)) rest of
+      ([],_) -> Nothing
+      value -> Just value
+    quotedName chunks ('"':rest) = case T.decodeUtf8' (BS.concat (reverse chunks)) of
+      Right name -> Just (T.unpack name,rest)
+      Left _ -> Nothing
+    quotedName chunks ('\\':a:b:rest) | isHexDigit a && isHexDigit b =
+      quotedName (BS.singleton (fromIntegral (16 * digitToInt a + digitToInt b)) : chunks) rest
+    quotedName _ ('\\':_) = Nothing
+    quotedName chunks (c:rest) = quotedName (T.encodeUtf8 (T.singleton c) : chunks) rest
+    quotedName _ [] = Nothing
 
 -- | LLVM nm reports target linker spellings even for bitcode. Keep IR names
 -- internally; Darwin adds exactly one underscore, including to C names that

@@ -1,6 +1,6 @@
 # Original locale/iconv boundary
 
-This bounded Linux GNU LP64 path admits exactly the four original
+This bounded Linux GNU and Darwin LP64 path admits exactly the four original
 `ghc-internal` static, unsafe `ccall` targets from
 `GHC.Internal.IO.Encoding.Iconv` in GHC9.14.1:
 
@@ -21,10 +21,10 @@ general native pointers are outside this addition.
 ## Native transport and lifetime
 
 `src/main/c/iconv-api.c` is a transport adapter, not a conversion algorithm.
-Sulong executes its LLVM bitcode; its calls to the host libc `iconv_open`,
+Sulong executes its LLVM bitcode; its calls to the host `iconv_open`,
 `iconv` and `iconv_close` do the conversion. The adapter copies checked managed
-byte regions into **malloc-owned native memory** before calling libc. It never
-passes a Java buffer interop object to libc as a native pointer. Temporary
+byte regions into **malloc-owned native memory** before calling native iconv. It never
+passes a Java buffer interop object to iconv as a native pointer. Temporary
 buffers are freed on normal return, including native errno failures. No Java
 Charset conversion is involved.
 
@@ -67,10 +67,10 @@ then restores the previous locale. Conversion needs this too: transliteration
 can consult LC_CTYPE after open. This avoids process-global locale mutation.
 
 For a valid unchanged process locale environment, this matches the selected
-Linux GHC startup policy. It is explicitly a first-use environment snapshot:
+GHC startup policy. It is explicitly a first-use environment snapshot:
 later process-global `setlocale` changes are not reflected. Invalid environment
 locale initialization faults rather than silently inheriting an embedding JVM
-locale. The supported target uses glibc iconv and `HAVE_LANGINFO_H`, not an
-alternate libcharset/libiconv configuration. Darwin and other libc/platform
-variants are not claimed; the lazy iconv loader rejects them without changing
-the existing MD5 path.
+locale. Linux uses glibc iconv; Darwin uses the system `/usr/lib/libiconv.2.dylib`,
+loaded into Sulong's context-local native library registry. Both use
+`nl_langinfo_l` for the encoding name. Other libc/platform variants are not
+claimed; the lazy iconv loader rejects them.

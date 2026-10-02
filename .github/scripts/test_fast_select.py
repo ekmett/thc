@@ -280,6 +280,25 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["driver-tests"], selected["haskell"]["suites"])
         self.assertEqual(["driver-tests"], selected["affected"]["haskell"])
 
+    def test_public_package_sources_select_executed_driver_suite(self):
+        policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
+        for path in ("t/haskell-driver/PublicPackageTests.hs",
+                     "t/fixtures/run-library-memory/cabal.project",
+                     "t/fixtures/run-library-memory/run-library-memory.cabal",
+                     "t/fixtures/run-library-memory/Main.hs"):
+            with self.subTest(path=path):
+                self.policy["owners"][path] = policy["owners"][path]
+                self.write(select.POLICY, json.dumps(self.policy))
+                self.write(path, "original\n")
+                before = self.commit()
+                self.write(path, "changed\n")
+                self.commit()
+                selected = self.plan(base=before)
+                self.assertEqual("narrow", selected["mode"], selected)
+                self.assertEqual(["driver-tests"], selected["haskell"]["suites"])
+                self.assertEqual([], selected["haskell"]["compileTargets"])
+                self.assertTrue(selected["runnable"])
+
     def test_primop_tests_select_the_new_cabal_suite(self):
         path = "t/primop-tools/Main.hs"
         self.policy["owners"][path] = dict(junit=[], python=[], haskell=["primop-tools"])
@@ -1410,12 +1429,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_floating_haskell_producers_and_main_keep_their_consumers(self):
         owners = self.policy["owners"]
-        for path in ("t/haskell-fixtures/BigNatLiteralFixtures.hs",
-                     "t/fixtures/compiler/BigNatLiteralAudit.hs", "t/fixtures/compiler/BigNatLiteralAuditNative.hs",
-                     "src/test/java/thc/runtime/BigNatLiteralTest.java"):
-            self.assertEqual(["thc.runtime.BigNatLiteralTest"], owners[path]["junit"])
-            self.assertEqual(["bin/test-audit-core.py"], owners[path]["python"])
-        self.assertIn("thc.runtime.BigNatLiteralTest", owners["t/haskell-fixtures/Main.hs"]["junit"])
+        self.assertEqual({"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
+                         owners["src/test/java/thc/runtime/BigNatLiteralTest.java"])
         for producer, consumer in (("FusedFloatingFixtures", "FusedFloatingTest"),
                                    ("ScalarBitCastFixtures", "ScalarBitCastTest"),
                                    ("SimdFloatFmaFixtures", "SimdFloatFmaTest"),

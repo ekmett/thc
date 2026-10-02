@@ -16,7 +16,7 @@ import Control.Exception (bracket)
 import Control.Monad (forM_)
 import System.IO.Error (tryIOError)
 import Data.List (isInfixOf)
-import System.Directory (createFileLink, getPermissions, setPermissions, executable)
+import System.Directory (createDirectoryIfMissing, createFileLink, getPermissions, setPermissions, executable)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), searchPathSeparator)
 import System.Info (os)
@@ -26,16 +26,22 @@ import THC.Driver.Cabal (defaultPlanOptions)
 import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeEntryArguments, runtimeDebugEnvironment)
 
 tests :: Env -> Test
-tests env = TestLabel "run options and target selection" $ TestList
+tests env = TestLabel "driver options and target selection" $ TestList
   [ TestLabel "completion uses real parser options without building" $ TestCase $ do
       let complete index words' = run env (root env) Nothing 30 ("--bash-completion" : show (index :: Int) : words')
       roots <- complete 1 ["thc", "acq"]
       assertSuccess roots
       assertEqual "public command prefix" "acquire\n" (out roots)
-      forM_ ["run", "acquire"] $ \command -> do
+      build <- complete 1 ["thc", "bui"]
+      assertSuccess build
+      assertEqual "built-in build completion" "build\n" (out build)
+      forM_ ["run", "acquire", "build"] $ \command -> do
         options <- complete 2 ["thc", command, "--inst"]
         assertSuccess options
         assertEqual "parser-derived flag" "--installed-core\n" (out options)
+      dap <- complete 2 ["thc", "run", "--dap-"]
+      assertSuccess dap
+      forM_ ["--dap-suspend\n", "--dap-wait-attached\n"] $ \option -> assertContains option (out dap)
       values <- complete 3 ["thc", "run", "--installed-core", "pi"]
       assertEqual "option values" "pinned\n" (out values)
       suffix <- complete 4 ["thc", "run", "target", "--", "--inst"]
@@ -66,7 +72,7 @@ tests env = TestLabel "run options and target selection" $ TestList
   , TestLabel "generated Bash script queries the executable" $ TestCase $
       if os == "mingw32" then pure () else do
         result <- runExe env (root env) Nothing 30 "bash"
-          ["-c", "source <(\"$1\" --bash-completion-script)\n" ++
+          ["-ec", "eval \"$(\"$1\" --bash-completion-script)\"\n" ++
                  "COMP_WORDS=(\"$1\" run --inst)\nCOMP_CWORD=2\n_thc\n" ++
                  "printf '%s\\n' \"${COMPREPLY[@]}\"", "bash", driver env]
         assertSuccess result
@@ -93,7 +99,7 @@ tests env = TestLabel "run options and target selection" $ TestList
       , entry <- [["--run-io", "core one.cbd,core-two.cbd", "main:Main.main"],
                   ["--run-io", "@packages.json", "selected:Main.main"],
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
-      , guest <- [[], ["--guest-option", "value", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
+      , guest <- [[], ["--guest-option", "value", "--verify-artifacts", "--", "", "two words", "lambda-λ", "--dap-suspend", "--dap-wait-attached"]]
       ]
   , TestLabel "DAP JVM options preserve inherited environment" $ TestCase $ do
       let inherited = [("JAVA_OPTS", "-Xmx2g -Dexample=\"two words\""), ("PATH", "unchanged")]
@@ -124,13 +130,36 @@ tests env = TestLabel "run options and target selection" $ TestList
       assertFailure result
       assertContains "--dap-port must be an integer from 1 to 65535" (err result)
   , TestLabel "DAP options are run-only" $ TestCase $
-      forM_ [["--dap-port", "4711"], ["--dap-no-suspend"], ["--dap-no-wait-attached"]] $ \arguments -> do
+      forM_ [["--dap-port", "4711"], ["--dap-suspend"], ["--dap-no-suspend"],
+             ["--dap-wait-attached"], ["--dap-no-wait-attached"]] $ \arguments -> do
         accepted <- parseOnly ("run" : arguments)
         assertFailure accepted
         assertContains "THC root directory does not exist" (err accepted)
-        rejected <- parseOnly ("acquire" : arguments)
-        assertFailure rejected
-        assertContains "unrecognized option" (err rejected)
+        forM_ ["acquire", "build"] $ \command -> do
+          rejected <- parseOnly (command : arguments)
+          assertFailure rejected
+          assertContains "unrecognized option" (err rejected)
+  , TestLabel "last DAP switch wins before the guest boundary" $ TestCase $
+      if os == "mingw32" then pure () else
+      withFixtureNamed env "t/fixtures/run-pure" "DAP option order" $ \package -> do
+        let compiler = package </> "bin/build-compiler.sh"
+            launcher = package </> "launcher"
+            stopped = "DAP option probe: no compiler invoked"
+        createDirectoryIfMissing True (package </> "bin")
+        writeText launcher "not executed\n"
+        -- Stop immediately after option validation, before any real build.
+        writeText compiler ("#!/bin/sh\nprintf '%s\\n' '" ++ stopped ++ "' >&2\nexit 1\n")
+        permissions <- getPermissions compiler
+        setPermissions compiler permissions {executable = True}
+        forM_ [("--dap-suspend", "--dap-no-suspend"),
+               ("--dap-wait-attached", "--dap-no-wait-attached")] $ \(yes, no) ->
+          forM_ [([no, yes], stopped), ([yes, no], "require --dap-port"),
+                 ([no, "--", yes], "require --dap-port"), ([yes, "--", no], stopped)] $ \(flags, expected) -> do
+            result <- run env package Nothing 30
+              (["run", "--thc-root", package, "--runtime", launcher] ++ flags)
+            assertFailure result
+            assertNoStdout result
+            assertContains expected (err result)
   , TestLabel "loose consumers keep paths before the guest boundary" $ TestCase $ do
       let modules = ["C:/core café/Main.cbd", "C:/core café/THC.InterfaceClosure.cbd"]
           entry = runtimeEntryArguments modules "C:/support/packages.json" "main:Main.main"
@@ -143,7 +172,7 @@ tests env = TestLabel "run options and target selection" $ TestList
       accepted <- parseOnly ["run", "--verify-artifacts"]
       assertFailure accepted
       assertContains "THC root directory does not exist" (err accepted)
-      forM_ [["acquire", "--verify-artifacts"], ["run", "--verify-artifacts=true"]] $ \arguments -> do
+      forM_ [["acquire", "--verify-artifacts"], ["build", "--verify-artifacts"], ["run", "--verify-artifacts=true"]] $ \arguments -> do
         rejected <- parseOnly arguments
         assertFailure rejected
         assertNoStdout rejected
@@ -172,6 +201,14 @@ tests env = TestLabel "run options and target selection" $ TestList
         assertFailure result
         assertNoStdout result
         assertContains "unrecognized option" (err result)
+  , TestLabel "acquisition commands reject runtime and guest arguments" $ TestCase $
+      forM_ ["acquire", "build"] $ \command ->
+      forM_ [["--runtime", "/missing/thc"], ["--"], ["--", "guest"]] $ \arguments -> do
+        result <- parseOnly (command : arguments)
+        assertFailure result
+        assertNoStdout result
+        assertBool "rejected before project or root validation"
+          (not ("THC root directory does not exist" `isInfixOf` err result))
   , TestLabel "runtime requires a value" $ TestCase $ do
       result <- parseOnly ["run", "--runtime"]
       assertFailure result
@@ -183,35 +220,43 @@ tests env = TestLabel "run options and target selection" $ TestList
       assertContains "--verify-artifacts" (out result)
       assertContains "verify runtime artifacts (default: off)" (out result)
   , TestLabel "positional Cabal targets and omitted default" $ TestCase $
-      forM_ ["run", "acquire"] $ \command ->
+      forM_ ["run", "acquire", "build"] $ \command ->
       forM_ [[], ["ordinary"], ["exe:ordinary"], ["example:exe:ordinary"],
              ["bench:measured"], ["example:bench:measured"], ["example:test:checked"]] $ \target -> do
         result <- parseOnly (command : target)
         assertFailure result
         assertContains "THC root directory does not exist" (err result)
+  , TestLabel "build accepts Cabal library, all and multiple targets" $ TestCase $
+      forM_ [["."], ["all"], ["lib:example"], ["example:lib:part"], ["./example"],
+             ["example:lib:part:Module"], ["example:lib:part", "example:exe:ordinary"]] $ \targets -> do
+        result <- parseOnly ("build" : targets)
+        assertFailure result
+        assertContains "THC root directory does not exist" (err result)
   , TestLabel "legacy selector flags are not aliases" $ TestCase $
-      forM_ ["run", "acquire"] $ \command ->
+      forM_ ["run", "acquire", "build"] $ \command ->
       forM_ ["--exe", "--target", "--bench"] $ \flag -> do
         result <- parseOnly [command, flag, "ordinary"]
         assertFailure result
         assertNoStdout result
         assertContains "unrecognized option" (err result)
   , TestLabel "project location flags follow Cabal" $ TestCase $
+      forM_ ["run", "acquire", "build"] $ \command ->
       forM_ [["--project-dir", "."], ["--project-file", "cabal.project"]] $ \location -> do
-        result <- parseOnly ("run" : "bench:measured" : location)
+        result <- parseOnly (command : "bench:measured" : location)
         assertFailure result
         assertContains "THC root directory does not exist" (err result)
-  , TestLabel "multiple runnable targets are rejected" $ TestCase $ do
-      result <- parseOnly ["run", "ordinary", "bench:measured"]
-      assertFailure result
-      assertContains "Usage: thc run [TARGET]" (err result)
+  , TestLabel "multiple runnable targets are rejected" $ TestCase $
+      forM_ ["run", "acquire"] $ \command -> do
+        result <- parseOnly [command, "ordinary", "bench:measured"]
+        assertFailure result
+        assertContains ("Usage: thc " ++ command ++ " [TARGET]") (err result)
   , TestLabel "target-like guest arguments are not parsed as driver selectors" $ TestCase $ do
       result <- parseOnly
         ["run", "bench:measured", "--", "--exe", "guest-option", "", "--"]
       assertFailure result
       assertContains "THC root directory does not exist" (err result)
   , TestLabel "driver help follows ordinary option ordering" $ TestCase $
-      forM_ ["run", "acquire"] $ \command ->
+      forM_ ["run", "acquire", "build"] $ \command ->
       forM_ ["--help", "-h"] $ \help ->
       forM_ [[help], ["example:bench:measured", help],
              [help, "example:test:checked"],
@@ -219,7 +264,7 @@ tests env = TestLabel "run options and target selection" $ TestList
         result <- parseOnly (command : arguments)
         assertSuccess result
         assertEqual "help needs no project/build and writes no diagnostic" "" (err result)
-        assertContains ("Usage: thc " ++ command ++ " [TARGET]") (out result)
+        assertContains ("Usage: thc " ++ command ++ if command == "build" then " [TARGETS...]" else " [TARGET]") (out result)
         assertContains "--help" (out result)
         assertContains "Show this help text" (out result)
   , TestLabel "guest help does not request driver help" $ TestCase $
@@ -229,7 +274,7 @@ tests env = TestLabel "run options and target selection" $ TestList
         assertNoStdout result
         assertContains "THC root directory does not exist" (err result)
   , TestLabel "help spelling as a required option value is opaque" $ TestCase $
-      forM_ ["run", "acquire"] $ \command -> do
+      forM_ ["run", "acquire", "build"] $ \command -> do
         result <- parseOnly [command, "example:bench:measured", "--project-dir", "--help"]
         assertFailure result
         assertNoStdout result

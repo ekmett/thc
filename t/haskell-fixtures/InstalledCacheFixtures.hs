@@ -30,6 +30,7 @@ import FixtureSupport (CommandResult(..), runLogged, writeJson)
 import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, getPermissions,
                          listDirectory, removeFile, removePathForcibly, setPermissions, executable, withCurrentDirectory)
 import System.FilePath ((</>))
+import System.Environment (lookupEnv, setEnv, unsetEnv)
 import qualified System.Info as Info
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
@@ -99,7 +100,7 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
   unit <- Installed.discoverInstalled context target
   extraCommands <- newIORef []
   let acquireUnit selected = Project.prepareInstalledBundle cache (work </> "staging") (root </> "src/driver/cbits/target-layout.c")
-        "cache-fixture-driver" context selected
+        context selected
       acquire = acquireUnit unit
       loaded = do
         result <- acquire
@@ -139,6 +140,14 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
     _ -> fail "Expected one successful probe index"
   BS.writeFile (cache </> "installed-probes/v1" </> indexFile) "corrupt index"
   _ <- cold "corrupt index"
+  -- A native-tool environment change must invalidate even this pure unit's
+  -- installed bundle; restoring the selection must reuse its completed index.
+  epoch <- lookupEnv "SOURCE_DATE_EPOCH"
+  (do setEnv "SOURCE_DATE_EPOCH" (if epoch == Just "1" then "2" else "1")
+      _ <- cold "changed native tool environment"
+      warm "unchanged native tool environment")
+    `finally` maybe (unsetEnv "SOURCE_DATE_EPOCH") (setEnv "SOURCE_DATE_EPOCH") epoch
+  warm "restored native tool environment"
   originalSource <- BS.readFile (source "InterfaceCacheRoot")
   (do BS.appendFile (source "InterfaceCacheRoot") "\n-- changed source text only\n"
       changed <- cold "source text"
@@ -186,7 +195,8 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
       (do writeRaw (hi "InterfaceCacheRoot") bodyChange
           changed <- memoized
           probesChanged <- probeCount
-          check (changed /= memoOriginal && probesChanged == probesRepeated + 1)
+          check (fst changed == fst memoOriginal && snd changed /= snd memoOriginal &&
+                 probesChanged == probesRepeated + 1)
             "Raw retained-Core mutation reused a previous probe")
         `finally` BS.writeFile (hi "InterfaceCacheRoot") rawBytes
       restored <- memoized
@@ -194,10 +204,11 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
       wrapperBytes <- BS.readFile wrapper
       (do BS.appendFile wrapper "\n# changed helper bytes for invocation-local probe control\n"
           beforeHelper <- probeCount
-          same <- memoized
+          changed <- memoized
           afterHelper <- probeCount
-          check (same == memoOriginal && afterHelper == beforeHelper + 1)
-            "Changed helper bytes reused a previous probe")
+          check (fst changed /= fst memoOriginal && snd changed == snd memoOriginal &&
+                 afterHelper == beforeHelper + 1)
+            "Changed helper bytes did not invalidate the probe identity")
         `finally` BS.writeFile wrapper wrapperBytes
       fresh <- Installed.prepareInstalledProbe context unit
       beforeFresh <- probeCount

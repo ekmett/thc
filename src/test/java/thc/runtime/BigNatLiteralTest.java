@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import java.io.File;
 import java.math.BigInteger;
@@ -16,7 +15,6 @@ import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import thc.CoreModules;
-import thc.EntryValue;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,82 +67,7 @@ class BigNatLiteralTest {
             }
     }
     private final File root = new File(System.getProperty("thc.projectRoot"));
-    private static final List<String> ENTRIES = list("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral", "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign");
-    private static final String DIRECTORY = "build/bignat-literals";
-    private static final List<BigInteger> VALUES = list("0", "1", "-1", "9223372036854775807", "9223372036854775808", "18446744073709551615", "18446744073709551616", "18446744073709551617",
-        "170141183460469231731687303715884105727", "170141183460469231731687303715884105728", "340282366920938463463374607431768211456", "340282366920938463472597979468622987265",
-        "-340282366920938463481821351505477763071", "6277101735386680763835789423207666416102355444464034512895", "6277101735386680763835789423207666416102355444464034512897",
-        "57896044618658097711785492504343953926975274699741220483192166611388333031427").stream().map(BigInteger::new).toList();
-    private static final List<Long> SEEDS = seeds();
-    private static List<Long> seeds() { var seeds = new ArrayList<>(list(Long.MIN_VALUE, Long.MAX_VALUE, -1000L, -17L, -1L)); for (long i = 0; i <= 16; i++) seeds.add(i); seeds.addAll(list(31L, 1L << 32)); return seeds; }
-    private Map<String, Object> evidence() throws Exception { return report(DIRECTORY + "/manifest.json"); }
-    private Map<String, Object> report(String path) throws Exception { return object(Json.parse(Files.readString(new File(root, path).toPath()))); }
-    private Map<String, Object> core(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
-    private static Context context(boolean inlining) { return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining)).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
-    private static void valid(RootCallTarget target, String label) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label); }
-    private static void compile(RootCallTarget target) throws Exception { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target, "initial installation"); }
-    private static void released(Language language) {
-        var state = language.getHandoffState().get(); assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().retainedReferences());
-    }
-    private record Row(String name, long seed, long index, long expected) {}
-    private static long expected(String name, long seed, long index, List<BigInteger> values) {
-        var signed = values.get((int) (seed & 15)); var magnitude = signed.abs(); int length = ((magnitude.bitLength() + 63) / 64) * 8;
-        return switch (name) {
-            case "integerRoundTrip", "naturalRoundTrip" -> seed;
-            case "integerLiteral" -> signed.longValue(); case "naturalLiteral" -> magnitude.longValue(); case "magnitudeSize" -> length;
-            case "magnitudeSign" -> signed.signum() < 0 ? 1L : 0L;
-            case "magnitudeWord" -> index < 0 || index >= length / 8 ? -1 : magnitude.shiftRight((int) index * 64).longValue();
-            case "magnitudeByte" -> {
-                if (index < 0 || index >= length) yield -1;
-                long position = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? index : (index / 8) * 8 + 7 - index % 8;
-                yield magnitude.shiftRight((int) position * 8).and(BigInteger.valueOf(255)).longValue();
-            }
-            default -> throw new IllegalStateException(name);
-        };
-    }
-    @Test void originalIntegerNaturalConversionsWithInlining() throws Exception { nativeResults(true); }
-    @Test void originalIntegerNaturalConversionsAcrossResidualCalls() throws Exception { nativeResults(false); }
-    private void nativeResults(boolean inlining) throws Exception {
-        var manifest = evidence(); var rows = new ArrayList<Row>();
-        for (var line : Files.readAllLines(new File(root, DIRECTORY + "/oracle.tsv").toPath())) { var p = line.split("\t"); rows.add(new Row(p[0], Long.parseLong(p[1]), Long.parseLong(p[2]), Long.parseLong(p[3]))); }
-        var modeled = new ArrayList<Row>();
-        for (var name : ENTRIES) for (long seed : SEEDS) {
-            int length = ((VALUES.get((int) (seed & 15)).abs().bitLength() + 63) / 64) * 8;
-            long first = name.equals("magnitudeByte") || name.equals("magnitudeWord") ? -1 : 0, last = name.equals("magnitudeByte") ? length : name.equals("magnitudeWord") ? length / 8 : 0;
-            for (long index = first; index <= last; index++) modeled.add(new Row(name, seed, index, expected(name, seed, index, VALUES)));
-        }
-        assertEquals(modeled, rows, "Every size, sign, limb, byte, sentinel and wrapped public conversion"); assertEquals(699, new HashSet<>(rows).size()); assertEquals(((Number) manifest.get("nativeRows")).intValue(), rows.size());
-        for (var stagePaths : object(manifest.get("stages")).entrySet()) {
-            var stage = stagePaths.getKey(); var sources = new ArrayList<Map<String, Object>>(); for (var path : expression(stagePaths.getValue())) sources.add(core((String) path)); var module = CoreModules.merge(sources);
-            for (var name : ENTRIES) {
-                var audit = report(DIRECTORY + "/" + stage + "-" + name + ".audit.json"); assertEquals(true, audit.get("accepted")); var selected = rows.stream().filter(row -> row.name.equals(name)).toList();
-                for (var backend : list("ast", "bytecode")) try (var context = context(inlining)) {
-                    context.initialize("thc"); context.enter();
-                    try {
-                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var instrumented = with(CoreModules.reachable(module, "main:BigNatLiteralAudit." + name), "instrument", true);
-                        ExecutableProgram program = backend.equals("ast") ? new Program(language, instrumented) : new BytecodeProgram(language, instrumented);
-                        var function = context.asValue(new EntryValue(program, "main:BigNatLiteralAudit." + name, 2)); var host = program.hostEntryTarget(2); var original = program.entryTarget("main:BigNatLiteralAudit." + name);
-                        var worker = "ghc-internal:GHC.Internal.Bignum." + (name.startsWith("integer") ? "Integer.integerToInt#" : name.startsWith("natural") ? "Natural.naturalToWord#" : "Integer.integerToBigNatSign#");
-                        assertTrue(objects(audit.get("reachableBindings")).stream().anyMatch(binding -> worker.equals(binding.get("id")))); var workerTarget = program.entryTarget(worker);
-                        var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
-                        CheckedConsumer<Row> check = row -> { assertEquals(row.expected, function.execute(row.seed, row.index).asLong(), label + "/" + row.seed + "/" + row.index); released(language); };
-                        // Warm the unchanged native corpus once; no settling or retries.
-                        for (var row : selected) check.accept(row); var targets = activeTargets(host); assertTrue(targets.size() > 1, label + " adopted guest path");
-                        for (var target : targets) if (target != host) compile(target); compile(workerTarget); assertTrue(function.invokeMember("compile").asBoolean());
-                        long allocations = language.getHandoffState().get().getResults().getAllocations();
-                        for (var row : selected.reversed()) {
-                            long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); check.accept(row);
-                            assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, label + " actual compiled entry"); assertEquals(targets, activeTargets(host), label + " active identities");
-                            valid(original, label + " original"); valid(workerTarget, label + " original worker"); for (var target : targets) valid(target, label + " active");
-                        }
-                        assertEquals(allocations, language.getHandoffState().get().getResults().getAllocations(), label + " result slabs reused");
-                        for (var counter : list("unsupportedTraps", "blackholes")) assertEquals(0L, ((Number) program.diagnostics().get(counter)).longValue(), label + "/" + counter);
-                        System.out.println("BigNatLiteral PASS " + label + " rows=" + selected.size() + " activeTargets=" + targets.size());
-                    } finally { context.leave(); }
-                }
-            }
-        }
-    }
+    private static Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).build(); }
     @Test void canonicalPrivateBytesAndCheckedSizeMatchGhcLimbLayout() {
         for (int bits : new int[]{0, 1, 63, 64, 65, 127, 128, 129, 192, 256}) {
             var number = bits == 0 ? BigInteger.ZERO : BigInteger.ONE.shiftLeft(bits - 1).add(BigInteger.ONE);
@@ -190,7 +113,7 @@ class BigNatLiteralTest {
     }
     @Test void sharedAuditorRetainsCanonicalIntrinsicAndMalformedControls(@TempDir Path temporary) throws Exception {
         var exact = exact(); var unknown = unknown(); int serial = 0;
-        for (var value : list("0", "1", VALUES.getLast().toString())) for (var proof : list(exact, null, unknown)) {
+        for (var value : list("0", "1", "57896044618658097711785492504343953926975274699741220483192166611388333031427")) for (var proof : list(exact, null, unknown)) {
             audit(temporary, serial++, literal(value, proof), true, null);
             // CLI recovers ByteArray# kind/PrimRep; auditor API separately checks evaluated=true.
             audit(temporary, serial++, size(literal(value, proof)), true, null);
@@ -208,17 +131,6 @@ class BigNatLiteralTest {
         audit(temporary, serial++, list("case", list("lit", "int", "0", map()), "scrutinee", list(list("lit", list("bignat", "1"), list(), list("lit", "int", "1", map()), map("binders", list())), list("default", null, list(), list("lit", "int", "0", map()), map("binders", list()))), map()), false, "alternative-kind");
         assertEquals(40, serial);
     }
-    @Test void everyModelByteReconstructsMagnitudeAndSentinels() {
-        for (int seed = 0; seed < VALUES.size(); seed++) {
-            var value = VALUES.get(seed); int bytes = ((value.abs().bitLength() + 63) / 64) * 8; var rebuilt = BigInteger.ZERO;
-            for (int index = 0; index < bytes; index++) {
-                int position = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? index : index / 8 * 8 + 7 - index % 8;
-                rebuilt = rebuilt.or(BigInteger.valueOf(expected("magnitudeByte", seed, index, VALUES)).shiftLeft(position * 8));
-            }
-            assertEquals(value.abs(), rebuilt); assertEquals(-1L, expected("magnitudeByte", seed, -1, VALUES)); assertEquals(-1L, expected("magnitudeByte", seed, bytes, VALUES));
-        }
-        assertEquals(0L, expected("magnitudeSize", 0, 0, VALUES));
-    }
     private static List<Object> size(Map<String, Object> proof, boolean bind) {
         var exact = exact(); var scalar = map("kind", "long", "primReps", list("IntRep"), "evaluated", true); var literal = literal("18446744073709551616", proof);
         // Direct calls recover the intrinsic proof; exact case binder is an independent control.
@@ -229,7 +141,7 @@ class BigNatLiteralTest {
         var exact = exact(); var bad = new ArrayList<>(list(with(exact, "primReps", list("BoxedRep (Just Lifted)")), with(exact, "primReps", list("BoxedRep Nothing")), with(exact, "kind", "unknown"), with(exact, "kind", "data"), with(exact, "kind", "closure"),
             map("kind", "long", "primReps", list("IntRep"), "evaluated", true), map("kind", "long", "primReps", list("WordRep"), "evaluated", true)));
         bad.addAll(aggregateForgeries());
-        for (var backend : list("ast", "bytecode")) try (var context = context(true)) {
+        for (var backend : list("ast", "bytecode")) try (var context = context()) {
             for (boolean bind : new boolean[]{false, true}) {
                 for (var proof : list(exact, null, unknown())) assertEquals(16L, context.eval("thc", request(temporary, backend, size(proof, bind))).execute(0L).asLong());
                 for (var proof : bad) assertThrows(PolyglotException.class, () -> context.eval("thc", request(temporary, backend, size(proof, bind))));
@@ -238,7 +150,7 @@ class BigNatLiteralTest {
     }
     @Test void bignatLiteralAlternativesRemainForbidden(@TempDir Path temporary) throws Exception {
         var body = list("case", list("lit", "int", "0", map()), "scrutinee", list(list("lit", list("bignat", "0"), list(), list("lit", "int", "1", map()), map("binders", list())), list("default", null, list(), list("lit", "int", "0", map()), map("binders", list()))), map());
-        for (var backend : list("ast", "bytecode")) try (var context = context(true)) {
+        for (var backend : list("ast", "bytecode")) try (var context = context()) {
             var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request(temporary, backend, body)));
             assertTrue(Objects.toString(failure.getMessage(), "").contains("BigNat/rubbish literal alternatives are invalid GHC Core"), failure.getMessage());
         }

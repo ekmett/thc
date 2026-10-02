@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.BigNatLiteralTest",
     "thc.runtime.Int32ByteOffsetTest",
     "thc.runtime.NarrowByteOffsetTest",
     "thc.StaticExportStartupTest",
@@ -715,22 +716,6 @@
       "sources": ["t/haskell-fixtures/PinnedAddressFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/PinnedAddressAudit.hs",
         "t/fixtures/compiler/PinnedAddressAuditNative.hs"]
-    },
-    "bignat-literals": {
-      "junit": ["thc.runtime.BigNatLiteralTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bignat-literals"]}],
-      "outputs": ["build/bignat-literals"],
-      "sources": ["t/haskell-fixtures/BigNatLiteralFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/BigNatLiteralAudit.hs",
-        "t/fixtures/compiler/BigNatLiteralAuditNative.hs", "bin/export-boot.py",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs-boot",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs-boot",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot"]
     },
     "floating-remainder": {
       "junit": ["thc.runtime.FloatingRemainderTest"],

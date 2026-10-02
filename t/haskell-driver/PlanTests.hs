@@ -198,8 +198,10 @@ tests env = TestList
       help <- invoke True ["--help"]
       assertContains "plan-package" (out help)
       assertContains "run" (out help)
+      assertContains "build" (out help)
       _ <- reject ["run", "--thc-root", base </> "missing-thc-root"] "THC root directory does not exist"
-      forM_ [["build", "--dry-run"], ["repl"], ["plan-package", "--unknown"], ["plan-package", "a", "b"]] $ \arguments ->
+      _ <- reject ["build", "--thc-root", base </> "missing-thc-root"] "THC root directory does not exist"
+      forM_ [["repl"], ["plan-package", "--unknown"], ["plan-package", "a", "b"]] $ \arguments ->
         reject arguments "Usage:"
 
     dotToSlash '.' = '/'
