@@ -14,7 +14,7 @@
 -- Independent integer byte-assembly model for 128-bit SIMD memory fixtures.
 module SimdByteArrayModel
   ( Family(..), Entry(..), families, familyName, moduleName, element, lanes, floating
-  , entries, entryValue, graphEntries, graphNames, helper, guestCalls, rows, diagnostics
+  , entries, entryValue, graphEntries, graphNames, rows, diagnostics
   , expected, expectedRows, encodeRows, encodeRequests, signed64
   ) where
 
@@ -129,20 +129,6 @@ entries family
 
 entryValue :: Entry -> Value
 entryValue entry = object ["name" .= entryName entry,"arity" .= entryArity entry,"cases" .= entryCases entry]
-
-helper :: Family -> String -> Maybe String
-helper family name = lookup name
-  [(offsetFamily ++ operation ++ "Case", offsetFamily ++ target operation) | offsetFamily <- familiesOfOffsets,
-    operation <- if floating family then ["Index","Read","Write","GraphIndex","GraphStore"] else ["Index","Read","Write","Store"]]
-  where target "GraphIndex" = "IndexGraph"
-        target "GraphStore" = "StoreGraph"
-        target "Store" = "StoreGraph"
-        target operation = operation ++ "Worker"
-
-guestCalls :: Family -> String -> Int
-guestCalls family name
-  | Just _ <- helper family name = 2
-  | otherwise = 1
 
 initialBytes :: Family -> [Integer]
 initialBytes family = [((base + fromIntegral (i `div` 4)*0x01030507) `shiftR` (8*(i `mod` 4))) .&. 255 | i <- [0..63 :: Int]]

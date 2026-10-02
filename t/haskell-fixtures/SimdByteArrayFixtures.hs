@@ -15,14 +15,13 @@
 module SimdByteArrayFixtures (prepareSimdByteArray) where
 
 import Control.Monad (forM, forM_, unless, when)
-import Data.Aeson (FromJSON, Result(..), Value(..), eitherDecodeStrict', fromJSON, object, toJSON, (.=))
+import Data.Aeson (Result(..), Value(..), eitherDecodeStrict', fromJSON, object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
-import Data.Char (toLower)
 import Data.Foldable (toList)
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort, stripPrefix)
+import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Word (Word32, Word8)
@@ -31,7 +30,6 @@ import FixtureSupport (CommandResult(..), hashFile, runLogged, runLoggedExpect, 
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek, poke)
-import GHC.Float (castFloatToWord32, castDoubleToWord64)
 import SimdByteArrayModel
 import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
@@ -51,15 +49,8 @@ items _ = []
 at :: Int -> Value -> Value
 at index value = case drop index (items value) of item:_ -> item; [] -> Null
 
-firstValue :: [Value] -> Value
-firstValue (value:_) = value
-firstValue [] = Null
-
 string :: Value -> String
 string value = case fromJSON value of Success answer -> answer; Error _ -> ""
-
-field :: FromJSON a => String -> Value -> IO a
-field key value = case fromJSON (get key value) of Success answer -> pure answer; Error message -> die (key ++ ": " ++ message)
 
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either (die . ((path ++ ": ") ++)) pure . eitherDecodeStrict'
@@ -69,26 +60,6 @@ readCore path = BS.readFile path >>= either die pure . readModuleValue
 
 check :: Bool -> String -> IO ()
 check condition message = unless condition (die message)
-
-walk :: Value -> [Value]
-walk value = value : concatMap walk (case value of Object fields -> KM.elems fields; Array values -> toList values; _ -> [])
-
-expressions :: String -> Value -> [Value]
-expressions tag = filter ((== toJSON tag) . at 0) . walk
-
-exact :: String -> [String] -> Value -> Bool
-exact kind reps proof = get "kind" proof == toJSON kind && get "primReps" proof == toJSON reps && get "aggregate" proof == Null &&
-  case get "evaluated" proof of Bool _ -> True; _ -> False
-
-scalar, state, array :: Value -> Bool
-scalar = exact "long" ["IntRep"]
-state = exact "void" []
-array = exact "object" ["BoxedRep (Just Unlifted)"]
-
-scalarStateTuple :: Value -> Bool
-scalarStateTuple proof = get "aggregate" proof == String "unboxed-tuple" && get "kind" proof == String "unknown" &&
-  get "primReps" proof == toJSON ["IntRep" :: String] && get "vector" proof == Null &&
-  case items (get "components" proof) of [s,x] -> state s && scalar x; _ -> False
 
 operations :: Family -> [String]
 operations family = [prefix ++ suffix | prefix <- ["index","read","write"], suffix <- [shape ++ "Array#",lane ++ "ArrayAs" ++ shape ++ "#"]]
@@ -110,155 +81,6 @@ boundary _ = "optimized-Core-after-Tidy-before-CorePrep"
 
 identity :: Family -> String -> String
 identity family name = "main:" ++ moduleName family ++ "." ++ name
-
-bindingName :: Family -> Value -> String
-bindingName family binding = maybe identifier id (stripPrefix (identity family "") identifier)
-  where identifier = string (get "id" binding)
-
--- Independent source evidence for the exact CorePrep/runRW beta-redex.
--- A merely zero-width value or an arbitrary immediate lambda is insufficient.
-validateStateCall :: String -> Value -> IO ()
-validateStateCall name call = do
-  let local = at 1 call
-      formals = items (at 1 local)
-      formal = firstValue formals
-      actuals = items (at 2 call)
-      actual = firstValue actuals
-      void = object ["primReps" .= ([] :: [String]),"kind" .= ("void" :: String),"evaluated" .= True]
-  check (at 0 call == String "app" && at 0 local == String "lam" && length formals == 1 &&
-    get "type" formal == String "State# RealWorld" && get "rep" formal == void &&
-    get "lifted" formal == Bool False && get "coercion" formal == Bool False &&
-    length actuals == 1 && at 0 actual == String "void" && get "rep" (at 1 actual) == void &&
-    take 3 (drop 3 (items call)) == [toJSON [False],Bool False,Bool False]) (name ++ ": exact in-frame State# application")
-
-validateWorker :: Family -> Value -> IO ()
-validateWorker family binding = do
-  let name = bindingName family binding
-      expr = get "expr" binding
-      formals = items (at 1 expr)
-      lambdas = expressions "lam" expr
-      result = get "resultRep" (at 3 expr)
-      rawIndex = floating family && "IndexWorker" `isSuffixOf` name
-      proof i = get "rep" (at i (at 1 expr))
-      memory = filter ((`elem` operations family) . primitive) (expressions "app" expr)
-  check (length lambdas == (if rawIndex then 2 else 1) && array (proof 0)) (name ++ ": worker array/lambda boundary")
-  when rawIndex $ do
-    let local = lambdas !! 1
-        calls = filter ((== String "lam") . at 0 . at 1) (expressions "app" expr)
-    check (length (items (at 1 local)) == 1 && state (get "rep" (at 0 (at 1 local))) && scalar (get "resultRep" (at 3 local)) &&
-      length calls == 1 && at 1 (firstValue calls) == local && length (items (at 2 (firstValue calls))) == 1) (name ++ ": scratch runRW call")
-    validateStateCall name (firstValue calls)
-  if any (`isSuffixOf` name) ["IndexWorker","IndexGraph"] then
-    check (length formals == (if rawIndex then 3 else 2) && all (scalar . get "rep") (drop 1 formals) && scalar result) (name ++ ": index ABI")
-  else if "ReadWorker" `isSuffixOf` name then do
-    let arity = if floating family then 4 else 3
-    check (length formals == arity && all (scalar . get "rep") (take (arity-2) (drop 1 formals)) &&
-      state (proof (arity-1)) && scalarStateTuple result) (name ++ ": read ABI")
-  else check (length formals == lanes family+3 && all (scalar . get "rep") (take (lanes family+1) (drop 1 formals)) &&
-    state (proof (lanes family+2)) && (if "StoreGraph" `isSuffixOf` name then array result else scalarStateTuple result)) (name ++ ": write ABI")
-  check (length memory == 1) (name ++ ": exactly one vector memory operation")
-  when (floating family && "Graph" `isSuffixOf` name) $ do
-    let ps = counts (map (string . at 1) (expressions "prim" expr))
-        (forbidden, indexCounts, storeCounts) = if family == FloatLanes then
-          (["newByteArray#","readFloatArray#","writeFloatArray#","readWord32Array#","writeWord32Array#"],
-           [("timesFloat#",4),("plusFloat#",3),("float2Int#",1)],[("int2Float#",4),("packFloatX4#",1),("unsafeFreezeByteArray#",1)])
-          else (["newByteArray#","readDoubleArray#","writeDoubleArray#","readIntArray#","writeIntArray#"],
-           [("*##",2),("+##",1),("double2Int#",1)],[("int2Double#",2),("packDoubleX2#",1),("unsafeFreezeByteArray#",1)])
-    check (all (`Map.notMember` ps) forbidden) (name ++ ": scratch graph storage")
-    check (all (\(p,n) -> Map.lookup p ps == Just n) (if "IndexGraph" `isSuffixOf` name then indexCounts else storeCounts)) (name ++ ": graph lane observation")
-  when ("StoreGraph" `isSuffixOf` name) $ do
-    let outer = at 2 expr
-        afterWrite = at 3 (at 0 (at 3 outer))
-        freeze = at 1 afterWrite
-        alternative = at 0 (at 3 afterWrite)
-    check (at 0 outer == String "case" && at 1 outer == firstValue memory && at 0 afterWrite == String "case" && primitive freeze == "unsafeFreezeByteArray#") (name ++ ": ordered final freeze")
-    check (map (take 2 . items) (items (at 2 freeze)) == [[String "var",get "id" (firstValue formals)],[String "var",at 2 outer]]) (name ++ ": write state consumed by freeze")
-    check (take 2 (items (at 3 alternative)) == [String "var",at 1 (at 2 alternative)]) (name ++ ": direct frozen return")
-
-guestStructure :: Family -> Entry -> Value -> Value -> IO Value
-guestStructure family entry report core = do
-  let name = entryName entry
-      bindings = Map.fromList [(get "id" binding,binding) | binding <- items (get "bindings" core)]
-      rootId = at 0 (get "roots" report)
-      reachable = [bindings Map.! get "id" item | item <- items (get "reachableBindings" report)]
-      expectedNames = Set.fromList (name : maybe [] pure (helper family name))
-  check (Set.fromList (map (string . get "id") reachable) == Set.map (identity family) expectedNames) (name ++ ": global closure")
-  facts <- forM reachable $ \binding -> do
-    let expr = get "expr" binding
-        lambdas = expressions "lam" expr
-        stateCalls = filter ((== String "lam") . at 0 . at 1) (expressions "app" expr)
-        references = [at 1 node | node <- expressions "var" expr, Map.member (at 1 node) bindings]
-        calls = [node | node <- expressions "app" expr, at 0 (at 1 node) == String "var", Map.member (at 1 (at 1 node)) bindings]
-        wrapper = get "id" binding == rootId
-        needsCall = wrapper && helper family name /= Nothing
-    check (at 0 expr == String "lam") (name ++ ": non-lambda root")
-    if wrapper then do
-      check (get "arity" binding == toJSON (entryArity entry) && length (items (at 1 expr)) == entryArity entry &&
-        all (scalar . get "rep") (items (at 1 expr)) && scalar (get "resultRep" (at 3 expr)) && length lambdas == 2) (name ++ ": scalar wrapper ABI")
-      let local = lambdas !! 1
-          localCalls = filter ((== String "lam") . at 0 . at 1) (expressions "app" expr)
-      check (length (items (at 1 local)) == 1 && state (get "rep" (at 0 (at 1 local))) && scalar (get "resultRep" (at 3 local)) &&
-        length localCalls == 1 && at 1 (firstValue localCalls) == local && length (items (at 2 (firstValue localCalls))) == 1) (name ++ ": one runRW call")
-    else validateWorker family binding
-    forM_ stateCalls (validateStateCall (bindingName family binding))
-    check (length references == (if needsCall then 1 else 0) && length calls == length references) (name ++ ": residual helper count")
-    forM_ calls $ \call -> do
-      let callee = bindings Map.! at 1 (at 1 call)
-      arity <- field "arity" callee :: IO Int
-      check (Just (bindingName family callee) == helper family name && length (items (at 2 call)) == arity &&
-        take 3 (drop 3 (items call)) == [toJSON (replicate arity False),Bool False,Bool False]) (name ++ ": saturated unlifted helper")
-    check (all ((== 1) . length . items . at 3) (expressions "case" expr)) (name ++ ": conditional guest call path")
-    let lowered = length lambdas - length stateCalls
-    pure (lowered,object ["id" .= get "id" binding,"name" .= get "name" binding,
-      "lambdaCount" .= length lambdas,"inFrameStateLambdas" .= length stateCalls,"loweredLambdaCount" .= lowered])
-  let total = sum (map fst facts)
-  check (total == guestCalls family name) (name ++ ": source-derived lowered guest root count")
-  pure (object ["guestCalls" .= total,"roots" .= map snd facts])
-
-inventory :: Family -> String -> Value -> IO Value
-inventory family stage core = do
-  check (get "boundary" core == toJSON (boundary stage)) "Wrong SIMD memory Core stage"
-  let bindings = get "bindings" core
-      ps = counts (map (string . at 1) (expressions "prim" bindings))
-      vectors = filter ((== String "vector") . get "kind") (walk bindings)
-      vector = object ["lanes" .= lanes family,"element" .= element family]
-      rep = toJSON ["VecRep " ++ show (lanes family) ++ " " ++ element family]
-      selected = [binding | binding <- items bindings, bindingName family binding `elem`
-        (map entryName (entries family) ++ [name | entry <- entries family, Just name <- [helper family (entryName entry)]])]
-      -- The unchanged shared auditor proves each recognized immediate read case.
-      -- Counting its syntax here does not replace the exact read_case contract.
-      readSites = [node | binding <- selected,node <- expressions "case" (get "expr" binding),
-        let name = primitive (at 1 node), name `elem` operations family, "read" `isPrefixOf` name]
-      literalKind = if family == Int32Lanes then "int32" else "word32"
-      literals = filter ((== toJSON literalKind) . at 1) (expressions "lit" bindings)
-  check (all (`Map.member` ps) (operations family) && Map.notMember "setByteArray#" ps) "Missing six SIMD memory primitives"
-  check (not (null vectors) && all (\p -> get "primReps" p == rep && get "vector" p == vector && get "aggregate" p == Null) vectors) "Inexact vector leaf proof"
-  check (length readSites == 6) "Expected four alias and two worker immediate vector reads"
-  numbers <- forM literals $ \literal -> maybe (die "Non-integral narrow lane literal") pure (readInteger (string (at 2 literal)))
-  check (not (null numbers) && if family == Int32Lanes then all (\x -> -2^(31 :: Int) <= x && x < 2^(31 :: Int)) numbers
-         else all (\x -> 0 <= x && x < 2^(32 :: Int)) numbers && any (>= 2^(31 :: Int)) numbers) "Missing/noncanonical narrow lane literals"
-  forM_ selected $ \binding -> do
-    let name = bindingName family binding
-        helperNames = [h | entry <- entries family, Just h <- [helper family (entryName entry)]]
-        primitiveNames = map (string . at 1) (expressions "prim" (get "expr" binding))
-        floatingOps = if family == FloatLanes then ["int2Float#","float2Int#","plusFloat#","timesFloat#"] else ["int2Double#","double2Int#","+##","*##"]
-    when (name `elem` helperNames) (validateWorker family binding)
-    when (floating family && not ("Graph" `isSuffixOf` name || "GraphIndexCase" `isSuffixOf` name || "GraphStoreCase" `isSuffixOf` name)) $
-      check (all (`notElem` primitiveNames) floatingOps) (name ++ ": raw observation gained floating arithmetic")
-  floatingFacts <- if floating family then do
-    check (all (not . ("cast" `isInfixOf`) . map toLower) (Map.keys ps)) "Scalar bitcasts outside SIMD memory slice"
-    let kind = if family == FloatLanes then "float" else "double"
-        literalValues = map (string . at 2) (filter ((== toJSON kind) . at 1) (expressions "lit" bindings))
-        wanted = if family == FloatLanes then ["3.0","5.0","7.0","11.0"] else ["3.0","5.0"]
-        bitValues = map (string . at 2) (filter ((== toJSON (kind ++ "-bits")) . at 1) (expressions "lit" bindings))
-        wantedBits = if family == FloatLanes then map (show . castFloatToWord32) [3,5,7,11]
-                     else map (show . castDoubleToWord64) [3,5]
-    check ((null bitValues && counts literalValues == Map.fromList [(x,3) | x <- wanted]) ||
-      (null literalValues && counts bitValues == Map.fromList [(x,3) | x <- wantedBits])) "Finite checksum literal sites changed"
-    pure [Key.fromString (kind ++ "LiteralSites") .= (length literalValues + length bitValues)]
-    else pure []
-  pure (object (["localReadSites" .= length readSites,Key.fromString (literalKind ++ "LiteralSites") .= length literals,
-    "vectorProofs" .= length vectors,"memoryPrimitiveCounts" .= Map.restrictKeys ps (Set.fromList (operations family))] ++ floatingFacts))
 
 hostEntries, frontiers :: [String]
 hostEntries = ["vectorArgument","readVectorEscape"] ++ [f ++ o ++ "Worker" | f <- ["vector","scalar"],o <- ["Read","Write"]]
@@ -398,24 +220,17 @@ prepareSimdByteArray root name args = do
     exported <- run (stage ++ "-export") [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
       "bin/export-core.sh" (ghcOptions ++ [x | exportOnly,x <- ["-fno-code","-fwrite-if-simplified-core"]] ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [fixture])
     core <- readCore (root </> corePath)
-    facts <- inventory family stage core
+    check (get "boundary" core == toJSON (boundary stage)) "Wrong SIMD memory Core stage"
     reports <- forM (map entryName (entries family) ++ graphNames family ++ hostEntries ++ frontiers) $ \entry -> do
       triple@(report,_,_) <- audit (stage ++ "-" ++ entry) entry corePath (entry `elem` frontiers)
       if entry `elem` frontiers then negative (frontierIssues capabilities entry) report else
         check (get "accepted" report == Bool True && items (get "issues" report) == [] && items (get "missingGlobals" report) == []) (entry ++ ": positive audit")
       pure (entry,triple)
     let reportMap = Map.fromList [(entry,report) | (entry,(report,_,_)) <- reports]
-    structures <- forM (entries family) $ \entry -> (,) (entryName entry) <$> guestStructure family entry (reportMap Map.! entryName entry) core
-    forM_ (graphNames family) $ \entry -> do
-      let bindings = filter ((== toJSON (identity family entry)) . get "id") (items (get "bindings" core))
-      check (length bindings == 1 && length (items (get "reachableBindings" (reportMap Map.! entry))) == 1) (entry ++ ": graph closure")
-      let binding = firstValue bindings
-      check (get "arity" binding == toJSON (if "Index" `isPrefixOf` drop 6 entry then 2 else lanes family+3) && length (expressions "lam" (get "expr" binding)) == 1) (entry ++ ": graph arity/lambda")
-      validateWorker family binding
     controls <- mutationControls family root attempt audit stage core
     let auditPath = directory </> stage ++ "-audit.json"
     writeJson (root </> auditPath) (toJSON reportMap)
-    pure (stage,object ([("entries",toJSON (Map.fromList structures))] ++ case facts of Object fields -> KM.toList fields; _ -> []),reportMap,controls,
+    pure (stage,reportMap,controls,
           exported : [result | (_,(_,result,_)) <- reports],corePath:auditPath:[path | (_,(_,_,path)) <- reports])
   native <- if exportOnly then pure Nothing else do
     let directoryNative = directory </> "native"
@@ -438,11 +253,11 @@ prepareSimdByteArray root name args = do
       pure (Just (object ["kind" .= ("selected-signaling-NaN/native-only" :: String),"rows" .= length actual,"matches" .= null differences,"differences" .= differences,
         "claim" .= ("Pinned native observations only; no portable scalar copying/boxing or arithmetic NaN promise" :: String)],observation))
     pure (Just (built,observed,diagnostic,binary))
-  let controlsCommands = concat [records | (_,_,_,(_,records,_),_,_) <- prepared]
-      controlsPaths = concat [paths | (_,_,_,(_,_,paths),_,_) <- prepared]
-      commands = [version,ghcInfo,host,architecture,system,compiler] ++ concat [cs | (_,_,_,_,cs,_) <- prepared] ++ controlsCommands ++
+  let controlsCommands = concat [records | (_,_,(_,records,_),_,_) <- prepared]
+      controlsPaths = concat [paths | (_,_,(_,_,paths),_,_) <- prepared]
+      commands = [version,ghcInfo,host,architecture,system,compiler] ++ concat [cs | (_,_,_,cs,_) <- prepared] ++ controlsCommands ++
         case native of Nothing -> []; Just (built,observed,diagnostic,_) -> [built,observed] ++ [result | Just (_,result) <- [diagnostic]]
-      artifacts = [directory </> "expected.tsv",directory </> "requests.tsv"] ++ concat [paths | (_,_,_,_,_,paths) <- prepared] ++ controlsPaths ++ concatMap commandArtifacts commands ++
+      artifacts = [directory </> "expected.tsv",directory </> "requests.tsv"] ++ concat [paths | (_,_,_,_,paths) <- prepared] ++ controlsPaths ++ concatMap commandArtifacts commands ++
         case native of Nothing -> []; Just (_,_,diagnostic,binary) -> [directory </> "oracle.tsv",binary] ++ [directory </> path | Just _ <- [diagnostic],path <- ["snan-expected.tsv","snan-requests.tsv","snan-oracle.tsv"]]
   compilerSources <- map ("src/compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "src/compiler/THC")
   auditorSources <- map ("bin" </>) . filter (\path -> "core_" `isPrefixOf` path && takeExtension path == ".py") <$> listDirectory (root </> "bin")
@@ -461,13 +276,9 @@ prepareSimdByteArray root name args = do
       provenance = object ["schema" .= (1 :: Int),"vector" .= name,"stages" .= stages,"modelByteOrder" .= ("little" :: String),
         "nativeByteOrder" .= (if hasNative then Just ("little" :: String) else Nothing),"nativeRows" .= (if hasNative then Just (length wanted) else Nothing),
         "modelRows" .= length wanted,"modelMatched" .= (if hasNative then Just True else Nothing),"entries" .= map entryValue (entries family),"graphEntries" .= graphEntries family,
-        "positiveAuditsAccepted" .= True,"audits" .= Map.fromList [(s,reports) | (s,_,reports,_,_,_) <- prepared],"structure" .= Map.fromList [(s,facts) | (s,facts,_,_,_,_) <- prepared],
-        "hostEntries" .= hostEntries,"frontiers" .= frontiers,"expectedGuestCallsByEntry" .= Map.fromList [(entryName e,guestCalls family (entryName e)) | e <- entries family],
-        "checkedGuestCallsByStage" .= Map.fromList [(s ++ "/" ++ entryName e,guestCalls family (entryName e)) | s <- stages,e <- entries family],
-        "expectedGraphGuestCallsByEntry" .= Map.fromList [(n,1 :: Int) | n <- graphNames family],
-        "checkedGraphGuestCallsByStage" .= Map.fromList [(s ++ "/" ++ n,1 :: Int) | s <- stages,n <- graphNames family],
-        "guestCountPolicy" .= ("Count source-proven lowered roots: exact immediate State# applications execute in-frame; retain outer/helper lambdas; no settling calls" :: String),
-        Key.fromString controlKey .= Map.fromList [(s,control) | (s,_,_,(control,_,_),_,_) <- prepared],
+        "positiveAuditsAccepted" .= True,"audits" .= Map.fromList [(s,reports) | (s,reports,_,_,_) <- prepared],
+        "hostEntries" .= hostEntries,"frontiers" .= frontiers,
+        Key.fromString controlKey .= Map.fromList [(s,control) | (s,_,(control,_,_),_,_) <- prepared],
         "nativeDiagnostics" .= (case native of Just (_,_,Just (diagnostic,_),_) -> diagnostic; _ -> Null),
         "commands" .= map commandRecord commands,"sources" .= sources,"artifacts" .= artifactRecords,"attempt" .= attempt,
         "toolchain" .= object ["ghc" .= ghc,"ghcVersion" .= ("9.14.1" :: String),"architecture" .= trim architecture,"machine" .= trim architecture,

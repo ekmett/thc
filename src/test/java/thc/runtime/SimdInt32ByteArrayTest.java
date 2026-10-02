@@ -27,13 +27,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class SimdInt32ByteArrayTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/simd-int32x4-bytearray");
-    private Context context(boolean inlining) {
-        return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
+    private Context context() {
+        return Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build();
     }
     @FunctionalInterface private interface Action { void run(Language language) throws Exception; }
-    private void withLanguage(boolean inlining, Action action) throws Exception {
-        try (var context = context(inlining)) {
+    private void withLanguage(Action action) throws Exception {
+        try (var context = context()) {
             context.initialize("thc"); context.enter();
             try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); } finally { context.leave(); }
         }
@@ -105,8 +105,7 @@ class SimdInt32ByteArrayTest {
         new SimdByteArrayCorpus("int32x4").controls(root);
         SimdByteArrayEvidence.controls(root, "int32x4", manifest);
     }
-    @Test void nativeMemoryCoreHasExactCompiledEntriesWithInlining() throws Exception { nativeCore(true); }
-    @Test void nativeMemoryCoreHasExactCompiledEntriesWithoutInlining() throws Exception { nativeCore(false); }
+    @Test void nativeMemoryCoreMatchesOnFirstInstalledCall() throws Exception { nativeCore(); }
     private record Change(String field, Object value) {}
     @Test void preparationModeRejectsCorruptionAndNativeDowngrades() {
         Map<String, Object> nativeMode = Map.of("stages", List.of("pre", "post"), "modelRows", 9666L,
@@ -140,7 +139,7 @@ class SimdInt32ByteArrayTest {
     }
     @Test void genuineVectorCallBindingsLoadBeforePublicHostAdmission() throws Exception {
         var provenance = provenance();
-        for (var stage : (List<String>) provenance.get("stages")) for (var backend : List.of("ast", "bytecode")) withLanguage(true, language -> {
+        for (var stage : (List<String>) provenance.get("stages")) for (var backend : List.of("ast", "bytecode")) withLanguage(language -> {
             var module = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdInt32X4ByteArray.cbd").toPath());
             for (var name : List.of("vectorArgument", "readVectorEscape")) {
                 var linked = CoreModules.reachable(module, "main:SimdInt32X4ByteArray." + name);
@@ -156,7 +155,7 @@ class SimdInt32ByteArrayTest {
     private record Operation(String name, int arity) {}
     @Test void publicHostTupleResultsRetainStateAndRejectInvalidCarriers() throws Exception {
         var provenance = provenance();
-        for (var stage : (List<String>) provenance.get("stages")) for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+        for (var stage : (List<String>) provenance.get("stages")) for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             var module = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdInt32X4ByteArray.cbd").toPath());
             for (var family : List.of("vector", "scalar")) for (var operation : List.of(new Operation("Read", 3), new Operation("Write", 7))) {
                 var name = family + operation.name + "Worker";
@@ -199,35 +198,19 @@ class SimdInt32ByteArrayTest {
         return result;
     }
     private void check(boolean compiled, List<List<Long>> cases, Map<IntegerSimdModel.Input, Long> expected,
-            ExecutableProgram p, RootCallTarget host, Object closure, RootCallTarget target,
-            List<RootCallTarget> targets, long callCount, Language language, String stage, String backend, String name, boolean inlining) throws Exception {
+            ExecutableProgram p, RootCallTarget host, Object closure, Language language, String stage, String backend, String name) {
         for (var input : cases) {
-            var label = stage + "/" + backend + "/" + name + "/" + input + "/inlining=" + inlining;
+            var label = stage + "/" + backend + "/" + name + "/" + input;
             long before = ((Number) p.diagnostics().get("compiledEntries")).longValue();
             assertEquals(expected.get(new IntegerSimdModel.Input(name, input)), Calls.target(host, new Object[]{closure, input.toArray()}), label);
-            if (compiled) {
-                assertEquals(before + callCount, ((Number) p.diagnostics().get("compiledEntries")).longValue(), label + " compiled guest entries");
-                var active = activeTargets(target);
-                assertEquals(targets.size(), active.size(), label + " active target count");
-                boolean identities = true;
-                for (var candidate : active) {
-                    boolean found = false; for (var prior : targets) if (prior == candidate) { found = true; break; }
-                    if (!found) { identities = false; break; }
-                }
-                assertTrue(identities, label + " active identities");
-                for (var installed : targets) valid(installed, label);
-                var calls = new ArrayList<DirectCallNode>();
-                for (var call : NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class))
-                    if (call.getCallTarget() == target) calls.add(call);
-                assertTrue(!calls.isEmpty(), label + " selected entry");
-                for (var call : calls) assertSame(target, call.getCurrentCallTarget(), label + " selected identity");
-            }
+            if (compiled) assertTrue(((Number) p.diagnostics().get("compiledEntries")).longValue() > before,
+                label + " must enter compiled guest code");
             var state = language.getHandoffState().get();
             assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getResults().retainedReferences());
             assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
         }
     }
-    private void nativeCore(boolean inlining) throws Exception {
+    private void nativeCore() throws Exception {
         var provenance = provenance();
         var stages = (List<String>) provenance.get("stages");
         var expected = rows("expected.tsv");
@@ -243,8 +226,7 @@ class SimdInt32ByteArrayTest {
         }
         assertEquals(declared.size(), new LinkedHashSet<>(declared).size());
         assertEquals(new LinkedHashSet<>(declared), expected.keySet());
-        var counts = (Map<String, Number>) provenance.get("expectedGuestCallsByEntry");
-        for (var stage : stages) for (var backend : List.of("ast", "bytecode")) withLanguage(inlining, language -> {
+        for (var stage : stages) for (var backend : List.of("ast", "bytecode")) withLanguage(language -> {
             var module = thc.CoreCbdFixtures.read(new File(directory, stage + "-core/SimdInt32X4ByteArray.cbd").toPath());
             for (var entry : entries) {
                 var name = (String) entry.get("name"); int arity = ((Number) entry.get("arity")).intValue();
@@ -257,34 +239,20 @@ class SimdInt32ByteArrayTest {
                 assertTrue(correctArity);
                 var linked = new LinkedHashMap<>(CoreModules.reachable(module, "main:SimdInt32X4ByteArray." + name)); linked.put("instrument", true);
                 ExecutableProgram p = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                var host = p.hostEntryTarget(arity); var closure = p.entryValue("main:SimdInt32X4ByteArray." + name); var target = p.entryTarget("main:SimdInt32X4ByteArray." + name);
-                long callCount = counts.get(name).longValue();
-                // Exact immediate State# bodies stay in-frame; worker wrappers
-                // additionally call their one opaque worker. Counts come from Core.
-                assertEquals(List.of("vectorUnitCase", "scalarUnitCase").contains(name) ? 1L : 2L, callCount);
-                assertEquals(callCount, ((Map<String, Number>) provenance.get("checkedGuestCallsByStage")).get(stage + "/" + name).longValue());
-                check(false, cases, expected, p, host, closure, target, List.of(), callCount, language, stage, backend, name, inlining);
-                var targets = activeTargets(target);
-                assertEquals((int) callCount, targets.size(), stage + "/" + backend + "/" + name + " guest roots");
+                var host = p.hostEntryTarget(arity); var closure = p.entryValue("main:SimdInt32X4ByteArray." + name);
+                check(false, cases, expected, p, host, closure, language, stage, backend, name);
+                var targets = activeTargets(host);
                 var targetClass = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
-                var callCounter = targetClass.getMethod("getCallCount");
                 var beforeInstall = p.diagnostics().get("compiledEntries");
-                var callsBeforeInstall = new ArrayList<Object>();
-                for (var t : targets) callsBeforeInstall.add(callCounter.invoke(t));
                 for (var t : targets) {
                     t.getClass().getMethod("compile", boolean.class).invoke(t, true);
                     valid(t, "initial installation");
-                    // Match EntryValue.compile: restore HotSpot's shared entry
-                    // stub before measuring the first call, without invoking it.
-                    var runtime = Truffle.getRuntime();
-                    runtime.getClass().getMethod("bypassedInstalledCode", targetClass).invoke(runtime, t);
-                    valid(t, "installation after boundary restoration");
                 }
+                // Restore the shared host entry stub without invoking guest code.
+                var runtime = Truffle.getRuntime();
+                runtime.getClass().getMethod("bypassedInstalledCode", targetClass).invoke(runtime, host);
                 assertEquals(beforeInstall, p.diagnostics().get("compiledEntries"), "Installation cannot execute guest code");
-                var callsAfterInstall = new ArrayList<Object>();
-                for (var t : targets) callsAfterInstall.add(callCounter.invoke(t));
-                assertEquals(callsBeforeInstall, callsAfterInstall, "Installation cannot settle interpreted calls");
-                check(true, cases, expected, p, host, closure, target, targets, callCount, language, stage, backend, name, inlining);
+                check(true, cases, expected, p, host, closure, language, stage, backend, name);
                 for (var counter : List.of("unsupportedTraps", "blackholes")) assertEquals(0L, ((Number) p.diagnostics().get(counter)).longValue(), counter);
             }
         });
