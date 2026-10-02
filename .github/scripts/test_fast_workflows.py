@@ -47,7 +47,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("bin/try.sh --handoff-modes", workflow)
         self.assertNotIn("bin/prepare-tests.sh", workflow)
         self.assertIn("fail-fast: false", grouped)
-        self.assertIn('fast_ci.py group --group "$CI_GROUP"', grouped)
+        self.assertIn('fast_ci.py group --group "$group"', grouped)
         self.assertIn("fast_ci.py compile-common", grouped)
         self.assertIn("digest-mismatch: error", grouped)
         self.assertIn("cabal-update: false", grouped)

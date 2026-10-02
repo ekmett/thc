@@ -144,15 +144,15 @@ def validate_xml(directory, expected):
             "platformSkippedCases": sorted(platform_skips), "xmlFiles": len(files)}
 
 
-def gradle_command(selection, *, install_dist=False, fail_fast=True):
+def gradle_command(selection, *, install_dist=False, fail_fast=True, reuse_daemon=False):
     require(selection.get("runnable") is True, "Selector could not establish a runnable test inventory")
     require(selection.get("mode") in ("narrow", "full"), "Invalid selection mode")
     classes = selection["junit"]["classes"]
     require(classes and len(set(classes)) == len(classes), "Empty/duplicate selected classes")
     require(all(isinstance(c, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", c) for c in classes),
             "Invalid selected class name")
-    # Keep reusable compilation caches, not a prior daemon's limits or failed cache-close state.
-    argv = ["./gradlew", "--no-daemon", "--max-workers=4", "--build-cache", "--continue",
+    # Standalone runs avoid external daemon state; CI batches own a fresh worker daemon.
+    argv = ["./gradlew", "--daemon" if reuse_daemon else "--no-daemon", "--max-workers=4", "--build-cache", "--continue",
             "--init-script", ".github/scripts/fast_ci.init.gradle"]
     if install_dist:
         argv.append("installDist")
@@ -478,7 +478,7 @@ def restore_common(root, archive):
         bundle.extractall(root, members=members, filter="data")
 
 
-def run_group(recorder, name):
+def run_group(recorder, name, *, reuse_daemon=False):
     import fast_select
     selection = fast_select.group_selection(recorder.root, name)
     manifest, owners = fixtures._manifest(recorder.root)
@@ -494,7 +494,7 @@ def run_group(recorder, name):
                 recorder.command(f"proof-{group}-{index}", check["argv"])
     for mode, task in HANDOFF_TASKS.items():
         preserve_previous(recorder.root, recorder.directory / ("prior-" + mode), task)
-    code, _ = recorder.command("junit-handoff-modes", gradle_command(selection, fail_fast=False),
+    code, _ = recorder.command("junit-handoff-modes", gradle_command(selection, fail_fast=False, reuse_daemon=reuse_daemon),
                                allowed=tuple(range(-128, 256)))
     for mode, task in HANDOFF_TASKS.items():
         preserve_previous(recorder.root, recorder.directory / mode, task)
@@ -524,6 +524,8 @@ def main(argv=None):
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
+    parser.add_argument("--reuse-daemon", action="store_true",
+                        help="Reuse the CI batch's worker daemon for grouped tests")
     parser.add_argument("--archive", type=Path)
     parser.add_argument("--base", default=os.environ.get("FAST_BASE_SHA", ""))
     parser.add_argument("--head", default=os.environ.get("FAST_HEAD_SHA", "HEAD"))
@@ -539,7 +541,7 @@ def main(argv=None):
         elif args.command == "compile-common":
             compile_common(recorder)
         elif args.command == "group":
-            run_group(recorder, args.group)
+            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon)
         elif args.command == "pack-common":
             pack_common(ROOT, args.archive)
         elif args.command == "restore-common":

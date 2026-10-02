@@ -139,6 +139,23 @@ class FastSelectionTest(unittest.TestCase):
         with self.assertRaisesRegex(select.SelectionError, "unmapped=.*NewTest"):
             select.groups(self.repo)
 
+    def test_worker_batches_cover_original_groups_once_without_changing_selections(self):
+        for size in (1, 19, 20, 21, 145, 300):
+            original = {f"group-{index}": [f"example.Test{index}"] for index in range(size)}
+            with self.subTest(size=size), mock.patch.object(select, "groups", return_value=original):
+                matrix = select.group_matrix(self.repo)["include"]
+                self.assertEqual(min(20, size), len(matrix))
+                self.assertEqual(len(matrix), len({batch["batch"] for batch in matrix}))
+                flattened = [name for batch in matrix for name in batch["groups"]]
+                self.assertCountEqual(original, flattened)
+                lengths = [len(batch["groups"]) for batch in matrix]
+                self.assertGreater(min(lengths), 0)
+                self.assertLessEqual(max(lengths) - min(lengths), 1)
+                for name in flattened:
+                    selected = select.group_selection(self.repo, name)
+                    self.assertEqual(set(original[name]) | {"thc.runtime.HandoffTest"},
+                                     set(selected["junit"]["classes"]))
+
     def test_group_repeats_only_mode_proof_and_keeps_full_suite_with_owner(self):
         import fast_ci
         handoff = "thc.runtime.HandoffTest"

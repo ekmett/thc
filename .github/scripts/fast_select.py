@@ -861,9 +861,15 @@ def groups(repo):
         if name in result:
             raise SelectionError("Duplicate CI group: " + name)
         result[name] = free[offset:offset+50]
-    if len(result) > 256:
-        raise SelectionError("More than 256 groups: split the platform matrix before adding jobs")
     return result
+
+
+def group_matrix(repo):
+    """Share worker setup while keeping each original group independently runnable."""
+    names = list(groups(repo))
+    count = min(20, len(names))
+    return {"include": [{"batch": f"batch-{index+1:02d}", "groups": names[index::count]}
+                        for index in range(count)]}
 
 
 def group_selection(repo, name):
@@ -888,7 +894,7 @@ def main():
     args = parser.parse_args()
     try:
         if args.matrix:
-            print(json.dumps({"group": list(groups(args.repo))}))
+            print(json.dumps(group_matrix(args.repo)))
             return 0
         result = select(args.repo, args.base, args.head)
     except (OSError, ValueError, TypeError, KeyError, SelectionError) as error:

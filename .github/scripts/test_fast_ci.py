@@ -6,8 +6,10 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
 
@@ -35,11 +37,72 @@ class FastRunnerTest(unittest.TestCase):
             "classes": ["example.Test"], "patterns": ["*"] if mode == "full" else ["example.Test"]}}
 
     def test_group_execution_collects_both_modes_without_fail_fast(self):
-        command = ci.gradle_command(self.selection(), fail_fast=False)
-        self.assertIn("testDefault", command)
-        self.assertIn("testDense", command)
-        self.assertEqual(2, command.count("--rerun"))
-        self.assertNotIn("--fail-fast", command)
+        for reuse in (False, True):
+            with self.subTest(reuse=reuse):
+                command = ci.gradle_command(self.selection(), fail_fast=False, reuse_daemon=reuse)
+                self.assertIn("--daemon" if reuse else "--no-daemon", command)
+                self.assertNotIn("--no-daemon" if reuse else "--daemon", command)
+                self.assertIn("testDefault", command)
+                self.assertIn("testDense", command)
+                self.assertEqual(2, command.count("--rerun"))
+                self.assertNotIn("--fail-fast", command)
+
+    def test_batch_workflow_continues_after_preparation_and_runtime_failures(self):
+        workflow = (Path(__file__).resolve().parents[1] / "workflows/test-groups.yml").read_text()
+        step = workflow.split("      - name: Run each original group with its own preparation and both handoff modes\n", 1)[1]
+        script = textwrap.dedent(step.split("      - name:", 1)[0].split("        run: |\n", 1)[1])
+        commands = self.root / "commands"
+        commands.mkdir()
+        runner = commands / "python3"
+        runner.write_text(f"#!{sys.executable}\n" + textwrap.dedent('''\
+            import pathlib, sys
+            args = sys.argv[1:]
+            assert args[:2] == [".github/scripts/fast_ci.py", "group"]
+            assert "--reuse-daemon" in args
+            group = args[args.index("--group") + 1]
+            report = pathlib.Path(args[args.index("--report-dir") + 1])
+            report.mkdir(parents=True)
+            (report / "preparation.log").write_text(group)
+            with pathlib.Path("executed").open("a") as stream:
+                stream.write(group + "\\n")
+            if group == "bad-preparation":
+                sys.exit(11)
+            for mode in ("default", "dense"):
+                (report / mode).mkdir()
+                (report / mode / "result.xml").write_text(group)
+            sys.exit(12 if group == "bad-runtime" else 0)
+            '''))
+        runner.chmod(0o755)
+        gradle = self.root / "gradlew"
+        gradle.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> daemon-commands\n')
+        gradle.chmod(0o755)
+        for groups, expected in ((["first", "bad-preparation", "bad-runtime", "last"], 1),
+                                 (["independent"], 0)):
+            with self.subTest(groups=groups):
+                (self.root / "executed").unlink(missing_ok=True)
+                (self.root / "daemon-commands").unlink(missing_ok=True)
+                summary = self.root / "summary"
+                summary.write_text("")
+                result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], cwd=self.root,
+                    env=dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"],
+                             CI_GROUPS=" ".join(groups), GITHUB_STEP_SUMMARY=str(summary)),
+                    text=True, capture_output=True)
+                self.assertEqual(expected, result.returncode, result.stdout + result.stderr)
+                self.assertEqual(groups, (self.root / "executed").read_text().splitlines())
+                self.assertEqual(["--stop", "--stop"], (self.root / "daemon-commands").read_text().splitlines())
+                for group in groups:
+                    report = self.root / "build/ci/group-results" / group
+                    self.assertEqual(group, (report / "preparation.log").read_text())
+                    failed = group.startswith("bad-")
+                    self.assertIn(f"- {group}: {'failed' if failed else 'passed'}", summary.read_text())
+                    if failed:
+                        self.assertIn(f"::error title={group}::", result.stdout)
+                    for mode in ("default", "dense"):
+                        output = report / mode / "result.xml"
+                        if group == "bad-preparation":
+                            self.assertFalse(output.exists())
+                        else:
+                            self.assertEqual(group, output.read_text())
 
     def test_haskell_suite_is_selected_exactly(self):
         self.assertEqual([], ci.haskell_suites(self.selection()))

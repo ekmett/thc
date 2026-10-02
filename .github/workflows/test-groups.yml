@@ -88,7 +88,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   group:
-    name: ${{ matrix.group }} (${{ inputs.os }})
+    name: ${{ matrix.batch }} (${{ inputs.os }})
     needs: compile
     strategy:
       fail-fast: false
@@ -142,15 +142,30 @@ jobs:
           digest-mismatch: error
       - name: Verify and restore common compilation
         run: python3 .github/scripts/fast_ci.py restore-common --archive build/ci/download/common.tar.gz
-      - name: Prepare this group's genuine inputs and run both original handoff modes
+      - name: Run each original group with its own preparation and both handoff modes
         env:
-          CI_GROUP: ${{ matrix.group }}
-        run: python3 .github/scripts/fast_ci.py group --group "$CI_GROUP" --report-dir build/ci/group-results
+          CI_GROUPS: ${{ join(matrix.groups, ' ') }}
+        run: |
+          ./gradlew --stop
+          trap './gradlew --stop' EXIT
+          failed=0
+          for group in $CI_GROUPS; do
+            echo "::group::$group"
+            if python3 .github/scripts/fast_ci.py group --group "$group" --reuse-daemon --report-dir "build/ci/group-results/$group"; then
+              echo "- $group: passed" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error title=$group::$group failed; see its preserved preparation and test output"
+              echo "- $group: failed" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$failed"
       - name: Preserve each group's original test and preparation output
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: tests-${{ runner.os }}-${{ matrix.group }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: tests-${{ runner.os }}-${{ matrix.batch }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/ci/group-results/
             build/test-results/testDefault/
