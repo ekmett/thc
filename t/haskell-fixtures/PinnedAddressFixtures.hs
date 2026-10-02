@@ -132,9 +132,6 @@ proofPath value = do
   _ <- field "kind" proof :: Either String String
   pure path
 
-rawProof :: Value -> Either String Value
-rawProof value = proofPath value >>= (`at` value)
-
 bindings :: Value -> Either String [(Path,Value)]
 bindings modules = concat <$> forM (zip [0..] (array modules)) (\(i,modul) -> do
   bs <- field "bindings" modul :: Either String [Value]
