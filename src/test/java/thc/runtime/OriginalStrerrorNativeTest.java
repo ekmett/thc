@@ -74,27 +74,30 @@ class OriginalStrerrorNativeTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var module = nativeModules(with(OriginalStdioFixtures.module(List.of("strerror")), "schema", 1L, "ghc", "9.14.1"));
                 ExecutableProgram program = backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); var entry = program.entryTarget("strerror");
+                int pointerBytes = ((TargetLayout) module.get("targetLayout")).getWordBytes();
+                // libc requires addressable storage, as in GHC allocaBytes; no foreign-call copy or promotion.
                 class Replay { void run(boolean compiled) throws Exception {
                     for (var row : messages) {
-                        byte[] bytes = new byte[512]; Arrays.fill(bytes,(byte) 0x55); var address = ManagedAddress.fromByteArray(bytes); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        var bytes = ManagedAllocation.mutable(512,pointerBytes,true); for (int i = 0; i < 512; i++) bytes.writeByte(i,0x55); var address = ManagedAddress.fromAllocation(bytes); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                         assertEquals(0,callScalarTestTarget(entry,new Object[]{0L,((Number) row.get("errno")).intValue(),address,512L,thc.runtime.Unit.INSTANCE}));
                         if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); valid(entry); }
-                        int end = -1; for (int i = 0; i < bytes.length; i++) if (bytes[i] == 0) { end = i; break; }
-                        assertTrue(end >= 1 && end <= 511); assertEquals(row.get("message"),new String(bytes,0,end,StandardCharsets.US_ASCII));
+                        int end = -1; for (int i = 0; i < bytes.getSize(); i++) if (bytes.readByte(i) == 0) { end = i; break; }
+                        assertTrue(end >= 1 && end <= 511); byte[] message = new byte[end]; for (int i = 0; i < end; i++) message[i] = (byte) bytes.readByte(i);
+                        assertEquals(row.get("message"),new String(message,StandardCharsets.US_ASCII));
                     }
                     for (var row : raw) {
-                        int length = ((Number) row.get("length")).intValue(); byte[] bytes = new byte[length]; Arrays.fill(bytes,(byte) 0x55); var address = ManagedAddress.fromByteArray(bytes);
+                        int length = ((Number) row.get("length")).intValue(); var bytes = ManagedAllocation.mutable(length,pointerBytes,true); for (int i = 0; i < length; i++) bytes.writeByte(i,0x55); var address = ManagedAddress.fromAllocation(bytes);
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertEquals(((Number) row.get("status")).intValue(),callScalarTestTarget(entry,new Object[]{0L,((Number) row.get("errno")).intValue(),address,(long) length,thc.runtime.Unit.INSTANCE}));
                         if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); valid(entry); }
-                        var expected = new ArrayList<Long>(); for (var value : (List<Number>) row.get("bytes")) expected.add(value.longValue()); var actual = new ArrayList<Long>(); for (byte value : bytes) actual.add((long) (value & 0xff));
+                        var expected = new ArrayList<Long>(); for (var value : (List<Number>) row.get("bytes")) expected.add(value.longValue()); var actual = new ArrayList<Long>(); for (int i = 0; i < length; i++) actual.add(bytes.readByte(i));
                         assertEquals(expected,actual,"native strerror buffer for " + row.get("errno") + "/" + length);
                     }
                 }}
                 var replay = new Replay(); replay.run(false); entry.getClass().getMethod("compile",boolean.class).invoke(entry,true); valid(entry); replay.run(true);
-                byte[] bytes = new byte[512]; Arrays.fill(bytes,(byte) 0x55); var address = ManagedAddress.fromByteArray(bytes);
+                var bytes = ManagedAllocation.mutable(512,pointerBytes,true); for (int i = 0; i < 512; i++) bytes.writeByte(i,0x55); var address = ManagedAddress.fromAllocation(bytes);
                 // Buffer extent is a C precondition; these failures must occur before entering C.
                 class Control { void reject(Object error,Object output,Object length,Object state) {
-                    assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,error,output,length,state})); for (byte value : bytes) assertEquals((byte) 0x55,value);
+                    assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,error,output,length,state})); for (int i = 0; i < bytes.getSize(); i++) assertEquals(0x55L,bytes.readByte(i));
                 }}
                 assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,22,address,512L,9L})); var control = new Control(); control.reject(1L << 32,address,512L,thc.runtime.Unit.INSTANCE);
                 control.reject(22,address,512L,9L); control.reject(22,ManagedAddress.unownedNumeric(1),512L,thc.runtime.Unit.INSTANCE);
