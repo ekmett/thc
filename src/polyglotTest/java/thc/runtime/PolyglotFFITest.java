@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 public class PolyglotFFITest {
     private Map<String, Object> map(Object... items) { var result = new LinkedHashMap<String, Object>(); for (int i = 0; i < items.length; i += 2) result.put((String) items[i], items[i + 1]); return result; }
-    private Map<String, Object> proof(String rep) { return map("kind", switch (rep) { case "AddrRep" -> "address"; case "IntRep", "Int8Rep", "Int64Rep" -> "long"; case "DoubleRep" -> "double"; case "State# RealWorld" -> "void"; default -> "object"; }, "primReps", rep.equals("State# RealWorld") ? List.of() : List.of(rep), "evaluated", !rep.equals("BoxedRep (Just Lifted)")); }
+    private Map<String, Object> proof(String rep) { return map("kind", switch (rep) { case "AddrRep" -> "address"; case "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word16Rep" -> "long"; case "FloatRep" -> "float"; case "DoubleRep" -> "double"; case "State# RealWorld" -> "void"; default -> "object"; }, "primReps", rep.equals("State# RealWorld") ? List.of() : List.of(rep), "evaluated", !rep.equals("BoxedRep (Just Lifted)")); }
     private Map<String, Object> tuple(String rep) { return map("kind", "unknown", "primReps", List.of(rep), "evaluated", false, "aggregate", "unboxed-tuple", "components", List.of(proof("State# RealWorld"), proof(rep))); }
     List<Object> call(PolyglotOp op) {
         var arguments = new ArrayList<List<Object>>(); var reps = new ArrayList<Map<String, Object>>(); var flags = new ArrayList<Boolean>();
