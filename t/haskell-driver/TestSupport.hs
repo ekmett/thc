@@ -11,7 +11,7 @@
 --
 -- Temporary-project, subprocess and bundle-inspection helpers for driver tests.
 module TestSupport
-  ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, checked, json, readJson, readCore
+  ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, runPreparation, checked, json, readJson, readCore
   , readSourceManifest, readPublishedCore, readCoreBytes, readPublishedCoreBytes
   , field, array, string, strings, bool, number, objects, named
   , assertContains, assertSuccess, assertFailure, assertNoStdout
@@ -152,8 +152,28 @@ copyTree source target = do
 run :: Env -> FilePath -> Maybe String -> Int -> [String] -> IO Result
 run env cwd backend seconds = runExe env cwd backend seconds (driver env)
 
+-- Compiler preparation has no per-command execution budget. The outer CI job
+-- bounds it; callers still check the returned result before executing the guest.
+runPreparation :: Env -> FilePath -> [String] -> IO Result
+runPreparation env cwd arguments = do
+  process <- testProcess env cwd Nothing (driver env) arguments
+  result <- Process.readCreateProcessWithExitCode process ""
+  recordResult env cwd (driver env) arguments result
+
 runExe :: Env -> FilePath -> Maybe String -> Int -> FilePath -> [String] -> IO Result
 runExe env cwd backend seconds executable arguments = do
+  process <- testProcess env cwd backend executable arguments
+  completed <- timeout (seconds * 1000000) (Process.readCreateProcessWithExitCode process "")
+  case completed of
+    Nothing -> do
+      appendFile (scratch env </> "commands.log")
+        (unlines ["$ " ++ unwords (executable : arguments), "cwd: " ++ cwd,
+                  "timed out after " ++ show seconds ++ " seconds"])
+      HUnit.assertFailure ("timed out: " ++ unwords arguments) >> fail "unreachable"
+    Just result -> recordResult env cwd executable arguments result
+
+testProcess :: Env -> FilePath -> Maybe String -> FilePath -> [String] -> IO Process.CreateProcess
+testProcess env cwd backend executable arguments = do
   original <- getEnvironment
   -- Backend-comparison controls inspect launcher metrics explicitly. Restrict
   -- the opt-in to the driver/runtime child; native oracle commands are unchanged.
@@ -166,19 +186,14 @@ runExe env cwd backend seconds executable arguments = do
         then ("JAVA_OPTS", maybe "" id (lookup "JAVA_OPTS" withBackend) ++ " -Dthc.diagnostics=true") :
              filter ((/= "JAVA_OPTS") . fst) withBackend
         else withBackend
-      process = (Process.proc executable arguments) { Process.cwd = Just cwd, Process.env = Just extra }
-  completed <- timeout (seconds * 1000000) (Process.readCreateProcessWithExitCode process "")
-  case completed of
-    Nothing -> do
-      appendFile (scratch env </> "commands.log")
-        (unlines ["$ " ++ unwords (executable : arguments), "cwd: " ++ cwd,
-                  "timed out after " ++ show seconds ++ " seconds"])
-      HUnit.assertFailure ("timed out: " ++ unwords arguments) >> fail "unreachable"
-    Just (status, stdout, stderr) -> do
-      appendFile (scratch env </> "commands.log")
-        (unlines ["$ " ++ unwords (executable : arguments), "cwd: " ++ cwd,
-                  "exit: " ++ show status, "stdout: " ++ stdout, "stderr: " ++ stderr])
-      pure (Result status stdout stderr)
+  pure $ (Process.proc executable arguments) { Process.cwd = Just cwd, Process.env = Just extra }
+
+recordResult :: Env -> FilePath -> FilePath -> [String] -> (ExitCode, String, String) -> IO Result
+recordResult env cwd executable arguments (status, stdout, stderr) = do
+  appendFile (scratch env </> "commands.log")
+    (unlines ["$ " ++ unwords (executable : arguments), "cwd: " ++ cwd,
+              "exit: " ++ show status, "stdout: " ++ stdout, "stderr: " ++ stderr])
+  pure (Result status stdout stderr)
 
 checked :: Env -> FilePath -> Maybe String -> Int -> [String] -> IO Result
 checked env cwd backend seconds arguments = do

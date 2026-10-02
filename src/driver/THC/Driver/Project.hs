@@ -13,7 +13,7 @@
 --
 -- Plan project components and acquire reproducible, dependency-closed Core bundles.
 module THC.Driver.Project
-  ( runProject, acquireProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
+  ( runProject, acquireProject, buildTargetsProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
   , prepareInstalledBundle, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
   , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
@@ -34,7 +34,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.List (isSuffixOf, nub, sort, sortOn)
+import Data.List (isPrefixOf, isSuffixOf, nub, nubBy, sort, sortOn, stripPrefix)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -117,7 +117,7 @@ data ExportContext = ExportContext
   , contextProjectOptions :: [String]
   , contextNativeTools :: Value
   , contextVerifyArtifacts :: Bool
-  , contextNoLinkUnit :: Maybe String
+  , contextNoLinkUnits :: [String]
   , contextCoreView :: Maybe InstalledContext
   , contextCoreInterfaces :: Map.Map String FilePath }
 
@@ -237,7 +237,7 @@ prepareWindowsRuntimeWithVerification verify repository selectedCompiler selecte
     driverHash <- digestFile driver
     nativeTools <- nativeToolIdentity
     let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-          archive native cache driverHash compiler (Just pkg) driver root [] nativeTools verify Nothing Nothing Map.empty
+          archive native cache driverHash compiler (Just pkg) driver root [] nativeTools verify [] Nothing Map.empty
         proxy = nativeCompilerProxy context
     createDirectoryIfMissing True (takeDirectory proxy)
     writeFile proxy ghcProxyWindowsCommand
@@ -303,13 +303,17 @@ cabalProjectOptions opts =
 acquireProject :: RunOptions -> FilePath -> IO ()
 acquireProject = buildProject AcquireOnly
 
-data ProjectAction = AcquireOnly | RunGuest deriving Eq
+-- | Build arbitrary Cabal components using the same acquisition as run.
+buildTargetsProject :: RunOptions -> [String] -> FilePath -> IO ()
+buildTargetsProject opts targets = buildProject (BuildTargets targets) opts
+
+data ProjectAction = AcquireOnly | BuildTargets [String] | RunGuest deriving Eq
 
 buildProject :: ProjectAction -> RunOptions -> FilePath -> IO ()
 buildProject action opts target = do
   require (Host.os /= "mingw32") "project acquisition is not yet supported on Windows"
-  require (action /= AcquireOnly || null (runArguments opts)) "acquire does not accept guest arguments"
-  let command = if action == AcquireOnly then "acquire" else "run"
+  let command = case action of AcquireOnly -> "acquire"; BuildTargets _ -> "build"; RunGuest -> "run"
+  require (action == RunGuest || null (runArguments opts)) (command ++ " does not accept guest arguments")
   require (not (null (runThcRoot opts))) (command ++ " requires --thc-root DIR")
   require (runInstalledCore opts `elem` ["required", "pinned"])
     "--installed-core must be required or pinned"
@@ -386,6 +390,41 @@ resolveRunnable working target configuration environment native = do
     [unit] -> pure unit
     _ -> fail "Cabal runnable artifact does not identify exactly one local component"
 
+-- Cabal 3.16's target command uses build's own selector functions. Its report
+-- normalizes module/file targets to complete components. Resolve only its
+-- fully-qualified forms against the plan, never stale build-info.
+resolveBuildTargets :: FilePath -> [String] -> [String] -> [(String, String)] -> FilePath -> IO [Unit]
+resolveBuildTargets working targets configuration environment native = do
+  let cabal = maybe "cabal" id (lookup "CABAL" environment)
+      requested = if null targets then ["."] else targets
+  (status, output, diagnostic) <- readCreateProcessWithExitCode
+    (proc cabal (["target"] ++ requested ++ configuration)) {cwd = Just working, env = Just environment} ""
+  require (status == ExitSuccess) ("Cabal build target selection failed: " ++ diagnostic)
+  let report = drop 1 (dropWhile (/= "Fully qualified target forms:") (lines output))
+      forms = [target | line <- takeWhile (isPrefixOf " - ") report, Just target <- [stripPrefix " - " line]]
+  require (not (null forms)) "Cabal target did not return supported local component targets"
+  plan <- readJson (native </> "cache/plan.json")
+  units <- filter unitLocal <$> (mapM readUnit =<< field plan "install-plan")
+  named <- forM units $ \unit -> do name <- componentTarget unit; pure (name, unit)
+  selected <- fmap concat $ forM forms $ \form -> do
+    let matches = [unit | (name,unit) <- named, form == name]
+    require (not (null matches)) ("Cabal target is not a supported local component: " ++ form)
+    pure matches
+  let unique = nubBy (\left right -> unitId left == unitId right) selected
+      complete = case dropWhile (isPrefixOf " - ") report of
+        summary:_ -> case words summary of
+          "Found":count:noun:"matching":_ -> count == show (length unique) && noun `elem` ["target", "targets"]
+          _ -> False
+        _ -> False
+  require complete "Cabal target selection includes unsupported non-local or ambiguous components"
+  pure unique
+
+componentTarget :: Unit -> IO String
+componentTarget unit = do
+  package <- field (unitValue unit) "pkg-name"
+  component <- field (unitValue unit) "component-name"
+  pure (package ++ ":" ++ if component == "lib" then "lib:" ++ package else component)
+
 -- Resolve the actual selected compiler's companion before Cabal sees the
 -- forwarding wrapper. The wrapper directory is not a GHC installation.
 selectedPackageTool :: FilePath -> Maybe FilePath -> IO FilePath
@@ -454,25 +493,30 @@ runBuiltProject action project working thcRoot runtime output native target proj
                    ("THC_PROXY_NATIVE_PIECES", native </> "cache/thc/native-pieces-v1")]
       selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
       cabal = maybe "cabal" id (lookup "CABAL" selectionEnvironment)
-  selectedUnit <- resolveRunnable working target configuration selectionEnvironment native
+  selectedUnits <- case action of
+    BuildTargets targets -> resolveBuildTargets working targets configuration selectionEnvironment native
+    _ -> pure <$> resolveRunnable working target configuration selectionEnvironment native
   selectionPlan <- readJson (native </> "cache/plan.json")
   selectionUnits <- mapM readUnit =<< field selectionPlan "install-plan"
   let selectionById = Map.fromList [(unitId unit, unit) | unit <- selectionUnits]
   require (Map.size selectionById == length selectionUnits) "Cabal plan has duplicate unit IDs"
-  selectedClosure <- dependencyClosure selectionById (unitId selectedUnit)
-  let guestOnly = any (\unit -> jsonField (unitValue unit) "pkg-name" == Just ("thc" :: String) &&
-                              jsonField (unitValue unit) "component-name" == Just ("lib:interop" :: String)) selectedClosure
-      noLinkUnit = if guestOnly then Just (unitId selectedUnit) else Nothing
-      environment = ("THC_PROXY_NO_LINK_UNIT", maybe "" id noLinkUnit) :
+  noLinkUnits <- fmap concat $ forM selectedUnits $ \unit -> do
+    closure <- dependencyClosure selectionById (unitId unit)
+    let guestOnly = any (\dependency -> jsonField (unitValue dependency) "pkg-name" == Just ("thc" :: String) &&
+          jsonField (unitValue dependency) "component-name" == Just ("lib:interop" :: String)) closure
+        runnable = maybe False ((`elem` ["exe", "test", "bench"]) . takeWhile (/= ':'))
+          (jsonField (unitValue unit) "component-name" :: Maybe String)
+    pure [unitId unit | guestOnly && runnable]
+  let environment = ("THC_PROXY_NO_LINK_UNIT", unlines noLinkUnits) :
         filter ((/= "THC_PROXY_NO_LINK_UNIT") . fst) selectionEnvironment
       nativeBuild arguments = runCommandWithEnv True cabal arguments project (Just environment)
-  selectedPackageName <- field (unitValue selectedUnit) "pkg-name"
-  selectedComponentName <- field (unitValue selectedUnit) "component-name"
-  require (takeWhile (/= ':') selectedComponentName `elem` ["exe", "bench", "test"])
-    "selected Cabal component is not an executable, exitcode test or benchmark"
-  let selection = (Just selectedPackageName, selectedComponentName)
-      targetComponent = selectedPackageName ++ ":" ++ selectedComponentName
-  nativeBuild (["build", targetComponent, "--enable-build-info"] ++ configuration)
+  targetComponents <- forM selectedUnits $ \unit -> do
+    name <- componentTarget unit
+    component <- field (unitValue unit) "component-name"
+    require (takeWhile (/= ':') component `elem` ["lib", "exe", "test", "bench"])
+      ("Core acquisition does not support Cabal component " ++ name)
+    pure name
+  nativeBuild (["build"] ++ targetComponents ++ ["--enable-build-info"] ++ configuration)
   plan <- readJson (native </> "cache/plan.json")
   cabalVersion <- field plan "cabal-version"
   compilerId <- field plan "compiler-id"
@@ -485,17 +529,21 @@ runBuiltProject action project working thcRoot runtime output native target proj
   driverHash <- digestFile driver
   nativeTools <- nativeToolIdentity
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts noLinkUnit Nothing Map.empty
+                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts noLinkUnits Nothing Map.empty
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records >>= concreteProjectUnits context
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
   require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
-  selected <- selectRunnable selection units
-  require (unitId selected == unitId selectedUnit) "Cabal changed the selected unit identity during its build"
-  -- The plan can also list unrelated executables, tests and benchmarks.
-  -- Only the requested runnable component and its complete dependency
-  -- closure have required build-info; a missing member of that closure fails.
-  ordered <- dependencyClosure byId (unitId selected)
+  selected <- forM selectedUnits $ \before -> do
+    after <- maybe (fail "Cabal changed the selected unit identity during its build") pure
+      (Map.lookup (unitId before) byId)
+    oldTarget <- componentTarget before
+    newTarget <- componentTarget after
+    require (oldTarget == newTarget) "Cabal changed the selected component during its build"
+    pure after
+  -- Stale build-info for previously built targets must not broaden acquisition.
+  ordered <- nubBy (\left right -> unitId left == unitId right) . concat <$>
+    mapM (dependencyClosure byId . unitId) selected
   builtLocals <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
     Nothing -> pure False
     Just path -> doesFileExist path) (filter unitLocal units)
@@ -518,12 +566,12 @@ runBuiltProject action project working thcRoot runtime output native target proj
       packageName <- field (unitValue unit) "pkg-name" :: IO String
       componentName <- field (unitValue unit) "component-name" :: IO String
       sourceRoot <- field (componentValue component) "src-dir"
-      let componentTarget = if componentName == "lib" then "lib:" ++ packageName else componentName
+      let setupTarget = if componentName == "lib" then "lib:" ++ packageName else componentName
       -- v2-build's monitor can say "up to date" after an intermediate .o is
       -- deleted. Ask this same Cabal CLI's Simple Setup to build the component
       -- directly; it owns and reads its own configured build representation.
       runCommandWithEnv True cabal ["act-as-setup", "--build-type=Simple", "--", "build",
-        "--builddir=" ++ dist, componentTarget] sourceRoot (Just environment)
+        "--builddir=" ++ dist, setupTarget] sourceRoot (Just environment)
   let globals = [unit | unit <- ordered, not (unitLocal unit),
                        jsonField (unitValue unit) "type" == Just ("configured" :: String)]
   capturedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
@@ -538,7 +586,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
       require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
         ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
     helperContext <- if installedPolicy == "pinned"
-      then preparePinnedInterfaces cacheRoot driverHash pluginDb pluginUnit pluginLibrary originalContext originalRegistrations
+      then preparePinnedInterfaces cacheRoot pluginDb pluginUnit pluginLibrary originalContext originalRegistrations
       else case ghcSource of
         Nothing -> pure originalContext
         Just source -> prepareForeignInterfaces
@@ -581,11 +629,9 @@ runBuiltProject action project working thcRoot runtime output native target proj
     pure (Map.fromList bundles, helperContext)
   let coreContext = context { contextCoreView = if installedPolicy == "pinned"
         then Just acquiredContext else Nothing }
-  captured <- traverse (\_ -> prepareGlobalBundles coreContext project targetComponent byId localComponents globals) capturedPath
-  selectedPackage <- field (unitValue selected) "pkg-name"
-  selectedComponent <- field (unitValue selected) "component-name"
+  captured <- traverse (\_ -> prepareGlobalBundles coreContext project targetComponents byId localComponents globals) capturedPath
   globalBundles <- maybe (prepareGlobalBundles coreContext project
-    (selectedPackage ++ ":" ++ selectedComponent) byId localComponents globals) pure captured
+    targetComponents byId localComponents globals) pure captured
   let sourceInterfaces = Map.map (replayInterfacePath . bundlePath)
         (Map.filter (not . null . bundleModules) globalBundles)
   (_, _, described) <- foldlM (\(keys, interfaces, acc) unit -> do
@@ -634,7 +680,10 @@ runBuiltProject action project working thcRoot runtime output native target proj
                                ["--io-main", "--output", audit]) thcRoot
     -- Full-Core main and shutdown share one program and its Handle CAFs.
     -- Like cabal run, preserve the caller's cwd even with --project-dir.
-    let programName = reverse (takeWhile (/= ':') (reverse (snd selection)))
+    selectedComponent <- case selected of
+      [unit] -> field (unitValue unit) "component-name"
+      _ -> fail "run requires exactly one runnable component"
+    let programName = reverse (takeWhile (/= ':') (reverse selectedComponent))
     runCommandWithEnv False runtime (runtimeLaunchArguments verifyArtifacts
       ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working (Just launchEnvironment)
 
@@ -726,7 +775,7 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
           original <- prepareInterfaceHelper context root
           registrations <- mapM (discoverInstalled original . unitId) missing
           helper <- if installedPolicy == "pinned" then
-            preparePinnedInterfaces (contextCache context) (contextDriverHash context)
+            preparePinnedInterfaces (contextCache context)
               (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context) original registrations
             else case ghcSource of
               Nothing -> pure original
@@ -1104,7 +1153,7 @@ wiredGhcInternal context root registeredUnit = do
   specification <- readJson (root </> "etc/ghc/9.14.1/windows-ghc-internal.json")
   original <- prepareInterfaceHelper context root
   registered <- discoverInstalled original registeredUnit
-  prepared <- preparePinnedInterfaces (contextCache context) (contextDriverHash context)
+  prepared <- preparePinnedInterfaces (contextCache context)
     (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context)
     original [registered]
   selected <- discoverInstalled prepared (registeredId registered)
@@ -1294,17 +1343,6 @@ backpackRegistration identifier component = do
     ("Backpack registration has a different unit ID: " ++ identifier)
   pure registered
 
-selectRunnable :: (Maybe String, String) -> [Unit] -> IO Unit
-selectRunnable target@(wantedPackage, wantedComponent) units = do
-  matches <- filterM (\unit -> if not (unitLocal unit) then pure False else do
-    component <- optionalField (unitValue unit) "component-name" ("" :: String)
-    package <- optionalField (unitValue unit) "pkg-name" ("" :: String)
-    pure (component == wantedComponent && maybe True (== package) wantedPackage)) units
-  case matches of
-    [unit] -> pure unit
-    _ -> fail ("selected runnable component " ++ show target ++ " has " ++ show (length matches) ++
-               " matching local Cabal components")
-
 dependencyClosure :: Map.Map String Unit -> String -> IO [Unit]
 dependencyClosure units target = snd <$> visit Set.empty Set.empty target
   where
@@ -1378,7 +1416,7 @@ exporterIdentity context = do
                                 "-fplugin-trustworthy"] :: [String])] ++
                  ["coreInterfaceView" .= installedViewIdentity path | Just path <- [contextCoreView context]]
 
-prepareGlobalBundles :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [(Unit, Component)] -> [Unit] -> IO (Map.Map String Bundle)
+prepareGlobalBundles :: ExportContext -> FilePath -> [String] -> Map.Map String Unit -> [(Unit, Component)] -> [Unit] -> IO (Map.Map String Bundle)
 prepareGlobalBundles _ _ _ _ _ [] = pure Map.empty
 prepareGlobalBundles context project target planned locals units = do
   let lockDir = contextCache context </> "core-bundles/v1/export-batches"
@@ -1603,7 +1641,7 @@ readCapturedInstalledBundles verify compiler requested path = do
     pure (identifier, (unit, InstalledBundle owner bundle))
   pure (Map.fromList pairs)
 
-captureGlobalUnits :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [Unit] ->
+captureGlobalUnits :: ExportContext -> FilePath -> [String] -> Map.Map String Unit -> [Unit] ->
                       [(Unit, String, String, FilePath)] -> IO () -> IO ()
 captureGlobalUnits context project target planned requested missing validateInputs = do
   helper <- prepareInterfaceHelper context (contextRoot context)
@@ -1622,10 +1660,10 @@ captureGlobalUnits context project target planned requested missing validateInpu
         capture = staging </> "capture"
         -- Cabal's offline mode rejects Hackage sources in a fresh store even
         -- when their tarballs are cached; use its normal source cache here.
-        -- Rebuild only the selected runnable component's closure. `all` also builds
+        -- Rebuild only the selected components' closure. `all` also builds
         -- unrelated tests/apps and their dependencies in this fresh store.
-        arguments = ["--store-dir=" ++ store, "build", target,
-                     "--enable-build-info", "--builddir", dist, "--with-compiler", wrapper] ++
+        arguments = ["--store-dir=" ++ store, "build"] ++ target ++
+                    ["--enable-build-info", "--builddir", dist, "--with-compiler", wrapper] ++
                     contextProjectOptions context ++
                     maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)
     writeFile wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
@@ -1641,7 +1679,7 @@ captureGlobalUnits context project target planned requested missing validateInpu
                      ("THC_PROXY_PLUGIN_DB", contextPluginDb context),
                      ("THC_PROXY_PLUGIN_UNIT", contextPluginUnit context),
                      ("THC_PROXY_PLUGIN_LIBRARY", contextPluginLibrary context),
-                     ("THC_PROXY_NO_LINK_UNIT", maybe "" id (contextNoLinkUnit context)),
+                     ("THC_PROXY_NO_LINK_UNIT", unlines (contextNoLinkUnits context)),
                      ("THC_PROXY_NATIVE_PIECES", staging </> "native-pieces"),
                      ("THC_PROXY_INTERFACE_HELPER", installedHelper helper),
                      ("THC_PROXY_INTERFACE_LIBDIR", installedLibdir helper),

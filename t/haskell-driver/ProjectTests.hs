@@ -10,10 +10,10 @@
 -- Portability : Native GHC; fixture compiler and host process services
 --
 -- Tests for project.
-module ProjectTests (tests, acquisitionTests, exceptionBridgeTests, interopTests, projectReplayTests) where
+module ProjectTests (tests, acquisitionTests, buildTests, exceptionBridgeTests, interopTests, projectReplayTests) where
 
 import Control.Exception (bracket)
-import Control.Monad (forM, forM_, when)
+import Control.Monad (foldM, forM, forM_, when)
 import Data.Aeson (Value)
 import qualified Data.ByteString as BS
 import qualified Data.Text as Text
@@ -23,7 +23,7 @@ import THC.Compact.Debug (SourceFile(..))
 import THC.Compact.Module (readModuleSources, readModuleValue)
 import qualified THC.Driver.CoreIndex as CoreIndex
 import THC.Driver.Zip (decodeZip)
-import Data.List (isInfixOf, isPrefixOf, sort)
+import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
                          doesFileExist, getModificationTime, listDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -33,7 +33,7 @@ import qualified THC.Driver.NativeRecipe as NativeRecipe
 import TestSupport
 
 tests :: Env -> Test
-tests env = TestList [acquisitionTests env, exceptionBridgeTests env, interopTests env, projectTests env, cstringTests env]
+tests env = TestList [acquisitionTests env, buildTests env, exceptionBridgeTests env, interopTests env, projectTests env, cstringTests env]
 
 interopTests :: Env -> Test
 interopTests env = TestLabel "interop acquisition skips only the selected native final link" $ TestCase $
@@ -219,7 +219,7 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
       ["acquire", "--project-dir", base, "fail-frontier", "--thc-root", thcRoot env]
     assertFailure notProject
     assertContains "Cabal runnable target selection failed" (err notProject)
-    acquired <- run env base Nothing 240 arguments
+    acquired <- runPreparation env base arguments
     assertSuccess acquired
     assertNoStdout acquired
     manifest <- readSourceManifest (output </> "packages.json")
@@ -255,6 +255,62 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
       =<< mapM (getModificationTime . string . (`field` "path") . (`field` "bundle")) supplied
     assertEqual "prior audit untouched" "retained older audit evidence\n"
       =<< readText (output </> "audit.json")
+
+buildTests :: Env -> Test
+buildTests env = TestLabel "Cabal build targets acquire only their selected closures" $ TestCase $
+  withFixtureNamed env "t/fixtures/run-project" "build project café" $ \project ->
+  withCache (scratch env </> "core-cache") $ do
+    let base = takeDirectory project
+        output = base </> "built"
+        marker = base </> "program-executed"
+        dep = ("dep-data", "lib", ["Answer"])
+        helper = ("th-helper", "lib", ["THHelper"])
+        bridge = ("app-run", "lib:bridge", ["Bridge", "Paths_app_run"])
+        executable = ("app-run", "exe:completed", ["Main"])
+        arguments targets =
+          ["build", "--project-dir", project, "--project-file", project </> "cabal.project",
+           "--thc-root", thcRoot env, "--dist-dir", output] ++ targets
+        build previous (working, targets, expected) = do
+          result <- run env working Nothing 300 (arguments targets)
+          assertSuccess result
+          assertNoStdout result
+          checkBuild previous targets expected
+        checkBuild previous targets expected = do
+          assertBool "build never executes the native or guest program" . not =<< doesFileExist marker
+          assertBool "build never starts the reachable auditor" . not =<< doesFileExist (output </> "audit.json")
+          manifest <- readSourceManifest (output </> "packages.json")
+          assertEqual "manifest format" "thc-core-packages" (string $ field manifest "format")
+          plan <- readJson (output </> "native/cache/plan.json")
+          let local = [(string (field unit "pkg-name"), string (field unit "component-name"), string (field unit "id")) |
+                       unit <- objects plan "install-plan",
+                       string (field unit "pkg-name") `elem` ["dep-data", "th-helper", "app-run"]]
+              known = nub (previous ++ local)
+              selected = [(package, component, sort (moduleNames supplied)) |
+                          (package, component, identifier) <- known, supplied <- objects manifest "units",
+                          identifier == string (field supplied "id")]
+          assertEqual ("selected component closures for " ++ show targets) (sort expected) (sort selected)
+          pure known
+    -- An accidental launch has an observable effect even though the original
+    -- fixture exits silently. This source belongs only to the copied project.
+    writeText (project </> "app-run/app/Main.hs") $ unlines
+      ["module Main where", "import Bridge (expected)", "main :: IO ()",
+       "main = writeFile " ++ show marker ++ " (show expected)"]
+    -- This first build owns cold compiler/library acquisition. The outer build
+    -- job bounds preparation; subsequent CLI checks retain their own deadline.
+    let initialTargets = ["dep-data:lib:dep-data"]
+        initialArguments = arguments initialTargets
+    initial <- runPreparation env project initialArguments
+    assertSuccess initial
+    assertNoStdout initial
+    acquired <- checkBuild [] initialTargets [dep]
+    _ <- foldM build acquired
+      [ (project </> "dep-data", [], [dep])
+      , (project </> "dep-data", ["all"], [dep, helper, bridge, executable])
+      -- A module target acquires its whole component. The dependency union must
+      -- deduplicate dep-data and exclude the previously built executable.
+      , (project, ["dep-data:lib:dep-data", "app-run:bridge:Bridge"], [dep, helper, bridge])
+      ]
+    pure ()
 
 projectTests :: Env -> Test
 projectTests = projectTestsWithBootstrap True
@@ -333,6 +389,13 @@ projectTestsWithBootstrap bootstrapRoot env = TestLabel "three-package project n
       assertContains (takeDirectory registered) (out libraryDirs)
       assertEqual "published library filename"
         (takeFileName registered) (takeFileName shared)
+    -- Acquire this testcase's completed target explicitly; no guest or native
+    -- executable runs before the unchanged execution and replay checks below.
+    prepared <- runPreparation env base
+      ["build", "--project-dir", project, "app-run:exe:completed", "--thc-root", thcRoot env,
+       "--dist-dir", output]
+    assertSuccess prepared
+    assertNoStdout prepared
     firstBundles <- forBackends env invoke output project entryOf unit bundleRef modulePath
     original <- readText source
     assertContains "I# 42#" original

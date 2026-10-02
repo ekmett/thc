@@ -11,7 +11,7 @@
 --
 -- Cabal invokes this transparent compiler for ordinary owned native builds
 -- and private store builds.
--- Only a selected THC-only runnable unit omits its native final link. A second
+-- Selected THC-only runnable units omit their native final links. A second
 -- invocation exports Core while
 -- Cabal's unpacked source and generated files still exist.
 module THC.Driver.GhcProxy (runGhcProxy, ghcProxyCommand, ghcProxyWindowsCommand, directPlugin,
@@ -51,9 +51,9 @@ runGhcProxy :: [String] -> IO ()
 runGhcProxy arguments = do
   compiler <- getEnv "THC_PROXY_GHC"
   options <- expandResponse arguments
-  noLinkUnit <- lookupEnv "THC_PROXY_NO_LINK_UNIT"
+  noLinkUnits <- maybe [] lines <$> lookupEnv "THC_PROXY_NO_LINK_UNIT"
   let noLink = ["-no-link" | "--make" `elem` options, Just unit <- [valueAfter "-this-unit-id" options],
-                            not (null unit), noLinkUnit == Just unit]
+                            not (null unit), unit `elem` noLinkUnits]
   guestPlugin <- if null noLink then pure [] else do
     capture <- getEnv "THC_PROXY_CAPTURE"
     pluginDb <- getEnv "THC_PROXY_PLUGIN_DB"

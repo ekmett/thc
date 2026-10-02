@@ -31,7 +31,7 @@ import Text.Read (readMaybe)
 import THC.Driver.Cabal
 import THC.Driver.GhcProxy (runGhcProxy)
 import THC.Driver.Json (renderJson)
-import THC.Driver.Project (runProject, acquireProject)
+import THC.Driver.Project (runProject, acquireProject, buildTargetsProject)
 import THC.Driver.Run
 
 main :: IO ()
@@ -52,21 +52,23 @@ main = topHandler $ do
             target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
         planPackage opts target >>= putStrLn . renderJson
       (_, _, errors) -> die (concat errors ++ usage)
-    command : rest | command `elem` ["run", "acquire"] -> do
+    command : rest | command `elem` ["run", "acquire", "build"] -> do
       let (driverArgs, suffix) = break (== "--") rest
           guestArgs = drop 1 suffix
-          acquire = command == "acquire"
-          commandUsage = if acquire then acquireUsage else runUsage
-      when (acquire && not (null suffix)) $ die "acquire does not accept guest arguments"
-      case getOpt Permute (withHelp (if acquire then acquireOptions else runOptions)) driverArgs of
+          building = command == "build"
+          executing = command == "run"
+          commandUsage = if building then buildUsage else if executing then runUsage else acquireUsage
+      when (not executing && not (null suffix)) $ die (command ++ " does not accept guest arguments")
+      case getOpt Permute (withHelp (if executing then runOptions else acquireOptions)) driverArgs of
         (updates, _, []) | any isNothing updates -> putStr commandUsage
-        (updates, targets, []) | length targets <= 1 -> do
+        (updates, targets, []) | building || length targets <= 1 -> do
           let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True guestArgs) (catMaybes updates)
           thcRoot <- resolveThcRoot (runThcRoot opts)
-          let selected = opts {runTarget = case targets of [] -> ""; [target] -> target; _ -> error "checked above",
+          let selected = opts {runTarget = case targets of [target] -> target; _ -> "",
                                runThcRoot = thcRoot}
           current <- getCurrentDirectory
-          if acquire then acquireProject selected current else runProject selected current
+          if building then buildTargetsProject selected targets current
+            else if executing then runProject selected current else acquireProject selected current
         (_, _, errors) -> die (concat errors ++ commandUsage)
     command@(first : _) : rest | first /= '-' && '/' `notElem` command && '\\' `notElem` command -> do
       extension <- findExecutable ("thc-" ++ command)
@@ -115,7 +117,8 @@ completionCommands :: [(String, [OptDescr ()])]
 completionCommands =
   [("plan-package", map void (withHelp options)),
    ("run", map void (withHelp runOptions)),
-   ("acquire", map void (withHelp acquireOptions))]
+   ("acquire", map void (withHelp acquireOptions)),
+   ("build", map void (withHelp acquireOptions))]
 
 completionExtensions :: IO [String]
 completionExtensions = do
@@ -165,7 +168,7 @@ options =
     parseFlag name = (mkFlagName name, True)
 
 usage :: String
-usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc run [TARGET] [FLAGS] [-- ARG...]\n                thc acquire [TARGET] [FLAGS]\n" options
+usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc build [TARGETS...] [FLAGS]\n                thc run [TARGET] [FLAGS] [-- ARG...]\n                thc acquire [TARGET] [FLAGS]\n" options
 
 runOptions :: [OptDescr (RunOptions -> RunOptions)]
 runOptions =
@@ -175,13 +178,17 @@ runOptions =
   , Option [] ["runtime"] (ReqArg (\path r -> r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
   , Option [] ["dap-port"] (ReqArg (\value r -> r {runDapPort = Just (parseDapPort value)}) "PORT")
       "Listen for Graal DAP on 127.0.0.1:PORT (1..65535); suspend and wait for attachment"
+  , Option [] ["dap-suspend"] (NoArg (\r -> r {runDapSuspend = True}))
+      "Suspend on the first guest statement (default with --dap-port)"
   , Option [] ["dap-no-suspend"] (NoArg (\r -> r {runDapSuspend = False}))
       "Do not suspend on the first guest statement (requires --dap-port)"
+  , Option [] ["dap-wait-attached"] (NoArg (\r -> r {runDapWaitAttached = True}))
+      "Wait for debugger attachment (default with --dap-port)"
   , Option [] ["dap-no-wait-attached"] (NoArg (\r -> r {runDapWaitAttached = False}))
       "Start guest execution before a debugger attaches (requires --dap-port)"
   , Option [] ["verify-artifacts"] (NoArg (\r -> r {runVerifyArtifacts = True}))
       "Audit reachable Core before launch and verify runtime artifacts (default: off)"
-  , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
+  , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: pinned release sources); required never silently falls back"
   , Option [] ["ghc-source"] (ReqArg (\path r -> r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
   ] ++ map liftPlanOption options
 
@@ -203,7 +210,10 @@ runUsage = usageInfo "Usage: thc run [TARGET] [FLAGS] [-- ARG...]\n\nResolve a C
 
 acquireOptions :: [OptDescr (RunOptions -> RunOptions)]
 acquireOptions = [option | option@(Option _ names _ _) <- runOptions,
-  not (any (`elem` ["runtime", "verify-artifacts", "dap-port", "dap-no-suspend", "dap-no-wait-attached"]) names)]
+  not (any (`elem` ["runtime", "verify-artifacts", "dap-port", "dap-suspend", "dap-no-suspend", "dap-wait-attached", "dap-no-wait-attached"]) names)]
+
+buildUsage :: String
+buildUsage = usageInfo "Usage: thc build [TARGETS...] [FLAGS]\n\nUse Cabal to build selected components and acquire their dependency Core into DIST/packages.json.\nWith no target, select the current package. Use all for every enabled project component, or pass libraries, executables and multiple Cabal targets.\nModule and file targets acquire their complete owning component.\nStops after atomic manifest publication; no runtime launcher, reachable-Core audit or guest/native application execution.\nAcquisition does not establish runtime support. Native Windows project acquisition is not yet supported.\n" (withHelp acquireOptions)
 
 acquireUsage :: String
 acquireUsage = usageInfo "Usage: thc acquire [TARGET] [FLAGS]\n\nResolve the same Cabal runnable target as run and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native runnable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" (withHelp acquireOptions)

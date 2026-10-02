@@ -450,7 +450,10 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
            (True, True, "sample", ["--make", "-this-unit-id=sample"]),
            (True, True, "sample", ["@" ++ response]),
            (False, False, "sample", ["--make", "-this-unit-id", "sample-tool"]),
-           (False, False, "sample", ["--numeric-version"])]
+           (False, False, "sample", ["--numeric-version"]),
+           (True, True, "sample\nguest-two\n", ["--make", "-this-unit-id", "sample"]),
+           (False, True, "sample\nguest-two\n", ["--make", "-this-unit-id", "guest-two"]),
+           (False, False, "sample\nguest-two\n", ["--make", "-this-unit-id", "sample-tool"])]
     forM_ cases $ \(replays, noLink, policy, supplied) -> do
       writeText arguments ""
       let command = (Process.proc wrapper supplied)

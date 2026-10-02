@@ -50,13 +50,13 @@ keeps every binding in their `.hi` interface files so THC can load it. The flag
 must be used when building the libraries; adding it only to your program
 cannot recover Core from libraries already installed without it.
 
-To get started with a standard **GHC 9.14.1** installation, THC includes pinned
-sources from that release and compiles a supported subset of its library
-modules itself. This default is enough for THC's small examples without
-rebuilding GHC; general applications need more library Core.
+With a standard **GHC 9.14.1** installation, the default `--installed-core pinned`
+provider rebuilds selected bundled libraries from the pinned GHC release and
+caches their complete Core. Their versions, modules and dependencies must match
+the selected installation. The first acquisition includes this library build.
 
-For dependencies beyond that subset, build GHC's libraries with the flag above
-and select them with `thc run TARGET --installed-core required`.
+Alternatively, build GHC's libraries with the flag above and select their
+retained Core with `thc run TARGET --installed-core required`.
 `make check-ghc-core GHC=/path/to/ghc` checks whether the installed libraries
 contain the needed Core. The [GHC build guide](docs/ghc-core.md) shows how to
 apply the flag when building GHC 9.14.1, the version THC currently supports.
@@ -75,7 +75,10 @@ cabal run thc -- run completed --project-dir t/fixtures/run-pure \
 ```
 
 This fixture checks a mutable reference and returns `()` without printing.
-Inside your package, use `thc run [TARGET]`, following `cabal run` target syntax.
+Inside your package, `thc build [TARGETS...]` follows Cabal build selection and
+acquires dependency Core without launching an application. Omit targets for the
+current package, use `all`, or select libraries and executables together.
+Use `thc run [TARGET]`, following `cabal run` target syntax, to build and execute.
 For an installed driver in your own project:
 
 ```sh
@@ -110,7 +113,8 @@ per-component build information for the export.
 For native imports, installed-library IO and callbacks, follow the
 [foreign-code setup](docs/interface-foreign.md). Platform permissions and
 resource lifetimes are explicit; see [Windows limits](docs/windows.md) for the
-native Windows path. `thc build` and `thc repl` are not implemented.
+native Windows path. General project acquisition (`thc build`) is currently
+available on macOS and Linux. `thc repl` is not implemented.
 
 ## Runtime capabilities
 
@@ -233,8 +237,8 @@ describe implemented protocols and opt-in experiments.
 * [Development](docs/contributing.md) covers building, testing and contributing.
   [Generated references](docs/contributing.md#generated-references) explain how to
   update the primitive inventory.
-* [Cabal integration](docs/cabal.md) describes the working `thc acquire` and
-  `thc run` paths and their current limits.
+* [Cabal integration](docs/cabal.md) describes `thc build`, `thc acquire` and
+  `thc run`, including their current limits.
 
 The older runtime experiments live on the
 [legacy branch](https://github.com/ekmett/thc/tree/legacy).
