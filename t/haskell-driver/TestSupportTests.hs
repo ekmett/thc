@@ -11,23 +11,29 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for test support.
-module TestSupportTests (tests) where
+module TestSupportTests (tests, helperMode) where
 
-import Control.Exception (SomeException, bracket, displayException, try)
-import Control.Monad (forM_)
+import Control.Concurrent (threadDelay)
+import Control.Exception (SomeException, bracket, displayException, finally, try)
+import Control.Monad (forM_, void, when)
 import Data.Aeson (Value, encode, object, (.=))
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (isInfixOf)
 import System.Directory (createDirectory, createDirectoryIfMissing, createDirectoryLink,
   doesDirectoryExist, doesFileExist, getTemporaryDirectory, removeFile, removePathForcibly)
+import System.Environment (getExecutablePath)
+import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>), takeDirectory)
-import System.IO (hClose, openTempFile)
-import Test.HUnit (Test(..), assertBool, assertFailure)
-import TestSupport (Env(..), assertContains, withFixtureNamed)
+import System.IO (hClose, hPutStrLn, openTempFile, stderr)
+import qualified System.Process as Process
+import System.Timeout (timeout)
+import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
+import TestSupport (Env(..), Result(..), assertContains, runExe, withFixtureNamed)
 
 tests :: Test
-tests = TestLabel "temporary fixture audit diagnostics" $ TestList
+tests = TestLabel "driver test support" $ TestList
   [ TestCase $ withHarness $ \environment -> do
       projectPath <- newIORef ""
       let outside = root environment </> "outside"
@@ -64,6 +70,29 @@ tests = TestLabel "temporary fixture audit diagnostics" $ TestList
         writeFile (project </> "audit.json") "{ malformed"
         assertFailure "original test failure"
       originalFailure failure
+  , TestCase $ withHarness $ \environment -> do
+      self <- getExecutablePath
+      let directory = root environment
+          writes = directory </> "descendant-writes"
+          stop = directory </> "stop-descendant"
+      -- The same process tree first checks normal exit and both captured streams.
+      completed <- runExe environment directory Nothing 5 self
+        ["--test-support-tree", "once", directory]
+      assertEqual "descendant stdout" "descendant stdout\n" (out completed)
+      assertEqual "descendant stderr" "descendant stderr\n" (err completed)
+      assertEqual "parent preserves descendant status" (ExitFailure 17) (code completed)
+      (do
+        failure <- try (runExe environment directory Nothing 2 self
+          ["--test-support-tree", "hold", directory])
+        case failure :: Either SomeException Result of
+          Left problem -> assertContains "timed out:" (displayException problem)
+          Right result -> assertFailure ("expected subprocess timeout: " ++ show result)
+        before <- BS.readFile writes
+        assertBool "descendant wrote before the timeout" (not (BS.null before))
+        threadDelay 250000
+        after <- BS.readFile writes
+        assertEqual "timeout cleanup stops descendant file writes before returning" before after)
+        `finally` writeFile stop ""
   ]
   where
     audit :: Value
@@ -78,6 +107,32 @@ tests = TestLabel "temporary fixture audit diagnostics" $ TestList
     originalFailure result = case result of
       Left problem -> assertContains "original test failure" (displayException problem)
       Right () -> assertFailure "expected the original assertion failure"
+
+-- Reuse this test executable so the lifetime control needs no shell or toolchain.
+helperMode :: [String] -> Maybe (IO ())
+helperMode arguments = case arguments of
+  ["--test-support-tree", mode, directory] -> Just $ do
+    self <- getExecutablePath
+    (_, _, _, child) <- Process.createProcess
+      (Process.proc self ["--test-support-writer", mode, directory])
+    -- The timeout case leaves an exited leader whose descendant keeps the
+    -- inherited output pipes open. Capture must not reap away group ownership.
+    if mode == "hold" then pure () else Process.waitForProcess child >>= exitWith
+  ["--test-support-writer", "once", _] -> Just $ do
+    putStrLn "descendant stdout"
+    hPutStrLn stderr "descendant stderr"
+    exitWith (ExitFailure 17)
+  ["--test-support-writer", "hold", directory] -> Just $ do
+    let loop = do
+          exists <- doesDirectoryExist directory
+          stopped <- doesFileExist (directory </> "stop-descendant")
+          when (exists && not stopped) $ do
+            appendFile (directory </> "descendant-writes") "x"
+            threadDelay 10000
+            loop
+    -- A broken cleanup must fail the assertion, not leave an unbounded orphan.
+    void (timeout 10000000 loop)
+  _ -> Nothing
 
 withHarness :: (Env -> IO a) -> IO a
 withHarness action = bracket temporary removePathForcibly $ \base -> do

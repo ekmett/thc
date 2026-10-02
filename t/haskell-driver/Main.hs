@@ -12,6 +12,7 @@
 -- Select and run the Haskell driver test groups.
 module Main (main) where
 
+import Control.Applicative ((<|>))
 import System.Environment (getArgs)
 import System.Exit (die, exitFailure)
 import Test.HUnit (Test(..), Counts(..), runTestTT)
@@ -41,7 +42,7 @@ import TestSupport (setup)
 main :: IO ()
 main = do
   arguments <- getArgs
-  case InstalledHydrationTests.helperMode arguments of
+  case TestSupportTests.helperMode arguments <|> InstalledHydrationTests.helperMode arguments of
     Just action -> action
     Nothing -> runTests arguments
 
@@ -49,6 +50,7 @@ runTests :: [String] -> IO ()
 runTests arguments = do
   env <- setup
   selected <- case arguments of
+    ["--test-support-only"] -> pure [TestSupportTests.tests]
     ["--installed-view-only"] -> pure
       [InstalledForeignTests.tests, InstalledForeignTests.viewTests env]
     ["--installed-foreign-source-only"] -> pure
@@ -106,6 +108,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--project-replay-only|--pinned-flags-only|--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--build-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--public-packages-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-view-only|--installed-foreign-source-only|--package-native-only|--native-cache-only|--native-recipe-only|--scalar-bitcode-only]"
+    _ -> die "Usage: driver-tests [--test-support-only|--project-replay-only|--pinned-flags-only|--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--build-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--public-packages-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-view-only|--installed-foreign-source-only|--package-native-only|--native-cache-only|--native-recipe-only|--scalar-bitcode-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure
