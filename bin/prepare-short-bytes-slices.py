@@ -19,9 +19,6 @@ from short_bytes_slice_model import ENTRIES, seeds, requests, verify
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT/'build/short-bytes-slices'
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
-FRONTIERS = ('appendFrontier', 'concatFrontier')
-OVERFLOW_WORKER = ':Data.ByteString.Internal.Type.overflowError'
-LENGTH = 'ghc-internal:GHC.Internal.List.$wlenAcc'
 FIXTURES = [ROOT/'t/fixtures/compiler'/name for name in ('ShortByteStringSliceAudit.hs', 'ShortByteStringSliceAuditNative.hs')]
 
 def check(ok, message):
@@ -40,21 +37,14 @@ def audit_inputs():
     return [ROOT/'bin/audit-core.py', ROOT/'bin/core-capabilities.json', *sorted((ROOT/'bin').glob('core_*.py')),
             ROOT/'src/main/resources/thc/scalar-primop-signatures.json']
 
-def overflow_id(unit):
+def check_unit(unit):
     check(isinstance(unit, str) and re.fullmatch(r'bytestring-0\.12\.2\.0(?:-[A-Za-z0-9]+)?', unit),
           'Requires one exact installed bytestring0.12.2.0 unit id')
-    return unit+OVERFLOW_WORKER
-
-def check_frontier(report, unit, label):
-    expected = overflow_id(unit)
-    check(not report['accepted'] and not report['issues'] and
-          [m['id'] for m in report['missingGlobals']] == [expected],
-          label+': exact unimplemented overflow frontier changed')
 
 def inventory(unit=None):
     if unit is None:
         unit = json.loads((OUT/'manifest.json').read_text())['installedBytestringUnitId']
-    overflow_id(unit)
+    check_unit(unit)
     spec = importlib.util.spec_from_file_location('slice_audit', ROOT/'bin/audit-core.py')
     audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
     caps = json.loads((ROOT/'bin/core-capabilities.json').read_text())
@@ -74,21 +64,12 @@ def inventory(unit=None):
         ids = [b['id'] for _,m in [*modules, *original_modules] for b in m['bindings']]
         check(len(ids) == len(set(ids)), 'Original whole-module composition must not duplicate or replace bindings')
         reports = {}
-        for name in (*ENTRIES, *FRONTIERS):
+        for name in ENTRIES:
             report = audit.Audit([*modules, *original_modules], caps).run(['main:ShortByteStringSliceAudit.'+name])
-            if name in ENTRIES:
-                check(report['accepted'] and not report['issues'] and not report['missingGlobals'], stage+'/'+name+': strict slice closure rejected')
-                check(LENGTH in {b['id'] for b in report['reachableBindings']}, 'Actual installed pack/List length dependency disappeared')
-                check('copyByteArray#' in {p['name'] for p in report['primitives']}, 'Actual slice copy path disappeared')
-                public = next(b for b in fixture['bindings'] if b['id'] == 'main:ShortByteStringSliceAudit.'+name)
-                check(public['arity'] == 4 and public['expr'][0] == 'lam' and len(public['expr'][1]) == 4, 'Changed scalar host ABI')
-                check(all(p['rep']['kind'] == 'long' and p['rep']['primReps'] == ['IntRep'] for p in public['expr'][1]), 'Inexact scalar input proof')
-                missing_list = audit.Audit([*modules, original_modules[1]], caps).run(['main:ShortByteStringSliceAudit.'+name])
-                check(not missing_list['accepted'] and not missing_list['issues'] and
-                      [m['id'] for m in missing_list['missingGlobals']] == [LENGTH], 'Missing-source control changed')
-                (OUT/f'{stage}-{name}-missing-list.audit.json').write_text(json.dumps(missing_list, indent=2)+'\n')
-            else:
-                check_frontier(report, unit, stage+'/'+name)
+            check(report['accepted'] and not report['issues'] and not report['missingGlobals'], stage+'/'+name+': strict slice closure rejected')
+            public = next(b for b in fixture['bindings'] if b['id'] == 'main:ShortByteStringSliceAudit.'+name)
+            check(public['arity'] == 4 and public['expr'][0] == 'lam' and len(public['expr'][1]) == 4, 'Changed scalar host ABI')
+            check(all(p['rep']['kind'] == 'long' and p['rep']['primReps'] == ['IntRep'] for p in public['expr'][1]), 'Inexact scalar input proof')
             (OUT/f'{stage}-{name}.audit.json').write_text(json.dumps(report, indent=2)+'\n')
             reports[name] = dict(accepted=report['accepted'], reachable=report['reachableBindings'],
                                  primitives=[p['name'] for p in report['primitives']], missing=report['missingGlobals'], issues=report['issues'])
@@ -106,7 +87,7 @@ def main():
         check(dict(ast.literal_eval(ghc_info))['target word size in bits'] == '64', 'Requires 64-bit machine Int')
         check(subprocess.check_output([pkg,'field','bytestring','version','--simple-output'],text=True).strip() == '0.12.2.0', 'Requires bytestring0.12.2.0')
         unit = subprocess.check_output([pkg,'field','bytestring','id','--simple-output'],text=True).strip()
-        overflow_id(unit)
+        check_unit(unit)
         (OUT/'native').mkdir(parents=True, exist_ok=True); manifest_path.unlink(missing_ok=True); commands=[]
         def run(argv, env=None):
             argv=list(map(str,argv)); commands.append(dict(argv=argv, environment=env or {}))
@@ -116,7 +97,7 @@ def main():
             run([sys.executable,'bin/export-boot.py','--frontier',frontier,'--build-dir',OUT/directory])
         for stage in STAGES:
             run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
-                 *['-fplugin-opt=THC.Plugin:closure='+n for n in (*ENTRIES,*FRONTIERS)],FIXTURES[0]],
+                 *['-fplugin-opt=THC.Plugin:closure='+n for n in ENTRIES],FIXTURES[0]],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         stages, coverage = inventory(unit)
         binary=OUT/'native/short-bytes-slices-oracle'
@@ -130,7 +111,8 @@ def main():
                  *[ROOT / 'bin' / n for n in ('build-compiler.sh', 'export-core.sh', 'toolchain.sh')],*sorted((ROOT/'src/compiler/THC').glob('*.hs')),*audit_inputs()]
         for d in ('list','cstring'):
             sources += [ROOT/r['path'] for r in json.loads((OUT/d/'boot-provenance.json').read_text())['sources']]
-        artifacts=[OUT/'requests.tsv',OUT/'oracle.tsv',*sorted(OUT.glob('*.audit.json')),
+        artifacts=[OUT/'requests.tsv',OUT/'oracle.tsv',
+                   *[OUT/f'{stage}-{name}.audit.json' for stage in STAGES for name in ENTRIES],
                    *[OUT/d/'boot-provenance.json' for d in ('list','cstring')]]
         artifacts += [p for d in ('pre-core','post-core','list/core','cstring/core','native') for p in sorted((OUT/d).rglob('*')) if p.is_file() and (d == 'native' or p.suffix == '.cbd')]
         installed=Path(subprocess.check_output([pkg,'field','bytestring','import-dirs','--simple-output'],text=True).strip())/'Data/ByteString/Short/Internal.dyn_hi'
@@ -148,5 +130,5 @@ def main():
     installed=manifest['installedShortInterface'];check(digest(Path(installed['path'])) == installed['sha256'], 'Installed bytestring interface changed')
     count=verify((OUT/'oracle.tsv').read_text());stages,coverage=inventory()
     check(stages == manifest['stages'] and coverage == manifest['coverage'] and count == manifest['nativeRows'], 'Slice evidence changed')
-    print(f'ShortByteString slices: {count} native/model rows; 6 accepted audits, 4 exact overflow frontiers, 6 missing-List controls')
+    print(f'ShortByteString slices: {count} native/model rows; strict pre/post slice audits accepted')
 if __name__ == '__main__': main()

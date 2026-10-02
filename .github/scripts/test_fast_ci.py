@@ -526,7 +526,7 @@ class FastRunnerTest(unittest.TestCase):
     def test_genuine_foreign_exceptions_remain_in_required_complete_core_build(self):
         root = Path(__file__).parents[2]
         gradle = (root / "build.gradle").read_text()
-        dedicated = gradle.split('def foreignExceptionTests =', 1)[1].split('tasks.register("jitStabilityTest", Test)', 1)[0]
+        dedicated = gradle.split('def foreignExceptionTests =', 1)[1].split('foreignExceptionTests[1].configure', 1)[0]
         self.assertIn('fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.output.classesDirs', dedicated)
         self.assertIn('fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime', dedicated)
         self.assertIn('includeTags("foreign-exceptions-full-core")', dedicated)

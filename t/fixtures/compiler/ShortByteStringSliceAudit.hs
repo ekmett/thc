@@ -51,11 +51,3 @@ splitCase :: Int# -> Int# -> Int# -> Int# -> Int#
 splitCase seed count side selector =
   case S.splitAt (I# count) (packed (I# seed)) of
     (left,right) -> observe (if I# side == 0 then left else right) selector
-
--- Keep neighboring complete cold overflow paths visible as strict frontiers.
-{-# OPAQUE appendFrontier #-}
-appendFrontier :: Int# -> Int# -> Int#
-appendFrontier x y = observe (S.append (packed (I# x)) (packed (I# y))) (-2#)
-{-# OPAQUE concatFrontier #-}
-concatFrontier :: Int# -> Int# -> Int#
-concatFrontier x y = observe (S.concat [packed (I# x), S.empty, packed (I# y)]) (-2#)

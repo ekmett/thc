@@ -12,7 +12,6 @@ PowerShell setup.
 | `make runtime`, `make haskell` | Build either component separately |
 | `make test TESTS='thc.RuntimeTest'` | Prepare native/Core fixtures and run one JUnit class |
 | `make test-modes TESTS='thc.RuntimeTest'` | Run that class in both handoff modes |
-| `make jit-test` | Run advisory compiled-code retention checks |
 | `make jar` | Rebuild the runtime JAR |
 | `make probe ARGS='...'` | Run a runtime diagnostic |
 | `make lint-haskell` | Lint tracked Haskell sources |
@@ -128,6 +127,5 @@ and the limitations of `-Pthc.stockTruffle=true`.
 ## Continuous integration
 
 Pull requests run [Fast checks](fast-ci.md): compiled smoke tests plus tests
-selected from changed files. Main runs the full cross-platform suite; JIT
-stability checks run separately. Check the selected tests and failure logs when
-CI differs from a local run.
+selected from changed files. Main runs the full cross-platform suite. Check the
+selected tests and failure logs when CI differs from a local run.

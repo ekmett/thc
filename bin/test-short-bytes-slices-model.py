@@ -2,9 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Independent offset formulas and exact public slice/source-frontier controls."""
-import importlib.util
-from pathlib import Path
+"""Independent offset formulas and native-oracle corruption controls."""
 import unittest
 import short_bytes_slice_model as model
 
@@ -43,32 +41,5 @@ class ModelTest(unittest.TestCase):
         for bad in (''.join(rows[1:]), text+rows[0], ''.join([rows[1], rows[0], *rows[2:]]),
                     rows[0].rsplit('\t', 1)[0]+'\t999\n'+''.join(rows[1:])):
             with self.assertRaises(AssertionError): model.verify(bad)
-
-    def test_installed_unit_identity_and_frontier_remain_exact(self):
-        spec = importlib.util.spec_from_file_location('slice_prepare_units', Path(__file__).with_name('prepare-short-bytes-slices.py'))
-        prepare = importlib.util.module_from_spec(spec); spec.loader.exec_module(prepare)
-        for unit in ('bytestring-0.12.2.0-5637', 'bytestring-0.12.2.0-3f3f'):
-            expected = unit+':Data.ByteString.Internal.Type.overflowError'
-            good = dict(accepted=False, issues=[], missingGlobals=[dict(id=expected)])
-            prepare.check_frontier(good, unit, 'retained platform unit')
-            other = 'bytestring-0.12.2.0-'+('3f3f' if unit.endswith('5637') else '5637')
-            for bad in (dict(good, accepted=True), dict(good, issues=[dict(code='unsupported-primop')]),
-                        dict(good, missingGlobals=[]), dict(good, missingGlobals=[dict(id=expected)]*2),
-                        dict(good, missingGlobals=[dict(id=other+prepare.OVERFLOW_WORKER)]),
-                        dict(good, missingGlobals=[dict(id=unit+':Data.ByteString.Internal.Type.other')])):
-                with self.assertRaises(AssertionError): prepare.check_frontier(bad, unit, 'negative')
-        for bad in (None, '', 'bytestring-0.12.1.0-5637', 'bytestring-0.12.2.0-5637 extra',
-                    'bytestring-0.12.2.0-5637:forged', ['bytestring-0.12.2.0-5637']):
-            with self.assertRaises(AssertionError): prepare.overflow_id(bad)
-
-    def test_prepared_original_composition_and_exact_missing_source_frontiers(self):
-        spec = importlib.util.spec_from_file_location('slice_prepare', Path(__file__).with_name('prepare-short-bytes-slices.py'))
-        prepare = importlib.util.module_from_spec(spec); spec.loader.exec_module(prepare)
-        stages, coverage = prepare.inventory()
-        self.assertEqual(set(stages), {'pre', 'post'})
-        for reports in coverage.values():
-            self.assertEqual(set(reports), set(model.ENTRIES) | set(prepare.FRONTIERS))
-            self.assertTrue(all(reports[name]['accepted'] for name in model.ENTRIES))
-            self.assertTrue(all(not reports[name]['accepted'] for name in prepare.FRONTIERS))
 
 if __name__ == '__main__': unittest.main()

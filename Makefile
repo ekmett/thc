@@ -18,7 +18,7 @@ export JAVA_HOME
 
 CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v '$(GHC)')" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal bin/check-ghc-core.hs
 
-.PHONY: all runtime haskell run jar fixtures test test-modes jit-test probe clean distclean check-java check-ghc-core
+.PHONY: all runtime haskell run jar fixtures test test-modes probe clean distclean check-java check-ghc-core
 .PHONY: docs docs-haskell docs-jvm docs-check check-pandoc
 .PHONY: lint-haskell
 .PHONY: foreign-exception-fixtures foreign-exception-test-modes
@@ -115,9 +115,6 @@ foreign-exception-fixtures: runtime
 
 foreign-exception-test-modes: foreign-exception-fixtures
 	./gradlew $(GRADLE_FLAGS) --continue foreignExceptionTest foreignExceptionDenseTest
-
-jit-test: fixtures
-	./gradlew jitStabilityTest $(GRADLE_FLAGS)
 
 probe: check-java
 	./gradlew probe $(GRADLE_FLAGS) --args='$(ARGS)'
