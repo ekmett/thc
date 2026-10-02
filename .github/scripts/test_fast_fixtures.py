@@ -1939,7 +1939,7 @@ class FixturePreparationTest(unittest.TestCase):
             path.write_text('pinned source\n')
         def run(name, argv, stdout=None):
             self.fake_run(name, argv, stdout)
-            if argv != group['commands'][0]['argv']:
+            if name != "fixture-original-stack-formatter-00":
                 return
             base = self.root / group['outputs'][0]
             attempt = 1
@@ -2058,11 +2058,16 @@ class FixturePreparationTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
+        self.enterContext(mock.patch.dict(fast_fixtures.os.environ, {"CABAL": "cabal"}))
         for pattern in fast_fixtures.COMMON_SOURCES:
             name = pattern.replace("**/*.hs", "Plugin.hs").replace("*.py", "core_vectors.py")
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(name)
+        (self.root / "bin/toolchain.sh").write_text(
+            "GHC='/selected compiler/ghc'\nGHC_PKG='/selected compiler/ghc-pkg'\n")
+        self.scalar_argv = ["cabal", "run", "--with-compiler=/selected compiler/ghc",
+                            "--with-hc-pkg=/selected compiler/ghc-pkg", "exe:thc-primops", "--", "scalars"]
         for name in ("fixtures/alpha.hs", "fixtures/beta.hs"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -2108,7 +2113,7 @@ class FixturePreparationTest(unittest.TestCase):
 
     def fake_run(self, name, argv, stdout=None):
         self.calls.append((name, argv, stdout))
-        if argv == ["cabal", "run", "exe:thc-primops", "--", "scalars"] and self.mutate_scalar_on_generator:
+        if name == "fixture-scalar-signatures" and self.mutate_scalar_on_generator:
             resource = self.root / "src/main/resources/thc/scalar-primop-signatures.json"
             resource.write_text("updated signature table")
         if argv == ["make-alpha"]:
@@ -2134,11 +2139,39 @@ class FixturePreparationTest(unittest.TestCase):
         first = self.prepare("thc.AlphaTest", "thc.AlphaBackendTest")
         self.assertEqual(first, {"mode": "selected", "rebuilt": ["alpha"], "reused": []})
         self.assertEqual([argv for _, argv, _ in self.calls], [
-            ["cabal", "run", "exe:thc-primops", "--", "scalars"],
+            self.scalar_argv,
             ["bin/build-compiler.sh"], ["make-alpha"]])
         self.assertEqual(self.prepare("thc.AlphaBackendTest"),
                          {"mode": "selected", "rebuilt": [], "reused": ["alpha"]})
         self.assertEqual(len(self.calls), 3)
+
+    def test_prepare_passes_selected_tools_to_recorder_and_reuses_warm_outputs(self):
+        argv = ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "alpha"]
+        self.manifest["groups"]["alpha"]["commands"][0]["argv"] = argv
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        fast_fixtures.os.environ["CABAL"] = "/selected cabal/cabal"
+        def record(name, command, stdout=None):
+            self.calls.append((name, command, stdout))
+            self.assertEqual("/selected compiler/ghc", fast_fixtures.os.environ["GHC"])
+            self.assertEqual("/selected compiler/ghc-pkg", fast_fixtures.os.environ["GHC_PKG"])
+            if stdout is not None:
+                (self.root / stdout).write_text("native alpha\n")
+        selection = self.selection("thc.AlphaTest")
+        self.assertEqual(["alpha"], fast_fixtures.prepare(self.root, selection, record, self.toolchain)["rebuilt"])
+        self.assertEqual([
+            ("fixture-scalar-signatures", ["/selected cabal/cabal", *self.scalar_argv[1:]], None),
+            ("fixture-compiler", ["bin/build-compiler.sh"], None),
+            ("fixture-alpha-00", ["/selected cabal/cabal", "run",
+                "--with-compiler=/selected compiler/ghc", "--with-hc-pkg=/selected compiler/ghc-pkg",
+                "exe:thc-fixtures", "--offline", "--", "alpha"], "build/alpha/oracle.tsv"),
+        ], self.calls)
+        self.assertEqual(argv, json.loads((self.root / fast_fixtures.MANIFEST).read_text())
+                         ["groups"]["alpha"]["commands"][0]["argv"])
+        self.calls.clear()
+        with mock.patch.object(fast_fixtures.subprocess, "check_output",
+                               side_effect=AssertionError("warm preparation must not resolve tools")):
+            self.assertEqual(["alpha"], fast_fixtures.prepare(self.root, selection, record, self.toolchain)["reused"])
+        self.assertEqual([], self.calls)
 
     def test_only_changed_group_rebuilds_and_compiler_runs_once(self):
         self.prepare("thc.AlphaTest", "thc.BetaTest")
@@ -2148,7 +2181,7 @@ class FixturePreparationTest(unittest.TestCase):
         result = self.prepare("thc.AlphaTest", "thc.BetaTest")
         self.assertEqual(result, {"mode": "selected", "rebuilt": ["beta"], "reused": ["alpha"]})
         self.assertEqual([argv for _, argv, _ in self.calls], [
-            ["cabal", "run", "exe:thc-primops", "--", "scalars"],
+            self.scalar_argv,
             ["bin/build-compiler.sh"], ["make-beta"]])
 
     def test_missing_or_changed_output_rebuilds(self):
@@ -2268,7 +2301,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(self.prepare("thc.AlphaTest", "thc.AlphaBackendTest", "thc.FreeTest", mode="full"),
                          {"mode": "selected", "rebuilt": ["beta", "alpha"], "reused": []})
         self.assertEqual([argv for _, argv, _ in self.calls], [
-            ["cabal", "run", "exe:thc-primops", "--", "scalars"],
+            self.scalar_argv,
             ["bin/build-compiler.sh"], ["make-beta"], ["make-alpha"]])
         preserved = self.root / "build/managed-md5-native.previous-attempt/failure.log"
         preserved.parent.mkdir(parents=True)
@@ -2282,7 +2315,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(self.prepare("thc.AlphaTest", mode="full"),
                          {"mode": "selected", "rebuilt": ["beta"], "reused": ["alpha"]})
         self.assertEqual([argv for _, argv, _ in self.calls], [
-            ["cabal", "run", "exe:thc-primops", "--", "scalars"],
+            self.scalar_argv,
             ["bin/build-compiler.sh"], ["make-beta"]])
 
     def test_fixture_free_selection_runs_no_commands(self):

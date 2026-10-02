@@ -782,7 +782,17 @@ def prepare(root, selection, run, toolchain):
 
     state = classify()
     if any(not reusable for _, _, _, _, reusable in state):
-        run("fixture-scalar-signatures", ["cabal", "run", "exe:thc-primops", "--", "scalars"])
+        # All callers, including the CI recorder, must use the same invocation
+        # paths as build-compiler.sh. Resolving symlink targets changes Cabal's
+        # configuration identity even when they name the same compiler.
+        os.environ.setdefault("GHC_ENVIRONMENT", "-")
+        ghc, pkg = subprocess.check_output(
+            ["sh", "-c", '. ./bin/toolchain.sh; printf "%s\\n" "$GHC" "$GHC_PKG"'],
+            cwd=root, text=True).splitlines()
+        os.environ.update(GHC=ghc, GHC_PKG=pkg)
+        cabal = os.environ.get("CABAL", "cabal")
+        cabal_options = ["--with-compiler=" + ghc, "--with-hc-pkg=" + pkg]
+        run("fixture-scalar-signatures", [cabal, "run", *cabal_options, "exe:thc-primops", "--", "scalars"])
         run("fixture-compiler", ["bin/build-compiler.sh"])
         # A preparatory command may have updated a declared source. Never skip
         # a previously reusable group on an identity calculated before it ran.
@@ -797,7 +807,10 @@ def prepare(root, selection, run, toolchain):
             stdout = command.get("stdout")
             if stdout is not None:
                 (root / _relative(stdout)).parent.mkdir(parents=True, exist_ok=True)
-            run(f"fixture-{group_id}-{index:02d}", command["argv"], stdout=stdout)
+            argv = command["argv"]
+            if argv[0] == "cabal":
+                argv = [cabal, argv[1], *cabal_options, *argv[2:]]
+            run(f"fixture-{group_id}-{index:02d}", argv, stdout=stdout)
         _write_stamp(stamp_path, {"schema": 1, "key": key,
                                   "outputs": _output_hashes(root, group)})
         rebuilt.append(group_id)
@@ -835,9 +848,6 @@ def main():
         cwd=root, text=True).splitlines()
     os.environ.update(GHC=ghc, GHC_PKG=pkg)
     def run(name, argv, stdout=None):
-        if argv[0] == "cabal":
-            argv = [os.environ.get("CABAL", "cabal"), argv[1],
-                    "--with-compiler=" + ghc, "--with-hc-pkg=" + pkg, *argv[2:]]
         print("+ " + repr(argv), flush=True)
         if stdout is None:
             subprocess.run(argv, cwd=root, check=True)
