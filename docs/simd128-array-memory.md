@@ -52,5 +52,5 @@ which supports arguments/results, tuple leaves, joins, PAP prefixes and owned
 captures/heap fields. The [Core host ABI](site/embedding.md#load-a-core-entry)
 transports exact vector and unboxed-tuple arguments/results; it does not relax
 the mutable-read intrinsic's immediate-case requirement.
-[Address operations](simd128-address-memory.md) and
+[Address operations](simd-address-families.md) and
 [wider byte-array vectors](simd-wide-array-memory.md) have separate contracts.

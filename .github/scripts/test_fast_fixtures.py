@@ -665,6 +665,7 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         group = manifest['groups']['simd-address-families']
         self.assertEqual('simd-address-families', owners['thc.runtime.SimdAddressFamiliesTest'])
+        self.assertIsNone(owners['thc.runtime.Simd128AddressTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'simd-address-families']}], group['commands'])
         self.assertIn('"$fixture_bin" simd-address-families', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertTrue(cache.SIMD_ADDRESS_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
@@ -673,13 +674,13 @@ class FixturePreparationTest(unittest.TestCase):
         for item in cache.SIMD_ADDRESS_OUTPUTS - {name}:
             path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
-        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.SIMD_ADDRESS_ENTRIES), scalarRows=3456,
-            nativeVector128Rows=576 if cache.SIMD_ADDRESS_NATIVE128 else 0,
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.SIMD_ADDRESS_ENTRIES), scalarRows=cache.SIMD_ADDRESS_ROWS,
+            nativeVector128Rows=cache.SIMD_ADDRESS_128_ROWS if cache.SIMD_ADDRESS_NATIVE128 else 0,
             stages={stage: {} for stage, _ in cache.SIMD_ADDRESS_STAGES}, artifactHashes=artifacts)
         (self.root / name).write_text(json.dumps(receipt))
         self.assertEqual(cache.SIMD_ADDRESS_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
         for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
-                    dict(receipt, scalarRows=3455), dict(receipt, stages={}), dict(receipt, artifactHashes={})):
+                    dict(receipt, scalarRows=cache.SIMD_ADDRESS_ROWS - 1), dict(receipt, stages={}), dict(receipt, artifactHashes={})):
             with self.assertRaises(cache.CacheMiss): cache.simd_address_artifact_hashes(bad)
         (self.root / 'build/simd-address-families/source/SimdAddressAudit.hs').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
@@ -758,30 +759,6 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" atomic-int-arrays', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/atomic-int-arrays/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
         self.assertEqual(6, len([p for p in fast_fixtures.FULL_REQUIRED if p.startswith('build/atomic-int-arrays/')]))
-
-    def test_simd128_address_completion_has_native_owner_and_closed_cache_scope(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        self.assertEqual('simd128-addresses', owners['thc.runtime.Simd128AddressNativeTest'])
-        self.assertIsNone(owners['thc.runtime.Simd128AddressTest'])
-        group = manifest['groups']['simd128-addresses']
-        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'simd128-addresses']}],
-                         group['commands'])
-        self.assertEqual(['build/simd128-addresses'], group['outputs'])
-        sources = fast_fixtures._source_hashes(project, group)
-        for path in ('t/fixtures/compiler/Simd128AddressAudit.hs', 't/fixtures/compiler/Simd128AddressNative.hs',
-                     't/haskell-fixtures/Simd128AddressFixtures.hs', 'bin/core_vector_memory.py',
-                     'bin/core_vectors.py', 'bin/simd-families.json'):
-            self.assertIn(path, sources)
-        self.assertIn('build/simd128-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
-        self.assertIn('build/simd128-addresses', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertEqual(36, len(fast_fixtures.fast_inputs.SIMD128_ARRAY_ENTRIES))
-        self.assertIn('"$fixture_bin" simd128-addresses', (project / 'bin/prepare-tests.sh').read_text().splitlines())
-        for path in fast_fixtures.fast_inputs.SIMD128_ADDRESS_OUTPUTS:
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
-        for path in ('build/simd128-addresses/native/rogue', 'build/simd128-addresses/commands/fake.stdout',
-                     'build/simd128-addresses/arbitrary.json'):
-            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(path), path)
 
     def test_simd128_array_completion_has_native_owner_and_closed_cache_scope(self):
         project = Path(__file__).resolve().parents[2]
@@ -2471,6 +2448,33 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('checkBuild(file("build/java-arrays/packages.json").isFile())', build)
         self.assertIn('"java-arrays/core/**/*.cbd"', build)
         self.assertNotIn('"$fixture_bin" java-arrays', (project / 'bin/prepare-tests.sh').read_text())
+
+    def test_example_fixture_keys_follow_exported_sources(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, _ = fast_fixtures._manifest(project)
+        for source in ("t/fixtures/Input.hs", "t/fixtures/input.c"):
+            path = self.root / source
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fixture input\n")
+        for name, sources in (
+                ("vector-api", ("src/examples/VectorLoops.hs", "src/runtime/THC/Prim.hs")),
+                ("truffle-strings", ("src/examples/StringPrimitives.hs", "src/runtime/THC/Prim.hs",
+                                     "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs"))):
+            group = manifest["groups"][name]
+            for source in sources:
+                path = self.root / source
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("original input\n")
+            original_key = fast_fixtures.cache_key(self.root, name, group, self.toolchain)
+            for source in sources:
+                with self.subTest(group=name, source=source):
+                    path = self.root / source
+                    path.write_text("changed input\n")
+                    try:
+                        self.assertNotEqual(original_key,
+                            fast_fixtures.cache_key(self.root, name, group, self.toolchain))
+                    finally:
+                        path.write_text("original input\n")
 
     def test_unrelated_source_does_not_invalidate_group(self):
         self.prepare("thc.AlphaTest")

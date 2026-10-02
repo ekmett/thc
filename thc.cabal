@@ -1290,7 +1290,6 @@ executable thc-fixtures
     VectorApiFixtures
     JavaArrayFixtures
     TruffleStringFixtures
-    Simd128AddressFixtures
     Simd128ArrayFixtures
     SimdWideArrayFixtures
     SimdAddressFixtures

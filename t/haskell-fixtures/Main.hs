@@ -25,7 +25,6 @@ import CompactModelFixtures (writeCompactModel)
 import GraphFixtures (prepareGraph)
 import IntegerCompletionFixtures (prepareIntegerCompletion)
 import AddressArrayCopyFixtures (prepareAddressArrayCopy)
-import Simd128AddressFixtures (prepareSimd128Addresses)
 import Simd128ArrayFixtures (prepareSimd128Arrays)
 import SimdWideArrayFixtures (prepareSimdWideArrays)
 import SimdAddressFixtures (prepareSimdAddresses)
@@ -980,7 +979,6 @@ main = do
     ["windows-codepages"] -> prepareWindowsCodePages root
     ["word-floating"] -> prepareWordFloating root
     ["scalar-bitcasts"] -> prepareScalarBitCasts root
-    ["simd128-addresses"] -> prepareSimd128Addresses root
     ["simd128-arrays"] -> prepareSimd128Arrays root
     ["simd-wide-arrays"] -> prepareSimdWideArrays root
     ["simd-address-families"] -> prepareSimdAddresses root

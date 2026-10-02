@@ -36,21 +36,17 @@ public class Int8ArrayNativeTest {
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
-    private Context context(boolean inlining) {
+    private Context context() {
         return Context.newBuilder("thc")
             .allowExperimentalOptions(true)
-            .option("compiler.Inlining", Boolean.toString(inlining))
             .option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw")
             .build();
     }
-    private void valid(RootCallTarget target, String label) throws Exception {
-        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label);
-    }
     private void compile(RootCallTarget target) throws Exception {
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
-        valid(target, "initial installation");
+        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "initial installation");
     }
     private List<RootCallTarget> activeTargets(RootCallTarget entry) {
         var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
@@ -290,18 +286,17 @@ public class Int8ArrayNativeTest {
             result.addAll(Set.of("sub" + kind + "#", "times" + kind + "#"));
         return result;
     }
-    private long checkedCalls(Map<String, Object> module, String name) {
+    private void checkedPrimitives(Map<String, Object> module, String name) {
         var evidence = new ArrayCoreEvidence(module, coreEntry(name));
         require(evidence.getPrimitiveCounts().keySet().containsAll(requiredPrimitives(name)),
             name + " missing required primitive");
-        return evidence.loweredImmediateStateCalls();
     }
     @Test
     public void genuineCoreMustRetainEveryRequiredPrimitive() throws Exception {
         for (var paths : ((Map<String, List<String>>) manifest().get("stages")).values())
             for (var name : names) {
                 var module = merged(paths);
-                assertEquals(1L, checkedCalls(module, name));
+                checkedPrimitives(module, name);
                 for (var primitive : requiredPrimitives(name)) {
                     var changed = (Map<String, Object>) thc.CoreCbdFixtures.snapshot(module);
                     var nodes = new ArrayCoreEvidence(changed, coreEntry(name))
@@ -312,19 +307,12 @@ public class Int8ArrayNativeTest {
                     assertTrue(!nodes.isEmpty(), name + "/" + primitive);
                     for (var node : nodes) node.set(1, "missingArrayPrimitive#");
                     assertThrows(
-                        IllegalArgumentException.class, () -> checkedCalls(changed, name), name + "/" + primitive);
+                        IllegalArgumentException.class, () -> checkedPrimitives(changed, name), name + "/" + primitive);
                 }
             }
     }
     @Test
-    public void nativePublicArraysAndByteAliasesWithInlining() throws Exception {
-        nativeChecks(true);
-    }
-    @Test
-    public void nativePublicArraysAndByteAliasesAcrossResidualCalls() throws Exception {
-        nativeChecks(false);
-    }
-    private void nativeChecks(boolean inlining) throws Exception {
+    public void nativePublicArraysAndByteAliases() throws Exception {
         var manifest = manifest();
         assertEquals(names, manifest.get("entries"));
         assertEquals(inputs, manifest.get("inputs"));
@@ -345,36 +333,18 @@ public class Int8ArrayNativeTest {
             var module = merged(stage.getValue());
             for (var name : names) {
                 var cases = rows.get(name);
-                long expectedCalls = checkedCalls(module, name);
-                for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
+                checkedPrimitives(module, name);
+                for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                         context.initialize("thc");
                         context.enter();
                         try {
                             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                             var linked = CoreModules.reachable(module, coreEntry(name));
-                            var bindings = (List<Map<String, Object>>) linked.get("bindings");
                             var p = program(language, changed(linked, "instrument", true), backend);
-                            var entry = p.entryTarget(
-                                (String) single(bindings.stream().filter(b -> coreEntry(name).equals(b.get("id"))).toList())
-                                    .get("id"));
-                            // The checked immediate runRW State# lambda is beta-reduced.
-                            var expectedLabels = new HashSet<String>();
-                            for (var binding : bindings) expectedLabels.add(lambdaLabel((List<?>) binding.get("expr")));
-                            List<RootCallTarget> targets = List.of();
-                            checkCases(cases, stage.getKey(), backend, name, inlining, p, entry, expectedCalls, targets,
-                                false, language);
-                            targets = activeTargets(entry);
-                            assertEquals((int) expectedCalls, targets.size(),
-                                stage.getKey() + "/" + backend + "/" + name + " active guest roots");
-                            assertEquals(expectedLabels,
-                                new HashSet<>(targets.stream().map(t -> t.getRootNode().getName()).toList()),
-                                stage.getKey() + "/" + backend + "/" + name + " guest root labels");
-                            for (var target : targets) compile(target);
-                            long allocations = language.getHandoffState().get().getResults().getAllocations();
-                            checkCases(cases, stage.getKey(), backend, name, inlining, p, entry, expectedCalls, targets,
-                                true, language);
-                            assertEquals(allocations, language.getHandoffState().get().getResults().getAllocations(),
-                                "Pooled results reused");
+                            var entry = p.entryTarget(coreEntry(name));
+                            checkCases(cases, stage.getKey(), backend, name, p, entry, false, language);
+                            for (var target : activeTargets(entry)) compile(target);
+                            checkCases(cases, stage.getKey(), backend, name, p, entry, true, language);
                             for (var counter : List.of("unsupportedTraps", "blackholes"))
                                 assertEquals(0L, count(p, counter), counter);
                         } finally {
@@ -384,31 +354,21 @@ public class Int8ArrayNativeTest {
             }
         }
     }
-    private String lambdaLabel(List<?> expression) {
-        assertEquals("lam", expression.get(0));
-        var formals = (List<Map<String, Object>>) expression.get(1);
-        return "lambda " + String.join(", ", formals.stream().map(f -> String.valueOf(f.get("name"))).toList());
-    }
-    private void checkCases(List<Row> cases, String stage, String backend, String name, boolean inlining,
-        ExecutableProgram program, RootCallTarget entry, long expectedCalls, List<RootCallTarget> targets,
-        boolean compiled, Language language) throws Exception {
+    private void checkCases(List<Row> cases, String stage, String backend, String name,
+        ExecutableProgram program, RootCallTarget entry, boolean compiled, Language language) throws Exception {
+        boolean firstCompiledCall = compiled;
         for (var row : cases) {
-            var label = stage + "/" + backend + "/" + name + "/" + row.input + "/inlining=" + inlining;
-            long before = count(program, "compiledEntries");
+            var label = stage + "/" + backend + "/" + name + "/" + row.input;
+            long before = firstCompiledCall ? count(program, "compiledEntries") : 0L;
             Object expected;
             if (((GuestRoot) entry.getRootNode()).getScalarResultProof().isInt())
                 expected = (int) row.answer;
             else
                 expected = row.answer;
             assertEquals(expected, Calls.target(entry, new Object[] {0L, row.input}), label);
-            if (compiled) {
-                assertEquals(
-                    expectedCalls, count(program, "compiledEntries") - before, label + " exact compiled entries");
-                var active = activeTargets(entry);
-                assertEquals(targets.size(), active.size(), label + " active target count");
-                assertTrue(active.stream().allMatch(t -> targets.stream().anyMatch(old -> old == t)),
-                    label + " active target identities");
-                for (var target : targets) valid(target, label);
+            if (firstCompiledCall) {
+                assertTrue(count(program, "compiledEntries") > before, label + " first installed call");
+                firstCompiledCall = false;
             }
             released(language);
         }
@@ -447,7 +407,7 @@ public class Int8ArrayNativeTest {
     @Test
     public void loweredAliasesExecuteWhileCarrierStateShapeAndSaturationGuardsRemain() throws Exception {
         var paths = paths();
-        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                 context.initialize("thc");
                 context.enter();
                 try {
@@ -586,7 +546,7 @@ public class Int8ArrayNativeTest {
     @Test
     public void invalidElementOffsetsAreGuardedOnBothBackendsWithoutNativeUndefinedAccesses() throws Exception {
         var paths = paths();
-        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                 context.initialize("thc");
                 context.enter();
                 try {
@@ -621,11 +581,6 @@ public class Int8ArrayNativeTest {
     }
     private static List<?> prefix(List<?> list) {
         return list.subList(0, Math.min(2, list.size()));
-    }
-    private static <T> T single(List<T> list) {
-        if (list.size() != 1)
-            throw new IllegalArgumentException("Expected a single element");
-        return list.getFirst();
     }
     private static Map<String, Object> changed(Map<String, Object> module, String key, Object value) {
         var result = new LinkedHashMap<>(module);

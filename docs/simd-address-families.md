@@ -1,8 +1,9 @@
 # SIMD address memory
 
 The local address-memory contract covers packed and scalar-offset index, read
-and write for these 24 vector representations:
+and write for these vector representations:
 
+- Int8X16, Word8X16, Int16X8, Word16X8, Int64X2, Word64X2.
 - Int8X32, Word8X32, Int8X64, Word8X64, Int16X32, Word16X32.
 - Int32X4, Word32X4, FloatX4, DoubleX2.
 - Int16X16, Word16X16, Int32X8, Word32X8, Int32X16, Word32X16.
@@ -22,5 +23,14 @@ managed pointer cells are rejected. Disjoint managed pointer cells retain their
 actual carriers. Floating lanes are transferred as raw bits without arithmetic.
 No vector access is promised atomic relative to competing scalar accesses.
 
-The six other 128-bit shapes are documented in
-[SIMD128 address memory](simd128-address-memory.md).
+Both backends preserve typed vector carriers and native byte order. Reads use
+immediate State/vector case lowering, with the State field erased. Integral
+carrier aliases are accepted; address carriers, vector species and aggregate
+shape remain checked. Null, opaque and unowned numeric addresses are not
+byte-addressable. Fully overwritten managed pointer cells lose their references.
+
+On macOS ARM64 with pinned GraalVM 25.3.4.1, cold AST compilation of the
+original `int16X8WritePacked` entry currently fails with recursive inlining in
+Vector API reinterpretation. The reproducer uses `Short128Vector` and a constant
+`ByteSpecies`. The pinned Word64X2 roundtrip also hits recursive inlining
+during vector reinterpretation. No compiler or runtime workaround is applied.

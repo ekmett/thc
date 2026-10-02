@@ -60,7 +60,7 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/CoreVectorMemory.java",
                   "src/main/java/thc/runtime/VectorByteArrayExpression.java",
                   "src/main/java/thc/runtime/VectorMemory.java")
-MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -318,12 +318,18 @@ SIMD_WIDE_ARRAY_OUTPUTS = frozenset("build/simd-wide-arrays/" + name for name in
     *("pre-" + name + "-audit.json" for name in SIMD_WIDE_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD_WIDE_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
-SIMD_ADDRESS_SHAPES = ("int8X32", "word8X32", "int8X64", "word8X64", "int16X32", "word16X32",
+SIMD_ADDRESS_SHAPES = ("int8X16", "word8X16", "int16X8", "word16X8", "int64X2", "word64X2",
+    "int8X32", "word8X32", "int8X64", "word8X64", "int16X32", "word16X32",
     "int32X4", "word32X4", "floatX4", "doubleX2", "int16X16", "word16X16",
     "int32X8", "word32X8", "int32X16", "word32X16", "int64X4", "word64X4", "int64X8", "word64X8",
     "floatX8", "floatX16", "doubleX4", "doubleX8")
 SIMD_ADDRESS_ENTRIES = tuple(shape + operation + mode for shape in SIMD_ADDRESS_SHAPES
-    for operation in ("Index", "Read", "Write") for mode in ("Packed", "Scalar"))
+    for operation in ("Index", "Read", "Write") for mode in ("Packed", "Scalar")) + ("word64X2RoundtripScalar",)
+# Eight independent seeds and three offsets per entry, including the owned roundtrip.
+SIMD_ADDRESS_ROWS = len(SIMD_ADDRESS_ENTRIES) * 8 * 3
+SIMD_ADDRESS_128_ROWS = sum(bool(re.match(
+    r"(?:(?:int8|word8)X16|(?:int16|word16)X8|(?:int32|word32|float)X4|(?:int64|word64|double)X2)[A-Z]", entry))
+    for entry in SIMD_ADDRESS_ENTRIES) * 8 * 3
 SIMD_ADDRESS_NATIVE128 = platform.machine().lower() not in ("arm64", "aarch64")
 SIMD_ADDRESS_STAGES = (("pre", "SimdAddressAudit"),) + ((("post128", "SimdAddress128Audit"),) if SIMD_ADDRESS_NATIVE128 else ())
 SIMD_ADDRESS_MODES = ("scalar",) + (("vector128",) if SIMD_ADDRESS_NATIVE128 else ())
@@ -347,8 +353,6 @@ SIMD128_ARRAY_OUTPUTS = frozenset("build/simd128-arrays/" + name for name in (
     *(stage + "-" + name + "-audit.json" for stage in ("pre", "post") for name in SIMD128_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD128_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
-SIMD128_ADDRESS_OUTPUTS = frozenset(path.replace("simd128-arrays", "simd128-addresses")
-    .replace("Simd128ArrayAudit", "Simd128AddressAudit") for path in SIMD128_ARRAY_OUTPUTS)
 BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
                   "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
 BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
@@ -582,7 +586,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/hint-trace/native/oracle",
     "build/closure-inspection/native/oracle",
     "build/simd-wide-arrays/native/oracle",
-    "build/simd128-addresses/native/oracle",
     "build/simd128-arrays/native/oracle",
     "build/simd-address-families/scalar/oracle", "build/simd-address-families/vector128/oracle",
     "build/scalar-memory-utilities/native/oracle",
@@ -1685,9 +1688,9 @@ def bytearray_artifact_hashes(family, manifest):
 def simd_address_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
             manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(SIMD_ADDRESS_ENTRIES) and
-            type(manifest.get("scalarRows")) is int and manifest["scalarRows"] == 3456 and
+            type(manifest.get("scalarRows")) is int and manifest["scalarRows"] == SIMD_ADDRESS_ROWS and
             type(manifest.get("nativeVector128Rows")) is int and
-            manifest["nativeVector128Rows"] == (576 if SIMD_ADDRESS_NATIVE128 else 0), "Invalid vector-address provenance")
+            manifest["nativeVector128Rows"] == (SIMD_ADDRESS_128_ROWS if SIMD_ADDRESS_NATIVE128 else 0), "Invalid vector-address provenance")
     require(isinstance(manifest.get("stages"), dict) and set(manifest["stages"]) == {stage for stage, _ in SIMD_ADDRESS_STAGES},
             "Missing vector-address Core stages")
     artifacts = manifest.get("artifactHashes")
@@ -1969,8 +1972,6 @@ def allowed_payload(name):
         return name in SIMD_ARITHMETIC_OUTPUTS
     if parts[1] == "simd-wide-arrays":
         return name in SIMD_WIDE_ARRAY_OUTPUTS
-    if parts[1] == "simd128-addresses":
-        return name in SIMD128_ADDRESS_OUTPUTS
     if parts[1] == "simd128-arrays":
         return name in SIMD128_ARRAY_OUTPUTS
     if parts[1] == "native-malloc":

@@ -1449,7 +1449,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
                 "Word32VectorStorageTest", "Simd128ArrayNativeTest", "Simd128ArrayProofTest",
                 "SimdArithmeticTest", "SimdWideArrayNativeTest", "SimdWideArrayProofTest",
-                "Simd128AddressNativeTest", "Simd128AddressTest"],
+                "SimdAddressFamiliesTest", "Simd128AddressTest"],
             "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SimdFloatByteArrayTest",
                 "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "SimdDoubleVectorTest",
                 "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest",

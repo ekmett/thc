@@ -393,13 +393,6 @@
       "sources": ["t/fixtures/compiler/SimdWideArrayAudit.hs", "t/fixtures/compiler/SimdWideArrayScalar.hs",
         "t/fixtures/compiler/SimdWideArrayNative.hs", "t/haskell-fixtures/SimdWideArrayFixtures.hs", "bin/simd-families.json"]
     },
-    "simd128-addresses": {
-      "junit": ["thc.runtime.Simd128AddressNativeTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-addresses"]}],
-      "outputs": ["build/simd128-addresses"],
-      "sources": ["t/fixtures/compiler/Simd128AddressAudit.hs", "t/fixtures/compiler/Simd128AddressNative.hs",
-        "t/haskell-fixtures/Simd128AddressFixtures.hs", "bin/simd-families.json"]
-    },
     "simd-address-families": {
       "junit": ["thc.runtime.SimdAddressFamiliesTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-address-families"]}],
@@ -1449,7 +1442,9 @@
       "junit": ["thc.runtime.IntrinsicOperandContinuationTest", "thc.runtime.TruffleStringTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "truffle-strings"]}],
       "outputs": ["build/truffle-strings"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json",
+        "src/examples/StringPrimitives.hs", "src/runtime/THC/Prim.hs",
+        "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs"]
     },
     "array-slices": {
       "junit": ["thc.runtime.ArraySliceTest"],
@@ -1473,7 +1468,8 @@
       "junit": ["thc.runtime.VectorApiTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "vector-api"]}],
       "outputs": ["build/vector-api"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
+      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json",
+        "src/examples/VectorLoops.hs", "src/runtime/THC/Prim.hs"]
     },
     "empty-tuple-input": {
       "junit": ["thc.runtime.EmptyTupleInputNativeTest"],
