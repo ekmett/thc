@@ -83,7 +83,7 @@ public class CaseArmOutliningTest {
             assertFalse(arms.isEmpty(), "Wide reusable cases need separate cold compilation units");
             for (var target : targets) {
                 var root = (FunctionRoot) target.getRootNode();
-                assertFalse(root.getStackCapture()); assertFalse(root.getCapturesContinuations$org_intelligence_thc());
+                assertFalse(root.getStackCapture()); assertTrue(root.getCapturesContinuations$org_intelligence_thc(), "Prepared roots retain continuation capability before thread creation");
                 assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
                 assertEquals(true, target.getClass().getMethod("prepareForAOT").invoke(target)); compile(target);
                 assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));

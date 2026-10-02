@@ -931,7 +931,7 @@ public final class Program implements ExecutableProgram {
         return true;
     }
     private boolean substantialSiblings(List<List<Object>> alternatives) {
-        if (!reusableCode || capturesContinuations || delimited || alternatives.size() < 2 || alternatives.size() > 32) return false;
+        if (!reusableCode || delimited || alternatives.size() < 2 || alternatives.size() > 32) return false;
         int remaining = 128;
         for (List<Object> alternative : alternatives) {
             remaining -= boundedCoreSize((List<?>) alternative.get(3), remaining);
@@ -1017,12 +1017,12 @@ public final class Program implements ExecutableProgram {
                 return node;
             }
         }
-        // Wide cold dispatches otherwise compile every nontrivial arm into one
-        // graph. Reuse side roots without enabling continuation frame capture.
+        // Split wide cold dispatches into side roots while retaining continuation
+        // capability; references to outer lexical joins remain in their frame.
         // Split modest bodies of an expensive sibling dispatch, not giant
         // singleton prefixes that would merely move the same large graph.
         int size = substantialSiblings ? boundedCoreSize(expression, 129) : 0;
-        boolean outline = outlineCaseArms || reusableCode && !capturesContinuations && !delimited &&
+        boolean outline = outlineCaseArms || reusableCode && !delimited &&
             (alternativeCount > 32 || substantialSiblings && size >= 12 && size <= 128);
         boolean hasLocalJoin = false;
         if (outline && Arrays.asList("app", "case", "let").contains(expression.getFirst()))
