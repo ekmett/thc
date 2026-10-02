@@ -2673,6 +2673,7 @@
         "thc.CoreCompactRecordsTest",
         "thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest",
         "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest",
+        "thc.runtime.ProcessSignalsTest",
         "thc.runtime.UnixLibcTest",
         "thc.runtime.TextCbitsTest",
         "thc.runtime.ClosureInspectionTest",
