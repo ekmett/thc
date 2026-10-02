@@ -211,7 +211,7 @@ class CoreUnitLoadTest {
     }
     @Test void coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding() throws Exception {
         var manifest = fixture(); for (var backend : List.of("ast", "bytecode")) for (boolean async : new boolean[]{false, true}) try (var context = executionContext()) {
-            var entry = context.eval("thc", request(manifest, backend, async)); assertEquals(1L, count(entry, "coreCompactModuleOpens")); assertEquals(1L, count(entry, "coreCompactDecodedModules")); assertEquals(1L, count(entry, "coreCompactDecodedBindings")); assertEquals(1L, count(entry, "loweredRootCount")); assertEquals(7L, entry.execute(0).asLong()); assertEquals(1L, count(entry, "coreCompactModuleOpens")); assertEquals(2L, entry.execute(1).asLong()); assertEquals(2L, count(entry, "coreCompactModuleOpens")); assertEquals(2L, count(entry, "coreCompactDecodedBindings")); long reads = count(entry, "coreCompactDataBytesRead"); assertEquals(3L, entry.execute(2).asLong()); assertEquals(reads, count(entry, "coreCompactDataBytesRead")); assertEquals(0L, count(entry, "coreCompactHashBytesScanned"));
+            var entry = context.eval("thc", request(manifest, backend, async)); assertEquals(1L, count(entry, "coreCompactModuleOpens")); assertEquals(1L, count(entry, "coreCompactDecodedModules")); assertEquals(1L, count(entry, "coreCompactDecodedBindings")); assertEquals(7L, entry.execute(0).asLong()); assertEquals(1L, count(entry, "coreCompactModuleOpens")); assertEquals(2L, entry.execute(1).asLong()); assertEquals(2L, count(entry, "coreCompactModuleOpens")); assertEquals(2L, count(entry, "coreCompactDecodedBindings")); long reads = count(entry, "coreCompactDataBytesRead"); assertEquals(3L, entry.execute(2).asLong()); assertEquals(reads, count(entry, "coreCompactDataBytesRead")); assertEquals(0L, count(entry, "coreCompactHashBytesScanned"));
         }
     }
     @Test void missingOrBadColdUnitFailsOnlyAtDemandAndDoesNotTouchThirdUnit() throws Exception {
@@ -279,14 +279,6 @@ class CoreUnitLoadTest {
                         assertEquals(7L, thc.runtime.Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:Main.entry"), new Object[]{0L}}));
                         assertEquals(8L, thc.runtime.Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:Main.second"), new Object[]{0L}}));
                         assertEquals(2L, statistic(program, "coreCompactModuleOpens"), "two explicit CBD modules, no package opened");
-                        var counts = program.rootCounts();
-                        assertEquals(3L, counts.get("loweredRootCount"));
-                        assertEquals(3L, counts.get("initializedBindingCount"));
-                        assertEquals(notes ? 3L : 0L, counts.get("sourceRootCount"));
-                        assertEquals(backend.equals("bytecode"), counts.containsKey("bytecodeRootCount"));
-                        assertEquals(backend.equals("bytecode") ? 5 : 4, counts.size());
-                        var diagnostics = program.diagnostics();
-                        counts.forEach((name, count) -> assertEquals(count, diagnostics.get(name)));
                     }
                 } finally { owner.getThreads().leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
             }

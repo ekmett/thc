@@ -74,7 +74,6 @@
     "thc.runtime.CallMaskSegmentsTest",
     "thc.CoreLinkerTest",
     "thc.CoreForeignArtifactsTest",
-    "thc.CoreLoweringRootsTest",
     "thc.runtime.CoreFreeVariablesTest",
     "thc.runtime.BytecodeColdHandlerTest",
     "thc.runtime.CompilerHeapHintTest",
