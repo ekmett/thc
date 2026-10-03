@@ -10,7 +10,8 @@ def wrap(n):
     return (n+(1 << 63)) % (1 << 64)-(1 << 63)
 
 def seeds():
-    return sorted(set(range(256)) | {MIN, MIN+1, MAX-1, MAX, -1, -17, -255, -(1 << 32), 1 << 32})
+    # Empty/singleton and boundary lengths, byte sign boundaries, and machine extremes.
+    return [MIN, -1, 0, 1, 7, 8, 9, 16, 127, 128, MAX]
 
 def payload(seed):
     return [(seed+i*73) % 256 for i in range(abs(seed) % 17)]

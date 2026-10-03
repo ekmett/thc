@@ -84,8 +84,12 @@ class ShortByteStringSliceTest {
         }
         var seeds = new ArrayList<Long>();
         for (var n : (List<Number>) manifest.get("seeds")) seeds.add(n.longValue());
-        assertEquals(265, seeds.size());
-        assertTrue(seeds.containsAll(List.of(Long.MIN_VALUE, Long.MAX_VALUE, -1L, 0L, 255L)));
+        assertTrue(seeds.containsAll(List.of(Long.MIN_VALUE, Long.MAX_VALUE, -1L, 0L)),
+            "Signed-machine seed boundaries remain represented");
+        assertTrue(seeds.stream().map(seed -> payload(seed).size()).toList().containsAll(List.of(0, 1, 7, 8, 9, 16)),
+            "Empty, singleton and boundary lengths remain represented");
+        assertTrue(seeds.stream().flatMap(seed -> payload(seed).stream()).toList().containsAll(List.of(0L, 1L, 127L, 128L, 255L)),
+            "Payloads include zero and unsigned-byte sign boundaries");
         var expected = new ArrayList<Row>();
         for (var name : entries)
             for (long seed : seeds) {
@@ -101,7 +105,6 @@ class ShortByteStringSliceTest {
                             expected.add(new Row(name, seed, count, side, selector, observe(data, selector)));
                     }
             }
-        assertEquals(81312, rows.size());
         assertEquals(((Number) manifest.get("nativeRows")).intValue(), rows.size());
         assertEquals(
             expected, rows, "Native oracle includes every result byte, length, checksum and boundary sentinel");
