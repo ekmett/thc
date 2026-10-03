@@ -69,7 +69,7 @@ providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
 There are 81 graph targets covering 122 mapped JUnit classes, 46 quarantined
-groups and ten groups still awaiting file rules. The native process target is
+groups and nine groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -145,6 +145,14 @@ compiled-entry deltas in the retained call test became positive execution checks
 The smaller Haskell tool built successfully; fixture/cache checks passed. The full
 selection check exposed one obsolete Unix dependency on ArrayCoreEvidence, which
 was removed and its focused ownership check passed.
+
+The duplicate native dup/dup2 pipeline is also removed. ManagedDescriptorDupTest
+covers shared offsets, lowest-free allocation, alias replacement, final-close
+ownership, errno and callback failures; OriginalStdioCallTest checks first compiled
+calls and state rejection, and UnixLibcTest checks real installed declarations.
+Their verified results above are reused. This removes 19 native process launches,
+eight audits and 167 retained artifacts. The Haskell tool and all 102 selection,
+49 fixture-selection and 97 cache checks passed after removal.
 
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread

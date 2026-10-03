@@ -466,8 +466,6 @@ extra-source-files:
   t/fixtures/compiler/OriginalFdReadyAuditNative.hs
   t/fixtures/compiler/OriginalIconvAudit.hs
   t/fixtures/compiler/OriginalIconvAuditNative.hs
-  t/fixtures/compiler/OriginalPosixDupAudit.hs
-  t/fixtures/compiler/OriginalPosixDupAuditNative.hs
   t/fixtures/compiler/TopHandlerMainThreadAbi.hs
   t/fixtures/compiler/TopHandlerMainThreadAbiNative.hs
   README.md
@@ -1273,7 +1271,6 @@ executable thc-fixtures
     SelectorProofFixtures
     UnsafeEqualityFixtures
     OriginalStdioFixtures
-    OriginalPosixDupFixtures
     OriginalStdioSeekFixtures
     OriginalStdioTruncateFixtures
     OriginalHandleReadinessFixtures

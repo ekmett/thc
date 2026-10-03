@@ -2720,33 +2720,6 @@ Tests read these and call nativeModules, adding 066 installed/native/runtime
   artifacts. Old manifest not invalidated. Keep shared descriptor/FFI behavior;
   assess repeated package seek mechanics for consolidation.
 
-078  original-posix-dup
-Fixture rationale (078 original-posix-dup)
-Purpose: Check duplicated descriptors share the intended resource state and close
-  ownership.
-Produces/consumed result: CBDs and oracle.json with per-case file observations.
-Cost and overlap: Descriptor ownership is a meaningful boundary. Put it in one file-
-  lifecycle suite; nineteen separate native launches are not intrinsically justified.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
-Producer: t/haskell-fixtures/OriginalPosixDupFixtures.hs.
-Consumer: thc.runtime.OriginalPosixDupNativeTest. Linux/macOS LP64.
-IN: t/fixtures/compiler/OriginalPosixDupAudit.hs, OriginalPosixDupAuditNative.hs;
-  shared tools/GHC9.14.1/ghc-internal/unix.
-Under build/original-posix-dup/:
-  native/oracle: IN source pair/packages; OUT binary/objects.
-  results/<0..18>.{txt,private,other}: IN oracle/request arguments;
-    OUT observations and two files per case. oracle.json reads txt/streams;
-    OUT 19 rows. Result files not removed first by this producer.
-  <pre|post>/core/OriginalPosixDupAudit.cbd, THC.InterfaceClosure.cbd:
-    IN source/exporter/four roots/stage; OUT CBD pair/ghc intermediates.
-  <stage>/<originalDup|originalDupErrno|originalDup2|originalDup2Errno>.audit.json:
-    IN stage pair/auditor; OUT eight reports.
-  logs/ghc-version,ghc-info,native-build,native-N,stage-export/audit-entry:
-    OUT triplets. manifest.json reads all outputs/source receipt; old removed.
-Consumer reads receipts/Core/audits/oracle and native command JSON explicitly.
-
 080  original-stdio-read
 Fixture rationale (080 original-stdio-read)
 Purpose: Check reads preserve buffer contents, lengths, EOF and file-position behavior.

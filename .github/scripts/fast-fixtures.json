@@ -611,14 +611,6 @@
       "sources": ["t/fixtures/compiler/OriginalStdioSeekAudit.hs", "t/fixtures/compiler/OriginalStdioSeekAuditNative.hs", "t/haskell-fixtures/OriginalStdioSeekFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"],
       "requires": ["original-process-identity"]
     },
-    "original-posix-dup": {
-      "junit": ["thc.runtime.OriginalPosixDupNativeTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-dup"]}],
-      "outputs": ["build/original-posix-dup"],
-      "sources": ["t/fixtures/compiler/OriginalPosixDupAudit.hs", "t/fixtures/compiler/OriginalPosixDupAuditNative.hs",
-        "t/haskell-fixtures/OriginalPosixDupFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
     "original-stdio-read": {
       "junit": ["thc.runtime.OriginalStdioReadTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-read"]}],
