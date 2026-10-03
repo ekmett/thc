@@ -365,7 +365,9 @@ public class ProcessSignalsTest {
         }
     }
     @Test public void nativeChildControlsAndGhcActionOracleHaveMatchingInputs() throws Exception {
-        assumeTrue(System.getProperty("os.name").equals("Linux")); var root = new File(System.getProperty("thc.projectRoot"));
+        assumeTrue(System.getProperty("os.name").equals("Linux") && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")),
+            "Native oracle fixture requires Linux x86_64");
+        var root = new File(System.getProperty("thc.projectRoot"));
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/process-signals/manifest.json").toPath()));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c",
             "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"), null);

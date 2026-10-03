@@ -27,7 +27,8 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `rts-shutdown`, `original-errno`, `ghc-bco`, `closure-inspection`, `cstring`,
 `thread-inventory`, `process-lifecycle-native`, `delimited-continuations`, `hint-trace`,
 `core-continuation`, `large-literal-cases`, `original-termios`, `original-rts-locks`,
-`rubbish-literals`, `original-tcgetattr`, `original-tcsetattr` and `float-decode`. Each has a `fixture-<group>`
+`rubbish-literals`, `original-tcgetattr`, `original-tcsetattr`, `float-decode`
+and `process-signals`. Each has a `fixture-<group>`
 target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
@@ -66,8 +67,8 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 75 graph targets covering 116 mapped JUnit classes, 46 quarantined
-groups and 17 groups still awaiting file rules. The native process target is
+There are 76 graph targets covering 117 mapped JUnit classes, 46 quarantined
+groups and 16 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -98,6 +99,14 @@ All 326 declared files existed and all 29 consumed artifacts had matching hashes
 graph writers. On the settled graph, deleting the native oracle rebuilt only its
 fixture in 3.36 seconds, kept the bignum dependency untouched and returned to no work
 in 0.41 seconds. Its audits dropped from 16 to two; obsolete bignum copies freed 14.4 MiB.
+
+Process signals passed 36 executions with four platform skips across both handoff
+modes through `make test-modes TESTS=thc.runtime.ProcessSignalsTest` (Gradle: seven
+seconds). CMake owns the isolated C control with assertions enabled in Release;
+the Haskell producer consumes that executable. Linux capture generation remains
+unverified here. Fork-failure and Loom controls select no generated fixtures and
+their `make fixtures` commands invoke no toolchain. The 49 fixture-selection
+checks and the manifest ownership check passed.
 
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread
@@ -148,7 +157,7 @@ in 0.41 seconds. Its audits dropped from 16 to two; obsolete bignum copies freed
 - Pinned-address rejection controls passed without leaving scratch catalogues.
   Removed 48 unreferenced catalogues (9.8 MiB), retaining named reports and logs.
 
-The focused JVM results do not establish that all 111 mapped classes pass.
+The focused JVM results do not establish that all 117 mapped classes pass.
 Linux generation/execution of the newly migrated rules, native Windows graph
 support and migration of the CI entry point remain open. Successful local
 fixture generation is not a claim that CI is green.

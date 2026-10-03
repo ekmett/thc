@@ -34,6 +34,8 @@
     "thc.WindowsDistributionTest"
   ],
   "fixtureFreeJunit": [
+    "thc.runtime.ForkHostFailureTest",
+    "thc.runtime.LoomSignalProcessTest",
     "thc.BoxedForeignProvenanceTest",
     "thc.PrimForeignProvenanceTest",
     "thc.runtime.DescriptorFlagsTest",
@@ -1588,8 +1590,9 @@
       "requires": ["sum-results"]
     },
     "process-signals": {
+      "cmakeTarget": "fixture-process-signals",
       "requires": ["compact-model"],
-      "junit": ["thc.runtime.ForkHostFailureTest", "thc.runtime.LoomSignalProcessTest", "thc.runtime.ProcessSignalsTest"],
+      "junit": ["thc.runtime.ProcessSignalsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "process-signals"]}],
       "outputs": ["build/process-signals"],
       "sources": ["t/haskell-fixtures/ProcessSignalFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"]
