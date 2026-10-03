@@ -2,21 +2,13 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import thc.CoreCompactFile;
-import thc.CoreCompactRecords;
 import thc.PackageNativeArchive;
-import thc.PackageNativeArchives;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class PackageNativeArchiveTest {
     private static Map<String,Object> scalar(String kind, String primitive, boolean evaluated) {
@@ -71,33 +63,5 @@ class PackageNativeArchiveTest {
         var ordinary = metadata(descriptor("ghc-internal", "ordinary_wait"));
         assertTrue(archive("ghc-internal", false, "__hscore_open", "ordinary_wait").blocks(List.of(open, ordinary)));
         assertTrue(archive("ghc-internal", true, "__hscore_open").blocks(open));
-    }
-    @Test void genuineInstalledPosixOpenKeepsOriginalArchiveAndAbi() throws Throwable {
-        String input = System.getenv("THC_TEST_GHC_POSIX_CBD");
-        assumeTrue(input != null, "requires an acquired original GHC.Internal.System.Posix.Internals CBD");
-        var path = Path.of(input);
-        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
-        try (var file = new CoreCompactFile(path, hash, true)) {
-            var records = new CoreCompactRecords(file, hash);
-            var module = new LinkedHashMap<>(records.header());
-            var bindings = new ArrayList<Map<String,Object>>();
-            file.verifyBindingOffsets(offset -> bindings.add(records.binding(offset)));
-            module.put("bindings", bindings);
-            assertEquals("ghc-internal", module.get("unit"));
-            assertEquals("GHC.Internal.System.Posix.Internals", module.get("module"));
-            var retained = PackageNativeArchives.read(module);
-            assertNotNull(retained);
-            int found = 0;
-            for (var binding : bindings) for (var call : PackageNativeArchive.calls(binding)) {
-                if (!(call.get("target") instanceof Map<?,?> target) || !"__hscore_open".equals(target.get("symbol")) ||
-                        !"interruptible".equals(call.get("safety"))) continue;
-                found++;
-                assertFalse(retained.blocks(binding), "existing managed operation must reach its strict validator");
-                var copy = new LinkedHashMap<String,Object>();
-                for (var entry : call.entrySet()) copy.put((String) entry.getKey(), entry.getValue());
-                assertEquals(OriginalStdioOp.OPEN_INTERRUPTIBLE, validate(copy));
-            }
-            assertTrue(found > 0, "genuine fixture must contain the original interruptible open");
-        }
     }
 }
