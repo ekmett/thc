@@ -22,7 +22,10 @@ CHECKS = {"checks / automation"} | {
     f"checks / {platform} ordinary tests / Common compilation ({os})"
     for platform, os in (("Linux", "ubuntu-latest"), ("macOS", "macos-latest"))
 }
-BUILD_SCHEDULED_JOBS = {"checks / build", "checks / foreign-exceptions", "checks / library", "checks / Windows tests"} | {
+BUILD_SCHEDULED_JOBS = {
+    "checks / build", "checks / foreign-exceptions", "checks / library", "checks / Windows tests",
+    "checks / Linux ordinary tests / group", "checks / macOS ordinary tests / group",
+} | {
     f"checks / library ({os}, {backend}, handoff={handoff})"
     for os in ("ubuntu-latest", "macos-latest")
     for backend in ("ast", "bytecode")

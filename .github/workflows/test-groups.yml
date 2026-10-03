@@ -92,7 +92,9 @@ jobs:
         run: |
           python3 .github/scripts/fast_ci.py start --report-dir build/ci/common-results
           python3 .github/scripts/fast_ci.py compile-common --report-dir build/ci/common-results
-          python3 .github/scripts/fast_ci.py pack-common --archive build/ci/common.tar.gz
+      - name: Pack common compilation for scheduled groups
+        if: inputs.cadence != 'commit'
+        run: python3 .github/scripts/fast_ci.py pack-common --archive build/ci/common.tar.gz
       - name: Check the primop checklist
         if: inputs.cadence == 'commit'
         run: |
@@ -158,14 +160,31 @@ jobs:
       - name: Check benchmark power provenance
         if: inputs.cadence == 'commit'
         run: python3 tools/test-compare-map-runtimes.py
-      - name: Preserve common compile phases
+      - name: Run commit group with existing compilation and both handoff modes
+        if: inputs.cadence == 'commit'
+        run: |
+          ./gradlew --stop
+          trap './gradlew --stop' EXIT
+          python3 .github/scripts/fast_ci.py group --group commit --cadence commit --reuse-daemon --report-dir build/ci/group-results/commit
+      - name: Preserve common compilation and commit test output
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: common-build-logs-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: build/ci/common-results/
+          path: |
+            build/ci/common-results/
+            build/ci/group-results/
+            build/test-results/testDefault/
+            build/test-results/testDense/
+            build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd
+            build/empty-join-input/post-core/EmptyJoinInputAudit.cbd
+            build/empty-join-input/provenance.json
+            build/empty-join-input/oracle.tsv
+            build/reports/tests/testDefault/
+            build/reports/tests/testDense/
           retention-days: 7
       - name: Share only this platform's common compile outputs
+        if: inputs.cadence != 'commit'
         uses: actions/upload-artifact@v7.0.1
         with:
           name: common-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -174,7 +193,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   group:
-    name: ${{ matrix.batch }} (${{ inputs.os }})
+    if: inputs.cadence != 'commit'
     needs: compile
     strategy:
       fail-fast: false

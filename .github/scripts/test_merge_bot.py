@@ -163,7 +163,8 @@ class MergeBotTest(unittest.TestCase):
     def test_skipped_scheduled_jobs_do_not_block_a_complete_commit_build(self):
         api = FakeAPI()
         for name in ("checks / build", "checks / foreign-exceptions", "checks / library", "checks / Windows tests",
-                     "checks / library (macos-latest, bytecode, handoff=true)"):
+                     "checks / library (macos-latest, bytecode, handoff=true)",
+                     "checks / Linux ordinary tests / group", "checks / macOS ordinary tests / group"):
             with self.subTest(name=name):
                 api.jobs = jobs() + [{"name": name, "status": "completed", "conclusion": "skipped"}]
                 self.assertEqual(build_result(api, "head")[0], "success")
@@ -175,7 +176,10 @@ class MergeBotTest(unittest.TestCase):
     def test_skipped_ordinary_or_unknown_jobs_still_fail_build(self):
         for name in ("checks / Linux ordinary tests / batch-1 (ubuntu-latest)",
                      "checks / unexpected", "checks / library (unknown)",
-                     "checks / build (ubuntu-latest)", "checks / build (macos-latest)"):
+                     "checks / build (ubuntu-latest)", "checks / build (macos-latest)",
+                     "checks / Linux ordinary tests / group (batch-01)",
+                     "checks / macOS ordinary tests / group (batch-01)",
+                     "checks / unknown ordinary tests / group"):
             with self.subTest(name=name):
                 api = FakeAPI()
                 api.jobs.append({"name": name, "status": "completed", "conclusion": "skipped"})
