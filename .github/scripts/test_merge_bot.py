@@ -11,7 +11,7 @@ from merge_bot import (ACTIONS_APP, CHECKS, REQUIRED_STATUS, BUILD_GATE, FAST_GA
 
 
 def publish_run(api, run_id):
-    # Existing regressions explicitly retain the transition's Build/11 policy.
+    # These regressions exercise the Build gate.
     return publish_selected_run(api, run_id, BUILD_GATE)
 
 
@@ -136,7 +136,7 @@ class MergeBotTest(unittest.TestCase):
 
     def test_required_names_cover_commit_checks_and_both_platform_compilations(self):
         self.assertEqual(CHECKS, {
-            "checks / automation", "checks / build (ubuntu-latest)", "checks / build (macos-latest)",
+            "checks / automation",
             "checks / Linux ordinary tests / Common compilation (ubuntu-latest)",
             "checks / macOS ordinary tests / Common compilation (macos-latest)",
         })
@@ -162,17 +162,20 @@ class MergeBotTest(unittest.TestCase):
 
     def test_skipped_scheduled_jobs_do_not_block_a_complete_commit_build(self):
         api = FakeAPI()
-        for name in ("checks / foreign-exceptions", "checks / library", "checks / Windows tests",
+        for name in ("checks / build", "checks / foreign-exceptions", "checks / library", "checks / Windows tests",
                      "checks / library (macos-latest, bytecode, handoff=true)"):
-            api.jobs.append({"name": name, "status": "completed", "conclusion": "skipped"})
-        self.assertEqual(build_result(api, "head")[0], "success")
-        for conclusion in ("failure", "cancelled", "timed_out"):
-            api.jobs[-1]["conclusion"] = conclusion
-            self.assertEqual(build_result(api, "head")[0], "failure")
+            with self.subTest(name=name):
+                api.jobs = jobs() + [{"name": name, "status": "completed", "conclusion": "skipped"}]
+                self.assertEqual(build_result(api, "head")[0], "success")
+                for status, conclusion in (("completed", "failure"), ("completed", "cancelled"),
+                                           ("completed", "timed_out"), ("in_progress", None)):
+                    api.jobs[-1].update(status=status, conclusion=conclusion)
+                    self.assertEqual(build_result(api, "head")[0], "failure")
 
     def test_skipped_ordinary_or_unknown_jobs_still_fail_build(self):
         for name in ("checks / Linux ordinary tests / batch-1 (ubuntu-latest)",
-                     "checks / unexpected", "checks / library (unknown)"):
+                     "checks / unexpected", "checks / library (unknown)",
+                     "checks / build (ubuntu-latest)", "checks / build (macos-latest)"):
             with self.subTest(name=name):
                 api = FakeAPI()
                 api.jobs.append({"name": name, "status": "completed", "conclusion": "skipped"})
@@ -198,7 +201,7 @@ class MergeBotTest(unittest.TestCase):
             reads += 1
             if reads == 3:
                 next(job for job in api.jobs if job["name"] ==
-                     "checks / build (macos-latest)")["conclusion"] = "failure"
+                     "checks / macOS ordinary tests / Common compilation (macos-latest)")["conclusion"] = "failure"
 
         api.before_jobs_read = changed
         messages = self.run_bot(api)
@@ -692,7 +695,6 @@ class FastGateTest(unittest.TestCase):
         self.assertEqual(PR_GATE, FAST_GATE)
         self.assertEqual(FAST_GATE.workflow, "fast.yml")
         self.assertEqual(FAST_GATE.checks, {"automation", "fast-check"})
-        self.assertEqual(len(BUILD_GATE.checks), 5)
         api = FastAPI()
         self.run_bot(api)
         self.assertEqual(api.actions, [

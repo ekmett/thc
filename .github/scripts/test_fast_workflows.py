@@ -97,7 +97,8 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         for job in ("foreign-exceptions", "library"):
             block = workflow.split("  " + job + ":\n", 1)[1].split("    steps:", 1)[0]
             self.assertIn("if: inputs.cadence == 'nightly'", block)
-        commands = [line.strip() for line in workflow.splitlines() if "cabal test driver-tests" in line]
+        grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
+        commands = [line.strip() for line in (workflow + grouped).splitlines() if "cabal test driver-tests" in line]
         self.assertEqual(3, len(commands))
         for option in ("--unit-only", "--public-packages-only", "--acquire-project-only"):
             self.assertEqual(1, sum("--test-options=" + option in command for command in commands))
@@ -105,6 +106,34 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
         self.assertIn('fast_select.py --matrix --cadence "$CI_CADENCE"', grouped)
         self.assertIn('fast_ci.py group --group "$group" --cadence "$CI_CADENCE"', grouped)
+
+    def test_commit_checks_reuse_common_compilation_and_scheduled_workers_stay_separate(self):
+        workflow = (WORKFLOW.parent / "checks.yml").read_text()
+        build = workflow.split("  build:\n", 1)[1].split("    steps:", 1)[0]
+        self.assertIn("if: inputs.cadence != 'commit'", build)
+        grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
+        common = grouped.split("  compile:\n", 1)[1].split("  group:\n", 1)[0]
+        for name in (
+            "Check the primop checklist",
+            "Check pinned guest protocol artifacts",
+            "Check driver units and CPU affinity API",
+            "Check exact dependency auditor and library frontier",
+            "Check merged fixture and runtime recipes with and without assertions",
+            "Check benchmark power provenance",
+        ):
+            with self.subTest(name=name):
+                self.assertNotIn("name: " + name, workflow)
+                self.assertEqual(1, common.count("name: " + name + "\n"))
+                block = common.split("name: " + name + "\n", 1)[1].split("\n      - ", 1)[0]
+                self.assertIn("if: inputs.cadence == 'commit'", block)
+                self.assertLess(common.index("fast_ci.py compile-common"), common.index("name: " + name))
+        self.assertNotIn("cabal run exe:thc-primops -- scalars", grouped)
+        self.assertNotIn("cabal build exe:thc", grouped)
+        self.assertIn("cabal run thc --offline -fdevelopment -- --help", common)
+        self.assertNotIn("continue-on-error", common)
+        self.assertIn("name: Verify pinned toolchain\n        if: inputs.cadence == 'commit'", common)
+        self.assertIn("python3 bin/test-audit-core.py", common)
+        self.assertIn("testMaterializableApi testReturnPolicy testReturnContinuations", common)
 
     def test_nightly_foreign_exception_runner_rejects_untrusted_events(self):
         workflow = (WORKFLOW.parent / "checks.yml").read_text()
@@ -127,7 +156,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 self.assertEqual(expected, result.returncode == 0)
 
     def test_build_runs_driver_units_without_selecting_package_integration(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
+        workflow = (WORKFLOW.parent / "test-groups.yml").read_text()
         block = workflow.split("name: Check driver units and CPU affinity API", 1)[1].split("\n      - ", 1)[0]
         commands = [line.strip() for line in block.splitlines() if line.strip().startswith("cabal test ")]
         self.assertEqual(commands, [
@@ -216,7 +245,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn('lookupEnv "GHC_PKG"', codepages)
 
     def test_stdio_checks_use_haskell_and_java_not_a_python_test_family(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
+        workflow = (WORKFLOW.parent / "test-groups.yml").read_text()
         block = workflow.split("name: Check merged fixture and runtime recipes with and without assertions", 1)[1].split("      - name:", 1)[0]
         for name in ("test-core-original-stdio.py", "test-original-stdio-fixtures.py", "test-generate-stdio-abi.py"):
             self.assertNotIn("bin/" + name, block)

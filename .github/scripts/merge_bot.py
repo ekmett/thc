@@ -18,11 +18,11 @@ from urllib.request import Request, urlopen
 LABEL = "auto-merge"
 BOT_LOGIN = "github-actions[bot]"
 CI_SKIP = re.compile(r"\[ci skip\]", re.IGNORECASE)
-CHECKS = {"checks / automation", "checks / build (ubuntu-latest)", "checks / build (macos-latest)"} | {
+CHECKS = {"checks / automation"} | {
     f"checks / {platform} ordinary tests / Common compilation ({os})"
     for platform, os in (("Linux", "ubuntu-latest"), ("macOS", "macos-latest"))
 }
-BUILD_SCHEDULED_JOBS = {"checks / foreign-exceptions", "checks / library", "checks / Windows tests"} | {
+BUILD_SCHEDULED_JOBS = {"checks / build", "checks / foreign-exceptions", "checks / library", "checks / Windows tests"} | {
     f"checks / library ({os}, {backend}, handoff={handoff})"
     for os in ("ubuntu-latest", "macos-latest")
     for backend in ("ast", "bytecode")
