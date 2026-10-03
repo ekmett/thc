@@ -2073,3 +2073,628 @@ Most installed-interface inputs are unhashed; copied source history is not a
 Value review: ten separately maintained libc/Unix harnesses, repeated source
   rebuilding and per-fixture ABI compiles. Preserve only THC boundary/lifetime/raw
   path semantics that package/general FFI tests do not already establish.
+
+076  original-stdio-truncate
+Producer: t/haskell-fixtures/OriginalStdioTruncateFixtures.hs.
+Consumer: thc.runtime.OriginalStdioTruncateNativeTest. Linux/macOS LP64.
+IN: t/fixtures/compiler/OriginalStdioTruncateAudit.hs and AuditNative.hs (same
+  OriginalStdioTruncate prefix); shared exporter/auditor/GHC9.14.1/ghc-internal/unix.
+Under build/original-stdio-truncate/:
+  native/oracle: IN native driver/audit source/packages; OUT binary/objects.
+  results/<0..13>.txt and .private for file cases: IN oracle + embedded request
+    arguments; OUT result/size/position and file bytes. oracle.json reads these
+    files/native command streams; OUT 14 observations.
+  <pre|post>/core/OriginalStdioTruncateAudit.cbd, THC.InterfaceClosure.cbd:
+    IN audit source/exporter/closure roots; OUT CBD pair/stage ghc intermediates.
+  <stage>/<originalTruncate|originalTruncateErrno>.audit.json: IN pair/auditor;
+    OUT reports. logs/ghc-version,ghc-info,native-build,native-N,stage-export/
+    audit-entry: OUT triplets. manifest.json reads all outputs/source receipt.
+Consumer reads receipts/Core/oracle/audits. Result files cleared before native run;
+  old manifest not invalidated. Shared auditor-table omissions remain.
+
+077  original-stdio-seek
+Producer: t/haskell-fixtures/OriginalStdioSeekFixtures.hs.
+Consumer: thc.runtime.OriginalStdioSeekNativeTest. Linux/macOS LP64.
+IN: t/fixtures/compiler/OriginalStdioSeekAudit.hs, OriginalStdioSeekAuditNative.hs;
+  shared tools/GHC9.14.1/ghc-internal/unix.
+Under build/original-stdio-seek/:
+  native/oracle: IN source pair/packages; OUT binary/intermediates.
+  logs/native-constants.stdout: IN oracle constants; OUT SEEK_SET/CUR/END.
+  results/<0..23>.txt and file-case .private: IN oracle/request arguments;
+    OUT status and unchanged file bytes. oracle.json reads results/streams;
+    OUT 24 cases. These result files cleared before run.
+  <pre|post>/core/OriginalStdioSeekAudit.cbd, THC.InterfaceClosure.cbd:
+    IN source/exporter/two roots/stage; OUT pair/ghc intermediates.
+  <stage>/<originalSeek|originalSeekErrno>.audit.json: IN pair/auditor; OUT reports.
+  logs/ghc-version,ghc-info,native-build,native-N,stage-export/audit-entry:
+    OUT triplets. manifest.json reads artifacts/source hashes/constants.
+Tests read these and call nativeModules, adding 066 installed/native/runtime
+  artifacts. Old manifest not invalidated. Keep shared descriptor/FFI behavior;
+  assess repeated package seek mechanics for consolidation.
+
+078  original-posix-dup
+Producer: t/haskell-fixtures/OriginalPosixDupFixtures.hs.
+Consumer: thc.runtime.OriginalPosixDupNativeTest. Linux/macOS LP64.
+IN: t/fixtures/compiler/OriginalPosixDupAudit.hs, OriginalPosixDupAuditNative.hs;
+  shared tools/GHC9.14.1/ghc-internal/unix.
+Under build/original-posix-dup/:
+  native/oracle: IN source pair/packages; OUT binary/objects.
+  results/<0..18>.{txt,private,other}: IN oracle/request arguments;
+    OUT observations and two files per case. oracle.json reads txt/streams;
+    OUT 19 rows. Result files not removed first by this producer.
+  <pre|post>/core/OriginalPosixDupAudit.cbd, THC.InterfaceClosure.cbd:
+    IN source/exporter/four roots/stage; OUT CBD pair/ghc intermediates.
+  <stage>/<originalDup|originalDupErrno|originalDup2|originalDup2Errno>.audit.json:
+    IN stage pair/auditor; OUT eight reports.
+  logs/ghc-version,ghc-info,native-build,native-N,stage-export/audit-entry:
+    OUT triplets. manifest.json reads all outputs/source receipt; old removed.
+Consumer reads receipts/Core/audits/oracle and native command JSON explicitly.
+
+079  original-stdio-close
+Producer: t/haskell-fixtures/OriginalStdioCloseFixtures.hs.
+Consumer: thc.runtime.OriginalStdioCloseNativeTest. Linux/macOS LP64.
+IN: t/fixtures/compiler/OriginalStdioCloseAudit.hs, OriginalStdioCloseAuditNative.hs;
+  shared tools/GHC9.14.1/ghc-internal/unix.
+Under build/original-stdio-close/:
+  native/oracle: IN source pair/packages; OUT binary/objects.
+  results/<0..3>.txt, .private for valid cases: IN oracle/requests; OUT results/files.
+  oracle.json: IN result files/streams; OUT four cases.
+  <pre|post>/core/OriginalStdioCloseAudit.cbd, THC.InterfaceClosure.cbd:
+    IN source/exporter/two closure roots; OUT pair/ghc intermediates.
+  <stage>/<originalClose|originalCloseErrno>.audit.json: IN pair/auditor; OUT reports.
+  logs/ghc-version,ghc-info,native-build,native-N,stage-export/audit-entry:
+    OUT triplets. manifest.json reads artifacts/source receipt; old not removed.
+Consumer reads receipt paths/oracle/Core/reports. Per-case result txt removed first.
+Compare close behavior with broader open/dup/resource-disposal tests.
+
+080  original-stdio-read
+Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalStdioRead.
+Consumer: thc.runtime.OriginalStdioReadTest. Linux/macOS LP64.
+IN: t/fixtures/compiler/OriginalStdioReadAudit.hs, OriginalStdioReadNative.hs;
+  shared tools/GHC9.14.1/ghc-internal/unix.
+Under build/original-stdio-read/:
+  native/original-stdio-read-oracle: IN source pair/packages; OUT binary/objects.
+  input.bin: IN producer's eight byte payload; OUT input file.
+  results/<0..39>.txt: IN oracle/request arguments and input.bin as BOTH inherited
+    fd0 and named reopenable input; OUT result/buffer image. Cleared first.
+  oracle.json: IN result files/native streams; OUT 40 rows.
+  <pre|post>/core/OriginalStdioReadAudit.cbd, THC.InterfaceClosure.cbd:
+    IN audit source/exporter/four closure roots; OUT pair/ghc intermediates.
+  <stage>/<entry>.audit.json: IN pair/auditor/read, safe-read and errno variants;
+    OUT eight reports. logs/ghc-version,native-build,native-000..039,stage-export/
+    audit-entry: OUT triplets. manifest.json reads all/source hashes; old removed.
+Consumer reads receipts/Core/audits/oracle. The seekable file on stdin is a real
+  native command input, not interchangeable with an empty pipe or closed fd0.
+
+081  mutvar
+Producer: t/haskell-fixtures/MutVarFixtures.hs. Consumer: thc.runtime.MutVarNativeTest.
+IN: t/fixtures/compiler/MutVarAudit.hs; producer/Main/FixtureSupport/shared tools/GHC9.14.1.
+Under build/mutvar/:
+  NativeMutVar.hs: IN producer template; OUT native driver.
+  native/mutvar-oracle: IN generated driver/audit source/native packages; OUT binary/objects.
+  oracle.tsv: IN binary + in-memory entry/value request corpus; OUT native results.
+  <pre|post>/core/MutVarAudit.cbd, THC.InterfaceClosure.cbd: IN source/exporter/
+    14 closure roots/stage; OUT exact CBD pair/ghc intermediates.
+  <stage>/<entry>.audit.json: IN pair/auditor; OUT 28 reports.
+  manifest.json: IN generated driver/TSV/CBD/reports/source receipt; OUT hashes.
+Consumer reads receipts/oracle/Core/audits; executable not hashed, no command logs.
+Old manifest removed; unexpected old CBDs cause exact directory inventory failure.
+
+082  weak-explicit
+Producer: t/haskell-fixtures/WeakFixtures.hs. Consumer: thc.runtime.ManagedWeakTest.
+IN: t/fixtures/compiler/WeakAudit.hs; producer/shared tools/native GHC9.14.1.
+Under build/weak-explicit/:
+  NativeWeak.hs -> native/weak-oracle: IN producer template then audit source/native
+    packages; OUT driver,binary,objects. oracle.tsv: IN binary/eight in-memory
+    inputs; OUT native results checked against signed input+58 model.
+  <pre|post>/core/WeakAudit.cbd, THC.InterfaceClosure.cbd: IN source/exporter/
+    weakComposite closure/stage; OUT exact pair/ghc intermediates.
+  <stage>/audit.json: IN pair/auditor; OUT report.
+  manifest.json: IN driver/TSV/CBD/audits/source receipt; OUT hashes; old removed.
+Consumer reads receipts/oracle/CBDs/reports. Executable not hashed; no command logs.
+Explicit weak operations only; this fixture does not demonstrate GC finalization.
+
+083  stable-names
+Producer: t/haskell-fixtures/StableNameFixtures.hs. Consumer: thc.runtime.StableNamesTest.
+IN: t/fixtures/core/StableNames.hs, t/fixtures/compiler/StableNamesNative.hs;
+  producer/shared tools/native GHC9.14.1.
+Under build/stable-names/:
+  native/oracle: IN source pair/native packages; OUT binary/objects.
+  commands/native-run.stdout: IN binary; OUT 20 observations.
+  <pre|post>/core/StableNames.cbd: IN source/exporter/stage; OUT CBD/ghc intermediates.
+  <stage>/<sameLifted|sameUnlifted|differentUnlifted|unevaluatedName>-audit.json:
+    IN stage CBD/auditor; OUT eight reports.
+  commands/{ghc-version,native-build,stage-export,stage-audit-entry}.*: OUT triplets.
+  manifest.json: IN parsed observations/CBD/reports/logs/source hashes; OUT receipt
+    with embedded native values. Consumer reads receipt paths/CBD/results.
+Native binary not hashed and old manifest not invalidated.
+
+084  stable-pointers
+Producer: t/haskell-fixtures/StablePointerFixtures.hs. Consumer: thc.runtime.StablePointerTest.
+IN: t/fixtures/compiler/StablePointerAudit.hs, SharedCAFNative.hs,
+  SharedCAFOriginalCalls.json; producer/shared tools/native GHC9.14.1/compact library.
+Under build/stable-pointers/:
+  <pre|post>/core/StablePointerAudit.cbd, THC.InterfaceClosure.cbd:
+    IN audit source/exporter/stableComposite,lazyStable closures; OUT pair/ghc/.
+  <stage>/shared-core/SharedCAFNative.cbd, THC.InterfaceClosure.cbd:
+    IN SharedCAFNative source/exporter/shared store closures; OUT pair/shared-ghc/.
+  <stage>/synthetic/SharedCAFNative.cbd: IN shared CBD decoded in-memory and tracked
+    original-call JSON certificate; OUT modified call heads reencoded as CBD.
+  <stage>/<entry>.audit.json: IN appropriate pair/auditor; OUT four reports per stage.
+  NativeStablePointer.hs -> native/stable-pointer-oracle: IN producer template,
+    then both Haskell sources/native packages; OUT driver,binary,objects.
+  oracle.tsv: IN binary/32 in-memory requests; OUT native results.
+  manifest.json: IN driver/TSV/CBDs/audits/source receipt; OUT hashes and module lists.
+Consumer reads receipts/base and synthetic CBDs/TSV/audits. Old manifest removed;
+  no command logs/executable hash. Pinned descriptor certificate/synthetic relabeling
+  deserves value review against current installed foreign-registration tests.
+
+085  interface-core
+Producer: t/haskell-fixtures/InterfaceFixtures.hs plus InterfaceForeignFacts.hs
+  and InstalledCacheFixtures.hs. Consumers: thc.CoreUnitManagedExportTest,
+  ManagedExportsNativeTest, ManagedForeignRootsNativeTest, ManagedImportStubsNativeTest,
+  thc.runtime.InterfaceCoreNativeTest.
+Shared IN: thc-fixtures, thc-interface, compiler plugin/private DB, GHC9.14.1/
+  ghc-pkg/base/ghc-internal and native toolchain; shared Driver installed/ZIP/CoreSymbols/
+  ForeignBitcode/target-layout.c; auditor data closure. Helper Cabal commands omit
+  explicit --with-compiler even though later GHC comes from GHC environment.
+Under build/interface-core/:
+  source/InterfaceLibrary.hs, CBVCoercionAudit.hs: IN corresponding tracked
+    t/fixtures/compiler sources; OUT copied files, later renamed to .saved.
+  full/{InterfaceLibrary,CBVCoercionAudit}.{hi,dyn_hi,o,dyn_o}:
+    IN copied sources/GHC/plugin, -dynamic-too -fwrite-if-simplified-core;
+    OUT interfaces/native objects plus direct/*.cbd from plugin.
+  thin/same: IN copies/GHC, -fno-write-if-simplified-core; OUT thin interfaces/objects.
+  <full|thin>/package.conf, package.conf.d/: IN generated registration/import dirs/
+    base unit + ghc-pkg; OUT private DBs consumed by helper/native compiler.
+  full/InterfaceForeign.{hi,dyn_hi,o,dyn_o}, foreign/package.conf[.d]:
+    IN t/fixtures/compiler/InterfaceForeign.hs (TH embeds extra C source);
+    OUT interfaces/objects/stubs and private registration.
+  native/oracle: IN InterfaceNative.hs, full objects/DB; OUT binary/intermediates.
+  logs/native-oracle.stdout: IN binary; OUT 21 native observations.
+  InterfaceLibrary.cbd, CBVCoercionAudit.cbd, InterfaceForeign.cbd:
+    IN matching full .hi/private DB/thc-interface; OUT helper Core stdout saved.
+  logs/helper-{thin,dynamic,wrong-way,wrong-module,duplicate-option}.*:
+    IN full/thin interfaces/identity/way options; OUT protocol control observations.
+  wired-unit.json, installed-bound-facts.json, logs/helper-wired-unit.*:
+    IN installed ghc-internal registration/GHC/Internal/Char.hi and Conc/Bound.hi;
+    OUT selected provider metadata/retained foreign facts and helper result.
+  installed-wrapper-facts.json and optional <occurrence>.cbd/<occurrence>-audit.json:
+    IN installed Data/Typeable/Internal.hi ($WTrType), Unsafe/Coerce.hi ($WUnsafeRefl),
+    GHC API/auditor; OUT facts and, only with retained Core, exported/audited wrappers.
+  foreign-alias/{a,b}/InterfaceForeignAlias.{hi,o,...}, {a,b}.cbd:
+    IN copied InterfaceForeignAlias.hs and differing C-label CPP flag; OUT native
+    compile products, then interface-loaded CBDs; source renamed .hs.saved.
+  foreign-association.json: IN those two variants; OUT comparison facts.
+  typed-export-source/*.hs then .hs.saved: IN tracked InterfaceForeignAlias,
+    ForeignExportSignatures, InterfaceForeign, ForeignExportManaged,
+    ForeignExportRegistration.hs; OUT source copies renamed after compilation.
+  typed-foreign-exports/<variant>/: IN matching copied source/plugin with export
+    association+registration flags/CPP options; OUT .hi/.o/stubs,direct CBDs,
+    package.conf/private DB. Variants a,b,instrumented use InterfaceForeignAlias;
+    signatures/static-signatures use ForeignExportSignatures; foreign-file uses
+    InterfaceForeign; managed/registration use matching ForeignExport modules.
+  typed-foreign-exports/<variant>.cbd: IN corresponding retained .hi; OUT eight CBDs.
+  typed-foreign-exports/managed/oracle, registration/oracle: IN respective objects/
+    private DB and ManagedExportNative.hs/RegistrationNative.hs; OUT binaries.
+  logs/managed-export-{native-oracle,registration-native-oracle}.stdout:
+    IN respective binary; OUT expected callback observations.
+  typed-foreign-exports.json: IN variant metadata; OUT association/ABI facts.
+  source/ForeignImportStubs.hs then .hs.saved: IN tracked source; OUT copied source.
+  import-stubs/<variant>/: IN copy/GHC/plugin with foreign-import-provenance and
+    variant CPP; OUT .hi/.o/stubs,direct CBDs,private DB. Variants plain,labels,
+    labels-header,capi-labels,capi-labels-header,finalizer-label,extra-file,wrapper,
+    instrumented. extra-file embeds TH C source; no external C source input.
+  import-stubs/<variant>.cbd: IN retained interface; OUT nine CBDs.
+  import-stubs/plain/oracle: IN plain object/DB + ImportStubsNative.hs; OUT binary.
+  logs/import-stubs-native-oracle.stdout: IN binary; OUT native observations.
+  import-stubs/<label-variant>-<probe|unknownData|unknownFunction>-audit.json:
+    IN variant CBD/auditor; OUT 15 reports; manifest only lists labels-* subset.
+  driver-cache/core-bundles/v1/<compiler-partition>/<key>/<unit>.zip:
+    IN full/foreign private interfaces/DB/helper/target-layout probe; OUT package
+    bundles via production Project acquisition. native/staging/: OUT intermediate
+    exported Core, target layout and native-link products.
+  driver-cache/unit-core/v3/<digest>/*: IN bundles; OUT published CBDs/publication.json.
+  packages.json, foreign-packages.json: IN published unit records; OUT manifests.
+  clock-capi.cbd, clock-capi-wrong-abi.cbd: IN producer in-memory model/C template;
+    OUT controls. Driver.ForeignBitcode consumes these/GHC headers/native compiler
+    to emit linked bitcode/artifact under native/staging (returned exact path is
+    computed by shared driver, not statically named here).
+  driver-controls.json: IN acquisition/control outcomes and bundle bytes;
+    OUT recorded checks.
+  cache-controls/λ雪🙂/<InterfaceCacheRoot|InterfaceCacheDependency>/source/*.hs:
+    IN tracked InterfaceCacheRoot.hs/InterfaceCacheDependency.hs; OUT copies.
+  cache-controls/λ雪🙂/<module>/*.{hi,dyn_hi,o,dyn_o}, package.conf.d/:
+    IN copies/GHC/base and dependency registration; OUT interfaces/objects/DB.
+  cache-controls/helper, helper-calls, mutate-after-probe, replacement.dyn_hi:
+    IN producer wrapper template/helper path/control operations; OUT private shell
+    wrapper/trace/mutation controls. cache-controls/cache/ consumes interfaces,
+    source bytes/registrations/helper and emits bundles/probe/selection caches.
+    Producer deliberately corrupts/restores its private cache/inputs to test repair.
+  cache-controls/facts.json: IN these control outcomes; OUT facts.
+  <opaqueEntry|inlineEntry|recursiveEntry|coercionEntry|wrapperEntry>-audit.json:
+    IN packages.json plus referenced CBDs/auditor; OUT five reports.
+  logs/: each helper/compiler/registration/oracle/audit call writes standard triplet.
+  manifest.json: IN selected outputs/logs/source hashes; OUT receipt. Does not cover
+    every compiler side product or cache file; old manifest not invalidated first.
+Consumers read manifest/receipts and their named CBDs/package manifests/logged
+  oracle stdout. ManagedExportsNativeTest and CoreUnitManagedExportTest also write
+  temporary model CBDs, so depend on shared compact-model encoder (041).
+ManagedForeignRootsNativeTest/ManagedImportStubsNativeTest launch Python auditor
+  during JUnit, producing temporary registration-runtime-audit.json and
+  import-stubs-runtime-audit.json; auditor/decoder/data remain TEST inputs too.
+This producer executes an entire cache correctness suite before publishing ordinary
+  interface fixtures. Separate those test operations from reusable fixture products.
+
+086 floating-tuples
+Producer: bin/prepare-floating-tuples.py; consumer: thc.runtime.FloatingTupleTest.
+Inputs: t/fixtures/compiler/FloatingTupleAudit.hs and FloatingTupleAuditNative.hs,
+  producer, shared exporter/plugin/auditor/decoder and pinned GHC/native libraries.
+Outputs under build/floating-tuple/ (singular):
+  native/oracle and native compiler intermediates: IN both Haskell sources/GHC.
+  oracle.tsv, bits.tsv: IN native/oracle, invoked normally and with argument bits.
+  pre-core/FloatingTupleAudit.cbd, post-core/FloatingTupleAudit.cbd and pre/post-ghc/:
+    IN audit source/exporter with corresponding stage flag.
+  pre-audit.json, post-audit.json: IN corresponding CBD, five entry names/auditor.
+  provenance.json: IN TSVs/audits, recursively found non-JSON files in native/,
+    pre-core/,post-core/, source receipts, build/compiler/plugin.json and its
+    sharedLibrary. OUT receipt; previous receipt is not invalidated first.
+  checks.json: IN receipt/all hashed files, oracles/CBDs/audits; OUT coverage checks.
+    --check-only also writes this file.
+Preflight consumes existing plugin manifest/database/library or builds if absent or
+  invalid; exporter subsequently invokes compiler build again. Consumer reads
+  receipt/all hashed files, both CBDs, audits, oracle.tsv and bits.tsv.
+Exact CPR producer/tuple/join shapes are asserted; review for compiler fossilization.
+Receipt includes unused PrimopTools.hs but misses shared auditor data tables.
+
+087 pinned-addresses
+Producer: t/haskell-fixtures/PinnedAddressFixtures.hs (thc-fixtures command).
+Consumer: thc.runtime.PinnedAddressTest.
+Inputs: t/fixtures/compiler/PinnedAddressAudit.hs, PinnedAddressAuditNative.hs,
+  producer/shared tools, pinned 64-bit GHC/host byte order and compact model library.
+Outputs under build/pinned-addresses/:
+  requests.tsv, expected.tsv: IN producer request model.
+  native/pinned-address-oracle, Main.{hi,o}, PinnedAddressAudit.{hi,o}:
+    IN native driver/audit module/GHC.
+  oracle.tsv: IN binary with requests.tsv on stdin; checked against expected.tsv.
+  <pre|post>/core/{PinnedAddressAudit,THC.InterfaceClosure}.cbd and stage/ghc/:
+    IN audit source/five closure roots/exporter/stage flag.
+  stage/<entry>.audit.json: IN CBD pair/auditor; entries pinnedBytes,alignedBytes,
+    keepAliveWord8,keepAliveLazy,fingerprintByte.
+  stage/negative/<label>-{0,1}.cbd: IN CBD pair/accepted baseline/compact model;
+    labels read-word-not-word8,write-word-not-word8,read-address-is-word,
+    read-state-is-int,read-offset-is-word,contents-lifted-array,
+    contents-result-is-word,allocation-size-is-word,allocation-state-is-int,
+    aligned-alignment-is-word,keepalive-state-is-int,keepalive-result-word-not-word8.
+  stage/negative-<label>.audit.json, stage/negative-proofs.json:
+    IN controls/auditor; OUT rejection reports and summary.
+  commands/*.{stdout,stderr,command.json}: IN each native build/oracle, stage export,
+    entry audit and negative audit command.
+  manifest.json: IN requests/expected, optional native artifacts, stage products,
+    logs/source hashes; OUT receipt with rows/coverage. Old receipt removed first.
+Modes native-only/export-only/allow-unsupported change the output set; default full.
+Consumer reads receipts, TSVs, CBDs, audit/negative reports and command records.
+Receipt again includes unused PrimopTools.hs and omits shared auditor data tables.
+
+088 sum-results (three indexed commands, four producer flows)
+Consumers: thc.AggregateFrontierTest, AggregateLayoutTest, SumLayoutMetadataTest;
+  thc.runtime.SumProtocolTest, SumResultTest, TupleRepresentationTest,
+  UnknownBoxedNativeTest. AggregateFrontierTest and SumProtocolTest also write
+  model CBDs, consuming shared compact-model encoder (041).
+A. bin/prepare-aggregate-frontier.sh:
+  IN bin/toolchain.sh, built thc-fixtures, t/fixtures/compiler/AggregateFrontier.hs,
+    AggregateFrontierNative.hs, exporter/native GHC/shared package libraries.
+  OUT build/aggregate-core/AggregateFrontier.cbd,
+    build/aggregate-post-core/AggregateFrontier.cbd and corresponding
+    build/aggregate-ghc/,aggregate-post-ghc/ intermediates.
+  build/aggregate-native/aggregate-frontier: IN native driver/audit source/GHC;
+    OUT executable and compiler intermediates.
+  build/aggregate-native/oracle.tsv: IN executable.
+  build/aggregate-frontier.json: IN CBD pair/oracle,
+    bin/check-aggregate-frontier.py and shared auditor/decoder/capabilities.
+  Then invokes B below.
+B. bin/check-aggregate-layout.py --prepare:
+  IN t/fixtures/compiler/AggregateLayoutAudit.hs, bin/sum_layout_model.py,
+    producer/exporter/auditor/decoder/capability data.
+  Under build/aggregate-layout/:
+    native/: IN source/GHC --make -no-link -O2 -dynamic; OUT .hi/.o (no oracle).
+    <pre|post>-core/AggregateLayoutAudit.cbd and stage-ghc/: IN source/exporter.
+    provenance.json: IN recursively found non-JSON native/core/ghc artifacts,
+      plugin manifest/shared library, GHC/ghc-pkg facts and source hashes.
+    checks.json: IN receipt/all hashes, CBDs/in-process auditor/layout model;
+      OUT coverage. Checking without --prepare still writes checks.json.
+C. bin/check-sum-layout.py --prepare:
+  IN t/fixtures/compiler/SumLayoutAudit.hs, SumLayoutAuditNative.hs,
+    bin/sum_layout_model.py and shared tools/data.
+  Under build/sum-layout/:
+    <pre|post>-core/SumLayoutAudit.cbd and stage-ghc/: IN audit source/exporter.
+    native/sum-layout-oracle and compiler intermediates: IN native/audit sources.
+    oracle.tsv: IN binary; checked against independent model.
+    provenance.json: IN recursive generated products/plugin/toolchain/source hashes;
+      old receipt removed first. Includes bin/test-sum-layout.py, not executed here.
+    checks.json: IN receipt/CBD inventory/in-process audits/layout model.
+D. bin/prepare-sum-result-audit.py:
+  IN t/fixtures/compiler/SumResultAudit.hs, SumResultAuditNative.hs,
+    producer model/shared exporter/auditor/decoder/data.
+  Under build/sum-result/:
+    <pre|post>-core/SumResultAudit.cbd and stage-ghc/: IN audit source/exporter.
+    pre-audit.json, post-audit.json: IN corresponding CBD/in-process auditor/data.
+    native/oracle and intermediates: IN native/audit sources/GHC.
+    oracle.tsv, oracle-pairs.tsv: IN binary normally / with --pairs respectively.
+    checks.json: IN model/oracle/audits; OUT coverage.
+    provenance.json: IN recursively all output files except itself/Core JSON,
+      plugin manifest/shared library, GHC/package descriptions and source hashes.
+      Old receipt removed first.
+Consumers read their named CBDs/oracles/checks and receipt-referenced files.
+Recursive receipts turn stale compiler intermediates into extra inputs; output sets
+  are not closed. Review overlap among frontier/layout/sum-layout/result suites
+  before carrying all four producers into the graph.
+
+089 simd-floatx4
+Producer: bin/prepare-floatx4-audit.py; consumer: thc.runtime.SimdFloatVectorTest.
+IN t/fixtures/compiler/SimdFloatX4.hs, SimdFloatX4Native.hs, producer model,
+  shared exporter/auditor/decoder/data, pinned GHC/native libraries.
+Outputs under build/simd-floatx4/:
+  expected.tsv: IN producer binary32 model.
+  <pre|post>-core/SimdFloatX4.cbd and stage-ghc/: IN source/exporter/stage options.
+  pre-audit.json, post-audit.json: IN corresponding CBD/in-process auditor/data.
+  native/floatx4-oracle and intermediates: IN native/audit source/GHC options.
+  oracle.tsv: IN binary; checked against expected.tsv model.
+  provenance.json: IN expected/CBDs/audits/native binary+TSV/source hashes and
+    toolchain facts; OUT stage/entry/structure/receipt metadata.
+--export-only produces only pre Core/model/audit, with -fno-code and
+  -fwrite-if-simplified-core; no native or post outputs. Used by CI on ARM.
+--ghc-option changes native and full-export code generation. Old oracle/receipt
+  and each target CBD are removed before generation.
+Consumer reads receipt/all hashed files, expected.tsv, optional oracle.tsv and
+  advertised stage CBDs. Exact compiler structure is also asserted; review value.
+Receipt includes test-floatx4-model.py without executing it, broad core_*.py and
+  nonrecursive compiler source glob; shared input-closure gaps still apply.
+
+090 simd-doublex2
+Producer: bin/prepare-doublex2-audit.py; consumer: thc.runtime.SimdDoubleVectorTest.
+IN t/fixtures/compiler/SimdDoubleX2.hs, SimdDoubleX2Native.hs,
+  bin/doublex2_model.py, producer and shared tools/data/native libraries.
+Same artifact flow/options as 089 under build/simd-doublex2/, with
+  <stage>-core/SimdDoubleX2.cbd, native/doublex2-oracle, expected.tsv, oracle.tsv,
+  stage-audit.json and provenance.json. Expected rows use binary64 model.
+Consumer reads receipt/all hashed files, expected/optional oracle TSV and stage CBDs.
+Receipt includes test-doublex2-model.py without execution; same closure/shape concerns.
+
+091 explicit64-arrays
+Producer: t/haskell-fixtures/Explicit64ArrayFixtures.hs.
+Consumer: thc.runtime.Explicit64ArrayTest.
+IN t/fixtures/compiler/Explicit64ArrayAudit.hs, Explicit64ArrayNative.hs,
+  producer (including stdin/model), shared tools/data, pinned GHC/native libraries.
+Under build/explicit64-arrays/:
+  <pre|post>/core/Explicit64ArrayAudit.cbd and stage/ghc/: IN audit source/exporter.
+  stage/audit.json: IN stage CBD/auditor, entry explicit64ArrayBits.
+  native/oracle and native/*.hi/*.o: IN driver/audit source/GHC.
+  oracle.tsv: IN native/oracle and ten integer stdin rows defined in producer;
+    checked against round-trip model before writing.
+  manifest.json: IN source hashes/oracle/two CBDs/two audits; old receipt removed.
+Consumer reads receipt/all hashes, oracle.tsv, both CBDs/audits. Native binary and
+  compiler intermediates are outputs but not receipt inputs. Shared closure gaps apply.
+
+092 floating-address
+Producer: t/haskell-fixtures/FloatingAddressFixtures.hs.
+Consumer: thc.runtime.FloatingAddressTest.
+IN t/fixtures/compiler/FloatingAddressAudit.hs, FloatingAddressNative.hs,
+  producer IEEE patterns/shared tools/data/pinned native toolchain.
+Under build/floating-address/:
+  <pre|post>/core/FloatingAddressAudit.cbd, stage/ghc/: IN audit source/exporter.
+  stage/audit.json: IN corresponding CBD/auditor, entry floatingAddressBits.
+  native/oracle and native intermediates: IN driver/audit source/GHC.
+  oracle.tsv: IN binary and producer's ten IEEE pattern pairs on stdin.
+  manifest.json: IN source hashes/oracle/stage CBDs/audits; old receipt removed.
+Consumer reads receipt/all hashes, oracle.tsv, both CBDs/audits.
+
+093 atomic-address
+Producer: t/haskell-fixtures/AtomicAddressFixtures.hs.
+Consumer: thc.runtime.AtomicAddressTest.
+IN t/fixtures/compiler/AtomicAddressAudit.hs, AtomicAddressNative.hs,
+  producer request corpus/shared tools/data/pinned native toolchain.
+Under build/atomic-address/:
+  inputs.txt: IN numeric/pointer requests defined in producer.
+  <pre|post>/core/AtomicAddressAudit.cbd, stage/ghc/: IN audit source/exporter.
+  stage/audit.json: IN stage CBD/auditor; atomicAddressNumeric/Pointer and their At variants.
+  native/oracle and intermediates: IN driver/audit source/GHC.
+  oracle.tsv: IN binary plus inputs.txt stdin.
+  logs/<version|export-pre|export-post|audit-pre|audit-post|native-build|native-oracle>.*:
+    OUT standard command triplets.
+  manifest.json: IN source hashes/inputs/oracle/CBDs/audits/logs; old receipt removed.
+Consumer reads receipt/all hashes, oracle.tsv and stage CBDs/audits.
+
+094 floating-byte-offset
+Producer: t/haskell-fixtures/FloatingByteOffsetFixtures.hs.
+Consumer: thc.runtime.FloatingByteOffsetTest.
+IN t/fixtures/compiler/FloatingByteOffsetAudit.hs, FloatingByteOffsetNative.hs,
+  producer IEEE corpus/shared tools/data/pinned native toolchain.
+Under build/floating-byte-offset/:
+  <pre|post>/core/FloatingByteOffsetAudit.cbd, stage/ghc/: IN audit source/exporter.
+  stage/audit.json: IN stage CBD/auditor, entry floatingByteOffsetBits.
+  native/oracle and intermediates: IN driver/audit source/GHC.
+  oracle.tsv: IN binary plus producer's ten IEEE pattern pairs on stdin.
+  manifest.json: IN source hashes/oracle/CBDs/audits; old receipt removed.
+Consumer reads receipt/all hashes, oracle.tsv and stage CBDs/audits.
+
+095 unaligned-scalar-memory
+Producer: t/haskell-fixtures/UnalignedScalarMemoryFixtures.hs.
+Consumer: thc.runtime.UnalignedScalarMemoryTest.
+IN t/fixtures/compiler/UnalignedScalarMemoryAudit.hs, UnalignedScalarMemoryNative.hs,
+  producer scalar/offset corpus/shared tools/data/pinned native toolchain.
+Under build/unaligned-scalar-memory/:
+  inputs.txt: IN producer's fourteen scalar types/offsets and Heap16/Heap32 controls.
+  logs/ghc-inventory.*: IN GHC ghc-package primop inventory; OUT command triplet.
+  <pre|post>/core/UnalignedScalarMemoryAudit.cbd, stage/ghc/: IN source/exporter.
+  stage/audit.json: IN CBD/auditor, unaligned<Type> entries including Heap16/Heap32.
+  native/oracle and intermediates: IN driver/audit source/GHC.
+  oracle.tsv: IN binary with inputs.txt stdin.
+  logs/<ghc-version|pre-export|post-export|pre-audit|post-audit|native-build|native-oracle>.*:
+    OUT standard command triplets.
+  manifest.json: IN source hashes/inputs/oracle/CBDs/audits/logs; old receipt removed.
+Consumer reads receipt/all hashes, oracle.tsv, stage CBDs/audits. Review overlap with
+  explicit64/floating-byte-offset/aligned scalar suites using behavior coverage.
+
+096 package-native-gc-carriers
+Producer: preparePackageNativeGcCarriers in
+  t/haskell-fixtures/PackageNativeArchiveFixtures.hs.
+Consumers: thc.BoxedForeignProvenanceTest, PrimForeignProvenanceTest.
+IN t/fixtures/compiler/{PackageNativeGcCarriers,PackageNativePrimCarriers,
+  PackageNativeUnknownPrim}.hs, shared exporter, exe:thc-interface (Cabal build and
+  list-bin --offline), THC.Driver.PackageNative/compact libraries,
+  bin/core_package_manifest.py/decoder closure, native GHC/ghc-internal.
+Under build/package-native-gc-carriers/:
+  source-core/PackageNativeGcCarriers.cbd, ghc/*.{hi,o,...}:
+    IN source/exporter with retained Core and foreign-import-provenance.
+  PackageNativeGcCarriers.cbd: IN ghc/PackageNativeGcCarriers.hi, interface helper,
+    libdir/home interfaces; then rewritten by archiveNativeModule/finalize metadata.
+  oracle, native/*.{hi,o,...}: IN same source/GHC -main-is PackageNativeGcCarriers.main.
+  oracle.txt: IN oracle executable; six relational observations.
+  primitive/source-core/PackageNativePrimCarriers.cbd, primitive/objects/*:
+    IN corresponding source/exporter.
+  primitive/PackageNativePrimCarriers.cbd: IN retained interface/helper then archive rewrite.
+  primitive/unknown-source-core/PackageNativeUnknownPrim.cbd, primitive/objects/*:
+    IN unknown source/exporter.
+  primitive/PackageNativeUnknownPrim.cbd: IN unknown interface/helper/archive rewrite.
+  original-v2/objects/GHC/**/*.{hi,hi-boot}: IN recursively copied installed
+    ghc-internal .dyn_hi/.dyn_hi-boot files, renamed in private tree.
+  original-v2/source-core/*, original-v2/objects/GHC/Internal/Stack/Decode.{hi,o,...}:
+    IN nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs,
+    copied interfaces, installed include/ headers, published plugin/DB, dynamic GHC.
+  original-v2/GHC.Internal.Stack.Decode.cbd: IN new interface/helper/archive rewrite.
+  If THC_GC_CARRIER_GHC_SOURCE and THC_GC_CARRIER_HOME_INTERFACES are both supplied,
+    source/interface roots change and Conc.Sync/TopHandler are compiled too, producing
+    analogous interfaces/source Core and original-v2/GHC.Internal.{Conc.Sync,TopHandler}.cbd.
+  logs/, primitive/logs/, original-v2/logs/: OUT command triplets for all calls;
+    validation reads each archived CBD through Python decoder.
+  manifest.json: IN selected sources/products/copied interface hashes/command records;
+    OUT receipt. Old receipt not explicitly invalidated. Header/import closure remains
+    unresolved; source receipt is much narrower than actual tool/source dependencies.
+Consumers require THC_TEST_GC_CARRIERS_CBD, THC_TEST_STACK_PRIM_CBD,
+  THC_TEST_PRIM_CARRIERS_CBD plus matching *_SHA256 environment; missing variables
+  cause assumptions/skips. Boxed test also reads oracle.txt next to its CBD.
+UnknownPrim is validated during production but not read by these two test classes.
+
+097 compiled-thunk-retention (two producers)
+Consumers: thc.runtime.BoxedArrayTest, CompiledThunkRetentionTest, FloatingPrimitiveTest.
+A. bin/prepare-boxed-arrays.py:
+  IN t/fixtures/compiler/BoxedArrayAudit.hs, producer model/template, shared tools/data,
+    GHC 9.14.1 and array 0.5.8.0 registration/native libraries.
+  Under build/boxed-arrays/:
+    <pre|post>/core/{BoxedArrayAudit,THC.InterfaceClosure}.cbd and stage/ghc/:
+      IN source/eight closure roots/exporter. Producer reads all *.cbd after export,
+      so actual consumed set can also include stale CBDs.
+    stage/<entry>.audit.json: IN stage CBD set/auditor; entries boxedSTRecursive,
+      boxedZero,boxedSnapshot,boxedClosure,boxedLiteral,boxedST,boxedLazyRead,boxedChecked.
+    NativeBoxedArray.hs: IN producer Haskell driver template.
+    native/boxed-array-oracle and intermediates: IN generated driver/audit source/GHC.
+    oracle.tsv, expected.tsv: IN executable/generated stdin requests/model.
+    manifest.json: IN sources/CBDs/audits/generated driver/binary/TSVs/toolchain facts;
+      old receipt removed first.
+  Exact primitive-use counts and exact missing-global sets are asserted. Review these
+    for removal rather than preserving accidental compiler structure.
+B. bin/prepare-floating-audit.py:
+  IN t/fixtures/compiler/FloatingAudit.hs, FloatingAuditNative.hs, producer model,
+    shared tools/data/native toolchain.
+  Under build/floating/:
+    native/floating-oracle and intermediates: IN native driver/audit source/GHC.
+    oracle.tsv: IN executable; compared against producer model.
+    core/FloatingAudit.cbd, ghc/: IN audit source/exporter (pre only).
+    checks.json: IN CBD/oracle/native binary/source hashes/in-process audits;
+      OUT receipt and captured Core-shape metadata. No old receipt invalidation.
+Consumers read receipts/hash files, advertised CBDs and oracle rows. FloatingPrimitiveTest
+  writes temporary model CBDs and therefore also needs compact-model encoder (041).
+
+098 original-stack
+Producer: t/haskell-fixtures/StackFixtures.hs.
+Consumers: thc.runtime.OriginalStackConsumerProofTest, OriginalStackDecoderCallTest.
+IN t/fixtures/compiler/OriginalStackAudit.hs, OriginalStackAuditNative.hs,
+  OriginalStackProof.json, shared exporter/pinned GHC/ghc-internal; receipt additionally
+  reads pinned CloneStack.hs,Decode.hs,InfoProv/Types.hsc,Heap/InfoTable.hsc and license.
+Under build/original-stack/:
+  run-N/previous-manifest.json: IN old manifest, moved into next unused run directory.
+  run-N/<pre|post>-core/{OriginalStackAudit,THC.InterfaceClosure}.cbd and stage-ghc/:
+    IN audit source/six closure roots/exporter. All emitted *.cbd read into receipt.
+  run-N/native/original-stack-native and intermediates: IN native/audit sources,
+    GHC -g -finfo-table-map/ghc-internal.
+  run-N/logs/native-invariants.stdout: IN executable; OUT live native shape values.
+  run-N/logs/<ghc-version|thc-revision|pre-export|post-export|native-compile|native-invariants>.*:
+    OUT standard command triplets; revision reads Git HEAD.
+  manifest.json: IN sources, proof-resource hardcoded hash, CBDs/binary/logs; OUT receipt.
+Consumer reads manifest/all selected hashes/Core/native stdout/proof resource; optional
+  THC_STACK_RETAINED_ROOT adds external retained JSON files named in OriginalStackProof.json.
+OriginalStackDecoderCallTest also reads tracked classpath core/original-stack-decoder-calls.json
+  and proof resource; it does not consume the generated original-stack outputs.
+Tests write build/reports/original-stack/proof.json and temporary containment files.
+Review frozen proof/archive comparison and run-N accumulation before graph conversion.
+
+099 original-stdio
+Producer: bin/prepare-original-stdio.sh --require-supported ->
+  t/haskell-fixtures/OriginalStdioFixtures.hs prepareOriginalStdio.
+Consumer: thc.runtime.OriginalStdioNativeTest.
+IN t/fixtures/compiler/OriginalStdioAudit.hs, OriginalStdioAuditNative.hs,
+  producer request domain, shared tools/data, Linux/macOS LP64 GHC/ghc-internal.
+Under build/original-stdio/:
+  native/original-stdio-oracle and intermediates: IN native/audit sources/GHC.
+  results/<0..143>.txt and logs/native-<000..143>.*:
+    IN binary/entry/fd/offset/count; each invocation writes numeric result file
+    and standard command triplet carrying actual stdout/stderr bytes.
+  oracle.json: IN result files and captured output; OUT 144 observations.
+  <pre|post>/core/{OriginalStdioAudit,THC.InterfaceClosure}.cbd, stage/ghc/:
+    IN audit source/four closure roots/exporter.
+  stage/<entry>.audit.json: IN CBD pair/auditor; entries originalWrite,
+    originalSafeWrite,originalWriteErrno,originalSafeWriteErrno.
+  logs/<ghc-version|ghc-info|native-build|stage-export|stage-audit-entry>.*:
+    OUT standard triplets.
+  manifest.json: IN source hashes/selected outputs/logs; old receipt removed.
+--native-only/--export-only omit opposite branch; audits require --require-supported.
+Consumer reads receipt/hash files, oracle, result files/stdout/stderr, CBD pairs/audits.
+144 process starts for four write operations: flag cost/value for later triage.
+
+100 original-handle-readiness
+Producer: t/haskell-fixtures/OriginalHandleReadinessFixtures.hs.
+Consumer: thc.runtime.OriginalHandleReadinessNativeTest.
+IN t/fixtures/compiler/OriginalHandleReadinessAudit.hs, OriginalHandleReadinessNative.hs,
+  shared tools/data, native 64-bit GHC/ghc-internal/unix.
+Under build/original-handle-readiness/:
+  native/oracle and intermediates: IN native driver/GHC/native packages.
+  oracle.json: IN three binary invocations for fd -1,1,2; assumes captured nonterminal
+    stdout/stderr; OUT isatty/errno observations.
+  <pre|post>/core/{OriginalHandleReadinessAudit,THC.InterfaceClosure}.cbd, stage/ghc/:
+    IN audit source/closure roots/exporter.
+  stage/<originalIsTerminal|originalIsTerminalErrno>.audit.json: IN CBD pair/auditor.
+  logs/: OUT triplets for ghc-version/info,native-build,native-<fd>,stage-export/audits.
+  manifest.json: IN source/product/log hashes; old receipt not removed first.
+Consumer reads receipt/hashed files/oracle/CBD pairs/audits and also executes
+  native/oracle --hold-pty during JUnit, keeping a private Linux PTY live.
+Thus native/oracle is an executable TEST input, not merely an oracle-generation tool.
+
+101 address-identity
+Producer: bin/prepare-address-identity.sh; consumer: thc.runtime.AddressIdentityNativeTest.
+IN t/fixtures/compiler/AddressIdentityAudit.hs, AddressIdentityAuditNative.hs,
+  bin/toolchain.sh, shared exporter/auditor/data and native GHC.
+Entire build/addr-identity/ is removed before production.
+  native and native-objects/: IN native/audit sources/GHC; OUT executable/intermediates.
+  oracle.txt: IN native executable.
+  <pre|post>-core/AddressIdentityAudit.cbd, stage-ghc/: IN audit source/exporter.
+  stage.audit.json: IN stage CBD/auditor, entry probe.
+Consumer reads oracle.txt/two CBDs/two audit reports. No receipt.
+
+102 address-array-copy
+Producer: t/haskell-fixtures/AddressArrayCopyFixtures.hs.
+Consumer: thc.runtime.AddressArrayCopyTest.
+IN t/fixtures/compiler/AddressArrayCopyAudit.hs, AddressArrayCopyNative.hs,
+  producer seed/offset/count corpus, shared tools/data/native 64-bit GHC.
+Under build/address-array-copy/:
+  inputs.tsv: IN producer requests for addrToArray,arrayToAddr,mutableArrayToAddr.
+  native/oracle and intermediates: IN native/audit sources/GHC.
+  oracle.tsv: IN binary with inputs.tsv stdin; records sixteen observed bytes/row.
+  <pre|post>-core/AddressArrayCopyAudit.cbd and stage-ghc/: IN source/exporter.
+  <stage>-<entry>-audit.json: IN stage CBD/auditor for the three entries.
+  commands/: OUT native-build/native-oracle/stage-export/stage-entry-audit triplets.
+  manifest.json: IN sources/input TSV/oracle/binary/CBDs/audits/log hashes;
+    old receipt removed first.
+Consumer reads receipt/hashed files/oracle/CBDs/audits. It also creates temporary
+  mutated CBDs via compact-model encoder (041), invokes Python auditor on them and
+  reads temporary <label>-report.json: both tools/data are TEST dependencies.
