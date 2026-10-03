@@ -605,15 +605,12 @@ ORIGINAL_STDIO_READ_OUTPUTS = frozenset("build/original-stdio-read/" + name for 
     "manifest.json", "oracle.json", "input.bin", "native/original-stdio-read-oracle",
     *(f"results/{index}.txt" for index in range(40)),
     *(f"logs/{label}.{suffix}"
-      for label in ("ghc-version", "native-build", "pre-export", "post-export",
-                    *(f"native-{index:03}" for index in range(40)),
-                    *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in
-                      ("originalRead", "originalSafeRead", "originalReadErrno", "originalSafeReadErrno")))
+      for label in ("ghc-version", "native-build", "native-observations", "pre-export", "post-export",
+                    "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post")
       for name in ("core/OriginalStdioReadAudit.cbd", "core/THC.InterfaceClosure.cbd",
-                   "originalRead.audit.json", "originalSafeRead.audit.json",
-                   "originalReadErrno.audit.json", "originalSafeReadErrno.audit.json")),
+                   "audit.json")),
 ))
 
 ORIGINAL_HANDLE_READINESS_LOGS = (

@@ -2727,11 +2727,11 @@ Tests read these and call nativeModules, adding 066 installed/native/runtime
 Fixture rationale (080 original-stdio-read)
 Purpose: Check reads preserve buffer contents, lengths, EOF and file-position behavior.
 Produces/consumed result: CBDs, input.bin and oracle.json from forty native cases.
-Cost and overlap: Keep guest buffer/EOF behavior in package I/O integration. A new
-  process per input is unnecessary; seekable stdin must remain an explicit input where
-  needed.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Cost and overlap: Keep original safe/unsafe FFI buffer/EOF behavior. Forty native
+  cases share one process; each case resets its seekable descriptor. Two batched
+  audits replace eight; no binding/lambda or foreign-call-count predictions.
+Build status: CMake fixture-original-stdio-read owns 79 named products. Both handoff
+  modes passed six executions in 16 seconds on macOS arm64, with both backends.
 
 Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalStdioRead.
 Consumer: thc.runtime.OriginalStdioReadTest. Linux/macOS LP64.
@@ -2741,15 +2741,18 @@ Under build/original-stdio-read/:
   native/original-stdio-read-oracle: IN source pair/packages; OUT binary/objects.
   input.bin: IN producer's eight byte payload; OUT input file.
   results/<0..39>.txt: IN oracle/request arguments and input.bin as BOTH inherited
-    fd0 and named reopenable input; OUT result/buffer image. Cleared first.
-  oracle.json: IN result files/native streams; OUT 40 rows.
+    fd0 and named reopenable input; OUT result/buffer image, overwritten directly.
+  oracle.json: IN result files; OUT 40 rows.
   <pre|post>/core/OriginalStdioReadAudit.cbd, THC.InterfaceClosure.cbd:
     IN audit source/exporter/four closure roots; OUT pair/ghc intermediates.
-  <stage>/<entry>.audit.json: IN pair/auditor/read, safe-read and errno variants;
-    OUT eight reports. logs/ghc-version,native-build,native-000..039,stage-export/
-    audit-entry: OUT triplets. manifest.json reads all/source hashes; old removed.
+  <stage>/audit.json: IN pair/auditor/read, safe-read and errno variants;
+    OUT two reports. logs/ghc-version,native-build,native-observations,stage-export,
+    stage-audit: OUT triplets. manifest.json reads all/source hashes; old removed.
 Consumer reads receipts/Core/audits/oracle. The seekable file on stdin is a real
   native command input, not interchangeable with an empty pipe or closed fd0.
+  All 70 consumed artifacts have declared graph writers and matching hashes.
+  Deleting input.bin rebuilt the owner in 3.14s, preserved an unrelated file and
+  returned to no work in 0.43s. No installed-Core acquisition is required.
 
 081  mutvar
 Fixture rationale (081 mutvar)

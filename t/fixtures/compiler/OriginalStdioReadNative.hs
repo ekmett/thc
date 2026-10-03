@@ -30,8 +30,15 @@ hex :: Word8 -> String
 hex byte = let digits = showHex byte "" in replicate (2 - length digits) '0' ++ digits
 
 main :: IO ()
-main = do
-  [entry, fdText, offsetText, countText, positionText, inputPath, resultPath] <- getArgs
+main = getArgs >>= batch
+  where
+    batch [] = pure ()
+    batch (entry : fd : offset : count : position : input : result : rest) =
+      observe entry fd offset count position input result >> batch rest
+    batch _ = error "Expected groups of ENTRY FD OFFSET COUNT POSITION INPUT RESULT"
+
+observe :: String -> String -> String -> String -> String -> FilePath -> FilePath -> IO ()
+observe entry fdText offsetText countText positionText inputPath resultPath = do
   input <- openFd inputPath ReadOnly defaultFileFlags
   _ <- fdSeek input AbsoluteSeek (read positionText)
   _ <- dupTo input stdInput

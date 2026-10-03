@@ -24,12 +24,13 @@
 --
 -- Fixture rationale (080 original-stdio-read)
 -- Purpose: Check reads preserve buffer contents, lengths, EOF and file-position behavior.
--- Produces/consumed result: CBDs, input.bin and oracle.json from forty native cases.
--- Cost and overlap: Keep guest buffer/EOF behavior in package I/O integration. A new
---   process per input is unnecessary; seekable stdin must remain an explicit input where
---   needed.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Inputs: OriginalStdioReadAudit.hs/Native.hs, embedded requests/payload, selected
+--   GHC/native libraries, exporter and auditor. No installed-Core acquisition.
+-- Produces: Native executable, input.bin, forty result files, oracle.json, pre/post
+--   CBD pairs, two audits, logs and manifest; CMake owns all persistent products.
+-- Cost and overlap: One native process, two audits. This crosses genuine safe/unsafe
+--   read declarations and C buffer offsets; provider tests do not exercise that ABI.
+--   The child starts with explicit seekable input.bin on fd0 and resets it per case.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 080.
 --
 -- Fixture rationale (099 original-stdio)
@@ -200,7 +201,7 @@ readRequests = [(entry,[fd,offset,count,start]) | entry <- readEntries,
                              (0,5,4,8),(0,3,6,7)]]
 
 -- The original GHC c_read/c_safe_read wrappers read from a real native fd0;
--- each child receives the seekable input file as fd0 before RTS initialization,
+-- the child receives the seekable input file as fd0 before RTS initialization,
 -- then the native harness opens and seeks its own fresh copy. Never start this
 -- oracle with fd0 closed: an RTS descriptor could occupy it before Haskell main.
 prepareOriginalStdioRead :: FilePath -> IO ()
@@ -229,23 +230,21 @@ prepareOriginalStdioRead root = do
   compiled <- execute "native-build" [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
     "-package","ghc-internal","-package","unix","-i" ++ (root </> "t/fixtures/compiler"),
     "-odir",root </> native,"-hidir",root </> native,nativeSource,"-o",root </> binary]
-  rows <- forM (zip [0 :: Int ..] readRequests) $ \(index,(entry,arguments)) -> do
-    let resultPath = dir </> "results" </> show index ++ ".txt"
-        label = "native-" ++ replicate (3 - length (show index)) '0' ++ show index
-    old <- doesFileExist (root </> resultPath)
-    when old (removeFile (root </> resultPath))
-    command <- runLoggedWithInput input 120 root (dir </> "logs") label [] (root </> binary)
-      (entry : map show arguments ++ [root </> input,root </> resultPath])
+  let cases = [(entry, arguments, dir </> "results" </> show index ++ ".txt")
+        | (index, (entry, arguments)) <- zip [0 :: Int ..] readRequests]
+  observed <- runLoggedWithInput input 120 root (dir </> "logs") "native-observations" [] (root </> binary)
+    (concat [entry : map show arguments ++ [root </> input, root </> resultPath]
+      | (entry, arguments, resultPath) <- cases])
+  rows <- forM cases $ \(entry, arguments, resultPath) -> do
     text <- BSC.unpack <$> BS.readFile (root </> resultPath)
     case lines text of
       [result,buffer] | Just number <- readInteger result,
                         length buffer == 32,
                         all (`elem` ("0123456789abcdef" :: String)) buffer ->
         pure (object ["entry" .= entry,"arguments" .= arguments,"result" .= number,
-                      "bufferHex" .= buffer,"stdoutHex" .= hexBytes (commandStdout command),
-                      "stderrHex" .= hexBytes (commandStderr command)],command,resultPath)
+                      "bufferHex" .= buffer],resultPath)
       _ -> die ("Malformed native original read result: " ++ resultPath)
-  writeJson (root </> oracle) (toJSON [row | (row,_,_) <- rows])
+  writeJson (root </> oracle) (toJSON [row | (row,_) <- rows])
   exports <- forM ["pre","post"] $ \stage -> do
     let stageDir = dir </> stage
         core = stageDir </> "core"
@@ -259,17 +258,14 @@ prepareOriginalStdioRead root = do
     mapM_ (\path -> do
       exists <- doesFileExist (root </> path)
       unless exists (die ("Missing genuine original read Core: " ++ path))) modules
-    audits <- forM readEntries $ \entry -> do
-      let path = stageDir </> entry ++ ".audit.json"
-      command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py","--entry", "main:OriginalStdioReadAudit." ++ entry,"--output",path] ++ modules)
-      pure (entry,path,command)
-    pure (stage,modules,Map.fromList [(entry,path) | (entry,path,_) <- audits],
-          exported : [command | (_,_,command) <- audits],
-          modules ++ [path | (_,path,_) <- audits])
+    let path = stageDir </> "audit.json"
+    command <- execute (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py", "--output", path] ++ modules ++
+       concat [["--entry", "main:OriginalStdioReadAudit." ++ entry] | entry <- readEntries])
+    pure (stage,modules,path,[exported,command],modules ++ [path])
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  let commands = [version,compiled] ++ [command | (_,command,_) <- rows] ++
+  let commands = [version,compiled,observed] ++
         concat [items | (_,_,_,items,_) <- exports]
       sources = sort $ [coreSource,nativeSource,"thc.cabal","t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/OriginalStdioFixtures.hs",
@@ -278,7 +274,7 @@ prepareOriginalStdioRead root = do
         "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
         ["src/compiler/THC" </> path | path <- plugin, takeExtension path == ".hs"] ++
         ["bin" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
-      artifacts = [input,oracle,binary] ++ [path | (_,_,path) <- rows] ++
+      artifacts = [input,oracle,binary] ++ [path | (_,path) <- rows] ++
         concat [paths | (_,_,_,_,paths) <- exports] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts

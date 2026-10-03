@@ -613,6 +613,7 @@
       "requires": ["original-process-identity"]
     },
     "original-stdio-read": {
+      "cmakeTarget": "fixture-original-stdio-read",
       "junit": ["thc.runtime.OriginalStdioReadTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-read"]}],
       "outputs": ["build/original-stdio-read"],

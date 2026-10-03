@@ -607,3 +607,26 @@ audited_fixture(original-stdio-truncate OriginalStdioTruncateAudit
   SOURCES t/fixtures/compiler/OriginalStdioTruncateAudit.hs t/fixtures/compiler/OriginalStdioTruncateAuditNative.hs
   OBJECT_DIRS native pre/ghc post/ghc
   OUTPUTS ${truncate_outputs})
+
+# 080: input.bin is both the child's explicit stdin and its per-case seekable
+# source. The producer writes it before running the single native observation
+# process; no earlier fixture or ambient fd0 supplies the read payload.
+set(read_outputs manifest.json oracle.json input.bin native/original-stdio-read-oracle)
+foreach(index RANGE 0 39)
+  list(APPEND read_outputs "results/${index}.txt")
+endforeach()
+set(read_labels ghc-version native-build native-observations)
+foreach(stage pre post)
+  list(APPEND read_outputs "${stage}/core/OriginalStdioReadAudit.cbd"
+    "${stage}/core/THC.InterfaceClosure.cbd" "${stage}/audit.json")
+  list(APPEND read_labels "${stage}-export" "${stage}-audit")
+endforeach()
+foreach(label IN LISTS read_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND read_outputs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(original-stdio-read OriginalStdioReadAudit
+  SOURCES t/fixtures/compiler/OriginalStdioReadAudit.hs t/fixtures/compiler/OriginalStdioReadNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS ${read_outputs})
