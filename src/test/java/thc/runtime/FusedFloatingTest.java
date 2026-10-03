@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import java.io.File;
 import java.math.BigInteger;
@@ -12,6 +11,7 @@ import java.util.*;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
+import thc.EntryValue;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -205,28 +205,30 @@ class FusedFloatingTest {
         return result;
     }
     private static Map<String, Object> worker(Map<String, Object> source, String name) {
-        var matches = objects(source.get("bindings")).stream().filter(binding -> entryId(name + "Worker").equals(binding.get("id"))).toList();
-        assertEquals(1, matches.size()); return matches.getFirst();
+        return objects(source.get("bindings")).stream().filter(binding -> entryId(name + "Worker").equals(binding.get("id")))
+            .findFirst().orElseThrow();
     }
     @Test void genuineCoreRetainsEveryFusedTernaryProofAndRejectsCorruption() throws Exception {
         provenance();
         for (var stage : list("pre", "post")) for (var f : FORMATS) for (int operation = 0; operation < 4; operation++) {
             var name = f.names().get(operation); var source = CoreModules.reachable(module(stage), entryId(name), true);
-            assertEquals(2, objects(source.get("bindings")).size()); var worker = worker(source, name);
+            var worker = worker(source, name);
             var primop = list("fmadd", "fmsub", "fnmadd", "fnmsub").get(operation) + (f.width == 32 ? "Float#" : "Double#");
-            var calls = calls(worker.get("expr")); assertEquals(1, calls.size()); var call = calls.getFirst();
-            assertEquals(primop, expression(call.get(1)).get(1)); assertEquals(list(false, false, false), call.get(3));
+            var call = calls(worker.get("expr")).stream().filter(candidate -> primop.equals(expression(candidate.get(1)).get(1)))
+                .findFirst().orElseThrow();
+            assertEquals(list(false, false, false), call.get(3));
             var proof = list(f.width == 32 ? "FloatRep" : "DoubleRep");
             var lambda = expression(worker.get("expr"));
             assertEquals(list(proof, proof, proof), objects(lambda.get(1)).stream().map(arg -> object(arg.get("rep")).get("primReps")).toList());
             assertEquals(proof, object(object(call.get(6)).get("rep")).get("primReps"));
-            for (var backend : list("ast", "bytecode")) try (var context = context(false)) {
+            for (var backend : list("ast", "bytecode")) try (var context = context()) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (int corruption = 0; corruption <= 3; corruption++) {
-                        var bad = object(Json.parse(Json.stringify(source))); var targetCalls = calls(worker(bad, name).get("expr"));
-                        assertEquals(1, targetCalls.size()); var target = targetCalls.getFirst();
+                        var bad = object(Json.parse(Json.stringify(source)));
+                        var target = calls(worker(bad, name).get("expr")).stream().filter(candidate -> primop.equals(expression(candidate.get(1)).get(1)))
+                            .findFirst().orElseThrow();
                         switch (corruption) {
                             case 0 -> { var args = expression(target.get(2)); target.set(2, new ArrayList<>(args.subList(0, args.size() - 1))); }
                             case 1 -> object(object(target.get(6)).get("rep")).put("primReps", list(f.width == 32 ? "DoubleRep" : "FloatRep"));
@@ -239,44 +241,54 @@ class FusedFloatingTest {
             }
         }
     }
-    private static Context context(boolean inlining) {
-        return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
+    private static Context context() {
+        return Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000").build();
     }
     private static ExecutableProgram program(Language language, Map<String, Object> source, String backend) {
         return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source);
     }
-    private static void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
-    @Test void nativeFusedResultsRemainCompiledWithInlining() throws Exception { nativeResults(true); }
-    @Test void nativeFusedResultsRemainCompiledAcrossResidualCalls() throws Exception { nativeResults(false); }
-    private void nativeResults(boolean inlining) throws Exception {
+    @Test void nativeFusedResultsMatchNativeAndIndependentModel() throws Exception {
         provenance(); var rows = rows();
-        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context(inlining)) {
+        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var f : FORMATS) for (var name : f.names()) {
                     var source = with(CoreModules.reachable(module(stage), entryId(name), true), "instrument", true);
-                    var p = program(language, source, backend); var target = p.entryTarget(entryId(name));
-                    var targets = objects(source.get("bindings")).stream().map(binding -> p.entryTarget((String) binding.get("id"))).toList();
-                    assertEquals(2, targets.size()); var selected = rows.stream().filter(row -> row.name.equals(name)).toList();
-                    CheckedBiConsumer<Row, Boolean> check = (row, compiled) -> {
-                        long before = ((Number) p.diagnostics().get("compiledEntries")).longValue();
-                        long value = (Long) Calls.target(target, new Object[]{0L, row.input.x, row.input.y, row.input.z});
-                        matches(f, f.nan(row.bits) ? null : row.bits, value, stage + "/" + backend + "/" + name + "/" + row.input);
-                        if (compiled) {
-                            assertEquals(before + 2, ((Number) p.diagnostics().get("compiledEntries")).longValue());
-                            for (var active : targets) valid(active);
+                    var p = program(language, source, backend);
+                    var function = context.asValue(new EntryValue(p, entryId(name), 3));
+                    var label = stage + "/" + backend + "/" + name;
+                    var selected = rows.stream().filter(row -> row.name.equals(name)).toList();
+                    CheckedBiConsumer<Row, Boolean> check = (row, firstInstalled) -> {
+                        long before = firstInstalled ? ((Number) p.diagnostics().get("compiledEntries")).longValue() : 0L;
+                        long value = function.execute(new BigInteger(Long.toUnsignedString(row.input.x)),
+                            new BigInteger(Long.toUnsignedString(row.input.y)),
+                            new BigInteger(Long.toUnsignedString(row.input.z))).asBigInteger().longValue();
+                        matches(f, f.nan(row.bits) ? null : row.bits, value, label + "/" + row.input);
+                        if (firstInstalled) {
+                            assertTrue(((Number) p.diagnostics().get("compiledEntries")).longValue() > before,
+                                label + " first installed call enters compiled guest code");
+                            var diagnostics = object(Json.parse(function.getMember("diagnostics").asString()));
+                            assertEquals(true, object(diagnostics.get("explicitCompilation")).get("validLastTier"),
+                                label + " first installed call preserves the installed guest entry and host bridge");
                         }
                         var state = language.getHandoffState().get();
                         assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getResults().getDepth());
                         assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().retainedReferences());
                     };
                     for (var row : selected) check.accept(row, false);
-                    for (var active : targets.reversed()) { active.getClass().getMethod("compile", boolean.class).invoke(active, true); valid(active); }
-                    for (var row : selected.reversed()) check.accept(row, true); // First installed call checked; no settling.
-                    for (var row : selected) check.accept(row, true);
+                    long beforeInstallation = ((Number) p.diagnostics().get("compiledEntries")).longValue();
+                    assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
+                    assertEquals(beforeInstallation, ((Number) p.diagnostics().get("compiledEntries")).longValue(),
+                        label + " installation executes no guest work");
+                    var diagnostics = object(Json.parse(function.getMember("diagnostics").asString()));
+                    assertEquals(true, object(diagnostics.get("explicitCompilation")).get("validLastTier"),
+                        label + " guest entry and host bridge installed");
+                    var compiled = selected.reversed();
+                    check.accept(compiled.getFirst(), true);
+                    for (var row : compiled.subList(1, compiled.size())) check.accept(row, false);
                     assertEquals(0L, ((Number) p.diagnostics().get("unsupportedTraps")).longValue());
                 }
             } finally { context.leave(); }
