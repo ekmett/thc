@@ -11,7 +11,7 @@ set(audit_inputs ${audit_modules}
   "${PROJECT_SOURCE_DIR}/src/main/resources/thc/core-native-overrides.json"
   "${PROJECT_SOURCE_DIR}/src/test/resources/thc/polyglot-abi.json")
 function(audited_fixture name modules)
-  cmake_parse_arguments(F "" "" "SOURCES;OUTPUTS;OBJECT_DIRS" ${ARGN})
+  cmake_parse_arguments(F "" "" "SOURCES;OUTPUTS;OBJECT_DIRS;BYPRODUCTS" ${ARGN})
   set(out "${PROJECT_SOURCE_DIR}/build/${name}")
   set(inputs)
   foreach(source IN LISTS F_SOURCES)
@@ -30,6 +30,9 @@ function(audited_fixture name modules)
     foreach(module IN LISTS modules)
       list(APPEND objects "${out}/${directory}/${module}.hi" "${out}/${directory}/${module}.o")
     endforeach()
+  endforeach()
+  foreach(product IN LISTS F_BYPRODUCTS)
+    list(APPEND objects "${out}/${product}")
   endforeach()
   add_custom_command(OUTPUT ${outputs} BYPRODUCTS ${objects}
     COMMAND ${fixture_env} "${fixtures_exe}" "${name}"
@@ -289,3 +292,116 @@ audited_fixture(unaligned-scalar-memory UnalignedScalarMemoryAudit
   OBJECT_DIRS native pre/ghc post/ghc
   OUTPUTS manifest.json inputs.txt oracle.tsv native/oracle pre/core/UnalignedScalarMemoryAudit.cbd
     post/core/UnalignedScalarMemoryAudit.cbd pre/audit.json post/audit.json ${unaligned_logs})
+
+# 102: pointer-array copying must preserve the selected bytes and aliases.
+set(copy_reports)
+set(copy_labels native-build native-oracle)
+foreach(stage pre post)
+  list(APPEND copy_labels "${stage}-export")
+  foreach(entry addrToArray arrayToAddr mutableArrayToAddr)
+    list(APPEND copy_reports "${stage}-${entry}-audit.json")
+    list(APPEND copy_labels "${stage}-${entry}-audit")
+  endforeach()
+endforeach()
+set(copy_logs)
+foreach(label IN LISTS copy_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND copy_logs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(address-array-copy AddressArrayCopyAudit
+  SOURCES t/fixtures/compiler/AddressArrayCopyAudit.hs t/fixtures/compiler/AddressArrayCopyNative.hs
+  OBJECT_DIRS native pre-ghc post-ghc
+  OUTPUTS manifest.json inputs.tsv oracle.tsv native/oracle pre-core/AddressArrayCopyAudit.cbd
+    post-core/AddressArrayCopyAudit.cbd ${copy_reports} ${copy_logs})
+
+# 104: bounded deep evaluation checks stack safety that shallow smoke misses.
+set(deep_logs)
+foreach(label ghc-version native-compile native-oracle pre-export pre-audit post-export post-audit)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND deep_logs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(deep-evaluation DeepEvaluation
+  SOURCES t/fixtures/compiler/DeepEvaluation.hs t/fixtures/compiler/DeepEvaluationNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json native/oracle pre/core/DeepEvaluation.cbd pre/core/THC.InterfaceClosure.cbd
+    post/core/DeepEvaluation.cbd post/core/THC.InterfaceClosure.cbd pre/audit.json post/audit.json ${deep_logs})
+
+# 107: masking state, laziness and exception delivery are observable contracts.
+set(mask_reports)
+set(mask_labels ghc-version native-compile native-oracle)
+foreach(stage pre post)
+  list(APPEND mask_labels "${stage}-export")
+  foreach(entry maskedFunction unmaskedFunction uninterruptibleFunction lazyFunctions bareMasks)
+    list(APPEND mask_reports "${stage}/${entry}-audit.json")
+    list(APPEND mask_labels "${stage}-audit-${entry}")
+  endforeach()
+endforeach()
+set(mask_logs)
+foreach(label IN LISTS mask_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND mask_logs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(mask-functions MaskFunctionAudit
+  SOURCES t/fixtures/compiler/MaskFunctionAudit.hs t/fixtures/compiler/MaskFunctionNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json native/oracle pre/core/MaskFunctionAudit.cbd
+    post/core/MaskFunctionAudit.cbd ${mask_reports} ${mask_logs})
+
+# 109: report live, blocked and completed thread states using synchronized cases.
+set(status_reports)
+foreach(stage pre post)
+  foreach(entry selfStatus maskedStatus finishedStatus diedStatus blockedStatus)
+    list(APPEND status_reports "${stage}/${entry}-audit.json")
+  endforeach()
+endforeach()
+audited_fixture(thread-status ThreadStatusAudit
+  SOURCES t/fixtures/compiler/ThreadStatusAudit.hs t/fixtures/compiler/ThreadStatusNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json native/oracle oracle.txt pre/core/ThreadStatusAudit.cbd
+    post/core/ThreadStatusAudit.cbd ${status_reports})
+
+# 111: the test executes this child to observe uncaught self-exception termination.
+audited_fixture(uncaught-self UncaughtSelfAudit
+  SOURCES t/fixtures/compiler/UncaughtSelfAudit.hs t/fixtures/compiler/UncaughtSelfNative.hs
+  OBJECT_DIRS pre/ghc post/ghc
+  OUTPUTS manifest.json native/oracle pre/core/UncaughtSelfAudit.cbd post/core/UncaughtSelfAudit.cbd
+    pre/audit.json post/audit.json pre/io-audit.json post/io-audit.json)
+
+# 115: synchronized live delivery and strict-entry paths retain continuation state.
+set(live_reports)
+foreach(stage pre post)
+  foreach(entry forceShared strictWorker strictCall strictEntry takeReady takeRunning releaseGate prefixCount warmLoop asyncPayload)
+    list(APPEND live_reports "${stage}/${entry}-audit.json")
+  endforeach()
+endforeach()
+audited_fixture(live-async LiveAsyncAudit
+  SOURCES t/fixtures/compiler/LiveAsyncAudit.hs t/fixtures/compiler/LiveAsyncNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json native/oracle oracle.txt strict-oracle.txt pre/core/LiveAsyncAudit.cbd
+    post/core/LiveAsyncAudit.cbd ${live_reports})
+
+# 110: async delivery through suspended/masked continuations. The scheduling
+# inputs are generated by their existing owner, including direct Ninja calls.
+set(async_outputs manifest.json native/oracle native/lazy-oracle
+  oracle.txt extra-oracle.txt saved-oracle.txt external-saved-oracle.txt
+  scheduled-saved-oracle.txt yield-oracle.txt lazy-oracle.txt)
+set(async_objects native/ThreadAsyncAudit.hi native/ThreadAsyncAudit.o
+  native/lazy/Main.hi native/lazy/Main.o native/lazy/LazyForkAudit.hi native/lazy/LazyForkAudit.o)
+foreach(stage pre post)
+  list(APPEND async_outputs "${stage}/core/ThreadAsyncAudit.cbd" "${stage}/core/LazyForkAudit.cbd")
+  list(APPEND async_objects "${stage}/ghc/ThreadAsyncAudit.hi" "${stage}/ghc/ThreadAsyncAudit.o"
+    "${stage}/lazy-ghc/LazyForkAudit.hi" "${stage}/lazy-ghc/LazyForkAudit.o")
+  foreach(entry forkAndThrow killUncaught selfThrow maskedUnmaskSelf promptSelfThrow
+      promptMaskedUnmaskSelf savedSelfThrow savedMaskedSelf savedSuffixSelf savedMaskCatchSelf
+      externalSaved scheduledSaved yieldProbe yieldMasked lazyFork)
+    list(APPEND async_outputs "${stage}/${entry}-audit.json")
+  endforeach()
+endforeach()
+audited_fixture(thread-async ""
+  SOURCES t/fixtures/compiler/ThreadAsyncAudit.hs t/fixtures/compiler/ThreadAsyncNative.hs
+    t/fixtures/compiler/LazyForkAudit.hs t/fixtures/compiler/LazyForkNative.hs
+  OUTPUTS ${async_outputs} BYPRODUCTS ${async_objects})
+add_dependencies(fixture-thread-async fixture-thread-scheduling)

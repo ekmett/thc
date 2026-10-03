@@ -28,10 +28,14 @@ include(cmake/FixtureTools.cmake)
 # A user's package DB or GHC_PACKAGE_PATH must not supply an undeclared import.
 list(APPEND fixture_env "GHC_PACKAGE_PATH=${ghc_db}"
   "THC_PLUGIN_MANIFEST=${plugin_manifest}" "THC_COMPACT=${compact_exe}")
+get_filename_component(python_bin "${Python3_EXECUTABLE}" DIRECTORY)
+list(APPEND fixture_env "PATH=${python_bin}:$ENV{PATH}")
 include(cmake/ScalarFixtures.cmake)
 include(cmake/CoreFixtures.cmake)
 include(cmake/ArrayFixtures.cmake)
 include(cmake/AuditedFixtures.cmake)
+include(cmake/ApiFixtures.cmake)
+include(cmake/NativeFixtures.cmake)
 
 # Keep the audited quarantine authoritative even for direct Ninja invocations.
 set(inventory_path "${PROJECT_SOURCE_DIR}/.github/scripts/fast-fixtures.json")

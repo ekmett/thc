@@ -15,10 +15,12 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `strict-fields`, `int-arrays`, `int8-arrays`, `int16-arrays`, `int32-arrays`,
 `double-arrays`, `float-word-arrays`, `pinned-pointer-cells`, `integer-completion`,
 `word-floating`, `tuple-arithmetic`, `scalar-bitcasts`, `floating-remainder`,
-`fused-floating`, `small-arrays`, `managed-address-reads`, `wide-char-address`
+`fused-floating`, `small-arrays`, `managed-address-reads`, `wide-char-address`,
 `scalar-memory-utilities`, `thread-scheduling`, `thread-label`, `weak-explicit`,
 `stable-names`, `explicit64-arrays`, `floating-address`, `floating-byte-offset`,
-`atomic-address` and `unaligned-scalar-memory`. Each has a `fixture-<group>` target. `make fixtures` requires an
+`atomic-address`, `unaligned-scalar-memory`, `address-array-copy`, `deep-evaluation`,
+`mask-functions`, `thread-status`, `uncaught-self`, `live-async`, `vector-api`,
+`truffle-strings`, `thread-async` and `native-addresses`. Each has a `fixture-<group>` target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
 
@@ -64,6 +66,10 @@ Local graph verification (macOS arm64, GHC 9.14.1)
   five memory families) generated with a deliberately invalid ambient
   `GHC_PACKAGE_PATH`. The graph supplied its selected database. The weak fixture
   also rebuilt with an unrelated malformed CBD present, then returned to no-op.
+- Ten more groups generated: address copies, deep evaluation, masking, thread
+  status, uncaught/live/async exceptions, string/vector APIs and native pointers.
+  The async programs have separate compiler intermediates. No-op checks caught
+  and removed a nonexistent native object declaration in the uncaught fixture.
 - `python3 bin/test-plugin.py`: 23 checks passed.
   `python3 .github/scripts/test_fast_fixtures.py`: 48 checks passed.
 

@@ -120,8 +120,10 @@ prepareThreadAsync root = do
     ["yield", "+RTS", "-N2", "-RTS"] ""
   unless (yielded == "37\n39\n") (die "Public thread yield# State/mask oracle disagreed")
   writeFile (output </> "yield-oracle.txt") yielded
+  let lazyObjects = native </> "lazy"
+  createDirectoryIfMissing True lazyObjects
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "t/fixtures/compiler", "-odir", native, "-hidir", native,
+    "-i" ++ root </> "t/fixtures/compiler", "-odir", lazyObjects, "-hidir", lazyObjects,
     root </> lazyDriver, "-o", native </> "lazy-oracle"] ""
   lazyActual <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "lazy-oracle")
     ["+RTS", "-N2", "-RTS"] ""
