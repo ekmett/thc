@@ -327,6 +327,7 @@
       "sources": ["cmake/ProcessFixtures.cmake", "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c", "src/main/c/native-process-api.c"]
     },
     "process-lifecycle": {
+      "quarantined": true,
       "ciPlatforms": ["Linux"],
       "requires": ["process-lifecycle-native"],
       "junit": ["thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest"],
@@ -563,6 +564,7 @@
     },
 
     "original-posix-stat": {
+      "quarantined": true,
       "ciPlatforms": ["Linux"],
       "junit": ["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalDirectoryStreamsTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalUnlinkAtTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-stat"]}],
@@ -706,6 +708,7 @@
       ]
     },
     "interface-core": {
+      "quarantined": true,
       "requires": ["compact-model"],
       "junit": ["thc.CoreUnitManagedExportTest", "thc.ManagedExportsNativeTest", "thc.ManagedForeignRootsNativeTest", "thc.ManagedImportStubsNativeTest", "thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],

@@ -1960,7 +1960,7 @@ Cost and overlap: Real child-process lifecycle needs integration coverage. Prepa
   these controls for every unrelated Gradle Test is unjustified; depend on them only for
   their consumers.
 Build status: Native controls owned by cmake/ProcessFixtures.cmake; Core/package
-  acquisition remains unmapped.
+  acquisition is QUARANTINED because every run publishes a timestamped source tree.
 
 Producers: t/haskell-fixtures/ProcessLifecycleFixtures.hs owns Core/acquisition;
   cmake/ProcessFixtures.cmake owns the two native executables.
@@ -2524,8 +2524,8 @@ Produces/consumed result: Per-operation CBDs/oracle.json for stat, mode, links, 
 Cost and overlap: Ten native producer flows are disproportionate to package linkage.
   Consolidate package-level filesystem behavior; retain only distinct THC
   ABI/authority/lifetime cases, not libc conformance.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: QUARANTINED: grouped Unix acquisition publishes timestamped source trees;
+  directory-streams conditionally runs the current-directory producer.
 
 Dispatcher: t/haskell-fixtures/OriginalPosixStatFixtures.hs:prepareOriginalPosixStat.
 Linux only; other hosts write build/original-posix-stat/manifest.json supported=false.
@@ -2795,8 +2795,8 @@ Produces/consumed result: Interface CBDs, package manifests and native observati
 Cost and overlap: Core-bearing versus thin interfaces and linkage need integration
   tests. Split independent scenarios: cache-corruption experiments, repeated audits and
   every negative variant must not run whenever any consumer needs one CBD.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: QUARANTINED: generation runs cache-corruption tests and records their
+  outcomes as reusable fixture data, while package DB init logs depend on prior runs.
 
 Producer: t/haskell-fixtures/InterfaceFixtures.hs plus InterfaceForeignFacts.hs
   and InstalledCacheFixtures.hs. Consumers: thc.CoreUnitManagedExportTest,

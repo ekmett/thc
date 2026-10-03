@@ -9,8 +9,8 @@
 -- Cost and overlap: Real child-process lifecycle needs integration coverage. Preparing
 --   these controls for every unrelated Gradle Test is unjustified; depend on them only for
 --   their consumers.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: QUARANTINED Core acquisition: every run extracts a new timestamped
+--   source tree and rebuilds process. Native controls have separate CMake owners.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 054.
 {-# LANGUAGE OverloadedStrings #-}
 

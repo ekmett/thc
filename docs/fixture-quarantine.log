@@ -19,6 +19,14 @@ have several producers. Exact compiler counts and historical receipts do not
 justify preserving a fixture.
 
 Previous attempts affect output names or are prerequisites:
+  process-lifecycle Core acquisition (054): always extracts source-<timestamp>,
+    rewrites its Cabal project and rebuilds process. The separate native process
+    target remains admitted. Give the pinned archive, stable extraction and Cabal
+    component their own file rules before restoring these two Core consumers.
+  original-posix-stat group (075): current-directory always extracts a timestamped
+    Unix source tree; directory-streams invokes that producer when its receipt is
+    absent. Split useful independent ABI fixtures from this ten-producer chain;
+    shared Unix acquisition needs one stable owner consumed by both directory tests.
   simd-int32x4-bytearray (030), simd-word32x4-bytearray (031),
   simd-floatx4-bytearray (032), simd-doublex2-bytearray (033): copy every old
     receipt artifact before generation; missing old files block replacement;
@@ -69,6 +77,13 @@ Joint output ownership:
     fixture must consume the generated sources, not regenerate them.
 
 Shared infrastructure also excluded from translation as fixture rules:
+  interface-core (085): runs InstalledCacheFixtures.checkInstalledCache during
+    generation, destroys/recreates its cache, corrupts interfaces and sources, and
+    publishes test-success booleans. A fixture cache hit would skip those tests.
+    Package DB initialization also changes the published log set on repeat runs.
+    Separate retained/thin interface products and native linkage artifacts from
+    cache-correctness tests; run the latter as tests with private scratch state.
+    Both pinned-source and complete retained-Core provider paths remain required.
   fast_fixtures.py full receipt: recursive output inventory and top-level build/
     allowlist make unrelated outputs affect reuse. Do not port this behavior.
   prepare-tests.sh: blanket ordered preparation, cleanup commands, repeated shared

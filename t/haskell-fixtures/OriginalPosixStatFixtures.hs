@@ -9,8 +9,8 @@
 -- Cost and overlap: Ten native producer flows are disproportionate to package linkage.
 --   Consolidate package-level filesystem behavior; retain only distinct THC
 --   ABI/authority/lifetime cases, not libc conformance.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: QUARANTINED grouped acquisition: current-directory creates a fresh
+--   timestamped Unix tree, and directory-streams conditionally runs that producer.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 075.
 {-# LANGUAGE OverloadedStrings #-}
 

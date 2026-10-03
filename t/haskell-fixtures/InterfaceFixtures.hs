@@ -9,8 +9,8 @@
 -- Cost and overlap: Core-bearing versus thin interfaces and linkage need integration
 --   tests. Split independent scenarios: cache-corruption experiments, repeated audits and
 --   every negative variant must not run whenever any consumer needs one CBD.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: QUARANTINED: generation deletes/recreates a cache and executes
+--   cache-corruption tests whose pass/fail booleans become cached fixture data.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 085.
 {-# LANGUAGE OverloadedStrings #-}
 
