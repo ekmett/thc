@@ -1436,6 +1436,7 @@
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "empty-join-input": {
+      "quarantined": true,
       "junit": ["thc.runtime.EmptyJoinInputTest"],
       "commands": [{"argv": ["python3", "bin/prepare-empty-join-input.py"]}],
       "outputs": ["build/empty-join-input"],
@@ -1565,6 +1566,7 @@
         "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "narrow-literal-proofs": {
+      "quarantined": true,
       "junit": ["thc.runtime.NarrowLiteralProofTest"],
       "commands": [{"argv": ["python3", "bin/prepare-narrow-literal-proofs.py"]}],
       "outputs": ["build/narrow-literal-proofs"],

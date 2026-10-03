@@ -8,8 +8,7 @@
 # Cost and overlap: Distinct argument-erasure regression, including first compiled
 #   execution. Two exports and one native reference are defensible; exact join shapes are
 #   not the contract.
-# Build status: Value review only; admission still requires explicit inputs and single-
-#   owner outputs.
+# Build status: QUARANTINED. Requires an exact join-call and State-lambda shape; retain the Linux regression.
 # Detailed file inputs/outputs: docs/fixture-inputs.log, entry 002.
 
 """Build a native empty-join oracle and verify exact GHC joins before/after Tidy."""

@@ -10,8 +10,7 @@
 # Cost and overlap: Keep the boundary behavior; compare with signed-narrow and array
 #   literal cases before retaining a separate native build. Metadata-only proof ceremony
 #   is not a benefit.
-# Build status: Value review only; admission still requires explicit inputs and single-
-#   owner outputs.
+# Build status: QUARANTINED. Requires exactly 24 direct write literals and fixed exported metadata shapes.
 # Detailed file inputs/outputs: docs/fixture-inputs.log, entry 001.
 
 """Freeze genuine direct-write literals before testing metadata-only projections."""

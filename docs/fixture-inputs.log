@@ -17,8 +17,7 @@ Produces/consumed result: Pre/post CBDs and native oracle.tsv; tests also consum
 Cost and overlap: Keep the boundary behavior; compare with signed-narrow and array
   literal cases before retaining a separate native build. Metadata-only proof ceremony
   is not a benefit.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: QUARANTINED: exact24 direct writes/metadata projection shape must not constrain optimization.
 
 Producer: bin/prepare-narrow-literal-proofs.py:main
 Consumers: thc.runtime.NarrowLiteralProofTest; producer --check-only.
@@ -111,8 +110,7 @@ Produces/consumed result: Pre/post CBDs and native oracle.tsv.
 Cost and overlap: Distinct argument-erasure regression, including first compiled
   execution. Two exports and one native reference are defensible; exact join shapes are
   not the contract.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: QUARANTINED: exact join-call and State-lambda shape must not constrain optimization.
 
 Producer: bin/prepare-empty-join-input.py:main / verify
 Consumers: thc.runtime.EmptyJoinInputTest; producer --check-only.
@@ -5886,3 +5884,14 @@ Inventory/header checkpoint after entry 174 (base 16c7b9355, local changes):
     classes. Mixed-class tagged methods add further excluded coverage, not a class count.
   git diff --check passed. PowerShell unavailable locally; native Windows script
     execution is unverified. No fixture/runtime builds, pushes or CI dispatches.
+
+Graph-admission correction for001/002:
+  NarrowLiteralProofTest.project requires exactly24 matching direct writes.
+  prepare-empty-join-input.verify requires one particular join call and exactly one
+  State lambda/application. Both are now excluded pending removal/consolidation of
+  structural checks. Preserve the semantic signed/high-bit and empty-join cases; the
+  known Linux empty-join first-compiled failure remains unresolved, not erased.
+  Correction verification: both Python producer changes are comment-only by AST
+  comparison. All45 blocked indexed groups refuse preparation before commands
+  (focused check passed in0.110s); Gradle expression evaluated with45 groups/93
+  classes and the full-Core tag excluded. git diff --check passed.

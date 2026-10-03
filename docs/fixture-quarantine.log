@@ -204,8 +204,12 @@ Compiler-structure assertions (also excluded):
     outputs and publish timestamped trees. WindowsDistributionTest and automated
     smoke/driver preparation excluded; standalone timeout diagnostic remains usable.
 
-Current admission summary (inventory through174): 43 indexed groups excluded,
-  plus30 explicit classes (27 custom and3 ordinary Windows). Total91 distinct
-  excluded classes; foreign-exceptions-full-core-tagged methods also withheld.
-  Ordinary selector: 411 active classes /64 withheld. These are selection counts,
-  not pass/fail counts. Repair/consolidation and runtime validation remain required.
+  narrow-literal-proofs (001): consumer fixes exactly24 direct writes and producer
+    projects exact literal metadata shape. Consolidate actual signed/high-bit behavior.
+  empty-join-input (002): producer fixes join-call and State-lambda shapes. Retain
+    semantic first-compiled checks and the unresolved Linux regression during repair.
+
+Current admission summary: 45 indexed groups and30 explicit classes excluded.
+  Total93 distinct classes; full-Core exception tag also withheld. Ordinary
+  selector: 409 selectable /66 withheld. These are selection counts, not
+  runtime pass/fail results. Quarantine does not resolve the underlying regressions.
