@@ -3,11 +3,13 @@
 
 -- Fixture rationale (076 original-stdio-truncate)
 -- Purpose: Check truncation updates length and position through the guest I/O boundary.
--- Produces/consumed result: CBDs and oracle.json from result files.
--- Cost and overlap: Fold essential length/position behavior into one file-lifecycle test.
---   Fourteen per-case native executions and a standalone harness need no preservation.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Inputs: OriginalStdioTruncateAudit.hs/Native.hs, selected GHC/native libraries,
+--   exporter and auditor. CMake owns every persistent product.
+-- Produces: Native executable, fourteen result files, ten private file images,
+--   oracle.json, pre/post CBD pairs, two batched audits, logs and manifest.
+-- Cost and overlap: One native process. ManagedFiles tests cover provider behavior;
+--   this checks the real c_ftruncate declaration and COff transport through export,
+--   closure loading and first compiled calls, preserving file position on resize.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 076.
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -35,7 +37,7 @@ import Foreign.C.Types (CInt, CLong)
 import System.Posix.Types (COff)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (sizeOf)
-import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
@@ -91,15 +93,12 @@ prepareOriginalStdioTruncate root = do
   compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
     "-package", "ghc-internal", "-package", "unix", "-i" ++ (root </> "t/fixtures/compiler"),
     "-odir", root </> native, "-hidir", root </> native, driver, "-o", root </> binary]
-  rows <- forM (zip [0 :: Int ..] requests) $ \(index, (entry, scenario)) -> do
-    let number = show index
-        label = "native-" ++ number
-        privateFile = results </> (number ++ ".private")
-        resultFile = results </> (number ++ ".txt")
-    stale <- doesFileExist (root </> resultFile)
-    when stale (removeFile (root </> resultFile))
-    observed <- runLogged 10 root (directory </> "logs") label [] (root </> binary)
-      [entry, scenario, root </> privateFile, root </> resultFile]
+  let cases = [(entry, scenario, results </> show index ++ ".private", results </> show index ++ ".txt")
+        | (index, (entry, scenario)) <- zip [0 :: Int ..] requests]
+  observed <- execute "native-observations" [] (root </> binary)
+    (concat [[entry, scenario, root </> privateFile, root </> resultFile]
+      | (entry, scenario, privateFile, resultFile) <- cases])
+  rows <- forM cases $ \(entry, scenario, privateFile, resultFile) -> do
     text <- BSC.unpack <$> BS.readFile (root </> resultFile)
     (result, observedSize, observedPosition) <- case lines text of
       [status, size, position] | Just value <- readInteger status,
@@ -118,11 +117,10 @@ prepareOriginalStdioTruncate root = do
         (die "Original truncate changed unexpected private-file bytes")
     let observation = object ["entry" .= entry, "scenario" .= scenario,
           "length" .= lengthFor scenario, "size" .= observedSize, "position" .= observedPosition,
-          "result" .= result,
-          "stdoutHex" .= hexBytes (commandStdout observed), "stderrHex" .= hexBytes (commandStderr observed)]
-    pure (observation, observed, resultFile, [privateFile | scenario `elem` fileScenarios])
+          "result" .= result]
+    pure (observation, resultFile, [privateFile | scenario `elem` fileScenarios])
   let oracle = directory </> "oracle.json"
-  writeJson (root </> oracle) (toJSON [row | (row, _, _, _) <- rows])
+  writeJson (root </> oracle) (toJSON [row | (row, _, _) <- rows])
   exports <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
@@ -136,16 +134,14 @@ prepareOriginalStdioTruncate root = do
     mapM_ (\path -> do
       exists <- doesFileExist (root </> path)
       unless exists (die ("Missing genuine GHC truncate export: " ++ path))) modules
-    audits <- forM entries $ \entry -> do
-      let path = stageDir </> entry ++ ".audit.json"
-      audited <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py", "--entry", "main:OriginalStdioTruncateAudit." ++ entry, "--output", path] ++ modules)
-      pure (entry, path, audited)
-    pure (stage, object ["modules" .= modules], Map.fromList [(entry, path) | (entry, path, _) <- audits],
-          exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])
+    let path = stageDir </> "audit.json"
+    audited <- execute (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py", "--output", path] ++ modules ++
+       concat [["--entry", "main:OriginalStdioTruncateAudit." ++ entry] | entry <- entries])
+    pure (stage, object ["modules" .= modules], path, [exported, audited], modules ++ [path])
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  let commands = [version, info, compiled] ++ [command | (_, command, _, _) <- rows] ++
+  let commands = [version, info, compiled, observed] ++
         concat [stageCommands | (_, _, _, stageCommands, _) <- exports]
       sources = sort $ [source, driver, "thc.cabal", "t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/OriginalStdioTruncateFixtures.hs",
@@ -154,8 +150,8 @@ prepareOriginalStdioTruncate root = do
         "bin/toolchain.sh", "bin/plugin.py"] ++
         ["src/compiler/THC" </> path | path <- plugin, takeExtension path == ".hs"] ++
         ["bin" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
-      artifacts = binary : oracle : [path | (_, _, path, _) <- rows] ++
-        concat [privateFiles | (_, _, _, privateFiles) <- rows] ++
+      artifacts = binary : oracle : [path | (_, path, _) <- rows] ++
+        concat [privateFiles | (_, _, privateFiles) <- rows] ++
         concat [paths | (_, _, _, _, paths) <- exports] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts

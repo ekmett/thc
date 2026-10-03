@@ -2668,11 +2668,12 @@ Value review: ten separately maintained libc/Unix harnesses, repeated source
 076  original-stdio-truncate
 Fixture rationale (076 original-stdio-truncate)
 Purpose: Check truncation updates length and position through the guest I/O boundary.
-Produces/consumed result: CBDs and oracle.json from result files.
-Cost and overlap: Fold essential length/position behavior into one file-lifecycle test.
-  Fourteen per-case native executions and a standalone harness need no preservation.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Produces/consumed result: Native executable, fourteen result files, ten private file
+  images, oracle.json, pre/post CBD pairs, two audits, logs and manifest.
+Cost and overlap: One native process. ManagedFiles tests cover provider behavior;
+  this checks the real c_ftruncate declaration and COff transport through export,
+  closure loading and first compiled calls, preserving file position on resize.
+Build status: Admitted as fixture-original-stdio-truncate in cmake/AuditedFixtures.cmake.
 
 Producer: t/haskell-fixtures/OriginalStdioTruncateFixtures.hs.
 Consumer: thc.runtime.OriginalStdioTruncateNativeTest. Linux/macOS LP64.
@@ -2685,11 +2686,13 @@ Under build/original-stdio-truncate/:
     files/native command streams; OUT 14 observations.
   <pre|post>/core/OriginalStdioTruncateAudit.cbd, THC.InterfaceClosure.cbd:
     IN audit source/exporter/closure roots; OUT CBD pair/stage ghc intermediates.
-  <stage>/<originalTruncate|originalTruncateErrno>.audit.json: IN pair/auditor;
-    OUT reports. logs/ghc-version,ghc-info,native-build,native-N,stage-export/
-    audit-entry: OUT triplets. manifest.json reads all outputs/source receipt.
-Consumer reads receipts/Core/oracle/audits. Result files cleared before native run;
-  old manifest not invalidated. Shared auditor-table omissions remain.
+  <stage>/audit.json: IN pair/auditor; both entries checked together.
+  logs/ghc-version,ghc-info,native-build,native-observations,stage-export/stage-audit:
+    OUT triplets. manifest.json reads all outputs/source receipt.
+Consumer reads receipts/Core/oracle/audits. All fourteen observations run in one
+  native process, overwriting named results directly. Existing output directories
+  and unrelated files are allowed. Native Main/audit and export-stage .hi/.o are
+  declared byproducts. Compiler call/root counts are not runtime assertions.
 
 077  original-stdio-seek
 Fixture rationale (077 original-stdio-seek)

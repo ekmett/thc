@@ -591,6 +591,7 @@
       ]
     },
     "original-stdio-truncate": {
+      "cmakeTarget": "fixture-original-stdio-truncate",
       "junit": ["thc.runtime.OriginalStdioTruncateNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-truncate"]}],
       "outputs": ["build/original-stdio-truncate"],

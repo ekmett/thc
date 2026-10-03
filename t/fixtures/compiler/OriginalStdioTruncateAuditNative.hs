@@ -25,8 +25,15 @@ import System.Posix.Types (Fd(..))
 import qualified OriginalStdioTruncateAudit as Original
 
 main :: IO ()
-main = do
-  [entry, scenario, privatePath, resultPath] <- getArgs
+main = getArgs >>= batch
+  where
+    batch [] = pure ()
+    batch (entry : scenario : privatePath : resultPath : rest) =
+      observe entry scenario privatePath resultPath >> batch rest
+    batch _ = error "Expected groups of ENTRY SCENARIO PRIVATE_PATH RESULT_PATH"
+
+observe :: String -> String -> FilePath -> FilePath -> IO ()
+observe entry scenario privatePath resultPath = do
   (fd, release, privateFile) <- case scenario of
     "invalid" -> pure (Fd (-1), pure (), False)
     "pipe" -> do

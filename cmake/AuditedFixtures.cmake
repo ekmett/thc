@@ -581,3 +581,29 @@ add_custom_command(OUTPUT ${literal_outputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate the independent large-literal Core and native oracle")
 add_custom_target(fixture-large-literal-cases DEPENDS ${literal_outputs})
+
+# 076: one native process observes original ftruncate/COff behavior on private
+# files and a pipe. Every file read to assemble the oracle is a declared product;
+# rerunning overwrites it directly and does not require an empty result directory.
+set(truncate_outputs manifest.json oracle.json native/oracle)
+foreach(index RANGE 0 13)
+  list(APPEND truncate_outputs "results/${index}.txt")
+  if(index LESS 5 OR (index GREATER 6 AND index LESS 12))
+    list(APPEND truncate_outputs "results/${index}.private")
+  endif()
+endforeach()
+set(truncate_labels ghc-version ghc-info native-build native-observations)
+foreach(stage pre post)
+  list(APPEND truncate_outputs "${stage}/core/OriginalStdioTruncateAudit.cbd"
+    "${stage}/core/THC.InterfaceClosure.cbd" "${stage}/audit.json")
+  list(APPEND truncate_labels "${stage}-export" "${stage}-audit")
+endforeach()
+foreach(label IN LISTS truncate_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND truncate_outputs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(original-stdio-truncate OriginalStdioTruncateAudit
+  SOURCES t/fixtures/compiler/OriginalStdioTruncateAudit.hs t/fixtures/compiler/OriginalStdioTruncateAuditNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS ${truncate_outputs})

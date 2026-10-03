@@ -757,10 +757,9 @@ ORIGINAL_STDIO_SEEK_OUTPUTS = frozenset("build/original-stdio-seek/" + name for 
 ))
 
 ORIGINAL_STDIO_TRUNCATE_LOGS = (
-    "ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
-) + tuple(f"native-{index}" for index in range(14)) + tuple(
-    f"{stage}-audit-{entry}" for stage in ("pre", "post")
-    for entry in ("originalTruncate", "originalTruncateErrno"))
+    "ghc-version", "ghc-info", "native-build", "native-observations",
+    "pre-export", "post-export", "pre-audit", "post-audit",
+)
 ORIGINAL_STDIO_TRUNCATE_OUTPUTS = frozenset("build/original-stdio-truncate/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
     *(f"results/{index}.txt" for index in range(14)),
@@ -769,7 +768,7 @@ ORIGINAL_STDIO_TRUNCATE_OUTPUTS = frozenset("build/original-stdio-truncate/" + n
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalStdioTruncateAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        "originalTruncate.audit.json", "originalTruncateErrno.audit.json")),
+        "audit.json")),
 ))
 
 
