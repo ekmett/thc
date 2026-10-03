@@ -151,3 +151,79 @@ foreach(family simd-floatx4-fma simd-wide-floating-fma)
     COMMENT "Generate ${family}: declared platform-specific fused results")
   add_custom_target(fixture-${family} DEPENDS ${outputs})
 endforeach()
+
+# 028/029: memory indexing, scalar offsets, complete-buffer writes and wide lanes.
+# One audit covers all declared entries per stage; no per-entry subprocesses.
+foreach(family simd128-arrays simd-wide-arrays)
+  set(out "${PROJECT_SOURCE_DIR}/build/${family}")
+  set(outputs "${out}/manifest.json" "${out}/inputs.tsv")
+  set(objects)
+  set(labels ghc-version)
+  set(inputs)
+  if(family STREQUAL "simd128-arrays")
+    set(module Simd128Array)
+    set(stages ${simd_stages})
+    set(native_enabled TRUE)
+    if(simd_options)
+      set(native_enabled FALSE)
+    endif()
+  else()
+    set(module SimdWideArray)
+    set(stages pre)
+    set(native_enabled TRUE)
+    list(APPEND inputs "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SimdWideArrayScalar.hs")
+    list(APPEND objects "${out}/native/SimdWideArrayScalar.hi" "${out}/native/SimdWideArrayScalar.o")
+  endif()
+  foreach(stage IN LISTS stages)
+    list(APPEND outputs "${out}/${stage}-core/${module}Audit.cbd" "${out}/${stage}-audit.json")
+    list(APPEND objects "${out}/${stage}-ghc/${module}Audit.hi")
+    list(APPEND labels "${stage}-export" "${stage}-audit")
+    if(family STREQUAL "simd128-arrays" AND native_enabled)
+      list(APPEND objects "${out}/${stage}-ghc/${module}Audit.o")
+    endif()
+  endforeach()
+  if(native_enabled)
+    list(APPEND outputs "${out}/oracle.tsv" "${out}/native/oracle")
+    list(APPEND objects "${out}/native/Main.hi" "${out}/native/Main.o")
+    if(family STREQUAL "simd128-arrays")
+      list(APPEND objects "${out}/native/${module}Audit.hi" "${out}/native/${module}Audit.o")
+    endif()
+    list(APPEND labels native-build native-oracle)
+  endif()
+  foreach(label IN LISTS labels)
+    foreach(suffix stdout stderr command.json)
+      list(APPEND outputs "${out}/commands/${label}.${suffix}")
+    endforeach()
+  endforeach()
+  add_custom_command(OUTPUT ${outputs} BYPRODUCTS ${objects}
+    COMMAND ${fixture_env} "${fixtures_exe}" "${family}"
+    DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/${module}Audit.hs"
+      "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/${module}Native.hs" ${inputs}
+      ${tool_sources} ${cabal_inputs} ${api_export_inputs} ${audit_inputs}
+      "${fixtures_exe}" "${compact_exe}" ${plugin_outputs} ${toolchain_inputs}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM COMMENT "Generate ${family} with one audit per Core stage")
+  add_custom_target(fixture-${family} DEPENDS ${outputs})
+endforeach()
+
+# 038: lane shuffle patterns have an independent scalar reference on every host.
+set(shuffle_out "${PROJECT_SOURCE_DIR}/build/simd-arithmetic")
+set(shuffle_outputs)
+foreach(path manifest.json inputs.tsv oracle.tsv native/oracle audit.json
+    pre-core/SimdArithmeticAudit.cbd sources/SimdArithmeticAudit.hs
+    sources/SimdArithmeticScalar.hs sources/Native.hs)
+  list(APPEND shuffle_outputs "${shuffle_out}/${path}")
+endforeach()
+foreach(label ghc-version native-build native-oracle pre-export audit)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND shuffle_outputs "${shuffle_out}/commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+add_custom_command(OUTPUT ${shuffle_outputs}
+  BYPRODUCTS "${shuffle_out}/native/Main.hi" "${shuffle_out}/native/Main.o"
+    "${shuffle_out}/native/SimdArithmeticScalar.hi" "${shuffle_out}/native/SimdArithmeticScalar.o"
+    "${shuffle_out}/ghc/SimdArithmeticAudit.hi"
+  COMMAND ${fixture_env} "${fixtures_exe}" simd-arithmetic
+  DEPENDS ${tool_sources} ${cabal_inputs} ${api_export_inputs} ${audit_inputs}
+    "${fixtures_exe}" "${compact_exe}" ${plugin_outputs} ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM COMMENT "Generate vector shuffle Core, scalar oracle and one audit")
+add_custom_target(fixture-simd-arithmetic DEPENDS ${shuffle_outputs})

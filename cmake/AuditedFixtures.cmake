@@ -404,4 +404,34 @@ audited_fixture(thread-async ""
   SOURCES t/fixtures/compiler/ThreadAsyncAudit.hs t/fixtures/compiler/ThreadAsyncNative.hs
     t/fixtures/compiler/LazyForkAudit.hs t/fixtures/compiler/LazyForkNative.hs
   OUTPUTS ${async_outputs} BYPRODUCTS ${async_objects})
-add_dependencies(fixture-thread-async fixture-thread-scheduling)
+
+# 087: native-address pinning and keepAlive lifetime, plus malformed ABI controls.
+set(pinned_outputs manifest.json requests.tsv expected.tsv oracle.tsv native/pinned-address-oracle)
+set(pinned_labels native-build native-oracle)
+set(pinned_negatives read-word-not-word8 write-word-not-word8 read-address-is-word
+  read-state-is-int read-offset-is-word contents-lifted-array contents-result-is-word
+  allocation-size-is-word allocation-state-is-int aligned-alignment-is-word
+  keepalive-state-is-int keepalive-result-word-not-word8)
+foreach(stage pre post)
+  list(APPEND pinned_outputs "${stage}/core/PinnedAddressAudit.cbd"
+    "${stage}/core/THC.InterfaceClosure.cbd" "${stage}/negative-proofs.json")
+  list(APPEND pinned_labels "${stage}-export")
+  foreach(entry pinnedBytes alignedBytes keepAliveWord8 keepAliveLazy fingerprintByte)
+    list(APPEND pinned_outputs "${stage}/${entry}.audit.json")
+    list(APPEND pinned_labels "${stage}-${entry}-audit")
+  endforeach()
+  foreach(control IN LISTS pinned_negatives)
+    list(APPEND pinned_outputs "${stage}/negative/${control}-0.cbd"
+      "${stage}/negative/${control}-1.cbd" "${stage}/negative-${control}.audit.json")
+    list(APPEND pinned_labels "${stage}-negative-${control}-audit")
+  endforeach()
+endforeach()
+foreach(label IN LISTS pinned_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND pinned_outputs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(pinned-addresses PinnedAddressAudit
+  SOURCES t/fixtures/compiler/PinnedAddressAudit.hs t/fixtures/compiler/PinnedAddressAuditNative.hs
+    src/tools/primops/PrimopTools.hs
+  OBJECT_DIRS native pre/ghc post/ghc OUTPUTS ${pinned_outputs})

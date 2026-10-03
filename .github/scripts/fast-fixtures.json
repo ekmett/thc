@@ -34,10 +34,8 @@
     "thc.WindowsDistributionTest"
   ],
   "fixtureFreeJunit": [
-    "thc.runtime.BigNatLiteralTest",
     "thc.runtime.Int32ByteOffsetTest",
     "thc.runtime.NarrowByteOffsetTest",
-    "thc.StaticExportStartupTest",
     "thc.HostInteropAbiTest",
     "thc.runtime.ExplicitInteropLibraryTest",
     "thc.runtime.JavaArrayTest",
@@ -297,6 +295,7 @@
   ],
   "groups": {
     "backend-annotations": {
+      "requires": ["compact-model"],
       "quarantined": true,
       "junit": ["thc.CoreBackendPolicyTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; fixture_bin=$(\"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"); printf '%s\\n' \"$fixture_bin\" > build/thc-fixtures.path; \"$fixture_bin\" backend-annotations"]}],
@@ -305,7 +304,7 @@
     },
     "compact-model": {
       "cmakeTarget": "fixture-compact-model",
-      "junit": ["thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnlinkTest"],
+      "junit": ["thc.runtime.BigNatLiteralTest", "thc.StaticExportStartupTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnlinkTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; \"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
@@ -327,6 +326,7 @@
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "simd-word32x4-bytearray": {
+      "requires": ["compact-model"],
       "quarantined": true,
       "junit": ["thc.runtime.SimdWord32ByteArrayTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- word32x4-bytearray --export-only ;; *) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- word32x4-bytearray ;; esac"]}],
@@ -335,6 +335,7 @@
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-word32x4-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-int32x4-bytearray": {
+      "requires": ["compact-model"],
       "quarantined": true,
       "junit": ["thc.runtime.SimdInt32ByteArrayTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- int32x4-bytearray --export-only ;; *) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- int32x4-bytearray ;; esac"]}],
@@ -409,12 +410,14 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "simd-arithmetic": {
+      "cmakeTarget": "fixture-simd-arithmetic",
       "junit": ["thc.runtime.SimdArithmeticTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-arithmetic"]}],
       "outputs": ["build/simd-arithmetic"],
       "sources": ["t/haskell-fixtures/SimdArithmeticFixtures.hs", "bin/simd-families.json", "bin/generate-simd-families.py"]
     },
     "simd-wide-arrays": {
+      "cmakeTarget": "fixture-simd-wide-arrays",
       "junit": ["thc.runtime.SimdWideArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-wide-arrays"]}],
       "outputs": ["build/simd-wide-arrays"],
@@ -430,6 +433,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/simd-families.json"]
     },
     "simd128-arrays": {
+      "cmakeTarget": "fixture-simd128-arrays",
       "junit": ["thc.runtime.Simd128ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-arrays"]}],
       "outputs": ["build/simd128-arrays"],
@@ -526,6 +530,7 @@
       "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/haskell-fixtures/RtsShutdownFixtures.hs", "t/fixtures/compiler/RtsShutdownNative.hs"]
     },
     "rubbish-literals": {
+      "requires": ["compact-model"],
       "junit": ["thc.runtime.RubbishLiteralTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rubbish-literals"]}],
       "outputs": ["build/rubbish-literals"],
@@ -661,6 +666,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/core-capabilities.json", "bin/audit-core.py"]
     },
     "stable-pointers": {
+      "quarantined": true,
       "junit": ["thc.runtime.StablePointerTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-pointers"]}],
       "outputs": ["build/stable-pointers"],
@@ -717,6 +723,7 @@
       ]
     },
     "interface-core": {
+      "requires": ["compact-model"],
       "junit": ["thc.CoreUnitManagedExportTest", "thc.ManagedExportsNativeTest", "thc.ManagedForeignRootsNativeTest", "thc.ManagedImportStubsNativeTest", "thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],
       "outputs": ["build/interface-core"],
@@ -772,6 +779,7 @@
       "sources": ["t/haskell-fixtures/SqrtFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/SqrtAudit.hs", "t/fixtures/compiler/SqrtAuditNative.hs"]
     },
     "pinned-addresses": {
+      "cmakeTarget": "fixture-pinned-addresses",
       "junit": ["thc.runtime.PinnedAddressTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "pinned-addresses"]}],
       "outputs": ["build/pinned-addresses"],
@@ -780,6 +788,7 @@
         "t/fixtures/compiler/PinnedAddressAuditNative.hs"]
     },
     "floating-remainder": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-floating-remainder",
       "junit": ["thc.runtime.FloatingRemainderTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-remainder"]}],
@@ -789,6 +798,7 @@
         "t/fixtures/compiler/FloatingRemainderNative.hs", "t/fixtures/core/InverseHyperbolic.hs"]
     },
     "float-decode": {
+      "requires": ["compact-model"],
       "junit": ["thc.runtime.FloatDecodeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-decode"]}],
       "outputs": ["build/float-decode"],
@@ -805,6 +815,7 @@
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot"]
     },
     "scalar-bitcasts": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-scalar-bitcasts",
       "junit": ["thc.runtime.ScalarBitCastTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}],
@@ -812,6 +823,7 @@
       "sources": ["t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.ps1", "bin/windows-common.ps1", "t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs"]
     },
     "sum-results": {
+      "requires": ["compact-model"],
       "quarantined": true,
       "junit": ["thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest", "thc.runtime.UnknownBoxedNativeTest"],
       "commands": [{"argv": ["sh", "bin/prepare-aggregate-frontier.sh"]}, {"argv": ["python3", "bin/check-sum-layout.py", "--prepare"]}, {"argv": ["python3", "bin/prepare-sum-result-audit.py"]}],
@@ -835,6 +847,7 @@
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-doublex2/provenance.json').read_text())\nassert proof['nativeRows'] == 3390 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-floatx4-bytearray": {
+      "requires": ["compact-model"],
       "quarantined": true,
       "junit": ["thc.runtime.SimdFloatByteArrayTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- floatx4-bytearray --export-only ;; *) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- floatx4-bytearray ;; esac"]}],
@@ -843,6 +856,7 @@
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-floatx4-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 6720 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "simd-doublex2-bytearray": {
+      "requires": ["compact-model"],
       "quarantined": true,
       "junit": ["thc.runtime.SimdDoubleByteArrayTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- doublex2-bytearray --export-only ;; *) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- doublex2-bytearray ;; esac"]}],
@@ -947,6 +961,7 @@
       ]
     },
     "compiled-thunk-retention": {
+      "requires": ["compact-model"],
       "quarantined": true,
       "junit": ["thc.runtime.BoxedArrayTest", "thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
       "commands": [{"argv": ["python3", "bin/prepare-boxed-arrays.py"]}, {"argv": ["python3", "bin/prepare-floating-audit.py"]}],
@@ -1025,6 +1040,7 @@
       ]
     },
     "address-array-copy": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-address-array-copy",
       "junit": ["thc.runtime.AddressArrayCopyTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "address-array-copy"]}],
@@ -1212,6 +1228,7 @@
       ]
     },
     "io-main-pap": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-io-main-pap",
       "junit": ["thc.runtime.IoMainPapNativeTest"],
       "commands": [{"argv": ["python3", "bin/prepare-io-main-pap.py"]}],
@@ -1223,6 +1240,7 @@
       ]
     },
     "runtime-core-native": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-runtime-core-native",
       "junit": ["thc.BytecodeBackendTest", "thc.FastSmokeTest", "thc.RuntimeTest", "thc.SelfTailProfileTest"],
       "commands": [{"argv": ["bin/export-core.sh", "t/fixtures/core/Fixtures.hs"]}, {"argv": ["bin/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}],
@@ -1258,6 +1276,7 @@
       ]
     },
     "integer-primops": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-integer-primops",
       "junit": ["thc.IntegerPrimopsTest"],
       "commands": [
@@ -1270,6 +1289,7 @@
       ]
     },
     "signed-narrow-primops": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-signed-narrow-primops",
       "junit": ["thc.SignedNarrowPrimopsTest"],
       "commands": [
@@ -1285,6 +1305,7 @@
       ]
     },
     "bit-primops": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-bit-primops",
       "junit": ["thc.runtime.BitPrimopsTest"],
       "commands": [
@@ -1456,6 +1477,7 @@
       ]
     },
     "source-core": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-source-core",
       "junit": ["thc.RealCoreJoinTest", "thc.runtime.CoreSourceTest"],
       "commands": [{"argv": ["env", "THC_SOURCE_NOTES=true", "THC_CORE_OUT=build/source-core", "THC_GHC_OUT=build/source-ghc", "bin/export-core.sh", "t/fixtures/compiler/SourceNotes.hs", "t/fixtures/compiler/RepresentationAudit.hs"]}, {"argv": ["python3", "bin/check-source-metadata.py", "--fixture", "build/source-core/SourceNotes.cbd", "build/source-core/RepresentationAudit.cbd"]}],
@@ -1463,6 +1485,7 @@
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "corpus": {
+      "requires": ["compact-model"],
       "quarantined": true,
       "junit": ["thc.CoverageCorpusTest", "thc.Int64ConversionTest", "thc.NarrowWordPrimitiveTest"],
       "commands": [{"argv": ["python3", "bin/prepare-corpus.py"]}],
@@ -1470,6 +1493,7 @@
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "strict-fields": {
+      "requires": ["compact-model"],
       "cmakeTarget": "fixture-strict-fields",
       "junit": ["thc.StrictFieldsTest"],
       "commands": [{"argv": ["bin/export-core.sh", "t/fixtures/compiler/StrictFields.hs"]}],
@@ -1477,6 +1501,7 @@
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "cstring": {
+      "requires": ["compact-model"],
       "junit": ["thc.CStringTest"],
       "commands": [{"argv": ["python3", "bin/export-boot.py"]}],
       "outputs": ["build/map/boot-core", "build/map/boot-provenance.json"],
@@ -1567,6 +1592,7 @@
       "requires": ["sum-results"]
     },
     "process-signals": {
+      "requires": ["compact-model"],
       "junit": ["thc.runtime.ForkHostFailureTest", "thc.runtime.LoomSignalProcessTest", "thc.runtime.ProcessSignalsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "process-signals"]}],
       "outputs": ["build/process-signals"],

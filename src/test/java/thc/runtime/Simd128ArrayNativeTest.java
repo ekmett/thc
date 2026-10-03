@@ -139,16 +139,12 @@ class Simd128ArrayNativeTest {
             var core = (String) stage.getValue().get("core");
             assertTrue(artifacts.containsKey(core));
             assertEquals(stage.getKey().equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", thc.CoreCbdFixtures.read(new File(root, core).toPath()).get("boundary"));
-            var records = (Map<String, Map<String, Object>>) stage.getValue().get("entries");
-            assertEquals(new LinkedHashSet<>(entries), records.keySet());
-            for (var item : records.entrySet()) {
-                var name = item.getKey(); var record = item.getValue();
-                var path = (String) record.get("audit"); assertTrue(artifacts.containsKey(path));
-                var audit = read(path);
-                assertEquals(List.of("main:Simd128ArrayAudit." + name), audit.get("roots"));
-                assertEquals(true, audit.get("accepted"));
-                assertEquals(List.of(), audit.get("issues")); assertEquals(List.of(), audit.get("missingGlobals"));
-            }
+            var path = (String) stage.getValue().get("audit");
+            assertTrue(artifacts.containsKey(path));
+            var audit = read(path);
+            assertEquals(entries.stream().map(name -> "main:Simd128ArrayAudit." + name).toList(), audit.get("roots"));
+            assertEquals(true, audit.get("accepted"));
+            assertEquals(List.of(), audit.get("issues")); assertEquals(List.of(), audit.get("missingGlobals"));
         }
         return proof;
     }

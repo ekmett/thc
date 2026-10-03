@@ -38,8 +38,8 @@ public final class CoreCbdTestSupport {
             if (configured != null && !configured.isBlank()) executable = configured;
             else if (Files.isRegularFile(prepared)) executable = Files.readString(prepared).strip();
             else {
-                var cabal = System.getenv().getOrDefault("CABAL", "cabal");
-                executable = run(List.of(cabal, "list-bin", "exe:thc-fixtures", "--offline")).strip();
+                throw new IOException("Missing build/thc-fixtures.path; prepare this test with "
+                    + "make fixtures TESTS=<class>, or set THC_FIXTURES to its encoder executable");
             }
             if (executable.isBlank() || !Files.isRegularFile(Path.of(executable)))
                 throw new IOException("Build thc-fixtures first or set THC_FIXTURES to its executable: " + executable);

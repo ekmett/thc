@@ -5,7 +5,7 @@
 -- Purpose: Check wide vector array storage and lane extraction.
 -- Produces/consumed result: Pre CBD and scalar-lane native oracle.tsv.
 -- Cost and overlap: Wide layouts need coverage beyond 128-bit cases. Reuse the vector-
---   memory pipeline; separate historical audit inventories add no value.
+--   memory pipeline; one auditor invocation checks all entries per Core stage.
 -- Build status: Value review only; admission still requires explicit inputs and single-
 --   owner outputs.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 029.
@@ -89,18 +89,17 @@ prepareSimdWideArrays root = do
       [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fno-code","-fwrite-if-simplified-core"] ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    reports <- forM entries $ \(name,_,_,_) -> do
-      let path = directory </> stage ++ "-" ++ name ++ "-audit.json"
-      command <- execute (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["bin/audit-core.py",corePath,"--entry","main:SimdWideArrayAudit." ++ name,"--output",path]
-      report <- readJson (root </> path)
-      accepted <- field report "accepted"
-      missing <- field report "missingGlobals" :: IO [Value]
-      issues <- field report "issues" :: IO [Value]
-      unless (accepted && null missing && null issues) (die "Strict SIMD wide audit rejected")
-      pure (name,object ["audit" .= path],path:commandArtifacts command)
-    pure (stage,object ["core" .= corePath,"entries" .= Map.fromList [(name,record) | (name,record,_) <- reports]],
-      corePath : commandArtifacts compilation ++ concat [paths | (_,_,paths) <- reports])
+    let path = directory </> stage ++ "-audit.json"
+    audited <- execute (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py",corePath,"--output",path] ++
+        concat [["--entry","main:SimdWideArrayAudit." ++ name] | (name,_,_,_) <- entries])
+    report <- readJson (root </> path)
+    accepted <- field report "accepted"
+    missing <- field report "missingGlobals" :: IO [Value]
+    issues <- field report "issues" :: IO [Value]
+    unless (accepted && null missing && null issues) (die "Strict SIMD wide audit rejected")
+    pure (stage,object ["core" .= corePath,"audit" .= path],
+      [corePath,path] ++ commandArtifacts compilation ++ commandArtifacts audited)
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ [source,driver,"t/fixtures/compiler/SimdWideArrayScalar.hs","t/haskell-fixtures/SimdWideArrayFixtures.hs",

@@ -7,8 +7,7 @@
 -- Cost and overlap: Keep ownership and sharing. Review the synthetic original-call
 --   certificate against installed foreign-registration coverage; historical certificate
 --   reproduction is not its own test purpose.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: QUARANTINED: two exact output-directory inventories reject unrelated CBDs.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 084.
 
 {-# LANGUAGE OverloadedStrings #-}

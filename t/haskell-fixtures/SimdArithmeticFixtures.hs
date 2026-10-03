@@ -160,15 +160,15 @@ prepareSimdArithmetic root = do
   BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout observed)
   exported <- execute "pre-export" [("THC_CORE_OUT",root </> directory </> "pre-core"),("THC_GHC_OUT",root </> directory </> "ghc")]
     "bin/export-core.sh" ["-fno-code","-fwrite-if-simplified-core",source]
-  audits <- forM entries $ \entry -> do
-    let path = directory </> name entry ++ "-audit.json"
-    command <- execute (name entry ++ "-audit") [] "python3" ["bin/audit-core.py",core,"--entry","main:SimdArithmeticAudit." ++ name entry,"--output",path]
-    report <- readJson (root </> path)
-    accepted <- field report "accepted"
-    missing <- field report "missingGlobals" :: IO [Value]
-    issues <- field report "issues" :: IO [Value]
-    unless (accepted && null missing && null issues) (die ("SIMD arithmetic audit rejected " ++ name entry))
-    pure (path:commandArtifacts command)
+  let auditPath = directory </> "audit.json"
+  audited <- execute "audit" [] "python3"
+    (["bin/audit-core.py",core,"--output",auditPath] ++
+      concat [["--entry","main:SimdArithmeticAudit." ++ name entry] | entry <- entries])
+  report <- readJson (root </> auditPath)
+  accepted <- field report "accepted"
+  missing <- field report "missingGlobals" :: IO [Value]
+  issues <- field report "issues" :: IO [Value]
+  unless (accepted && null missing && null issues) (die "SIMD shuffle audit rejected")
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ ["t/haskell-fixtures/SimdArithmeticFixtures.hs","t/haskell-fixtures/FixtureSupport.hs",
@@ -176,8 +176,8 @@ prepareSimdArithmetic root = do
     "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
     ["src/compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
     ["bin" </> path | path <- scripts,isPrefixOf "core_" path,takeExtension path == ".py"])
-  artifactHashes <- hashes root ([source,scalarSource,driver,inputs,binary,core,directory </> "oracle.tsv"] ++ concat audits ++
-    concatMap commandArtifacts [version,nativeBuild,observed,exported])
+  artifactHashes <- hashes root ([source,scalarSource,driver,inputs,binary,core,directory </> "oracle.tsv",auditPath] ++
+    concatMap commandArtifacts [version,nativeBuild,observed,exported,audited])
   writeJson manifest (object ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"rows" .= length requests,
     "entries" .= [object ["name" .= name entry,"lanes" .= lanes (shape entry),
       "width" .= width (shape entry),"scalar" .= scalar (shape entry),"pattern" .= patternId entry] | entry <- entries],

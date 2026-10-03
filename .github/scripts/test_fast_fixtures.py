@@ -47,6 +47,16 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.prepare_cmake(self.root, self.selection("thc.FreeTest"), run)["targets"], [])
         run.assert_not_called()
 
+    def test_model_writers_require_the_declared_encoder(self):
+        project = Path(__file__).resolve().parents[2]
+        for name in ("thc.runtime.BigNatLiteralTest", "thc.StaticExportStartupTest",
+                     "thc.runtime.IoMainPapNativeTest", "thc.runtime.AddressArrayCopyTest"):
+            with self.subTest(test=name):
+                result = fast_fixtures.prepare_cmake(project, self.selection(name), mock.Mock())
+                self.assertIn("fixture-compact-model", result["targets"])
+        result = fast_fixtures.prepare_cmake(project, self.selection("thc.runtime.Int32ByteOffsetTest"), mock.Mock())
+        self.assertEqual([], result["targets"])
+
     def test_every_real_quarantined_fixture_stops_before_toolchain_or_generation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)
@@ -691,12 +701,6 @@ class FixturePreparationTest(unittest.TestCase):
                                      ([] if machine == "x86_64" else ["--export-only"]), actual)
 
 
-    def test_bignat_loader_controls_are_fixture_free(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        self.assertIn("thc.runtime.BigNatLiteralTest", manifest["fixtureFreeJunit"])
-        self.assertIsNone(owners["thc.runtime.BigNatLiteralTest"])
-
     def test_float_decode_tracks_upstream_sources_without_bundling_them(self):
         cache = fast_fixtures.fast_inputs
         name = "build/float-decode/manifest.json"
@@ -877,6 +881,8 @@ class FixturePreparationTest(unittest.TestCase):
     def test_selected_process_signal_preparation_reuses_explicit_mac_exclusion(self):
         project = Path(__file__).resolve().parents[2]
         group = fast_fixtures._manifest(project)[0]['groups']['process-signals']
+        # Isolate this provider's platform exclusion; encoder edges have their own check.
+        group = {**group, 'requires': []}
         self.assertIn('t/haskell-fixtures/ProcessSignalFixtures.hs', group['sources'])
         self.assertIn('t/haskell-fixtures/FixtureSupport.hs', group['sources'])
         for name in group['sources']:

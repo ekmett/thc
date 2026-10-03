@@ -107,11 +107,13 @@ class SimdArithmeticTest {
     private void check(Value function, Row row, String backend) { assertEquals(row.result, function.execute(row.a, row.b).asLong(), backend + "/" + row); }
     @Test void nativeShufflesRunOnFirstInstalledCallsOnBothBackends() throws Exception {
         var evidence = evidence(); var module = thc.CoreCbdFixtures.read(new File(directory, "pre-core/SimdArithmeticAudit.cbd").toPath());
+        var audit = json(new File(directory, "audit.json"));
+        assertEquals(evidence.shapes.stream().map(shape -> "main:SimdArithmeticAudit." + shape.name).toList(), audit.get("roots"));
+        assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("missingGlobals")); assertEquals(List.of(), audit.get("issues"));
         var cases = new LinkedHashMap<String, List<Row>>(); for (var row : evidence.rows) cases.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row);
         for (var backend : List.of("ast", "bytecode")) language((context, language) -> {
             for (var shape : evidence.shapes) {
-                var label = backend + "/" + shape.name; var audit = json(new File(directory, shape.name + "-audit.json"));
-                assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("missingGlobals")); assertEquals(List.of(), audit.get("issues"));
+                var label = backend + "/" + shape.name;
                 var entryId = "main:SimdArithmeticAudit." + shape.name; var input = new LinkedHashMap<>(CoreModules.reachable(module, entryId)); input.put("instrument", true);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input);
                 var function = context.asValue(new EntryValue(program, entryId, 2));

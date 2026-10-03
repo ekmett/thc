@@ -5,7 +5,7 @@
 -- Purpose: Check 128-bit integer vector array loads/stores across element widths.
 -- Produces/consumed result: CBDs, input cases and native/model oracle rows.
 -- Cost and overlap: Keep width/lane memory cases, sharing setup with the broader vector-
---   memory corpus. ARM model-only coverage must not be described as native verification.
+--   memory corpus, with one audit per Core stage. ARM model-only coverage is not native verification.
 -- Build status: Value review only; admission still requires explicit inputs and single-
 --   owner outputs.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 028.
@@ -90,18 +90,17 @@ prepareSimd128Arrays root = do
       [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
       "bin/export-core.sh" ((if exportedOnly then ["-fno-code","-fwrite-if-simplified-core"] else ["-fllvm"]) ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    reports <- forM entries $ \(name,_,_) -> do
-      let path = directory </> stage ++ "-" ++ name ++ "-audit.json"
-      command <- execute (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["bin/audit-core.py",corePath,"--entry","main:Simd128ArrayAudit." ++ name,"--output",path]
-      report <- readJson (root </> path)
-      accepted <- field report "accepted"
-      missing <- field report "missingGlobals" :: IO [Value]
-      issues <- field report "issues" :: IO [Value]
-      unless (accepted && null missing && null issues) (die "Strict SIMD128 audit rejected")
-      pure (name,object ["audit" .= path],path:commandArtifacts command)
-    pure (stage,object ["core" .= corePath,"entries" .= Map.fromList [(name,record) | (name,record,_) <- reports]],
-      corePath : commandArtifacts compilation ++ concat [paths | (_,_,paths) <- reports])
+    let path = directory </> stage ++ "-audit.json"
+    audited <- execute (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py",corePath,"--output",path] ++
+        concat [["--entry","main:Simd128ArrayAudit." ++ name] | (name,_,_) <- entries])
+    report <- readJson (root </> path)
+    accepted <- field report "accepted"
+    missing <- field report "missingGlobals" :: IO [Value]
+    issues <- field report "issues" :: IO [Value]
+    unless (accepted && null missing && null issues) (die "Strict SIMD128 audit rejected")
+    pure (stage,object ["core" .= corePath,"audit" .= path],
+      [corePath,path] ++ commandArtifacts compilation ++ commandArtifacts audited)
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ [source,driver,"t/haskell-fixtures/Simd128ArrayFixtures.hs",

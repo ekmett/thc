@@ -38,6 +38,9 @@ Unrelated directory members change consumed inputs or make generation fail:
     short-bytes-slices (129), tuple-return (130), unsafe-equality (134),
     tag-to-enum (135): recursively discovered products enter receipts consumed
     by tests. sum-results includes aggregate-layout, sum-layout and sum-result.
+  stable-pointers (084): both original and shared-CAF exports require exact
+    output-directory inventories. Unrelated CBDs must not prevent regeneration;
+    replace both listings with their declared pairs before readmission.
   compiled-thunk-retention (097): boxed-array producer consumes every stage CBD;
     its grouped consumers include the floating fixture. Split useful independent
     coverage before admitting it separately.
