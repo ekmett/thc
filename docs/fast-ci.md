@@ -52,8 +52,10 @@ Scheduled jobs still share common compilation before distributing their groups.
 The job's Gradle worker is stopped on success or failure.
 
 Each build coordinator writes `build-trace.json` alongside its timing report;
-the existing CI result artifacts include it and the individual fragments under
-`traces/`. Open the JSON in Perfetto to see command spans, completed Ninja edges
+the existing CI result artifacts include it, the individual fragments and raw
+Ninja logs under `traces/`, including on failure. Platform and scheduled result
+artifacts are retained for seven days, Fast results for fourteen days. Open the
+JSON in Perfetto to see command spans, completed Ninja edges
 and Gradle tasks on one timeline. Gradle task outcomes distinguish execution,
 cache hits, skipped tasks and up-to-date outputs. Ninja records successful edges
 only; a failed command retains its outer span and log. Multi-output edges appear

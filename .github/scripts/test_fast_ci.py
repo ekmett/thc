@@ -20,8 +20,13 @@ SPEC.loader.exec_module(ci)
 
 class FastRunnerTest(unittest.TestCase):
     def test_ninja_trace_excludes_history_and_groups_multi_output_edges(self):
+        for version in (5, 6, 7):
+            with self.subTest(version=version):
+                self.check_ninja_trace(version)
+
+    def check_ninja_trace(self, version):
         log = self.root / '.ninja_log'
-        before = b'# ninja log v6\n0\t90\t1\told\taaa\n'
+        before = f'# ninja log v{version}\n0\t90\t1\told\taaa\n'.encode()
         log.write_bytes(before + b'0\t20\t2\ta\tbbb\n0\t20\t2\tb\tbbb\n5\t10\t3\tc\tccc\n')
         events = ci.ninja_events(log, before, 1000000)
         output = self.root / 'trace.json'

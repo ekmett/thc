@@ -18,6 +18,7 @@ import io
 import platform
 import tarfile
 import os
+import shutil
 from pathlib import Path
 import re
 import signal
@@ -76,7 +77,10 @@ def ninja_events(path, previous, started):
         return []
     data = path.read_bytes()
     require(data.startswith(previous), "Ninja log changed during tracing; refusing stale timings")
-    require(data.splitlines()[0] in (b"# ninja log v5", b"# ninja log v6"), "Unknown Ninja log format")
+    header = data.splitlines()[0] if data else b""
+    # v6 and v7 change command hashing, not the five timing/output fields.
+    require(header in (b"# ninja log v5", b"# ninja log v6", b"# ninja log v7"),
+            f"Unknown Ninja log format: {header!r}")
     edges = {}
     for line in data[len(previous):].decode().splitlines():
         if not line or line.startswith("#"):
@@ -168,6 +172,12 @@ class Recorder:
                        "args": {"exitCode": phase.get("exitCode"), "command": phase["command"]}}]
             if ninja_log is not None:
                 try:
+                    # Artifact upload ignores hidden files. Keep the raw log
+                    # beside the trace even if conversion fails or is interrupted.
+                    raw_log = Path(str(trace_prefix) + ".ninja.log")
+                    if ninja_log.exists():
+                        shutil.copyfile(ninja_log, raw_log)
+                        events[0]["args"].update(ninjaLog=raw_log.name, ninjaLogOffset=len(previous))
                     events.extend(ninja_events(ninja_log, previous, started))
                 except (OSError, ValueError, RuntimeError) as error:
                     # Keep the build's real exit status and its command span.
