@@ -22,3 +22,25 @@ add_custom_command(OUTPUT ${pap_outputs} BYPRODUCTS ${pap_objects}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate IO-main partial application Core and native effect oracle")
 add_custom_target(fixture-io-main-pap DEPENDS ${pap_outputs})
+
+# 136: managed addresses through fields, closures, PAPs and tuple returns. The
+# generated native driver and byte model share no generated inputs with another
+# producer; GHC representation choices are not assertions in fixture generation.
+set(address_out "${PROJECT_SOURCE_DIR}/build/address-fields")
+set(address_outputs "${address_out}/manifest.json" "${address_out}/NativeAddressFields.hs"
+  "${address_out}/oracle.tsv" "${address_out}/expected.tsv" "${address_out}/native/address-fields-oracle")
+set(address_objects "${address_out}/native/Main.hi" "${address_out}/native/Main.o"
+  "${address_out}/native/AddressFieldAudit.hi" "${address_out}/native/AddressFieldAudit.o")
+foreach(stage pre post)
+  list(APPEND address_outputs "${address_out}/${stage}/core/AddressFieldAudit.cbd" "${address_out}/${stage}/audit.json")
+  list(APPEND address_objects "${address_out}/${stage}/ghc/AddressFieldAudit.hi" "${address_out}/${stage}/ghc/AddressFieldAudit.o")
+endforeach()
+add_custom_command(OUTPUT ${address_outputs} BYPRODUCTS ${address_objects}
+  COMMAND ${fixture_env} "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/bin/prepare-address-fields.py"
+  DEPENDS "${PROJECT_SOURCE_DIR}/bin/prepare-address-fields.py"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/AddressFieldAudit.hs"
+    ${api_export_inputs} ${audit_inputs} ${tool_sources}
+    "${compact_exe}" ${plugin_outputs} ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate address-field Core, native values and independent byte model")
+add_custom_target(fixture-address-fields DEPENDS ${address_outputs})

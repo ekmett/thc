@@ -5,12 +5,13 @@
 # Fixture rationale (136 address-fields)
 # Purpose: Check pointer-valued constructor fields preserve addresses across storage and
 #   calls.
-# Produces/consumed result: AddressFieldAudit CBDs and oracle.tsv/expected.tsv.
-# Cost and overlap: Retain field transport if native-address tests do not exercise it.
-#   Share pointer setup and delete incidental shape constraints; one generated driver
-#   suffices.
-# Build status: Value review only; admission still requires explicit inputs and single-
-#   owner outputs.
+# Inputs: AddressFieldAudit.hs, this driver's byte model, selected GHC, exporter,
+#   auditor and compact decoder; all declared in cmake/ScriptFixtures.cmake.
+# Produces: pre/post CBDs and two audits, one generated native driver/executable,
+#   225 oracle/model rows and manifest. Each persistent file has one CMake writer.
+# Cost and overlap: Address storage in data fields, closures, partial applications
+#   and tuple returns is distinct from direct address reads. Keep observable bytes,
+#   lazy neighbours and carrier rejection; no GHC lambda/case/constructor predictions.
 # Detailed file inputs/outputs: docs/fixture-inputs.log, entry 136.
 
 """Native GHC managed literal addresses in constructors and unboxed tuples."""
@@ -37,13 +38,6 @@ def model(name, x):
         'twins': x+630+byte, 'emptyLiteral': 4*x+11, 'terminator': 4*x+13, 'backwards': x+byte,
         'tupleFrontier': x+65}[name])
 
-def walk(value):
-    if isinstance(value, list):
-        yield value
-        for child in value: yield from walk(child)
-    elif isinstance(value, dict):
-        for child in value.values(): yield from walk(child)
-
 def main():
     BUILD.mkdir(parents=True, exist_ok=True)
     (BUILD/'manifest.json').unlink(missing_ok=True)
@@ -65,45 +59,12 @@ def main():
         path = core/'AddressFieldAudit.cbd'; module = core_package_manifest.inspect_cbd(path.read_bytes()); artifacts.append(path)
         stages[stage] = str(path.relative_to(ROOT))
         assert module['boundary'] == ('optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep')
-        prefix = module['unit'] + ':' + module['module'] + '.'
-        constructors = {c['id']: c for c in module['constructors']}
-        for name, reps in [('Packet', [['AddrRep'], ['IntRep'], ['BoxedRep (Just Lifted)']]),
-                           ('Twin', [['AddrRep'], ['AddrRep'], ['BoxedRep (Just Lifted)']])]:
-            con = constructors[prefix + name]
-            assert con['fieldReps'] == reps and con['fieldLifted'] == [False, False, True]
-            for i, rep in enumerate(reps):
-                if rep == ['AddrRep']:
-                    assert con['fieldTypes'][i] == dict(kind='address', primReps=['AddrRep'], evaluated=True)
-            assert con['fieldTypes'][-1]['evaluated'] is False
-        bindings = {b['id']: b for b in module['bindings']}
-        assert bindings[prefix + 'bottom']['expr'][:2] == ['var', bindings[prefix + 'bottom']['id']]
-        # OPAQUE controls must retain actual constructor production, consumption,
-        # and the captured/PAP routes; natural is intentionally free to optimize.
-        assert any(n[:2] == ['con', constructors[prefix + 'Packet']['id']] for n in walk(bindings[prefix + 'makePacket']['expr']))
-        assert any(n[:2] == ['data', constructors[prefix + 'Packet']['id']] for n in walk(bindings[prefix + 'readPacket']['expr']))
-        assert sum(n[:1] == ['lam'] for n in walk(bindings[prefix + 'captured']['expr'])) >= 2
-        assert sum(n[:1] == ['lam'] for n in walk(bindings[prefix + 'partial']['expr'])) >= 2
-        captured_case = bindings[prefix + 'captured']['expr'][2]
-        assert captured_case[0] == 'case'
-        captured_lambda = next(n for n in walk(captured_case) if n[:1] == ['lam'])
-        assert any(n[:2] == ['var', captured_case[2]] and n[2]['rep']['kind'] == 'data' and
-                   n[2]['rep']['evaluated'] is True for n in walk(captured_lambda)), 'Evaluated constructor capture vanished'
-        partial_lambda = list(n for n in walk(bindings[prefix + 'partial']['expr']) if n[:1] == ['lam'])[1]
-        assert any(n[:1] == ['var'] and len(n) > 2 and n[2]['rep']['kind'] == 'address'
-                   for n in walk(partial_lambda)), 'Address capture in eta-expanded constructor vanished'
-        for name in ENTRIES:
-            report = audit.Audit([(str(path.relative_to(ROOT)), module)], cap).run([module['unit'] + ':' + module['module'] + '.' + name])
-            dest = directory/(name+'.audit.json'); dest.write_text(json.dumps(report, indent=2)+'\n'); artifacts.append(dest)
-            assert not report['missingGlobals'], (stage, name, report['missingGlobals'])
-            if name in ENTRIES:
-                assert report['accepted'], (stage, name, report['issues'])
-                if name not in ('natural', 'tupleFrontier'):
-                    assert bindings[prefix + 'bottom']['id'] in {b['id'] for b in report['reachableBindings']}
-            summaries[stage+'/'+name] = report['summary']
-        assert any(n[:2] == ['con', next(c['id'] for c in module['constructors'] if c['kind'] == 'unboxed-tuple')]
-                   for n in walk(bindings[prefix + 'addressTuple']['expr'])), 'AddrRep tuple producer vanished'
-        assert any(n[:1] == ['data'] and n[1] in {c['id'] for c in module['constructors'] if c['kind'] == 'unboxed-tuple'}
-                   for n in walk(bindings[prefix + 'tupleFrontier']['expr'])), 'AddrRep tuple consumer vanished'
+        roots = [module['unit'] + ':' + module['module'] + '.' + name for name in ENTRIES]
+        report = audit.Audit([(str(path.relative_to(ROOT)), module)], cap).run(roots)
+        dest = directory/'audit.json'; dest.write_text(json.dumps(report, indent=2)+'\n'); artifacts.append(dest)
+        assert report['accepted'], (stage, report['issues'])
+        assert not report['missingGlobals'], (stage, report['missingGlobals'])
+        summaries[stage] = report['summary']
     driver = ['{-# LANGUAGE MagicHash #-}', 'module Main where', 'import GHC.Exts (Int(I#))',
         'import qualified AddressFieldAudit as P', 'call name (I# x) = case name of']
     driver += ['  "'+name+'" -> I# (P.'+name+' x)' for name in ENTRIES]
@@ -128,8 +89,8 @@ def main():
         allNativeValuesMatchIndependentModel=True, inputHashes=hashes(inputs), artifactHashes=hashes(artifacts), commands=commands,
         ghcInfo=run([ghc, '--info'], text=True, capture_output=True).stdout,
         limitations=['Managed immutable literal allocations only; no foreign pointer or raw address conversion.',
-                    'Only managed literal AddrRep tuple fields are transported; AddrRep sums and native pointers remain unsupported.',
+                    'This corpus covers managed literal fields and tuples, not native pointers or address sums.',
                     'Native reads stay within the original literal including its final NUL; invalid offsets are JVM-only controls.']), indent=2)+'\n')
-    print(f'Prepared address fields: {len(ENTRIES)*len(VALUES)} native/model rows; {2*len(ENTRIES)} accepted pre/post audits')
+    print(f'Prepared address fields: {len(ENTRIES)*len(VALUES)} native/model rows; 2 batched pre/post audits')
 
 if __name__ == '__main__': main()

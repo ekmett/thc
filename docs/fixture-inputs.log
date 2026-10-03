@@ -4338,24 +4338,26 @@ Consumer reads receipt/hashes/oracle/Core/audits. No old receipt invalidation.
 Fixture rationale (136 address-fields)
 Purpose: Check pointer-valued constructor fields preserve addresses across storage and
   calls.
-Produces/consumed result: AddressFieldAudit CBDs and oracle.tsv/expected.tsv.
-Cost and overlap: Retain field transport if native-address tests do not exercise it.
-  Share pointer setup and delete incidental shape constraints; one generated driver
-  suffices.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Produces/consumed result: pre/post CBDs, two audits, one generated native driver and
+  executable, 225 oracle/model rows and manifest.
+Cost and overlap: Address storage in data fields, closures, partial applications and
+  tuple returns is distinct from direct address reads. Keep observable bytes, lazy
+  neighbours and carrier rejection; no GHC lambda/case/constructor predictions.
+Build status: Admitted as fixture-address-fields in cmake/ScriptFixtures.cmake.
 
 Producer: bin/prepare-address-fields.py; consumer: thc.runtime.AddressFieldTest.
 IN t/fixtures/compiler/AddressFieldAudit.hs, producer model/template/shared tools/data/GHC.
 Under build/address-fields/:
   <pre|post>/core/AddressFieldAudit.cbd and stage/ghc/: IN source/exporter.
-  stage/<entry>.audit.json: IN CBD/in-process auditor.
+  stage/audit.json: IN CBD/in-process auditor, all nine entry points together.
   NativeAddressFields.hs: IN producer template/entry list.
   native/address-fields-oracle and intermediates: IN generated driver/audit source/GHC.
   oracle.tsv, expected.tsv: IN binary/generated requests/independent bounded byte model.
   manifest.json: IN source/Core/audit/driver/binary/TSV hashes; old receipt removed.
-Consumer reads receipt/all hashes/advertised CBDs/oracle. Shape checks are separate
-  from the byte/field behavior being tested; assess before preserving them.
+Consumer reads receipt/all hashes/advertised CBDs/oracle. Producer no longer predicts
+  constructor/case/lambda topology; runtime tests check values, laziness, carrier
+  rejection and first compiled calls without requiring a particular DirectCallNode
+  arrangement. Native Main/AddressFieldAudit and pre/post .hi/.o are CMake byproducts.
 
 137 sum-join
 Fixture rationale (137 sum-join)

@@ -29,7 +29,7 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `core-continuation`, `large-literal-cases`, `original-termios`, `original-rts-locks`,
 `rubbish-literals`, `original-tcgetattr`, `original-tcsetattr`, `float-decode`
 and `process-signals`, `unix-libc`, `exception-result-layouts`,
-`scalar-exception-results`, `original-fd-ready`. Each has a `fixture-<group>`
+`scalar-exception-results`, `original-fd-ready`, `address-fields`. Each has a `fixture-<group>`
 target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
@@ -68,8 +68,8 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 80 graph targets covering 121 mapped JUnit classes, 46 quarantined
-groups and 12 groups still awaiting file rules. The native process target is
+There are 81 graph targets covering 122 mapped JUnit classes, 46 quarantined
+groups and 11 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -130,6 +130,13 @@ writers, the native scratch file was removed, and the repeat did no work. Its
 22 audit processes became 11 while requiring rejection evidence for both safe
 and unsafe entries. Fixture selection, cache inventory and ownership checks passed.
 
+Address fields passed 16 executions across both modes through Make in 36 seconds,
+plus five Python ABI checks. Its eight consumed artifacts had matching hashes and
+graph writers, all declared products existed and the repeat did no work. Two
+batched audits replace 18 reports. GHC expression-topology and Truffle call-node
+inventory assertions are removed; native values, lazy neighbours, typed carrier
+rejection and first compiled calls remain.
+
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread
   inventory and three SIMD groups. Both backends run within those classes.
@@ -179,7 +186,7 @@ and unsafe entries. Fixture selection, cache inventory and ownership checks pass
 - Pinned-address rejection controls passed without leaving scratch catalogues.
   Removed 48 unreferenced catalogues (9.8 MiB), retaining named reports and logs.
 
-The focused JVM results do not establish that all 121 mapped classes pass.
+The focused JVM results do not establish that all 122 mapped classes pass.
 Linux generation/execution of the newly migrated rules, native Windows graph
 support and migration of the CI entry point remain open. Successful local
 fixture generation is not a claim that CI is green.
