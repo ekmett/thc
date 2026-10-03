@@ -304,6 +304,7 @@
       "sources": ["t/fixtures/compiler/BackendAnnotations.hs", "t/haskell-fixtures/BackendAnnotationFixtures.hs", "t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "src/compiler/THC/BackendAnnotations.hs", "src/compiler/THC/Plugin.hs", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/Encode.hs", "thc.cabal"]
     },
     "compact-model": {
+      "cmakeTarget": "fixture-compact-model",
       "junit": ["thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnlinkTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; \"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
@@ -1191,12 +1192,14 @@
       ]
     },
     "runtime-core-native": {
+      "cmakeTarget": "fixture-runtime-core-native",
       "junit": ["thc.BytecodeBackendTest", "thc.FastSmokeTest", "thc.RuntimeTest", "thc.SelfTailProfileTest"],
       "commands": [{"argv": ["bin/export-core.sh", "t/fixtures/core/Fixtures.hs"]}, {"argv": ["bin/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}],
       "outputs": ["build/core/THC.Prim.Test.cbd", "build/core/Fixtures.cbd", "build/native/oracle.tsv"],
       "sources": ["t/fixtures/compiler/THC/Prim/Test.hs", "t/fixtures/core/Fixtures.hs", "t/fixtures/core/NativeOracle.hs", "t/fixtures/core/NativeTiming.hs", "t/fixtures/core/MapWorkload.hs", "bin/native-oracle.sh"]
     },
     "explicit64-primops": {
+      "cmakeTarget": "fixture-explicit64-primops",
       "junit": ["thc.runtime.Explicit64PrimopsTest"],
       "commands": [
         {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "explicit64"]}
@@ -1224,6 +1227,7 @@
       ]
     },
     "integer-primops": {
+      "cmakeTarget": "fixture-integer-primops",
       "junit": ["thc.IntegerPrimopsTest"],
       "commands": [
         {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "integer"]}
@@ -1235,6 +1239,7 @@
       ]
     },
     "signed-narrow-primops": {
+      "cmakeTarget": "fixture-signed-narrow-primops",
       "junit": ["thc.SignedNarrowPrimopsTest"],
       "commands": [
         {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "signed-narrow"]}
@@ -1249,6 +1254,7 @@
       ]
     },
     "bit-primops": {
+      "cmakeTarget": "fixture-bit-primops",
       "junit": ["thc.runtime.BitPrimopsTest"],
       "commands": [
         {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bit"]}
@@ -1411,6 +1417,7 @@
       ]
     },
     "source-core": {
+      "cmakeTarget": "fixture-source-core",
       "junit": ["thc.RealCoreJoinTest", "thc.runtime.CoreSourceTest"],
       "commands": [{"argv": ["env", "THC_SOURCE_NOTES=true", "THC_CORE_OUT=build/source-core", "THC_GHC_OUT=build/source-ghc", "bin/export-core.sh", "t/fixtures/compiler/SourceNotes.hs", "t/fixtures/compiler/RepresentationAudit.hs"]}, {"argv": ["python3", "bin/check-source-metadata.py", "--fixture", "build/source-core/SourceNotes.cbd", "build/source-core/RepresentationAudit.cbd"]}],
       "outputs": ["build/source-core"],
@@ -1424,6 +1431,7 @@
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "strict-fields": {
+      "cmakeTarget": "fixture-strict-fields",
       "junit": ["thc.StrictFieldsTest"],
       "commands": [{"argv": ["bin/export-core.sh", "t/fixtures/compiler/StrictFields.hs"]}],
       "outputs": ["build/core/StrictFields.cbd"],

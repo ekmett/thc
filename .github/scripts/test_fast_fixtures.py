@@ -30,6 +30,23 @@ def process_identity_provider(unit):
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_cmake_selection_never_falls_back_to_ordered_recipes(self):
+        self.manifest["groups"]["alpha"]["cmakeTarget"] = "fixture-alpha"
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        run = mock.Mock()
+        with mock.patch.dict("os.environ", {"GHC": "chosen-ghc"}):
+            result = fast_fixtures.prepare_cmake(self.root, self.selection("thc.AlphaTest"), run)
+        self.assertEqual(result, {"mode": "cmake", "targets": ["fixture-alpha"]})
+        self.assertEqual(run.call_count, 2)
+        self.assertIn("-DGHC=chosen-ghc", run.call_args_list[0].args[1])
+        self.assertEqual(run.call_args_list[1].args[1][-2:], ["--target", "fixture-alpha"])
+        run.reset_mock()
+        with self.assertRaisesRegex(ValueError, "not yet migrated"):
+            fast_fixtures.prepare_cmake(self.root, self.selection("thc.BetaTest"), run)
+        run.assert_not_called()
+        self.assertEqual(fast_fixtures.prepare_cmake(self.root, self.selection("thc.FreeTest"), run)["targets"], [])
+        run.assert_not_called()
+
     def test_every_real_quarantined_fixture_stops_before_toolchain_or_generation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)

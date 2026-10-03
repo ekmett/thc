@@ -110,7 +110,7 @@ def relocate_package_paths(record, quoted_root):
     return "".join(result)
 
 
-def registry(root, ghc_pkg="ghc-pkg"):
+def registry(root, ghc_pkg="ghc-pkg", package_db=None, inputs=None):
     """Publish actual Cabal registrations with a complete non-boot closure.
 
     GHC resolves plugin dependencies through the package DB even when a plugin
@@ -119,10 +119,14 @@ def registry(root, ghc_pkg="ghc-pkg"):
     """
     root = Path(root).resolve()
     library, units = plugin_plan(root)
+    if inputs is not None:
+        inputs.add(root / "dist-newstyle/cache/plan.json")
     def query(*arguments):
         return subprocess.check_output([ghc_pkg, *arguments], cwd=root, text=True).strip()
     if query("--version") != "GHC package manager version 9.14.1":
         raise RuntimeError("THC plugin requires ghc-pkg 9.14.1")
+    if inputs is not None:
+        inputs.add(Path(query("--global", "--no-user-package-db", "list").splitlines()[0]) / "package.cache")
     common = ["--global", "--no-user-package-db", "--expand-pkgroot"]
     global_records = {}
     for record in re.split(r"(?m)^---[ \t]*$", query(*common, "dump")):
@@ -176,6 +180,8 @@ def registry(root, ghc_pkg="ghc-pkg"):
             if len(candidates) != 1:
                 raise RuntimeError("Expected one actual Cabal registration for " + unit)
             database = candidates[0].parent
+            if inputs is not None:
+                inputs.add(candidates[0])
             description = [*common, "--package-db", str(database), "--ipid", "describe", unit]
             record = query(*description) + "\n"
             destination = selected
@@ -188,6 +194,15 @@ def registry(root, ghc_pkg="ghc-pkg"):
             raise RuntimeError("Cabal registration differs from planned dependency closure: " + unit)
         if "${pkgroot}" in record or "${pkgrooturl}" in record:
             raise RuntimeError("Unexpanded package registration path: " + unit)
+        if inputs is not None:
+            suffix = "dylib" if sys.platform == "darwin" else "so"
+            for name in fields.get("hs-libraries", "").split():
+                candidates = [Path(directory) / f"lib{name}-ghc9.14.1.{suffix}"
+                              for directory in shlex.split(fields.get("dynamic-library-dirs", ""))]
+                library_path = next((path for path in candidates if path.is_file()), None)
+                if library_path is None:
+                    raise RuntimeError("Missing registered dynamic library: " + name)
+                inputs.add(library_path)
         destination[unit] = record
         pending.extend(dependencies)
 
@@ -195,6 +210,20 @@ def registry(root, ghc_pkg="ghc-pkg"):
     parent = root / REGISTRIES
     parent.mkdir(parents=True, exist_ok=True)
     database = parent / hashlib.sha256(identity).hexdigest()
+    if package_db is not None:
+        database = Path(package_db).resolve()
+        if database.parent != parent or not re.fullmatch(r"cmake-[0-9a-f]{64}", database.name):
+            raise RuntimeError("CMake plugin registry must be in build/compiler/plugin-package-dbs/cmake-<plan hash>")
+        # One CMake rule owns these registrations. Unlike the immutable cache,
+        # this publication can regenerate a missing member of its OUTPUT list.
+        database.mkdir(parents=True, exist_ok=True)
+        for unit, record in selected.items():
+            destination = database / (unit + ".conf")
+            if not destination.exists() or destination.read_text() != record:
+                destination.write_text(record)
+        subprocess.check_call([ghc_pkg, *common, "--package-db", str(database), "recache"], cwd=root, stdout=sys.stderr)
+        subprocess.check_call([ghc_pkg, *common, "--package-db", str(database), "check"], cwd=root, stdout=sys.stderr)
+        return {"schema": 1, "unitId": library["id"], "packageDb": str(database)}
     def verify():
         actual = {path.stem: path.read_text() for path in database.glob("*.conf")}
         if actual != selected or not (database / "package.cache").is_file():
@@ -221,12 +250,12 @@ def registry(root, ghc_pkg="ghc-pkg"):
     return {"schema": 1, "unitId": library["id"], "packageDb": str(database)}
 
 
-def locate(root, ghc_pkg="ghc-pkg"):
+def locate(root, ghc_pkg="ghc-pkg", package_db=None, inputs=None):
     root = Path(root).resolve()
     library, _ = plugin_plan(root)
     unit = library["id"]
     dist = Path(library["dist-dir"]).resolve()
-    data = registry(root, ghc_pkg)
+    data = registry(root, ghc_pkg, package_db, inputs)
     package_db = data["packageDb"]
     def field(name):
         return subprocess.check_output(
@@ -247,9 +276,10 @@ def locate(root, ghc_pkg="ghc-pkg"):
     return data | {"sharedLibrary": str(copy), "cabalSharedLibrary": str(original)}
 
 
-def publish(root, ghc_pkg="ghc-pkg"):
+def publish(root, ghc_pkg="ghc-pkg", package_db=None, depfile=None):
     root = Path(root).resolve()
-    data = locate(root, ghc_pkg)
+    inputs = set() if depfile is not None else None
+    data = locate(root, ghc_pkg, package_db, inputs)
     source, destination = Path(data["cabalSharedLibrary"]), Path(data["sharedLibrary"])
     destination.parent.mkdir(parents=True, exist_ok=True)
     def digest(path):
@@ -265,6 +295,10 @@ def publish(root, ghc_pkg="ghc-pkg"):
         temporary = manifest.with_name(manifest.name + ".tmp")
         temporary.write_text(rendered)
         os.replace(temporary, manifest)
+    if depfile is not None:
+        def escape(path):
+            return str(path).replace("\\", "/").replace("$", "$$").replace("#", "\\#").replace(" ", "\\ ").replace(":", "\\:")
+        Path(depfile).write_text(escape(manifest) + ": " + " ".join(escape(path) for path in sorted(inputs)) + "\n")
     return data
 
 
@@ -276,7 +310,7 @@ def read(root):
         raise RuntimeError("Invalid THC plugin manifest")
     database = Path(data["packageDb"]).resolve()
     legacy = root / "dist-newstyle/packagedb/ghc-9.14.1"
-    private = database.parent == root / REGISTRIES and re.fullmatch(r"[0-9a-f]{64}", database.name)
+    private = database.parent == root / REGISTRIES and (re.fullmatch(r"cmake-[0-9a-f]{64}", database.name) or re.fullmatch(r"[0-9a-f]{64}", database.name))
     if Path(data["sharedLibrary"]).parent != root / "build/compiler" or not (database == legacy or private):
         raise RuntimeError("THC plugin manifest belongs to another checkout")
     if not Path(data["sharedLibrary"]).is_file() or not Path(data["packageDb"]).is_dir():
@@ -333,6 +367,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--ghc-pkg", default="ghc-pkg")
+    parser.add_argument("--package-db", type=Path, help="CMake-owned plugin registry output")
+    parser.add_argument("--depfile", type=Path, help="Write consumed Cabal registrations and libraries for Ninja")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--publish", action="store_true")
     mode.add_argument("--registry-only", action="store_true",
@@ -341,8 +377,10 @@ if __name__ == "__main__":
                       help="Render the direct plugin flag from OUTPUT followed by caller GHC arguments")
     parser.add_argument("--field", choices=("unitId", "packageDb", "sharedLibrary", "cabalSharedLibrary"))
     args = parser.parse_args()
+    if (args.package_db is not None or args.depfile is not None) and not args.publish:
+        parser.error("--package-db and --depfile require --publish")
     result = registry(args.root, args.ghc_pkg) if args.registry_only else \
-        publish(args.root, args.ghc_pkg) if args.publish else read(args.root)
+        publish(args.root, args.ghc_pkg, args.package_db, args.depfile) if args.publish else read(args.root)
     if args.field and args.field not in result:
         parser.error("--registry-only does not locate shared-library fields")
     if args.external_plugin is not None:

@@ -84,9 +84,9 @@ check-pandoc:
 jar: check-java
 	./gradlew jar $(GRADLE_FLAGS)
 
-fixtures: check-java
+fixtures:
 ifneq ($(strip $(TESTS)),)
-	GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' CABAL='$(CABAL)' python3 .github/scripts/fast_fixtures.py --tests '$(TESTS)'
+	GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' CABAL='$(CABAL)' python3 .github/scripts/fast_fixtures.py --cmake --tests '$(TESTS)'
 else
 	bin/prepare-tests.sh
 endif

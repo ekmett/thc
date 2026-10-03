@@ -465,6 +465,32 @@ def prepare(root, selection, run, toolchain):
     return {"mode": "selected", "rebuilt": rebuilt, "reused": reused}
 
 
+def prepare_cmake(root, selection, run):
+    """Select graph targets; Ninja, not directory receipts, owns freshness."""
+    root = Path(root).resolve()
+    manifest, owners = _manifest(root)
+    classes = selection["junit"]["classes"]
+    if not classes or any(name not in owners for name in classes):
+        raise ValueError("Select exact known test classes for the fixture graph")
+    blocked = set(classes) & quarantined_classes(root)
+    if blocked:
+        raise ValueError("Quarantined tests cannot run: " + ", ".join(sorted(blocked)))
+    groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None})
+    pending = [name for name in groups if not manifest["groups"][name].get("cmakeTarget")]
+    if pending:
+        raise ValueError("Fixture file rules are not yet migrated: " + ", ".join(pending)
+                         + "; see docs/fixture-inputs.log. No legacy preparation was run.")
+    targets = [manifest["groups"][name]["cmakeTarget"] for name in groups]
+    if targets:
+        configure = ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"]
+        for tool in ("GHC", "GHC_PKG", "CABAL"):
+            if os.environ.get(tool):
+                configure.append("-D" + tool + "=" + os.environ[tool])
+        run("fixture-configure", configure)
+        run("fixture-build", ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", *targets])
+    return {"mode": "cmake", "targets": targets}
+
+
 def local_selection(selector, owners):
     # Wildcards can also match method names in unrelated classes. Without
     # Gradle's discovered method inventory, use full preparation for them.
@@ -482,6 +508,7 @@ def local_selection(selector, owners):
 def main():
     parser = argparse.ArgumentParser(description="Prepare fixtures for a Gradle test selector.")
     parser.add_argument("--tests", required=True)
+    parser.add_argument("--cmake", action="store_true", help="Use the explicit file graph; reject unmigrated recipes")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     _, owners = _manifest(root)
@@ -495,12 +522,6 @@ def main():
     if selection["mode"] == "narrow" and all(owners[name] is None for name in selection["junit"]["classes"]):
         print("Selected tests need no generated fixtures.")
         return
-    # A developer's ambient package environment is not a fixture dependency.
-    os.environ.setdefault("GHC_ENVIRONMENT", "-")
-    ghc, pkg = subprocess.check_output(
-        ["sh", "-c", '. ./bin/toolchain.sh; printf "%s\\n" "$GHC" "$GHC_PKG"'],
-        cwd=root, text=True).splitlines()
-    os.environ.update(GHC=ghc, GHC_PKG=pkg)
     def run(name, argv, stdout=None):
         print("+ " + repr(argv), flush=True)
         if stdout is None:
@@ -508,6 +529,15 @@ def main():
         else:
             with (root / stdout).open("w") as output:
                 subprocess.run(argv, cwd=root, stdout=output, check=True)
+    if args.cmake:
+        print(prepare_cmake(root, selection, run))
+        return
+    # A developer's ambient package environment is not a fixture dependency.
+    os.environ.setdefault("GHC_ENVIRONMENT", "-")
+    ghc, pkg = subprocess.check_output(
+        ["sh", "-c", '. ./bin/toolchain.sh; printf "%s\\n" "$GHC" "$GHC_PKG"'],
+        cwd=root, text=True).splitlines()
+    os.environ.update(GHC=ghc, GHC_PKG=pkg)
     toolchain = {"platform": {"system": platform.system(), "machine": platform.machine()},
                  "toolchain": fast_inputs.toolchain(root)}
     print(prepare(root, selection, run, toolchain))

@@ -199,6 +199,19 @@ class PluginRegistryTest(unittest.TestCase):
         self.assertFalse((self.root / plugin.MANIFEST).exists(), "registry-only must not replace a shared manifest")
         self.assertEqual(len([call for call in self.calls if call[-1] == "recache"]), 1)
 
+    def test_cmake_publication_recreates_missing_registered_output(self):
+        database = self.root / plugin.REGISTRIES / ("cmake-" + "a" * 64)
+        plugin.registry(self.root, "selected-ghc-pkg", database)
+        missing = database / "crypto-unit.conf"
+        expected = missing.read_bytes()
+        missing.unlink()
+        (database / "package.cache").unlink()
+        plugin.registry(self.root, "selected-ghc-pkg", database)
+        self.assertEqual(expected, missing.read_bytes())
+        self.assertTrue((database / "package.cache").is_file())
+        with self.assertRaisesRegex(RuntimeError, "CMake plugin registry"):
+            plugin.registry(self.root, "selected-ghc-pkg", self.root / "unowned")
+
     def test_reuse_and_changed_registration_have_content_bound_identities(self):
         first = self.registry()
         self.assertEqual(first, self.registry())

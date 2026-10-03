@@ -503,44 +503,94 @@ inputPaths root family = do
 
 prepare :: FilePath -> Family -> IO ()
 prepare root family = do
+  when (Host.os /= "mingw32") $ do
+    _ <- run root [] "bin/build-compiler.sh" [] ""
+    pure ()
+  mapM_ (prepareScalarStep root family) (["driver"] ++ scalarStages family ++ ["native", "oracle", "manifest"])
+
+scalarStages :: Family -> [String]
+scalarStages Bit = ["pre-core", "post-core"]
+scalarStages _ = ["core"]
+
+-- Each operation owns only its named files. CMake supplies the edges between
+-- the generated driver, exported modules, native executable, TSV and manifest.
+prepareScalarStep :: FilePath -> Family -> String -> IO ()
+prepareScalarStep root family step = do
   let directory = "build" </> familyName family
       output = root </> directory
       manifest = output </> "manifest.json"
       es = entries family
       source = "t/fixtures/compiler" </> fixtureModule family ++ ".hs"
-      stages = if family == Bit then ["pre-core", "post-core"] else ["core"]
-  createDirectoryIfMissing True output
-  present <- doesFileExist manifest
-  when present (removeFile manifest)
-  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
-  version <- run root [] ghc ["--numeric-version"] ""
-  unless (takeWhile (/= '\n') version == "9.14.1") (die "thc-fixtures requires GHC 9.14.1")
-  let roots = maybe [] (\name -> ["-fplugin-opt=THC.Plugin:closure=" ++ name]) (compositeName family) ++
-        ["-fplugin-opt=THC.Plugin:closure=" ++ entryName e | e <- es]
-  stageArtifacts <- forM stages $ \stage -> do
-    let core = directory </> stage
-        ghcOut = directory </> (stage ++ "-ghc")
-        options = if stage == "post-core" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
-        exportArgs = options ++ roots ++ [source]
-    _ <- run root [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> ghcOut)]
-      "bin/export-core.sh" exportArgs ""
-    let modules = relativeCore family stage
-    forM_ modules $ \path -> do
-      exists <- doesFileExist (root </> path)
-      unless exists (die ("Missing GHC Core export: " ++ path))
-    pure (stage,modules)
-  let driver = directory </> driverFile family
+      stages = scalarStages family
+      driver = directory </> driverFile family
       requests = [(e,x,y) | e <- es, (x,y) <- operands family e]
       stdinText = requestText family requests
       nativeDir = directory </> "native"
       executable = nativeDir </> oracleName family ++ if Host.os == "mingw32" then ".exe" else ""
       oracle = directory </> "oracle.tsv"
-  writeFile (root </> driver) (oracleDriver family es)
-  createDirectoryIfMissing True (root </> nativeDir)
-  _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-i" ++ (root </> "t/fixtures/compiler"), "-odir", root </> nativeDir,
-     "-hidir", root </> nativeDir, root </> driver, "-o", root </> executable] ""
-  actual <- runWithTimeout (Just (60 * 1000000)) root [] (root </> executable) [] stdinText
+      stageArtifacts = [(stage, relativeCore family stage) | stage <- stages]
+  createDirectoryIfMissing True output
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  case step of
+    "driver" -> writeFile (root </> driver) (oracleDriver family es)
+    stage | stage `elem` stages -> do
+      let core = directory </> stage
+          ghcOut = directory </> (stage ++ "-ghc")
+          roots = maybe [] (\name -> ["-fplugin-opt=THC.Plugin:closure=" ++ name]) (compositeName family) ++
+            ["-fplugin-opt=THC.Plugin:closure=" ++ entryName e | e <- es]
+          options = if stage == "post-core" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
+      _ <- run root [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> ghcOut)]
+        "bin/export-core.sh" ((if Host.os == "mingw32" then [] else ["--plugin-manifest",root </> "build/compiler/plugin.json"]) ++ options ++ roots ++ [source]) ""
+      forM_ (relativeCore family stage) $ \path -> do
+        exists <- doesFileExist (root </> path)
+        unless exists (die ("Missing GHC Core export: " ++ path))
+    "native" -> do
+      createDirectoryIfMissing True (root </> nativeDir)
+      _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
+        "-i" ++ (root </> "t/fixtures/compiler"), "-odir", root </> nativeDir,
+        "-hidir", root </> nativeDir, root </> driver, "-o", root </> executable] ""
+      pure ()
+    "oracle" -> do
+      actual <- runWithTimeout (Just (60 * 1000000)) root [] (root </> executable) [] stdinText
+      _ <- checkScalarRows family requests actual
+      writeFile (root </> oracle) actual
+    "manifest" -> do
+      actual <- readFile (root </> oracle)
+      parsed <- checkScalarRows family requests actual
+      sources <- inputPaths root family
+      let modules = concatMap snd stageArtifacts
+          artifacts = modules ++ [driver,oracle,executable]
+      sourceHashes <- hashes root sources
+      artifactHashes <- hashes root artifacts
+      ghcInfo <- if family == Explicit64 then run root [] ghc ["--info"] "" else pure ""
+      let common = ["schema" .= (1 :: Int), "entries" .= map (entryJson family) es,
+                    "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes]
+          details = case family of
+            Bit -> ["ghc" .= ("9.14.1" :: String),
+              "stages" .= case stageArtifacts of
+                [(_,pre),(_,post)] -> object ["pre" .= pre, "post" .= post]
+                _ -> error "Bit fixture requires pre/post GHC Core exports",
+              "compositeEntry" .= ("bitPrimops" :: String), "nativeRows" .= length parsed,
+              "nativeResultPolicy" .= ("Mask only GHC-defined bits; THC checks canonical zero upper bits directly" :: String)]
+            IntegerWord -> ["composite" .= object
+              ["name" .= ("composite" :: String), "arity" .= (3 :: Int),
+               "selectorArgument" .= (0 :: Int), "selectorOrder" .= map entryName es],
+              "modules" .= modules]
+            SignedNarrow -> ["modules" .= modules, "compositeEntry" .= ("signedNarrowDispatch" :: String),
+              "nativeRows" .= length parsed,
+              "excludedDivisionInputs" .= (["zero narrowed divisor", "narrow minBound / -1"] :: [String])]
+            Explicit64 -> ["ghc" .= ("9.14.1" :: String), "ghcInfo" .= ghcInfo,
+              "commands" .= ([] :: [[String]]),
+              "excludedInputs" .= (["zero divisors", "signed minBound / -1 (quotient and remainder)",
+                                     "shift counts outside [0,64)"] :: [String])]
+      writeJson manifest (object (common ++ details))
+      putStrLn (familyName family ++ ": " ++ show (length es) ++ " entries, " ++
+                show (length parsed) ++ " native rows, " ++ show (length stageArtifacts) ++
+                " GHC Core export stage" ++ (if length stageArtifacts == 1 then "" else "s"))
+    _ -> die ("Unknown scalar fixture operation: " ++ step)
+
+checkScalarRows :: Family -> [(Entry,Integer,Integer)] -> String -> IO [(String,Integer,Integer)]
+checkScalarRows family requests actual = do
   let expectedKeys = Set.fromList [(entryName e,x,y) | (e,x,y) <- requests]
       rows = map (splitTab . takeWhile (/= '\r')) (lines actual)
       parseRow fields = case fields of
@@ -557,37 +607,7 @@ prepare root family = do
   parsed <- maybe (die "Malformed native oracle TSV") pure (traverse parseRow rows)
   unless (length parsed == Set.size expectedKeys && Set.fromList parsed == expectedKeys)
     (die "Native oracle returned missing, duplicate, or unexpected inputs")
-  writeFile (root </> oracle) actual
-  sources <- inputPaths root family
-  let modules = concatMap snd stageArtifacts
-      artifacts = modules ++ [driver,oracle,executable]
-  sourceHashes <- hashes root sources
-  artifactHashes <- hashes root artifacts
-  ghcInfo <- if family == Explicit64 then run root [] ghc ["--info"] "" else pure ""
-  let common = ["schema" .= (1 :: Int), "entries" .= map (entryJson family) es,
-                "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes]
-      details = case family of
-        Bit -> ["ghc" .= ("9.14.1" :: String),
-          "stages" .= case stageArtifacts of
-            [(_,pre),(_,post)] -> object ["pre" .= pre, "post" .= post]
-            _ -> error "Bit fixture requires pre/post GHC Core exports",
-          "compositeEntry" .= ("bitPrimops" :: String), "nativeRows" .= length parsed,
-          "nativeResultPolicy" .= ("Mask only GHC-defined bits; THC checks canonical zero upper bits directly" :: String)]
-        IntegerWord -> ["composite" .= object
-          ["name" .= ("composite" :: String), "arity" .= (3 :: Int),
-           "selectorArgument" .= (0 :: Int), "selectorOrder" .= map entryName es],
-          "modules" .= modules]
-        SignedNarrow -> ["modules" .= modules, "compositeEntry" .= ("signedNarrowDispatch" :: String),
-          "nativeRows" .= length parsed,
-          "excludedDivisionInputs" .= (["zero narrowed divisor", "narrow minBound / -1"] :: [String])]
-        Explicit64 -> ["ghc" .= ("9.14.1" :: String), "ghcInfo" .= ghcInfo,
-          "commands" .= ([] :: [[String]]),
-          "excludedInputs" .= (["zero divisors", "signed minBound / -1 (quotient and remainder)",
-                                 "shift counts outside [0,64)"] :: [String])]
-  writeJson manifest (object (common ++ details))
-  putStrLn (familyName family ++ ": " ++ show (length es) ++ " entries, " ++
-            show (length parsed) ++ " native rows, " ++ show (length stageArtifacts) ++
-            " GHC Core export stage" ++ (if length stageArtifacts == 1 then "" else "s"))
+  pure parsed
 
 data ArrayGroup = ArrayGroup
   { arraySource :: FilePath
@@ -978,6 +998,12 @@ main = do
     [name] -> prepareAggregate root name
     _ -> pure False
   unless handled $ case args of
+    ["scalar", family, step] -> case family of
+      "bit" -> prepareScalarStep root Bit step
+      "integer" -> prepareScalarStep root IntegerWord step
+      "signed-narrow" -> prepareScalarStep root SignedNarrow step
+      "explicit64" -> prepareScalarStep root Explicit64 step
+      _ -> die ("Unknown scalar fixture family: " ++ family)
     ["compact-model", input, output] -> writeCompactModel input output
     ["integer-completion"] -> prepareIntegerCompletion root
     ["windows-smoke"] -> prepareWindowsSmoke root
