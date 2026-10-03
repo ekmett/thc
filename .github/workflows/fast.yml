@@ -193,7 +193,7 @@ jobs:
         with:
           ghc-version: '9.14.1'
           cabal-version: '3.16.0.0'
-          cabal-update: true
+          cabal-update: false
       - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
         if: needs.automation.outputs.persistent != 'true'
         with:
@@ -202,6 +202,24 @@ jobs:
           distribution: graalvm-community
           github-token: ${{ secrets.GITHUB_TOKEN }}
           check-for-updates: false
+      - name: Ensure the frozen Hackage snapshot is available
+        run: |
+          python3 - <<'HACKAGE'
+          from datetime import datetime
+          from pathlib import Path
+          import re
+          import subprocess
+
+          states = re.findall(r'^index-state: (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)$', Path('cabal.project').read_text(), re.M)
+          if len(states) != 1:
+              raise SystemExit('cabal.project must declare one frozen index-state')
+          state = states[0]
+          cache = Path(subprocess.check_output(['cabal', 'path', '--remote-repo-cache'], text=True).strip()) / 'hackage.haskell.org'
+          timestamp = cache / '01-index.timestamp'
+          expected = {state, '@' + str(int(datetime.fromisoformat(state.replace('Z', '+00:00')).timestamp()))}
+          if not (cache / '01-index.tar').is_file() or not timestamp.is_file() or timestamp.read_text().strip() not in expected:
+              subprocess.run(['cabal', 'update', 'hackage.haskell.org,' + state], check=True)
+          HACKAGE
       - name: Resolve Cabal project dependencies
         run: |
           case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac

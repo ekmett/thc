@@ -12,6 +12,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 
 
 WORKFLOW = Path(__file__).resolve().parents[1] / "workflows/fast.yml"
@@ -28,6 +29,41 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
+    def test_persistent_index_refreshes_only_for_missing_or_changed_snapshot(self):
+        script = embedded_python("HACKAGE")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / "packages" / "hackage.haskell.org"
+            cache.mkdir(parents=True)
+            (root / "cabal.project").write_text("index-state: 2026-10-02T22:18:55Z\n")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with patch("subprocess.check_output", return_value=str(cache.parent)), \
+                     patch("subprocess.run") as update:
+                    exec(script, {})
+                    update.assert_called_once_with(["cabal", "update", "hackage.haskell.org,2026-10-02T22:18:55Z"], check=True)
+                    (cache / "01-index.tar").write_bytes(b"index")
+                    from datetime import datetime
+                    epoch = int(datetime.fromisoformat("2026-10-02T22:18:55+00:00").timestamp())
+                    for timestamp in ("2026-10-02T22:18:55Z", "@" + str(epoch)):
+                        (cache / "01-index.timestamp").write_text(timestamp)
+                        update.reset_mock()
+                        exec(script, {})
+                        update.assert_not_called()
+                    for timestamp in ("HEAD", "2026-09-24T12:38:18Z"):
+                        (cache / "01-index.timestamp").write_text(timestamp)
+                        update.reset_mock()
+                        exec(script, {})
+                        update.assert_called_once()
+                    (cache / "01-index.timestamp").write_text("2026-10-02T22:18:55Z")
+                    (root / "cabal.project").write_text("index-state: 2026-10-03T00:00:00Z\n")
+                    update.side_effect = subprocess.CalledProcessError(1, "cabal update")
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        exec(script, {})
+            finally:
+                os.chdir(previous)
+
     def test_commit_plan_contains_no_scheduled_jobs_or_skipped_matrix(self):
         pending = ["build.yml"]
         visited = set()
