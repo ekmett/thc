@@ -88,6 +88,12 @@ jobs:
           assert release['JAVA_VERSION'].strip('"').split('.')[0] == '25', release.get('JAVA_VERSION')
           PY
           java --version
+      - name: Reuse Cabal's incremental project outputs
+        uses: actions/cache@v4
+        with:
+          path: dist-newstyle
+          key: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
+          restore-keys: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
       - name: Compile common tools and test classes without acquiring fixtures or running tests
         run: |
           python3 .github/scripts/fast_ci.py start --report-dir build/ci/common-results
