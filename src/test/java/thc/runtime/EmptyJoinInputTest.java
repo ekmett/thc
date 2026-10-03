@@ -49,7 +49,14 @@ class EmptyJoinInputTest {
         return map("bindings", list(binding("entry", lambda(List.of(parameter("x", integer)), body))), "instrument", true,
             "constructors", list(map("id", "Empty", "kind", "unboxed-tuple", "arity", 0, "fieldReps", list(), "fieldLifted", list(), "strictFields", list())));
     }
-    private Context context(boolean inlining) { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", Boolean.toString(inlining)).build(); }
+    private Context context(boolean inlining, boolean diagnose) {
+        var builder = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", Boolean.toString(inlining));
+        if (diagnose && Boolean.getBoolean("thc.emptyJoinDiagnostics")) {
+            builder.option("compiler.TraceInlining", "true")
+                .option("engine.TraceCompilation", "true");
+        }
+        return builder.build();
+    }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
     private void valid(RootCallTarget target, String label) throws ReflectiveOperationException { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label); }
     private void compile(RootCallTarget target) throws ReflectiveOperationException { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target, "installed"); }
@@ -87,11 +94,19 @@ class EmptyJoinInputTest {
         var rows = new LinkedHashMap<String, List<List<String>>>();
         for (var line : Files.readAllLines(new File(root, "build/empty-join-input/oracle.tsv").toPath())) { var row = Arrays.asList(line.split("\t", -1)); rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row); }
         int count = 0; for (var cases : rows.values()) count += cases.size(); assertEquals(58, count); assertEquals(9, rows.size());
-        for (String stage : List.of("pre", "post")) for (var group : rows.entrySet()) for (String backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
+        for (String stage : List.of("pre", "post")) for (var group : rows.entrySet()) for (String backend : List.of("ast", "bytecode")) try (var context = context(inlining, inlining && stage.equals("pre") && backend.equals("ast") && group.getKey().equals("swapCase"))) {
             context.initialize("thc"); context.enter();
             try {
                 String name = group.getKey(); var cases = group.getValue(); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = program(language, with(CoreModules.reachable(module(stage), id(name)), "instrument", true), backend);
+                var selected = CoreModules.reachable(module(stage), id(name));
+                if (Boolean.getBoolean("thc.emptyJoinDiagnostics") && inlining && stage.equals("pre") && backend.equals("ast") && name.equals("swapCase")) {
+                    // Only debug labels change: parameter ids, proofs and expressions remain intact.
+                    // Naming can perturb compilation; this run captures evidence, not a fix.
+                    for (var node : OriginalStdioChecks.nodes(selected)) if (!node.isEmpty() && "lam".equals(node.getFirst()))
+                        for (var parameter : (List<Map<String, Object>>) node.get(1))
+                            parameter.put("name", "emptyJoinDiagnostic_" + parameter.get("name"));
+                }
+                var program = program(language, with(selected, "instrument", true), backend);
                 var function = context.asValue(new EntryValue(program, id(name), 1)); var original = program.entryTarget(id(name)); var host = program.hostEntryTarget(1); String label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                 java.util.function.Consumer<List<String>> check = row -> { assertEquals(Long.parseLong(row.get(2)), function.execute(Long.parseLong(row.get(1))).asLong(), label + "/" + row.get(1)); released(language); };
                 for (var row : cases) check.accept(row);
@@ -111,7 +126,7 @@ class EmptyJoinInputTest {
         }
     }
     @Test void emptyOperandRunsInLogicalOrderBeforeParallelMovesAndFailureTransfersNothing() {
-        try (var context = context(false)) {
+        try (var context = context(false, false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var layout = new FrameLayout(); int a = layout.bind("a"), b = layout.bind("b"), first = layout.bind("first"), last = layout.bind("last");
@@ -144,7 +159,7 @@ class EmptyJoinInputTest {
         }
     }
     @Test void emptyInputKeepsLogicalArityOnEitherBackend() {
-        for (String backend : List.of("ast", "bytecode")) try (var context = context(false)) {
+        for (String backend : List.of("ast", "bytecode")) try (var context = context(false, false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var p = program(language, fixture(), backend);
@@ -160,7 +175,7 @@ class EmptyJoinInputTest {
         }
     }
     @Test void shapeLevityAndUnknownProofsRejectButSameFrameEmptyJoinCaptureRuns() throws ReflectiveOperationException {
-        for (String backend : List.of("ast", "bytecode")) try (var context = context(false)) {
+        for (String backend : List.of("ast", "bytecode")) try (var context = context(false, false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -182,7 +197,7 @@ class EmptyJoinInputTest {
         }
     }
     @Test void genuineThrowingEmptyOperandIsNotErasedAndRecoveryReleasesResults() throws Exception {
-        for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) try (var context = context(false)) {
+        for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) try (var context = context(false, false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var p = program(language, with(CoreModules.reachable(module(stage), id("throwCase")), "instrument", true), backend);
