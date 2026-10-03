@@ -296,10 +296,6 @@ def _output_hashes(root, group):
         name = "build/original-open/manifest.json"
         expected = fast_inputs.original_open_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
-    if group["outputs"] == ["build/original-fcntl"]:
-        name = "build/original-fcntl/manifest.json"
-        expected = fast_inputs.fcntl_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-errno"]:
         name = "build/original-errno/manifest.json"
         expected = fast_inputs.errno_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))

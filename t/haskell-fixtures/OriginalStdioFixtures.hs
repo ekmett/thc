@@ -1,16 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
--- Fixture rationale (064 original-fcntl)
--- Purpose: Check descriptor flags and fcntl argument transport through installed package
---   Core.
--- Produces/consumed result: CBD pair and oracle.json, with runtime ABI resources.
--- Cost and overlap: A small unix-package integration case can cover this. Twelve package-
---   constant checks and a standalone native harness are not independently justified.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
--- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 064.
---
 -- Fixture rationale (065 original-errno)
 -- Purpose: Check errno is read/written in the correct native context across foreign calls.
 -- Produces/consumed result: CBDs and oracle.json derived from native observations.
@@ -64,7 +54,7 @@
 --
 -- Production of native observations only. Independent semantics, host ABI and
 -- exact original FCall proofs are checked by the Java fixture consumers.
-module OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead, prepareOriginalFcntl, prepareOriginalErrno, prepareOriginalProcessIdentity) where
+module OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead, prepareOriginalErrno, prepareOriginalProcessIdentity) where
 
 import Control.Monad (forM, unless, when)
 import Data.Aeson (object, (.=), toJSON)
@@ -300,88 +290,6 @@ prepareOriginalStdioRead root = do
      "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
   putStrLn ("original-stdio-read: " ++ show (length rows) ++ " native observations, pre/post strict Core audits")
-
--- One composite original-declaration export/oracle; the JVM consumer checks
--- exact flag values, shared descriptor state and each compiled operation.
-prepareOriginalFcntl :: FilePath -> IO ()
-prepareOriginalFcntl root
-  | Host.os /= "linux" || Host.arch /= "x86_64" || sizeOf (0 :: CLong) /= 8 = do
-      createDirectoryIfMissing True (root </> "build/original-fcntl")
-      inputHashes <- fcntlSources root >>= hashes root
-      writeJson (root </> "build/original-fcntl/manifest.json") $ object
-        ["schema" .= (1 :: Int), "platform" .= Host.os, "supported" .= False,
-         "reason" .= ("Original Linux x86_64 LP64 fcntl declarations only" :: String),
-         "inputHashes" .= inputHashes, "artifactHashes" .= object []]
-      putStrLn "original-fcntl: explicitly excluded on this platform"
-  | otherwise = prepareNativeFcntl root
-
-fcntlSources :: FilePath -> IO [FilePath]
-fcntlSources root = do
-  plugin <- listDirectory (root </> "src/compiler/THC")
-  scripts <- listDirectory (root </> "bin")
-  pure $ sort $ ["t/fixtures/compiler/OriginalFcntlAudit.hs", "t/fixtures/compiler/OriginalFcntlNative.hs",
-    "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
-    "t/haskell-fixtures/OriginalStdioFixtures.hs", "bin/audit-core.py", "bin/core-capabilities.json",
-    "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh",
-    "bin/toolchain.sh", "bin/plugin.py"] ++
-    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
-
-prepareNativeFcntl :: FilePath -> IO ()
-prepareNativeFcntl root = do
-  let output = "build/original-fcntl"
-      coreSource = "t/fixtures/compiler/OriginalFcntlAudit.hs"
-      nativeSource = "t/fixtures/compiler/OriginalFcntlNative.hs"
-      names = ["originalAppend", "originalCreat", "originalNoctty", "originalNonblock", "originalRdonly",
-               "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalExcl", "originalBinary", "originalTrunc", "originalGetFlags", "originalSetFlags"]
-      execute = runLogged 180 root (output </> "logs")
-      binary = output </> "native/oracle"
-      oracle = output </> "oracle.json"
-      manifest = root </> output </> "manifest.json"
-  createDirectoryIfMissing True (root </> output </> "native")
-  stale <- doesFileExist manifest
-  when stale (removeFile manifest)
-  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
-  version <- execute "ghc-version" [] ghc ["--numeric-version"]
-  unless (commandStdout version == "9.14.1\n") (die "Original fcntl requires GHC 9.14.1")
-  info <- execute "ghc-info" [] ghc ["--info"]
-  case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String, String)] of
-    Just target | lookup "Host platform" target == Just "x86_64-unknown-linux",
-                  lookup "Target platform" target == lookup "Host platform" target,
-                  lookup "target word size" target == Just "8" -> pure ()
-    _ -> die "Original fcntl requires native Linux x86_64 GHC"
-  compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint",
-    "-package", "ghc-internal", "-package", "unix", "-it/fixtures/compiler",
-    "-odir", root </> output </> "native", "-hidir", root </> output </> "native", nativeSource, "-o", root </> binary]
-  observed <- execute "native-run" [] (root </> binary) [root </> output </> "native/private-file"]
-  (constants, rows, invalid) <- maybe (die "Malformed original fcntl observations") pure
-    (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe ([Integer], [[Integer]], [Integer]))
-  unless (length constants == 12 && length rows == 4 && all ((== 3) . length) rows && length invalid == 2)
-    (die "Incomplete original fcntl observations")
-  writeJson (root </> oracle) $ object ["constants" .= constants, "rows" .= rows, "invalid" .= invalid]
-  exports <- forM ["pre", "post"] $ \stage -> do
-    let core = output </> stage </> "core"
-        modules = [core </> "OriginalFcntlAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
-        options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-          ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
-    exported <- execute (stage ++ "-export")
-      [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> output </> stage </> "ghc")]
-      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [coreSource])
-    audits <- forM names $ \name -> do
-      let path = output </> stage </> name ++ ".audit.json"
-      audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
-        (["bin/audit-core.py", "--entry", "main:OriginalFcntlAudit." ++ name, "--output", path] ++ modules)
-      pure (path, audited)
-    pure (exported : map snd audits, modules ++ map fst audits)
-  let commands = [version, info, compiled, observed] ++ concatMap fst exports
-      artifacts = [binary, oracle] ++ concatMap snd exports ++ concatMap commandArtifacts commands
-  inputHashes <- fcntlSources root >>= hashes root
-  artifactHashes <- hashes root artifacts
-  writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= names,
-    "platform" .= Host.os, "supported" .= True, "installedArtifactsHashed" .= False,
-    "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= length rows,
-    "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "original-fcntl: twelve genuine constants, four native shared-status rows and fourteen pre/post Core roots"
 
 -- Genuine resetErrno/getErrno Core plus an independent native header oracle
 -- for all signed CInt boundaries. The Java consumer checks the observations.

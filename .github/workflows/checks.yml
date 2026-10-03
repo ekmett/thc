@@ -355,7 +355,6 @@ jobs:
             build/rts-shutdown/logs/
             build/original-open/
             build/process-lifecycle/
-            build/original-fcntl/
             build/original-termios/
             build/original-tcsetattr/
             build/original-tcgetattr/
@@ -477,7 +476,8 @@ jobs:
 
   foreign-exceptions:
     needs: automation
-    if: inputs.cadence == 'nightly'
+    # Quarantined until runtime/package/fixture products have graph owners.
+    if: ${{ false }}
     # Complete original Core is provisioned on this trusted runner.
     runs-on: [self-hosted, Linux, X64, thc-fast]
     timeout-minutes: 45

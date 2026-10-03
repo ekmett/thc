@@ -2250,34 +2250,6 @@ Consumer reads receipts/CBDs/audits/oracle and executes native/oracle --serve on
 This and 062 need value review against package/FFI coverage; PTY state and buffer
   transport checks are distinct from retesting libc's own implementation.
 
-064  original-fcntl
-Fixture rationale (064 original-fcntl)
-Purpose: Check descriptor flags and fcntl argument transport through installed package
-  Core.
-Produces/consumed result: CBD pair and oracle.json, with runtime ABI resources.
-Cost and overlap: A small unix-package integration case can cover this. Twelve package-
-  constant checks and a standalone native harness are not independently justified.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
-Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalFcntl.
-Consumer: thc.runtime.OriginalFcntlTest; Linux x86_64 LP64 only.
-IN: t/fixtures/compiler/OriginalFcntlAudit.hs, OriginalFcntlNative.hs;
-  built thc-fixtures/shared tools/GHC9.14.1, installed ghc-internal/unix.
-Under build/original-fcntl/:
-  native/oracle: IN native source/packages; OUT executable/intermediates.
-  oracle.json: IN executable run with native/private-file path; OUT constants,
-    four shared-status rows and invalid-call results. private-file is scratch.
-  <pre|post>/core/OriginalFcntlAudit.cbd, THC.InterfaceClosure.cbd
-    IN audit source/exporter/14 closure roots/installed interfaces; OUT CBDs/ghc/.
-  <stage>/<name>.audit.json: IN stage pair/auditor/14 names; OUT 28 reports.
-  logs/: ghc-version/info,native-build/run,pre/post-export,stage-audit-name;
-    OUT log triplets. manifest.json reads artifacts/source hashes; old removed.
-Unsupported host emits only negative manifest. Tests read receipts/CBDs/reports/
-  oracle.json/generated StdioHostAbi and create their own temporary files.
-InstalledCoreFixtures.hs is listed by CI but this producer does not acquire whole
-  installed archives. Retest of 12 package constants is a value-review candidate.
-
 065  original-errno
 Fixture rationale (065 original-errno)
 Purpose: Check errno is read/written in the correct native context across foreign calls.

@@ -381,7 +381,6 @@ tasks.withType(Test).configureEach {
             "rts-shutdown/*.json", "rts-shutdown/logs/*.stdout", "rts-shutdown/logs/*.stderr",
             "original-rts-locks/**/*.json", "original-rts-locks/**/*.cbd", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
             "original-open/**/*.json", "original-open/**/*.cbd", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
-            "original-fcntl/**/*.json", "original-fcntl/**/*.cbd", "original-fcntl/logs/*.stdout", "original-fcntl/logs/*.stderr", "original-fcntl/native/oracle",
             "original-errno/**/*.json", "original-errno/**/*.cbd", "original-errno/logs/*.stdout", "original-errno/logs/*.stderr",
             "original-errno/native/oracle", "original-errno/native/observations.txt",
             "original-process-identity/**/*.json", "original-process-identity/**/*.cbd", "original-process-identity/installed/bundles/*.zip", "original-process-identity/logs/*.stdout",

@@ -551,7 +551,7 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn("name: Fast checks", text)
         self.assertIn("  fast-check:", text)
 
-    def test_genuine_foreign_exceptions_remain_in_required_complete_core_build(self):
+    def test_quarantined_foreign_exceptions_cannot_run_through_make_or_ci(self):
         root = Path(__file__).parents[2]
         gradle = (root / "build.gradle").read_text()
         dedicated = gradle.split('def foreignExceptionTests =', 1)[1].split('foreignExceptionTests[1].configure', 1)[0]
@@ -562,11 +562,15 @@ class FastRunnerTest(unittest.TestCase):
         self.assertFalse((root / "src/polyglotTest/java/thc/runtime/ForeignExceptionTest.java").exists())
         makefile = (root / "Makefile").read_text()
         self.assertIn('foreign-exception-test-modes: foreign-exception-fixtures', makefile)
-        self.assertIn('-- foreign-exceptions', makefile)
-        self.assertRegex(makefile, r'for family in [^;]*\boriginal-fcntl\b[^;]*; do')
+        guard = makefile.split('foreign-exception-fixtures:\n', 1)[1].split('foreign-exception-test-modes:', 1)[0]
+        self.assertIn('preparation is quarantined', guard)
+        self.assertIn('@exit 2', guard)
+        self.assertNotIn('cabal', guard)
+        self.assertNotIn('-- foreign-exceptions', makefile)
         self.assertIn('--continue foreignExceptionTest foreignExceptionDenseTest', makefile)
         workflow = (root / ".github/workflows/checks.yml").read_text()
         lane = workflow.split('  foreign-exceptions:\n', 1)[1].split('  library:\n', 1)[0]
+        self.assertIn('if: ${{ false }}', lane)
         self.assertNotIn('continue-on-error', lane)
         self.assertIn('runs-on: [self-hosted, Linux, X64, thc-fast]', lane)
         self.assertIn('persist-credentials: false', lane)
@@ -579,7 +583,7 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn('build/test-results/foreignExceptionTest/*.xml', lane)
         self.assertIn('build/test-results/foreignExceptionDenseTest/*.xml', lane)
 
-    def test_original_fcntl_keeps_native_regressions_in_affected_fast_tests(self):
+    def test_descriptor_flags_keep_native_regressions_in_affected_fast_tests(self):
         root = Path(__file__).parents[2]
         policy = json.loads((root / ".github/scripts/fast-tests.json").read_text())
         groups = policy["leafSources"] | policy["owners"]
@@ -590,7 +594,7 @@ class FastRunnerTest(unittest.TestCase):
                        "src/main/java/thc/runtime/NativeFileResource.java",
                        "src/main/java/thc/runtime/OpenedNativeFile.java"):
             with self.subTest(source=source):
-                self.assertTrue({"thc.runtime.ManagedProcessForeignTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.NativeEventDescriptorsTest",
+                self.assertTrue({"thc.runtime.ManagedProcessForeignTest", "thc.runtime.DescriptorFlagsTest", "thc.runtime.NativeEventDescriptorsTest",
                                  "thc.runtime.NativeEpollTest"}.issubset(groups[source]["junit"]))
 
     def test_previous_revision_or_driver_error_cannot_publish(self):

@@ -72,6 +72,13 @@ class FixturePreparationTest(unittest.TestCase):
                 result = fast_fixtures.prepare_cmake(project, self.selection(name), mock.Mock())
                 self.assertEqual([target], result["targets"])
 
+    def test_descriptor_flags_do_not_build_a_native_constant_fixture(self):
+        project = Path(__file__).resolve().parents[2]
+        run = mock.Mock()
+        result = fast_fixtures.prepare_cmake(project, self.selection("thc.runtime.DescriptorFlagsTest"), run)
+        self.assertEqual([], result["targets"])
+        run.assert_not_called()
+
     def test_every_real_quarantined_fixture_stops_before_toolchain_or_generation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)

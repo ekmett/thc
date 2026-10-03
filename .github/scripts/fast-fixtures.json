@@ -34,6 +34,7 @@
     "thc.WindowsDistributionTest"
   ],
   "fixtureFreeJunit": [
+    "thc.runtime.DescriptorFlagsTest",
     "thc.runtime.Int32ByteOffsetTest",
     "thc.runtime.NarrowByteOffsetTest",
     "thc.HostInteropAbiTest",
@@ -484,16 +485,7 @@
         "t/haskell-fixtures/OriginalTcgetattrFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
-    "original-fcntl": {
-      "ciPlatforms": ["Linux"],
-      "junit": ["thc.runtime.OriginalFcntlTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fcntl"]}],
-      "outputs": ["build/original-fcntl"],
-      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
-        "t/fixtures/compiler/OriginalFcntlAudit.hs", "t/fixtures/compiler/OriginalFcntlNative.hs",
-        "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
+
     "original-errno": {
       "cmakeTarget": "fixture-original-errno",
       "junit": ["thc.runtime.OriginalErrnoTest"],

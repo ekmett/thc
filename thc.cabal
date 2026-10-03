@@ -439,7 +439,6 @@ extra-source-files:
   t/fixtures/compiler/OriginalRtsLocksAudit.hs
   t/fixtures/compiler/CompilerRtsAudit.hs
   t/fixtures/compiler/RtsDiagnosticsNative.hs
-  t/fixtures/compiler/OriginalFcntlAudit.hs
   t/fixtures/compiler/OriginalPathLinkAudit.hs
   t/fixtures/compiler/OriginalDirectoryPathsAudit.hs
   t/fixtures/compiler/OriginalPathAccessAudit.hs
@@ -449,7 +448,6 @@ extra-source-files:
   t/fixtures/compiler/OriginalDirectoryStreamsAudit.hs
   t/fixtures/compiler/WindowsDirectoryAudit.hsc
   t/fixtures/compiler/WindowsBridgeAudit.hs
-  t/fixtures/compiler/OriginalFcntlNative.hs
   t/fixtures/compiler/OriginalErrnoAudit.hs
   t/fixtures/compiler/OriginalErrnoNative.hs
   t/fixtures/compiler/OriginalProcessIdentityAudit.hs

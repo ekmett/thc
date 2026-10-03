@@ -65,7 +65,7 @@ providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
 There are 70 graph targets covering 111 mapped JUnit classes, 46 quarantined
-groups and 24 groups still awaiting file rules. The native process target is
+groups and 23 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -92,6 +92,10 @@ Gradle no longer builds these process controls for every unrelated test.
   freed 12.9 MiB. Saved-termios has an explicit Linux x86_64 graph; macOS
   generated its unsupported receipt and returned to no work. Its Linux products
   and runtime behavior remain unverified here.
+- Descriptor append behavior is fixture-free; its old `fcntl` producer and 28
+  audits are gone. Descriptor ownership and host ABI checks passed in both modes;
+  the preserved append control still requires Linux x86_64. The nightly foreign-
+  exception job is disabled while its Make prerequisite is quarantined.
 - Thread inventory has separate native object directories, two nine-entry
   audits instead of 18, and no source-shape/root-count predictions. Its first
   compiled calls, interpreter-bypass negative control, callback masking and
@@ -108,7 +112,7 @@ Gradle no longer builds these process controls for every unrelated test.
   consumer in 8.16 seconds; the immediate repeat did no work in 0.41 seconds.
   Selected rebuilds returned to no work. Every checked receipt artifact had
   a declared graph writer; the CString overlay's files also have writers.
-- The 102 change-selection checks, 50 fixture-selection checks and 23 plugin
+- The 102 change-selection checks, 51 fixture-selection checks and 23 plugin
   checks passed. Record-field
   hydration regenerated its own interfaces with matching pre/post native rows.
 - Pinned-address rejection controls passed without leaving scratch catalogues.
