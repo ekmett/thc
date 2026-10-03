@@ -63,7 +63,7 @@ MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-li
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-open original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-open original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
@@ -570,7 +570,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/scalar-memory-utilities/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
-    "build/original-stdio-seek/native/oracle",
     "build/original-open/native/oracle",
     "build/original-errno/native/oracle",
     "build/original-process-identity/native/oracle",
@@ -717,22 +716,6 @@ ORIGINAL_POSIX_STAT_OUTPUTS = frozenset("build/original-posix-stat/" + name for 
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalPosixStatAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_POSIX_STAT_ENTRIES))),
-))
-
-ORIGINAL_STDIO_SEEK_LOGS = (
-    "ghc-version", "ghc-info", "native-build", "native-constants", "pre-export", "post-export",
-) + tuple(f"native-{index}" for index in range(24)) + tuple(
-    f"{stage}-audit-{entry}" for stage in ("pre", "post")
-    for entry in ("originalSeek", "originalSeekErrno"))
-ORIGINAL_STDIO_SEEK_OUTPUTS = frozenset("build/original-stdio-seek/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"results/{index}.txt" for index in range(24)),
-    *(f"results/{index}.private" for index in range(24) if index % 12 not in (7, 8)),
-    *(f"logs/{label}.{suffix}" for label in ORIGINAL_STDIO_SEEK_LOGS
-      for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalStdioSeekAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        "originalSeek.audit.json", "originalSeekErrno.audit.json")),
 ))
 
 ORIGINAL_STDIO_TRUNCATE_LOGS = (
@@ -1652,8 +1635,6 @@ def allowed_payload(name):
         return name in SIMD_WIDE_FMA_OUTPUTS
     if parts[1] == "original-stdio-read":
         return name in ORIGINAL_STDIO_READ_OUTPUTS
-    if parts[1] == "original-stdio-seek":
-        return name in ORIGINAL_STDIO_SEEK_OUTPUTS
     if parts[1] == "original-stdio-truncate":
         return name in ORIGINAL_STDIO_TRUNCATE_OUTPUTS
     if parts[1] == "native-addresses":

@@ -1704,7 +1704,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                              set(owners["src/main/java/thc/runtime/StdioHostAbi.java"]["junit"]))
         native = {"thc.runtime.OriginalStdioReadTest",
                   "thc.runtime.OriginalHandleReadinessNativeTest",
-                  "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest"}
+                  "thc.runtime.OriginalStdioTruncateNativeTest"}
         for name in ("ManagedFiles", "ManagedStdio", "StdioHostAbi", "CoreOriginalStdio",
                      "OriginalStdioExpression", "OriginalStdioOp"):
             path = "src/main/java/thc/runtime/" + name + ".java"

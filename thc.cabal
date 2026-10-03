@@ -1271,7 +1271,6 @@ executable thc-fixtures
     SelectorProofFixtures
     UnsafeEqualityFixtures
     OriginalStdioFixtures
-    OriginalStdioSeekFixtures
     OriginalStdioTruncateFixtures
     OriginalHandleReadinessFixtures
     OriginalPathModeFixtures

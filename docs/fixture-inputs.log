@@ -2694,35 +2694,6 @@ Consumer reads receipts/Core/oracle/audits. All fourteen observations run in one
   and unrelated files are allowed. Native Main/audit and export-stage .hi/.o are
   declared byproducts. Compiler call/root counts are not runtime assertions.
 
-077  original-stdio-seek
-Fixture rationale (077 original-stdio-seek)
-Purpose: Check guest seek results, errors and file-position state.
-Produces/consumed result: CBDs/oracle.json plus shared installed modules.
-Cost and overlap: Retain a small seek/read/write lifecycle case. Twenty-four native
-  cases, constant discovery and separate acquisition are excessive for ordinary package
-  behavior.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
-Producer: t/haskell-fixtures/OriginalStdioSeekFixtures.hs.
-Consumer: thc.runtime.OriginalStdioSeekNativeTest. Linux/macOS LP64.
-IN: t/fixtures/compiler/OriginalStdioSeekAudit.hs, OriginalStdioSeekAuditNative.hs;
-  shared tools/GHC9.14.1/ghc-internal/unix.
-Under build/original-stdio-seek/:
-  native/oracle: IN source pair/packages; OUT binary/intermediates.
-  logs/native-constants.stdout: IN oracle constants; OUT SEEK_SET/CUR/END.
-  results/<0..23>.txt and file-case .private: IN oracle/request arguments;
-    OUT status and unchanged file bytes. oracle.json reads results/streams;
-    OUT 24 cases. These result files cleared before run.
-  <pre|post>/core/OriginalStdioSeekAudit.cbd, THC.InterfaceClosure.cbd:
-    IN source/exporter/two roots/stage; OUT pair/ghc intermediates.
-  <stage>/<originalSeek|originalSeekErrno>.audit.json: IN pair/auditor; OUT reports.
-  logs/ghc-version,ghc-info,native-build,native-N,stage-export/audit-entry:
-    OUT triplets. manifest.json reads artifacts/source hashes/constants.
-Tests read these and call nativeModules, adding 066 installed/native/runtime
-  artifacts. Old manifest not invalidated. Keep shared descriptor/FFI behavior;
-  assess repeated package seek mechanics for consolidation.
-
 080  original-stdio-read
 Fixture rationale (080 original-stdio-read)
 Purpose: Check reads preserve buffer contents, lengths, EOF and file-position behavior.

@@ -70,7 +70,7 @@ providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
 There are 84 graph targets covering 125 mapped JUnit classes, 46 quarantined
-groups and five groups still awaiting file rules. The native process target is
+groups and four groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -177,6 +177,11 @@ eight audits and 630 published files are no longer required. Its compiler-shape
 checker is also deleted. The retained compiled write/safety, stdio and ABI checks
 passed 44 executions in 14 seconds, with two Linux-only skips. Cache corruption
 and executable-mode controls now use the admitted read fixture.
+
+The separate seek-conformance producer and its package-acquisition dependency are
+removed. Managed file seek/read/write/resize and compiled-call checks passed six
+executions across both handoff modes in 13 seconds. The retained tests check file
+position, bytes and errors directly without exporting another copy of libc calls.
 
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread

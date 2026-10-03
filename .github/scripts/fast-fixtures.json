@@ -604,14 +604,6 @@
         "thc.cabal"
       ]
     },
-    "original-stdio-seek": {
-      "requires": ["original-process-identity"],
-      "junit": ["thc.runtime.OriginalStdioSeekNativeTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-seek"]}],
-      "outputs": ["build/original-stdio-seek"],
-      "sources": ["t/fixtures/compiler/OriginalStdioSeekAudit.hs", "t/fixtures/compiler/OriginalStdioSeekAuditNative.hs", "t/haskell-fixtures/OriginalStdioSeekFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"],
-      "requires": ["original-process-identity"]
-    },
     "original-stdio-read": {
       "cmakeTarget": "fixture-original-stdio-read",
       "junit": ["thc.runtime.OriginalStdioReadTest"],
