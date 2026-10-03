@@ -505,15 +505,29 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual(summary["classes"], ["example.PolyglotTest"])
         self.assertEqual(json.loads((recorder.directory / "polyglot/summary.json").read_text())["tests"], 1)
 
-    def test_nonrunnable_or_method_only_selection_rejected(self):
+    def test_narrow_selection_allows_exact_methods_but_not_wildcards_or_unowned_classes(self):
         selection = self.selection()
         selection["runnable"] = False
         with self.assertRaises(RuntimeError):
             ci.gradle_command(selection)
         selection["runnable"] = True
         selection["junit"]["patterns"] = ["example.Test.oneMethod"]
-        with self.assertRaises(RuntimeError):
-            ci.gradle_command(selection)
+        self.assertEqual(2, ci.gradle_command(selection).count("example.Test.oneMethod"))
+        for patterns in ([], ["example.Test.*"], ["example.Other.oneMethod"],
+                         ["example.Test.oneMethod", "example.Test.oneMethod"],
+                         ["example.Test", "example.Test.oneMethod"]):
+            with self.subTest(patterns=patterns), self.assertRaises(RuntimeError):
+                ci.gradle_command(selection | {"junit": {"classes": ["example.Test"], "patterns": patterns}})
+
+    def test_partial_report_must_contain_exactly_the_selected_methods(self):
+        self.suite(body='<testcase name="works()" classname="example.Test"/>')
+        ci.validate_xml(self.root, ["example.Test"], ["example.Test.works"])
+        for patterns in (["example.Test.missing"], ["example.Test.works", "example.Test.missing"]):
+            with self.subTest(patterns=patterns), self.assertRaisesRegex(RuntimeError, "method mismatch"):
+                ci.validate_xml(self.root, ["example.Test"], patterns)
+        with self.assertRaisesRegex(RuntimeError, "method mismatch"):
+            ci.validate_methods([("example.Test", "works()"), ("example.Test", "unexpected()")],
+                                ["example.Test"], ["example.Test.works"])
 
     def test_python_runs_normal_and_optimized_without_shell(self):
         selected = {"python": {"commands": [["python3", "odd name/test_me.py"]]}}

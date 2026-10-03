@@ -147,6 +147,39 @@ class FastSelectionTest(unittest.TestCase):
                 actual = {name for tests in select.groups(self.repo, cadence=cadence).values() for name in tests}
                 self.assertEqual(expected, actual)
 
+    def test_partial_methods_run_on_commit_and_complete_classes_run_nightly(self):
+        self.cadence_fixture()
+        self.write("src/test/java/example/LeafTest.java", java_fixture("LeafTest",
+            "@Test void quick() {}\n@Test void thorough() {}"))
+        self.policy["cadence"]["partialJunit"] = {"example.LeafTest": ["quick"]}
+        self.write(select.POLICY, json.dumps(self.policy))
+        self.commit()
+        committed = select.select(self.repo, "", "HEAD", cadence="commit")
+        self.assertIn("example.LeafTest.quick", committed["junit"]["patterns"])
+        self.assertNotIn("example.LeafTest", committed["junit"]["patterns"])
+        self.assertIn("example.LeafTest", committed["deferred"]["nightly"]["junit"])
+        grouped = select.group_selection(self.repo, "commit", cadence="commit")
+        self.assertIn("example.LeafTest.quick", grouped["junit"]["patterns"])
+        self.assertEqual({"consumer": ["example.LeafTest"]}, select.groups(self.repo, cadence="nightly"))
+        nightly = select.group_selection(self.repo, "consumer", cadence="nightly")
+        self.assertIn("example.LeafTest", nightly["junit"]["patterns"])
+        self.assertNotIn("example.LeafTest.quick", nightly["junit"]["patterns"])
+        self.assertIn("example.LeafTest", select.select(self.repo, "", "HEAD", cadence="nightly")["junit"]["patterns"])
+        self.assertIn("example.LeafTest", select.group_selection(self.repo, "consumer")["junit"]["patterns"])
+        self.assertEqual({}, select.groups(self.repo, cadence="hourly"))
+
+    def test_invalid_partial_methods_cannot_silently_disappear(self):
+        self.cadence_fixture()
+        for partial in ([], {"example.MissingTest": ["works"]}, {"example.LeafTest": []},
+                        {"example.LeafTest": ["missing"]}, {"example.LeafTest": ["works", "works"]},
+                        {"example.LeafTest": ["*"]}, {"example.LeafTest": [1]}):
+            with self.subTest(partial=partial):
+                self.policy["cadence"]["partialJunit"] = partial
+                self.write(select.POLICY, json.dumps(self.policy))
+                self.commit()
+                with self.assertRaises(select.SelectionError):
+                    select.select(self.repo, "", "HEAD", cadence="commit")
+
     def test_nightly_provider_moves_transitive_consumers_and_overrides_hourly(self):
         import fast_fixtures
         manifest = self.cadence_fixture(hourly=["example.OtherTest"], nightly=["provider"])
@@ -1193,10 +1226,13 @@ private String text = "class FakeString { @Test }";
         self.write(select.POLICY, json.dumps(policy))
         groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
                   *policy["primopFamilies"].values(), *policy["automation"].values()]
-        for name in {name for group in groups for name in group["junit"]} | set(policy["cadence"]["hourlyJunit"]):
+        for name in ({name for group in groups for name in group["junit"]}
+                     | set(policy["cadence"]["hourlyJunit"]) | set(policy["cadence"].get("partialJunit", {}))):
             package, short = name.rsplit(".", 1)
             self.write("src/test/java/" + name.replace(".", "/") + ".java",
-                       java_fixture(short).replace("package example", "package " + package))
+                       java_fixture(short, "\n".join("@Test void " + method + "() {}" for method in
+                           policy["cadence"].get("partialJunit", {}).get(name, ["works"])))
+                       .replace("package example", "package " + package))
         for path in {path for group in groups for path in group["python"]}:
             self.write(path, PYTHON_TEST)
         for path in policy["leafSources"]:
@@ -1222,10 +1258,13 @@ private String text = "class FakeString { @Test }";
         self.write(select.POLICY, json.dumps(policy))
         groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
                   *policy["primopFamilies"].values(), *policy["automation"].values()]
-        for name in {name for group in groups for name in group["junit"]} | set(policy["cadence"]["hourlyJunit"]):
+        for name in ({name for group in groups for name in group["junit"]}
+                     | set(policy["cadence"]["hourlyJunit"]) | set(policy["cadence"].get("partialJunit", {}))):
             package, short = name.rsplit(".", 1)
             self.write("src/test/java/" + name.replace(".", "/") + ".java",
-                       java_fixture(short).replace("package example", "package " + package))
+                       java_fixture(short, "\n".join("@Test void " + method + "() {}" for method in
+                           policy["cadence"].get("partialJunit", {}).get(name, ["works"])))
+                       .replace("package example", "package " + package))
         for path in {path for group in groups for path in group["python"]}:
             self.write(path, PYTHON_TEST)
         for path in policy["leafSources"]:

@@ -53,6 +53,16 @@ negative controls; scalar fixtures do not repeat pre/post/inlining matrices or
 assert compiler-internal target counts. Mixed-backend continuation coverage uses
 five cases for strict inputs, typed PAPs, tuple transport, masking and async delivery.
 
+`HandoffTest`, `AstStackTest`, `CoreUnitLoadTest` and `ManagedStackSnapshotTest`
+run five of their 46 behavioral test methods on commits, plus the handoff-mode
+proof. The fixed sample covers lazy argument ownership, sharing/masking through
+stack spills, the first compiled bytecode spill, lazy Core demand and snapshots
+surviving unwind. `cadence.partialJunit` in `fast-tests.json` names these methods.
+The nightly Intensive workflow runs all 47 methods, including the partial set,
+in both handoff modes. Ordinary local class selectors also run the full classes.
+Selection and result validation reject missing methods; no random sampling or
+ordering-dependent rotation is used.
+
 The existing source ownership selector chooses affected Python and Haskell checks
 and patch controls. Unknown changes or an unavailable comparison base retain the
 full admitted checks. Runtime per-commit coverage remains unchanged. The selection,

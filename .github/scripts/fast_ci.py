@@ -334,7 +334,7 @@ fi
     recorder.save()
 
 
-def validate_xml(directory, expected):
+def validate_xml(directory, expected, patterns=None):
     """Require fresh suites; only the Windows-only suite may be disabled on Linux."""
     files = sorted(directory.glob("TEST-*.xml"))
     require(bool(files), "No fresh JUnit XML")
@@ -376,8 +376,20 @@ def validate_xml(directory, expected):
             and totals["skipped"] == len(platform_skips),
             "JUnit reports failures/errors/skips: " + repr(totals))
     require(bool(cases), "No executed JUnit testcases")
+    if patterns is not None:
+        validate_methods(cases + platform_skips, expected, patterns)
     return {**totals, "classes": sorted(classes), "cases": sorted(cases),
             "platformSkippedCases": sorted(platform_skips), "xmlFiles": len(files)}
+
+
+def validate_methods(cases, classes, patterns):
+    for name in classes:
+        if name in patterns:
+            continue
+        methods = {p[len(name) + 1:] for p in patterns if p.startswith(name + ".")}
+        observed = {case.split("(", 1)[0] for owner, case in cases if owner == name}
+        require(methods and observed == methods,
+                f"Partial JUnit method mismatch in {name}: expected={sorted(methods)}, actual={sorted(observed)}")
 
 
 def gradle_command(selection, *, install_dist=False, fail_fast=True, reuse_daemon=False):
@@ -394,9 +406,15 @@ def gradle_command(selection, *, install_dist=False, fail_fast=True, reuse_daemo
         argv.append("installDist")
     if selection["mode"] == "narrow":
         patterns = selection["junit"]["patterns"]
-        proof = "thc.runtime.HandoffTest.requestedModeReachesTestProcessAndContext"
-        require(["thc.runtime.HandoffTest" if name == proof else name for name in patterns] == classes,
-                "Narrow patterns must name entire selected classes or the handoff mode proof")
+        require(isinstance(patterns, list) and patterns and all(isinstance(p, str) for p in patterns)
+                and len(patterns) == len(set(patterns)), "Empty/duplicate narrow patterns")
+        require(all(p in classes or p.rsplit(".", 1)[0] in classes
+                    and re.fullmatch(r"[A-Za-z_$][\w$]*", p.rsplit(".", 1)[-1]) for p in patterns),
+                "Narrow patterns must name selected classes or exact test methods")
+        require({p if p in classes else p.rsplit(".", 1)[0] for p in patterns} == set(classes),
+                "Narrow patterns must cover every selected class")
+        require(not any(p.rsplit(".", 1)[0] in patterns for p in patterns if p not in classes),
+                "A full class must not hide a partial method selection")
     else:
         require(selection["junit"]["patterns"] == ["*"], "Full mode must run every test")
     for task in HANDOFF_TASKS.values():
@@ -486,7 +504,8 @@ def run_modes(recorder, selection, *, install_dist=False):
     for mode in HANDOFF_TASKS:
         try:
             xml = directory / mode / "xml"
-            summary = validate_xml(xml, selection["junit"]["classes"])
+            summary = validate_xml(xml, selection["junit"]["classes"],
+                                   selection["junit"]["patterns"] if selection["mode"] == "narrow" else None)
             # HandoffTest belongs to every smoke/full selection. This marker is
             # printed only after checking the actual fork property and runtime
             # context, without changing either to manufacture the expected mode.
@@ -732,7 +751,8 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=Fals
     selection = fast_select.group_selection(recorder.root, name, cadence=cadence)
     manifest, owners = fixtures._manifest(recorder.root)
     require(all(c in owners for c in selection["junit"]["classes"]), "Unowned selected class")
-    recorder.data["selection"] = {"mode": "group", "group": name, "cadence": cadence, "reasons": []}
+    recorder.data["selection"] = {"mode": "group", "group": name, "cadence": cadence,
+                                  "junit": selection["junit"], "reasons": []}
     # Unknown ownership fails above; a group job must never widen to all fixtures.
     recorder.data["nativeInputs"] = ({"mode": "cmake-graph"} if prepared else
                                     fixtures.prepare_cmake(recorder.root, selection, recorder.command))
@@ -761,6 +781,7 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=Fals
         # Keep original JUnit platform/tag exclusions and assumption semantics.
         cases.append(sorted((case.attrib["classname"], case.attrib["name"])
                             for suite in suites for case in suite.findall("testcase")))
+        validate_methods(cases[-1], selection["junit"]["classes"], selection["junit"]["patterns"])
     require(cases[0] == cases[1], "Grouped handoff modes ran different testcase sets")
     recorder.data.update(passed=True, testCasesPerMode=len(cases[0]))
     recorder.save()

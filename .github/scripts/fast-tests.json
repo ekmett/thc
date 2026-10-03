@@ -3291,6 +3291,22 @@
     }
   },
   "cadence": {
+    "partialJunit": {
+      "thc.runtime.HandoffTest": [
+        "requestedModeReachesTestProcessAndContext",
+        "lazyReferencePrefixesAndCapturedEnvironmentsRemainOwnedAcrossResidualCalls"
+      ],
+      "thc.runtime.AstStackTest": [
+        "spillsRetainSharedUpdatesPrefixesMasksAndMemoizedFailure",
+        "coldInstalledBytecodeEntryPreservesAutonomousCutEffects"
+      ],
+      "thc.CoreUnitLoadTest": [
+        "coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding"
+      ],
+      "thc.runtime.ManagedStackSnapshotTest": [
+        "captureBeforeSynchronousUnwindRemainsStableAfterGuestFramesAndContextReturn"
+      ]
+    },
     "hourlyJunit": [
       "thc.AggregateFrontierTest",
       "thc.AggregateLayoutTest",
