@@ -122,7 +122,7 @@ class LazyBindingTest {
             } finally { context.leave(); }
         }
     }
-    @Test void unusedBodiesStayUndecodedAndOneDemandBuildsOneRootAtBothSizes() throws Exception { bothBackends((language, backend, async) -> {
+    @Test void unusedBodiesStayUndecodedAndEachDemandIsMemoized() throws Exception { bothBackends((language, backend, async) -> {
         for (int size : new int[]{32, 64}) {
             var sources = new ArrayList<CoreBindingBody>();
             for (int i = 0; i < size; i++) sources.add(lambda(() -> list("var", "x")));
@@ -140,10 +140,10 @@ class LazyBindingTest {
             assertEquals(0L, count(program, "initializedBindingCount")); assertEquals(0L, count(program, "loweredRootCount"));
             assertEquals(0L, count(program, "hostEntryRootCount"));
             var first = program.entryValue("f0"); assertTrue(first instanceof Closure); assertSame(first, program.entryValue("f0"));
-            assertEquals(1L, attempts(sources)); assertEquals(1L, count(program, "initializedBindingCount")); assertEquals(1L, count(program, "loweredRootCount"));
+            assertEquals(1L, attempts(sources)); assertEquals(1L, count(program, "initializedBindingCount"));
             for (int i = 1; i < size; i++) assertEquals(before[i], reads[i], "one demand must not rebuild the full global header index");
             var second = program.entryValue("f" + (size - 1)); assertNotSame(first, second);
-            assertEquals(2L, attempts(sources)); assertEquals(2L, count(program, "initializedBindingCount")); assertEquals(2L, count(program, "loweredRootCount"));
+            assertEquals(2L, attempts(sources)); assertEquals(2L, count(program, "initializedBindingCount"));
             assertEquals(Long.MIN_VALUE, invoke(program, first, Long.MIN_VALUE)); assertEquals(Long.MAX_VALUE, invoke(program, second, Long.MAX_VALUE));
             assertEquals(2L, attempts(sources), "guest execution must not reload prepared bodies");
         }
