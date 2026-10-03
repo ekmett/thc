@@ -37,13 +37,26 @@ public final class Main {
             .option("engine.CompilationFailureAction", "Throw");
         if (profile == ContextProfile.SYNCHRONOUS_TEST)
             return builder.option("engine.BackgroundCompilation", "false");
-        return builder.allowEnvironmentAccess(EnvironmentAccess.INHERIT)
+        builder.allowEnvironmentAccess(EnvironmentAccess.INHERIT)
             .option("engine.CompilationFailureAction", "Print")
-            .option("engine.CompilerThreads", System.getProperty("polyglot.engine.CompilerThreads", LAUNCHER_COMPILER_THREADS))
-            .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
-            .option("engine.SingleTierCompilationThreshold", "10000")
-            .option("compiler.CompilationTimeout", "30")
-            .option("compiler.MaximumGraalGraphSize", "100000");
+            .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"));
+        launcherCompilerOptions().forEach(builder::option);
+        return builder;
+    }
+
+    /**
+     * The launcher's compiler settings. An explicit {@code polyglot.KEY} system property
+     * takes precedence over each default, as it would without the launcher, so programs
+     * whose hot code needs a larger graph budget can raise it from {@code JAVA_OPTS}.
+     */
+    static Map<String, String> launcherCompilerOptions() {
+        var defaults = new LinkedHashMap<String, String>();
+        defaults.put("engine.CompilerThreads", LAUNCHER_COMPILER_THREADS);
+        defaults.put("engine.SingleTierCompilationThreshold", "10000");
+        defaults.put("compiler.CompilationTimeout", "30");
+        defaults.put("compiler.MaximumGraalGraphSize", "100000");
+        defaults.replaceAll((key, value) -> System.getProperty("polyglot." + key, value));
+        return defaults;
     }
 
     /** Values and native resources must not outlive or cross this owning context. */

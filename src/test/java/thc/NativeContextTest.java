@@ -27,4 +27,19 @@ class NativeContextTest {
             else System.setProperty("polyglot.llvm.managed", previous);
         }
     }
+
+    @Test void explicitPolyglotPropertiesOverrideLauncherCompilerDefaults() {
+        var key = "polyglot.compiler.MaximumGraalGraphSize";
+        var previous = System.getProperty(key);
+        try {
+            System.clearProperty(key);
+            assertEquals("100000", Main.launcherCompilerOptions().get("compiler.MaximumGraalGraphSize"));
+            System.setProperty(key, "400000");
+            assertEquals("400000", Main.launcherCompilerOptions().get("compiler.MaximumGraalGraphSize"));
+            assertEquals("30", Main.launcherCompilerOptions().get("compiler.CompilationTimeout"));
+        } finally {
+            if (previous == null) System.clearProperty(key);
+            else System.setProperty(key, previous);
+        }
+    }
 }

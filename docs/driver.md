@@ -206,6 +206,12 @@ To append runtime metrics after a successful IO launch, set
 `JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"`. Normal guest stderr contains
 no metrics report. Embedded callers can read the `diagnostics` member directly.
 
+The launcher chooses Truffle's compiler pool, single-tier threshold (10 000),
+compilation timeout (30 s) and graph budget (`compiler.MaximumGraalGraphSize`,
+100 000). An explicit `polyglot.` system property overrides each, for example
+`JAVA_OPTS="${JAVA_OPTS:-} -Dpolyglot.compiler.MaximumGraalGraphSize=400000"`
+when a hot function stays interpreted after `GraphTooBigBailoutException`.
+
 ## Attach a debugger
 
 ```sh
