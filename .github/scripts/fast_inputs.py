@@ -662,7 +662,7 @@ ORIGINAL_OPEN_OUTPUTS = frozenset("build/original-open/" + name for name in (
         "core/OriginalOpenAudit.cbd", "core/THC.InterfaceClosure.cbd", *(f"{entry}.audit.json" for entry in ORIGINAL_OPEN_ENTRIES))),
 ))
 ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for name in (
-    "manifest.json", "oracle.json", "declarations.json", "declarations.cbd", "template-pre.cbd",
+    "manifest.json", "oracle.json", "declarations.json", "declarations.cbd",
     "pre.cbd", "post.cbd",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_RTS_LOCK_ENTRIES),
     *(f"logs/{label}.{suffix}" for label in ("version", "info", "libdir", "imports",

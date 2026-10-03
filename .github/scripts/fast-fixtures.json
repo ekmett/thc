@@ -553,6 +553,7 @@
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-rts-locks": {
+      "cmakeTarget": "fixture-original-rts-locks",
       "junit": ["thc.runtime.OriginalRtsLocksTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-rts-locks", "--require-supported"]}],
       "outputs": ["build/original-rts-locks"],

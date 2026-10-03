@@ -2487,14 +2487,12 @@ Test reads cases/receipts and builds controls in memory. Guest context shutdown
 
 072  original-rts-locks
 Fixture rationale (072 original-rts-locks)
-Purpose: Check the supported RTS lock boundary and reject calls outside its contract.
-Produces/consumed result: Declarations/templates, oracle.json and optional auditor
-  reports.
-Cost and overlap: Keep only THC-owned synchronization or required rejection behavior.
-  Frozen declaration/template archives are not independent coverage and should be
-  removed.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Purpose: Compare THC's context-local reader/writer lock table and errno preservation
+  with native RTS calls, including first compiled calls and malformed ABI rejection.
+Produces/consumed result: Pre/post CBDs, original declaration CBD/metadata, oracle.json,
+  four audits and logs. Declarations verify the actual foreign identity used by Core.
+Cost and overlap: One GHC session; descriptor close/dup cannot cover this separate table.
+Build status: cmake/InterfaceFixtures.cmake owns all 34 products in one command.
 
 Producer: t/haskell-fixtures/OriginalRtsLocksFixtures.hs; --require-supported
   enables four auditor outputs and is set by the CI entry.
@@ -2505,18 +2503,16 @@ IN: t/fixtures/compiler/OriginalRtsLocksAudit.hs; built thc-fixtures GHC API/
 Under build/original-rts-locks/:
   declarations.cbd: IN installed interface unfoldings; OUT foreign-declaration subset.
   declarations.json: IN installed path/subset metadata; OUT diagnostic receipt.
-  template-pre.cbd: IN source compiled/simplified by GHC API; OUT original template.
   pre.cbd, post.cbd: IN template + original lock/unlock FCallIds/type equality;
-    OUT specialized Core and ghc/ intermediates.
+    OUT specialized Core. GHC parsing/typechecking emits no persistent object/interface.
   oracle.json: IN GHC-compiled specialized native expressions executed in producer
     against RTS state and errno; OUT 14 observations. No standalone oracle executable.
   <pre|post>-<originalLock|originalUnlock>.audit.json: IN stage CBD/auditor;
     OUT four reports when requireSupported.
   logs/version.*,info.*,libdir.*,imports.*,<stage>-<entry>.*: OUT log triplets.
-  manifest.json: IN six main outputs/audits/logs/source receipt; OUT hashes.
-Consumer reads receipts/Core/declaration evidence/oracle/audits. Installed interface
-  not hashed and old manifest not removed. Declaration/template archival value
-  should be reviewed separately from the useful THC lock ownership semantics.
+  manifest.json: IN five main outputs/audits/logs/source receipt; OUT hashes.
+Consumer reads receipts/Core/declarations/oracle/audits. The selected interfaces,
+  package registrations and native libraries are explicit CMake toolchain inputs.
 
 074  original-fd-ready
 Fixture rationale (074 original-fd-ready)

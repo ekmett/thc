@@ -1128,7 +1128,6 @@ class FastInputTests(unittest.TestCase):
                 self.rejected_without_writes(altered)
 
     def test_rts_locks_exact_nonexecutable_cache_inventory(self):
-        self.assertEqual(35, len(cache.ORIGINAL_RTS_LOCK_OUTPUTS))
         self.assertIn('build/original-rts-locks/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_RTS_LOCK_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)

@@ -25,7 +25,8 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `simd-wide-floating-fma`, `io-main-pap`, `simd-wide-arrays`, `simd128-arrays`,
 `simd-arithmetic`, `pinned-addresses`, `record-fields`, `rts-diagnostics`,
 `rts-shutdown`, `original-errno`, `ghc-bco`, `closure-inspection`, `cstring`,
-`thread-inventory`, `process-lifecycle-native`, `delimited-continuations`, `hint-trace`, `core-continuation`, `large-literal-cases` and `original-termios`. Each has a `fixture-<group>`
+`thread-inventory`, `process-lifecycle-native`, `delimited-continuations`, `hint-trace`,
+`core-continuation`, `large-literal-cases`, `original-termios` and `original-rts-locks`. Each has a `fixture-<group>`
 target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
@@ -64,14 +65,19 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 70 graph targets covering 111 mapped JUnit classes, 46 quarantined
-groups and 22 groups still awaiting file rules. The native process target is
+There are 71 graph targets covering 112 mapped JUnit classes, 46 quarantined
+groups and 21 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
 Boxed and primitive foreign-provenance controls use in-memory models. Their
 optional archive-count fixtures and the global Gradle manifest probe are removed;
 28 metadata rejection checks passed across both handoff modes in a 12-second run.
+
+RTS locks passed all six executions in both handoff modes in 17 seconds. All
+33 consumed artifacts had matching hashes and declared graph writers. Its unused
+template snapshot is removed. Deleting oracle.json rebuilt its owner in 2.00 seconds;
+the immediate repeat did no work in 0.46 seconds.
 
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread

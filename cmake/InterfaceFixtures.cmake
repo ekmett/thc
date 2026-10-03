@@ -39,3 +39,33 @@ add_custom_command(OUTPUT ${record_outputs} BYPRODUCTS ${record_objects}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate record-field Core, native results and hydrated interfaces")
 add_custom_target(fixture-record-fields DEPENDS ${record_outputs})
+
+# 072: adapt the selected GHC's private lock declarations, then compare THC's
+# context-owned table with real RTS calls compiled in the producer's GHC session.
+# The installed interfaces/libraries are toolchain inputs; there is no package
+# Core acquisition or guessed native executable/object output.
+set(lock_out "${PROJECT_SOURCE_DIR}/build/original-rts-locks")
+set(lock_outputs)
+foreach(name manifest.json oracle.json declarations.json declarations.cbd pre.cbd post.cbd)
+  list(APPEND lock_outputs "${lock_out}/${name}")
+endforeach()
+set(lock_labels version info libdir imports)
+foreach(stage pre post)
+  foreach(entry originalLock originalUnlock)
+    list(APPEND lock_outputs "${lock_out}/${stage}-${entry}.audit.json")
+    list(APPEND lock_labels "${stage}-${entry}")
+  endforeach()
+endforeach()
+foreach(label IN LISTS lock_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND lock_outputs "${lock_out}/logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+add_custom_command(OUTPUT ${lock_outputs}
+  COMMAND ${fixture_env} "${fixtures_exe}" original-rts-locks --require-supported
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalRtsLocksAudit.hs"
+    ${tool_sources} ${cabal_inputs} ${audit_inputs} ${toolchain_inputs}
+    "${fixtures_exe}" "${compact_exe}"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate original RTS lock Core and native state observations")
+add_custom_target(fixture-original-rts-locks DEPENDS ${lock_outputs})

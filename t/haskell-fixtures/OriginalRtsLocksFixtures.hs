@@ -2,14 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 -- Fixture rationale (072 original-rts-locks)
--- Purpose: Check the supported RTS lock boundary and reject calls outside its contract.
--- Produces/consumed result: Declarations/templates, oracle.json and optional auditor
---   reports.
--- Cost and overlap: Keep only THC-owned synchronization or required rejection behavior.
---   Frozen declaration/template archives are not independent coverage and should be
---   removed.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Purpose: Check THC's context-local reader/writer lock table, errno preservation
+--   and first compiled calls against the native RTS; reject malformed foreign ABIs.
+-- Consumes: OriginalRtsLocksAudit.hs, selected GHC's FD.hi and package/tool closure,
+--   this GHC-API producer, serializer and auditor. No installed Core acquisition.
+-- Produces: pre/post CBDs, original declaration CBD/metadata, 14 native observations,
+--   four audits and command logs. The declaration CBD checks actual source identity.
+-- Cost and overlap: One in-process GHC session supplies both Core and native calls;
+--   descriptor close/dup tests alone cannot check this separate context-owned table.
+-- Build status: cmake/InterfaceFixtures.cmake owns every persistent product.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 072.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -147,7 +148,6 @@ prepareOriginalRtsLocks root requireSupported = do
     desugared <- desugarModule checked
     current <- getSession
     optimized <- liftIO $ hscSimplify current [] (coreModule desugared)
-    liftIO $ serializeOptimizedCoreCBD flags ["unit-qualified"] optimized >>= BS.writeFile (root </> directory </> "template-pre.cbd")
     let bindings = flattenBinds (mg_binds optimized)
         resolve expression = case expression of
           Var v | Just body <- lookup v bindings -> resolve body
@@ -211,7 +211,7 @@ prepareOriginalRtsLocks root requireSupported = do
          "--output", output, directory </> stage ++ ".cbd"]
       pure (output,command)
   let commands = [version,info,libdir,imports] ++ map snd (concat audits)
-      artifacts = map (directory </>) ["oracle.json","declarations.json","declarations.cbd","template-pre.cbd","pre.cbd","post.cbd"] ++
+      artifacts = map (directory </>) ["oracle.json","declarations.json","declarations.cbd","pre.cbd","post.cbd"] ++
         map fst (concat audits) ++ concatMap commandArtifacts commands
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
   compactFiles <- listDirectory (root </> "src/cbd/THC/Compact")
