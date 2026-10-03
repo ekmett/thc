@@ -247,6 +247,9 @@ interface helper. It does not require an earlier whole-project build.
 Win32 supplies the actual code pages, conversion flags, fallback characters and
 localized error text; ANSI conversion is not replaced with UTF-8. Buffers retain
 their capacity and mutability checks, including native partial-failure writes.
+The fixture compares conversions and errors for explicit code pages with native
+GHC results. It does not compare console code-page numbers across processes:
+the producer and test JVM can have different associated consoles.
 
 Both safe and unsafe `WideCharToMultiByte` declarations retain their exact
 argument widths. Safe calls release guest scheduling admission during native

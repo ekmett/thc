@@ -177,7 +177,6 @@ class WindowsCodePagesTest {
     private final Map<String, OriginalStdioOp> operations = new LinkedHashMap<>();
     {
         operations.put("ansiPage", OriginalStdioOp.ANSI_CODE_PAGE);
-        operations.put("consolePage", OriginalStdioOp.CONSOLE_CODE_PAGE);
         operations.put("windowsError", OriginalStdioOp.LAST_ERROR);
         operations.put("pageInfo", OriginalStdioOp.CODE_PAGE_INFO);
         operations.put("leadByte", OriginalStdioOp.DBCS_LEAD_BYTE);
@@ -288,8 +287,6 @@ class WindowsCodePagesTest {
                         void run() throws Exception {
                             if (!wideOnly) {
                             assertEquals(oracle.get("ansi"), invoke("ansiPage", 0L));
-                            assertEquals(oracle.get("console"), invoke("consolePage", 0L));
-                            if (Long.valueOf(0).equals(oracle.get("console"))) assertEquals(oracle.get("consoleError"), invoke("windowsError", 0L));
                             for (var row : (List<Map<String, Object>>) oracle.get("info")) {
                                 var storage = buffer(34);
                                 var output = storage.plus(8);

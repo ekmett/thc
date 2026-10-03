@@ -63,7 +63,7 @@ import THC.Driver.PackageNative (installedNativeSignatures, nativeWrapperSource)
 import Unsafe.Coerce (unsafeCoerce)
 
 operations :: [(String,String)]
-operations = [("ansiPage","GetACP"),("consolePage","GetConsoleCP"),("windowsError","GetLastError"),
+operations = [("ansiPage","GetACP"),("windowsError","GetLastError"),
   ("pageInfo","GetCPInfo"),("leadByte","IsDBCSLeadByteEx"),("multiByte","MultiByteToWideChar"),
   ("wideChar","WideCharToMultiByte"),("wideCharSafe","WideCharToMultiByte"),("mapError","maperrno_func"),("mapCurrentError","maperrno"),
   ("errorMessage","base_getErrorMessage"),("localFree","LocalFree")]
@@ -300,14 +300,13 @@ prepareWindowsCodePages root = do
        (index,(symbol,convention,safety,arguments,result)) <- nativeEntries],
      "inheritedInterfaceHashes" .= inheritedHashes,"inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
-  putStrLn "windows-codepages: twelve genuine GHC FCallIds, native encoding/error oracle and 24 strict audits"
+  putStrLn "windows-codepages: genuine GHC FCallIds, native encoding/error oracle and strict pre/post audits"
 
 -- Each value was compiled by GHC from the typed consumer and its actual
 -- original FCallId, as in the existing native directory oracle.
 observe :: Map.Map String a -> IO Value
 observe natives = do
   let ansi = unsafeCoerce (natives Map.! "ansiPage") :: IO Word
-      console = unsafeCoerce (natives Map.! "consolePage") :: IO Word
       lastError = unsafeCoerce (natives Map.! "windowsError") :: IO Word
       info = unsafeCoerce (natives Map.! "pageInfo") :: Word -> Ptr () -> IO Int
       lead = unsafeCoerce (natives Map.! "leadByte") :: Word -> Word -> IO Int
@@ -321,8 +320,6 @@ observe natives = do
       bytes pointer = peekArray 64 (castPtr pointer :: Ptr Word8)
       errorFor result = if result == 0 then lastError else pure 0
   acp <- ansi
-  ccp <- console
-  consoleError <- if ccp == 0 then lastError else pure 0
   infos <- forM [0,1252,932,65001,999999] $ \page -> allocaBytes 64 $ \output -> do
     fillBytes output 165 64
     result <- info page output
@@ -383,7 +380,7 @@ observe natives = do
       pure (object ["error" .= err,"null" .= False,"units" .= content])
   nullReleased <- release nullPtr
   unless (nullReleased == nullPtr) (die "Native LocalFree(NULL) failed")
-  pure (object ["ansi" .= acp,"console" .= ccp,"consoleError" .= consoleError,"info" .= infos,"lead" .= leads,"mapping" .= mapped,
+  pure (object ["ansi" .= acp,"info" .= infos,"lead" .= leads,"mapping" .= mapped,
     "mappedCurrent" .= mappedCurrent,"multi" .= multiRows,"wide" .= wideRows,"wideSafe" .= wideSafeRows,"messages" .= messages])
 
 multiCases :: [(String,Word,Word,[Word8],Int,Int,Bool,Bool)]

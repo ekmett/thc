@@ -29,9 +29,8 @@ type MapStateCall = State# RealWorld -> (# State# RealWorld #)
 type MessageCall = Word32# -> State# RealWorld -> (# State# RealWorld, Addr# #)
 type FreeCall = Addr# -> State# RealWorld -> (# State# RealWorld, Addr# #)
 
-ansiPage, consolePage, windowsError :: PageCall -> Int# -> Word#
+ansiPage, windowsError :: PageCall -> Int# -> Word#
 ansiPage call _ = case call realWorld# of (# _, value #) -> word32ToWord# value
-consolePage call _ = case call realWorld# of (# _, value #) -> word32ToWord# value
 windowsError call _ = case call realWorld# of (# _, value #) -> word32ToWord# value
 pageInfo :: InfoCall -> Word# -> Addr# -> Int#
 pageInfo call page output = case call (wordToWord32# page) output realWorld# of (# _, value #) -> value
@@ -55,9 +54,8 @@ errorMessage call value = case call (wordToWord32# value) realWorld# of (# _, re
 localFree :: FreeCall -> Addr# -> Addr#
 localFree call value = case call value realWorld# of (# _, result #) -> result
 
-nativeAnsiPage, nativeConsolePage, nativeWindowsError :: PageCall -> IO Word
+nativeAnsiPage, nativeWindowsError :: PageCall -> IO Word
 nativeAnsiPage call = IO (\state -> case call state of (# next, value #) -> (# next, W# (word32ToWord# value) #))
-nativeConsolePage call = IO (\state -> case call state of (# next, value #) -> (# next, W# (word32ToWord# value) #))
 nativeWindowsError call = IO (\state -> case call state of (# next, value #) -> (# next, W# (word32ToWord# value) #))
 nativePageInfo :: InfoCall -> Word -> Ptr () -> IO Int
 nativePageInfo call (W# page) (Ptr output) = IO (\state ->
