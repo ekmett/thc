@@ -197,7 +197,15 @@ def registry(root, ghc_pkg="ghc-pkg", package_db=None, inputs=None):
         if inputs is not None:
             suffix = "dylib" if sys.platform == "darwin" else "so"
             for name in fields.get("hs-libraries", "").split():
-                candidates = [Path(directory) / f"lib{name}-ghc9.14.1.{suffix}"
+                # GHC.Unit.Info.unitHsLibs: HS libraries carry the GHC suffix;
+                # C libraries drop their static-archive prefix (Cffi -> ffi).
+                if name.startswith("HS"):
+                    dynamic_name = name + "-ghc9.14.1"
+                elif name.startswith("C"):
+                    dynamic_name = name[1:]
+                else:
+                    raise RuntimeError("Unknown registered library naming convention: " + name)
+                candidates = [Path(directory) / f"lib{dynamic_name}.{suffix}"
                               for directory in shlex.split(fields.get("dynamic-library-dirs", ""))]
                 library_path = next((path for path in candidates if path.is_file()), None)
                 if library_path is None:

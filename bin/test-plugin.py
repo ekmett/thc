@@ -152,6 +152,8 @@ class PluginRegistryTest(unittest.TestCase):
         if arguments[1:] == ["--version"]:
             return "GHC package manager version 9.14.1\n"
         self.assertIn("--no-user-package-db", arguments)
+        if arguments[-1] == "list":
+            return str(self.root / "boot/package.conf.d") + "\n"
         self.assertEqual(sum(flag in arguments for flag in ("--expand-pkgroot", "--no-expand-pkgroot")), 1)
         if arguments[-1] == "dump":
             # The selected GHC 9.14.1 dump retains these placeholders despite
@@ -211,6 +213,24 @@ class PluginRegistryTest(unittest.TestCase):
         self.assertTrue((database / "package.cache").is_file())
         with self.assertRaisesRegex(RuntimeError, "CMake plugin registry"):
             plugin.registry(self.root, "selected-ghc-pkg", self.root / "unowned")
+
+    def test_depfile_tracks_haskell_and_c_libraries_using_ghc_dynamic_names(self):
+        directory = self.root / "dynamic libraries"
+        directory.mkdir()
+        self.boot += 'dynamic-library-dirs: ' + json.dumps(str(directory)) + '\n'
+        self.boot += 'hs-libraries: HSbase Cffi\n'
+        for system, suffix in (("linux", "so"), ("darwin", "dylib")):
+            with self.subTest(system=system), patch.object(plugin.sys, "platform", system):
+                haskell = directory / ("libHSbase-ghc9.14.1." + suffix)
+                native = directory / ("libffi." + suffix)
+                haskell.touch()
+                native.touch()
+                inputs = set()
+                plugin.registry(self.root, "selected-ghc-pkg", inputs=inputs)
+                self.assertTrue({haskell, native} <= inputs)
+                native.unlink()
+                with self.assertRaisesRegex(RuntimeError, "Missing registered dynamic library: Cffi"):
+                    plugin.registry(self.root, "selected-ghc-pkg", inputs=set())
 
     def test_reuse_and_changed_registration_have_content_bound_identities(self):
         first = self.registry()
