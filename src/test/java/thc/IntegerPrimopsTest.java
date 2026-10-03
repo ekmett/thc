@@ -55,7 +55,7 @@ public final class IntegerPrimopsTest {
                 String actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(Files.readAllBytes(root.resolve(entry.getKey()))));
                 assertEquals(entry.getValue(), actual,
-                    "Stale integer primop fixture: " + entry.getKey() + "; rerun prepare-tests.sh");
+                    "Stale integer primop fixture: " + entry.getKey() + "; run make fixtures TESTS=thc.IntegerPrimopsTest");
             }
         }
     }

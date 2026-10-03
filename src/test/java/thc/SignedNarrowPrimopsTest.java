@@ -57,7 +57,7 @@ public final class SignedNarrowPrimopsTest {
     private void verifyHashes(Map<String, Object> manifest) throws Exception {
         for (String kind : List.of("inputHashes", "artifactHashes")) for (var entry : ((Map<String, String>) manifest.get(kind)).entrySet()) {
             String actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(entry.getKey()))));
-            assertEquals(entry.getValue(), actual, "Stale signed narrow fixture: " + entry.getKey() + "; rerun prepare-tests.sh");
+            assertEquals(entry.getValue(), actual, "Stale signed narrow fixture: " + entry.getKey() + "; run make fixtures TESTS=thc.SignedNarrowPrimopsTest");
         }
     }
     private void check(Value function, String backend, Map<String, Object> entry, long[] row) {

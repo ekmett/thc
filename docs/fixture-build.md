@@ -64,6 +64,9 @@ Verification on macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25:
   Direct `cmake --build build/fixtures --parallel 2` did no work in 0.49s.
 - All 3,112 declared products existed; 1,758 consumed artifact hashes across
   76 manifests/provenance files matched products with declared graph writers.
+- Ninja checked 8,083 graph nodes and reported no missing generated-file dependencies.
+- `make test-modes TESTS=thc.IntegerPrimopsTest` passed all six executions
+  across both handoff modes and both backends in 40.5s (Gradle: 33s).
 - Focused recovery checks covered missing CBD siblings, native oracle files,
   the encoder sidecar and the interface-reader executable. Each rebuilt through
   its owner and returned to no work. Unrelated files were preserved and ignored.

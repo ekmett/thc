@@ -3,13 +3,13 @@ Fixture quarantine: excluded from build/test execution and the new CMake/Ninja b
 These are not deferred tests that run anyway. The existing fixture selector refuses
 them, CI selection withholds them, and Gradle excludes their consumer classes in
 all modes. The existing selection manifest carries quarantined=true on each named
-group. The blanket preparation entry point now stops without running producers.
+group. Make and CI build only admitted CMake targets.
 Do not register these producers or consumers in the new CMake/Ninja graph.
 Additional classes use quarantinedJunit; mixed-class full-Core methods use
 quarantinedJunitTags. Ordered foreign-exception Make preparation stops immediately.
 Windows PowerShell selects only the remaining portable and direct ABI checks.
 Direct producer commands remain source material for isolated repair, not build
-entry points. No fixture generation is being run during this inventory.
+entry points. Scheduled jobs do not invoke quarantined producers.
 
 Readmission requires useful semantic coverage, named file inputs, one producer
 per output file, and successful incremental regeneration without clearing a

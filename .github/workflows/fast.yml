@@ -211,11 +211,13 @@ jobs:
         if: runner.os == 'Linux' && needs.automation.outputs.persistent != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev cmake ninja-build
           echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
       - name: Check Linux native and LLVM build dependencies
         if: runner.os == 'Linux'
         run: |
+          cmake --version
+          ninja --version
           for tool in clang llc opt; do
             command -v "$tool"
             major=$("$tool" --version | sed -nE 's/.*version ([0-9]+).*/\1/p' | sed -n '1p')

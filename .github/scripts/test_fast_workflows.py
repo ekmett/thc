@@ -73,16 +73,9 @@ class FastWorkflowGuardsTest(unittest.TestCase):
             self.assertIn("  " + job + ":\n    needs: automation\n", workflow)
         self.assertIn("    needs: build\n", workflow.split("  library:\n", 1)[1])
 
-    def test_intensive_and_hourly_work_have_explicit_single_cadence_owners(self):
+    def test_intensive_work_has_explicit_cadence_and_quarantined_work_is_absent(self):
         workflow = (WORKFLOW.parent / "checks.yml").read_text()
-        for cadence, names in (
-            ("hourly", (
-                "Check tuple join arguments and bottoming tuple cases",
-                "Check original binary sum inputs and captures",
-                "Check original binary sum join inputs and captures",
-                "Check original tuple closure and thunk captures")),
-            ("nightly", (
-                "Check original aggregate constructor fields against native GHC",
+        for name in (
                 "Check Haskell calls into JavaScript",
                 "Compare public packages with native GHC on both backends and handoff modes",
                 "Check cold project dependency acquisition",
@@ -90,11 +83,13 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 "Package verified library inputs and installed runtime",
                 "Share this platform's library inputs with this workflow attempt",
                 "Prepare fresh Map source and native oracle",
-                "Check diagnostic Map on both backends and handoff modes")),
-        ):
-            for name in names:
-                with self.subTest(name=name):
-                    self.assertIn("      - name: " + name + "\n        if: inputs.cadence == '" + cadence + "'\n", workflow)
+                "Check diagnostic Map on both backends and handoff modes"):
+            with self.subTest(name=name):
+                self.assertIn("      - name: " + name + "\n        if: inputs.cadence == 'nightly'\n", workflow)
+        for producer in ("aggregate-heap", "fourway-aggregate", "generic-sum-transport",
+                         "narrow-integer-transport", "tuple-join", "sum-input",
+                         "sum-join-input", "tuple-capture"):
+            self.assertNotIn("--offline -- " + producer, workflow)
         for job, condition in (("foreign-exceptions", "if: ${{ false }}"),
                                ("library", "if: inputs.cadence == 'nightly'")):
             block = workflow.split("  " + job + ":\n", 1)[1].split("    steps:", 1)[0]
@@ -112,7 +107,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
     def test_commit_checks_reuse_common_compilation_and_scheduled_workers_stay_separate(self):
         workflow = (WORKFLOW.parent / "checks.yml").read_text()
         build = workflow.split("  build:\n", 1)[1].split("    steps:", 1)[0]
-        self.assertIn("if: inputs.cadence != 'commit'", build)
+        self.assertIn("if: inputs.cadence == 'nightly'", build)
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
         common = grouped.split("  compile:\n", 1)[1].split("  group:\n", 1)[0]
         for name in (
@@ -192,14 +187,6 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("cabal-update: false", grouped)
         self.assertNotIn("continue-on-error", grouped)
         self.assertNotIn("needs: build", grouped)
-
-    def test_tuple_join_ci_uses_stock_core_subset_and_both_modes(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
-        block = workflow.split("name: Check tuple join arguments and bottoming tuple cases", 1)[1].split("      - name:", 1)[0]
-        self.assertIn("cabal run exe:thc-fixtures --offline -- tuple-join --local", block)
-        self.assertIn("./gradlew tupleJoinFullCoreTest tupleJoinFullCoreDenseTest", block)
-        self.assertIn("build/tuple-join-input/", workflow)
-        self.assertNotIn("continue-on-error", block)
 
     def test_scheduled_windows_checks_select_runtime_hourly_and_driver_nightly(self):
         workflow = (WORKFLOW.parent / "checks.yml").read_text()
