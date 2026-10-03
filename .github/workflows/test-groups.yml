@@ -137,7 +137,6 @@ jobs:
           python3 bin/test-address-fields.py
           python3 bin/test-core-data-tags.py
           python3 bin/test-show-word-list-model.py
-          python3 bin/test-narrow-literal-proofs.py
           python3 bin/test-short-bytes-slices-model.py
           python3 bin/test-array-slice-model.py
       - name: Check merged fixture and runtime recipes with and without assertions

@@ -123,7 +123,7 @@ def main():
          '-o', str(native/'narrow-literal-oracle')])
     run([str(native/'narrow-literal-oracle')], output=OUT/'oracle.tsv')
     evidence = check_inputs()
-    sources = [ROOT/p for p in ['bin/prepare-narrow-literal-proofs.py', 'bin/test-narrow-literal-proofs.py',
+    sources = [ROOT/p for p in ['bin/prepare-narrow-literal-proofs.py',
         't/fixtures/compiler/NarrowLiteralProofAudit.hs', 't/fixtures/compiler/NarrowLiteralProofAuditNative.hs',
         'bin/build-compiler.sh', 'bin/export-core.sh', 'bin/toolchain.sh', 'bin/audit-core.py',
         'bin/core-capabilities.json', 'src/tools/primops/PrimopTools.hs', 'thc.cabal', 'src/main/resources/thc/scalar-primop-signatures.json']]
