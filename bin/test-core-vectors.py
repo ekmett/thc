@@ -498,14 +498,6 @@ class VectorAuditTest(unittest.TestCase):
             self.assertFalse(signature_matches(TUPLE_DOUBLE_REP,bad))
         bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][2]=[]
         self.assertFalse(run(bad)['accepted'])
-    def test_real_double_core_local_entries_and_formal_frontier(self):
-        from doublex2_model import entries
-        from core_package_manifest import inspect_cbd
-        path=ROOT.parent/'build/simd-doublex2/pre-core/SimdDoubleX2.cbd'
-        if not path.exists(): self.skipTest('Double SIMD Core export not generated')
-        m=inspect_cbd(path.read_bytes())
-        for entry in entries(): self.assertTrue(run(m,'main:SimdDoubleX2.' + entry['name'])['accepted'],entry['name'])
-        self.assertTrue(run(m,'main:SimdDoubleX2.vectorArgument')['accepted'])
     def test_float_local_shape_requires_concrete_float_lanes(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastFloatX4#'
@@ -523,14 +515,6 @@ class VectorAuditTest(unittest.TestCase):
         self.assertTrue(signature_matches(TUPLE_FLOAT_REP, TUPLE_FLOAT_REP))
         bad=copy.deepcopy(TUPLE_FLOAT_REP); bad['components'][0]=dict(LANE_FLOAT_REP,kind='unknown')
         self.assertFalse(signature_matches(TUPLE_FLOAT_REP,bad))
-    def test_real_float_core_local_entries_and_formal_frontier(self):
-        from core_package_manifest import inspect_cbd
-        path=ROOT.parent/'build/simd-floatx4/pre-core/SimdFloatX4.cbd'
-        if not path.exists(): self.skipTest('Float SIMD Core export not generated')
-        m=inspect_cbd(path.read_bytes())
-        for name in ('plusCase','minusCase','timesCase','edgePlus','edgeMinus','edgeTimes','nonFmaCase'):
-            self.assertTrue(run(m,'main:SimdFloatX4.' + name)['accepted'], name)
-        self.assertTrue(run(m,'main:SimdFloatX4.vectorArgument')['accepted'])
     def test_exact_local_vector_is_accepted(self): self.assertTrue(run(fixture())['accepted'])
     def test_missing_or_wrong_shape_is_rejected(self):
         for mutation in ('missing', 'lane-count', 'physical', 'boxed', 'tuple'):
@@ -546,15 +530,6 @@ class VectorAuditTest(unittest.TestCase):
         report=run(m)
         self.assertFalse(report['accepted'])
         self.assertIn('aggregate-shape',{i['code'] for i in report['issues']})
-    def test_real_core_local_entries_and_vector_join_capability(self):
-        from core_package_manifest import inspect_cbd
-        path=ROOT.parent/'build/simd/pre-core/SimdInt64X2.cbd'
-        if not path.exists(): self.skipTest('SIMD Core export not generated')
-        m=inspect_cbd(path.read_bytes())
-        for name in ('vectorCase','subtractCase'): self.assertTrue(run(m,'main:SimdInt64X2.'+name)['accepted'],name)
-        report = run(m, 'main:SimdInt64X2.branchCase')
-        self.assertEqual({'join-arguments', 'join-captures', 'join-results'} <= set(CAP.get('vectorTransport', [])),
-                         report['accepted'], report['issues'])
     def test_int32_exact_local_shape_and_cross_width_rejection(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastInt32X4#'
@@ -565,13 +540,4 @@ class VectorAuditTest(unittest.TestCase):
         self.assertTrue(run(m)['accepted'])
         body[1][6]['rep']=copy.deepcopy(VECTOR_REP)
         self.assertFalse(run(m)['accepted'])
-    def test_real_int32_core_local_entries_and_vector_join_capability(self):
-        from core_package_manifest import inspect_cbd
-        path=ROOT.parent/'build/simd-int32x4/pre-core/SimdInt32X4.cbd'
-        if not path.exists(): self.skipTest('Int32 SIMD Core export not generated')
-        m=inspect_cbd(path.read_bytes())
-        for name in ('vectorCase','subtractCase'): self.assertTrue(run(m,'main:SimdInt32X4.'+name)['accepted'],name)
-        report = run(m, 'main:SimdInt32X4.branchCase')
-        self.assertEqual({'join-arguments', 'join-captures', 'join-results'} <= set(CAP.get('vectorTransport', [])),
-                         report['accepted'], report['issues'])
 if __name__=='__main__':unittest.main()

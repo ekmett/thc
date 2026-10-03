@@ -30,19 +30,15 @@ IMPORT_PROFILES = ('ghc-9.14.1-thc-only-static-c-imports-v1',
 @lru_cache(maxsize=1)
 def _compact_executable():
     root = Path(__file__).resolve().parent.parent
-    prepared = root / 'build/thc-compact.path'
     executable = os.environ.get('THC_COMPACT')
     if not executable:
-        if prepared.is_file():
-            executable = prepared.read_text(encoding='utf-8').strip()
-        else:
-            result = subprocess.run([os.environ.get('CABAL', 'cabal'), 'list-bin', 'exe:thc-compact', '--offline',
-                                     '--with-compiler=' + os.environ.get('GHC', 'ghc'),
-                                     '--with-hc-pkg=' + os.environ.get('GHC_PKG', 'ghc-pkg')],
-                                    cwd=root, capture_output=True, text=True, encoding='utf-8', timeout=60)
-            if result.returncode:
-                raise ValueError('Cannot locate CBD inspector: ' + result.stderr.strip())
-            executable = result.stdout.strip()
+        result = subprocess.run([os.environ.get('CABAL', 'cabal'), 'list-bin', 'exe:thc-compact', '--offline',
+                                 '--with-compiler=' + os.environ.get('GHC', 'ghc'),
+                                 '--with-hc-pkg=' + os.environ.get('GHC_PKG', 'ghc-pkg')],
+                                cwd=root, capture_output=True, text=True, encoding='utf-8', timeout=60)
+        if result.returncode:
+            raise ValueError('Cannot locate CBD inspector: ' + result.stderr.strip())
+        executable = result.stdout.strip()
     executable = Path(executable).resolve()
     if not executable.is_file():
         raise ValueError('Build exe:thc-compact first or set THC_COMPACT to its executable: ' + str(executable))

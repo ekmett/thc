@@ -76,6 +76,41 @@ class FixtureExecutableTest(unittest.TestCase):
         locate.assert_not_called()
 
 
+class CompactExecutableTest(unittest.TestCase):
+    def setUp(self):
+        core_package_manifest._compact_executable.cache_clear()
+        self.addCleanup(core_package_manifest._compact_executable.cache_clear)
+
+    def test_unowned_path_sidecar_cannot_override_selected_cabal_decoder(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            selected = root / 'selected-compact'
+            selected.touch()
+            stale = root / 'obsolete-compact'
+            stale.touch()
+            (root / 'build').mkdir()
+            (root / 'build/thc-compact.path').write_text(str(stale), encoding='utf-8')
+            result = subprocess.CompletedProcess([], 0, str(selected) + '\n', '')
+            with patch.object(core_package_manifest, '__file__', str(root / 'bin/core_package_manifest.py')), \
+                    patch.dict(os.environ, {'THC_COMPACT': '', 'CABAL': 'selected-cabal',
+                                            'GHC': 'selected-ghc', 'GHC_PKG': 'selected-ghc-pkg'}), \
+                    patch.object(subprocess, 'run', return_value=result) as locate:
+                self.assertEqual(str(selected), core_package_manifest._compact_executable())
+            locate.assert_called_once_with(
+                ['selected-cabal', 'list-bin', 'exe:thc-compact', '--offline',
+                 '--with-compiler=selected-ghc', '--with-hc-pkg=selected-ghc-pkg'],
+                cwd=root, capture_output=True, text=True, encoding='utf-8', timeout=60)
+
+    def test_explicit_decoder_does_not_invoke_cabal(self):
+        with TemporaryDirectory() as temporary:
+            selected = Path(temporary).resolve() / 'explicit-compact'
+            selected.touch()
+            with patch.dict(os.environ, {'THC_COMPACT': str(selected)}), \
+                    patch.object(subprocess, 'run') as locate:
+                self.assertEqual(str(selected), core_package_manifest._compact_executable())
+            locate.assert_not_called()
+
+
 def write_core(path, module):
     """Test notation enters the existing test-only encoder, never the audit loader."""
     model = dict(schema=1, ghc='9.14.1', unit='fixture', module='Model',
