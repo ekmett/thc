@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 plugins { id 'java' }
 
+dependencies {
+    compileOnly gradleApi()
+    compileOnly localGroovy()
+}
+
 group = 'thc'
 sourceSets.main.java.setSrcDirs(['java'])
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }

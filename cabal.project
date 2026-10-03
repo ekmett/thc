@@ -3,6 +3,9 @@
 
 packages: .
 shared: True
+-- Share four compilation slots between Cabal components and GHC modules.
+jobs: 4
+semaphore: True
 -- Bump deliberately when updating the Hackage snapshot and its CI cache.
 index-state: 2026-10-02T22:18:55Z
 

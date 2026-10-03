@@ -54,9 +54,57 @@ def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
 
 
+def write_trace(path, events):
+    """Perfetto's Chrome JSON format; lanes show overlap, not OS thread identity."""
+    ends = {}
+    for event in sorted(events, key=lambda item: (item["ts"], -item["dur"])):
+        lanes = ends.setdefault(event["pid"], [])
+        lane = next((i for i, end in enumerate(lanes) if end <= event["ts"]), len(lanes))
+        if lane == len(lanes):
+            lanes.append(0)
+        lanes[lane] = event["ts"] + event["dur"]
+        event["tid"] = lane + 1
+    labels = {1: "Build commands", 2: "Ninja edges", 3: "Gradle tasks"}
+    metadata = [{"name": "process_name", "ph": "M", "pid": pid, "tid": 0,
+                 "args": {"name": labels[pid]}} for pid in sorted(ends)]
+    write_json(path, {"traceEvents": metadata + events, "displayTimeUnit": "ms"})
+
+
+def ninja_events(path, previous, started):
+    """Read only this invocation's appended log, grouping multi-output edges."""
+    if not path.exists():
+        return []
+    data = path.read_bytes()
+    require(data.startswith(previous), "Ninja log changed during tracing; refusing stale timings")
+    require(data.splitlines()[0] in (b"# ninja log v5", b"# ninja log v6"), "Unknown Ninja log format")
+    edges = {}
+    for line in data[len(previous):].decode().splitlines():
+        if not line or line.startswith("#"):
+            continue
+        start, end, _, output, command = line.split("\t")
+        key = (int(start), int(end), command)
+        edges.setdefault(key, []).append(output)
+    return [{"name": outputs[0], "cat": "Ninja edge", "ph": "X", "pid": 2,
+             "ts": started + start * 1000, "dur": (end - start) * 1000,
+             "args": {"outputs": outputs}}
+            for (start, end, _), outputs in edges.items()]
+
+
+def merge_traces(directory, output):
+    events = []
+    for path in sorted(directory.glob("*.events.json")):
+        try:
+            events.extend(event for event in json.loads(path.read_text())["traceEvents"] if event["ph"] == "X")
+        except (OSError, ValueError, KeyError) as error:
+            print(f"Incomplete build trace {path}: {error}", file=sys.stderr)
+    write_trace(output, events)
+
+
 class Recorder:
     def __init__(self, root, directory):
         self.root, self.directory = root, directory
+        self.trace_directory = Path(os.environ.get("THC_BUILD_TRACE_DIR",
+                                    directory / "traces" / f"run-{time.time_ns()}")).resolve()
         self.path = directory / "timings.json"
         self.data = json.loads(self.path.read_text()) if self.path.exists() else {
             "schema": 1, "started": utc(), "startedEpoch": time.time(),
@@ -68,10 +116,30 @@ class Recorder:
 
     def command(self, name, argv, *, env=None, allowed=(0,), capture=False, stdout=None):
         self.directory.mkdir(parents=True, exist_ok=True)
+        argv = list(map(str, argv))
+        env = dict(os.environ if env is None else env)
+        trace_dir = Path(env.get("THC_BUILD_TRACE_DIR", self.trace_directory)).resolve()
+        trace_dir.mkdir(parents=True, exist_ok=True)
+        env["THC_BUILD_TRACE_DIR"] = str(trace_dir)
+        trace_prefix = trace_dir / f"{name}-{os.getpid()}-{time.time_ns()}"
+        tool = Path(argv[0]).name
+        ninja_log, previous = None, b""
+        if tool in ("gradlew", "gradlew.bat"):
+            env["THC_BUILD_TRACE"] = str(trace_prefix) + ".gradle.events.json"
+        elif tool == "cmake" and "--build" in argv:
+            build = self.root / argv[argv.index("--build") + 1]
+            if (build / "build.ninja").is_file():
+                # Recompact first so Ninja cannot rewrite old history beneath our
+                # append offset. This retains hashes and never rebuilds outputs.
+                subprocess.run(["ninja", "-C", str(build), "-t", "recompact"],
+                               cwd=self.root, env=env, check=True, stdout=subprocess.DEVNULL)
+                ninja_log = build / ".ninja_log"
+                previous = ninja_log.read_bytes() if ninja_log.exists() else b""
         logfile = self.directory / (f"{len(self.data['phases']):02d}-{name}.log")
         phase = {"name": name, "command": list(map(str, argv)), "started": utc(),
                  "log": str(logfile.relative_to(self.root))}
         begin = time.monotonic()
+        started = time.time_ns() // 1000
         output = []
         print("+ " + repr(phase["command"]), flush=True)
         try:
@@ -95,6 +163,17 @@ class Recorder:
             phase.update(seconds=round(time.monotonic() - begin, 6), finished=utc())
             self.data["phases"].append(phase)
             self.save()
+            events = [{"name": name, "cat": "Build command", "ph": "X", "pid": 1,
+                       "ts": started, "dur": round(phase["seconds"] * 1000000),
+                       "args": {"exitCode": phase.get("exitCode"), "command": phase["command"]}}]
+            if ninja_log is not None:
+                try:
+                    events.extend(ninja_events(ninja_log, previous, started))
+                except (OSError, ValueError, RuntimeError) as error:
+                    # Keep the build's real exit status and its command span.
+                    events[0]["args"]["traceError"] = str(error)
+                    print("Ninja trace incomplete: " + str(error), file=sys.stderr)
+            write_trace(Path(str(trace_prefix) + ".command.events.json"), events)
         require(phase["exitCode"] in allowed, f"{name} failed: exit {phase['exitCode']}; see {logfile}")
         return phase["exitCode"], "".join(output)
 
@@ -802,6 +881,11 @@ def main(argv=None):
         recorder.save()
         print("Fast checks failed: " + str(error), file=sys.stderr)
         return 1
+    finally:
+        # Nested check-command/jvm-group processes own fragments only. Their
+        # coordinator merges after all children exit, including failed builds.
+        if args.command in ("commit-checks", "run", "group", "compile-common", "compile-test-support"):
+            merge_traces(recorder.trace_directory, recorder.directory / "build-trace.json")
     return 0
 
 

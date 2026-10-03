@@ -51,12 +51,33 @@ individual command timings, Ninja log and Gradle profiles accompany the job logs
 Scheduled jobs still share common compilation before distributing their groups.
 The job's Gradle worker is stopped on success or failure.
 
+Each build coordinator writes `build-trace.json` alongside its timing report;
+the existing CI result artifacts include it and the individual fragments under
+`traces/`. Open the JSON in Perfetto to see command spans, completed Ninja edges
+and Gradle tasks on one timeline. Gradle task outcomes distinguish execution,
+cache hits, skipped tasks and up-to-date outputs. Ninja records successful edges
+only; a failed command retains its outer span and log. Multi-output edges appear
+once, and an incremental run excludes old Ninja log entries. Lanes display
+overlap, not operating-system thread identities. Ninja timestamps are aligned
+to the launching CMake command, so they include a small process-start offset.
+Setup downloads are recorded separately in `setup-results/timings.json`.
+
+For a direct Gradle build, use
+`./gradlew -Pthc.buildTrace=/absolute/path/build-trace.json installDist`.
+The listener records task start/end times through Gradle's public event API;
+it does not sample the JVM or instrument task code. A reused report directory
+keeps trace fragments in a separate directory for each invocation; the combined
+file describes the latest coordinator invocation.
+
 `cabal.project` pins the Hackage `index-state`. CI updates the index only when that
 snapshot is absent from its cache. To update dependencies deliberately, change
 that timestamp and run `cabal update`; editing `thc.cabal` does not refresh it.
 Cabal and Gradle dependency caches fall back across project edits, while Cabal's
 checkout outputs retain their project-specific key. Cabal and Gradle validate
 the restored build inputs normally.
+Cabal defaults to four jobs in `cabal.project`. Its job semaphore shares those
+slots with GHC's module compiler, avoiding four Cabal builds each spawning four
+GHC workers. An explicit `cabal build -jN` changes the shared budget.
 
 Intensive also caches the driver's content-addressed Core bundles, replay
 interfaces and native companions under `THC_CACHE_HOME`. Their existing input

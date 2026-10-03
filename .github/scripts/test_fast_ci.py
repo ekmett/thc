@@ -19,6 +19,36 @@ SPEC.loader.exec_module(ci)
 
 
 class FastRunnerTest(unittest.TestCase):
+    def test_ninja_trace_excludes_history_and_groups_multi_output_edges(self):
+        log = self.root / '.ninja_log'
+        before = b'# ninja log v6\n0\t90\t1\told\taaa\n'
+        log.write_bytes(before + b'0\t20\t2\ta\tbbb\n0\t20\t2\tb\tbbb\n5\t10\t3\tc\tccc\n')
+        events = ci.ninja_events(log, before, 1000000)
+        output = self.root / 'trace.json'
+        ci.write_trace(output, events)
+        spans = [event for event in json.loads(output.read_text())['traceEvents'] if event['ph'] == 'X']
+        self.assertEqual(2, len(spans))
+        self.assertEqual(['a', 'b'], spans[0]['args']['outputs'])
+        self.assertEqual((1000000, 20000), (spans[0]['ts'], spans[0]['dur']))
+        self.assertNotEqual(spans[0]['tid'], spans[1]['tid'])
+        self.assertEqual([], ci.ninja_events(log, log.read_bytes(), 2000000))
+        log.write_bytes(b'# ninja log v6\n')
+        with self.assertRaisesRegex(RuntimeError, 'refusing stale timings'):
+            ci.ninja_events(log, before, 3000000)
+
+    def test_failed_commands_keep_trace_and_original_failure_on_repeated_runs(self):
+        with patch.object(ci, 'git', return_value='a' * 40):
+            first = ci.Recorder(self.root, self.root / 'report')
+            second = ci.Recorder(self.root, self.root / 'report')
+        self.assertNotEqual(first.trace_directory, second.trace_directory)
+        with self.assertRaisesRegex(RuntimeError, 'exit 7'):
+            first.command('failure', [sys.executable, '-c', 'raise SystemExit(7)'])
+        (first.trace_directory / 'interrupted.events.json').write_text('{')
+        ci.merge_traces(first.trace_directory, self.root / 'failed-trace.json')
+        spans = [e for e in json.loads((self.root / 'failed-trace.json').read_text())['traceEvents'] if e['ph'] == 'X']
+        self.assertEqual(7, spans[0]['args']['exitCode'])
+        self.assertGreater(spans[0]['dur'], 0)
+
     def test_commit_graph_selects_changed_models_without_dropping_runtime_coverage(self):
         import fast_select
         changed = dict(mode="narrow", runnable=True, changedPaths=["bin/core-package-manifest.py"],

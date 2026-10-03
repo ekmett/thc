@@ -16,6 +16,15 @@ plugins {
     id "application"
 }
 
+// CI supplies a unique destination per invocation; local builds can opt in.
+def buildTrace = providers.environmentVariable('THC_BUILD_TRACE').orElse(providers.gradleProperty('thc.buildTrace'))
+if (buildTrace.isPresent()) {
+    def listener = gradle.sharedServices.registerIfAbsent('thcBuildTrace', thc.buildlogic.BuildTrace) {
+        parameters.outputFile.set(file(buildTrace.get()))
+    }
+    objects.newInstance(thc.buildlogic.BuildTrace.Registration).events.onTaskCompletion(listener)
+}
+
 tasks.named('wrapper') {
     jarFile = file('nih/gradle/wrapper/gradle-wrapper.jar')
 }
