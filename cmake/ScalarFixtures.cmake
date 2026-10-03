@@ -13,16 +13,28 @@ function(scalar_fixture name family module driver_name oracle_name)
   add_custom_command(OUTPUT "${driver}"
     COMMAND ${fixture_env} "${fixtures_exe}" scalar ${family} driver
     DEPENDS "${fixtures_exe}" WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
-  add_custom_command(OUTPUT "${native}"
-    BYPRODUCTS "${out}/native/Main.hi" "${out}/native/Main.o"
-      "${out}/native/${module}.hi" "${out}/native/${module}.o"
-    COMMAND ${fixture_env} "${fixtures_exe}" scalar ${family} native
-    DEPENDS "${driver}" "${source}" "${fixtures_exe}" ${toolchain_inputs}
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
-  add_custom_command(OUTPUT "${oracle}"
-    COMMAND ${fixture_env} "${fixtures_exe}" scalar ${family} oracle
-    DEPENDS "${native}" "${fixtures_exe}"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+  # Native GHC baseline: independent of the THC exporter and runtime. Hash the
+  # driver, imported fixture module and producer recipe; restore only its files.
+  set(native_outputs "${native}" "${oracle}" "${out}/native/Main.hi" "${out}/native/Main.o"
+    "${out}/native/${module}.hi" "${out}/native/${module}.o")
+  set(native_inputs "${driver}" "${source}" "${PROJECT_SOURCE_DIR}/t/haskell-fixtures/Main.hs"
+    "${PROJECT_SOURCE_DIR}/t/haskell-fixtures/FixtureSupport.hs"
+    "${PROJECT_SOURCE_DIR}/cmake/ScalarFixtures.cmake" "${PROJECT_SOURCE_DIR}/.github/scripts/fast_inputs.py")
+  set(native_args)
+  foreach(input IN LISTS native_inputs)
+    file(RELATIVE_PATH relative "${PROJECT_SOURCE_DIR}" "${input}")
+    list(APPEND native_args --input "${relative}")
+  endforeach()
+  foreach(output IN LISTS native_outputs)
+    file(RELATIVE_PATH relative "${PROJECT_SOURCE_DIR}" "${output}")
+    list(APPEND native_args --output "${relative}")
+  endforeach()
+  add_custom_command(OUTPUT ${native_outputs}
+    COMMAND ${fixture_env} "${Python3_EXECUTABLE}" .github/scripts/fast_inputs.py native-oracle
+      --producer "${fixtures_exe}" --family "${family}" ${native_args}
+    DEPENDS ${native_inputs} "${fixtures_exe}" ${toolchain_inputs}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+    COMMENT "Restore or build the independent native GHC ${family} baseline")
   set(stages core)
   if(family STREQUAL "bit")
     set(stages pre-core post-core)

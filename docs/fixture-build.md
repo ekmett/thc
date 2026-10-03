@@ -37,6 +37,16 @@ files. No rule needs an empty directory or consumes a generated-directory listin
 Ninja's file and command dependencies determine freshness; missing products rerun
 their owner. The retired directory-receipt preparation path is removed.
 
+The inventory marks `signed-narrow-primops`, `bit-primops`, `integer-primops` and
+`explicit64-primops` with `nativeOracle: independent-ghc`. Their native executable,
+object/interface files and expected output have a separate cache under
+`THC_NATIVE_ORACLE_CACHE` (default `~/.cache/thc-native-oracles`). Keys include the
+fixture and generated driver bytes, producer recipe, pinned GHC and global package
+identity, platform and relevant environment. Exporter and Java changes do not
+invalidate these baselines. Cache restoration verifies every output digest; THC
+execution still runs. Other groups that produce native and Core files in one
+operation are not yet eligible for this independent cache.
+
 The Cabal plan determines tool paths and plugin dependency units. One rule builds
 the shared tools and owns their Cabal plan and package cache. Another publishes
 the plugin, its private package database and registrations, with external

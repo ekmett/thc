@@ -202,7 +202,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
 
     def test_tool_and_index_caches_survive_project_changes(self):
         setup = (WORKFLOW.parents[1] / "actions/setup/action.yml").read_text()
-        immutable = setup.split("    - name: Reuse Cabal dependency store", 1)[0]
+        immutable = setup.split("    - name: Reuse independent native GHC oracles", 1)[0]
         self.assertNotIn("hashFiles", immutable)
         self.assertNotIn("github.sha", immutable)
         self.assertIn("steps.identity.outputs.index", immutable)

@@ -23,6 +23,7 @@ import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import zlib
 
 SCHEMA = 1
@@ -1954,9 +1955,77 @@ def restore(root, current, source):
     return manifest
 
 
+def native_oracle(root, producer, family, inputs, outputs, cache_home):
+    """Cache the explicitly separated GHC baseline, never its THC Core exports."""
+    ghc = str(Path(shutil.which(os.environ.get("GHC", "ghc"))).resolve())
+    pkg = str(Path(shutil.which(os.environ.get("GHC_PKG", "ghc-pkg"))).resolve())
+    version = command([ghc, "--numeric-version"], root)
+    require(version == "9.14.1", "Native oracle cache requires pinned GHC 9.14.1")
+    libdir = Path(command([ghc, "--print-libdir"], root))
+    package_db = Path(command([ghc, "--print-global-package-db"], root))
+    files = [root / relative(name) for name in inputs]
+    files += [Path(ghc), Path(pkg), libdir / "settings", package_db / "package.cache"]
+    current = {"schema": 1, "family": family, "workspace": str(root),
+        "platform": [platform.system(), platform.release(), platform.machine()],
+        "ghc": version, "ghcInfo": command([ghc, "--info"], root),
+        "packages": command([pkg, "dump", "--global"], root),
+        "inputs": {str(path): digest(path) for path in files},
+        "outputs": outputs,
+        "environment": {name: os.environ.get(name) for name in
+            ("GHC_PACKAGE_PATH", "GHC_ENVIRONMENT", "GHCRTS", "LANG", "LC_ALL", "LIBRARY_PATH", "LD_LIBRARY_PATH")}}
+    key = sha(canonical(current))
+    archive = cache_home / "v1" / (key + ".tar.gz")
+    payload = None
+    if archive.is_file():
+        try:
+            with tarfile.open(archive, "r:gz") as saved:
+                record = json.load(saved.extractfile("identity.json"))
+                require(record["identity"] == current, "Native oracle identity differs")
+                payload = {}
+                for name in outputs:
+                    member = saved.getmember(name)
+                    require(member.isfile(), "Native oracle cache contains a non-file")
+                    data = saved.extractfile(member).read()
+                    require(sha(data) == record["hashes"][name], "Native oracle cache digest differs")
+                    payload[name] = (data, member.mode & 0o777)
+        except (CacheMiss, OSError, ValueError, KeyError, tarfile.TarError, EOFError) as error:
+            print("Native oracle cache miss: " + str(error), file=sys.stderr)
+            payload = None
+    if payload is not None:
+        for name, (data, mode) in payload.items():
+            destination = root / relative(name)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
+            destination.chmod(mode)
+        print(f"NATIVE ORACLE HIT {family}: {key}")
+        return
+    for step in ("native", "oracle"):
+        subprocess.run([str(producer), "scalar", family, step], cwd=root, check=True)
+    hashes = {name: digest(root / relative(name)) for name in outputs}
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=archive.parent) as temporary:
+        pending = Path(temporary) / "oracle.tar.gz"
+        with tarfile.open(pending, "w:gz", compresslevel=1) as saved:
+            data = canonical({"identity": current, "hashes": hashes})
+            record = tarfile.TarInfo("identity.json")
+            record.size = len(data)
+            saved.addfile(record, io.BytesIO(data))
+            for name in outputs:
+                saved.add(root / relative(name), arcname=name, recursive=False)
+        pending.replace(archive)
+    print(f"NATIVE ORACLE BUILT {family}: {key}")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    native = commands.add_parser("native-oracle")
+    native.add_argument("--root", type=Path, default=Path.cwd())
+    native.add_argument("--producer", type=Path, required=True)
+    native.add_argument("--family", choices=("bit", "integer", "signed-narrow", "explicit64"), required=True)
+    native.add_argument("--input", action="append", required=True)
+    native.add_argument("--output", action="append", required=True)
+    native.add_argument("--cache-home", type=Path, default=Path(os.environ.get("THC_NATIVE_ORACLE_CACHE", str(Path.home() / ".cache/thc-native-oracles"))))
     for name in ("key", "pack", "restore"):
         p = commands.add_parser(name)
         p.add_argument("--root", type=Path, default=Path.cwd())
@@ -1968,6 +2037,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         root = args.root.resolve()
+        if args.command == "native-oracle":
+            native_oracle(root, args.producer, args.family, args.input, args.output, args.cache_home)
+            return 0
         if args.command == "restore":
             # A known miss needs no scan of the installed GHC libraries.
             require(args.bundle.is_file() and not args.bundle.is_symlink(), "Bundle missing or linked")

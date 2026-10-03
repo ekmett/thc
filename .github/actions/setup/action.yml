@@ -115,6 +115,12 @@ runs:
       with:
         path: ~/.cabal/packages
         key: ${{ steps.index.outputs.cache-primary-key }}
+    - name: Reuse independent native GHC oracles
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/thc-native-oracles
+        key: native-oracles-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-${{ hashFiles('t/fixtures/compiler/*PrimopsAudit.hs', 't/fixtures/compiler/Explicit64PrimopsAudit.hs', 't/haskell-fixtures/Main.hs', 't/haskell-fixtures/FixtureSupport.hs', 'cmake/ScalarFixtures.cmake', '.github/scripts/fast_inputs.py') }}
+        restore-keys: native-oracles-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-
     - name: Reuse Cabal dependency store
       uses: actions/cache@v4
       with:

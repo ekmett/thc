@@ -1207,6 +1207,7 @@
       "sources": ["t/fixtures/compiler/THC/Prim/Test.hs", "t/fixtures/core/Fixtures.hs", "t/fixtures/core/NativeOracle.hs", "t/fixtures/core/NativeTiming.hs", "t/fixtures/core/MapWorkload.hs", "bin/native-oracle.sh"]
     },
     "explicit64-primops": {
+      "nativeOracle": "independent-ghc",
       "cmakeTarget": "fixture-explicit64-primops",
       "junit": ["thc.runtime.Explicit64PrimopsTest"],
       "commands": [
@@ -1235,6 +1236,7 @@
       ]
     },
     "integer-primops": {
+      "nativeOracle": "independent-ghc",
       "requires": ["compact-model"],
       "cmakeTarget": "fixture-integer-primops",
       "junit": ["thc.IntegerPrimopsTest"],
@@ -1248,6 +1250,7 @@
       ]
     },
     "signed-narrow-primops": {
+      "nativeOracle": "independent-ghc",
       "requires": ["compact-model"],
       "cmakeTarget": "fixture-signed-narrow-primops",
       "junit": ["thc.SignedNarrowPrimopsTest"],
@@ -1264,6 +1267,7 @@
       ]
     },
     "bit-primops": {
+      "nativeOracle": "independent-ghc",
       "requires": ["compact-model"],
       "cmakeTarget": "fixture-bit-primops",
       "junit": ["thc.runtime.BitPrimopsTest"],

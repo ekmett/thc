@@ -30,8 +30,13 @@ class FastRunnerTest(unittest.TestCase):
             self.assertIn("--daemon", application[1])
             self.assertFalse(any("testClasses" in argv or "fixture-tools" in argv for argv in application))
             command.reset_mock()
-            ci.compile_test_support(recorder, reuse_daemon=True)
+            with patch.dict(os.environ, {"GHC": "/pinned/ghc", "GHC_PKG": "/pinned/ghc-pkg", "CABAL": "/pinned/cabal"}):
+                ci.compile_test_support(recorder, reuse_daemon=True)
             support = [call.args[1] for call in command.call_args_list]
+            self.assertTrue(any("--only-dependencies" in argv and "exe:thc-fixtures" in argv for argv in support))
+            configuration = next(argv for argv in support if argv[0] == "cmake" and "-S" in argv)
+            self.assertIn("-DCABAL=/pinned/cabal", configuration)
+            self.assertIn("-DGHC=/pinned/ghc", configuration)
             self.assertTrue(any("fixture-tools" in argv for argv in support))
             self.assertEqual(["testClasses", "toolsJar"], support[-1][-2:])
             self.assertFalse(any("testDefault" in argv or "testDense" in argv for argv in support))

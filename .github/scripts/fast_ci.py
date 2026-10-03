@@ -235,6 +235,9 @@ fi
     recorder.command("verify-graalvm", [str(java_home / "bin/java"), "--version"])
     with open(os.environ["GITHUB_ENV"], "a") as stream:
         stream.write(f"JAVA_HOME={java_home}\nGRAALVM_HOME={java_home}\n")
+        stream.write(f"GHC={os.environ['THC_GHCUP_ROOT']}/ghc/9.14.1/bin/ghc\n"
+                     f"GHC_PKG={os.environ['THC_GHCUP_ROOT']}/ghc/9.14.1/bin/ghc-pkg\n"
+                     f"CABAL={os.environ['THC_GHCUP_ROOT']}/cabal/3.16.0.0/cabal\n")
     with open(os.environ["GITHUB_PATH"], "a") as stream:
         stream.write(f"{java_home}/bin\n{os.environ['THC_GHCUP_ROOT']}/ghc/9.14.1/bin\n"
                      f"{os.environ['THC_GHCUP_ROOT']}/cabal/3.16.0.0\n{llvm_bin}\n")
@@ -585,8 +588,14 @@ def compile_common(recorder, *, reuse_daemon=False):
 
 def compile_test_support(recorder, *, reuse_daemon=False):
     recorder.command("common-test-tools", ["cabal", "build", "exe:thc-primops"])
+    recorder.command("common-fixture-dependencies", ["cabal", "build", "--only-dependencies",
+        "lib:thc", "exe:thc-fixtures", "exe:thc-compact", "exe:thc-interface"])
     recorder.command("common-scalars", ["cabal", "run", "exe:thc-primops", "--", "scalars"])
-    recorder.command("common-fixture-configure", ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"])
+    configure = ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"]
+    for tool in ("GHC", "GHC_PKG", "CABAL"):
+        if os.environ.get(tool):
+            configure.append("-D" + tool + "=" + os.environ[tool])
+    recorder.command("common-fixture-configure", configure)
     recorder.command("common-fixture-tools", ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", "fixture-tools"])
     recorder.command("common-test-classes", ["./gradlew", "--daemon" if reuse_daemon else "--no-daemon",
                                             "--max-workers=2", "--build-cache", "--profile", "testClasses", "toolsJar"])

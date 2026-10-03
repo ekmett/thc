@@ -21,6 +21,40 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_native_oracle_reuses_baseline_and_invalidates_its_actual_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for name in ("ghc", "ghc-pkg", "boot/settings", "boot/package.cache", "source.hs"):
+                path = root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(name)
+            calls = []
+            def query(argv, _root):
+                if argv[-1] == "--numeric-version": return "9.14.1"
+                if argv[-1] in ("--print-libdir", "--print-global-package-db"): return str(root / "boot")
+                return "pinned compiler and packages"
+            def produce(argv, **kwargs):
+                calls.append(argv[-1])
+                (root / "oracle.tsv").write_text((root / "source.hs").read_text())
+            with patch.object(cache, "command", side_effect=query), \
+                 patch.object(cache.shutil, "which", side_effect=lambda name: str(root / Path(name).name)), \
+                 patch.object(cache.subprocess, "run", side_effect=produce), \
+                 patch.dict(os.environ, {"GHC": "ghc", "GHC_PKG": "ghc-pkg"}):
+                def run(): cache.native_oracle(root, root / "producer", "integer", ["source.hs"], ["oracle.tsv"], root / "cache")
+                run()
+                (root / "oracle.tsv").unlink()
+                (root / "exporter.hs").write_text("unrelated THC change")
+                run()
+                self.assertEqual(["native", "oracle"], calls)
+                self.assertEqual("source.hs", (root / "oracle.tsv").read_text())
+                (root / "source.hs").write_text("changed fixture")
+                run()
+                self.assertEqual(4, len(calls))
+                (root / "boot/package.cache").write_text("changed boot libraries")
+                run()
+                self.assertEqual(6, len(calls))
+                for archive in (root / "cache/v1").glob("*.tar.gz"): archive.write_bytes(b"broken")
+                run()
+                self.assertEqual(8, len(calls))
+
     def test_numeric_oracles_keep_native_cache_permissions_on_windows(self):
         for family, executable in (('bit-primops', 'bit-primops-oracle'),
                                    ('signed-narrow-primops', 'signed-narrow-primops-oracle'),
