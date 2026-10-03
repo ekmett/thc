@@ -68,7 +68,9 @@ endforeach()
 set(termios_out "${PROJECT_SOURCE_DIR}/build/original-termios")
 set(termios_outputs "${termios_out}/manifest.json")
 set(termios_objects)
+set(termios_plugin_inputs)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+  set(termios_plugin_inputs ${plugin_outputs})
   list(APPEND termios_outputs "${termios_out}/saved/native/oracle" "${termios_out}/saved/oracle.json")
   list(APPEND termios_objects "${termios_out}/saved/native/Main.hi" "${termios_out}/saved/native/Main.o")
   set(termios_labels ghc-version ghc-info saved-native-build saved-native-run)
@@ -96,9 +98,54 @@ add_custom_command(OUTPUT ${termios_outputs} BYPRODUCTS ${termios_objects}
   DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalSavedTermiosAudit.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalSavedTermiosNative.hs"
     ${tool_sources} ${cabal_inputs} ${audit_inputs} ${toolchain_inputs}
-    "${fixtures_exe}" "${compact_exe}" ${plugin_outputs}
+    "${fixtures_exe}" "${compact_exe}" ${termios_plugin_inputs}
     "${PROJECT_SOURCE_DIR}/bin/export-core.sh" "${PROJECT_SOURCE_DIR}/bin/export-core.ps1"
     "${PROJECT_SOURCE_DIR}/bin/build-compiler.sh" "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate the saved-termios fixture for its declared platform")
 add_custom_target(fixture-original-termios DEPENDS ${termios_outputs})
+
+# 062/063: descriptor leases and termios image transport through THC. Each
+# operation owns its private PTY server and exports; neither consumes the other's
+# files. The server is also an explicit runtime input, not just a build oracle.
+foreach(operation tcgetattr tcsetattr)
+  if(operation STREQUAL "tcgetattr")
+    set(module OriginalTcgetattr)
+    set(entry originalTcgetattr)
+  else()
+    set(module OriginalTcsetattr)
+    set(entry originalTcsetattr)
+  endif()
+  set(out "${PROJECT_SOURCE_DIR}/build/original-${operation}")
+  set(outputs "${out}/manifest.json")
+  set(objects)
+  set(terminal_plugin_inputs)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+    set(terminal_plugin_inputs ${plugin_outputs})
+    list(APPEND outputs "${out}/oracle.json" "${out}/native/oracle")
+    list(APPEND objects "${out}/native/Main.hi" "${out}/native/Main.o")
+    set(labels ghc-version ghc-info native-build native-run)
+    foreach(stage pre post)
+      list(APPEND outputs "${out}/${stage}/core/${module}Audit.cbd"
+        "${out}/${stage}/core/THC.InterfaceClosure.cbd" "${out}/${stage}/${entry}.audit.json")
+      list(APPEND objects "${out}/${stage}/ghc/${module}Audit.hi" "${out}/${stage}/ghc/${module}Audit.o")
+      list(APPEND labels "${stage}-export" "${stage}-audit-${entry}")
+    endforeach()
+    foreach(label IN LISTS labels)
+      foreach(suffix stdout stderr command.json)
+        list(APPEND outputs "${out}/logs/${label}.${suffix}")
+      endforeach()
+    endforeach()
+  endif()
+  add_custom_command(OUTPUT ${outputs} BYPRODUCTS ${objects}
+    COMMAND ${fixture_env} "${fixtures_exe}" "original-${operation}"
+    DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/${module}Audit.hs"
+      "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/${module}Native.hs"
+      ${tool_sources} ${cabal_inputs} ${audit_inputs} ${toolchain_inputs}
+      "${fixtures_exe}" "${compact_exe}" ${terminal_plugin_inputs}
+      "${PROJECT_SOURCE_DIR}/bin/export-core.sh" "${PROJECT_SOURCE_DIR}/bin/export-core.ps1"
+      "${PROJECT_SOURCE_DIR}/bin/build-compiler.sh" "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+    COMMENT "Generate the ${operation} fixture for its declared platform")
+  add_custom_target(fixture-original-${operation} DEPENDS ${outputs})
+endforeach()

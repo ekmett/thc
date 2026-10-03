@@ -2,12 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 -- Fixture rationale (063 original-tcgetattr)
--- Purpose: Check termios reads copy the correct image/status through the runtime boundary.
--- Produces/consumed result: Core CBDs, oracle.json and native/oracle --serve.
--- Cost and overlap: Share the PTY/server with tcsetattr. Keep transport/error cases that
---   exercise THC; repeating native terminal semantics adds little.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Purpose: Check termios reads preserve buffer boundaries, descriptor aliases and
+--   context lifetime through THC, including first compiled calls and ABI rejection.
+-- Consumes: OriginalTcgetattr{Audit,Native}.hs, selected GHC/unix/ghc-internal,
+--   shared exporter/plugin and auditor, this producer and native Linux x86_64 PTYs.
+-- Produces: Pre/post CBDs, two audits, oracle.json, native PTY server and logs.
+-- Cost and overlap: One small native compile; unlike set, get must fill guest memory.
+--   General descriptor tests do not cover the termios image's transport boundary.
+-- Build status: cmake/NativeFixtures.cmake owns the private products. Other hosts
+--   produce only an explicit unsupported manifest; tests are Linux x86_64 only.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 063.
 {-# LANGUAGE OverloadedStrings #-}
 

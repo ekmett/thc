@@ -26,8 +26,8 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `simd-arithmetic`, `pinned-addresses`, `record-fields`, `rts-diagnostics`,
 `rts-shutdown`, `original-errno`, `ghc-bco`, `closure-inspection`, `cstring`,
 `thread-inventory`, `process-lifecycle-native`, `delimited-continuations`, `hint-trace`,
-`core-continuation`, `large-literal-cases`, `original-termios`, `original-rts-locks`
-and `rubbish-literals`. Each has a `fixture-<group>`
+`core-continuation`, `large-literal-cases`, `original-termios`, `original-rts-locks`,
+`rubbish-literals`, `original-tcgetattr` and `original-tcsetattr`. Each has a `fixture-<group>`
 target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
@@ -66,8 +66,8 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 72 graph targets covering 113 mapped JUnit classes, 46 quarantined
-groups and 20 groups still awaiting file rules. The native process target is
+There are 74 graph targets covering 115 mapped JUnit classes, 46 quarantined
+groups and 18 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -87,6 +87,11 @@ and rejection checks; all 18 executions passed across both handoff modes in 27 s
 Its 30 consumed artifacts have graph writers, and an unchanged
 repeat did no work in 0.37 seconds. AArch64 native generation requires LLVM's `opt`
 and `llc` on the configured PATH; this run used the installed LLVM 18 tools.
+
+Terminal get/set targets own their Linux PTY servers, Core, audits and observations.
+On macOS both emitted explicit unsupported receipts and returned to no work; Linux
+generation and runtime execution remain unverified here. Unsupported terminal targets
+do not publish an unused plugin database.
 
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread

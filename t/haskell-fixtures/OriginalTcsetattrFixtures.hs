@@ -2,14 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 -- Fixture rationale (062 original-tcsetattr)
--- Purpose: Check termios writes cross the managed/native boundary without corrupting the
---   image.
--- Produces/consumed result: Core CBDs, oracle.json and a native PTY server executed by the
---   test.
--- Cost and overlap: PTY transport can justify an integration test. Merge get/set setup; do
---   not maintain a separate libc conformance suite or duplicate ABI probes.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Purpose: Check terminal writes follow the correct descriptor lease, preserve the
+--   guest image and reject bad state/CInt/buffer proofs before effects.
+-- Consumes: OriginalTcsetattr{Audit,Native}.hs, selected GHC/unix/ghc-internal,
+--   shared exporter/plugin and auditor, this producer and native Linux x86_64 PTYs.
+-- Produces: Pre/post CBDs, two audits, oracle.json, native PTY server and logs.
+-- Cost and overlap: One small native compile; get cannot prove mutation reaches the
+--   correct native terminal after descriptor reuse or context disposal.
+-- Build status: cmake/NativeFixtures.cmake owns the private products. Other hosts
+--   produce only an explicit unsupported manifest; tests are Linux x86_64 only.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 062.
 {-# LANGUAGE OverloadedStrings #-}
 

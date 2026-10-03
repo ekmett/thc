@@ -2188,14 +2188,14 @@ Consumer reads receipt paths/CBD/oracle. Executable not hashed; manifest removed
 
 062  original-tcsetattr
 Fixture rationale (062 original-tcsetattr)
-Purpose: Check termios writes cross the managed/native boundary without corrupting the
-  image.
+Purpose: Check terminal writes follow the correct descriptor lease, preserve the guest
+  image and reject bad state/CInt/buffer proofs before effects.
 Produces/consumed result: Core CBDs, oracle.json and a native PTY server executed by the
   test.
-Cost and overlap: PTY transport can justify an integration test. Merge get/set setup; do
-  not maintain a separate libc conformance suite or duplicate ABI probes.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Cost and overlap: Get cannot prove mutation reaches the correct native terminal after
+  descriptor reuse/disposal. One small native compile; its PTY server is also a test input.
+Build status: cmake/NativeFixtures.cmake owns the private products. Linux x86_64 only;
+  other platforms produce just an unsupported receipt.
 
 Producer: t/haskell-fixtures/OriginalTcsetattrFixtures.hs.
 Consumer: thc.runtime.OriginalTcsetattrTest; Linux x86_64 only.
@@ -2203,12 +2203,12 @@ IN: t/fixtures/compiler/OriginalTcsetattrAudit.hs, OriginalTcsetattrNative.hs;
   producer/Main/FixtureSupport, shared tools, native GHC9.14.1/ghc-internal/unix.
 Under build/original-tcsetattr/:
   native/oracle: IN native source/native packages/system PTY APIs; OUT executable
-    and native/ intermediates. Source imports determine native module closure.
+    and native/Main.hi, Main.o from installed package dependencies.
   oracle.json: IN native/oracle stdout parsed as termios size and 22 rows;
     OUT checked image/status/errno observations.
   <pre|post>/core/OriginalTcsetattrAudit.cbd, THC.InterfaceClosure.cbd
     IN audit source/exporter/closure=originalTcsetattr/installed interfaces/stage;
-    OUT CBD pair and stage/ghc/.
+    OUT CBD pair and stage/ghc/OriginalTcsetattrAudit.hi, .o.
   <stage>/originalTcsetattr.audit.json: IN exact CBD pair/shared auditor; OUT report.
   logs/: ghc-version/info,native-build/run,pre/post-export/audit-originalTcsetattr;
     OUT standard log triplets. manifest.json reads all above/source hashes.
@@ -2216,35 +2216,37 @@ Other hosts produce only supported=false manifest with source hashes. Old manife
   removed first. Tests read receipts/CBDs/audits/oracle.json AND execute oracle
   --serve, requiring a working PTY; their own temporary regular files are outputs.
 StdioHostAbi generated runtime resource is an additional test input. Do not treat
-  this as merely recorded-result consumption. Installed interface files not hashed.
+  this as merely recorded-result consumption. Selected interfaces/native libraries
+  are explicit CMake toolchain inputs.
 
 063  original-tcgetattr
 Fixture rationale (063 original-tcgetattr)
-Purpose: Check termios reads copy the correct image/status through the runtime boundary.
+Purpose: Check terminal reads preserve buffer boundaries, descriptor aliases and context
+  lifetime through THC, including first compiled calls and ABI rejection.
 Produces/consumed result: Core CBDs, oracle.json and native/oracle --serve.
-Cost and overlap: Share the PTY/server with tcsetattr. Keep transport/error cases that
-  exercise THC; repeating native terminal semantics adds little.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Cost and overlap: Unlike set, get must fill guest memory; general descriptor tests do
+  not cover this image transport. One small native compile with private outputs.
+Build status: cmake/NativeFixtures.cmake owns the private products. Linux x86_64 only;
+  other platforms produce just an unsupported receipt.
 
 Producer: t/haskell-fixtures/OriginalTcgetattrFixtures.hs.
 Consumer: thc.runtime.OriginalTcgetattrTest; Linux x86_64 only.
 IN: t/fixtures/compiler/OriginalTcgetattrAudit.hs, OriginalTcgetattrNative.hs;
   producer/Main/FixtureSupport, shared tools/GHC9.14.1/ghc-internal/unix/system PTY.
 Under build/original-tcgetattr/:
-  native/oracle: IN native source/packages; OUT executable/native intermediates.
+  native/oracle: IN native source/packages; OUT executable and native/Main.hi, Main.o.
   oracle.json: IN executable stdout; OUT termios size and 12 image/status/errno rows.
   <pre|post>/core/OriginalTcgetattrAudit.cbd, THC.InterfaceClosure.cbd
     IN audit source/exporter/closure=originalTcgetattr/installed interfaces/stage;
-    OUT CBD pair and stage/ghc/ intermediates.
+    OUT CBD pair and stage/ghc/OriginalTcgetattrAudit.hi, .o.
   <stage>/originalTcgetattr.audit.json: IN exact CBD pair/auditor; OUT report.
   logs/: ghc-version/info,native-build/run,pre/post-export/audit-originalTcgetattr;
     OUT log triplets. manifest.json reads all outputs/source hashes.
 Unsupported hosts emit only negative manifest; old manifest removed first.
 Consumer reads receipts/CBDs/audits/oracle and executes native/oracle --serve on a
   PTY, using generated StdioHostAbi; temporary regular files are test outputs.
-This and 062 need value review against package/FFI coverage; PTY state and buffer
-  transport checks are distinct from retesting libc's own implementation.
+Selected interfaces/native libraries are explicit CMake toolchain inputs. The two
+  native servers use distinct private directories; neither has a hidden preparation edge.
 
 065  original-errno
 Fixture rationale (065 original-errno)

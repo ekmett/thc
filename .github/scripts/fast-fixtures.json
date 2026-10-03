@@ -470,6 +470,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-tcsetattr": {
+      "cmakeTarget": "fixture-original-tcsetattr",
       "ciPlatforms": ["Linux"],
       "junit": ["thc.runtime.OriginalTcsetattrTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-tcsetattr"]}],
@@ -479,6 +480,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-tcgetattr": {
+      "cmakeTarget": "fixture-original-tcgetattr",
       "ciPlatforms": ["Linux"],
       "junit": ["thc.runtime.OriginalTcgetattrTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-tcgetattr"]}],
