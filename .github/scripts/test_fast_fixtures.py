@@ -2872,7 +2872,8 @@ class FixturePreparationTest(unittest.TestCase):
     def test_bytearray_families_use_haskell_producers_and_closed_receipts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
-        groups = {"bytearray": "ByteArrayTest", "mutable-bytearrays": "MutableByteArrayTest",
+        self.assertIsNone(owners["thc.runtime.MutableByteArrayTest"])
+        groups = {"bytearray": "ByteArrayTest", "mutable-bytearrays": "MutableByteArrayNativeTest",
                   "resize-bytearrays": "ResizeByteArrayTest", "mutable-bytearray-size": "MutableByteArraySizeTest",
                   "compare-byte-arrays": "CompareByteArraysTest"}
         for family, klass in groups.items():

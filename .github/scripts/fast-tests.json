@@ -2387,11 +2387,11 @@
       ]
     },
     "t/haskell-fixtures/ByteArrayFixtures.hs": {
-      "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
+      "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayNativeTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
       "python": ["bin/test-core-bytearrays.py"]
     },
     "src/test/java/thc/runtime/ByteArrayFixtureEvidence.java": {
-      "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
+      "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayNativeTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
       "python": ["bin/test-core-bytearrays.py"]
     },
     "t/fixtures/compiler/ByteArrayAudit.hs": {
@@ -2399,7 +2399,7 @@
       "python": ["bin/test-core-bytearrays.py"]
     },
     "t/fixtures/compiler/MutableByteArrayAudit.hs": {
-      "junit": ["thc.runtime.MutableByteArrayTest"],
+      "junit": ["thc.runtime.MutableByteArrayNativeTest"],
       "python": ["bin/test-core-bytearrays.py"]
     },
     "t/fixtures/compiler/CompareByteArraysAudit.hs": {
@@ -2679,7 +2679,7 @@
         "thc.runtime.ManagedWeakTest",
         "thc.runtime.ShrinkByteArrayTest",
         "thc.runtime.ByteArrayTest",
-        "thc.runtime.MutableByteArrayTest",
+        "thc.runtime.MutableByteArrayNativeTest",
         "thc.runtime.ResizeByteArrayTest",
         "thc.runtime.MutableByteArraySizeTest",
         "thc.runtime.CompareByteArraysTest",
@@ -3568,6 +3568,7 @@
       "thc.runtime.ManagedProcessesTest",
       "thc.runtime.ManagedWeakTest",
       "thc.runtime.MaskFunctionNativeTest",
+      "thc.runtime.MutableByteArrayNativeTest",
       "thc.runtime.MutableByteArraySizeTest",
       "thc.runtime.NarrowLiteralProofTest",
       "thc.runtime.NativeAddressTest",

@@ -71,6 +71,7 @@
     "thc.runtime.FloatVectorStorageTest",
     "thc.runtime.CoreTouchTest",
     "thc.runtime.MutableByteArrayContentsTest",
+    "thc.runtime.MutableByteArrayTest",
     "thc.runtime.CallMaskSegmentsTest",
     "thc.CoreLinkerTest",
     "thc.CoreForeignArtifactsTest",
@@ -1249,7 +1250,7 @@
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot"]
     },
     "mutable-bytearrays": {
-      "junit": ["thc.runtime.MutableByteArrayTest"],
+      "junit": ["thc.runtime.MutableByteArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutable-bytearrays"]}],
       "outputs": ["build/mutable-bytearrays"],
       "sources": ["t/haskell-fixtures/ByteArrayFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/MutableByteArrayAudit.hs", "src/tools/primops/PrimopTools.hs"]
