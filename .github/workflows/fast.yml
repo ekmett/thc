@@ -19,7 +19,7 @@ on:
         type: string
         required: false
       empty_join_diagnostics:
-        description: Retain EmptyJoin compiler graphs and interpreter-transfer traces
+        description: Retain EmptyJoin compiler graphs
         type: boolean
         default: false
         required: false

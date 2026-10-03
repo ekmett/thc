@@ -513,8 +513,6 @@ def handoffModeTests = [["testDefault", false],[ "testDense", true]].collect { t
         systemProperty("thc.expectedHandoffSlabs", dense.toString())
         if ("true".equalsIgnoreCase(System.getenv("THC_EMPTY_JOIN_DIAGNOSTICS"))) {
             systemProperty("thc.emptyJoinDiagnostics", "true")
-            // Truffle fixes transfer tracing when the first engine starts.
-            systemProperty("polyglot.engine.TraceTransferToInterpreter", "true")
             def run = "${System.getenv('GITHUB_RUN_ID') ?: 'local'}-${System.getenv('GITHUB_RUN_ATTEMPT') ?: '1'}"
             systemProperty("jdk.graal.Dump", "Truffle:2")
             systemProperty("jdk.graal.MethodFilter", "*emptyJoinDiagnostic*")
