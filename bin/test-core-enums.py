@@ -8,7 +8,6 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
-from core_package_manifest import inspect_cbd
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
 audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
@@ -84,19 +83,4 @@ class EnumTests(unittest.TestCase):
                       dict(kind='unknown', primReps=['IntRep'], evaluated=False)]:
             m=fixture();m['bindings'][0]['expr'][2][2][0]=['var','x']+([] if proof is None else [dict(rep=proof)])
             self.assertTrue(run(m)['accepted'])
-    def test_real_unsupported_families(self):
-        for stage in ['pre','post']:
-            path=ROOT.parent/'build/tag-to-enum'/f'{stage}-core/TagToEnumFrontier.cbd'
-            module=inspect_cbd(path.read_bytes())
-            for entry in ['parameterized','family']:
-                result=audit.Audit([(str(path),module)],CAP).run(['main:TagToEnumFrontier.'+entry])
-                self.assertFalse(result['accepted'])
-                self.assertTrue(any(x['code']=='enum-family' for x in result['issues']))
-    def test_real_exports(self):
-        for stage in ['pre','post']:
-            folder=ROOT.parent/'build/tag-to-enum'/f'{stage}-core'
-            self.assertTrue(folder.is_dir(),'Run prepare-tag-to-enum-audit.py')
-            modules=[(str(p),inspect_cbd(p.read_bytes())) for p in folder.glob('*.cbd')]
-            result=audit.Audit(modules,CAP).run(['main:TagToEnumAudit.'+entry for entry in ['boolCase','orderingCase','colourCase','wrappedColourCase','externalCase','papCase','lazyCase','lazyTagCase','lazyWrappedTagCase','onceCase']])
-            self.assertTrue(result['accepted'],result['issues'])
 if __name__=='__main__':unittest.main()

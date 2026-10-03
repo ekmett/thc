@@ -26,7 +26,7 @@ import qualified Distribution.InstalledPackageInfo as Package
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
 import qualified System.Directory as Directory
-import System.Environment (getEnvironment, lookupEnv, setEnv, unsetEnv)
+import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
 import qualified System.Process as Process
@@ -44,8 +44,7 @@ tests env = TestList [proxyOptionsTest env, staticExportsTest env, storeProjectT
 
 exportSafetyTests :: Env -> Test
 exportSafetyTests env = TestLabel "local export preserves inferred safety and rejects Unsafe imports" $ TestCase $
-  withFixtureNamed env "t/fixtures/run-store-project" "local safe library" $ \project ->
-  withCache (scratch env </> "core-cache") $ do
+  withFixtureNamed env "t/fixtures/run-store-project" "local safe library" $ \project -> do
     let base = takeDirectory project
         output = base </> "output"
         source = project </> "dep-data/src/SafeDependency.hs"
@@ -107,8 +106,7 @@ exportSafetyTests env = TestLabel "local export preserves inferred safety and re
 concurrentTests :: Env -> Test
 concurrentTests env = TestLabel "overlapping project captures share immutable cache publications" $ TestCase $
   withFixtureNamed env "t/fixtures/run-store-project" "first" $ \first ->
-  withFixtureNamed env "t/fixtures/run-store-project" "second" $ \second ->
-  withCache (scratch env </> "core-cache") $ do
+  withFixtureNamed env "t/fixtures/run-store-project" "second" $ \second -> do
     let base = takeDirectory first
         source = base </> "dependency-source"
         facade = base </> "facade-source"
@@ -186,8 +184,7 @@ concurrentTests env = TestLabel "overlapping project captures share immutable ca
 
 inplaceTests :: Env -> Test
 inplaceTests env = TestLabel "archive dependency retains its project-local dependency contents" $ TestCase $
-  withFixtureNamed env "t/fixtures/run-store-project" "inplace dependencies" $ \project ->
-  withCache (scratch env </> "core-cache") $ do
+  withFixtureNamed env "t/fixtures/run-store-project" "inplace dependencies" $ \project -> do
     let base = takeDirectory project
         dependency = base </> "dependency-source"
         facade = base </> "facade-source"
@@ -532,8 +529,7 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
 storeProjectTest :: Env -> Test
 storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
   -- Keep assembler output paths portable; proxy-only cases above cover quotes.
-  withFixtureNamed env "t/fixtures/run-store-project" "project café" $ \project ->
-  withCache (scratch env </> "core-cache") $ do
+  withFixtureNamed env "t/fixtures/run-store-project" "project café" $ \project -> do
     let base = takeDirectory project
         source = base </> "dependency-source"
         answer = source </> "src/SafeDependency.hs"
@@ -603,8 +599,7 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
 
 customStoreProjectTest :: Env -> Test
 customStoreProjectTest env = TestLabel "Custom Setup capture recovers failures and retains runtime-only closure" $ TestCase $
-  withFixtureNamed env "t/fixtures/run-store-project" "custom project" $ \project ->
-  withCache (scratch env </> "core-cache") $ do
+  withFixtureNamed env "t/fixtures/run-store-project" "custom project" $ \project -> do
     let base = takeDirectory project
         dependency = base </> "dependency-source"
         leaf = base </> "leaf-source"
@@ -729,8 +724,7 @@ customStoreProjectTest env = TestLabel "Custom Setup capture recovers failures a
 nativeVariantsTest :: Env -> Bool -> Test
 nativeVariantsTest env cxx = TestLabel
   ("same native " ++ (if cxx then "C++/ccall-header" else "C") ++ " symbol retains pointer and byte-array variants") $ TestCase $
-  withFixtureNamed env "t/fixtures/run-native-variants" "native variants" $ \project ->
-  withCache (scratch env </> "core-cache") $ do
+  withFixtureNamed env "t/fixtures/run-native-variants" "native variants" $ \project -> do
     if cxx then do
       original <- readText (project </> "variants.c")
       writeText (project </> "variants.cc") $ unlines
@@ -817,15 +811,6 @@ assertBackend backend result = do
   diagnostics <- json (last $ lines $ err result)
   assertEqual "backend" backend (string $ field diagnostics "backend")
   assertEqual "no traps" 0 (number $ field diagnostics "unsupportedTraps")
-
-withCache :: FilePath -> IO a -> IO a
-withCache path action = bracket acquire restore (const action)
-  where
-    acquire = do
-      prior <- lookupEnv "THC_CACHE_HOME"
-      setEnv "THC_CACHE_HOME" path
-      pure prior
-    restore = maybe (unsetEnv "THC_CACHE_HOME") (setEnv "THC_CACHE_HOME")
 
 one :: (a -> Bool) -> [a] -> a
 one predicate values = case filter predicate values of

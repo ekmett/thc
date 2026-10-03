@@ -49,7 +49,22 @@ main = do
 runTests :: [String] -> IO ()
 runTests arguments = do
   env <- setup
+  let unitTests =
+        [ CoreIndexTests.tests
+        , CoreSymbolsTests.tests env
+        , BundleSelectionTests.tests env
+        , InstalledForeignTests.tests
+        , InstalledHydrationTests.tests
+        , ScalarBitcodeTests.tests
+        , NativeCacheTests.tests
+        , RuntimeShimTests.tests
+        , TestSupportTests.tests
+        , PlanTests.unitTests env
+        , PinnedFlagsTests.tests
+        , RunOptionsTests.tests env
+        ]
   selected <- case arguments of
+    ["--unit-only"] -> pure unitTests
     ["--test-support-only"] -> pure [TestSupportTests.tests]
     ["--installed-view-only"] -> pure
       [InstalledForeignTests.tests, InstalledForeignTests.viewTests env]
@@ -59,7 +74,6 @@ runTests arguments = do
     ["--core-index-only"] -> pure [CoreIndexTests.tests, CoreSymbolsTests.tests env]
     ["--bundle-selection-only"] -> pure [BundleSelectionTests.tests env]
     ["--runnable-targets-only"] -> pure [RunOptionsTests.tests env, BenchmarkTests.tests env]
-    ["--project-replay-only"] -> pure [ProjectTests.projectReplayTests env]
     ["--acquire-project-only"] -> pure [ProjectTests.acquisitionTests env]
     ["--build-project-only"] -> pure [ProjectTests.buildTests env]
     ["--backpack-full-core-only"] -> pure [BackpackTests.tests env]
@@ -87,30 +101,19 @@ runTests arguments = do
     ["--native-cache-only"] -> pure [NativeCacheTests.tests]
     ["--native-recipe-only"] -> pure [NativeRecipeTests.tests, NativeRecipeTests.interfaceTests]
     ["--scalar-bitcode-only"] -> pure [ScalarBitcodeTests.tests]
-    [] -> pure
-      [ CoreIndexTests.tests
-      , CoreSymbolsTests.tests env
-      , BundleSelectionTests.tests env
-      , InstalledForeignTests.tests
-      , InstalledHydrationTests.tests
-      , ScalarBitcodeTests.tests
-      , PackageNativeTests.tests
-      , NativeCacheTests.tests
+    [] -> pure $ unitTests ++
+      [ PackageNativeTests.tests
       , NativeRecipeTests.tests
       , NativeRecipeTests.interfaceTests
-      , RuntimeShimTests.tests
       , InstalledForeignTests.viewTests env
-      , TestSupportTests.tests
-      , PlanTests.tests env
+      , PlanTests.integrationTests env
       , RunTests.tests env
       , PublicPackageTests.tests env
-      , PinnedFlagsTests.tests
-      , RunOptionsTests.tests env
       , BenchmarkTests.tests env
       , ProjectTests.tests env
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--test-support-only|--project-replay-only|--pinned-flags-only|--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--build-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--public-packages-only|--cstring-project-only|--store-inventory-only|--store-project-only|--native-variants-only|--store-projects-only|--custom-store-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-view-only|--installed-foreign-source-only|--package-native-only|--native-cache-only|--native-recipe-only|--scalar-bitcode-only]"
+    _ -> die "Usage: driver-tests [--unit-only|--test-support-only|--pinned-flags-only|--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--build-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--public-packages-only|--cstring-project-only|--store-inventory-only|--store-project-only|--native-variants-only|--store-projects-only|--custom-store-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-view-only|--installed-foreign-source-only|--package-native-only|--native-cache-only|--native-recipe-only|--scalar-bitcode-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

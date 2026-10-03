@@ -29,11 +29,49 @@ def fixture_executable():
     if configured:
         return configured
     root = Path(__file__).resolve().parent.parent
-    prepared = root / 'build/thc-fixtures.path'
-    if prepared.is_file():
-        return prepared.read_text(encoding='utf-8').strip()
-    return subprocess.check_output([os.environ.get('CABAL', 'cabal'), 'list-bin',
-        'exe:thc-fixtures', '--offline'], cwd=root, text=True).strip()
+    cabal = os.environ.get('CABAL', 'cabal')
+    subprocess.run([cabal, 'build', 'exe:thc-fixtures', '--offline'], cwd=root, check=True)
+    return subprocess.check_output([cabal, 'list-bin', 'exe:thc-fixtures', '--offline'],
+                                   cwd=root, text=True).strip()
+
+
+class FixtureExecutableTest(unittest.TestCase):
+    def setUp(self):
+        fixture_executable.cache_clear()
+        self.addCleanup(fixture_executable.cache_clear)
+
+    def test_explicit_encoder_does_not_invoke_cabal(self):
+        with patch.dict(os.environ, {'THC_FIXTURES': '/chosen/encoder'}), \
+                patch.object(subprocess, 'run') as build, patch.object(subprocess, 'check_output') as locate:
+            self.assertEqual('/chosen/encoder', fixture_executable())
+        build.assert_not_called()
+        locate.assert_not_called()
+
+    def test_default_encoder_is_built_once_before_location_and_reuse(self):
+        commands = []
+        def build(argv, **kwargs):
+            commands.append(argv)
+            self.assertEqual(dict(cwd=Path(__file__).resolve().parent.parent, check=True), kwargs)
+        def locate(argv, **kwargs):
+            commands.append(argv)
+            self.assertEqual(2, len(commands), 'build must finish before locating the encoder')
+            self.assertEqual(dict(cwd=Path(__file__).resolve().parent.parent, text=True), kwargs)
+            return '/built/encoder\n'
+        with patch.dict(os.environ, {'THC_FIXTURES': '', 'CABAL': 'selected-cabal'}), \
+                patch.object(subprocess, 'run', side_effect=build), \
+                patch.object(subprocess, 'check_output', side_effect=locate):
+            self.assertEqual('/built/encoder', fixture_executable())
+            self.assertEqual('/built/encoder', fixture_executable())
+        self.assertEqual([['selected-cabal', 'build', 'exe:thc-fixtures', '--offline'],
+                          ['selected-cabal', 'list-bin', 'exe:thc-fixtures', '--offline']], commands)
+
+    def test_failed_encoder_build_cannot_reuse_a_previous_executable(self):
+        with patch.dict(os.environ, {'THC_FIXTURES': ''}), \
+                patch.object(subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'cabal')), \
+                patch.object(subprocess, 'check_output') as locate, \
+                self.assertRaises(subprocess.CalledProcessError):
+            fixture_executable()
+        locate.assert_not_called()
 
 
 def write_core(path, module):

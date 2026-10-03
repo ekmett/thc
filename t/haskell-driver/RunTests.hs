@@ -16,7 +16,7 @@ import Control.Monad (forM_)
 import qualified Data.ByteString as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist, getModificationTime)
+import System.Directory (canonicalizePath, doesFileExist, getModificationTime)
 import System.FilePath ((</>), takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Compact.Core (Presence(..))
@@ -32,8 +32,8 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
   withFixtureNamed env "t/fixtures/run-pure" "project café" $ \package -> do
     let base = takeDirectory package
         source = package </> "app/Main.hs"
-        -- Keep the first build cold, then edit this same project to exercise
-        -- invalidation. Public-package and replay tests own the backend matrix.
+        -- Prepare this fresh project explicitly before bounded execution,
+        -- then edit the same project to exercise invalidation.
         output = base </> "output"
         invokeWith backend options = run env base backend 180
           (["run", "--project-dir", package, "completed", "--dist-dir", output,
@@ -44,8 +44,11 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
           plan <- readJson (output </> "native/cache/plan.json")
           pure $ string $ field (one ((== "exe:completed") . string . (`field` "component-name"))
             (objects plan "install-plan")) "bin-file"
-    cold <- doesDirectoryExist output
-    assertBool "fixture starts with a cold native dist directory" (not cold)
+    prepared <- runPreparation env base
+      ["build", "--project-dir", package, "completed", "--dist-dir", output,
+       "--thc-root", thcRoot env]
+    assertSuccess prepared
+    assertNoStdout prepared
     ordinary <- invokeWith Nothing []
     assertSuccess ordinary
     assertNoStdout ordinary

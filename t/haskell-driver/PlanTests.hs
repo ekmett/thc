@@ -10,7 +10,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for plan.
-module PlanTests (tests) where
+module PlanTests (unitTests, integrationTests) where
 
 import Control.Monad (forM, forM_)
 import qualified Data.ByteString as BS
@@ -23,19 +23,28 @@ import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
-tests :: Env -> Test
-tests env = TestList
+-- These rejections stop before Cabal configures a package or invokes GHC.
+unitTests :: Env -> Test
+unitTests = tests False
+
+integrationTests :: Env -> Test
+integrationTests = tests True
+
+tests :: Bool -> Env -> Test
+tests integration env = TestList $ if integration then
   [ caseOf "real configuration and native artifacts" realArtifacts
   , caseOf "default components and flags" flags
   , caseOf "unknown flag and missing dependency" unknownFlag
   , caseOf "project boundary and explicit file" projectBoundary
-  , caseOf "local and freeze project files" projectFiles
   , caseOf "real file discovery and canonical root" discovery
-  , caseOf "ambiguous, missing and invalid input" invalidInputs
-  , caseOf "custom Setup is rejected without execution" customSetup
   , caseOf "disabled component" disabled
   , caseOf "unsupported detailed test" detailed
   , caseOf "relative dist path" relativeDist
+  ]
+  else
+  [ caseOf "local and freeze project files" projectFiles
+  , caseOf "ambiguous, missing and invalid input" invalidInputs
+  , caseOf "custom Setup is rejected without execution" customSetup
   , caseOf "CLI contract" cli
   ]
   where

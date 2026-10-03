@@ -13,9 +13,7 @@
 -- Tests for empty store project.
 module EmptyStoreProjectTests (tests) where
 
-import Control.Exception (bracket)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
-import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.Installed (emptyRegistration, modulelessRegistration)
@@ -109,31 +107,28 @@ emptyProjectTest env = TestLabel "empty, C-only and reexport-only Cabal store li
     let mainSource = project </> "app/app/Main.hs"
     mainText <- readText mainSource
     writeText mainSource (replaceText "import Answer" "import PublicAnswer" mainText)
-    priorCache <- lookupEnv "THC_CACHE_HOME"
-    let restore = maybe (unsetEnv "THC_CACHE_HOME") (setEnv "THC_CACHE_HOME") priorCache
-    bracket (setEnv "THC_CACHE_HOME" (scratch env </> "core-cache")) (const restore) $ \_ -> do
-      prepared <- runPreparation env base
-        ["build", "--project-dir", project, "completed", "--thc-root", thcRoot env,
-         "--dist-dir", output]
-      assertSuccess prepared
-      assertNoStdout prepared
-      first <- invoke "ast"
-      assertSuccess first
-      assertNoStdout first
-      plan <- readJson (output </> "native/cache/plan.json")
-      executable <- case filter ((== "exe:completed") . string . (`field` "component-name"))
-        (objects plan "install-plan") of
-          [unit] -> pure (string (field unit "bin-file"))
-          _ -> fail "expected one completed executable"
-      native <- runExe env project Nothing 60 executable []
-      assertSuccess native
-      assertEqual "native and AST package behavior agree" (out native) (out first)
-      audit <- readJson (output </> "audit.json")
-      assertBool "unchanged strict package audit" (bool (field audit "accepted"))
-      assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
-      second <- runExe env base (Just "bytecode") 240 (runtime env)
-        ["--verify-artifacts", "--run-executable", '@' : (output </> "packages.json"),
-         "main::Main.main", "ghc-internal:GHC.Internal.TopHandler.flushStdHandles", "--", "completed"]
-      assertSuccess second
-      assertNoStdout second
-      assertEqual "native and bytecode package behavior agree" (out native) (out second)
+    prepared <- runPreparation env base
+      ["build", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+       "--dist-dir", output]
+    assertSuccess prepared
+    assertNoStdout prepared
+    first <- invoke "ast"
+    assertSuccess first
+    assertNoStdout first
+    plan <- readJson (output </> "native/cache/plan.json")
+    executable <- case filter ((== "exe:completed") . string . (`field` "component-name"))
+      (objects plan "install-plan") of
+        [unit] -> pure (string (field unit "bin-file"))
+        _ -> fail "expected one completed executable"
+    native <- runExe env project Nothing 60 executable []
+    assertSuccess native
+    assertEqual "native and AST package behavior agree" (out native) (out first)
+    audit <- readJson (output </> "audit.json")
+    assertBool "unchanged strict package audit" (bool (field audit "accepted"))
+    assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
+    second <- runExe env base (Just "bytecode") 240 (runtime env)
+      ["--verify-artifacts", "--run-executable", '@' : (output </> "packages.json"),
+       "main::Main.main", "ghc-internal:GHC.Internal.TopHandler.flushStdHandles", "--", "completed"]
+    assertSuccess second
+    assertNoStdout second
+    assertEqual "native and bytecode package behavior agree" (out native) (out second)

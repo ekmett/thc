@@ -44,6 +44,14 @@ Selectors apply to the preceding task. Results are in
 under `build/reports/tests`. See [handoff storage](handoff-slabs.md) for the
 mode distinction.
 
+Normal CI runs the driver's parser, plan rejection, index, cache, linkage and
+subprocess ownership controls without configuring or building guest packages:
+
+```sh
+cabal test driver-tests -fdevelopment --test-options=--unit-only --test-show-details=direct
+```
+
+Package integration checks retain their focused selectors for explicit runs.
 The driver suite's public-package smoke compares Integer, Text, ByteString and
 memory operations with native GHC on both backends and in both handoff modes.
 Build the runtime before running it directly:
