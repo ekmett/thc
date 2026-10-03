@@ -69,8 +69,8 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 83 graph targets covering 124 mapped JUnit classes, 46 quarantined
-groups and seven groups still awaiting file rules. The native process target is
+There are 84 graph targets covering 125 mapped JUnit classes, 46 quarantined
+groups and six groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -167,6 +167,11 @@ Deleting input.bin rebuilt the producer in 3.14 seconds, preserving an unrelated
 file; the repeat did no work in 0.43 seconds. Forty native cases share one process
 and two audits replace eight. The seekable input on stdin is explicit.
 
+The PTY fixture retains only the live descriptor/alias case, removing duplicate
+nonterminal observations and exact lambda/root counts. Linux x86_64 has 35 named
+products; macOS generates an unsupported receipt and both test modes skip.
+Haskell and Java compilation passed; Linux execution is still unverified.
+
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread
   inventory and three SIMD groups. Both backends run within those classes.
@@ -216,7 +221,7 @@ and two audits replace eight. The seekable input on stdin is explicit.
 - Pinned-address rejection controls passed without leaving scratch catalogues.
   Removed 48 unreferenced catalogues (9.8 MiB), retaining named reports and logs.
 
-The focused JVM results do not establish that all 124 mapped classes pass.
+The focused JVM results do not establish that all 125 mapped classes pass.
 Linux generation/execution of the newly migrated rules, native Windows graph
 support and migration of the CI entry point remain open. Successful local
 fixture generation is not a claim that CI is green.

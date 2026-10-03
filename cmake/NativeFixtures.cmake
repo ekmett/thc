@@ -1,5 +1,33 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+# 100: a live PTY checks THC descriptor alias ownership. The native helper is a
+# test input; it produces no persistent oracle data. Other platforms skip it.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+  set(pty_outputs manifest.json native/oracle)
+  set(pty_labels ghc-version ghc-info native-build)
+  foreach(stage pre post)
+    list(APPEND pty_outputs "${stage}/core/OriginalHandleReadinessAudit.cbd"
+      "${stage}/core/THC.InterfaceClosure.cbd" "${stage}/originalIsTerminal.audit.json")
+    list(APPEND pty_labels "${stage}-export" "${stage}-audit-originalIsTerminal")
+  endforeach()
+  foreach(label IN LISTS pty_labels)
+    foreach(suffix stdout stderr command.json)
+      list(APPEND pty_outputs "logs/${label}.${suffix}")
+    endforeach()
+  endforeach()
+  audited_fixture(original-handle-readiness OriginalHandleReadinessAudit
+    SOURCES t/fixtures/compiler/OriginalHandleReadinessAudit.hs t/fixtures/compiler/OriginalHandleReadinessNative.hs
+    OBJECT_DIRS pre/ghc post/ghc OUTPUTS ${pty_outputs})
+else()
+  set(pty_manifest "${PROJECT_SOURCE_DIR}/build/original-handle-readiness/manifest.json")
+  add_custom_command(OUTPUT "${pty_manifest}"
+    COMMAND ${fixture_env} "${fixtures_exe}" original-handle-readiness
+    DEPENDS ${tool_sources} ${cabal_inputs} "${fixtures_exe}"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+    COMMENT "Record that the Linux PTY fixture is unavailable on this platform")
+  add_custom_target(fixture-original-handle-readiness DEPENDS "${pty_manifest}")
+endif()
+
 # 068: independent observations for THC pointer aliases and explicit ownership.
 # No Core export or package acquisition is involved. Both sets have one writer.
 set(address_outputs)

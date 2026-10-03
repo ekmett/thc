@@ -2,13 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 -- Fixture rationale (100 original-handle-readiness)
--- Purpose: Check handle readiness across guest buffers and a live PTY.
--- Produces/consumed result: CBDs, oracle data and native/oracle --hold-pty executed at
---   test time.
--- Cost and overlap: Retain buffered-handle distinctions not covered by raw fd readiness.
---   Share PTY controls and acquisition; do not duplicate system readiness testing.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Purpose: A native PTY stays live through a THC descriptor alias and first compiled
+--   c_isatty call. Ordinary nonterminal/errno cases live in UnixLibcTest and
+--   OriginalErrnoTest; no separate libc conformance oracle is generated here.
+-- Consumes: the two named Haskell sources, selected GHC/unix/ghc-internal, exporter
+--   and auditor. Produces native/oracle, two CBD pairs, two audits and command logs.
+-- Cost: One native helper build and one export/audit per stage; the test starts
+--   one PTY helper, keeping it alive across stages and backends.
+-- Build status: CMake owns every named Linux x86_64 product, or an unsupported
+--   manifest elsewhere. No installed-Core acquisition or empty-directory input.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 100.
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -25,17 +27,28 @@
 module OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness) where
 
 import Control.Monad (forM, unless)
-import Data.Aeson (object, (.=), toJSON)
+import Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BSC
 import FixtureSupport
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
+import System.Info (arch, os)
 import Text.Read (readMaybe)
 
 prepareOriginalHandleReadiness :: FilePath -> IO ()
-prepareOriginalHandleReadiness root = do
+prepareOriginalHandleReadiness root
+  | os /= "linux" || arch /= "x86_64" = do
+      let output = root </> "build/original-handle-readiness"
+      createDirectoryIfMissing True output
+      writeJson (output </> "manifest.json") $ object
+        ["schema" .= (1 :: Int), "supported" .= False, "platform" .= os,
+         "artifactHashes" .= object []]
+  | otherwise = preparePty root
+
+preparePty :: FilePath -> IO ()
+preparePty root = do
   let directory = "build/original-handle-readiness"
       source = "t/fixtures/compiler/OriginalHandleReadinessAudit.hs"
       driver = "t/fixtures/compiler/OriginalHandleReadinessNative.hs"
@@ -54,26 +67,18 @@ prepareOriginalHandleReadiness root = do
   compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint",
     "-package", "ghc-internal", "-package", "unix", "-odir", root </> directory </> "native",
     "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
-  rows <- forM [-1,1,2 :: Int] $ \fd -> do
-    command <- execute ("native-" ++ show fd) [] (root </> binary) [show fd]
-    let result = readMaybe (BSC.unpack (commandStdout command)) :: Maybe (Int,Int)
-    (status,err) <- maybe (die ("Malformed native isatty result for " ++ show fd)) pure result
-    unless (status == 0 && err > 0) (die ("Native isatty was not a nonterminal/invalid descriptor: " ++ show fd))
-    pure (object ["fd" .= fd,"result" .= status,"errno" .= err], command)
-  let oracle = directory </> "oracle.json"
-  writeJson (root </> oracle) (toJSON [row | (row,_) <- rows])
   exports <- forM ["pre","post"] $ \stage -> do
     let core = directory </> stage </> "core"
         modules = [core </> "OriginalHandleReadinessAudit.cbd",core </> "THC.InterfaceClosure.cbd"]
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-          ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- ["originalIsTerminal", "originalIsTerminalErrno"]]
+          ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- ["originalIsTerminal"]]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
       "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [source])
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine GHC export: " ++ path))) modules
-    audits <- forM ["originalIsTerminal", "originalIsTerminalErrno"] $ \entry -> do
+    audits <- forM ["originalIsTerminal"] $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
         (["bin/audit-core.py", "--entry", "main:OriginalHandleReadinessAudit." ++ entry, "--output", path] ++ modules)
@@ -83,14 +88,14 @@ prepareOriginalHandleReadiness root = do
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/OriginalHandleReadinessFixtures.hs",
         "bin/audit-core.py", "bin/core_original_foreign.py", "bin/core-capabilities.json",
         "bin/export-core.sh", "bin/build-compiler.sh", "src/compiler/THC/Plugin.hs"]
-      commands = [version,info,compiled] ++ [command | (_,command) <- rows] ++
+      commands = [version,info,compiled] ++
         concat [exported : [command | (_,command) <- audits] | (_,exported,audits) <- exports]
-      artifacts = [binary,oracle] ++ concat [modules ++ [path | (path,_) <- audits] | (modules,_,audits) <- exports] ++
+      artifacts = [binary] ++ concat [modules ++ [path | (path,_) <- audits] | (modules,_,audits) <- exports] ++
         concatMap commandArtifacts commands
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object
-    ["schema" .= (1 :: Int), "nativeRows" .= (3 :: Int), "oracle" .= oracle,
+    ["schema" .= (1 :: Int), "supported" .= True, "platform" .= os,
      "stages" .= (["pre", "post"] :: [String]), "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "original-handle-readiness: native isatty/errno and strict pre/post Core prepared"
+  putStrLn "original-handle-readiness: live PTY helper and pre/post Core prepared"

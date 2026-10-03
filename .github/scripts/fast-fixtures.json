@@ -984,6 +984,8 @@
       ]
     },
     "original-handle-readiness": {
+      "cmakeTarget": "fixture-original-handle-readiness",
+      "ciPlatforms": ["Linux"],
       "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-handle-readiness"]}],
       "outputs": ["build/original-handle-readiness"],

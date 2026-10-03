@@ -614,17 +614,17 @@ ORIGINAL_STDIO_READ_OUTPUTS = frozenset("build/original-stdio-read/" + name for 
 ))
 
 ORIGINAL_HANDLE_READINESS_LOGS = (
-    "ghc-version", "ghc-info", "native-build", "native--1", "native-1", "native-2",
+    "ghc-version", "ghc-info", "native-build",
     "pre-export", "post-export",
 ) + tuple(f"{stage}-audit-{entry}" for stage in ("pre", "post")
-          for entry in ("originalIsTerminal", "originalIsTerminalErrno"))
+          for entry in ("originalIsTerminal",))
 ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
+    "manifest.json", "native/oracle",
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_HANDLE_READINESS_LOGS
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalHandleReadinessAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        "originalIsTerminal.audit.json", "originalIsTerminalErrno.audit.json")),
+        "originalIsTerminal.audit.json")),
 ))
 
 RTS_DIAGNOSTIC_OUTPUTS = frozenset("build/rts-diagnostics/" + name for name in (

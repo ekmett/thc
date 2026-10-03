@@ -3359,30 +3359,27 @@ Consumer reads receipt/hash files, oracle, result files/stdout/stderr, CBD pairs
 
 100 original-handle-readiness
 Fixture rationale (100 original-handle-readiness)
-Purpose: Check handle readiness across guest buffers and a live PTY.
-Produces/consumed result: CBDs, oracle data and native/oracle --hold-pty executed at
-  test time.
-Cost and overlap: Retain buffered-handle distinctions not covered by raw fd readiness.
-  Share PTY controls and acquisition; do not duplicate system readiness testing.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
+Purpose: Check an original GHC c_isatty call through a live THC-owned PTY descriptor,
+  including first compiled calls and survival through its last descriptor alias.
+Cost and overlap: Ordinary nonterminal/errno cases duplicate UnixLibcTest and
+  OriginalErrnoTest and are removed. No persisted isatty oracle or root-count proof.
+Build status: CMake fixture-original-handle-readiness owns 35 Linux x86_64 files.
+  Other hosts get only an unsupported manifest; the whole Java class skips there.
 Producer: t/haskell-fixtures/OriginalHandleReadinessFixtures.hs.
 Consumer: thc.runtime.OriginalHandleReadinessNativeTest.
-IN t/fixtures/compiler/OriginalHandleReadinessAudit.hs, OriginalHandleReadinessNative.hs,
-  shared tools/data, native 64-bit GHC/ghc-internal/unix.
+IN: OriginalHandleReadinessAudit.hs, OriginalHandleReadinessNative.hs, selected
+  GHC/ghc-internal/unix, exporter/plugin, CBD decoder and auditor.
 Under build/original-handle-readiness/:
-  native/oracle and intermediates: IN native driver/GHC/native packages.
-  oracle.json: IN three binary invocations for fd -1,1,2; assumes captured nonterminal
-    stdout/stderr; OUT isatty/errno observations.
-  <pre|post>/core/{OriginalHandleReadinessAudit,THC.InterfaceClosure}.cbd, stage/ghc/:
-    IN audit source/closure roots/exporter.
-  stage/<originalIsTerminal|originalIsTerminalErrno>.audit.json: IN CBD pair/auditor.
-  logs/: OUT triplets for ghc-version/info,native-build,native-<fd>,stage-export/audits.
-  manifest.json: IN source/product/log hashes; old receipt not removed first.
-Consumer reads receipt/hashed files/oracle/CBD pairs/audits and also executes
-  native/oracle --hold-pty during JUnit, keeping a private Linux PTY live.
-Thus native/oracle is an executable TEST input, not merely an oracle-generation tool.
+  native/oracle, native/Main.{hi,o}: IN native source/GHC/unix; OUT live PTY helper.
+  <pre|post>/core/{OriginalHandleReadinessAudit,THC.InterfaceClosure}.cbd:
+    IN audit source/originalIsTerminal/exporter; OUT CBD pair and stage ghc/.hi/.o.
+  <stage>/originalIsTerminal.audit.json: IN named pair/auditor; OUT accepted report.
+  logs/<ghc-version|ghc-info|native-build|stage-export|stage-audit-originalIsTerminal>.*:
+    OUT stdout, stderr, command.json. manifest.json reads named source/product hashes.
+Test executes native/oracle once, consumes its announced live PTY path/native result,
+  then keeps the helper alive across both backends and stages; no live paths cached.
+Verification: Haskell tool and Java compile on macOS arm64; both mode executions
+  skip as declared. Linux generation and execution remain unverified here.
 
 101 address-identity
 Fixture rationale (101 address-identity)

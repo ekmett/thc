@@ -2032,7 +2032,6 @@
         "thc.runtime.FloatingByteOffsetTest",
         "thc.runtime.ManagedWeakTest","thc.runtime.AddressIdentityNativeTest",
         "thc.runtime.Explicit64ArrayTest",
-        "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
         "thc.runtime.OriginalOpenTest",
