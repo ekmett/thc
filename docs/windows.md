@@ -60,7 +60,7 @@ Each group builds its own prerequisites. Driver prepares `windows-driver` and
 entry and exact runtime publication in both handoff modes. Code pages use the
 selected, validated `GHC_PKG`, reusing Driver's pinned-Core acquisition. Runtime
 prepares `windows-smoke`, runs the package-native and lock suites, and retains
-the remaining smoke, tuple, array, allocation, directory and ABI checks. Its
+the remaining smoke, tuple, bit-primop, array, allocation, directory and ABI checks. Its
 smoke tasks do not require a driver fixture or acquire pinned Core. All runs
 both groups and retains their separate smoke and combined focused reports.
 

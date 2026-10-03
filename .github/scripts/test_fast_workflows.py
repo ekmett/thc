@@ -96,6 +96,12 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("if ($testDriver)", script)
         self.assertIn("if ($testRuntime)", script)
         self.assertIn("foreach ($mode in @('testDefault', 'testDense'))", script)
+        focused = script.split('$focusedTests = @()', 1)[1]
+        runtime = focused.split('if ($testRuntime) {', 1)[1].split('\n    }', 1)[0]
+        self.assertIn("Invoke-ThcTool $fixture @('bit')", runtime)
+        self.assertIn("'thc.runtime.BitPrimopsTest'", runtime)
+        driver = focused.split('if ($testDriver) {', 1)[1].split('\n    }', 1)[0]
+        self.assertNotIn('BitPrimopsTest', driver)
         codepages = (project / 't/haskell-fixtures/WindowsCodePageFixtures.hs').read_text()
         self.assertIn('lookupEnv "GHC_PKG"', codepages)
 

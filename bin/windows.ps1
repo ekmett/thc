@@ -68,7 +68,9 @@ try {
     }
     if ($testRuntime) {
         Invoke-ThcTool $fixture @('tuple-arithmetic')
-        $focusedTests += @('thc.runtime.TupleArithmeticTest', 'thc.runtime.WordCarryTest')
+        Invoke-ThcTool $fixture @('bit')
+        $focusedTests += @('thc.runtime.TupleArithmeticTest', 'thc.runtime.WordCarryTest',
+            'thc.runtime.BitPrimopsTest')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava
