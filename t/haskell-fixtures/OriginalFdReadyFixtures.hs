@@ -2,12 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 -- Fixture rationale (074 original-fd-ready)
--- Purpose: Check descriptor readiness integrates with blocking/cancellation semantics.
--- Produces/consumed result: Declaration/Core fixtures, oracle.json and ABI controls.
--- Cost and overlap: Keep the runtime waiting boundary. Avoid duplicating readiness in fd-
---   ready, handle-readiness and process scheduling; share controls and acquisition.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Purpose: Check genuine safe/unsafe fdReady declarations preserve descriptor state,
+--   file position and errno, with explicit rejection of unsupported waits and bad ABIs.
+-- Inputs: OriginalFdReadyAudit.hs/Native.hs, installed FD.hi and selected GHC
+--   libraries, compiler/compact tools and auditor.
+-- Produces: Native oracle, original/adapted CBDs, 168 observations, ten malformed
+--   CBDs, eleven batched audit reports, command logs and manifest; CMake owns them.
+-- Cost and overlap: No whole-package acquisition. One native run covers regular
+--   file/EOF/closed/ignored descriptor cases; higher-level Handle tests do not
+--   replace this exact foreign ABI, state and errno boundary.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 074.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -30,7 +33,6 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.IORef (newIORef, writeIORef)
 import Data.List (isPrefixOf, nubBy, sort, sortOn)
-import qualified Data.Map.Strict as Map
 import Data.Traversable (mapAccumL)
 import FixtureSupport
 import GHC hiding (entry, exprType)
@@ -225,11 +227,10 @@ prepareOriginalFdReady root = do
         (typeEnvTyCons (md_types (interfaceDetails template))) adapted (interfaceForeign template)
       BS.writeFile (root </> originalPath) originalBytes
       BS.writeFile (root </> adaptedCompact) adaptedBytes
-  audits <- forM entries $ \entry -> do
-    let output = directory </> entry ++ ".audit.json"
-    audited <- execute ("audit-" ++ entry) [] "python3"
-      ["bin/audit-core.py", adaptedCompact, "--entry", "main:OriginalFdReadyAudit." ++ entry, "--output", output]
-    pure (entry, output, audited)
+  let auditPath = directory </> "audit.json"
+      auditEntries = concat [["--entry", "main:OriginalFdReadyAudit." ++ entry] | entry <- entries]
+  audited <- execute "audit" [] "python3"
+    (["bin/audit-core.py", adaptedCompact, "--output", auditPath] ++ auditEntries)
   adaptedModel <- BS.readFile (root </> adaptedCompact) >>= either die pure . readModuleValue
   createDirectoryIfMissing True (root </> directory </> "negative")
   controls <- forM negativeCases $ \(label, change) -> do
@@ -237,23 +238,27 @@ prepareOriginalFdReady root = do
         mutated = rewriteReady change adaptedModel
     unless (mutated /= adaptedModel) (die "Readiness negative control did not mutate the descriptor")
     _ <- writeModuleValue (root </> compact) mutated
-    rejected <- forM entries $ \entry -> do
-      let output = directory </> "negative" </> label ++ "-" ++ entry ++ ".audit.json"
-      audited <- runLoggedExpect 1 180 root (directory </> "logs") ("negative-" ++ label ++ "-" ++ entry) [] "python3"
-        ["bin/audit-core.py", compact, "--entry", "main:OriginalFdReadyAudit." ++ entry, "--output", output]
-      report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
-      unless (jsonField "accepted" report == Bool False &&
-        case jsonField "issues" report of
-          Array issues -> any ((== String "foreign-call") . jsonField "code") issues
-          _ -> False) (die "Readiness negative control did not reject the original foreign descriptor")
-      pure (output, audited)
-    pure (compact : map fst rejected, map snd rejected)
+    let output = directory </> "negative" </> label ++ ".audit.json"
+    rejected <- runLoggedExpect 1 180 root (directory </> "logs") ("negative-" ++ label) [] "python3"
+      (["bin/audit-core.py", compact, "--output", output] ++ auditEntries)
+    report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
+    -- A joint failure alone is insufficient: each entry must reach a rejected
+    -- foreign descriptor, preserving both safe and unsafe negative controls.
+    let rejects entry = case jsonField "issues" report of
+          Array issues -> any (\issue -> jsonField "code" issue == String "foreign-call" &&
+            case jsonField "reachableVia" issue of
+              Array path -> toJSON ("main:OriginalFdReadyAudit." ++ entry) `elem` path
+              _ -> False) issues
+          _ -> False
+    unless (jsonField "accepted" report == Bool False && all rejects entries)
+      (die "Readiness negative control did not reject both original foreign descriptors")
+    pure ([compact, output], rejected)
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
   compactFiles <- listDirectory (root </> "src/cbd/THC/Compact")
   scriptFiles <- listDirectory (root </> "bin")
-  let negatives = concatMap snd controls
+  let negatives = map snd controls
       commands = [version, info, libdirResult, importsResult, compiled, observed] ++
-        [command | (_,_,command) <- audits] ++ negatives
+        [audited] ++ negatives
       inputs = sort $ [source, driver, "t/haskell-fixtures/OriginalFdReadyFixtures.hs",
         "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "src/core-symbols/THC/CoreSymbols.hs", "thc.cabal",
@@ -261,8 +266,7 @@ prepareOriginalFdReady root = do
         ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
         ["src/cbd/THC/Compact" </> name | name <- compactFiles, takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
-      artifacts = [oracle, originalPath, adaptedCompact, binary,
-        directory </> "native/private-file"] ++ [path | (_,path,_) <- audits] ++
+      artifacts = [oracle, originalPath, adaptedCompact, binary, auditPath] ++
         concatMap fst controls ++ concatMap commandArtifacts commands
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -272,5 +276,5 @@ prepareOriginalFdReady root = do
      "negativeControls" .= length negativeCases,
      "negativeControlLabels" .= map fst negativeCases,
      "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
-     "audits" .= Map.fromList [(entry,path) | (entry,path,_) <- audits], "commands" .= map commandRecord commands]
-  putStrLn "original-fd-ready:168 native observations, actual original FCallIds,2 strict entries,10 controls (20 rejected audits)"
+     "audit" .= auditPath, "commands" .= map commandRecord commands]
+  putStrLn "original-fd-ready:168 native observations, actual original FCallIds,2 strict entries,10 controls rejecting both entries"

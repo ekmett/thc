@@ -810,17 +810,15 @@ ORIGINAL_FD_READY_NEGATIVES = (
     "wrong-arity", "wrong-supplied-arity", "signed-cbool",
     "machine-timeout", "scalar-state", "machine-result",
 )
-ORIGINAL_FD_READY_AUDIT_NEGATIVES = ORIGINAL_FD_READY_NEGATIVES
 ORIGINAL_FD_READY_LOGS = (
     "ghc-version", "ghc-info", "ghc-libdir", "ghc-internal-imports", "native-build", "native-observations",
-) + tuple(f"audit-{entry}" for entry in ORIGINAL_FD_READY_ENTRIES) + tuple(
-    f"negative-{label}-{entry}" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES)
+    "audit",
+) + tuple(f"negative-{label}" for label in ORIGINAL_FD_READY_NEGATIVES)
 ORIGINAL_FD_READY_OUTPUTS = frozenset("build/original-fd-ready/" + name for name in (
     "manifest.json", "oracle.json", "OriginalFDDeclarations.cbd",
-    "OriginalFdReadyAudit.cbd", "native/oracle", "native/private-file",
-    *(f"{entry}.audit.json" for entry in ORIGINAL_FD_READY_ENTRIES),
-    *(f"negative/{label}.cbd" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES),
-    *(f"negative/{label}-{entry}.audit.json" for label in ORIGINAL_FD_READY_AUDIT_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES),
+    "OriginalFdReadyAudit.cbd", "native/oracle", "audit.json",
+    *(f"negative/{label}.cbd" for label in ORIGINAL_FD_READY_NEGATIVES),
+    *(f"negative/{label}.audit.json" for label in ORIGINAL_FD_READY_NEGATIVES),
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_FD_READY_LOGS for suffix in ("stdout", "stderr", "command.json")),
 ))
 
@@ -1007,7 +1005,7 @@ def fd_ready_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
             manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(ORIGINAL_FD_READY_ENTRIES),
             "Invalid original fdReady manifest")
-    for field, expected in (("nativeRows", 168), ("negativeAudits", 20),
+    for field, expected in (("nativeRows", 168), ("negativeAudits", 10),
                             ("negativeControls", 10)):
         require(type(manifest.get(field)) is int and manifest[field] == expected,
                 "Invalid original fdReady proof count: " + field)

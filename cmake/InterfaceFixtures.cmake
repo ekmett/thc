@@ -119,3 +119,34 @@ add_custom_command(OUTPUT ${unix_outputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate original unix Core and native descriptor/environment observations")
 add_custom_target(fixture-unix-libc DEPENDS ${unix_outputs})
+
+# 074: actual FD.hi declarations and a private native template, not whole-package
+# Core acquisition. Each malformed CBD gets one audit covering both safety modes.
+set(ready_out "${PROJECT_SOURCE_DIR}/build/original-fd-ready")
+set(ready_outputs)
+foreach(name manifest.json oracle.json OriginalFDDeclarations.cbd OriginalFdReadyAudit.cbd native/oracle audit.json)
+  list(APPEND ready_outputs "${ready_out}/${name}")
+endforeach()
+set(ready_labels ghc-version ghc-info ghc-libdir ghc-internal-imports native-build native-observations audit)
+foreach(control wrong-unit non-function wrong-convention interruptible wrong-arity
+    wrong-supplied-arity signed-cbool machine-timeout scalar-state machine-result)
+  list(APPEND ready_outputs "${ready_out}/negative/${control}.cbd" "${ready_out}/negative/${control}.audit.json")
+  list(APPEND ready_labels "negative-${control}")
+endforeach()
+foreach(label IN LISTS ready_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND ready_outputs "${ready_out}/logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+add_custom_command(OUTPUT ${ready_outputs}
+  BYPRODUCTS "${ready_out}/native/Main.hi" "${ready_out}/native/Main.o"
+    "${ready_out}/native/OriginalFdReadyAudit.hi" "${ready_out}/native/OriginalFdReadyAudit.o"
+  COMMAND ${fixture_env} "${fixtures_exe}" original-fd-ready
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalFdReadyAudit.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalFdReadyAuditNative.hs"
+    "${PROJECT_SOURCE_DIR}/src/core-symbols/THC/CoreSymbols.hs"
+    ${tool_sources} ${cabal_inputs} ${audit_inputs} ${toolchain_inputs}
+    "${fixtures_exe}" "${compact_exe}"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate original readiness Core, native observations and ABI controls")
+add_custom_target(fixture-original-fd-ready DEPENDS ${ready_outputs})

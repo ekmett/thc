@@ -46,8 +46,8 @@ class OriginalFdReadyNativeTest {
                 assertEquals(originalHead.get(0),adaptedHead.get(0)); assertEquals(originalHead.get(2),adaptedHead.get(2));
                 assertEquals(((Map<?,?>)matched.getFirst().get(6)).get("foreignCall"),descriptor);
             }
-            var report=document(name+".audit.json");
-            assertEquals(true,report.get("accepted")); assertEquals(List.of(entryId(name)),report.get("roots"));
+            var report=document("audit.json");
+            assertEquals(true,report.get("accepted")); assertEquals(entries.stream().map(OriginalFdReadyNativeTest::entryId).toList(),report.get("roots"));
             for(var field:List.of("issues","missingGlobals","runtimeExternals")) assertEquals(List.of(),report.get(field),field);
             var auditedCalls=(List<Map<String,Object>>)report.get("foreignCalls");
             assertTrue(auditedCalls.stream().anyMatch(call->Objects.equals("fdReady",call.get("symbol"))),name);
@@ -117,8 +117,9 @@ class OriginalFdReadyNativeTest {
         var labels=List.of("wrong-unit","non-function","wrong-convention","interruptible","wrong-arity","wrong-supplied-arity","signed-cbool","machine-timeout","scalar-state","machine-result");
         assertEquals(labels,document("manifest.json").get("negativeControlLabels"));
         for(var label:labels) {
-            for(var entry:entries) { var report=document("negative/"+label+"-"+entry+".audit.json"); assertEquals(false,report.get("accepted")); assertEquals(List.of(entryId(entry)),report.get("roots"));
-                var issues=(List<Map<String,Object>>)report.get("issues"); assertTrue(issues.stream().anyMatch(issue->Objects.equals("foreign-call",issue.get("code"))),label+"/"+entry);
+            var report=document("negative/"+label+".audit.json"); assertEquals(false,report.get("accepted")); assertEquals(entries.stream().map(OriginalFdReadyNativeTest::entryId).toList(),report.get("roots"));
+            for(var entry:entries) {
+                var issues=(List<Map<String,Object>>)report.get("issues"); assertTrue(issues.stream().anyMatch(issue->Objects.equals("foreign-call",issue.get("code")) && ((List<?>) issue.get("reachableVia")).contains(entryId(entry))),label+"/"+entry);
             }
         }
     }

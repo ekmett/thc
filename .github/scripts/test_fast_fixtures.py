@@ -242,7 +242,7 @@ class FixturePreparationTest(unittest.TestCase):
             path.write_text('{}\n')
             artifacts[artifact] = fast_fixtures._digest(path)
         receipt = dict(schema=1, ghc='9.14.1', entries=list(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_ENTRIES),
-                       nativeRows=168, negativeAudits=20, negativeControls=10,
+                       nativeRows=168, negativeAudits=10, negativeControls=10,
                        negativeControlLabels=list(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_NEGATIVES),
                        artifactHashes=artifacts)
         path = self.root / name

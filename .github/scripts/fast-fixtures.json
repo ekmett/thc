@@ -575,6 +575,7 @@
       "sources": ["t/fixtures/compiler/OriginalPosixStatAudit.hs", "t/fixtures/compiler/OriginalPosixStatNative.hs", "t/fixtures/compiler/OriginalPathStatAudit.hs", "t/haskell-fixtures/OriginalPathStatFixtures.hs", "t/fixtures/compiler/OriginalPathModeAudit.hs", "t/haskell-fixtures/OriginalPathModeFixtures.hs", "t/fixtures/compiler/OriginalPathLinkAudit.hs", "t/haskell-fixtures/OriginalPathLinkFixtures.hs", "t/haskell-fixtures/OriginalPosixStatFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/OriginalPathAccessAudit.hs", "t/haskell-fixtures/OriginalPathAccessFixtures.hs", "t/fixtures/compiler/OriginalUnlinkAtAudit.hs", "t/haskell-fixtures/OriginalUnlinkAtFixtures.hs", "t/fixtures/compiler/OriginalFstatAtAudit.hs", "t/haskell-fixtures/OriginalFstatAtFixtures.hs", "t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs", "t/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs", "t/fixtures/compiler/OriginalDirectoryStreamsAudit.hs", "t/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs", "t/fixtures/compiler/OriginalDirectoryPathsAudit.hs", "t/haskell-fixtures/OriginalDirectoryPathsFixtures.hs"]
     },
     "original-fd-ready": {
+      "cmakeTarget": "fixture-original-fd-ready",
       "junit": ["thc.runtime.OriginalFdReadyNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fd-ready"]}],
       "outputs": ["build/original-fd-ready"],

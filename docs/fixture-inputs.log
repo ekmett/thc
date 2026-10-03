@@ -2515,12 +2515,14 @@ Consumer reads receipts/Core/declarations/oracle/audits. The selected interfaces
 
 074  original-fd-ready
 Fixture rationale (074 original-fd-ready)
-Purpose: Check descriptor readiness integrates with blocking/cancellation semantics.
-Produces/consumed result: Declaration/Core fixtures, oracle.json and ABI controls.
-Cost and overlap: Keep the runtime waiting boundary. Avoid duplicating readiness in fd-
-  ready, handle-readiness and process scheduling; share controls and acquisition.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Purpose: Check genuine safe/unsafe fdReady declarations preserve descriptor state,
+  file position and errno, with explicit rejection of unsupported waits and bad ABIs.
+Produces/consumed result: Native oracle, original/adapted CBDs, 168 observations,
+  ten malformed CBDs, eleven batched audits, command logs and manifest.
+Cost and overlap: No whole-package acquisition. One native run covers regular-file,
+  EOF, closed and ignored descriptors. Higher-level Handle tests do not replace this
+  foreign ABI, state and errno boundary. Each negative report must reject both entries.
+Build status: Admitted as fixture-original-fd-ready in cmake/InterfaceFixtures.cmake.
 
 Producer: t/haskell-fixtures/OriginalFdReadyFixtures.hs.
 Consumer: thc.runtime.OriginalFdReadyNativeTest.
@@ -2530,24 +2532,24 @@ IN: t/fixtures/compiler/OriginalFdReadyAudit.hs, OriginalFdReadyAuditNative.hs;
 Under build/original-fd-ready/:
   native/oracle, native/OriginalFdReadyAudit.hi: IN both sources/native GHC with
     -fwrite-if-simplified-core, ghc-internal/unix; OUT executable/interface/objects.
-  native/private-file: IN oracle execution's scenario data; OUT recorded file.
+  native/private-file: private scratch for oracle scenarios, removed after observation.
   oracle.json: IN oracle stdout (168 rows); OUT named readiness observations.
   OriginalFDDeclarations.cbd: IN installed FD.hi unfoldings; OUT declaration subset.
   OriginalFdReadyAudit.cbd: IN generated template .hi + installed safe/unsafe FCallIds;
     OUT adapted executable Core.
-  <originalReadySafe|originalReadyUnsafe>.audit.json: IN adapted CBD/auditor;
-    OUT two reports.
+  audit.json: IN adapted CBD/auditor; OUT one report for both entries.
   negative/<label>.cbd: IN adapted CBD decoded/mutated/reencoded by built compact
     library; OUT ten descriptor controls. Labels: wrong-unit,non-function,
     wrong-convention,interruptible,wrong-arity,wrong-supplied-arity,signed-cbool,
     machine-timeout,scalar-state,machine-result.
-  negative/<label>-<entry>.audit.json: IN control CBD/auditor/each entry;
-    OUT 20 rejected reports.
+  negative/<label>.audit.json: IN control CBD/auditor/both entries;
+    OUT ten rejected reports; reachableVia evidence must include both entry paths.
   logs/: ghc-version/info/libdir,ghc-internal-imports,native-build/observations,
-    audit-entry,negative-label-entry; OUT log triplets.
-  manifest.json: IN executable,private-file,oracle,all CBDs/audits/logs/source receipt;
+    audit,negative-label; OUT log triplets.
+  manifest.json: IN executable,oracle,all CBDs/audits/logs/source receipt;
     OUT hashes. Consumer reads these receipts/CBDs/oracle/reports, creates own files.
-Old manifest not invalidated; consumed installed FD.hi omitted from hashes.
+CMake tracks installed FD.hi and its selected interface/native-library closure as
+  toolchain inputs, plus Main and template .hi/.o as native build byproducts.
 
 075  original-posix-stat (ten producers behind one indexed group)
 Fixture rationale (075 original-posix-stat)

@@ -19,6 +19,7 @@ import Foreign.C.Error (Errno(..), getErrno)
 import GHC.Exts (Int(I#))
 import GHC.Internal.System.Posix.Internals (c_close)
 import System.Environment (getArgs)
+import System.Directory (removeFile)
 import System.IO (SeekMode(SeekFromEnd))
 import System.Posix.IO (OpenMode(..), closeFd, defaultFileFlags, fdSeek, openFd)
 import System.Posix.Types (Fd(..))
@@ -53,4 +54,5 @@ main = do
              closeFd $ \fd -> do
                if scenario == "eof" then fdSeek fd SeekFromEnd 0 >> pure () else pure ()
                observe fd
+  removeFile privatePath
   print (concatMap (concatMap (concatMap concat)) rows)
