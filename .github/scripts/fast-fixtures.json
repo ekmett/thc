@@ -362,6 +362,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "ghc-bco": {
+      "cmakeTarget": "fixture-ghc-bco",
       "junit": ["thc.runtime.GhcBCOTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "ghc-bco"]}],
       "outputs": ["build/ghc-bco"],
@@ -478,6 +479,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-errno": {
+      "cmakeTarget": "fixture-original-errno",
       "junit": ["thc.runtime.OriginalErrnoTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-errno"]}],
       "outputs": ["build/original-errno"],

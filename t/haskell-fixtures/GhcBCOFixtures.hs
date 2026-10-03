@@ -5,11 +5,9 @@
 -- Purpose: Check the runtime contract for GHC bytecode-object primops and unsupported
 --   cases.
 -- Produces/consumed result: Two CBDs consumed by GhcBCOTest.
--- Cost and overlap: A small behavior/rejection test can be useful. Seventy auditor
---   subprocesses for two CBDs are not justified; collapse duplicate reports before
---   admission.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Cost and overlap: Native results exercise BCO execution, sharing and rejection
+--   boundaries. One multi-entry audit per stage covers the exported entry set.
+-- Build status: cmake/AuditedFixtures.cmake owns the named files; no directory scan.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 055.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -60,18 +58,17 @@ prepareGhcBCO root = do
     exported <- runLogged 180 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    audits <- fmap concat $ forM entries $ \entry -> do
-      let report = directory </> stage </> (entry ++ "-audit.json")
-      audited <- runLogged 30 root logs (stage ++ "-audit-" ++ entry) [] "python3"
-        ["bin/audit-core.py", "--entry", "main:GhcBCO." ++ entry, "--output", report, core </> "GhcBCO.cbd"]
-      bytes <- BS.readFile (root </> report)
-      case decodeStrict' bytes of
-        Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
-          KeyMap.lookup "issues" value == Just (Array mempty),
-          KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
-        _ -> die ("Strict BCO audit rejected " ++ entry)
-      pure (report : commandArtifacts audited)
-    pure ((core </> "GhcBCO.cbd") : commandArtifacts exported ++ audits)
+    let report = directory </> stage </> "audit.json"
+    audited <- runLogged 30 root logs (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py", "--output", report, core </> "GhcBCO.cbd"] ++
+       concatMap (\entry -> ["--entry", "main:GhcBCO." ++ entry]) entries)
+    bytes <- BS.readFile (root </> report)
+    case decodeStrict' bytes of
+      Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
+        KeyMap.lookup "issues" value == Just (Array mempty),
+        KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
+      _ -> die ("Strict BCO audit rejected " ++ stage)
+    pure ([core </> "GhcBCO.cbd", report] ++ commandArtifacts exported ++ commandArtifacts audited)
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = [source, driver, "thc.cabal", "t/haskell-fixtures/Main.hs",
@@ -86,4 +83,4 @@ prepareGhcBCO root = do
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "stages" .= stages, "arguments" .= ([-2,0,7] :: [Int]), "native" .= values,
      "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes]
-  putStrLn ("ghc-bco: " ++ show (length values) ++ " native observations and " ++ show (2 * length entries) ++ " original pre/post Core audits")
+  putStrLn ("ghc-bco: " ++ show (length values) ++ " native observations and two multi-entry pre/post Core audits")

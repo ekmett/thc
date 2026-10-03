@@ -2006,11 +2006,9 @@ Fixture rationale (055 ghc-bco)
 Purpose: Check the runtime contract for GHC bytecode-object primops and unsupported
   cases.
 Produces/consumed result: Two CBDs consumed by GhcBCOTest.
-Cost and overlap: A small behavior/rejection test can be useful. Seventy auditor
-  subprocesses for two CBDs are not justified; collapse duplicate reports before
-  admission.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Cost and overlap: Compare BCO behavior/sharing with native GHC and retain malformed
+  bytecode rejection. Two multi-entry audits cover the same 35 entries per stage.
+Build status: Named files owned by cmake/AuditedFixtures.cmake.
 
 Producer: t/haskell-fixtures/GhcBCOFixtures.hs. Consumer: thc.runtime.GhcBCOTest.
 IN: t/fixtures/core/GhcBCO.hs, t/fixtures/compiler/GhcBCONative.hs;
@@ -2019,14 +2017,16 @@ Under build/ghc-bco/:
   native/oracle: IN sources/native packages; OUT executable/intermediates.
   commands/native-run.stdout: IN oracle no stdin; OUT 105 integer observations.
   <pre|post>/core/GhcBCO.cbd: IN Core source/exporter/stage option; OUT CBD/ghc/.
-  <stage>/<entry>-audit.json: IN stage CBD/auditor/each of 35 producer entries;
-    OUT 70 separate reports (and 70 auditor processes).
-  commands/: ghc-version,native-build/run,pre/post-export,stage-audit-entry;
+  <stage>/audit.json: IN stage CBD/auditor/all 35 producer entries;
+    OUT one report per stage (two auditor processes total).
+  commands/: ghc-version,native-build/run,pre/post-export,stage-audit;
     OUT standard log triplets.
   manifest.json: IN native stdout parsed into values, CBD/reports/logs/source
     hashes; OUT embedded native results and hashes. Executable not hashed.
 Consumer reads manifest/receipt paths/CBDs. Old manifest not invalidated at start.
-Auditor table omissions recur; consider one multi-entry audit per stage.
+CMake declares the auditor capability/ABI tables and tool installation inputs.
+Consumer checks BCO creation is exercised without fixing primitive multiplicities
+  or compiled-root entry counts.
 
 056  delimited-continuations
 Fixture rationale (056 delimited-continuations)
@@ -2282,8 +2282,7 @@ Produces/consumed result: CBDs and oracle.json derived from native observations.
 Cost and overlap: Keep the FFI errno boundary, especially thread/context isolation.
   Consolidate into package FFI integration; do not test the system errno constants
   themselves.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: Named files owned by cmake/AuditedFixtures.cmake.
 
 Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalErrno.
 Consumer: thc.runtime.OriginalErrnoTest; Linux/macOS LP64.
@@ -2301,8 +2300,8 @@ Under build/original-errno/:
   logs/: ghc-version/info,native-build/run,pre/post-export/audit-originalResetErrno;
     OUT log triplets. manifest.json consumes all above/source hashes.
 Tests read manifest/receipts/CBD/audits/oracle. Unsupported hosts get only negative
-  manifest. No whole installed acquisition here. Exact FCall count assertion also
-  needs distinction from the actual errno transport/semantics contract.
+  manifest. No whole installed acquisition here. Consumer checks behavior and first compiled execution without requiring exact
+  FCall counts, lambda nesting or compiled-root entry counts.
 
 066  original-process-identity
 Fixture rationale (066 original-process-identity)

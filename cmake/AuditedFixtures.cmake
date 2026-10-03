@@ -435,3 +435,35 @@ audited_fixture(pinned-addresses PinnedAddressAudit
   SOURCES t/fixtures/compiler/PinnedAddressAudit.hs t/fixtures/compiler/PinnedAddressAuditNative.hs
     src/tools/primops/PrimopTools.hs
   OBJECT_DIRS native pre/ghc post/ghc OUTPUTS ${pinned_outputs})
+
+# 065: errno belongs to the guest context/carrier and survives foreign calls.
+# Compile a five-row native reference and the real installed reset/get wrappers.
+set(errno_outputs manifest.json oracle.json native/oracle native/observations.txt)
+set(errno_labels ghc-version ghc-info native-build native-run)
+foreach(stage pre post)
+  list(APPEND errno_outputs "${stage}/core/OriginalErrnoAudit.cbd"
+    "${stage}/core/THC.InterfaceClosure.cbd" "${stage}/originalResetErrno.audit.json")
+  list(APPEND errno_labels "${stage}-export" "${stage}-audit-originalResetErrno")
+endforeach()
+foreach(label IN LISTS errno_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND errno_outputs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(original-errno OriginalErrnoAudit
+  SOURCES t/fixtures/compiler/OriginalErrnoAudit.hs t/fixtures/compiler/OriginalErrnoNative.hs
+  OBJECT_DIRS pre/ghc post/ghc
+  OUTPUTS ${errno_outputs})
+
+# 055: BCO semantics against native GHC; one multi-entry audit for each CBD.
+set(bco_outputs manifest.json native/oracle pre/core/GhcBCO.cbd post/core/GhcBCO.cbd
+  pre/audit.json post/audit.json)
+foreach(label ghc-version native-build native-run pre-export pre-audit post-export post-audit)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND bco_outputs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(ghc-bco GhcBCO
+  SOURCES t/fixtures/core/GhcBCO.hs t/fixtures/compiler/GhcBCONative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS ${bco_outputs})
