@@ -6,7 +6,8 @@
 
 The runner must honor mode=full, run both handoff modes, and verify fresh JUnit
 coverage for EVERY selected class (not merely a nonempty aggregate report).
-Commands are argv arrays, never shell source. No budget can remove changed tests.
+Commands are argv arrays, never shell source. Explicit CI cadence defers owned
+coverage to scheduled runs; it does not report those tests as executed.
 """
 import argparse
 import ast
@@ -549,7 +550,7 @@ def additive_full_core_tests(before, after, statuses, old_paths):
         return None
 
 
-def select(repo, base_ref, head_ref):
+def select(repo, base_ref, head_ref, *, cadence=None):
     repo = Path(repo).resolve()
     reasons = []
     def widen(code, path=None):
@@ -634,7 +635,7 @@ def select(repo, base_ref, head_ref):
             widen("executed-selector-mismatch")
         policy_hash = digest.hexdigest()
         policy = json.loads((repo / POLICY).read_text())
-        if set(policy) != {"schema", "smoke", "leafSources", "owners", "primopFamilies", "automation"} or type(policy["schema"]) is not int or policy["schema"] != 2:
+        if set(policy) != {"schema", "smoke", "leafSources", "owners", "primopFamilies", "automation", "cadence"} or type(policy["schema"]) is not int or policy["schema"] != 2:
             raise SelectionError("invalid policy schema")
         if any(not isinstance(policy[key], dict) for key in ("leafSources", "owners", "primopFamilies", "automation")):
             raise SelectionError("invalid ownership map")
@@ -655,6 +656,15 @@ def select(repo, base_ref, head_ref):
                 raise SelectionError("invalid Haskell test suite")
         if not policy["smoke"]["junit"] or not policy["smoke"]["python"]:
             raise SelectionError("empty smoke")
+        scheduled = policy["cadence"]
+        if not isinstance(scheduled, dict) or set(scheduled) != {"hourlyJunit", "nightlyFixtures"}:
+            raise SelectionError("invalid cadence policy")
+        hourly, nightly = scheduled["hourlyJunit"], scheduled["nightlyFixtures"]
+        if (not isinstance(hourly, list) or any(not isinstance(c, str) or c not in classes for c in hourly)
+                or len(hourly) != len(set(hourly)) or set(hourly) & set(policy["smoke"]["junit"])
+                or not isinstance(nightly, list) or any(not isinstance(n, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", n) for n in nightly)
+                or len(nightly) != len(set(nightly))):
+            raise SelectionError("invalid scheduled tests")
         if any(path not in files or not path.startswith("src/main/") for path in policy["leafSources"]):
             raise SelectionError("nonexistent or nonproduction leaf source")
         if any(not isinstance(path, str) or not path or path.startswith("/") or ".." in PurePosixPath(path).parts
@@ -819,7 +829,7 @@ def select(repo, base_ref, head_ref):
     if not existing:
         widen("selected-test-file-missing-or-symlinked")
         mode = "full"
-    return dict(schema=1, mode=mode,
+    result = dict(schema=1, mode=mode,
                 runnable=bool(selected_junit and selected_python and existing
                               and (not polyglot_required or (polyglot_classes and polyglot_inventory_complete))),
                 base=base, head=head, requestedBase=base_ref, requestedHead=head_ref,
@@ -835,30 +845,84 @@ def select(repo, base_ref, head_ref):
                 python=dict(commands=[["python3", path] for path in sorted(selected_python)],
                             files=sorted(selected_python), count=len(selected_python)),
                 haskell=dict(suites=sorted(selected_haskell), count=len(selected_haskell), compileTargets=compile_targets))
-
-
-def groups(repo, *, system=None):
-    """Partition the complete ordinary inventory using its sole fixture manifest."""
+    if cadence is None:
+        return result
+    unsafe = {"invalid-selection-policy", "policy-checkout-mismatch", "executed-selector-mismatch",
+              "dirty-checkout", "head-checkout-mismatch", "missing-head"}
+    if (cadence not in ("commit", "hourly", "nightly") or not result["runnable"]
+            or not inventory_complete or policy is None or any(r["code"] in unsafe for r in reasons)):
+        raise SelectionError("Cannot apply cadence to an invalid selection")
     import fast_fixtures
-    inventory = select(repo, "", "HEAD")
-    if not inventory["runnable"] or not inventory["inventoryComplete"]:
-        raise SelectionError("Incomplete grouped JUnit inventory")
-    manifest, owners = fast_fixtures._manifest(Path(repo))
-    classes = set(inventory["junit"]["classes"])
-    if classes != set(owners):
-        raise SelectionError(f"Fixture ownership mismatch: unmapped={sorted(classes-set(owners))}, stale={sorted(set(owners)-classes)}")
-    # A shared expensive provider is acquired once for its connected consumers.
+    manifest, owners = fast_fixtures._manifest(repo)
+    if set(owners) != set(classes):
+        raise SelectionError("Incomplete fixture ownership for cadence selection")
+    assigned = cadence_assignments(manifest, owners, policy)
+    deferred = {scope: {"junit": sorted(c for c in selected_junit if assigned[c] == scope)}
+                for scope in ("commit", "hourly", "nightly") if scope != cadence}
+    if polyglot_required and cadence != "nightly":
+        deferred["nightly"]["polyglot"] = sorted(polyglot_classes)
+        result["polyglot"] = dict(required=False, classes=[])
+    actual = sorted(c for c in selected_junit if assigned[c] == cadence)
+    if not actual:
+        raise SelectionError("Empty cadence selection")
+    result.update(mode="narrow", requestedMode=mode, cadence=cadence, deferred=deferred,
+                  junit=dict(patterns=actual, classes=actual,
+                             sourceFiles=sorted({classes[c] for c in actual}), count=len(actual)))
+    return result
+
+
+def fixture_components(manifest):
     components = {name: {name} for name in manifest["groups"]}
     for name, group in manifest["groups"].items():
         for dep in group.get("requires", []):
             merged = components[name] | components[dep]
             for member in merged:
                 components[member] = merged
-    result = {min(component): sorted({c for name in component for c in manifest["groups"][name]["junit"]})
+    return components
+
+
+def cadence_assignments(manifest, owners, policy):
+    scheduled = policy["cadence"]
+    nightly = set(scheduled["nightlyFixtures"])
+    if nightly - set(manifest["groups"]):
+        raise SelectionError("Unknown nightly fixture: " + repr(sorted(nightly - set(manifest["groups"]))))
+    components = fixture_components(manifest)
+    nightly = {name for name, component in components.items() if component & nightly}
+    assigned = {name: "nightly" if owner in nightly else
+                "hourly" if name in scheduled["hourlyJunit"] else "commit"
+                for name, owner in owners.items()}
+    if any(assigned.get(name) != "commit" for name in policy["smoke"]["junit"]):
+        raise SelectionError("Committed smoke must remain per-commit")
+    return assigned
+
+
+def groups(repo, *, system=None, cadence=None):
+    """Partition the complete ordinary inventory using its sole fixture manifest."""
+    import fast_fixtures
+    inventory = select(repo, "", "HEAD")
+    if not inventory["runnable"] or not inventory["inventoryComplete"]:
+        raise SelectionError("Incomplete grouped JUnit inventory")
+    if cadence is not None and any(r["code"] in {
+            "invalid-selection-policy", "policy-checkout-mismatch", "executed-selector-mismatch",
+            "dirty-checkout", "head-checkout-mismatch", "missing-head"} for r in inventory["reasons"]):
+        raise SelectionError("Cannot apply cadence to an invalid inventory")
+    manifest, owners = fast_fixtures._manifest(Path(repo))
+    classes = set(inventory["junit"]["classes"])
+    if classes != set(owners):
+        raise SelectionError(f"Fixture ownership mismatch: unmapped={sorted(classes-set(owners))}, stale={sorted(set(owners)-classes)}")
+    # A shared expensive provider is acquired once for its connected consumers.
+    components = fixture_components(manifest)
+    if cadence is not None and cadence not in ("commit", "hourly", "nightly"):
+        raise SelectionError("Unknown cadence: " + cadence)
+    policy = json.loads((Path(repo) / POLICY).read_text())
+    assigned = cadence_assignments(manifest, owners, policy)
+    included = {c for c in classes if cadence is None or assigned[c] == cadence}
+    result = {min(component): sorted({c for name in component for c in manifest["groups"][name]["junit"] if c in included})
               for component in components.values()
               if system is None or any(system in manifest["groups"][name].get("ciPlatforms", [system])
                                        for name in component)}
-    free = sorted(manifest["fixtureFreeJunit"])
+    result = {name: tests for name, tests in result.items() if tests}
+    free = sorted(set(manifest["fixtureFreeJunit"]) & included)
     for offset in range(0, len(free), 50):
         name = "fixture-free-" + free[offset].rsplit(".", 1)[-1].lower()
         if name in result:
@@ -867,16 +931,16 @@ def groups(repo, *, system=None):
     return result
 
 
-def group_matrix(repo):
+def group_matrix(repo, *, cadence=None):
     """Share worker setup while keeping each original group independently runnable."""
-    names = list(groups(repo, system=platform.system()))
+    names = list(groups(repo, system=platform.system(), cadence=cadence))
     count = min(20, len(names))
     return {"include": [{"batch": f"batch-{index+1:02d}", "groups": names[index::count]}
                         for index in range(count)]}
 
 
-def group_selection(repo, name):
-    selected = groups(repo)
+def group_selection(repo, name, *, cadence=None):
+    selected = groups(repo, cadence=cadence)
     if name not in selected:
         raise SelectionError("Unknown CI group: " + name)
     # Repeat the process-mode proof, but run the full transport suite only in
@@ -892,14 +956,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=ROOT)
     parser.add_argument("--matrix", action="store_true")
+    parser.add_argument("--cadence", choices=("commit", "hourly", "nightly"))
     parser.add_argument("--base", default="")
     parser.add_argument("--head", default="HEAD")
     args = parser.parse_args()
     try:
         if args.matrix:
-            print(json.dumps(group_matrix(args.repo)))
+            print(json.dumps(group_matrix(args.repo, cadence=args.cadence)))
             return 0
-        result = select(args.repo, args.base, args.head)
+        result = select(args.repo, args.base, args.head, cadence=args.cadence)
     except (OSError, ValueError, TypeError, KeyError, SelectionError) as error:
         # An unusable repository cannot safely produce test counts. Fail the job,
         # not a success-shaped empty selection. No exception changes to narrow.

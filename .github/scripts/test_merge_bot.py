@@ -134,17 +134,11 @@ class MergeBotTest(unittest.TestCase):
         self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"})])
         self.assertEqual(api.statuses[0]["state"], "success")
 
-    def test_required_names_cover_all_eight_library_modes_and_original_jobs(self):
+    def test_required_names_cover_commit_checks_and_both_platform_compilations(self):
         self.assertEqual(CHECKS, {
-            "automation", "build (ubuntu-latest)", "build (macos-latest)",
-            "library (ubuntu-latest, ast, handoff=false)",
-            "library (ubuntu-latest, ast, handoff=true)",
-            "library (ubuntu-latest, bytecode, handoff=false)",
-            "library (ubuntu-latest, bytecode, handoff=true)",
-            "library (macos-latest, ast, handoff=false)",
-            "library (macos-latest, ast, handoff=true)",
-            "library (macos-latest, bytecode, handoff=false)",
-            "library (macos-latest, bytecode, handoff=true)",
+            "checks / automation", "checks / build (ubuntu-latest)", "checks / build (macos-latest)",
+            "checks / Linux ordinary tests / Common compilation (ubuntu-latest)",
+            "checks / macOS ordinary tests / Common compilation (macos-latest)",
         })
 
     def test_every_required_mode_is_mandatory_and_must_appear_exactly_once(self):
@@ -160,14 +154,32 @@ class MergeBotTest(unittest.TestCase):
                     self.assertEqual(api.actions, [])
                     self.assertEqual(api.statuses[0]["state"], "failure")
 
-    def test_pre_split_three_job_success_is_not_a_complete_build(self):
+    def test_old_job_names_cannot_stand_in_for_current_commit_jobs(self):
         api = FakeAPI()
-        api.jobs = [job for job in api.jobs if not job["name"].startswith("library (")]
-        self.assertEqual(len(api.jobs), 3)
+        api.jobs = [{"name": name, "status": "completed", "conclusion": "success"}
+                    for name in ("automation", "build (ubuntu-latest)", "build (macos-latest)")]
         self.assertEqual(build_result(api, "head")[0], "failure")
 
-    def test_library_modes_cannot_be_skipped_pending_or_failed(self):
-        for name in sorted(name for name in CHECKS if name.startswith("library (")):
+    def test_skipped_scheduled_jobs_do_not_block_a_complete_commit_build(self):
+        api = FakeAPI()
+        for name in ("checks / foreign-exceptions", "checks / library", "checks / Windows tests",
+                     "checks / library (macos-latest, bytecode, handoff=true)"):
+            api.jobs.append({"name": name, "status": "completed", "conclusion": "skipped"})
+        self.assertEqual(build_result(api, "head")[0], "success")
+        for conclusion in ("failure", "cancelled", "timed_out"):
+            api.jobs[-1]["conclusion"] = conclusion
+            self.assertEqual(build_result(api, "head")[0], "failure")
+
+    def test_skipped_ordinary_or_unknown_jobs_still_fail_build(self):
+        for name in ("checks / Linux ordinary tests / batch-1 (ubuntu-latest)",
+                     "checks / unexpected", "checks / library (unknown)"):
+            with self.subTest(name=name):
+                api = FakeAPI()
+                api.jobs.append({"name": name, "status": "completed", "conclusion": "skipped"})
+                self.assertEqual(build_result(api, "head")[0], "failure")
+
+    def test_required_commit_jobs_cannot_be_skipped_pending_or_failed(self):
+        for name in sorted(CHECKS):
             for status, conclusion in (("queued", None), ("in_progress", None),
                                        ("completed", "skipped"), ("completed", "failure"),
                                        ("completed", "cancelled")):
@@ -177,7 +189,7 @@ class MergeBotTest(unittest.TestCase):
                         status=status, conclusion=conclusion)
                     self.assertEqual(build_result(api, "head")[0], "failure")
 
-    def test_library_result_changes_during_final_merge_recheck_prevent_merge(self):
+    def test_commit_result_changes_during_final_merge_recheck_prevent_merge(self):
         api = FakeAPI()
         reads = 0
 
@@ -186,7 +198,7 @@ class MergeBotTest(unittest.TestCase):
             reads += 1
             if reads == 3:
                 next(job for job in api.jobs if job["name"] ==
-                     "library (macos-latest, bytecode, handoff=true)")["conclusion"] = "failure"
+                     "checks / build (macos-latest)")["conclusion"] = "failure"
 
         api.before_jobs_read = changed
         messages = self.run_bot(api)
@@ -680,7 +692,7 @@ class FastGateTest(unittest.TestCase):
         self.assertEqual(PR_GATE, FAST_GATE)
         self.assertEqual(FAST_GATE.workflow, "fast.yml")
         self.assertEqual(FAST_GATE.checks, {"automation", "fast-check"})
-        self.assertEqual(len(BUILD_GATE.checks), 11)
+        self.assertEqual(len(BUILD_GATE.checks), 5)
         api = FastAPI()
         self.run_bot(api)
         self.assertEqual(api.actions, [

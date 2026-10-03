@@ -887,17 +887,17 @@ class FixturePreparationTest(unittest.TestCase):
             path = 'build/native-malloc/' + suffix
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path))
             self.assertIn('"native-malloc/' + suffix + '"', (project / 'build.gradle').read_text())
-            self.assertIn(path, (project / '.github/workflows/build.yml').read_text())
+            self.assertIn(path, (project / '.github/workflows/checks.yml').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-malloc/native/oracle'))
 
     def test_build_installs_matching_llvm_tools_on_macos(self):
         project = Path(__file__).resolve().parents[2]
-        source = (project / '.github/workflows/build.yml').read_text()
+        source = (project / '.github/workflows/checks.yml').read_text()
         self.assertIn("if: runner.os == 'macOS'", source)
         self.assertIn('brew install llvm@18', source)
         self.assertIn('echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"', source)
         self.assertIn('for tool in clang llc opt llvm-nm llvm-link llvm-objcopy; do', source)
-        self.assertNotIn("- name: Check LLVM backend tools\n        if:", source)
+        self.assertIn("- name: Check LLVM backend tools\n        if: inputs.cadence != 'commit'", source)
 
     def test_original_fcntl_registered_cache_checks_all_artifacts(self):
         project = Path(__file__).resolve().parents[2]
@@ -2276,7 +2276,7 @@ class FixturePreparationTest(unittest.TestCase):
                 self.assertIn('"$fixture_bin" ' + name, (project / "bin/prepare-tests.sh").read_text().splitlines())
                 self.assertIn("build/" + name, fast_fixtures.FULL_OUTPUT_ROOTS)
                 self.assertIn("build/" + name + "/manifest.json", fast_fixtures.FULL_REQUIRED)
-                self.assertIn("build/" + name + "/", (project / ".github/workflows/build.yml").read_text())
+                self.assertIn("build/" + name + "/", (project / ".github/workflows/checks.yml").read_text())
                 self.assertIn(name + "/**/*.json", (project / "build.gradle").read_text())
                 self.assertIn(junit, policy["leafSources"]["src/main/java/thc/runtime/FloatingPrimitives.java"]["junit"])
 
@@ -2329,7 +2329,7 @@ class FixturePreparationTest(unittest.TestCase):
         gradle = (project / 'build.gradle').read_text()
         for suffix in ('**/*.json', 'oracle.txt'):
             self.assertIn('"simd-floatx4-fma/' + suffix + '"', gradle)
-        self.assertIn('build/simd-floatx4-fma/', (project / '.github/workflows/build.yml').read_text())
+        self.assertIn('build/simd-floatx4-fma/', (project / '.github/workflows/checks.yml').read_text())
 
         wide = manifest['groups']['simd-wide-floating-fma']
         self.assertEqual('simd-wide-floating-fma', owners['thc.runtime.SimdWideFloatFmaTest'])
@@ -2345,7 +2345,7 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn('build/simd-wide-floating-fma/' + suffix, fast_fixtures.FULL_REQUIRED)
         for suffix in ('**/*.json', 'oracle.txt'):
             self.assertIn('"simd-wide-floating-fma/' + suffix + '"', gradle)
-        self.assertIn('build/simd-wide-floating-fma/', (project / '.github/workflows/build.yml').read_text())
+        self.assertIn('build/simd-wide-floating-fma/', (project / '.github/workflows/checks.yml').read_text())
 
     def test_floating_address_fixture_is_selected_and_receipted(self):
         project = Path(__file__).resolve().parents[2]
@@ -2376,7 +2376,7 @@ class FixturePreparationTest(unittest.TestCase):
                        "pre/core/AtomicAddressAudit.cbd", "post/core/AtomicAddressAudit.cbd"):
             self.assertIn("build/atomic-address/" + suffix, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"atomic-address/*.tsv"', (project / "build.gradle").read_text())
-        self.assertIn("build/atomic-address/", (project / ".github/workflows/build.yml").read_text())
+        self.assertIn("build/atomic-address/", (project / ".github/workflows/checks.yml").read_text())
 
     def test_floating_native_consumers_use_existing_complete_preparation_groups(self):
         project = Path(__file__).resolve().parents[2]
@@ -2657,7 +2657,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn("build/address-array-copy", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn("address-array-copy", fast_fixtures.fast_inputs.MANIFEST_DIRS)
         self.assertIn('"address-array-copy/**/*.json"', (project / "build.gradle").read_text())
-        self.assertIn("build/address-array-copy/", (project / ".github/workflows/build.yml").read_text())
+        self.assertIn("build/address-array-copy/", (project / ".github/workflows/checks.yml").read_text())
 
     def test_original_stack_has_portable_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]

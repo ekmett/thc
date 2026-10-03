@@ -318,14 +318,16 @@ def identify(recorder, identity_path):
 
 def execute(recorder, base, head, identity_path):
     _, output = recorder.command("select", [sys.executable, ".github/scripts/fast_select.py",
-                                "--base", base, "--head", head], capture=True)
+                                "--base", base, "--head", head, "--cadence", "commit"], capture=True)
     selection = json.loads(output)
     write_json(recorder.directory / "selection.json", selection)
+    require(selection.get("cadence") == "commit", "Fast checks require an explicit commit-cadence selection")
     gradle_command(selection)  # Fail closed before preparing or running anything.
     polyglot = polyglot_command(selection)
     selected_haskell = haskell_suites(selection)
     compile_targets = haskell_compile_targets(selection)
-    recorder.data["selection"] = {key: selection[key] for key in ("mode", "reasons")}
+    recorder.data["selection"] = {key: selection[key] for key in
+                                  ("mode", "reasons", "requestedMode", "cadence", "deferred") if key in selection}
     recorder.data.update(requestedBase=base, selectionBase=base)
     # Check generated documentation against the actual pinned GHC API on hits
     # as well as misses. Keep this fresh report separate from cached provenance.
@@ -343,11 +345,6 @@ def execute(recorder, base, head, identity_path):
                                                  "-fdevelopment", "-ffull-core-tests"])
         except RuntimeError as error:
             failures.append("haskell-compile: " + str(error))
-    if "driver-tests" in selected_haskell:
-        try:
-            recorder.command("driver-plugin", ["bin/build-compiler.sh"])
-        except RuntimeError as error:
-            failures.append("driver-plugin: " + str(error))
     automation_sha = os.environ.get("FAST_AUTOMATION_SHA", "")
     automation_checked = bool(SHA.fullmatch(automation_sha)) and automation_sha == git(recorder.root, "rev-parse", "HEAD")
     recorder.data["automationReused"] = automation_sha if automation_checked else None
@@ -358,14 +355,15 @@ def execute(recorder, base, head, identity_path):
             failures.append(str(error))
     summaries = {}
     try:
-        summaries, mode_failures = run_modes(recorder, selection, install_dist="driver-tests" in selected_haskell)
+        summaries, mode_failures = run_modes(recorder, selection, install_dist=False)
         failures.extend(mode_failures)
     except (RuntimeError, ValueError, ET.ParseError) as error:
         failures.append(f"handoff modes: {error}")
     for suite in selected_haskell:
         try:
             recorder.command(suite, ["cabal", "test", suite, "-fdevelopment",
-                                              "--test-show-details=direct"])
+                                    "--test-show-details=direct"] +
+                             (["--test-options=--unit-only"] if suite == "driver-tests" else []))
         except RuntimeError as error:
             failures.append(suite + ": " + str(error))
     polyglot_summary = None
@@ -409,10 +407,13 @@ def finish(recorder):
     recorder.data["actionCaches"] = {key: os.environ.get(key, "not-reported") for key in
         ("TOOLCHAIN_CACHE_HIT", "GRADLE_CACHE_HIT", "NATIVE_CACHE_HIT")}
     recorder.save()
+    deferred = {scope: {kind: len(tests) for kind, tests in coverage.items()}
+                for scope, coverage in recorder.data.get("selection", {}).get("deferred", {}).items()}
     lines = ["## Fast checks", "", f"Revision: `{recorder.data['revision']}`", "",
              f"Elapsed since checkout: {recorder.data['totalSeconds']:.1f}s (includes setup/cache steps).",
              f"Native inputs: {recorder.data.get('nativeInputs', 'not reached')}.",
-             f"Scope: {recorder.data.get('selection', {}).get('mode', 'not reached')}.", "",
+             f"Scope: {recorder.data.get('selection', {}).get('cadence', recorder.data.get('selection', {}).get('mode', 'not reached'))}.",
+             f"Deferred coverage: {deferred}; exact classes are in selection.json.", "",
              "| Phase | Seconds | Exit |", "| --- | ---: | ---: |"]
     lines.extend(f"| {phase['name']} | {phase['seconds']:.3f} | {phase['exitCode']} |"
                  for phase in recorder.data["phases"])
@@ -478,12 +479,12 @@ def restore_common(root, archive):
         bundle.extractall(root, members=members, filter="data")
 
 
-def run_group(recorder, name, *, reuse_daemon=False):
+def run_group(recorder, name, *, reuse_daemon=False, cadence=None):
     import fast_select
-    selection = fast_select.group_selection(recorder.root, name)
+    selection = fast_select.group_selection(recorder.root, name, cadence=cadence)
     manifest, owners = fixtures._manifest(recorder.root)
     require(all(c in owners for c in selection["junit"]["classes"]), "Unowned selected class")
-    recorder.data["selection"] = {"mode": "group", "group": name, "reasons": []}
+    recorder.data["selection"] = {"mode": "group", "group": name, "cadence": cadence, "reasons": []}
     toolchain = {"platform": {"system": platform.system(), "machine": platform.machine()},
                  "toolchain": fixtures.fast_inputs.toolchain(recorder.root)}
     # Unknown ownership fails above; a group job must never widen to all fixtures.
@@ -524,6 +525,7 @@ def main(argv=None):
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
+    parser.add_argument("--cadence", choices=("commit", "hourly", "nightly"))
     parser.add_argument("--reuse-daemon", action="store_true",
                         help="Reuse the CI batch's worker daemon for grouped tests")
     parser.add_argument("--archive", type=Path)
@@ -541,7 +543,7 @@ def main(argv=None):
         elif args.command == "compile-common":
             compile_common(recorder)
         elif args.command == "group":
-            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon)
+            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence)
         elif args.command == "pack-common":
             pack_common(ROOT, args.archive)
         elif args.command == "restore-common":

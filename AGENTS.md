@@ -110,5 +110,8 @@ fast-forward push; do not force-push or change branch protections.
 
 Reuse worker evidence and retest substantive integration changes. GitHub Actions
 provide post-merge feedback, not a publication gate; address failures promptly.
+A failed Hourly CI run on main stops development and integration. Fix that regression
+and obtain a successful Hourly run before resuming unrelated work.
+
 Keep automated bulk merging disabled. Report verified behavior and remaining
 limits without claiming that preparation alone proves execution or compilation.

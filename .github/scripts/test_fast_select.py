@@ -39,7 +39,7 @@ class FastSelectionTest(unittest.TestCase):
         self.git("config", "gc.auto", "0")
         smoke = dict(junit=["example.SmokeTest"], python=["bin/test-smoke.py"])
         affected = dict(junit=["example.OtherTest"], python=["bin/test-other.py"])
-        self.policy = dict(schema=2, smoke=smoke,
+        self.policy = dict(schema=2, smoke=smoke, cadence=dict(hourlyJunit=[], nightlyFixtures=[]),
                            leafSources={"src/main/java/Leaf.java": dict(junit=["example.LeafTest"], python=[])},
                            owners={"t/fixtures/compiler/Family.hs": affected,
                                    "bin/prepare-family.py": affected,
@@ -98,6 +98,124 @@ class FastSelectionTest(unittest.TestCase):
         if code:
             self.assertIn(code, {r["code"] for r in result["reasons"]}, result)
         return result
+
+    def cadence_fixture(self, *, hourly=(), nightly=()):
+        import fast_fixtures
+        manifest = {"schema": 1, "fixtureFreeJunit": ["example.SmokeTest"], "groups": {
+            "provider": {"junit": ["example.LeafTest"], "commands": [{"argv": ["provider"]}],
+                         "outputs": ["build/provider"], "sources": ["README.md"]},
+            "consumer": {"junit": ["example.OtherTest"], "commands": [{"argv": ["consumer"]}],
+                         "outputs": ["build/consumer"], "sources": ["README.md"], "requires": ["provider"]}}}
+        self.policy["cadence"] = dict(hourlyJunit=list(hourly), nightlyFixtures=list(nightly))
+        self.write(select.POLICY, json.dumps(self.policy))
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        return manifest
+
+    def test_cadence_partitions_all_classes_and_unknown_tests_stay_commit(self):
+        import fast_fixtures
+        manifest = self.cadence_fixture(hourly=["example.LeafTest"])
+        self.write("src/test/java/example/NewTest.java", java_fixture("NewTest"))
+        manifest["fixtureFreeJunit"].append("example.NewTest")
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        scopes = {scope: {c for tests in select.groups(self.repo, cadence=scope).values() for c in tests}
+                  for scope in ("commit", "hourly", "nightly")}
+        self.assertEqual(scopes["commit"], {"example.SmokeTest", "example.OtherTest", "example.NewTest"})
+        self.assertEqual(scopes["hourly"], {"example.LeafTest"})
+        self.assertEqual(scopes["nightly"], set())
+        complete = [c for tests in select.groups(self.repo).values() for c in tests]
+        self.assertCountEqual(complete, [c for classes in scopes.values() for c in classes])
+        selected = select.group_selection(self.repo, "consumer", cadence="hourly")
+        self.assertEqual(selected["junit"]["classes"], ["example.LeafTest", "thc.runtime.HandoffTest"])
+        with self.assertRaisesRegex(select.SelectionError, "Unknown CI group"):
+            select.group_selection(self.repo, "consumer", cadence="nightly")
+
+    def test_nightly_provider_moves_transitive_consumers_and_overrides_hourly(self):
+        import fast_fixtures
+        manifest = self.cadence_fixture(hourly=["example.OtherTest"], nightly=["provider"])
+        self.write("src/test/java/example/NewTest.java", java_fixture("NewTest"))
+        manifest["groups"]["downstream"] = {"junit": ["example.NewTest"], "commands": [{"argv": ["downstream"]}],
+            "outputs": ["build/downstream"], "sources": ["README.md"], "requires": ["consumer"]}
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        self.assertEqual({c for tests in select.groups(self.repo, cadence="nightly").values() for c in tests},
+                         {"example.LeafTest", "example.OtherTest", "example.NewTest"})
+        self.assertEqual(select.groups(self.repo, cadence="hourly"), {})
+        result = select.select(self.repo, "", "HEAD", cadence="commit")
+        self.assertEqual(result["junit"]["classes"], ["example.SmokeTest"])
+        self.assertEqual(result["deferred"]["nightly"]["junit"],
+                         ["example.LeafTest", "example.NewTest", "example.OtherTest"])
+        run = mock.Mock(side_effect=AssertionError("Commit smoke cannot acquire a nightly provider"))
+        self.assertEqual(fast_fixtures.prepare(self.repo, result, run, {}),
+                         {"mode": "selected", "rebuilt": [], "reused": []})
+        run.assert_not_called()
+
+    def test_changed_hourly_test_is_honestly_deferred_but_python_remains(self):
+        self.cadence_fixture(hourly=["example.OtherTest"])
+        base = self.git("rev-parse", "HEAD")
+        self.write("src/test/java/example/OtherTest.java", java_fixture("OtherTest", "@Test void changed() {}"))
+        self.write("bin/test-other.py", PYTHON_TEST + "# changed\n")
+        self.commit()
+        result = select.select(self.repo, base, "HEAD", cadence="commit")
+        self.assertEqual(result["requestedMode"], "narrow")
+        self.assertEqual(result["mode"], "narrow")
+        self.assertEqual(result["junit"]["classes"], ["example.SmokeTest"])
+        self.assertEqual(result["deferred"]["hourly"]["junit"], ["example.OtherTest"])
+        self.assertIn("bin/test-other.py", result["python"]["files"])
+
+    def test_full_selection_is_partitioned_with_reasons_and_polyglot_deferred(self):
+        self.cadence_fixture(hourly=["example.OtherTest"], nightly=["provider"])
+        complete = select.select(self.repo, "", "HEAD")
+        result = select.select(self.repo, "", "HEAD", cadence="commit")
+        self.assertEqual(result["requestedMode"], "full")
+        self.assertEqual(result["mode"], "narrow")
+        self.assertEqual(result["reasons"], complete["reasons"])
+        self.assertEqual(result["python"], complete["python"])
+        self.assertEqual(result["haskell"], complete["haskell"])
+        self.assertEqual(result["polyglot"], {"required": False, "classes": []})
+        self.assertEqual(result["deferred"]["nightly"]["polyglot"], ["example.PolyglotTest"])
+        self.assertEqual(result["junit"]["patterns"], ["example.SmokeTest"])
+
+    def test_invalid_or_dirty_inventory_cannot_be_hidden_by_cadence(self):
+        self.cadence_fixture(hourly=["example.OtherTest"])
+        self.write("README.md", "dirty\n")
+        with self.assertRaisesRegex(select.SelectionError, "invalid selection"):
+            select.select(self.repo, "", "HEAD", cadence="commit")
+        with self.assertRaisesRegex(select.SelectionError, "invalid inventory"):
+            select.groups(self.repo, cadence="commit")
+        self.commit()
+        self.policy["cadence"]["hourlyJunit"].append("example.SmokeTest")
+        self.write(select.POLICY, json.dumps(self.policy))
+        self.commit()
+        with self.assertRaisesRegex(select.SelectionError, "invalid selection"):
+            select.select(self.repo, "", "HEAD", cadence="commit")
+
+    def test_nightly_smoke_or_unknown_provider_is_rejected(self):
+        import fast_fixtures
+        manifest = self.cadence_fixture(nightly=["missing"])
+        with self.assertRaisesRegex(select.SelectionError, "Unknown nightly fixture"):
+            select.groups(self.repo, cadence="commit")
+        self.policy["cadence"]["nightlyFixtures"] = ["provider"]
+        manifest["fixtureFreeJunit"] = []
+        manifest["groups"]["provider"]["junit"].append("example.SmokeTest")
+        self.write(select.POLICY, json.dumps(self.policy))
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        with self.assertRaisesRegex(select.SelectionError, "smoke must remain"):
+            select.groups(self.repo, cadence="commit")
+
+    def test_cadence_edits_do_not_invalidate_fixture_identity(self):
+        import fast_fixtures
+        manifest = self.cadence_fixture()
+        group = manifest["groups"]["provider"]
+        with mock.patch.object(fast_fixtures, "COMMON_SOURCES", ()):
+            before = fast_fixtures.cache_key(self.repo, "provider", group, {})
+            self.policy["cadence"]["hourlyJunit"] = ["example.OtherTest"]
+            self.write(select.POLICY, json.dumps(self.policy))
+            self.assertEqual(before, fast_fixtures.cache_key(self.repo, "provider", group, {}))
+            self.write("README.md", "changed producer input\n")
+            self.assertNotEqual(before, fast_fixtures.cache_key(self.repo, "provider", group, {}))
 
     def test_grouped_jobs_cover_every_class_and_share_required_providers(self):
         import fast_fixtures
@@ -1056,7 +1174,7 @@ private String text = "class FakeString { @Test }";
         self.write(select.POLICY, json.dumps(policy))
         groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
                   *policy["primopFamilies"].values(), *policy["automation"].values()]
-        for name in {name for group in groups for name in group["junit"]}:
+        for name in {name for group in groups for name in group["junit"]} | set(policy["cadence"]["hourlyJunit"]):
             package, short = name.rsplit(".", 1)
             self.write("src/test/java/" + name.replace(".", "/") + ".java",
                        java_fixture(short).replace("package example", "package " + package))
@@ -1085,7 +1203,7 @@ private String text = "class FakeString { @Test }";
         self.write(select.POLICY, json.dumps(policy))
         groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
                   *policy["primopFamilies"].values(), *policy["automation"].values()]
-        for name in {name for group in groups for name in group["junit"]}:
+        for name in {name for group in groups for name in group["junit"]} | set(policy["cadence"]["hourlyJunit"]):
             package, short = name.rsplit(".", 1)
             self.write("src/test/java/" + name.replace(".", "/") + ".java",
                        java_fixture(short).replace("package example", "package " + package))
@@ -1439,7 +1557,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_fast_automation_sources_have_control_owners(self):
         automation = self.policy["automation"]
-        for path in (".github/scripts/fast_ci.py", ".github/scripts/fast_inputs.py",
+        for path in (".github/scripts/hourly_health.py", ".github/scripts/test_hourly_health.py",
+                     ".github/scripts/fast_ci.py", ".github/scripts/fast_inputs.py",
                      ".github/scripts/fast_fixtures.py", ".github/scripts/fast_select.py",
                      ".github/scripts/fast-fixtures.json", ".github/scripts/fast-tests.json",
                      ".github/scripts/test_fast_ci.py", ".github/scripts/test_fast_inputs.py",

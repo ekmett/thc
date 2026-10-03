@@ -10,7 +10,10 @@ on:
         required: true
       expected_sha:
         type: string
-        required: false
+        required: true
+      cadence:
+        type: string
+        required: true
 permissions:
   contents: read
 jobs:
@@ -23,15 +26,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          ref: ${{ github.sha }}
           submodules: true
           persist-credentials: false
       - name: Verify source and complete fixture ownership
         id: inventory
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CI_CADENCE: ${{ inputs.cadence }}
         run: |
-          test -z "$EXPECTED_SHA" || test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-          matrix=$(python3 .github/scripts/fast_select.py --matrix)
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          matrix=$(python3 .github/scripts/fast_select.py --matrix --cadence "$CI_CADENCE")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
@@ -98,6 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          ref: ${{ github.sha }}
           submodules: true
           persist-credentials: false
       - uses: actions/setup-python@v6
@@ -134,7 +141,7 @@ jobs:
         run: |
           brew install llvm@18
           echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
-      - name: Download only this source platform and Build attempt
+      - name: Download only this source platform and workflow attempt
         uses: actions/download-artifact@v8
         with:
           name: common-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -145,13 +152,14 @@ jobs:
       - name: Run each original group with its own preparation and both handoff modes
         env:
           CI_GROUPS: ${{ join(matrix.groups, ' ') }}
+          CI_CADENCE: ${{ inputs.cadence }}
         run: |
           ./gradlew --stop
           trap './gradlew --stop' EXIT
           failed=0
           for group in $CI_GROUPS; do
             echo "::group::$group"
-            if python3 .github/scripts/fast_ci.py group --group "$group" --reuse-daemon --report-dir "build/ci/group-results/$group"; then
+            if python3 .github/scripts/fast_ci.py group --group "$group" --cadence "$CI_CADENCE" --reuse-daemon --report-dir "build/ci/group-results/$group"; then
               echo "- $group: passed" >> "$GITHUB_STEP_SUMMARY"
             else
               echo "::error title=$group::$group failed; see its preserved preparation and test output"

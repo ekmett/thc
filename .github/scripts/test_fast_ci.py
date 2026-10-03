@@ -32,9 +32,37 @@ class FastRunnerTest(unittest.TestCase):
             f'<testsuite name="{name}" {attributes}>{body}</testsuite>')
 
     def selection(self, mode="narrow"):
-        return {"mode": mode, "runnable": True, "haskell": {"suites": [], "count": 0},
+        return {"mode": mode, "runnable": True, "cadence": "commit", "haskell": {"suites": [], "count": 0},
                 "polyglot": {"required": False, "classes": []}, "junit": {
             "classes": ["example.Test"], "patterns": ["*"] if mode == "full" else ["example.Test"]}}
+
+    def test_fast_requests_commit_cadence_and_reports_deferred_coverage(self):
+        selection = self.selection() | {"reasons": [{"code": "unmapped-source-or-configuration"}],
+            "requestedMode": "full", "deferred": {"hourly": {"junit": ["example.OtherTest"]},
+            "nightly": {"junit": ["example.SlowTest"]}}, "python": {"commands": []}}
+        identity = self.root / "identity.json"
+        identity.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]) as command, \
+                patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                patch.object(ci, "run_modes", return_value=({}, [])) as modes:
+            ci.execute(recorder, "HEAD", "HEAD", identity)
+        self.assertEqual(command.call_args_list[0].args[1][-2:], ["--cadence", "commit"])
+        self.assertEqual(recorder.data["selection"]["requestedMode"], "full")
+        self.assertEqual(recorder.data["selection"]["mode"], "narrow")
+        self.assertEqual(recorder.data["selection"]["deferred"], selection["deferred"])
+        modes.assert_called_once_with(recorder, selection, install_dist=False)
+
+    def test_fast_rejects_unscoped_selection_before_preparation(self):
+        selection = self.selection()
+        del selection["cadence"]
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(recorder, "command", return_value=(0, json.dumps(selection))), \
+                patch.object(ci.fixtures, "prepare") as prepare, self.assertRaisesRegex(RuntimeError, "commit-cadence"):
+            ci.execute(recorder, "HEAD", "HEAD", self.root / "missing-identity.json")
+        prepare.assert_not_called()
 
     def test_group_execution_collects_both_modes_without_fail_fast(self):
         for reuse in (False, True):
@@ -85,7 +113,7 @@ class FastRunnerTest(unittest.TestCase):
                 summary.write_text("")
                 result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], cwd=self.root,
                     env=dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"],
-                             CI_GROUPS=" ".join(groups), GITHUB_STEP_SUMMARY=str(summary)),
+                             CI_GROUPS=" ".join(groups), CI_CADENCE="commit", GITHUB_STEP_SUMMARY=str(summary)),
                     text=True, capture_output=True)
                 self.assertEqual(expected, result.returncode, result.stdout + result.stderr)
                 self.assertEqual(groups, (self.root / "executed").read_text().splitlines())
@@ -537,7 +565,7 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn('-- foreign-exceptions', makefile)
         self.assertRegex(makefile, r'for family in [^;]*\boriginal-fcntl\b[^;]*; do')
         self.assertIn('--continue foreignExceptionTest foreignExceptionDenseTest', makefile)
-        workflow = (root / ".github/workflows/build.yml").read_text()
+        workflow = (root / ".github/workflows/checks.yml").read_text()
         lane = workflow.split('  foreign-exceptions:\n', 1)[1].split('  library:\n', 1)[0]
         self.assertNotIn('continue-on-error', lane)
         self.assertIn('runs-on: [self-hosted, Linux, X64, thc-fast]', lane)
@@ -598,23 +626,29 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual((recorder.data["requestedBase"], recorder.data["selectionBase"]), ("b" * 40, "b" * 40))
         self.assertTrue(recorder.data["passed"])
 
-    def test_selected_haskell_suite_builds_runtime_and_runs_after_fixtures(self):
+    def test_selected_driver_units_need_no_plugin_or_runtime_distribution(self):
         selection = self.selection() | {"reasons": [], "python": {"commands": []},
                                         "haskell": {"suites": ["driver-tests"], "count": 1}}
         identity_path = self.root / "identity.json"
         identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
-        with patch.object(ci, "git", return_value="a" * 40):
-            recorder = ci.Recorder(self.root, self.root / "receipts")
-        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection))] + [(0, "")] * 3) as commands, \
-                patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
-                patch.object(ci, "run_modes", return_value=({}, [])) as modes:
-            ci.execute(recorder, "HEAD", "HEAD", identity_path)
-        modes.assert_called_once_with(recorder, selection, install_dist=True)
-        self.assertEqual([call.args[0] for call in commands.call_args_list[2:]],
-                         ["driver-plugin", "driver-tests"])
-        self.assertEqual(["cabal", "test", "driver-tests", "-fdevelopment", "--test-show-details=direct"],
-                         commands.call_args_list[3].args[1])
-
+        for failed in (False, True):
+            with self.subTest(failed=failed), patch.object(ci, "git", return_value="a" * 40):
+                recorder = ci.Recorder(self.root, self.root / ("failed" if failed else "passed"))
+                outputs = [(0, json.dumps(selection)), (0, ""),
+                           RuntimeError("units failed") if failed else (0, "")]
+                with patch.object(recorder, "command", side_effect=outputs) as commands, \
+                        patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                        patch.object(ci, "run_modes", return_value=({}, [])) as modes:
+                    if failed:
+                        with self.assertRaisesRegex(RuntimeError, "driver-tests"):
+                            ci.execute(recorder, "HEAD", "HEAD", identity_path)
+                    else:
+                        ci.execute(recorder, "HEAD", "HEAD", identity_path)
+                modes.assert_called_once_with(recorder, selection, install_dist=False)
+                self.assertEqual([call.args[0] for call in commands.call_args_list[2:]], ["driver-tests"])
+                self.assertEqual(["cabal", "test", "driver-tests", "-fdevelopment",
+                                  "--test-show-details=direct", "--test-options=--unit-only"],
+                                 commands.call_args_list[2].args[1])
 
     def test_non_driver_suites_run_without_building_driver_plugin(self):
         identity_path = self.root / "identity.json"

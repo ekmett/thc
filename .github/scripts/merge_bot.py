@@ -18,8 +18,12 @@ from urllib.request import Request, urlopen
 LABEL = "auto-merge"
 BOT_LOGIN = "github-actions[bot]"
 CI_SKIP = re.compile(r"\[ci skip\]", re.IGNORECASE)
-CHECKS = {"build (ubuntu-latest)", "build (macos-latest)", "automation"} | {
-    f"library ({os}, {backend}, handoff={handoff})"
+CHECKS = {"checks / automation", "checks / build (ubuntu-latest)", "checks / build (macos-latest)"} | {
+    f"checks / {platform} ordinary tests / Common compilation ({os})"
+    for platform, os in (("Linux", "ubuntu-latest"), ("macOS", "macos-latest"))
+}
+BUILD_SCHEDULED_JOBS = {"checks / foreign-exceptions", "checks / library", "checks / Windows tests"} | {
+    f"checks / library ({os}, {backend}, handoff={handoff})"
     for os in ("ubuntu-latest", "macos-latest")
     for backend in ("ast", "bytecode")
     for handoff in ("false", "true")
@@ -35,8 +39,7 @@ class Gate:
 
 BUILD_GATE = Gate("build.yml", "Build", frozenset(CHECKS))
 FAST_GATE = Gate("fast.yml", "Fast checks", frozenset({"automation", "fast-check"}))
-# This policy is code checked out from trusted main, never PR data or an event
-# input. The transition PR itself still uses the old main's Build/11 policy.
+# This policy is code checked out from trusted main, never PR data or an event input.
 PR_GATE = FAST_GATE
 REQUIRED_STATUS = "required-tests"
 ACTIONS_APP = 15368
@@ -93,8 +96,13 @@ def complete_attempt(api, run, gate, current=True):
         return "failure"
     jobs = list(api.pages(f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs", "jobs"))
     names = [job["name"] for job in jobs]
+    # Build deliberately skips scheduled-only jobs. Required commit jobs must each
+    # succeed; a failed or unfinished extra job still fails the whole attempt.
     passed = (all(names.count(name) == 1 for name in gate.checks)
-              and all(job["status"] == "completed" and job["conclusion"] == "success" for job in jobs))
+              and all(job["status"] == "completed" and (
+                  job["conclusion"] == "success" or
+                  (gate == BUILD_GATE and job["name"] in BUILD_SCHEDULED_JOBS and job["conclusion"] == "skipped"))
+                  for job in jobs))
     if current:
         fresh = api.call("GET", f"actions/runs/{run['id']}")
         if any(fresh[key] != run[key] for key in

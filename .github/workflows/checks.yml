@@ -1,0 +1,679 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: Shared checks
+on:
+  workflow_call:
+    inputs:
+      cadence:
+        type: string
+        required: true
+      expected_sha:
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          submodules: true
+          persist-credentials: false
+      - name: Check dispatched revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Validate cadence
+        env:
+          CI_CADENCE: ${{ inputs.cadence }}
+        run: |
+          case "$CI_CADENCE" in commit|hourly|nightly) ;; *) exit 1 ;; esac
+      - name: Stop commit checks when Hourly is failing
+        if: inputs.cadence == 'commit'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/hourly_health.py
+      - name: Test merge decisions and race handling
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - name: Lint CI and merge workflows
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --retry-max-time 30 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          # GitHub supports queue: max; the pinned linter does not yet know this key.
+          "$RUNNER_TEMP/actionlint" -ignore '^unexpected key "queue" for "concurrency" section\.'
+  jvm-linux:
+    needs: automation
+    name: Linux ordinary tests
+    uses: ./.github/workflows/test-groups.yml
+    with:
+      os: ubuntu-latest
+      expected_sha: ${{ inputs.expected_sha }}
+      cadence: ${{ inputs.cadence }}
+  jvm-macos:
+    needs: automation
+    name: macOS ordinary tests
+    uses: ./.github/workflows/test-groups.yml
+    with:
+      os: macos-latest
+      expected_sha: ${{ inputs.expected_sha }}
+      cadence: ${{ inputs.cadence }}
+  windows:
+    needs: automation
+    if: inputs.cadence != 'commit'
+    name: Windows tests
+    uses: ./.github/workflows/windows.yml
+    with:
+      testGroup: ${{ inputs.cadence == 'hourly' && 'Runtime' || 'Driver' }}
+  build:
+    needs: automation
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # Keep the existing cold preparation budget; test and compiler limits are unchanged.
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          submodules: true
+          persist-credentials: false
+      - name: Check dispatched revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-version: '3.16.0.0'
+          cabal-update: true
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - name: Verify pinned toolchain
+        shell: bash
+        run: |
+          test "$(ghc --numeric-version)" = 9.14.1
+          test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
+          case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          release = dict(line.split('=', 1) for line in (Path(os.environ['JAVA_HOME']) / 'release').read_text().splitlines() if '=' in line)
+          assert release['GRAALVM_VERSION'].strip('"') == '25.3.4.1', release.get('GRAALVM_VERSION')
+          assert release['JAVA_VERSION'].strip('"').split('.')[0] == '25', release.get('JAVA_VERSION')
+          PY
+          java --version
+      - name: Check the primop checklist
+        if: inputs.cadence == 'commit'
+        run: |
+          cabal run exe:thc-primops -- coverage --check
+          cabal run exe:thc-primops -- scalars
+          # Cabal's pre-test setup resolves sibling libraries from the combined plan.
+          # Register them before any suite starts, including on a clean build.
+          cabal build test:primop-tools test:compact-core-tests -fdevelopment
+          cabal test primop-tools compact-core-tests -fdevelopment --test-show-details=direct
+      - name: Resolve Cabal driver dependencies
+        run: cabal build exe:thc
+      - name: Install Linux native and LLVM build dependencies
+        if: runner.os == 'Linux' && inputs.cadence != 'commit'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+      - name: Install macOS LLVM build dependencies
+        if: runner.os == 'macOS' && inputs.cadence != 'commit'
+        run: |
+          brew install llvm@18
+          echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
+      - name: Check LLVM backend tools
+        if: inputs.cadence != 'commit'
+        run: |
+          for tool in clang llc opt llvm-nm llvm-link llvm-objcopy; do
+            command -v "$tool"
+            major=$("$tool" --version | sed -nE 's/.*version ([0-9]+).*/\1/p' | sed -n '1p')
+            test "$major" = 18
+          done
+      - name: Check pinned guest protocol artifacts
+        if: inputs.cadence == 'commit'
+        run: ./gradlew --no-daemon --max-workers=2 --continue testMaterializableApi testReturnPolicy testReturnContinuations
+      - name: Build JVM distribution from source
+        if: inputs.cadence != 'commit'
+        run: |
+          bin/build-compiler.sh
+          ./gradlew --no-daemon installDist toolsJar
+      - name: Check original aggregate constructor fields against native GHC
+        if: inputs.cadence == 'nightly'
+        run: |
+          cabal run exe:thc-fixtures --offline -- aggregate-heap
+          cabal run exe:thc-fixtures --offline -- fourway-aggregate
+          cabal run exe:thc-fixtures --offline -- generic-sum-transport
+          cabal run exe:thc-fixtures --offline -- narrow-integer-transport
+          ./gradlew aggregateHeapFullCoreTest aggregateHeapFullCoreDenseTest \
+            fourwayAggregateFullCoreTest fourwayAggregateFullCoreDenseTest \
+            genericSumTransportFullCoreTest genericSumTransportFullCoreDenseTest \
+            narrowIntegerTransportFullCoreTest narrowIntegerTransportFullCoreDenseTest
+      - name: Check tuple join arguments and bottoming tuple cases
+        if: inputs.cadence == 'hourly'
+        run: |
+          cabal run exe:thc-fixtures --offline -- tuple-join --local
+          ./gradlew tupleJoinFullCoreTest tupleJoinFullCoreDenseTest
+      - name: Check original binary sum inputs and captures
+        if: inputs.cadence == 'hourly'
+        run: |
+          cabal run exe:thc-fixtures --offline -- sum-input
+          ./gradlew sumInputFullCoreTest sumInputFullCoreDenseTest
+      - name: Check original binary sum join inputs and captures
+        if: inputs.cadence == 'hourly'
+        run: |
+          cabal run exe:thc-fixtures --offline -- sum-join-input
+          ./gradlew sumJoinInputFullCoreTest sumJoinInputFullCoreDenseTest
+      - name: Check original tuple closure and thunk captures
+        if: inputs.cadence == 'hourly'
+        run: |
+          cabal run exe:thc-fixtures --offline -- tuple-capture
+          ./gradlew tupleCaptureFullCoreTest tupleCaptureFullCoreDenseTest
+      - name: Check Haskell calls into JavaScript
+        if: inputs.cadence == 'nightly'
+        run: |
+          python3 bin/test-polyglot-audit.py
+          python3 -O bin/test-polyglot-audit.py
+          bin/polyglot-demo.sh
+          python3 bin/test-javascript-ffi.py
+          bin/javascript-demo.sh
+          ./gradlew polyglotTest
+      - name: Check driver units and CPU affinity API
+        if: inputs.cadence == 'commit'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cabal build exe:thc --offline -fdevelopment
+          cabal run thc --offline -fdevelopment -- --help
+          cabal test driver-tests -fdevelopment --test-options=--unit-only --test-show-details=direct
+          cabal test cpu-affinity-api -fdevelopment --test-show-details=direct
+      - name: Compare public packages with native GHC on both backends and handoff modes
+        if: inputs.cadence == 'nightly'
+        run: cabal test driver-tests -fdevelopment --test-options=--public-packages-only --test-show-details=direct
+      - name: Check cold project dependency acquisition
+        if: inputs.cadence == 'nightly'
+        run: cabal test driver-tests -fdevelopment --test-options=--acquire-project-only --test-show-details=direct
+      - name: Prepare fresh library source and native oracles
+        if: inputs.cadence == 'nightly'
+        run: python3 bin/prepare-library-tests.py
+      - name: Package verified library inputs and installed runtime
+        if: inputs.cadence == 'nightly'
+        run: python3 .github/scripts/library_bundle.py pack --output build/library-transfer.tar.gz
+      - name: Share this platform's library inputs with this workflow attempt
+        if: inputs.cadence == 'nightly'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: library-inputs-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/library-transfer.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Check exact dependency auditor and library frontier
+        if: inputs.cadence == 'commit'
+        run: |
+          python3 bin/test-audit-core.py
+          python3 bin/test-plugin.py
+          python3 bin/test-core-enums.py
+          python3 bin/test-sum-layout.py
+          python3 bin/test-core-sums.py
+          python3 bin/test-tuple-inputs.py
+          python3 bin/test-empty-join-inputs.py
+          python3 bin/test-library-frontier.py
+          python3 bin/test-sequence-model.py
+          python3 bin/test-core-vectors.py
+          python3 bin/test-simd-families.py
+          python3 bin/test-floatx4-model.py
+          python3 bin/test-doublex2-model.py
+          python3 bin/test-core-vector-memory.py
+          python3 bin/test-core-word32-vector-memory.py
+          python3 bin/test-core-float-vector-memory.py
+          python3 bin/test-core-double-vector-memory.py
+          python3 bin/test-core-bytearrays.py
+          python3 bin/test-core-arrays.py
+          python3 bin/test-address-fields.py
+          python3 bin/test-core-data-tags.py
+          python3 bin/test-show-word-list-model.py
+          python3 bin/test-narrow-literal-proofs.py
+          python3 bin/test-short-bytes-slices-model.py
+          python3 bin/test-array-slice-model.py
+      - name: Check merged fixture and runtime recipes with and without assertions
+        if: inputs.cadence == 'commit'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in \
+            bin/test-build-cbits.py \
+            bin/test-core-managed-memory.py \
+            bin/test-core-managed-files.py \
+            bin/test-core-package-manifest.py \
+            bin/test-managed-mvar-fixtures.py \
+            bin/test-managed-mvars.py \
+            bin/test-synchronous-exception-fixtures.py; do
+            python3 "$test"
+            python3 -O "$test"
+          done
+      - name: Check benchmark power provenance
+        if: inputs.cadence == 'commit'
+        run: python3 tools/test-compare-map-runtimes.py
+      - name: Prepare fresh Map source and native oracle
+        if: inputs.cadence == 'nightly'
+        env:
+          THC_DIAGNOSTIC_UNSUPPORTED: 'true'
+        run: bin/prepare-map.sh
+      - name: Check diagnostic Map on both backends and handoff modes
+        if: inputs.cadence == 'nightly'
+        shell: bash
+        run: |
+          set -euo pipefail
+          matrix_status=0
+          for handoff in false true; do
+            for backend in ast bytecode; do
+              java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+                "-Dthc.backend=$backend" "-Dthc.handoffSlabs=$handoff" \
+                -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
+                -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.MapCheck build/map/modules.txt build/map/oracle.tsv \
+                2>&1 | tee "build/map/check-$backend-handoff-$handoff.log" || matrix_status=1
+            done
+          done
+          exit "$matrix_status"
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: test-results-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/reports/tests/
+            build/original-stdio-read/logs/
+            build/original-stdio-read/results/
+            build/original-stdio-read/input.bin
+            build/original-stdio-read/oracle.json
+            build/original-stdio-read/manifest.json
+            build/original-stdio-read/*/*.audit.json
+            build/original-stdio-read/*/core/*.cbd
+            build/unaligned-scalar-memory/
+            build/floating/core/
+            build/floating/checks.json
+            build/floating/oracle.tsv
+            build/word-floating/
+            build/fused-floating/
+            build/aligned-scalar-memory/
+            build/floating-tuple/
+            build/atomic-address/
+            build/empty-tuple-input/
+            build/empty-join-input/
+            build/tuple-input/
+            build/sqrt/
+            build/tag-to-enum/
+            build/mutable-bytearray-size/manifest.json
+            build/mutable-bytearray-size/*.tsv
+            build/mutable-bytearray-size/*.audit.json
+            build/mutable-bytearray-size/*-core/
+            build/mutable-bytearray-size/native/mutable-bytearray-size-oracle
+            build/resize-bytearrays/manifest.json
+            build/resize-bytearrays/*.tsv
+            build/resize-bytearrays/*.audit.json
+            build/resize-bytearrays/*-core/
+            build/resize-bytearrays/native/resize-bytearrays-oracle
+            build/mutable-bytearrays/manifest.json
+            build/mutable-bytearrays/*.tsv
+            build/mutable-bytearrays/*.audit.json
+            build/mutable-bytearrays/NativeMutableByteArrays.hs
+            build/mutable-bytearrays/*-core/
+            build/mutable-bytearrays/native/mutable-bytearrays-oracle
+            build/array-slices/manifest.json
+            build/array-slices/*.tsv
+            build/array-slices/*.audit.json
+            build/array-slices/NativeArraySlices.hs
+            build/array-slices/*-core/
+            build/array-slices/native/array-slices-oracle
+            build/narrow-literal-proofs/manifest.json
+            build/narrow-literal-proofs/oracle.tsv
+            build/narrow-literal-proofs/*-audit.json
+            build/narrow-literal-proofs/*-core/
+            build/narrow-literal-proofs/native/narrow-literal-oracle
+            build/show-word-list/manifest.json
+            build/show-word-list/*.tsv
+            build/show-word-list/*.audit.json
+            build/show-word-list/*-core/
+            build/show-word-list/boot/core/
+            build/show-word-list/boot/boot-provenance.json
+            build/show-word-list/cstring/core/
+            build/show-word-list/cstring/boot-provenance.json
+            build/show-word-list/native/show-word-list-oracle
+            build/short-bytes-slices/manifest.json
+            build/short-bytes-slices/*.tsv
+            build/short-bytes-slices/*.audit.json
+            build/short-bytes-slices/*-core/
+            build/short-bytes-slices/list/core/
+            build/short-bytes-slices/list/boot-provenance.json
+            build/short-bytes-slices/cstring/core/
+            build/short-bytes-slices/cstring/boot-provenance.json
+            build/short-bytes-slices/native/short-bytes-slices-oracle
+            build/unsafe-equality/
+            build/proxy-void/
+            build/unix-libc/
+            build/test-results/
+            build/mask-functions/
+            build/deep-evaluation/
+            build/aggregate-frontier.json
+            build/primop-coverage.json
+            build/scalar-signatures/provenance.json
+            build/aggregate-native/oracle.tsv
+            build/aggregate-layout/
+            build/sum-layout/
+            build/sum-result/
+            build/sum-input/
+            build/sum-join-input/
+            build/tuple-capture/
+            build/tuple-return/
+            build/state-tuple/checks.json
+            build/state-tuple/provenance.json
+            build/state-tuple/oracle.tsv
+            build/state-tuple/*-audit.json
+            build/state-tuple/*-core/*.cbd
+            build/mutvar/manifest.json
+            build/stm/
+            build/mutvar/oracle.tsv
+            build/mutvar/NativeMutVar.hs
+            build/mutvar/*/*.audit.json
+            build/mutvar/*/core/*.cbd
+            build/boxed-arrays/
+            build/boxed-array-extensions/
+            build/simd-address-families/
+            build/simd128-arrays/
+            build/simd-wide-arrays/
+            build/simd-arithmetic/
+            build/original-posix-stat/
+            build/original-posix-dup/
+            build/original-rts-locks/
+            build/thread-label/**/*.json
+            build/thread-label/*/core/*.cbd
+            build/thread-label/oracle.txt
+            build/hint-trace/
+            build/delimited-continuations/
+            build/ghc-bco/
+            build/rts-diagnostics/*.json
+            build/rts-diagnostics/logs/
+            build/rts-shutdown/*.json
+            build/rts-shutdown/logs/
+            build/original-open/
+            build/process-lifecycle/
+            build/original-fcntl/
+            build/original-termios/
+            build/original-tcsetattr/
+            build/original-tcgetattr/
+            build/native-addresses/manifest.json
+            build/native-addresses/oracle.json
+            build/native-addresses/logs/
+            build/native-malloc/manifest.json
+            build/native-malloc/oracle.txt
+            build/native-malloc/logs/
+            build/address-fields/
+            build/data-to-tag/
+            build/scalar-bitcasts/
+            build/address-array-copy/
+            build/float-decode/
+            build/floating-remainder/
+            build/integer-completion/
+            build/thread-inventory/
+            build/compare-byte-arrays/manifest.json
+            build/compare-byte-arrays/oracle.tsv
+            build/compare-byte-arrays/NativeCompareByteArrays.hs
+            build/compare-byte-arrays/*/*.audit.json
+            build/compare-byte-arrays/*/boot-provenance.json
+            build/compare-byte-arrays/*/core/*.cbd
+            build/bytearray/manifest.json
+            build/bytearray/oracle.tsv
+            build/bytearray/NativeByteArray.hs
+            build/bytearray/*/*.audit.json
+            build/bytearray/*/boot-provenance.json
+            build/bytearray/*/core/*.cbd
+            build/int-arrays/manifest.json
+            build/int-arrays/oracle.tsv
+            build/int-arrays/expected.tsv
+            build/int-arrays/NativeIntArray.hs
+            build/int-arrays/native/int-array-oracle
+            build/int-arrays/*/*.audit.json
+            build/int-arrays/*/*/core/*.cbd
+            build/double-arrays/manifest.json
+            build/double-arrays/oracle.tsv
+            build/double-arrays/expected.tsv
+            build/double-arrays/NativeDoubleArray.hs
+            build/double-arrays/native/double-array-oracle
+            build/double-arrays/*/*.audit.json
+            build/double-arrays/*/*/core/*.cbd
+            build/int32-arrays/manifest.json
+            build/int32-arrays/oracle.tsv
+            build/int32-arrays/literal-oracle.tsv
+            build/int32-arrays/expected.tsv
+            build/int32-arrays/NativeInt32Array.hs
+            build/int32-arrays/native/int32-array-oracle
+            build/int32-arrays/*/*.audit.json
+            build/int32-arrays/*/*/core/*.cbd
+            build/float-word-arrays/manifest.json
+            build/float-word-arrays/oracle.tsv
+            build/float-word-arrays/expected.tsv
+            build/float-word-arrays/NativeFloatWordArray.hs
+            build/float-word-arrays/native/float-word-array-oracle
+            build/float-word-arrays/*/*.audit.json
+            build/float-word-arrays/*/*/core/*.cbd
+            build/int8-arrays/manifest.json
+            build/int8-arrays/*.tsv
+            build/int8-arrays/NativeInt8Array.hs
+            build/int8-arrays/native/int8-array-oracle
+            build/int8-arrays/*/*.audit.json
+            build/int8-arrays/*/*/core/*.cbd
+            build/int16-arrays/manifest.json
+            build/int16-arrays/oracle.tsv
+            build/int16-arrays/expected.tsv
+            build/int16-arrays/literal-oracle.tsv
+            build/int16-arrays/NativeInt16Array.hs
+            build/int16-arrays/native/int16-array-oracle
+            build/int16-arrays/*/*.audit.json
+            build/int16-arrays/*/*/core/*.cbd
+            build/tuple-join/
+            build/tuple-join-input/
+            build/tuple-arithmetic/
+            build/integer-primops/manifest.json
+            build/integer-primops/oracle.tsv
+            build/integer-primops/*.audit.json
+            build/bit-primops/manifest.json
+            build/bit-primops/oracle.tsv
+            build/bit-primops/NativeBitPrimops.hs
+            build/bit-primops/*-core/*.cbd
+            build/bit-primops/*.audit.json
+            build/simd/
+            build/explicit64-primops/manifest.json
+            build/explicit64-primops/oracle.tsv
+            build/explicit64-primops/*.audit.json
+            build/simd-int32x4/
+            build/simd-floatx4/
+            build/simd-floatx4-fma/
+            build/simd-wide-floating-fma/
+            build/simd-doublex2/
+            build/simd-int32x4-bytearray/
+            build/simd-word32x4-bytearray/
+            build/simd-floatx4-bytearray/
+            build/simd-doublex2-bytearray/
+            build/signed-narrow-primops/manifest.json
+            build/signed-narrow-primops/oracle.tsv
+            build/signed-narrow-primops/*.audit.json
+            build/corpus/corpus.json
+            build/corpus/oracle.tsv
+            build/corpus/structure.json
+            build/corpus/groups/**/*.audit.json
+            build/corpus/groups/**/boot-provenance.json
+            build/libraries/cases.json
+            build/libraries/oracle.tsv
+            build/libraries/oracle-validation.json
+            build/libraries/check-*.log
+            build/libraries/*/audit.json
+            build/libraries/sequence/*.audit.json
+            build/libraries/*/provenance.json
+            build/map/audit.json
+            build/map/check-*.log
+            build/map/modules.txt
+            build/map/oracle.tsv
+            build/map/oracle-validation.json
+            build/map/provenance.json
+            build/map/reproduction-provenance.json
+
+  foreign-exceptions:
+    needs: automation
+    if: inputs.cadence == 'nightly'
+    # Complete original Core is provisioned on this trusted runner.
+    runs-on: [self-hosted, Linux, X64, thc-fast]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: work/foreign-exceptions
+    env:
+      THC_FULL_CORE_ENVIRONMENT: ${{ vars.THC_FULL_CORE_ENVIRONMENT }}
+    steps:
+      - name: Require a trusted repository branch
+        working-directory: .
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            push|schedule) test "$GITHUB_REF" = refs/heads/main ;;
+            workflow_dispatch) case "$GITHUB_REF" in refs/heads/*) ;; *) exit 1 ;; esac ;;
+            *) exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          submodules: true
+          persist-credentials: false
+          path: work/foreign-exceptions
+      - name: Check dispatched revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Prepare genuine exception support and test both handoff modes
+        run: |
+          set -euo pipefail
+          test -n "$THC_FULL_CORE_ENVIRONMENT" && test -f "$THC_FULL_CORE_ENVIRONMENT"
+          # shellcheck source=/dev/null
+          source "$THC_FULL_CORE_ENVIRONMENT"
+          test -n "${THC_FOREIGN_EXCEPTION_GHC_SOURCE:-}" && test -d "$THC_FOREIGN_EXCEPTION_GHC_SOURCE"
+          test "$("$GHC" --numeric-version)" = 9.14.1
+          test "$("$GHC_PKG" --version)" = 'GHC package manager version 9.14.1'
+          # Never share mutable Gradle/THC acquisition caches with Fast checks or
+          # development worktrees, even if the provisioned environment sets them.
+          export GRADLE_USER_HOME="$RUNNER_TEMP/thc-foreign-exceptions/gradle"
+          export THC_GRADLE_USER_HOME="$GRADLE_USER_HOME"
+          export THC_CACHE_HOME="$RUNNER_TEMP/thc-foreign-exceptions/core"
+          make foreign-exception-test-modes GRADLE_FLAGS='--no-daemon --max-workers=2'
+      - name: Retain portable source and artifact hashes
+        if: always()
+        run: |
+          if [ -f build/foreign-exceptions/manifest.json ]; then
+            mkdir -p build/foreign-exception-ci
+            node <<'JS'
+          const fs = require('fs');
+          const {schema, ghc, entries, inputHashes, artifactHashes} =
+            JSON.parse(fs.readFileSync('build/foreign-exceptions/manifest.json', 'utf8'));
+          fs.writeFileSync('build/foreign-exception-ci/provenance.json',
+            JSON.stringify({schema, ghc, entries, inputHashes, artifactHashes}, null, 2) + '\n');
+          JS
+          fi
+      - name: Preserve genuine exception correctness results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: foreign-exception-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            work/foreign-exceptions/build/foreign-exception-ci/provenance.json
+            work/foreign-exceptions/build/test-results/foreignExceptionTest/*.xml
+            work/foreign-exceptions/build/test-results/foreignExceptionDenseTest/*.xml
+            work/foreign-exceptions/build/foreign-exceptions/logs/native-oracle.stdout
+          if-no-files-found: warn
+          retention-days: 14
+
+  library:
+    if: inputs.cadence == 'nightly'
+    name: library (${{ matrix.os }}, ${{ matrix.backend }}, handoff=${{ matrix.handoff }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        backend: [ast, bytecode]
+        handoff: ['false', 'true']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          submodules: true
+          persist-credentials: false
+      - name: Check dispatched revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - name: Download only this platform and workflow attempt
+        uses: actions/download-artifact@v8
+        with:
+          name: library-inputs-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/library-download
+          digest-mismatch: error
+      - name: Verify source, platform, pinned JDK and original library fingerprints
+        run: python3 .github/scripts/library_bundle.py restore --archive build/library-download/library-transfer.tar.gz
+      - name: Run the complete strict and compiled library checks
+        shell: bash
+        env:
+          BACKEND: ${{ matrix.backend }}
+          HANDOFF: ${{ matrix.handoff }}
+        run: |
+          set -euo pipefail
+          "$JAVA_HOME/bin/java" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+            "-Dthc.handoffSlabs=$HANDOFF" -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' \
+            thc.LibraryCheck build/libraries/cases.json "$BACKEND" \
+            2>&1 | tee "build/libraries/check-$BACKEND-handoff-$HANDOFF.log"
+      - name: Preserve each library mode's results
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: library-results-${{ runner.os }}-${{ matrix.backend }}-handoff-${{ matrix.handoff }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/library-transfer-verified.json
+            build/libraries/check-*.log

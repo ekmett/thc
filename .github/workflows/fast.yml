@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 concurrency:
   # Closed PRs share their open PR's number even after a merge changes GITHUB_REF
   # to main. Missing PR metadata stays in a run-specific PR group, never main's.
@@ -110,6 +111,10 @@ jobs:
           fi
           echo "runner=$runner" >> "$GITHUB_OUTPUT"
           echo "persistent=$persistent" >> "$GITHUB_OUTPUT"
+      - name: Stop for an unresolved hourly regression
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/hourly_health.py
       - name: Test automation and cache safety with assertions enabled and disabled
         run: |
           python3 -m unittest discover -s .github/scripts -p 'test_*.py'

@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-name: Build
+name: Hourly
 on:
-  push:
-    branches: [main]
+  schedule:
+    - cron: '31 * * * *'
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -18,5 +18,5 @@ jobs:
   checks:
     uses: ./.github/workflows/checks.yml
     with:
-      cadence: commit
+      cadence: hourly
       expected_sha: ${{ inputs.expected_sha || github.sha }}
