@@ -510,7 +510,7 @@ def handoffModeTests = [["testDefault", false],[ "testDense", true]].collect { t
         useJUnitPlatform { excludeTags("simd-families-experiment", "foreign-exceptions-full-core", "truffle-strings-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())
-        maxParallelForks = 1
+        maxParallelForks = 4
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Handoff mode evidence requires a fresh test process") { true }
     }
