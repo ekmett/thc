@@ -63,7 +63,7 @@ MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-li
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc original-stack original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating package-native-gc-carriers""".split()
 GC_CARRIER_OUTPUTS = frozenset("build/package-native-gc-carriers/" + name for name in (
     "manifest.json", "PackageNativeGcCarriers.cbd", "oracle.txt",
@@ -591,7 +591,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/original-tcgetattr/native/oracle",
     "build/original-termios/saved/native/oracle",
     "build/original-stdio-truncate/native/oracle",
-    "build/original-strerror/native/oracle",
     "build/original-fd-ready/native/oracle",
     "build/original-handle-readiness/native/oracle",
     "build/original-posix-stat/native/oracle",
@@ -827,11 +826,6 @@ ORIGINAL_STDIO_TRUNCATE_OUTPUTS = frozenset("build/original-stdio-truncate/" + n
         "originalTruncate.audit.json", "originalTruncateErrno.audit.json")),
 ))
 
-ORIGINAL_STRERROR_OUTPUTS = frozenset("build/original-strerror/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"logs/{label}.{suffix}" for label in ("ghc-version", "native-build", "native-oracle")
-      for suffix in ("stdout", "stderr", "command.json")),
-))
 
 ORIGINAL_FD_READY_ENTRIES = ("originalReadySafe", "originalReadyUnsafe")
 ORIGINAL_FD_READY_NEGATIVES = (
@@ -1800,8 +1794,6 @@ def allowed_payload(name):
         return name in SIMD128_ARRAY_OUTPUTS
     if parts[1] == "native-malloc":
         return name in ("build/native-malloc/manifest.json", "build/native-malloc/oracle.txt")
-    if parts[1] == "original-strerror":
-        return name in ORIGINAL_STRERROR_OUTPUTS
     if parts[1] == "original-fd-ready":
         return name in ORIGINAL_FD_READY_OUTPUTS
     if parts[1] == "original-handle-readiness":

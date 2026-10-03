@@ -401,7 +401,6 @@ extra-source-files:
   t/fixtures/compiler/OriginalStringRtsNative.hs
   t/fixtures/compiler/RtsShutdownNative.hs
   nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c
-  t/fixtures/compiler/OriginalStrerrorNative.hs
   t/fixtures/compiler/NativeMallocNative.hs
   t/fixtures/compiler/ProcessSignalsNative.hs
   t/fixtures/compiler/CBVCoercionAudit.hs
@@ -1279,7 +1278,6 @@ executable thc-fixtures
     OriginalStdioCloseFixtures
     OriginalPosixDupFixtures
     OriginalStdioSeekFixtures
-    OriginalStrerrorFixtures
     OriginalStdioTruncateFixtures
     OriginalHandleReadinessFixtures
     OriginalPathModeFixtures

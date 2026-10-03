@@ -6,8 +6,8 @@
 -- Produces/consumed result: Saved-termios CBDs and oracle.json.
 -- Cost and overlap: The retained-pointer boundary is distinct from get/set image
 --   transport. Keep a small lifetime test and share package/native setup.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: CMake owns named Linux x86_64 artifacts and an explicit unsupported
+--   receipt on other hosts. Linux generation/execution still needs verification.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 067.
 {-# LANGUAGE OverloadedStrings #-}
 

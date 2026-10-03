@@ -62,3 +62,43 @@ foreach(family rts-diagnostics rts-shutdown)
     COMMENT "Generate ${family} native process observations")
   add_custom_target(fixture-${family} DEPENDS ${outputs})
 endforeach()
+
+# 067: THC-owned saved termios pointers must retain aliases and obey context
+# lifetime. This is distinct from libc termios structure/constant conformance.
+set(termios_out "${PROJECT_SOURCE_DIR}/build/original-termios")
+set(termios_outputs "${termios_out}/manifest.json")
+set(termios_objects)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+  list(APPEND termios_outputs "${termios_out}/saved/native/oracle" "${termios_out}/saved/oracle.json")
+  list(APPEND termios_objects "${termios_out}/saved/native/Main.hi" "${termios_out}/saved/native/Main.o")
+  set(termios_labels ghc-version ghc-info saved-native-build saved-native-run)
+  foreach(stage pre post)
+    list(APPEND termios_labels "saved-${stage}-export")
+    list(APPEND termios_outputs "${termios_out}/saved/${stage}/core/OriginalSavedTermiosAudit.cbd"
+      "${termios_out}/saved/${stage}/core/THC.InterfaceClosure.cbd")
+    list(APPEND termios_objects "${termios_out}/saved/${stage}/ghc/OriginalSavedTermiosAudit.hi"
+      "${termios_out}/saved/${stage}/ghc/OriginalSavedTermiosAudit.o")
+    foreach(entry originalGetSavedTermios originalSetSavedTermios)
+      list(APPEND termios_outputs "${termios_out}/saved/${stage}/${entry}.audit.json")
+      list(APPEND termios_labels "saved-${stage}-audit-${entry}")
+    endforeach()
+  endforeach()
+  foreach(label IN LISTS termios_labels)
+    foreach(suffix stdout stderr command.json)
+      list(APPEND termios_outputs "${termios_out}/logs/${label}.${suffix}")
+    endforeach()
+  endforeach()
+endif()
+# Other platforms produce only an explicit unsupported receipt; the JUnit class
+# is enabled on Linux x86_64 only. No missing Linux products are called success.
+add_custom_command(OUTPUT ${termios_outputs} BYPRODUCTS ${termios_objects}
+  COMMAND ${fixture_env} "${fixtures_exe}" original-termios
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalSavedTermiosAudit.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalSavedTermiosNative.hs"
+    ${tool_sources} ${cabal_inputs} ${audit_inputs} ${toolchain_inputs}
+    "${fixtures_exe}" "${compact_exe}" ${plugin_outputs}
+    "${PROJECT_SOURCE_DIR}/bin/export-core.sh" "${PROJECT_SOURCE_DIR}/bin/export-core.ps1"
+    "${PROJECT_SOURCE_DIR}/bin/build-compiler.sh" "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate the saved-termios fixture for its declared platform")
+add_custom_target(fixture-original-termios DEPENDS ${termios_outputs})

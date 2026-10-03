@@ -25,7 +25,7 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `simd-wide-floating-fma`, `io-main-pap`, `simd-wide-arrays`, `simd128-arrays`,
 `simd-arithmetic`, `pinned-addresses`, `record-fields`, `rts-diagnostics`,
 `rts-shutdown`, `original-errno`, `ghc-bco`, `closure-inspection`, `cstring`,
-`thread-inventory`, `process-lifecycle-native`, `delimited-continuations`, `hint-trace`, `core-continuation` and `large-literal-cases`. Each has a `fixture-<group>`
+`thread-inventory`, `process-lifecycle-native`, `delimited-continuations`, `hint-trace`, `core-continuation`, `large-literal-cases` and `original-termios`. Each has a `fixture-<group>`
 target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
@@ -64,8 +64,8 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 69 graph targets covering 110 mapped JUnit classes, 46 quarantined
-groups and 26 groups still awaiting file rules. The native process target is
+There are 70 graph targets covering 111 mapped JUnit classes, 46 quarantined
+groups and 24 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -86,6 +86,12 @@ Gradle no longer builds these process controls for every unrelated test.
   modes in 19.6 seconds. Deleting the lazy callback oracle rebuilt its owner in
   3.06 seconds and left the independent literal fixture untouched; the next run
   did no work in 0.40 seconds. Their 29 declared products exist.
+- The standalone libc `strerror` harness and its package-Core dependency were
+  removed. General native buffer/lifetime and typed package-link checks passed
+  46 executions across both modes in 15.5 seconds. Its retired generated files
+  freed 12.9 MiB. Saved-termios has an explicit Linux x86_64 graph; macOS
+  generated its unsupported receipt and returned to no work. Its Linux products
+  and runtime behavior remain unverified here.
 - Thread inventory has separate native object directories, two nine-entry
   audits instead of 18, and no source-shape/root-count predictions. Its first
   compiled calls, interpreter-bypass negative control, callback masking and
@@ -108,7 +114,7 @@ Gradle no longer builds these process controls for every unrelated test.
 - Pinned-address rejection controls passed without leaving scratch catalogues.
   Removed 48 unreferenced catalogues (9.8 MiB), retaining named reports and logs.
 
-The focused JVM results do not establish that all 110 mapped classes pass.
+The focused JVM results do not establish that all 111 mapped classes pass.
 Linux generation/execution of the newly migrated rules, native Windows graph
 support and migration of the CI entry point remain open. Successful local
 fixture generation is not a claim that CI is green.

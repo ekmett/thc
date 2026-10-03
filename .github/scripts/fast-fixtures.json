@@ -511,6 +511,7 @@
       "sources": ["t/fixtures/compiler/OriginalProcessIdentityAudit.hs", "t/fixtures/compiler/OriginalProcessIdentityNative.hs", "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/cbits/target-layout.c", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java", "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs"]
     },
     "original-termios": {
+      "cmakeTarget": "fixture-original-termios",
       "ciPlatforms": ["Linux"],
       "junit": ["thc.runtime.OriginalSavedTermiosTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],
@@ -565,14 +566,7 @@
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/CompactModelFixtures.hs",
         "src/cbd/THC/Compact/Module.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
-    "original-strerror": {
-      "requires": ["original-process-identity"],
-      "junit": ["thc.runtime.OriginalStrerrorNativeTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-strerror"]}],
-      "outputs": ["build/original-strerror"],
-      "sources": ["t/fixtures/compiler/OriginalStrerrorNative.hs", "t/haskell-fixtures/OriginalStrerrorFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"],
-      "requires": ["original-process-identity"]
-    },
+
     "original-posix-stat": {
       "ciPlatforms": ["Linux"],
       "junit": ["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalDirectoryStreamsTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalUnlinkAtTest"],

@@ -2379,8 +2379,8 @@ Purpose: Check retained termios pointers preserve ownership/lifetime across call
 Produces/consumed result: Saved-termios CBDs and oracle.json.
 Cost and overlap: The retained-pointer boundary is distinct from get/set image
   transport. Keep a small lifetime test and share package/native setup.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: CMake owns named Linux x86_64 artifacts and an explicit unsupported
+  receipt on other hosts. Linux generation/execution still needs verification.
 
 Producer: t/haskell-fixtures/OriginalTermiosFixtures.hs.
 Consumer: thc.runtime.OriginalSavedTermiosTest; Linux x86_64 only.
@@ -2545,34 +2545,6 @@ Under build/original-rts-locks/:
 Consumer reads receipts/Core/declaration evidence/oracle/audits. Installed interface
   not hashed and old manifest not removed. Declaration/template archival value
   should be reviewed separately from the useful THC lock ownership semantics.
-
-073  original-strerror
-Fixture rationale (073 original-strerror)
-Purpose: Check foreign string results are transported into guest-visible error text.
-Produces/consumed result: Oracle/Core artifacts plus installed modules from process-
-  identity.
-Cost and overlap: A package-level failing operation already exercises error strings.
-  Standalone strerror conformance is not justified; consolidate a transport case into
-  errno/package smoke.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
-Producer: t/haskell-fixtures/OriginalStrerrorFixtures.hs.
-Consumer: thc.runtime.OriginalStrerrorNativeTest.
-IN: t/fixtures/compiler/OriginalStrerrorNative.hs; built thc-fixtures/FixtureSupport,
-  native GHC9.14.1/ghc-internal/libc; oracle environment LC_ALL=C.
-Under build/original-strerror/:
-  native/oracle: IN native source/package headers/libraries; OUT executable/objects.
-  oracle.json: IN executable stdout; OUT two error messages/four bounded-buffer rows.
-  logs/ghc-version.*,native-build.*,native-oracle.*: OUT log triplets.
-  manifest.json: IN native source and oracle.json only; OUT hashes.
-Consumer also calls OriginalStdioChecks.nativeModules: reads 066's manifest,
-  installed/packages.json, all receipt artifacts, module metadata, native link
-  records, runtime-core exception CBDs and their selected installed closure.
-That helper resolves/link-loads package cbits. This is an explicit edge to 066,
-  not merely this fixture's native executable. Receipt omits producer/tool inputs;
-  old manifest remains during generation. Candidate consolidate with general
-  package/native buffer transport tests rather than maintain a strerror harness.
 
 074  original-fd-ready
 Fixture rationale (074 original-fd-ready)
