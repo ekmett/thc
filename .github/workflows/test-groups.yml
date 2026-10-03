@@ -42,6 +42,21 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
+      - name: Identify macOS compiler cache
+        if: runner.os == 'macOS'
+        id: ghc-cache-host
+        run: |
+          os_version=$(sw_vers -productVersion)
+          echo "identity=${os_version%%.*}-$HOME" >> "$GITHUB_OUTPUT"
+      - name: Reuse installed macOS GHC
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ghcup/ghc/9.14.1
+            ~/.ghcup/db/ghc/9.14.1
+            ~/.ghcup/db/ghc/9.14.1.spec
+          key: installed-ghc-${{ runner.os }}-${{ runner.arch }}-${{ steps.ghc-cache-host.outputs.identity }}-9.14.1-setup0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d
       - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
         with:
           ghc-version: '9.14.1'
@@ -215,6 +230,21 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
+      - name: Identify macOS compiler cache
+        if: runner.os == 'macOS'
+        id: ghc-cache-host
+        run: |
+          os_version=$(sw_vers -productVersion)
+          echo "identity=${os_version%%.*}-$HOME" >> "$GITHUB_OUTPUT"
+      - name: Reuse installed macOS GHC
+        if: runner.os == 'macOS'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.ghcup/ghc/9.14.1
+            ~/.ghcup/db/ghc/9.14.1
+            ~/.ghcup/db/ghc/9.14.1.spec
+          key: installed-ghc-${{ runner.os }}-${{ runner.arch }}-${{ steps.ghc-cache-host.outputs.identity }}-9.14.1-setup0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d
       - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
         with:
           ghc-version: '9.14.1'
