@@ -6,8 +6,7 @@
 -- Produces/consumed result: CBDs and oracle.tsv.
 -- Cost and overlap: Keep the managed-address boundary, which native-address tests do not
 --   cover. Consolidate width cases with memory tests rather than duplicate acquisition.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: CMake owns the named outputs; audits consume only the declared CBD pair.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 050.
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -89,13 +88,11 @@ prepareManagedAddressReads root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_,_) <- entries]
     _ <- run root [("THC_CORE_OUT",root </> core), ("THC_GHC_OUT",root </> ghcOut)]
       "bin/export-core.sh" (options ++ [source]) ""
-    files <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
-    unless ("ManagedAddressReadAudit.cbd" `elem` files)
-      (die ("Missing " ++ stage ++ " managed-address Core"))
+    let files = ["ManagedAddressReadAudit.cbd", "THC.InterfaceClosure.cbd"]
     forM_ entries $ \(name,_,_) -> do
       let report = directory </> (stage ++ "-" ++ name ++ ".audit.json")
-      _ <- run root [] "python3" ["bin/audit-core.py", "--entry","main:ManagedAddressReadAudit." ++ name,
-        "--output",report,core] ""
+      _ <- run root [] "python3" (["bin/audit-core.py", "--entry","main:ManagedAddressReadAudit." ++ name,
+        "--output",report] ++ map (core </>) files) ""
       pure ()
     pure (stage,map (core </>) files)
   plugin <- listDirectory (root </> "src/compiler/THC")

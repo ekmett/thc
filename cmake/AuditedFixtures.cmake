@@ -1,0 +1,192 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+# The auditor consumes its Python modules, declared capability tables and the
+# CBD decoder. No executable fixture needs a generated JSON Core sibling.
+file(GLOB audit_modules CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/bin/core_*.py")
+set(audit_inputs ${audit_modules}
+  "${PROJECT_SOURCE_DIR}/bin/audit-core.py"
+  "${PROJECT_SOURCE_DIR}/bin/core-capabilities.json"
+  "${PROJECT_SOURCE_DIR}/bin/simd-families.json"
+  "${PROJECT_SOURCE_DIR}/src/main/resources/thc/scalar-primop-signatures.json"
+  "${PROJECT_SOURCE_DIR}/src/main/resources/thc/core-native-overrides.json"
+  "${PROJECT_SOURCE_DIR}/src/test/resources/thc/polyglot-abi.json")
+function(audited_fixture name modules)
+  cmake_parse_arguments(F "" "" "SOURCES;OUTPUTS;OBJECT_DIRS" ${ARGN})
+  set(out "${PROJECT_SOURCE_DIR}/build/${name}")
+  set(inputs)
+  foreach(source IN LISTS F_SOURCES)
+    list(APPEND inputs "${PROJECT_SOURCE_DIR}/${source}")
+  endforeach()
+  # Existing receipts also hash these exporter sources (including Windows).
+  foreach(script export-core.sh export-core.ps1 windows-common.ps1 build-compiler.sh toolchain.sh plugin.py)
+    list(APPEND inputs "${PROJECT_SOURCE_DIR}/bin/${script}")
+  endforeach()
+  set(outputs)
+  foreach(output IN LISTS F_OUTPUTS)
+    list(APPEND outputs "${out}/${output}")
+  endforeach()
+  set(objects "${out}/native/Main.hi" "${out}/native/Main.o")
+  foreach(directory IN LISTS F_OBJECT_DIRS)
+    foreach(module IN LISTS modules)
+      list(APPEND objects "${out}/${directory}/${module}.hi" "${out}/${directory}/${module}.o")
+    endforeach()
+  endforeach()
+  add_custom_command(OUTPUT ${outputs} BYPRODUCTS ${objects}
+    COMMAND ${fixture_env} "${fixtures_exe}" "${name}"
+    DEPENDS ${inputs} ${audit_inputs} ${tool_sources} ${cabal_inputs}
+      "${fixtures_exe}" "${compact_exe}" ${plugin_outputs} ${toolchain_inputs}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+    COMMENT "Generate ${name}: named Core, native and audit outputs")
+  add_custom_target(fixture-${name} DEPENDS ${outputs})
+endfunction()
+
+# 013: addressable cells must preserve pointer values, ownership and byte access.
+audited_fixture(pinned-pointer-cells PinnedPointerCellsAudit
+  SOURCES t/fixtures/compiler/PinnedPointerCellsAudit.hs t/fixtures/compiler/PinnedPointerCellsNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.tsv native/oracle
+    pre/core/PinnedPointerCellsAudit.cbd pre/core/THC.InterfaceClosure.cbd pre/audit.json
+    post/core/PinnedPointerCellsAudit.cbd post/core/THC.InterfaceClosure.cbd post/audit.json)
+
+# 015: quotient/remainder pairs, unsigned division and overflow flags.
+set(integer_logs)
+foreach(label ghc-version ghc-info pre-export pre-audit post-export post-audit native-build native-oracle)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND integer_logs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(integer-completion IntegerCompletionAudit
+  SOURCES t/fixtures/compiler/IntegerCompletionAudit.hs
+  OBJECT_DIRS native pre-ghc post-ghc
+  OUTPUTS manifest.json NativeIntegerCompletion.hs requests.tsv oracle.tsv
+    native/integer-completion-oracle pre-core/IntegerCompletionAudit.cbd
+    post-core/IntegerCompletionAudit.cbd pre-audit.json post-audit.json ${integer_logs})
+
+# 016: unsigned-to-floating rounding cannot be inferred from signed arithmetic.
+audited_fixture(word-floating WordFloatingAudit
+  SOURCES t/fixtures/compiler/WordFloatingAudit.hs t/fixtures/compiler/WordFloatingNative.hs
+  OBJECT_DIRS native pre-ghc post-ghc
+  OUTPUTS manifest.json oracle.tsv native/word-floating-oracle
+    pre-core/WordFloatingAudit.cbd post-core/WordFloatingAudit.cbd pre-audit.json post-audit.json)
+
+# 017: carry/multiply/division return every component across calls. This is the
+# sole producer of these CBDs; the quarantined cbv recipe must not export them.
+audited_fixture(tuple-arithmetic TupleArithmeticAudit
+  SOURCES t/fixtures/compiler/TupleArithmeticAudit.hs
+  OBJECT_DIRS native pre-ghc post-ghc
+  OUTPUTS manifest.json NativeTupleArithmetic.hs oracle.tsv call-oracle.tsv
+    native/tuple-arithmetic-oracle pre-core/TupleArithmeticAudit.cbd
+    post-core/TupleArithmeticAudit.cbd pre-audit.json post-audit.json)
+
+# 023: preserve Float/Double bit patterns across fields, captures and casts.
+set(bitcast_reports)
+set(bitcast_labels native-build native-oracle)
+foreach(stage pre post)
+  list(APPEND bitcast_labels "${stage}-export")
+  foreach(family float double)
+    foreach(operation Roundtrip Field Captured Decode Encode)
+      list(APPEND bitcast_reports "${stage}-${family}${operation}-audit.json")
+      list(APPEND bitcast_labels "${stage}-${family}${operation}-audit")
+    endforeach()
+  endforeach()
+endforeach()
+set(bitcast_logs)
+foreach(label IN LISTS bitcast_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND bitcast_logs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(scalar-bitcasts ScalarBitCastAudit
+  SOURCES t/fixtures/compiler/ScalarBitCastAudit.hs t/fixtures/compiler/ScalarBitCastNative.hs
+    src/tools/primops/PrimopTools.hs
+  OBJECT_DIRS native pre-ghc post-ghc
+  OUTPUTS manifest.json inputs.tsv oracle.tsv native/scalar-bitcast-oracle
+    pre-core/ScalarBitCastAudit.cbd post-core/ScalarBitCastAudit.cbd
+    pre-audit.json post-audit.json ${bitcast_reports} ${bitcast_logs})
+
+# 025: inverse hyperbolic functions, min/max and decoded words, including calls.
+set(floating_reports)
+set(floating_labels native-build native-oracle)
+set(floating_entries decodeWordsDirect decodeWordsCall asinhExample)
+foreach(operation asinh acosh atanh min max)
+  foreach(type Float Double)
+    list(APPEND floating_entries "${operation}${type}")
+  endforeach()
+endforeach()
+foreach(stage pre post)
+  list(APPEND floating_labels "${stage}-export")
+  foreach(entry IN LISTS floating_entries)
+    list(APPEND floating_reports "${stage}-${entry}-audit.json")
+    list(APPEND floating_labels "${stage}-${entry}-audit")
+  endforeach()
+endforeach()
+set(floating_logs)
+foreach(label IN LISTS floating_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND floating_logs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(floating-remainder "FloatingRemainderAudit;InverseHyperbolic"
+  SOURCES t/fixtures/compiler/FloatingRemainderAudit.hs t/fixtures/compiler/FloatingRemainderNative.hs
+    t/fixtures/core/InverseHyperbolic.hs
+  OBJECT_DIRS native pre-ghc post-ghc
+  OUTPUTS manifest.json inputs.tsv oracle.tsv native/oracle
+    pre-core/FloatingRemainderAudit.cbd post-core/FloatingRemainderAudit.cbd
+    pre-core/InverseHyperbolic.cbd post-core/InverseHyperbolic.cbd
+    ${floating_reports} ${floating_logs})
+
+# 034: fused operations have rounding behavior separate multiply/add cannot test.
+audited_fixture(fused-floating FloatingAudit
+  SOURCES t/fixtures/compiler/FloatingAudit.hs t/fixtures/compiler/FloatingAuditNative.hs
+  OBJECT_DIRS native pre-ghc post-ghc
+  OUTPUTS manifest.json oracle.tsv native/floating-oracle
+    pre-core/FloatingAudit.cbd post-core/FloatingAudit.cbd pre-audit.json post-audit.json)
+
+# 048: small boxed arrays and safe slices retain values and laziness.
+audited_fixture(small-arrays SmallArrayAudit
+  SOURCES t/fixtures/compiler/SmallArrayAudit.hs t/fixtures/compiler/SmallArrayAuditNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.tsv native/oracle
+    pre/core/SmallArrayAudit.cbd post/core/SmallArrayAudit.cbd pre/audit.json post/audit.json)
+
+# 050: typed reads through managed addresses use these two declared CBDs only.
+set(managed_reports)
+foreach(stage pre post)
+  foreach(entry word32Read wordRead int32Read intRead)
+    list(APPEND managed_reports "${stage}-${entry}.audit.json")
+  endforeach()
+endforeach()
+audited_fixture(managed-address-reads ManagedAddressReadAudit
+  SOURCES t/fixtures/compiler/ManagedAddressReadAudit.hs t/fixtures/compiler/ManagedAddressReadNative.hs
+  OBJECT_DIRS native pre-ghc post-ghc
+  OUTPUTS manifest.json requests.tsv oracle.tsv native/managed-address-read-oracle
+    pre-core/ManagedAddressReadAudit.cbd pre-core/THC.InterfaceClosure.cbd
+    post-core/ManagedAddressReadAudit.cbd post-core/THC.InterfaceClosure.cbd ${managed_reports})
+
+# 051: wide-character address offsets and representation.
+set(wide_char_logs)
+foreach(label ghc-version ghc-info native-compile native-oracle pre-export pre-audit post-export post-audit)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND wide_char_logs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(wide-char-address WideCharAddressAudit
+  SOURCES t/fixtures/compiler/WideCharAddressAudit.hs t/fixtures/compiler/WideCharAddressNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json native/oracle
+    pre/core/WideCharAddressAudit.cbd pre/core/THC.InterfaceClosure.cbd pre/audit.json
+    post/core/WideCharAddressAudit.cbd post/core/THC.InterfaceClosure.cbd post/audit.json ${wide_char_logs})
+
+# 053: byte/length/offset semantics across THC's memory boundary.
+set(memory_logs)
+foreach(label native-build native-oracle pre-export pre-audit post-export post-audit)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND memory_logs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(scalar-memory-utilities ScalarMemoryUtilities
+  SOURCES t/fixtures/compiler/ScalarMemoryUtilities.hs t/fixtures/compiler/ScalarMemoryUtilitiesNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.tsv native/oracle
+    pre/core/ScalarMemoryUtilities.cbd post/core/ScalarMemoryUtilities.cbd
+    pre/audit.json post/audit.json ${memory_logs})

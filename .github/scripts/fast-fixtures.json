@@ -352,6 +352,7 @@
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "scalar-memory-utilities": {
+      "cmakeTarget": "fixture-scalar-memory-utilities",
       "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-memory-utilities"]}],
       "outputs": ["build/scalar-memory-utilities"],
@@ -717,6 +718,7 @@
       "sources": ["src/test/java/thc/CoreCbdTestSupport.java", "t/haskell-fixtures/InstalledCacheFixtures.hs", "t/fixtures/compiler/InterfaceCacheRoot.hs", "t/fixtures/compiler/InterfaceCacheDependency.hs", "t/haskell-fixtures/InterfaceFixtures.hs", "t/haskell-fixtures/InterfaceForeignFacts.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/InterfaceLibrary.hs", "t/fixtures/compiler/InterfaceNative.hs", "t/fixtures/compiler/InterfaceForeign.hs", "t/fixtures/compiler/InterfaceForeignAlias.hs", "t/fixtures/compiler/ForeignImportStubs.hs", "t/fixtures/compiler/ImportStubsNative.hs", "src/compiler/THC/ForeignImportProvenance.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "src/compiler/interface/Main.hs", "src/compiler/THC/Interface.hs", "src/driver/cbits/target-layout.c", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/Zip.hs", "thc.cabal"]
     },
     "fused-floating": {
+      "cmakeTarget": "fixture-fused-floating",
       "junit": ["thc.runtime.FusedFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "fused-floating"]}],
       "outputs": ["build/fused-floating"],
@@ -741,6 +743,7 @@
       "sources": ["t/haskell-fixtures/SimdWideFloatFmaFixtures.hs", "t/haskell-fixtures/SimdFloatFmaFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/SimdWideFloatFma.hs", "t/fixtures/compiler/SimdWideFloatFmaNative.hs", "bin/core_vectors.py"]
     },
     "word-floating": {
+      "cmakeTarget": "fixture-word-floating",
       "junit": ["thc.runtime.WordFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],
       "outputs": ["build/word-floating"],
@@ -769,6 +772,7 @@
         "t/fixtures/compiler/PinnedAddressAuditNative.hs"]
     },
     "floating-remainder": {
+      "cmakeTarget": "fixture-floating-remainder",
       "junit": ["thc.runtime.FloatingRemainderTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-remainder"]}],
       "outputs": ["build/floating-remainder"],
@@ -793,6 +797,7 @@
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot"]
     },
     "scalar-bitcasts": {
+      "cmakeTarget": "fixture-scalar-bitcasts",
       "junit": ["thc.runtime.ScalarBitCastTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}],
       "outputs": ["build/scalar-bitcasts"],
@@ -992,6 +997,7 @@
       ]
     },
     "managed-address-reads": {
+      "cmakeTarget": "fixture-managed-address-reads",
       "junit": ["thc.runtime.ManagedAddressReadTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "managed-address-reads"]}],
       "outputs": ["build/managed-address-reads"],
@@ -1012,6 +1018,7 @@
         "t/fixtures/compiler/AddressArrayCopyNative.hs"]
     },
     "pinned-pointer-cells": {
+      "cmakeTarget": "fixture-pinned-pointer-cells",
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "pinned-pointer-cells"]}],
       "outputs": ["build/pinned-pointer-cells"],
@@ -1035,6 +1042,7 @@
       ]
     },
     "wide-char-address": {
+      "cmakeTarget": "fixture-wide-char-address",
       "junit": ["thc.runtime.WideCharAddressTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "wide-char-address"]}],
       "outputs": ["build/wide-char-address"],
@@ -1046,6 +1054,7 @@
       ]
     },
     "small-arrays": {
+      "cmakeTarget": "fixture-small-arrays",
       "junit": ["thc.runtime.SmallArrayTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "small-arrays"]}],
       "outputs": ["build/small-arrays"],
@@ -1269,6 +1278,7 @@
       ]
     },
     "integer-completion": {
+      "cmakeTarget": "fixture-integer-completion",
       "junit": ["thc.runtime.IntegerCompletionTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "integer-completion"]}],
       "outputs": ["build/integer-completion"],
@@ -1473,6 +1483,7 @@
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "tuple-arithmetic": {
+      "cmakeTarget": "fixture-tuple-arithmetic",
       "junit": ["thc.runtime.TupleArithmeticTest", "thc.runtime.WordCarryTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "tuple-arithmetic"]}],
       "outputs": ["build/tuple-arithmetic"],

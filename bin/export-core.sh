@@ -7,13 +7,16 @@ set -eu
 cd "$(dirname "$0")/.."
 root=$(pwd)
 . "$root/bin/toolchain.sh"
-# Explicitly supplied publication is a build-graph input. Legacy standalone
-# callers retain their build entry point until their fixtures are migrated.
+# A graph caller supplies its plugin publication as an explicit file input.
+publication=${THC_PLUGIN_MANIFEST:-}
 if [ "${1:-}" = --plugin-manifest ]; then
-  [ "${2:-}" = "$root/build/compiler/plugin.json" ] || {
+  publication=${2:-}
+  shift 2
+fi
+if [ -n "$publication" ]; then
+  [ "$publication" = "$root/build/compiler/plugin.json" ] || {
     echo "Expected this checkout's build/compiler/plugin.json" >&2; exit 2;
   }
-  shift 2
 else
   "$root/bin/build-compiler.sh"
 fi

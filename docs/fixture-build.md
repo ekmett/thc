@@ -13,7 +13,10 @@ make fixtures TESTS=thc.IntegerPrimopsTest
 The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `integer-primops`, `explicit64-primops`, `runtime-core-native`, `source-core` and
 `strict-fields`, `int-arrays`, `int8-arrays`, `int16-arrays`, `int32-arrays`,
-`double-arrays` and `float-word-arrays`. Each has a `fixture-<group>` target. `make fixtures` requires an
+`double-arrays`, `float-word-arrays`, `pinned-pointer-cells`, `integer-completion`,
+`word-floating`, `tuple-arithmetic`, `scalar-bitcasts`, `floating-remainder`,
+`fused-floating`, `small-arrays`, `managed-address-reads`, `wide-char-address`
+and `scalar-memory-utilities`. Each has a `fixture-<group>` target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
 
@@ -42,7 +45,7 @@ providers or runtime test results follow from successfully generating fixtures.
 
 Local graph verification (macOS arm64, GHC 9.14.1)
 
-- All fourteen admitted targets generated successfully, then Ninja reported no
+- All 25 admitted targets (58 mapped JUnit classes) generated successfully, then Ninja reported no
   work. The six array families together took 20.6 seconds including their shared
   tool rebuild (Ninja command log); native comparisons contained 19,175 rows.
 - Removing the Integer/Word interface-closure CBD rebuilt both CBD outputs and
@@ -50,6 +53,9 @@ Local graph verification (macOS arm64, GHC 9.14.1)
 - Removing `int16-arrays/literal-oracle.tsv` rebuilt that family's outputs.
   Touching `IntArrayAudit.hs` rebuilt only `int-arrays`; an unrelated file did
   not trigger a build. Quarantined target names were rejected.
+- Managed-address reads now passes the exact two CBD paths to the auditor. A
+  deliberately malformed extra CBD was ignored while a missing required CBD
+  was regenerated; it did not enter the receipt.
 - `python3 bin/test-plugin.py`: 23 checks passed.
   `python3 .github/scripts/test_fast_fixtures.py`: 48 checks passed.
 
