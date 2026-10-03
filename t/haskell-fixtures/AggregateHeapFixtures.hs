@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (145 aggregate-heap)
+-- Purpose: Check aggregate heap fields retain payload layout and lazy sharing.
+-- Produces/consumed result: pre/post CBD closure, oracle.tsv and constructor facts.
+-- Cost and overlap: Heap fields differ from call/result transport; retain missing
+--   cases in one aggregate corpus. A separate receipt/audit framework is excessive.
+-- Build status: QUARANTINED. Producer and consumer glob stage CBD directories.
+--   --export-only still builds/runs native code; it only omits strict audits.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 145.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

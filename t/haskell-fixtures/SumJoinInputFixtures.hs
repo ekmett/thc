@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (152 sum-join-input)
+-- Purpose: Check sum join arguments through recursion, swaps, captures, empty
+--   payloads and changing tags, including released handoff references.
+-- Consumes: SumJoinInputAudit{,Native}.hs, GHC 9.14.1, exporter/plugin and auditor.
+-- Produces/consumed result: Named pre/post CBDs, 259 native rows, audits and manifest.
+-- Cost and overlap: Consolidate semantic join moves with tuple/generic aggregate
+--   coverage; another native/export/audit framework is not independently justified.
+-- Build status: QUARANTINED. Producer counts joins; consumer fixes GHC let/wrapper
+--   shapes and exact transfer counts. These prevent valid compiler optimization.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 152.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

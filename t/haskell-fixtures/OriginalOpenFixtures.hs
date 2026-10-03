@@ -6,8 +6,8 @@
 -- Produces/consumed result: Core CBDs, oracle.json and the runtime native-open provider.
 -- Cost and overlap: Retain open/cancel/resource-leak behavior. Exact internal root counts
 --   must go; native provider testing is justified only by THC-owned request state.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: QUARANTINED; compiler-structure assertions must be removed.
+--   Excluded from build/test entry points; see docs/fixture-quarantine.log.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 069.
 {-# LANGUAGE OverloadedStrings #-}
 

@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (149 tuple-join-input)
+-- Purpose: Check tuple/empty join arguments, recursive swaps, exceptions and retry.
+-- Consumes: TupleJoinInputAudit{,Native}.hs, exporter/auditor and GHC; optional
+--   complete installed Core or THC_TUPLE_JOIN_PACKAGES and its referenced archives.
+-- Produces/consumed result: Named pre/post CBDs, oracle.tsv, audits and manifest.
+-- Cost and overlap: Keep join-move/empty/bottom cases in shared aggregate coverage.
+--   Original roundTo acquisition should not be required for basic join transport.
+-- Build status: QUARANTINED. Generation demands minimum join/case counts and an
+--   original roundTo reference even when original-library roots are not requested.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 149.
 {-# LANGUAGE OverloadedStrings, LambdaCase #-}
 
 -- |

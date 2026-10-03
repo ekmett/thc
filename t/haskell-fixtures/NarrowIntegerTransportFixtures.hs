@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (147 narrow-integer-transport)
+-- Purpose: Check narrow signed/unsigned values across call, heap and public ABI paths.
+-- Produces/consumed result: Pre/post CBD closure and 460 native oracle.tsv rows.
+-- Cost and overlap: A useful broad corpus that could absorb tiny literal/array
+--   fixtures. Share one native batch; split the SIMD case that forces LLVM on ARM.
+-- Build status: QUARANTINED. Producer and consumer enumerate stage CBD directories.
+--   Preserve public signedness/range and first-compiled behavior after repair.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 147.
 {-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      : NarrowIntegerTransportFixtures

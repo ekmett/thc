@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (142 gc-stats)
+-- Purpose: Check GC/clock call transport and unavailable-stats buffer safety.
+-- Produces/consumed result: Twelve entry/stage CBDs and oracle.json/manifest.
+-- Cost and overlap: Three full interfaces, interpreter compilation and twelve
+--   audits are excessive for input/input+1 observations. Keep a bounded runtime
+--   smoke and buffer guard; this cannot compare Java and native GC algorithms.
+-- Build status: QUARANTINED. Preparation assumes native RTS statistics are disabled
+--   despite inherited RTS settings; the consumer also pins compiled-entry counts.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 142.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

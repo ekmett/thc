@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (144 float-foreign)
+-- Purpose: Check floating classification/rounding across foreign transport.
+-- Produces/consumed result: pre/post CBDs and 384 raw-bit native rows in oracle.tsv.
+-- Cost and overlap: Retain classification/rounding edge cases not yet shown covered
+--   elsewhere. Share public floating behavior coverage; full-interface FCallId
+--   rewriting and twenty-four audits are excessive just to check math.
+-- Build status: Value review only; no separate expensive producer admitted yet.
+--   Compiled-call verification uses an increase, not an exact internal root count.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 144.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

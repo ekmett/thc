@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (140 original-time-clock)
+-- Purpose: Check clock CAPI buffer/errno transport and base/time coexistence.
+-- Produces/consumed result: Original/linked/specialized CBDs and oracle.json.
+-- Cost and overlap: Complete interface acquisition, FCallId rewriting, native
+--   interpretation and eight audits are not justified for ordinary package calls.
+--   Retain package smoke and general FFI guards; remove the dedicated C harness.
+-- Build status: QUARANTINED; the consumer also hard-codes one/two executed roots.
+--   Excluded from build/test entry points; see docs/fixture-quarantine.log.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 140.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

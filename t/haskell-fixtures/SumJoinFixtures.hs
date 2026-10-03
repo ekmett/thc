@@ -8,8 +8,8 @@
 -- Cost and overlap: Keep distinct join/sum execution cases within one aggregate corpus.
 --   Drop unused receipts and exact join/state-lambda/case counts rather than fossilize
 --   lowering.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: QUARANTINED; compiler-structure assertions must be removed.
+--   Excluded from build/test entry points; see docs/fixture-quarantine.log.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 137.
 {-# LANGUAGE OverloadedStrings #-}
 

@@ -1898,8 +1898,8 @@ Produces/consumed result: Stage CBDs and oracle.tsv.
 Cost and overlap: Keep data/offset behavior, merge duplicate width cases with
   address/array tests. Exact root or primitive-use counts must be removed before
   optimization work.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: QUARANTINED; compiler-structure assertions must be removed.
+  Excluded from build/test entry points; see docs/fixture-quarantine.log.
 
 Producer: t/haskell-fixtures/AlignedScalarMemoryFixtures.hs:prepareAlignedScalarMemory.
 Consumer: thc.runtime.AlignedScalarMemoryTest.
@@ -2434,8 +2434,8 @@ Purpose: Check open requests preserve resource ownership and blocking/async beha
 Produces/consumed result: Core CBDs, oracle.json and the runtime native-open provider.
 Cost and overlap: Retain open/cancel/resource-leak behavior. Exact internal root counts
   must go; native provider testing is justified only by THC-owned request state.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: QUARANTINED; compiler-structure assertions must be removed.
+  Excluded from build/test entry points; see docs/fixture-quarantine.log.
 
 Producer: t/haskell-fixtures/OriginalOpenFixtures.hs.
 Consumers: thc.runtime.OriginalOpenTest, LoomOriginalOpenTest.
@@ -4144,8 +4144,8 @@ Produces/consumed result: TupleJoinAudit CBDs and oracle.tsv; generated receipt/
 Cost and overlap: Keep distinct join-result execution in the aggregate corpus. Drop
   unused receipt work and exact join/state-lambda counts; do not retain a whole pipeline
   for metadata ceremony.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: QUARANTINED; compiler-structure assertions must be removed.
+  Excluded from build/test entry points; see docs/fixture-quarantine.log.
 
 Producer: bin/prepare-tuple-join-audit.py; consumer: thc.runtime.TupleJoinResultTest.
 IN t/fixtures/compiler/TupleJoinAudit.hs, TupleJoinAuditNative.hs, producer model,
@@ -4477,8 +4477,8 @@ Produces/consumed result: SumJoinAudit CBDs and oracle.tsv; manifest/audits are 
 Cost and overlap: Keep distinct join/sum execution cases within one aggregate corpus.
   Drop unused receipts and exact join/state-lambda/case counts rather than fossilize
   lowering.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: QUARANTINED; compiler-structure assertions must be removed.
+  Excluded from build/test entry points; see docs/fixture-quarantine.log.
 
 Producer: t/haskell-fixtures/SumJoinFixtures.hs; consumer: thc.runtime.SumJoinResultTest.
 IN t/fixtures/compiler/SumJoinAudit.hs, SumJoinAuditNative.hs, shared tools/data/GHC.
@@ -4757,3 +4757,449 @@ Quarantine enforcement checkpoint
   CI selection contains 103 groups / 419 classes and no quarantined consumers.
   Direct quarantined/wildcard CLI requests exit 2 with PATH=/nonexistent, before
   toolchain discovery. No Gradle application build or runtime suite was executed.
+
+140 original-time-clock (custom full-Core suite)
+Fixture rationale (140 original-time-clock)
+Purpose: Exercise clock CAPI buffer/errno transport and coexistence of base/time.
+Produces/consumed result: linked original/specialized CBDs and oracle.json;
+  OriginalTimeClockTest also hashes source/interface/audit receipts.
+Cost and overlap: Complete time/base interface Core, typed FCallId rewriting,
+  native interpreter calls and eight audits are excessive for ordinary package
+  calls. Keep a package-level time smoke and a small general FFI buffer/errno
+  boundary test if those cases are missing; do not preserve a clock-C conformance
+  harness. The test hard-codes one/two executed compiler roots.
+Build status: QUARANTINED; excluded from all Gradle Test tasks and from the new graph.
+Producer: t/haskell-fixtures/OriginalTimeClockFixtures.hs.
+Consumer: src/fullCoreTest/java/thc/runtime/OriginalTimeClockTest.java;
+  Gradle originalTimeClockDefault/originalTimeClockDense.
+Inputs: t/fixtures/compiler/OriginalTimeClockAudit.hs, built thc-fixtures with
+  GHC API/plugin/interface/Driver.ForeignBitcode modules, selected Linux64 GHC
+  9.14.1/ghc-pkg, native time/base/unix packages and headers resolved by
+  THC.Driver.ForeignBitcode.timeClockHeaders. Complete installed interfaces:
+  time Data/Time/Clock/Internal/CTimespec.hi and base System/CPUTime/Posix/ClockGetTime.hi.
+Under build/original-time-clock/:
+  original.cbd, base-original.cbd <- respective installed interfaces/Core loader.
+  linked.cbd, base-linked.cbd <- originals and linkClockGetTime; the helper compiles
+    temporary clock.c/clock.bc using selected headers and attaches foreign linkage.
+  specialized-closed.cbd <- fixture source and typed original FCallId substitutions.
+  pre.cbd, post.cbd <- specialized Core simplified/tidied by GHC API.
+  ghc/ <- compiler/interpreter and foreign-bitcode intermediate outputs.
+  oracle.json <- hscCompileCoreExpr native functions, current clock state, guarded
+    memory images and errno; nine observations. Time values are live observations,
+    not deterministic content derived solely from files.
+  <pre|post>-<originalId|originalConstant|originalResolution|originalTime>.audit.json
+    <- linked.cbd + stage CBD/auditor; originalId is an expected rejection.
+  logs/{version,libdir,info,imports,includes,unit,base-imports,<stage>-<entry>}.*
+    <- corresponding commands; stdout/stderr/command.json.
+  manifest.json <- source/header/interface hashes, named CBD/oracle/audit/log outputs.
+Consumer additionally reads generated runtime ABI resources, allocates test-private
+  buffers, links the embedded foreign bitcode and writes temporary controls.
+No ordinary index group or Make/workflow producer invocation found. The Gradle
+  tasks require a preexisting manifest; that is a missing producer edge, not setup.
+
+Structural-assertion quarantine follow-up
+  052 aligned-scalar-memory, 069 original-open, 124 tuple-join and 137 sum-join
+  are now excluded too. Their previously recorded exact Core/root/join/state-lambda
+  assumptions are not admission requirements for the future compiler.
+
+141 rts-event (custom full-Core suite; I/O-manager prerequisites, not eventlog/JFR)
+Fixture rationale (141 rts-event)
+Purpose: Check logical capabilities, context-local manager slots and descriptor
+  lifecycles; the same JUnit class contains a useful direct masking/resumption test.
+Produces/consumed result: entry-specific pre/post CBDs, oracle.json and manifest.
+Cost and overlap: Six complete interfaces, thirty CBDs/audits, native interpreter
+  calls and three recursive producer subprocesses are excessive for ordinary
+  pipe/eventfd/poll package behavior. Preserve THC-owned capability/context state
+  and safe-completion masking in focused tests; use package integration for libc.
+Build status: QUARANTINED. Native child invocations rewrite the parent's log/compiler
+  paths, and consumers assert exact compiled-entry increments. Split valuable
+  fixture-free masking coverage before readmission; do not weaken first-call checks.
+Producer: t/haskell-fixtures/RtsEventFixtures.hs; consumer RtsEventNativeTest in
+  src/fullCoreTest; Gradle rtsEventFullCoreTest/rtsEventFullCoreDenseTest.
+IN t/fixtures/compiler/RtsEventAudit.hs, shared thc-fixtures/GHC API/plugin/interface
+  tools and auditor, selected GHC 9.14.1 native64 RTS/packages. Full ghc-internal
+  interfaces GHC/Internal/{Conc/Sync,Event/Thread,Event/Control,Event/EPoll,
+  Event/Poll,System/Posix/Internals}.hi. This is Linux API-dependent even though
+  the producer's initial host check only requires native64.
+Under build/rts-event/:
+  <entry>-<pre|post>.cbd <- typed original FCallId substitution into fixture Core;
+    entries processors, capabilities, siginfo, setfd, cloexec, eventThread,
+    timerManager, timerThread, eventfdCycle, pipeCycle, epollCycle, epollSafeCycle,
+    pollCycle, pollSafeCycle, controlCycle. GHC API serializes/tidies each separately.
+  ghc/ <- GHC interpreter/compiler products for the shared audit source.
+  oracle.json <- in-process hscCompileCoreExpr native calls for inputs 1,2,4;
+    rows (24) and descriptorRows (21). Capability changes are restored afterward.
+    controlCycle instead reexecutes thc-fixtures rts-event three times with
+    THC_RTS_EVENT_NATIVE_CONTROL set; each child repeats interface/compiler setup
+    in the SAME directory, rewrites version/info/libdir/imports logs, executes
+    native control and exits before the ordinary export/receipt phase.
+  <entry>-<stage>.audit.json <- corresponding CBD, named binder and Python auditor;
+    thirty auditor subprocesses.
+  logs/{version,info,libdir,imports,<entry>-<stage>,controlCycle-native-<1|2|4>}.*
+    <- command stdout/stderr/command.json; parent and child ownership collides.
+  manifest.json <- source/interface hashes, CBDs/audits/oracle; command logs are
+    produced but not in artifactHashes.
+Consumer reads receipts/Core/oracles, uses runtime native providers and creates
+  test-private descriptor/control state. Exact row/source declarations and compiled
+  entry increments are asserted; context capability values themselves are API
+  semantics, distinct from internal compiler root counts.
+
+142 gc-stats (custom full-Core suite)
+Fixture rationale (142 gc-stats)
+Purpose: Check GC/clock calls return through the runtime boundary and unavailable
+  stats do not write a guest buffer. These do not prove equivalent GC algorithms.
+Produces/consumed result: twelve entry/stage CBDs and oracle.json/manifest.
+Cost and overlap: Three complete interfaces, native interpreter compilation and
+  twelve auditor starts are disproportionate to mostly input/input+1 observations.
+  Keep a bounded runtime GC/clock smoke and the unavailable-stats buffer guard.
+Build status: QUARANTINED. Native preparation secretly requires RTS stats disabled;
+  inherited runtime settings can invalidate it. Exact compiled-entry increments
+  also constrain compiler structure. Required RTS settings must be explicit inputs.
+Producer: t/haskell-fixtures/GcStatsFixtures.hs; consumer GcStatsNativeTest in
+  src/fullCoreTest; Gradle gcStatsFullCoreTest/gcStatsFullCoreDenseTest.
+IN t/fixtures/compiler/GcStatsAudit.hs, thc-fixtures/GHC API/plugin/interface/auditor
+  closure, selected native64 GHC 9.14.1/ghc-internal, complete installed interfaces
+  GHC/Internal/{Stats,System/Mem,Clock}.hi, producer RTS settings including GHCRTS.
+Under build/gc-stats/:
+  <enabled|stats|minor|major|blocking|clock>-<pre|post>.cbd <- typed original FCallId
+    substitution into audit source, simplification/tidying/serialization through GHC API.
+  ghc/ <- compiler/interpreter intermediates.
+  oracle.json <- hscCompileCoreExpr/in-process native calls for -7,0,42; fifteen rows
+    across five entries (stats leaf is not invoked). Requires enabled result equal
+    input and every other result input+1; aborts when native RTS stats are enabled.
+  <entry>-<stage>.audit.json <- matching CBD + named entry + auditor (twelve calls).
+  logs/{version,info,libdir,imports,<entry>-<stage>}.* <- stdout/stderr/command.json.
+  manifest.json <- input/interface hashes and CBD/oracle hashes; audit/log outputs
+    are produced but not included in artifactHashes; statsEnabled is hard-coded false.
+Consumer hashes the receipt, reads CBD/oracle rows, creates temporary controls and
+  checks unavailable stats leaves a buffer intact. Preexisting manifest is demanded
+  by the custom Gradle tasks; no producing task edge exists.
+
+143 compiler-rts (custom full-Core suite)
+Fixture rationale (143 compiler-rts)
+Purpose: Check compiler-package shared CAF slots/keepCAFs and unique address cells
+  cross the guest runtime boundary with the correct ownership and identity.
+Produces/consumed result: pre.cbd, post.cbd, oracle.tsv and unique-oracle with receipt.
+Cost and overlap: Compiler-owned global state is a legitimate boundary, unlike a
+  random libc function. Retain a narrow semantic/identity test. Three complete
+  interfaces, in-process native compilation, another native executable and twelve
+  declaration audits should not be replicated per consumer; share compiler package
+  acquisition and remove reports the test does not consume.
+Build status: Value review only; not yet admitted to the new graph. This consumer
+  checks compiledEntries increases, not an exact internal-root count.
+Producer: t/haskell-fixtures/CompilerRtsFixtures.hs; consumer CompilerRtsNativeTest
+  in src/fullCoreTest; custom compiler RTS default/dense Gradle tasks.
+IN t/fixtures/compiler/CompilerRtsAudit.hs, selected GHC 9.14.1/ghc-pkg and full
+  installed GHC.hi, GHC/Data/FastString.hi, GHC/Utils/GlobalVars.hi; shared linked
+  GHC API/plugin/interface and auditor closure. Unit owner is hard-coded to
+  ghc-9.14.1-inplace, which needs checking against supported complete-Core installs.
+Under build/compiler-rts/:
+  pre.cbd, post.cbd <- typed original FCallId substitution for keepCAFsForGHCi and
+    four get-or-set compiler globals, plus uniqueCells/counter/increment Core.
+  ghc/ <- GHC API/interpreter and standalone native compiler intermediates; both
+    native phases use this same directory, so phase ownership must be separated.
+  oracle.tsv <- native hscCompileCoreExpr calls (five operations x five inputs),
+    after explicitly initializing three native GHC global IORefs. It is written
+    provisionally, then replaced with thirty rows after the unique oracle runs.
+  UniqueOracle.hs <- producer template importing CompilerRtsAudit.
+  unique-oracle <- generated driver/audit source, GHC --make -O2 -dynamic -package ghc.
+  logs/unique-oracle.stdout <- executable; checked against input+4; contributes
+    five more rows to final oracle.tsv.
+  <pre|post>-<six entries>.audit.json <- stage CBD/auditor; twelve reports.
+  logs/{version,libdir,imports,unique-build,unique-oracle,<stage>-audit-<entry>}.*
+    <- stdout/stderr/command.json.
+  manifest.json <- source/interface hashes and CBD/oracle/generated driver/native
+    executable hashes. Audits/logs are not included in artifactHashes.
+Consumer hashes receipt paths and reads CBD/oracle; declaration controls mutate
+  in-memory Core. The task demands preexisting manifest rather than owning a rule.
+
+144 float-foreign (custom full-Core suite)
+Fixture rationale (144 float-foreign)
+Purpose: Check floating classification and rounding across actual foreign-call
+  transport, including signed zero, subnormals, NaNs/payloads and halfway values.
+Produces/consumed result: pre/post CBDs and oracle.tsv; source/interface/log hashes.
+Cost and overlap: Classification/rounding cases are not established as covered by
+  the already-scanned bitcast/remainder tests. Keep those semantic cases, but move
+  them into shared public floating behavior coverage. Two complete interface reads,
+  typed FCallId rewriting and twenty-four audits are not necessary merely to check
+  math. First-compiled verification uses an increase, not an exact root count.
+Build status: Value review only; no separate expensive producer admitted yet.
+Producer: t/haskell-fixtures/FloatForeignFixtures.hs; consumer FloatForeignNativeTest
+  in src/fullCoreTest, custom floatForeignTest/floatForeignDenseTest tasks.
+IN t/fixtures/compiler/FloatForeignAudit.hs, GHC API/plugin/interface/auditor closure,
+  selected GHC 9.14.1 and complete ghc-internal GHC/Internal/Float.hi and
+  GHC/Internal/Float/RealFracMethods.hi; native libraries used by those FCallIds.
+Under build/float-foreign/:
+  pre.cbd, post.cbd <- twelve original classification/rint FCallIds specialized into
+    typed audit-source consumers and simplified/tidied through GHC API.
+  ghc/ <- GHC API/native interpreter intermediate files.
+  oracle.tsv <- twelve hscCompileCoreExpr/native functions x 32 bit-pattern inputs
+    (384 rows); no separate native executable. Native environment/rounding behavior
+    remains a real input, not merely the logged compiler version.
+  <pre|post>-<entry>.audit.json <- matching stage CBD and auditor (24 subprocesses).
+  logs/{version,libdir,imports,<stage>-audit-<entry>}.* <- command triplets.
+  manifest.json <- source/interface hashes and CBD/oracle/command log hashes;
+    audit JSON files themselves are not in artifactHashes. Old receipt is removed.
+Consumer reads receipt paths, CBDs and oracle.tsv; performs in-memory declaration
+  mutation controls. Gradle requires a preexisting manifest, not a producer edge.
+
+145 aggregate-heap (custom full-Core suite)
+Fixture rationale (145 aggregate-heap)
+Purpose: Check nested/empty tuple and sum fields in heap constructors preserve
+  payload layout and lazy sharing, including GHC's original BoxedRep.
+Produces/consumed result: pre/post CBD closure, oracle.tsv and constructor metadata.
+Cost and overlap: Heap-field transport is distinct from argument/result transport;
+  retain missing layout/laziness cases in one aggregate corpus. No reason for a
+  separate receipt/audit framework. Type/layout contracts need coverage; incidental
+  worker/root structure does not. First-compiled tests use counter increases.
+Build status: QUARANTINED: producer and consumer enumerate all CBDs in stage/core,
+  so old/unrelated files affect inputs. Named module ownership is required.
+Producer: t/haskell-fixtures/AggregateHeapFixtures.hs; consumer AggregateHeapNativeTest
+  in src/fullCoreTest; custom aggregateHeapTest/aggregateHeapDenseTest tasks.
+IN t/fixtures/compiler/{AggregateHeapFields,AggregateHeapFieldsNative}.hs, shared
+  exporter/plugin/auditor/CBD decoder; native64 GHC 9.14.1 with matching ghc package
+  interfaces/native libraries. Package identity is queried, not hard-coded.
+Under build/aggregate-heap/:
+  native/oracle and intermediates <- native/audit sources, --make -O2 -dynamic
+    -fforce-recomp -dcore-lint -dstg-lint -package ghc.
+  oracle.tsv <- binary's embedded nine entries x thirteen inputs (117 rows);
+    boxedTag must agree with originalBoxedTag reference.
+  <pre|post>/core/AggregateHeapFields.cbd plus discovered *.cbd closure <- source,
+    nine closure roots, stage option and exporter. stage/ghc/ are intermediates.
+  stage/audit.json <- all discovered CBDs/auditor; omitted with --export-only.
+  commands/{ghc-version,ghc-package-id,ghc-info,native-build,native-run,<stage>-export,
+    <stage>-audit}.* <- command triplets.
+  manifest.json (or export-manifest.json) <- source hashes, native binary/oracle,
+    discovered CBDs/audits/logs and checked constructor representation records.
+--export-only still builds/runs the native oracle and both Core stages; it only
+  suppresses strict audits and changes receipt destination. Only manifest.json
+  is removed at start, not an old export-manifest.json.
+Consumer reads receipt/hashes/oracle, then independently enumerates stage/core
+  instead of consuming only named CBD outputs. No Gradle producer edge.
+
+146 fourway-aggregate (custom full-Core suite)
+Fixture rationale (146 fourway-aggregate)
+Purpose: Check four-alternative sum tags/payloads, nested heap fields, partial
+  applications and residual/captured aggregate values, including original GHC data.
+Produces/consumed result: stage CBD closure, oracle.tsv and typed constructor facts.
+Cost and overlap: Multiway sums and PAP/capture/heap transport have real value beyond
+  two-way result arithmetic. Retain representative semantic cases in the aggregate
+  corpus. One native batch is proportionate; three consumer classes should share it.
+  Representation contracts are meaningful, but incidental retained-binding/lowering
+  inventories must not become permanent compiler constraints.
+Build status: QUARANTINED: both producer and native consumer discover stage CBDs by
+  directory listing. Named inputs must replace this before graph admission.
+Producer: t/haskell-fixtures/FourWayAggregateFixtures.hs; consumers full-Core
+  FourWayAggregateNativeTest, FourWayAggregateStorageTest, FourWayAggregateProtocolTest
+  via FourWayEvidence. Gradle fourwayAggregateFullCoreTest/default-dense pair.
+IN t/fixtures/compiler/{FourWayAggregateFields,FourWayAggregateFieldsNative}.hs,
+  selected native64 GHC 9.14.1/ghc-pkg/ghc package (identity queried), shared exporter,
+  plugin, auditor/data and CBD reader.
+Under build/fourway-aggregate/:
+  native/oracle + native compiler intermediates <- native/audit sources, --make
+    -O2 -dynamic -Wall -Werror -fforce-recomp -dcore-lint -dstg-lint -package ghc.
+  oracle.tsv <- executable, sixteen entries x sixteen selector positions x six
+    unsigned payloads (1536 rows); payload-preservation checked independently.
+  <pre|post>/core/FourWayAggregateFields.cbd + discovered closure CBDs <- source,
+    sixteen closure roots/exporter; stage/ghc/ are intermediates.
+  stage/audit.json <- discovered CBD set and all entries/auditor.
+  commands/{ghc-version,ghc-package-id,ghc-info,native-build,native-run,<stage>-export,
+    <stage>-audit}.* <- command triplets.
+  manifest.json <- source and artifact hashes (native binary/oracle, discovered
+    CBDs/audits/logs), constructor proof records and audit summaries; old removed.
+Producer also asserts exact exported field/type/slot maps and retained partial
+  applications/bindings. Preserve actual aggregate ABI tests while reviewing
+  incidental shape demands. Consumers read the receipt and oracle; native test
+  independently lists every stage CBD. Storage/protocol tests use FourWayEvidence
+  and should keep a fixture-free independent model where possible.
+
+147 narrow-integer-transport (custom full-Core suite)
+Fixture rationale (147 narrow-integer-transport)
+Purpose: Check six signed/unsigned narrow widths through fields, tuples, captures,
+  PAPs, sums, masking, arithmetic, memory, loops and public API boundaries.
+Produces/consumed result: pre/post CBD closure, oracle.tsv and manifest.
+Cost and overlap: This broader semantic corpus is a candidate to absorb tiny literal
+  and width-specific array fixtures. One native batch is justified for distinct
+  transport paths; duplicated narrow pipelines are not. Separate its SIMD case so
+  all scalar coverage does not require an LLVM backend on ARM.
+Build status: QUARANTINED: producer and consumer enumerate stage CBD directories.
+Producer: t/haskell-fixtures/NarrowIntegerTransportFixtures.hs; consumer
+  NarrowIntegerTransportTest in src/fullCoreTest, custom default/dense tasks.
+IN t/fixtures/compiler/{NarrowIntegerTransport,NarrowIntegerTransportNative}.hs,
+  shared exporter/plugin/auditor/decoder, GHC 9.14.1/native packages. ARM selects
+  -fllvm for both native and Core compilation because one case contains SIMD;
+  LLVM tools/settings are therefore real dependencies of this entire producer.
+Under build/narrow-integer-transport/:
+  native/oracle + intermediates <- native/audit sources, --make -O2 -dynamic -Wall
+    -Werror -fforce-recomp -dcore-lint -dstg-lint plus selected backend flag.
+  oracle.tsv <- executable; 23 entries x 20 payloads (460 rows).
+  <pre|post>/core/NarrowIntegerTransport.cbd + discovered closure CBDs <- source,
+    23 closure roots/exporter; stage/ghc/ intermediates.
+  stage/audit.json <- all discovered CBDs and entries/auditor.
+  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
+    <- command triplets.
+  manifest.json <- source/binary/oracle/discovered Core/audit/log hashes; old removed.
+Producer checks a six-width tuple representation and a shared-slot sum layout.
+Consumers read receipt/oracle then independently list stage CBDs; public boundary
+  tests check signedness and out-of-range rejection. Compiled checks use increases,
+  not exact root counts. Gradle's manifest precondition does not create a producer.
+
+148 generic-sum-transport (custom full-Core suite)
+Fixture rationale (148 generic-sum-transport)
+Purpose: Check heterogeneous address/integer/vector sums through nested fields,
+  PAPs/captures and reuse, including release of inactive reference payloads.
+Produces/consumed result: pre/post CBD closure, oracle.tsv and receipt; direct runtime
+  controls also use the exported layout to exercise address identity/vector species.
+Cost and overlap: These carrier/lifetime/layout boundaries are valuable beyond
+  arithmetic sum results. Consolidate generic/fourway/heap aggregate preparation.
+  Keep independent storage/rejection controls fixture-free where possible; they
+  should not need 1440 native rows merely to check one malformed layout.
+Build status: QUARANTINED: both producer and consumer discover CBDs by directory
+  listing. The vector cases additionally force LLVM on aarch64 for all entries.
+Producer: t/haskell-fixtures/GenericSumTransportFixtures.hs; consumer
+  GenericSumTransportTest in src/fullCoreTest, custom default/dense tasks.
+IN t/fixtures/compiler/{GenericSumTransport,GenericSumTransportNative}.hs, shared
+  exporter/plugin/auditor/decoder, GHC 9.14.1 native packages and LLVM on aarch64.
+  This producer checks only arch == aarch64 (unlike 147's aarch64/arm64 branch).
+Under build/generic-sum-transport/:
+  native/oracle + intermediates <- native/audit sources, --make -O2 -dynamic -Wall
+    -Werror -fforce-recomp -dcore-lint -dstg-lint plus backend flags.
+  oracle.tsv <- executable, ten entries x sixteen selectors x nine payloads
+    (1440 rows), checked for complete requested case inventory.
+  <pre|post>/core/GenericSumTransport.cbd + discovered closure CBDs <- audit source,
+    ten roots/exporter; stage/ghc/ intermediates.
+  stage/audit.json <- all discovered CBDs + entries/auditor.
+  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
+    <- command triplets.
+  manifest.json <- sources, native binary/oracle, discovered CBDs/audits/logs;
+    old manifest removed first.
+Producer checks address/integer shared slots, vector slots and nested slot trees.
+Those are representation contracts; do not equate them with arbitrary root counts.
+Consumer reads receipt/oracle and lists stage CBDs. Independent direct tests cover
+  carrier identity, inactive references, vector species and invalid payload levity;
+  first-compiled checks use counter increases. Gradle has no producing task edge.
+
+149 tuple-join-input (custom fixture)
+Fixture rationale (149 tuple-join-input)
+Purpose: Check tuple/empty join arguments, recursive swaps, exceptions and retry.
+Consumes: TupleJoinInputAudit{,Native}.hs, exporter/auditor and GHC; optional
+  complete installed Core or THC_TUPLE_JOIN_PACKAGES and its referenced archives.
+Produces/consumed result: Named pre/post CBDs, oracle.tsv, audits and manifest.
+Cost and overlap: Keep join-move/empty/bottom cases in shared aggregate coverage.
+  Original roundTo acquisition should not be required for basic join transport.
+Build status: QUARANTINED. Generation demands minimum join/case counts and an
+  original roundTo reference even when original-library roots are not requested.
+Producer: t/haskell-fixtures/TupleJoinFixtures.hs; consumer TupleJoinNativeTest.
+Under build/tuple-join-input/:
+  native/oracle and native intermediates <- audit/driver sources, GHC --make -O2
+    -dynamic -fforce-recomp -dcore-lint -dstg-lint -package ghc-internal.
+  oracle.tsv <- native executable, 222 rows across six entries; native includes all
+    six even when originalLibrary=False exports only four guest entry roots.
+  installed/bundles/<unit>.zip, installed/packages.json <- prepareInstalledCore
+    (shared acquisition in entry 066), or THC_TUPLE_JOIN_PACKAGES. The latter selects
+    ghc-internal/rts units, checks/copies bundle hashes and rewrites bundle paths;
+    other referenced native/package paths still need explicit dependency closure.
+  <pre|post>/core/TupleJoinInputAudit.cbd <- source, selected roots, stage/exporter;
+    stage/ghc/ intermediates. Its directory filter accepts this EXACT filename;
+    this is not an output-glob defect.
+  stage/audit.json <- named CBD + optional installed/packages.json + auditor.
+  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
+    <- command/stdout/stderr triplets.
+  manifest.json <- source/native binary/oracle/package/Core/audit/log hashes;
+    records originalLibrary and packageManifest; old receipt removed first.
+Producer requires at least three tuple joins/two empty cases and roundTo reference
+  unconditionally. The false-mode root/reference mismatch needs review; it has not
+  been executed in this inventory pass. Consumer reads named CBDs, oracle, receipt
+  paths and optional package modules. First-compiled checks use increases, which
+  are valid; arbitrary join/case counts are not a lasting compiler contract.
+
+150 sum-input (custom fixture)
+Fixture rationale (150 sum-input)
+Purpose: Check sum arguments through direct calls, PAPs, capture, tail calls,
+  overapplication, empty payloads and escaped references without leaking handoffs.
+Consumes: SumInputAudit{,Native}.hs, selected GHC, exporter/plugin and auditor.
+Produces/consumed result: Named pre/post CBDs, 333 native rows, audits and manifest.
+Cost and overlap: Transport/lifetime cases are useful; share the aggregate corpus
+  with generic/fourway coverage instead of keeping another preparation framework.
+Build status: QUARANTINED. Generation fixes lambda/partial-application/capture
+  shapes and exact worker arity; semantic tests must survive compiler optimization.
+Producer: t/haskell-fixtures/SumInputFixtures.hs; consumer SumInputNativeTest.
+Under build/sum-input/:
+  native/oracle and native intermediates <- audit/driver sources and GHC 9.14.1,
+    --make -O2 -dynamic -fforce-recomp -dcore-lint -dstg-lint.
+  oracle.tsv <- native executable, nine entries x 37 inputs (333 rows).
+  <pre|post>/core/SumInputAudit.cbd <- source, nine named roots, stage/exporter;
+    stage/ghc/ intermediates. No Core output-directory inventory.
+  stage/audit.json <- named CBD, nine entries and auditor; must be accepted.
+  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
+    <- command triplets.
+  manifest.json <- source closure and native binary/oracle/Core/audit/log hashes;
+    old receipt removed first. Source closure includes discovered compiler .hs and
+    core_*.py files; replace broad inventories with actual tool dependencies.
+Producer checks >=4 sum formals, a consume partial call, overArities==[2] and
+  captured-sum occurrences. Consumer reads these exact CBD/audit paths and oracle;
+  verifies values plus zero remaining handoff depth/references. Those cleanup and
+  semantic observations justify tests; the producer's internal inventory does not.
+
+151 tuple-capture (custom fixture)
+Fixture rationale (151 tuple-capture)
+Purpose: Check escaped tuple captures, thunk sharing, independent closures,
+  PAP reuse, empty/state captures and unforced lazy fields.
+Consumes: TupleCaptureAudit{,Native}.hs, selected GHC, exporter and auditor.
+Produces/consumed result: Named pre/post CBDs, 296 native rows, audits and manifest.
+Cost and overlap: Retain capture lifetime/sharing in shared aggregate coverage;
+  direct representation controls should not require a separate native pipeline.
+Build status: QUARANTINED. Producer requires at least eight capture occurrences;
+  consumer also fixes capture storage/image sizes that optimization can change.
+Producer: TupleCaptureFixtures.hs; consumer TupleCaptureNativeTest.
+Under build/tuple-capture/:
+  native/oracle and intermediates <- audit/native driver, GHC 9.14.1 --make -O2
+    -dynamic -fforce-recomp -dcore-lint -dstg-lint.
+  oracle.tsv <- native binary, eight entries x 37 inputs (296 rows).
+  <pre|post>/core/TupleCaptureAudit.cbd <- source, eight closure roots and exporter;
+    stage/ghc/ intermediates.
+  stage/audit.json <- exact CBD and entries/auditor; accepted checked.
+  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
+    <- command triplets.
+  manifest.json <- source/tool closure and native binary/oracle/CBD/audit/log hashes;
+    old manifest removed first.
+No output CBD glob. Producer counts free tuple variables inside lambdas (>=8).
+Consumer hashes receipt inputs, reads exact paths, verifies values and no retained
+  handoff references. Direct checks fix six storage fields and 56-byte closure image.
+  Keep identity, unforced ignored fields and exactly-once thunk evaluation: those
+  assert sharing semantics rather than the incidental number of compiler roots.
+
+152 sum-join-input (custom fixture)
+Fixture rationale (152 sum-join-input)
+Purpose: Check sum join arguments through recursion, swaps, captures, empty
+  payloads and changing tags, including released handoff references.
+Consumes: SumJoinInputAudit{,Native}.hs, GHC 9.14.1, exporter/plugin and auditor.
+Produces/consumed result: Named pre/post CBDs, 259 native rows, audits and manifest.
+Cost and overlap: Consolidate semantic join moves with tuple/generic aggregate
+  coverage; another native/export/audit framework is not independently justified.
+Build status: QUARANTINED. Producer counts joins; consumer fixes GHC let/wrapper
+  shapes and exact transfer counts. These prevent valid compiler optimization.
+Producer: SumJoinInputFixtures.hs; consumer SumJoinInputNativeTest.
+Under build/sum-join-input/:
+  native/oracle and intermediates <- audit/driver sources, GHC --make -O2 -dynamic
+    -fforce-recomp -dcore-lint -dstg-lint.
+  oracle.tsv <- native executable, seven entries x 37 inputs (259 rows).
+  <pre|post>/core/SumJoinInputAudit.cbd <- source, seven roots, stage/exporter;
+    stage/ghc/ intermediates. Exact named output, not a Core glob.
+  stage/audit.json <- named CBD + seven entries/auditor; accepted checked.
+  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
+    <- command triplets.
+  manifest.json <- source/tool closure, binary/oracle/Core/audit/log hashes;
+    old manifest removed first.
+Producer requires >=7 sum join inputs. Consumer traverses a specific wrapper/loop
+  let shape, asserts binding counts and transfer identities, then checks exact
+  execution transfer counts. Native results, first-compiled execution and zero
+  retained handoff references are useful; those incidental shape counts are not.
+
+Verification checkpoint after entry 152 (base a4b375785, local changes):
+  16 Haskell producer edits compared with HEAD after stripping line comments and
+    blank lines: code unchanged. Gradle quarantine expression evaluated standalone
+    with its bundled Groovy: 43 indexed groups / 74 consumer classes excluded
+    (61 ordinary plus 13 custom). git diff --check passed. No fixture builds,
+    runtime tests, pushes or CI dispatches were performed. Earlier selector tests
+    remain valid; exclusions are missing coverage, not passing behavior.

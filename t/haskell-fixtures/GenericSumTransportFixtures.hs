@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (148 generic-sum-transport)
+-- Purpose: Check heterogeneous sum layout, carrier identity and inactive references.
+-- Produces/consumed result: Pre/post CBD closure and 1440 native oracle.tsv rows.
+-- Cost and overlap: Retain these ABI/lifetime cases in one aggregate corpus.
+--   Independent malformed-layout/storage controls should not need native setup.
+-- Build status: QUARANTINED. Both sides list stage CBDs; vector cases force LLVM
+--   for all aarch64 entries. Separate vector prerequisites when consolidating.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 148.
 {-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      : GenericSumTransportFixtures

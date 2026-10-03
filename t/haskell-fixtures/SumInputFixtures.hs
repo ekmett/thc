@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (150 sum-input)
+-- Purpose: Check sum arguments through direct calls, PAPs, capture, tail calls,
+--   overapplication, empty payloads and escaped references without leaking handoffs.
+-- Consumes: SumInputAudit{,Native}.hs, selected GHC, exporter/plugin and auditor.
+-- Produces/consumed result: Named pre/post CBDs, 333 native rows, audits and manifest.
+-- Cost and overlap: Transport/lifetime cases are useful; share the aggregate corpus
+--   with generic/fourway coverage instead of keeping another preparation framework.
+-- Build status: QUARANTINED. Generation fixes lambda/partial-application/capture
+--   shapes and exact worker arity; semantic tests must survive compiler optimization.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 150.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

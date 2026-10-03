@@ -10,8 +10,8 @@
 # Cost and overlap: Keep distinct join-result execution in the aggregate corpus. Drop
 #   unused receipt work and exact join/state-lambda counts; do not retain a whole pipeline
 #   for metadata ceremony.
-# Build status: Value review only; admission still requires explicit inputs and single-
-#   owner outputs.
+# Build status: QUARANTINED; compiler-structure assertions must be removed.
+#   Excluded from build/test entry points; see docs/fixture-quarantine.log.
 # Detailed file inputs/outputs: docs/fixture-inputs.log, entry 124.
 
 """Build a native tuple-join oracle and verify exact GHC joins before/after Tidy."""

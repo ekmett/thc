@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (141 rts-event; I/O-manager prerequisites, not eventlog/JFR)
+-- Purpose: Check logical capabilities, context manager slots and descriptor I/O.
+-- Produces/consumed result: Thirty entry/stage CBDs, oracle.json and audit receipts.
+-- Cost and overlap: Six installed interfaces, thirty audits and three recursive
+--   native producer runs are not justified for libc conformance. Retain THC-owned
+--   state and the fixture-free masking/resumption test; use package I/O integration.
+-- Build status: QUARANTINED. Children overwrite parent log/compiler paths, and
+--   consumers assert exact compiled-entry counts. No admission to the new graph.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 141.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

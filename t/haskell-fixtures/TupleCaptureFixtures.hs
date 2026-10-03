@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (151 tuple-capture)
+-- Purpose: Check escaped tuple captures, thunk sharing, independent closures,
+--   PAP reuse, empty/state captures and unforced lazy fields.
+-- Consumes: TupleCaptureAudit{,Native}.hs, selected GHC, exporter and auditor.
+-- Produces/consumed result: Named pre/post CBDs, 296 native rows, audits and manifest.
+-- Cost and overlap: Retain capture lifetime/sharing in shared aggregate coverage;
+--   direct representation controls should not require a separate native pipeline.
+-- Build status: QUARANTINED. Producer requires at least eight capture occurrences;
+--   consumer also fixes capture storage/image sizes that optimization can change.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 151.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

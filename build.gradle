@@ -221,7 +221,8 @@ tasks.named("run", JavaExec) {
 }
 // Quarantine excludes execution in every cadence and handoff mode, including direct Gradle runs.
 // These declarations remain visible for repair; they are not a passing test inventory.
-def fixtureGroups = new JsonSlurper().parse(file(".github/scripts/fast-fixtures.json")).groups
+def fixtureInventory = new JsonSlurper().parse(file(".github/scripts/fast-fixtures.json"))
+def fixtureGroups = fixtureInventory.groups
 def quarantinedFixtureGroups = new LinkedHashSet(fixtureGroups.findAll { name, group -> group.quarantined }.keySet())
 boolean quarantineChanged = true
 while (quarantineChanged) {
@@ -230,7 +231,8 @@ while (quarantineChanged) {
     }.keySet()
     quarantineChanged = quarantinedFixtureGroups.addAll(dependents)
 }
-def quarantinedFixtureTests = quarantinedFixtureGroups.collectMany { fixtureGroups[it].junit }
+def quarantinedFixtureTests = quarantinedFixtureGroups.collectMany { fixtureGroups[it].junit } +
+    (fixtureInventory.quarantinedFullCoreJunit ?: [])
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
     filter { quarantinedFixtureTests.each { excludeTestsMatching(it) } }

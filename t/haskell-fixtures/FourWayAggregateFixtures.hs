@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (146 fourway-aggregate)
+-- Purpose: Check multiway sum payload/tag, heap, capture and PAP transport.
+-- Produces/consumed result: Stage CBD closure, oracle.tsv and typed field facts.
+-- Cost and overlap: Distinct aggregate ABI cases have value; share one native batch
+--   across the native/storage/protocol consumers and the general aggregate corpus.
+--   Preserve type/layout contracts, not incidental retained-binding inventories.
+-- Build status: QUARANTINED. Producer and native consumer list every stage CBD.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 146.
+
 {-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Copyright   : (C) 2026 Edward Kmett

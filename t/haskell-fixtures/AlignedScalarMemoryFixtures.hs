@@ -7,8 +7,8 @@
 -- Cost and overlap: Keep data/offset behavior, merge duplicate width cases with
 --   address/array tests. Exact root or primitive-use counts must be removed before
 --   optimization work.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: QUARANTINED; compiler-structure assertions must be removed.
+--   Excluded from build/test entry points; see docs/fixture-quarantine.log.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 052.
 
 {-# LANGUAGE OverloadedStrings #-}

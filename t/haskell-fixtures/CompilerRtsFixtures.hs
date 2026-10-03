@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (143 compiler-rts)
+-- Purpose: Check compiler-package shared CAF slots and unique address identity.
+-- Produces/consumed result: pre/post CBDs, oracle.tsv and unique-oracle/receipt.
+-- Cost and overlap: Guest compiler-owned state justifies a narrow boundary test.
+--   Share full compiler acquisition; twelve declaration audits and two native
+--   compilation paths should not be repeated for each consumer. Audits are not
+--   consumed by this test. Separate the native phases' shared ghc/ intermediates.
+-- Build status: Value review only; explicit ownership is required for admission.
+--   First-compiled checks use a counter increase, not exact internal root counts.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 143.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
