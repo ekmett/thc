@@ -57,6 +57,13 @@ class FixturePreparationTest(unittest.TestCase):
         result = fast_fixtures.prepare_cmake(project, self.selection("thc.runtime.Int32ByteOffsetTest"), mock.Mock())
         self.assertEqual([], result["targets"])
 
+    def test_process_native_controls_do_not_acquire_package_core(self):
+        project = Path(__file__).resolve().parents[2]
+        for name in ("thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest"):
+            with self.subTest(test=name):
+                result = fast_fixtures.prepare_cmake(project, self.selection(name), mock.Mock())
+                self.assertEqual(["fixture-process-lifecycle-native"], result["targets"])
+
     def test_every_real_quarantined_fixture_stops_before_toolchain_or_generation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)

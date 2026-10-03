@@ -19,7 +19,9 @@ PowerShell setup.
 
 During fixture triage, select an exact nonquarantined class with `TESTS`. Blanket
 preparation is disabled; [quarantined fixtures](fixture-quarantine.log) are excluded
-from local and CI selections and from direct Gradle execution. `make clean` removes Gradle and
+from local and CI selections and from direct Gradle execution. Make and direct Gradle
+use Gradle's standard shared dependency cache; an explicit `GRADLE_USER_HOME`
+is honored. `make clean` removes Gradle and
 Cabal build products; `make distclean` also removes the checkout's `.gradle` and
 `.gradle-user-home`. Neither removes an external cache. Use
 `GRADLE_FLAGS=--offline` or `CABAL_FLAGS=--offline` for an offline build.

@@ -6,8 +6,8 @@
 -- Produces/consumed result: CBDs, oracle.txt and callback-oracle.txt.
 -- Cost and overlap: Keep API-visible membership/state behavior. Reproducing filesystem
 --   receipt inventories in the consumer adds no runtime coverage.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: cmake/AuditedFixtures.cmake owns explicit native/Core/report files.
+--   The two native programs have separate compiler intermediates; audits are batched.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 058.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -55,16 +55,16 @@ prepareThreadInventory root = do
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [source]) ""
-    forM_ entries $ \entry -> do
-      let report = directory </> stage </> (entry ++ "-audit.json")
-      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:ThreadInventory." ++ entry,
-        "--output", report, core </> "ThreadInventory.cbd"] ""
-      bytes <- BS.readFile (root </> report)
-      case decodeStrict' bytes of
-        Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
-          KeyMap.lookup "issues" value == Just (Array mempty),
-          KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
-        _ -> die ("Strict thread inventory audit rejected " ++ entry)
+    let report = directory </> stage </> "audit.json"
+    _ <- run root [] "python3"
+      (["bin/audit-core.py", "--output", report, core </> "ThreadInventory.cbd"] ++
+       concatMap (\entry -> ["--entry", "main:ThreadInventory." ++ entry]) entries) ""
+    bytes <- BS.readFile (root </> report)
+    case decodeStrict' bytes of
+      Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
+        KeyMap.lookup "issues" value == Just (Array mempty),
+        KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
+      _ -> die ("Strict thread inventory audit rejected " ++ stage)
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
@@ -73,9 +73,11 @@ prepareThreadInventory root = do
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") ["+RTS", "-N2", "-RTS"] ""
   unless (observations == "10\n0\n111\n1\n42\n210\n17\n1\n") (die "Native thread inventory disagreed")
   writeFile (output </> "oracle.txt") observations
+  let callbackObjects = native </> "callback"
+  createDirectoryIfMissing True callbackObjects
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-fforce-recomp", "-Wall", "-Werror",
-    "-dcore-lint", "-dstg-lint", "-i" ++ (root </> "t/fixtures/core"), "-odir", native, "-hidir", native,
-    "-stubdir", native, root </> callbackDriver, root </> callbackC, "-o", native </> "callback-oracle"] ""
+    "-dcore-lint", "-dstg-lint", "-i" ++ (root </> "t/fixtures/core"), "-odir", callbackObjects, "-hidir", callbackObjects,
+    "-stubdir", callbackObjects, root </> callbackDriver, root </> callbackC, "-o", native </> "callback-oracle"] ""
   callbacks <- runWithTimeout (Just 30000000) root [] (native </> "callback-oracle") ["+RTS", "-N2", "-RTS"] ""
   let expectedCallbacks = concatMap (\mask -> "(" ++ mask ++
         ",True,True,Unmasked,True,True,True,Unmasked,True,1,8)\n(True,True)\n")
@@ -92,7 +94,7 @@ prepareThreadInventory root = do
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt", directory </> "callback-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
-          suffix <- ["core/ThreadInventory.cbd"] ++ [entry ++ "-audit.json" | entry <- entries]]
+          suffix <- ["core/ThreadInventory.cbd", "audit.json"]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

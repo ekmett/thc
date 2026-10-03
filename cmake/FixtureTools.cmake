@@ -67,9 +67,7 @@ foreach(i RANGE ${last})
     string(JSON dist GET "${plan}" install-plan ${i} dist-dir)
     if(component MATCHES "^exe:")
       string(JSON binary GET "${plan}" install-plan ${i} bin-file)
-      if(NOT component STREQUAL "exe:thc-interface")
-        list(APPEND tool_outputs "${binary}")
-      endif()
+      set(component_outputs "${binary}")
       if(component STREQUAL "exe:thc-fixtures")
         set(fixtures_exe "${binary}")
       elseif(component STREQUAL "exe:thc-compact")
@@ -85,21 +83,33 @@ foreach(i RANGE ${last})
       set(shared "${library_dir}/libHS${unit}-ghc9.14.1.${shared_suffix}")
       set(unit_products_${unit} "${shared}"
         "${PROJECT_SOURCE_DIR}/dist-newstyle/packagedb/ghc-9.14.1/${unit}.conf")
-      list(APPEND tool_outputs ${unit_products_${unit}})
+      set(component_outputs ${unit_products_${unit}})
       if(component STREQUAL "lib")
         set(plugin_unit "${unit}")
         set(plugin_shared "${shared}")
         set(plugin_copy "${PROJECT_SOURCE_DIR}/build/compiler/libHS${unit}-ghc9.14.1.${shared_suffix}")
       endif()
     endif()
+    list(APPEND tool_outputs ${component_outputs})
+    foreach(product IN LISTS component_outputs)
+      string(APPEND cabal_product_checks "cabal_output([==[${product}]==] [==[${dist}/cache]==])\n")
+    endforeach()
   endif()
 endforeach()
+configure_file("${PROJECT_SOURCE_DIR}/cmake/CabalProducts.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/CabalProducts.cmake" @ONLY)
 if(NOT fixtures_exe OR NOT plugin_shared)
   message(FATAL_ERROR "Cabal plan is missing the selected fixture tools")
 endif()
+# All tools share Cabal's plan and registration database. One command owns
+# those mutable files too; a later interface-only build must not invalidate an
+# already-published plugin and make every fixture run again on the next build.
 add_custom_command(OUTPUT ${tool_outputs}
-  COMMAND ${fixture_env} "${CABAL}" build ${cabal_options} lib:thc exe:thc-fixtures exe:thc-compact -j2
-  DEPENDS ${cabal_inputs} ${tool_sources} ${toolchain_inputs}
+  BYPRODUCTS "${plan_path}" "${PROJECT_SOURCE_DIR}/dist-newstyle/packagedb/ghc-9.14.1/package.cache"
+  COMMAND "${CMAKE_COMMAND}" -DREPAIR=ON -P "${CMAKE_CURRENT_BINARY_DIR}/CabalProducts.cmake"
+  COMMAND ${fixture_env} "${CABAL}" build ${cabal_options} lib:thc exe:thc-fixtures exe:thc-compact exe:thc-interface -j2
+  COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/CabalProducts.cmake"
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CabalProducts.cmake" ${cabal_inputs} ${tool_sources} ${toolchain_inputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Build shared fixture tools with Cabal")
 
@@ -141,13 +151,3 @@ add_custom_command(OUTPUT "${encoder_path}"
   COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_BINARY_DIR}/thc-fixtures.path" "${encoder_path}"
   DEPENDS "${fixtures_exe}" "${CMAKE_CURRENT_BINARY_DIR}/thc-fixtures.path" VERBATIM)
 add_custom_target(fixture-compact-model DEPENDS "${encoder_path}" "${fixtures_exe}")
-
-# Interface hydration is only built when a selected fixture consumes it. It
-# shares the already-built plugin libraries, so parallel Cabal writers cannot
-# race over those components.
-add_custom_command(OUTPUT "${interface_exe}"
-  COMMAND ${fixture_env} "${CABAL}" build ${cabal_options} exe:thc-interface -j2
-  DEPENDS "${PROJECT_SOURCE_DIR}/src/compiler/interface/Main.hs"
-    ${plugin_build_inputs} ${cabal_inputs} ${toolchain_inputs}
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
-  COMMENT "Build the selected interface Core reader with Cabal")

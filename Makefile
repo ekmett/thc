@@ -13,7 +13,6 @@ HLINT ?= hlint
 HLINT_FLAGS ?=
 DOCS_REVISION ?= $(shell git rev-parse HEAD)
 DOCS_CABAL_FLAGS = $(CABAL_FLAGS) --with-compiler='$(GHC)' --builddir=build/docs/cabal -j2
-export GRADLE_USER_HOME ?= $(CURDIR)/.gradle-user-home
 export JAVA_HOME
 
 CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v '$(GHC)')" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal bin/check-ghc-core.hs

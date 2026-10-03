@@ -1962,11 +1962,11 @@ Produces/consumed result: Core fixtures and native process-oracle/sigchld-policy
 Cost and overlap: Real child-process lifecycle needs integration coverage. Preparing
   these controls for every unrelated Gradle Test is unjustified; depend on them only for
   their consumers.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: Native controls owned by cmake/ProcessFixtures.cmake; Core/package
+  acquisition remains unmapped.
 
-Producer: t/haskell-fixtures/ProcessLifecycleFixtures.hs plus Gradle's
-  prepareProcessLifecycleOracle (build.gradle), two separate output owners.
+Producers: t/haskell-fixtures/ProcessLifecycleFixtures.hs owns Core/acquisition;
+  cmake/ProcessFixtures.cmake owns the two native executables.
 Consumers: thc.runtime.CoreProcessForeignTest, ManagedProcessForeignTest,
   ManagedProcessesTest, ProcessLifecycleCoreTest; Linux x86_64 only.
 Under build/process-lifecycle/:
@@ -1997,8 +1997,11 @@ Consumers read Core/manifest/audits and receipt paths, execute native controls,
   and create temporary files/children. Host tools include /bin/sh, /bin/true,
   /bin/cat; Linux /proc supplies process/descriptor observations.
 The native executables are not produced by the Haskell command or included in its
-  manifest. Gradle currently makes EVERY Test task depend on their build. Record
-  this broad dependency and timestamped package rebuild as cost/scope candidates.
+  manifest. Gradle no longer builds these controls. ManagedProcessesTest and
+  ManagedProcessForeignTest select only fixture-process-lifecycle-native. The two
+  Core consumers still require the separate, unmapped package/Core flow. CMake C
+  compilation records header dependencies for sigchld-policy; native Haskell
+  compilation declares Main.hi/.o alongside its executable.
 Full package native headers/link inputs remain an unresolved shared closure.
 
 055  ghc-bco
@@ -2091,8 +2094,8 @@ Purpose: Check thread inventory and callback-visible thread state.
 Produces/consumed result: CBDs, oracle.txt and callback-oracle.txt.
 Cost and overlap: Keep API-visible membership/state behavior. Reproducing filesystem
   receipt inventories in the consumer adds no runtime coverage.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: Named files owned by cmake/AuditedFixtures.cmake; independent native
+  compiler intermediates and one audit per stage.
 
 Producer: t/haskell-fixtures/ThreadInventoryFixtures.hs.
 Consumer: thc.runtime.ThreadInventoryNativeTest.
@@ -2101,16 +2104,18 @@ IN: t/fixtures/core/ThreadInventory.hs, t/fixtures/compiler/ThreadInventoryNativ
   shared exporter/auditor/native GHC9.14.1 with threaded RTS and native C toolchain.
 Under build/thread-inventory/:
   <pre|post>/core/ThreadInventory.cbd: IN Core source/exporter/stage; OUT CBD/ghc/.
-  <stage>/<entry>-audit.json: IN stage CBD/auditor/nine entries; OUT 18 reports.
+  <stage>/audit.json: IN stage CBD/auditor/all nine entries; OUT two reports.
   native/oracle: IN main source/driver, --make -O2 -dynamic -threaded;
     OUT executable/intermediates.
   native/callback-oracle: IN callback driver/C source/Core source, same flags
-    plus -Wall -Werror and stubdir; OUT executable/native intermediates/C stubs.
+    plus -Wall -Werror; OUT executable and native/callback/ intermediates/C stub.
   oracle.txt, callback-oracle.txt: IN respective executable +RTS -N2; OUT checked
-    observations. Both builds share native/ (including Main object/interface paths).
+    observations. Each program has its own Main object/interface paths.
   manifest.json: IN text results/CBD/audits/source receipt; OUT hashes/native
     values. Old manifest removed; executables not hashed; no command log files.
-Consumer reads all these and reproduces receipt directory inventories. Runtime
+Consumer reads the named files and receipt hashes. Core-shape/root-count predictions
+  and the test of that prediction helper were removed; interpreter-bypass negative
+  control, first compiled calls and thread semantics remain. Runtime
   library/native callback support remains separate test input, not oracle output.
 
 059  closure-inspection

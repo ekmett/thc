@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+# Cabal monitors source changes but not deletion of its linked products. Forget
+# only the affected component's build/registration memo; GHC keeps its objects
+# and relinks the missing product. Never accept a successful build with holes.
+function(cabal_output path cache)
+  if(NOT EXISTS "${path}")
+    if(REPAIR)
+      message(STATUS "Repair missing Cabal output: ${path}")
+      file(REMOVE "${cache}/build" "${cache}/registration")
+    else()
+      message(FATAL_ERROR "Cabal did not produce its declared output: ${path}")
+    endif()
+  endif()
+endfunction()
+@cabal_product_checks@

@@ -39,6 +39,7 @@ include(cmake/SimdFixtures.cmake)
 include(cmake/ScriptFixtures.cmake)
 include(cmake/InterfaceFixtures.cmake)
 include(cmake/BootFixtures.cmake)
+include(cmake/ProcessFixtures.cmake)
 
 # Keep the audited quarantine authoritative even for direct Ninja invocations.
 set(inventory_path "${PROJECT_SOURCE_DIR}/.github/scripts/fast-fixtures.json")

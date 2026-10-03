@@ -474,3 +474,14 @@ audited_fixture(closure-inspection ClosureInspectionAudit
   SOURCES t/fixtures/compiler/ClosureInspectionAudit.hs t/fixtures/compiler/ClosureInspectionNative.hs
   OBJECT_DIRS native ghc
   OUTPUTS manifest.json core/ClosureInspectionAudit.cbd native/oracle oracle.tsv audit.json)
+
+# 058: observable thread membership, callback identity/masks and cancellation.
+# The independent callback executable gets its own Main.o/hi and FFI stub files.
+audited_fixture(thread-inventory ThreadInventory
+  SOURCES t/fixtures/core/ThreadInventory.hs t/fixtures/compiler/ThreadInventoryNative.hs
+    t/fixtures/compiler/CallbackIdentityNative.hs t/fixtures/compiler/callback-identity.c
+  OBJECT_DIRS native pre/ghc post/ghc
+  BYPRODUCTS native/callback/Main.hi native/callback/Main.o native/callback/Main_stub.h
+    native/callback/ThreadInventory.hi native/callback/ThreadInventory.o
+  OUTPUTS manifest.json native/oracle native/callback-oracle oracle.txt callback-oracle.txt
+    pre/core/ThreadInventory.cbd pre/audit.json post/core/ThreadInventory.cbd post/audit.json)

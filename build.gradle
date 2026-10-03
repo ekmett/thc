@@ -301,7 +301,7 @@ tasks.withType(Test).configureEach {
             "unix-libc/*.cbd", "unix-libc/*.json", "unix-libc/logs/*.stdout", "unix-libc/logs/*.stderr", "unix-libc/logs/*.command.json",
             "proxy-void/**/*.cbd", "proxy-void/**/*.json", "proxy-void/*.tsv", "proxy-void/native/**", "proxy-void/api/**", "proxy-void/commands/**",
             "unsafe-equality/**/*.cbd", "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
-            "aggregate-core/**/*.cbd", "aggregate-post-core/**/*.cbd", "map/boot-core/**/*.cbd", "aggregate-layout/pre-core/**/*.cbd", "aggregate-layout/post-core/**/*.cbd",
+            "aggregate-core/**/*.cbd", "aggregate-post-core/**/*.cbd", "map/boot-core/**/*.cbd", "cstring/boot-core/GHC.Internal.CString.cbd", "aggregate-layout/pre-core/**/*.cbd", "aggregate-layout/post-core/**/*.cbd",
             "sum-layout/**/*.json", "sum-layout/**/*.cbd", "sum-layout/*.tsv", "sum-layout/native/**",
             "sum-result/**/*.json", "sum-result/**/*.cbd", "sum-result/*.tsv", "sum-result/native/**",
             "tuple-return/pre-core/**/*.cbd", "tuple-return/post-core/**/*.cbd", "tuple-return/oracle.tsv",
@@ -326,7 +326,7 @@ tasks.withType(Test).configureEach {
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/**/*.cbd", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "core-continuation/**/*.cbd", "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "thread-status/**/*.json", "thread-status/oracle.txt",
-            "thread-inventory/**/*.cbd", "thread-inventory/**/*.json", "thread-inventory/oracle.txt",
+            "thread-inventory/**/*.cbd", "thread-inventory/**/*.json", "thread-inventory/oracle.txt", "thread-inventory/callback-oracle.txt",
             "thread-scheduling/**/*.cbd", "thread-scheduling/**/*.json", "thread-scheduling/oracle.txt",
             "scalar-memory-utilities/**/*.cbd", "scalar-memory-utilities/**/*.json", "scalar-memory-utilities/oracle.tsv",
             "scalar-memory-utilities/native/oracle", "scalar-memory-utilities/commands/*.stdout", "scalar-memory-utilities/commands/*.stderr",
@@ -447,7 +447,7 @@ tasks.withType(Test).configureEach {
             "simd-doublex2/**/*.cbd", "simd-doublex2/**/*.json", "simd-doublex2/*.tsv",
             "simd-wide-arrays/manifest.json", "simd-wide-arrays/*.tsv", "simd-wide-arrays/*-core/*.cbd", "simd-wide-arrays/*-core/*.json",
             "simd-wide-arrays/*-audit.json", "simd-wide-arrays/native/oracle", "simd-wide-arrays/commands/*",
-            "simd-arithmetic/manifest.json", "simd-arithmetic/*.tsv", "simd-arithmetic/pre-core/*.cbd", "simd-arithmetic/*-audit.json", "simd-arithmetic/native/oracle", "simd-arithmetic/commands/*", "simd-arithmetic/sources/*.hs",
+            "simd-arithmetic/manifest.json", "simd-arithmetic/audit.json", "simd-arithmetic/*.tsv", "simd-arithmetic/pre-core/*.cbd", "simd-arithmetic/*-audit.json", "simd-arithmetic/native/oracle", "simd-arithmetic/commands/*", "simd-arithmetic/sources/*.hs",
             "simd128-arrays/manifest.json", "simd128-arrays/*.tsv", "simd128-arrays/*-core/*.cbd", "simd128-arrays/*-core/*.json",
             "simd-address-families/manifest.json", "simd-address-families/*.tsv", "simd-address-families/source/*.hs",
             "simd-address-families/*-core/*.cbd", "simd-address-families/*-core/*.json", "simd-address-families/*-audit.json", "simd-address-families/commands/*",
@@ -1397,32 +1397,6 @@ def compileNativeProcesses = tasks.register("compileNativeProcesses") {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-processes")) }
 tasks.processResources { dependsOn(compileNativeProcesses) }
-
-def prepareProcessLifecycleOracle = tasks.register("prepareProcessLifecycleOracle") {
-    def source = layout.projectDirectory.file("t/fixtures/process-lifecycle/Main.hs")
-    def policySource = layout.projectDirectory.file("t/fixtures/process-lifecycle/sigchld-policy.c")
-    def transportSource = layout.projectDirectory.file("src/main/c/native-process-api.c")
-    def output = layout.buildDirectory.dir("process-lifecycle/native")
-    def ghc = providers.environmentVariable("GHC").orElse("ghc")
-    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
-    inputs.file(source); inputs.property("ghc", ghc)
-    inputs.file(policySource); inputs.file(transportSource); inputs.property("clang", clang); if (macHost) inputs.property("SDKROOT", nativeSdkRoot)
-    outputs.dir(output)
-    onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in ["amd64", "x86_64"] }
-    doLast {
-        def version = nativeExec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
-        checkBuild(version == "9.14.1") { "Process oracle requires GHC 9.14.1, found $version" }
-        def destination = output.get().asFile
-        destination.mkdirs()
-        nativeExec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
-            "-outputdir", destination.path, source.asFile.path, "-o", destination.toPath().resolve("process-oracle").toFile().path) }.result.get()
-        // Signal dispositions belong to this standalone control, never the test JVM.
-        nativeExec { commandLine(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-            policySource.asFile.path, transportSource.asFile.path, "-Wl,--wrap=posix_spawn",
-            "-o", destination.toPath().resolve("sigchld-policy").toFile().path) }.result.get()
-    }
-}
-tasks.withType(Test).configureEach { dependsOn(prepareProcessLifecycleOracle) }
 
 // Owned native workers and asynchronous syscall guard must run as machine code.
 def compileNativeOpenRequests = tasks.register("compileNativeOpenRequests") {

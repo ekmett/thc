@@ -309,9 +309,21 @@
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
     },
+    "process-lifecycle-native": {
+      "cmakeTarget": "fixture-process-lifecycle-native",
+      "ciPlatforms": ["Linux"],
+      "junit": ["thc.runtime.ManagedProcessForeignTest", "thc.runtime.ManagedProcessesTest"],
+      "commands": [
+        {"argv": ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"]},
+        {"argv": ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", "fixture-process-lifecycle-native"]}
+      ],
+      "outputs": ["build/process-lifecycle/native/process-oracle", "build/process-lifecycle/native/sigchld-policy"],
+      "sources": ["cmake/ProcessFixtures.cmake", "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c", "src/main/c/native-process-api.c"]
+    },
     "process-lifecycle": {
       "ciPlatforms": ["Linux"],
-      "junit": ["thc.runtime.CoreProcessForeignTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.ManagedProcessesTest", "thc.runtime.ProcessLifecycleCoreTest"],
+      "requires": ["process-lifecycle-native"],
+      "junit": ["thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -s)-$(uname -m)\" in Linux-x86_64) \"${CABAL:-cabal}\" run exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" -- process-lifecycle ;; esac"]}],
       "outputs": ["build/process-lifecycle/core"],
       "sources": ["t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c", "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java", "src/main/java/thc/runtime/ManagedProcessForeign.java", "src/main/java/thc/runtime/ManagedProcesses.java"]
@@ -386,6 +398,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-inventory": {
+      "cmakeTarget": "fixture-thread-inventory",
       "junit": ["thc.runtime.ThreadInventoryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],
       "outputs": ["build/thread-inventory"],
