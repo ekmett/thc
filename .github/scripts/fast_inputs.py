@@ -65,12 +65,11 @@ explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int3
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc original-stack original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
-UNIX_LIBC_ENTRIES = ("unixClose", "unixDup", "unixIsatty", "unixGetenv")
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
-    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in UNIX_LIBC_ENTRIES),
+    "pre.audit.json", "post.audit.json",
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
-      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in UNIX_LIBC_ENTRIES))
+      "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_PATH_STAT_ENTRIES = ("pathStat", "pathLstat", "unixPathLstat")
 ORIGINAL_PATH_STAT_OUTPUTS = frozenset("build/original-path-stat/" + name for name in (

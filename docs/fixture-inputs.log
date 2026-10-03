@@ -3838,15 +3838,15 @@ Consumer reads receipt/hash files/Core/cases. Broad local SIMD coverage is a can
 
 117 unix-libc
 Fixture rationale (117 unix-libc)
-Purpose: Check unix package foreign declarations resolve through the expected
-  ABI/linkage boundary.
-Produces/consumed result: Exported/declaration Core facts derived from installed unix
-  interfaces.
-Cost and overlap: No separate libc implementation audit is justified. Retain only THC
-  ABI/transport negative controls; successful package integration should cover ordinary
-  library behavior.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Purpose: Check genuine unix declarations reach THC-owned descriptors and context
+  environment state, preserving their ABI and first compiled-call behavior.
+Produces/consumed result: pre/post CBDs, native descriptor/environment observations,
+  two audits, command logs and a manifest.
+Cost and overlap: Four declarations in one GHC session. OriginalUnixBatchTest covers
+  other pathname/descriptor operations with synthetic models; this checks actual
+  installed declarations through export and execution. No libc implementation audit,
+  exact compiler root/lambda counts or compiled-entry counts remain.
+Build status: Admitted as fixture-unix-libc in cmake/InterfaceFixtures.cmake.
 
 Producer: t/haskell-fixtures/UnixLibcFixtures.hs; consumer: thc.runtime.UnixLibcTest.
 IN t/fixtures/compiler/UnixLibcAudit.hs, producer/THC.Plugin/GHC API libraries,
@@ -3855,18 +3855,18 @@ IN t/fixtures/compiler/UnixLibcAudit.hs, producer/THC.Plugin/GHC API libraries,
 Under build/unix-libc/:
   pre.cbd, post.cbd: IN source+foreign declarations extracted from those interfaces,
     typed/specialized through GHC API; serialized directly, no export shell step.
-  ghc/: GHC API working intermediates.
+  ghc/: private GHC API scratch, no persistent interface/object products.
   native-file: IN producer literal Z; temporary file used/deleted during native lifecycle.
   oracle.json: IN GHC-interpreted native calls, private file, controlled THC_UNIX_FFI_*
     environment variables; OUT lifecycle/invalid-descriptor/environment observations.
-  <pre|post>-<unixClose|unixDup|unixIsatty|unixGetenv>.audit.json: IN stage CBD/auditor.
-  logs/: OUT version/libdir/imports/unit and eight audit command triplets.
-  manifest.json: IN sources/products/logs; old receipt removed. Receipt includes runtime
-    Java sources/descriptor JSON unused in generation, while installed interface closure
-    is external. Windows producer rejects.
+  <pre|post>.audit.json: IN stage CBD/auditor; all four entry points checked together.
+  logs/: OUT version/libdir/imports/unit and two audit command triplets.
+  manifest.json: IN producer sources/products/logs; old receipt removed. Runtime Java
+    sources and descriptor JSON are consumer inputs, not generation inputs. The selected
+    installed interface/native-library closure is a CMake toolchain dependency.
+    Windows producer rejects.
 Consumer reads receipt/hash files/Core/oracle/audits and tracked
   src/test/resources/core/original-unix-libc-descriptors.json; writes temporary test files.
-Review ordinary libc coverage versus real package-level behavior per user direction.
 
 118 source-core
 Fixture rationale (118 source-core)

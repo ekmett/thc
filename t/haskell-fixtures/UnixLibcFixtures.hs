@@ -2,15 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 -- Fixture rationale (117 unix-libc)
--- Purpose: Check unix package foreign declarations resolve through the expected
---   ABI/linkage boundary.
--- Produces/consumed result: Exported/declaration Core facts derived from installed unix
---   interfaces.
--- Cost and overlap: No separate libc implementation audit is justified. Retain only THC
---   ABI/transport negative controls; successful package integration should cover ordinary
---   library behavior.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Purpose: Check genuine unix declarations reach THC-owned descriptors and context
+--   environment state, preserving their ABI and first compiled-call behavior.
+-- Inputs: UnixLibcAudit.hs, selected unix interfaces/native libraries and auditor.
+-- Produces: pre/post CBDs, native descriptor/environment observations, two audits,
+--   command logs and a manifest. CMake owns all persistent products.
+-- Cost and overlap: Four declarations, one GHC session and two batched audits.
+--   OriginalUnixBatchTest covers other pathname/descriptor operations with synthetic
+--   models; this checks the actual installed declarations across export and execution.
+--   No libc implementation, compiler root-count or lambda-count audit is retained.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 117.
 {-# LANGUAGE CPP, OverloadedStrings #-}
 
@@ -222,22 +222,23 @@ prepareUnixLibc root = do
           "closeAgain" .= closedAgain],"invalid" .= invalid,"environment" .= environment])
       _ -> die "Missing compiled original unix consumers"
   writeJson (root </> directory </> "oracle.json") oracle
-  audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", "main:UnixLibcAudit." ++ name,
-      "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".cbd"]
+  audits <- forM ["pre", "post"] $ \stage ->
+    execute (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py", "--output", directory </> stage ++ ".audit.json", directory </> stage ++ ".cbd"] ++
+       concat [["--entry", "main:UnixLibcAudit." ++ name] | name <- entries])
   let commands = [version, library, imports, owner] ++ audits
   inputHashes <- hashes root [source, "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
-    "src/test/resources/core/original-unix-libc-descriptors.json", "t/haskell-fixtures/UnixLibcFixtures.hs",
+    "t/haskell-fixtures/UnixLibcFixtures.hs",
     "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs", "bin/core_original_foreign.py",
-    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java"]
+    "bin/audit-core.py", "bin/core-capabilities.json"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.cbd", "post.cbd", "oracle.json"]] ++
-    [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++
+    [directory </> stage ++ ".audit.json" | stage <- ["pre","post"]] ++
     concatMap commandArtifacts commands)
   writeJson manifest $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries, "unixUnit" .= oneLine owner,
      "consumerKind" .= ("typed consumers specialized with genuine installed unix 2.8.8.0 FCallIds" :: String),
      "interfaces" .= interfaces, "installedArtifactsHashed" .= False, "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "unix-libc: 4 original FCallIds, native file/environment observations and 8 strict audits"
+  putStrLn "unix-libc: 4 original FCallIds, native file/environment observations and 2 batched audits"
 
 #endif

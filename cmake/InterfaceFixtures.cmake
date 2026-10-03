@@ -97,3 +97,25 @@ add_custom_command(OUTPUT ${rubbish_outputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate typed rubbish Core and native continuation observations")
 add_custom_target(fixture-rubbish-literals DEPENDS ${rubbish_outputs})
+
+# 117: genuine installed unix declarations cross THC's context-owned descriptor
+# and environment boundary. GHC's interpreter supplies native reference values;
+# it leaves no executable, object or interface products in the scratch directory.
+set(unix_out "${PROJECT_SOURCE_DIR}/build/unix-libc")
+set(unix_outputs)
+foreach(name manifest.json pre.cbd post.cbd oracle.json pre.audit.json post.audit.json)
+  list(APPEND unix_outputs "${unix_out}/${name}")
+endforeach()
+foreach(label version libdir imports unit pre-audit post-audit)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND unix_outputs "${unix_out}/logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+add_custom_command(OUTPUT ${unix_outputs}
+  COMMAND ${fixture_env} "${fixtures_exe}" unix-libc
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/UnixLibcAudit.hs"
+    ${tool_sources} ${cabal_inputs} ${audit_inputs} ${toolchain_inputs}
+    "${fixtures_exe}" "${compact_exe}"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate original unix Core and native descriptor/environment observations")
+add_custom_target(fixture-unix-libc DEPENDS ${unix_outputs})
