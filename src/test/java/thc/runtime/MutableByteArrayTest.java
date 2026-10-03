@@ -478,7 +478,10 @@ class MutableByteArrayTest {
                 if (!same)
                     assertArrayEquals(sourceBefore, source);
                 if (firstCompiledCall) {
-                    assertTrue(count(p) > before, backend + "/" + op + " first installed call");
+                    long after = count(p);
+                    assertTrue(after > before, backend + "/" + op + " first installed call: compiledEntries "
+                        + before + " -> " + after + ", isValidLastTier="
+                        + entry.getClass().getMethod("isValidLastTier").invoke(entry));
                     valid(entry, backend + "/" + op);
                     firstCompiledCall = false;
                 }
