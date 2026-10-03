@@ -883,3 +883,519 @@ Consumer directly reads manifest, receipts, CBD, oracle.tsv and post-audit.json.
   The destructive directory reset prevents independent incremental output edges
   inside this function until generation is split into owning operations.
 
+027  simd-address-families
+Producer: t/haskell-fixtures/SimdAddressFixtures.hs:prepareSimdAddresses.
+Consumer: src/test/java/thc/runtime/SimdAddressFamiliesTest.java.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures; shared exporter/auditor,
+  simd-families.json via auditor; GHC 9.14.1. Build-host architecture selects branch:
+  arm64/aarch64 omit native vector128 and post128; other architectures require LLVM
+  for those two compilations. Scalar native oracle runs on both branches.
+Under build/simd-address-families/:
+  source/SimdAddressAudit.hs, SimdAddress128Audit.hs, SimdAddressScalar.hs
+    IN: producer shapes, entries and vector/scalar templates; OUT generated sources.
+  source/ScalarNative.hs, VectorNative.hs
+    IN: driver template plus all/narrow entries; OUT generated native drivers.
+  scalar-inputs.tsv: IN all producer requests; OUT scalar oracle stdin.
+  scalar/oracle: IN ScalarNative.hs, SimdAddressScalar.hs, native GHC/packages;
+    OUT executable and scalar/ GHC intermediates.
+  scalar-oracle.tsv: IN executable and scalar-inputs.tsv; OUT five-column TSV.
+  vector128-inputs.tsv, vector128/oracle, vector128-oracle.tsv (non-ARM branch)
+    IN: narrow requests; VectorNative.hs, SimdAddress128Audit.hs, GHC -fllvm/LLVM
+        and native packages; executable plus input respectively.
+    OUT: request file, native executable/intermediates, five-column native results.
+  pre-core/SimdAddressAudit.cbd
+    IN: generated all-width source, exporter/plugin, -fno-code
+        -fwrite-if-simplified-core. OUT: CBD and pre-ghc/ interfaces.
+  post128-core/SimdAddress128Audit.cbd (non-ARM branch)
+    IN: generated narrow source, exporter/plugin, -fllvm, post-tidy, LLVM tools.
+    OUT: CBD and post128-ghc/ intermediates.
+  pre-audit.json, post128-audit.json (when corresponding stage exists)
+    IN: matching CBD, selected entries, auditor/decoder/data. OUT: stage report.
+  commands logs: ghc-version, scalar-build, scalar-oracle, pre-export, pre-audit;
+    non-ARM also vector128-build, vector128-oracle, post128-export, post128-audit.
+  manifest.json: IN generated source/*.hs directory listing, all produced artifacts/
+    command logs, source receipt; OUT hashes, stages and native row counts.
+Consumer reads manifest, all receipt paths, stage CBD/report and available native
+  TSVs. No extra synthetic encoder call found. Generated source listing can pick
+  up stale .hs files. Architecture branch is not equivalent to proven LLVM/native
+  CPU support; this scan does not establish which platform execution passes.
+
+028  simd128-arrays
+Producer: t/haskell-fixtures/Simd128ArrayFixtures.hs:prepareSimd128Arrays.
+Consumer: src/test/java/thc/runtime/Simd128ArrayNativeTest.java.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures;
+  t/fixtures/compiler/Simd128ArrayAudit.hs and Simd128ArrayNative.hs;
+  GHC 9.14.1, shared exporter/auditor/data. Architecture branch as in 027.
+Under build/simd128-arrays/:
+  inputs.tsv: IN producer requests; OUT native/test input inventory.
+  native/oracle, oracle.tsv (non-ARM only)
+    IN: tracked native driver plus audit source/GHC -fllvm/LLVM/native packages;
+        then executable and inputs.tsv. OUT: executable/intermediates, native TSV.
+  pre-core/Simd128ArrayAudit.cbd, post-core/Simd128ArrayAudit.cbd
+    IN: audit source/exporter. ARM: pre only, -fno-code -fwrite-if-simplified-core;
+        non-ARM: -fllvm, both stages, post-tidy for post.
+    OUT: selected stage CBDs and stage-ghc/ intermediates.
+  <stage>-<entry>-audit.json
+    Entries six families (int8X16, word8X16, int16X8, word16X8, int64X2, word64X2)
+      x Index/Read/Write x Packed/Scalar (initial letter lower-case as shown).
+    IN: CBD plus entry/auditor inputs; OUT 36 reports per enabled stage.
+  commands logs: ghc-version, each enabled stage-export and stage-entry-audit,
+    native-build/native-oracle when enabled.
+  manifest.json: IN inputs, produced CBDs/reports/native files/logs, source receipt;
+    OUT stage inventory and hashes; nativeRows=null on ARM.
+Consumer reads inputs, manifest/receipt paths, CBDs/reports, oracle when present.
+
+029  simd-wide-arrays
+Producer: t/haskell-fixtures/SimdWideArrayFixtures.hs:prepareSimdWideArrays.
+Consumer: src/test/java/thc/runtime/SimdWideArrayNativeTest.java.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures; GHC 9.14.1;
+  t/fixtures/compiler/SimdWideArrayAudit.hs, SimdWideArrayNative.hs,
+  SimdWideArrayScalar.hs; shared exporter/auditor/data.
+Under build/simd-wide-arrays/:
+  inputs.tsv: IN producer requests; OUT input inventory.
+  native/oracle: IN SimdWideArrayNative.hs and imported SimdWideArrayScalar.hs,
+    native GHC/packages, no LLVM flag; OUT executable/native intermediates.
+  oracle.tsv: IN executable and inputs.tsv; OUT five-column scalar-lane observations.
+  pre-core/SimdWideArrayAudit.cbd
+    IN: vector audit source/exporter, -fno-code -fwrite-if-simplified-core;
+    OUT pre CBD and pre-ghc/ interfaces. No post/native-wide stage exists.
+  pre-<entry>-audit.json
+    IN: pre CBD, each producer entry and auditor/data; OUT 120 reports (20 shapes
+        x Index/Read/Write x Packed/Scalar).
+  commands logs: ghc-version, native-build, native-oracle, pre-export,
+    pre-<entry>-audit. OUT three files per command.
+  manifest.json: IN input/native/CBD/audit/log files and source receipt;
+    OUT hashes and nativeMode=scalar-lane.
+Consumer reads manifest/receipt paths, inputs, TSV, CBD and audit reports.
+  SIMD table is recorded by all three families but polyglot-abi.json is not.
+Shared SIMD byte-array producer, 030-033
+  t/haskell-fixtures/SimdByteArrayFixtures.hs:prepareSimdByteArray; model and case
+  declarations in SimdByteArrayModel.hs; Main.hs, FixtureSupport.hs, built thc-fixtures
+  with in-process CBD encoder/decoder. Shared exporter/plugin and Python auditor
+  closure; GHC 9.14.1, little-endian 64-bit native host, uname tool/output, inherited
+  environment. Options --export-only and --ghc-option affect outputs/content.
+  Current manifest wrapper uses uname -m: ARM gets export-only (pre stage, no
+  native oracle); other hosts get pre/post plus native. Extra GHC options default
+  empty; no automatic LLVM flag in the default non-ARM branch.
+
+  For each family, before generation the function READS existing provenance.json
+  and every prior artifacts[].path and COPIES them into a fresh random
+  prepare-run-*/previous/ tree. A missing old file fails even if a clean rebuild
+  could produce it. This is an actual backward dependency on previous outputs,
+  and accumulating archival state; candidate for deletion under current user policy.
+  Fresh attempt directories are also embedded in the newly produced receipt, so
+  successful output is not determined solely by source/toolchain content.
+
+  Common artifact flow under that family's build directory:
+    expected.tsv: IN model rows/expected functions; OUT independently modeled TSV.
+    requests.tsv: IN same case inventory; OUT native stdin without expected results.
+    <stage>-core/<module>.cbd
+      IN: tracked fixture source, plugin/exporter, ghcOptions/stage/export-only flags.
+      OUT: CBD; <stage>-ghc/ intermediates. Stage CBD is deleted before export.
+    prepare-run-*/audits/<stage>-<entry>.json
+      IN: stage CBD, entry, capabilities, auditor/decoder/data.
+      OUT: accepted reports for entries/graphNames/hostEntries, rejected report
+        for readTupleEscape. Entry families come from SimdByteArrayModel.hs.
+    prepare-run-*/mutations/<stage>-wrong-<element>-<offset><op>.cbd
+      IN: stage CBD and producer mutation code, in-process Haskell CBD writer.
+      OUT: mutated proof CBD; offset=vector/scalar, op=Index/Read/Write.
+    prepare-run-*/audits/<same mutation label>.json
+      IN: mutation CBD, auditor/decoder/data; OUT negative audit report.
+    pre-audit.json and post-audit.json (enabled stages only)
+      IN: in-memory stage entry reports; OUT combined JSON report.
+    native/<family>-oracle (native mode only)
+      IN: tracked <module>Native.hs and imported <module>.hs, GHC/packages,
+          ghcOptions; OUT executable and native/ .hi/.o files.
+    oracle.tsv (native only)
+      IN: executable, requests.tsv, byte comparison with model; OUT native TSV.
+    prepare-run-*/commands/<label>.{stdout,stderr,command.json}
+      Labels ghc-version, ghc-info, host, architecture, system, compiler-build,
+        each stage-export/entry/mutation audit; native-build/native-oracle if enabled.
+      IN: commands and their inputs; OUT three log files per command.
+    provenance.json and prepare-run-*/provenance.json
+      IN: source records, all fresh artifacts/logs, stage report data, host/options;
+      OUT: two copies of current receipt.
+
+  Source receipt additionally hashes Java VectorMemoryFamily.java, VectorMemoryOp.java,
+  VectorReadCase.java, CoreVectorMemory.java, VectorByteArrayExpression.java (all in
+  src/main/java/thc/runtime), although fixture generation does not execute JVM code.
+  Double family also hashes VectorMemory.java. This ties regeneration to runtime
+  changes without a producer computation that consumes those implementations.
+  Receipt omits imported polyglot ABI and SIMD JSON tables. Top-level-only compiler
+  receipt caveat remains. Native filenames have no explicit .exe suffix branch.
+  Tests read receipt source/artifact bytes, selected stage CBDs, expected/oracle TSV;
+  SimdByteArrayEvidence reads command records; SimdByteArrayCorpus reads expected/
+  oracle TSV. Their local helper file reads are included; no subprocess in Java.
+
+030  simd-int32x4-bytearray
+  Directory: build/simd-int32x4-bytearray; family argument int32x4-bytearray.
+  Source: t/fixtures/compiler/SimdInt32X4ByteArray.hs.
+  Native source: t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs imports it.
+  CBDs: pre-core/SimdInt32X4ByteArray.cbd, post-core/SimdInt32X4ByteArray.cbd.
+  Native executable: native/int32x4-bytearray-oracle.
+  Other artifacts follow the explicit common flow above. Wrong element controls:
+    Word32ElemRep; six mutation CBD/report pairs per enabled stage.
+  Consumer: thc.runtime.SimdInt32ByteArrayTest, evidence/corpus helpers above;
+    group ciChecks also reads provenance.json on Linux.
+
+031  simd-word32x4-bytearray
+  Directory: build/simd-word32x4-bytearray; family argument word32x4-bytearray.
+  Source: t/fixtures/compiler/SimdWord32X4ByteArray.hs.
+  Native source: t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs imports it.
+  CBDs: pre-core/SimdWord32X4ByteArray.cbd, post-core/SimdWord32X4ByteArray.cbd.
+  Native executable: native/word32x4-bytearray-oracle.
+  Other artifacts as above; wrong element Int32ElemRep, six pairs per stage.
+  Consumer: thc.runtime.SimdWord32ByteArrayTest and helpers; Linux provenance check.
+
+032  simd-floatx4-bytearray
+  Directory: build/simd-floatx4-bytearray; family argument floatx4-bytearray.
+  Source: t/fixtures/compiler/SimdFloatX4ByteArray.hs.
+  Native source: t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs imports it.
+  CBDs: pre-core/SimdFloatX4ByteArray.cbd, post-core/SimdFloatX4ByteArray.cbd.
+  Native executable: native/floatx4-bytearray-oracle.
+  Wrong elements: Int32ElemRep, Word32ElemRep, DoubleElemRep; eighteen mutation
+    CBD/report pairs per enabled stage. Other common outputs as above.
+  Extra native-only outputs: snan-expected.tsv and snan-requests.tsv from model
+    diagnostics; snan-oracle.tsv from the same executable reading snan-requests.tsv;
+    command label snan-oracle with three log files. These record diagnostics only.
+  Consumer: thc.runtime.SimdFloatByteArrayTest and helpers; Linux provenance check;
+    signaling-NaN files also become receipt-hashed inputs.
+
+033  simd-doublex2-bytearray
+  Directory: build/simd-doublex2-bytearray; family argument doublex2-bytearray.
+  Source: t/fixtures/compiler/SimdDoubleX2ByteArray.hs.
+  Native source: t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs imports it.
+  CBDs: pre-core/SimdDoubleX2ByteArray.cbd, post-core/SimdDoubleX2ByteArray.cbd.
+  Native executable: native/doublex2-bytearray-oracle.
+  Wrong elements: Int64ElemRep, Int32ElemRep, Word32ElemRep, FloatElemRep;
+    twenty-four mutation CBD/report pairs per enabled stage.
+  Same common outputs and native-only signaling-NaN files/logs described for 032.
+  Consumer: thc.runtime.SimdDoubleByteArrayTest and helpers; Linux provenance check.
+
+034  fused-floating
+Producer: t/haskell-fixtures/FusedFloatingFixtures.hs:prepareFusedFloating.
+Consumer: thc.runtime.FusedFloatingTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter/auditor;
+  t/fixtures/compiler/FloatingAudit.hs, FloatingAuditNative.hs; native 64-bit GHC9.14.1.
+Under build/fused-floating/:
+  pre-core/FloatingAudit.cbd, post-core/FloatingAudit.cbd: IN audit source/plugin
+    with stage option; OUT CBDs and stage-ghc/ intermediates.
+  native/floating-oracle: IN both sources/native packages, no ISA flags;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable --fused, producer's in-memory bit-pattern requests;
+    OUT native TSV after checking requested keys and integer bit ranges.
+  pre-audit.json, post-audit.json: IN respective CBD/eight entries/auditor closure;
+    OUT stage reports.
+  manifest.json: IN TSV, CBDs, reports, source receipt, GHC --info; OUT hashes.
+Consumer reads manifest/receipt paths, CBDs, TSV and audits. Native executable is
+  produced but excluded from artifact hashes. Auditor tables/tool closure omitted.
+
+035  simd-floatx4-fma (also FloatX8, DoubleX2 and DoubleX4)
+Producer: t/haskell-fixtures/SimdFloatFmaFixtures.hs:prepareSimdFloatFma.
+Consumer: thc.runtime.SimdFloatFmaTest.
+IN: producer/FixtureSupport.hs/Main.hs and built thc-fixtures;
+  t/fixtures/compiler/SimdFloatFma.hs and SimdFloatFmaNative.hs; exporter/auditor.
+  GHC9.14.1, arch/os; aarch64 exports pre only. Native requires Linux x86_64,
+  /proc/cpuinfo with avx/avx2/fma, LLVM toolchain; -fllvm -mavx2 -mfma.
+Under build/simd-floatx4-fma/:
+  pre-core/SimdFloatFma.cbd, post-core/SimdFloatFma.cbd (native branch)
+    IN audit source/exporter/options; OUT CBD and stage-ghc/. ARM pre uses
+    -fno-code -fwrite-if-simplified-core.
+  pre-audit.json, pre-double-audit.json; post equivalents when enabled
+    IN stage CBD, corresponding float/double entry lists, auditor/decoder/data.
+    OUT four reports native, two on ARM; logs/<stage>-audit and
+    logs/<stage>-double-audit each have stdout/stderr/command.json suffixes.
+  native/oracle (native branch): IN both Haskell sources, native packages/LLVM/ISA;
+    OUT executable/native intermediates.
+  oracle.txt (native branch): IN executable and producer-generated request string;
+    OUT native results.
+  manifest.json: IN CBD/report/oracle files and short source receipt; OUT hashes,
+    inputs, stages and nativeRows (null on ARM). Native executable/logs not hashed.
+Consumer reads receipt paths, available oracle, CBDs/audits. Small receipt omits
+  most exporter/auditor imports and data; it is not a complete dependency closure.
+
+036  simd-wide-floating-fma
+Producer: t/haskell-fixtures/SimdWideFloatFmaFixtures.hs:prepareSimdWideFloatFma.
+Consumer: thc.runtime.SimdWideFloatFmaTest using SimdFloatFmaTest's shared checker.
+IN: producer, SimdFloatFmaFixtures.hs inputs/doubleInputs, Main.hs/FixtureSupport.hs;
+  t/fixtures/compiler/SimdWideFloatFma.hs and SimdWideFloatFmaNative.hs;
+  shared exporter/auditor/GHC9.14.1. Native aarch64 or Linux x86_64; on x86 reads
+  /proc/cpuinfo for fma and uses -mfma. No native 512-bit instruction oracle.
+Under build/simd-wide-floating-fma/:
+  pre-core/SimdWideFloatFma.cbd: IN vector source/exporter, -fno-code
+    -fwrite-if-simplified-core; OUT pre CBD/pre-ghc/ intermediates.
+  pre-audit.json, pre-double-audit.json: IN pre CBD, eight entry roots/auditor;
+    OUT reports; logs/audit and logs/double-audit with three command-log suffixes.
+  native/scalar-lane-oracle: IN tracked native source and native GHC/packages/flags;
+    OUT executable/native intermediates.
+  oracle.txt: IN executable and shared input definitions; OUT scalar-lane results.
+  manifest.json: IN CBD/reports/oracle and short source receipt; OUT hashes/platform
+    choices. Native executable and logs produced but not included in hashes.
+Consumer's helper selects this directory for 512-bit tests; normal SimdFloatFmaTest
+  tests select 035. Code sharing here does not require 035's generated artifacts.
+
+037  simd-calls
+Producer: t/haskell-fixtures/SimdCallFixtures.hs:prepareSimdCalls.
+Consumer: thc.runtime.SimdCallNativeTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures;
+  t/fixtures/compiler/SimdCallAudit.hs, SimdCallNative.hs, GHC9.14.1,
+  shared exporter/auditor. aarch64 is export-only; other architectures take native.
+Under build/simd-calls/:
+  pre-core/SimdCallAudit.cbd, post-core/SimdCallAudit.cbd (non-ARM)
+    IN source/exporter, stage option; ARM pre adds no-code/write-interface-Core.
+    OUT CBDs and stage-ghc/ intermediates.
+  <stage>-audit.json: IN stage CBD, sixteen entry roots/auditor/data; OUT report.
+  native/simd-call-oracle: IN both Haskell sources/native packages, non-ARM only;
+    OUT executable and native/ objects/interfaces.
+  oracle.tsv: IN executable and in-memory requests (entries x nine inputs);
+    OUT native TSV, non-ARM only.
+  manifest.json: IN CBDs/reports/optional TSV, short source receipt; OUT hashes.
+Consumer reads manifest/receipt paths, stage CBDs/reports, optional TSV. Native
+  executable not hashed; short source receipt omits shared inputs listed in 001.
+
+038  simd-arithmetic (shuffle)
+Producer: t/haskell-fixtures/SimdArithmeticFixtures.hs:prepareSimdArithmetic.
+Consumer: thc.runtime.SimdArithmeticTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures; bin/simd-families.json
+  directly selects admitted shuffle shapes; shared GHC9.14.1/exporter/auditor.
+Under build/simd-arithmetic/:
+  sources/SimdArithmeticAudit.hs, sources/SimdArithmeticScalar.hs, sources/Native.hs
+    IN table, producer templates/indices; OUT generated vector/scalar/driver sources.
+  inputs.tsv: IN shape-specific requestRows and wrapping; OUT native stdin.
+  native/oracle: IN Native.hs/SimdArithmeticScalar.hs and native GHC packages;
+    OUT executable/native intermediates; no LLVM/native vector execution.
+  oracle.tsv: IN executable and inputs.tsv; OUT native scalar-lane results.
+  pre-core/SimdArithmeticAudit.cbd: IN generated vector source/exporter, no-code
+    and write-interface-Core; OUT CBD and ghc/ intermediates.
+  <entry>-audit.json: IN pre CBD, each selected shape's two shuffle entries,
+    auditor/decoder/data; OUT one report per entry.
+  commands logs: ghc-version, native-build, native-oracle, pre-export, entry-audit;
+    OUT three standard log files per label.
+  manifest.json: IN generated sources, input/native/oracle/CBD/reports/logs and
+    source receipt; OUT hashes and shape/case inventory.
+Consumer reads receipt paths, manifest, native TSV, pre CBD and reports. Group
+  sources list generate-simd-families.py but producer reads the table and never
+  executes that generator; keep table ownership separate from its consumer.
+
+039  data-to-tag
+Producer: bin/prepare-data-to-tag.py:main; consumer thc.runtime.DataToTagTest.
+IN: producer, t/fixtures/compiler/DataToTagAudit.hs, exporter/plugin and full
+  auditor/decoder closure (001). GHC9.14.1 also runs a ghc-package -e signature query.
+Under build/data-to-tag/:
+  pre/core/DataToTagAudit.cbd and post/core/DataToTagAudit.cbd
+    IN source/exporter/stage option; OUT CBDs, stage/ghc/ scratch. Every CBD in
+    each stage/core directory is read/retained, including any stale file.
+  <stage>/<entry>.audit.json: IN entire stage CBD list, capability table, Python
+    auditor and entry name; OUT reports for seven accepted/five rejected entries.
+  NativeDataToTag.hs: IN producer driver template/entries; OUT generated driver.
+  native/data-to-tag-oracle: IN generated driver plus audit source/native packages;
+    OUT executable and native/ intermediates.
+  expected.tsv: IN producer model and cases; OUT independently computed results.
+  oracle.tsv: IN executable and in-memory requests; OUT matching native results.
+  exceptions.tsv: IN executable with forceCase -1; OUT observed exception row.
+  manifest.json: IN all outputs above and source receipt, GHC API signature/info;
+    OUT hashes, stages and audit inventory.
+Consumer reads manifest/receipts, stage CBD, oracle. Receipt omits plugin.py,
+  thc.cabal and auditor import-time tables. Exact exported application counts in
+  producer deserve later redundancy/optimization review.
+
+040  backend-annotations
+Producer: t/haskell-fixtures/BackendAnnotationFixtures.hs:prepareBackendAnnotations.
+Consumer: thc.CoreBackendPolicyTest; producer also executes compiler rejection tests.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures and linked compiler/CBD
+  modules; t/fixtures/compiler/BackendAnnotations.hs, ForeignExportRegistration.hs;
+  shared exporter/plugin/package DB; selected GHC/libdir and installed interfaces.
+Under build/backend-annotations/:
+  pre/BackendAnnotations.cbd, post/BackendAnnotations.cbd
+    IN first source/exporter, write-interface-Core/expose-all-unfoldings/no-worker-
+      wrapper, post-tidy on post; OUT CBDs, pre-ghc/post-ghc .hi/.o files.
+  interface.cbd: IN post-ghc/BackendAnnotations.hi plus GHC session/libdir/package
+    interfaces, THC.Interface.loadInterfaceCore/interfaceCoreCBD; OUT CBD.
+  BackendUse.hs: IN producer literal template; OUT source importing BackendAnnotations.
+  closure/BackendUse.cbd, closure/THC.InterfaceClosure.cbd
+    IN BackendUse.hs, post-ghc/BackendAnnotations.hi, selected plugin DB/library;
+    OUT CBDs, closure-ghc objects and post-ghc/BackendUse.hi.
+  Rejected.hs: IN each of four annotation templates; OUT repeatedly overwritten
+    source. Each export consumes it and writes rejected-ghc/ scratch plus
+    option.log, vectorize.log, scope.log, conflict.log (expected failures).
+  foreign-hooks/<variant>/foreign.cbd (stock/prior/replacement/extra-plugin)
+    IN ForeignExportRegistration.hs, GHC session/installed interfaces, linked
+      plugin and hook configuration; OUT interface-derived CBD after compiling
+      .hi/.o/foreign stubs in that variant directory. Plugin additionally exports
+      unit-qualified Core under variant/core/ (exact filename still to resolve).
+  commands logs: pre-export, post-export, libdir, plugin-db, plugin-flag, closure-export.
+No manifest. Java directly reads the three BackendAnnotations capture paths and
+  additionally writes temporary synthetic CBDs through the shared encoder.
+Group wrapper also builds exe:thc-fixtures and writes build/thc-fixtures.path (041).
+
+041  compact-model / shared test encoder
+Producer: .github/scripts/fast-fixtures.json:compact-model builds exe:thc-fixtures
+  with Cabal --offline and selected GHC/GHC_PKG; then cabal list-bin writes
+  build/thc-fixtures.path. Backend-annotations duplicates that write; additional
+  writers are bin/prepare-tests.sh and .github/scripts/fast_ci.py common-encoder.
+IN for executable: Cabal component graph rooted at t/haskell-fixtures/Main.hs,
+  CompactModelFixtures.hs and all imported fixture modules, thc.cabal/cabal.project,
+  linked src/cbd/THC/Compact/{Module,JSON,Encode}.hs closure and package dependencies.
+OUT: Cabal-built thc-fixtures executable plus object/interface products;
+  build/thc-fixtures.path contains its location, not its contents.
+Actual compact-model INPUT_JSON OUTPUT_CBD operation:
+  IN: explicit caller JSON, built executable/linked Aeson/CBD writer;
+  OUT: exact caller CBD. No fixture archive, oracle or previous CBD required.
+Java CoreCbdTestSupport resolution/temporary files recorded after 012. Indexed
+  consumer classes are the compact-model group's junit list (28 classes); other
+  direct callers can exist outside that group and need matching encoder edges.
+  Sidecar has known writers now, but several separate owners and weak toolchain
+  fallback remain. CMake should own the executable dependency, not infer readiness
+  from an old path file. No complete Cabal source closure is claimed in this entry.
+
+042  proxy-void
+Producer: t/haskell-fixtures/ProxyVoidFixtures.hs:prepareProxyVoid.
+Consumer: thc.runtime.ProxyVoidTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter/auditor;
+  t/fixtures/compiler/ProxyVoidAudit.hs, ProxyVoidAuditNative.hs, ProxyVoidPredicate.hs;
+  src/compiler/THC/Wired.hs (direct predicate import) and pinned GHC ghc package.
+Under build/proxy-void/:
+  api/predicate: IN predicate source, THC.Wired.hs, GHC API; -O0 -dynamic;
+    OUT executable/api objects/interfaces; executed as compiler API check.
+  native/oracle: IN native/audit sources/GHC packages; OUT executable/intermediates.
+  oracle.tsv: IN executable's embedded cases, checked against producer Int64 model;
+    OUT captured native results.
+  pre/core/ProxyVoidAudit.cbd, post/core/ProxyVoidAudit.cbd plus interface closure
+    IN audit source/exporter, direct/returned/tupleCase/effect closure roots;
+    OUT stage CBDs and stage/ghc scratch files.
+  pre/audit.json, post/audit.json: IN all CBDs listed in stage/core/, named entries,
+    auditor/data; OUT stage report. Directory listing again permits stale inputs.
+  commands logs: ghc-version, predicate-build, predicate-run, native-build,
+    native-run, pre/post-export, pre/post-audit; standard three suffixes.
+  manifest.json: IN oracle, both executables, CBDs/reports/logs/source receipt;
+    OUT hashes and entry inventory. Java reads receipts, CBD, audits and TSV.
+
+043  rubbish-literals
+Producer: t/haskell-fixtures/RubbishLiteralFixtures.hs:prepareRubbishLiterals.
+Consumer: thc.runtime.RubbishLiteralTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures with linked GHC/THC.Plugin/
+  CBD modules; t/fixtures/compiler/RubbishLiteralAudit.hs; native 64-bit GHC9.14.1,
+  GHC libdir, ghc-pkg registration and installed GHC/Internal/Event/Manager.hi.
+  Interface imports are loaded by GHC as well; only that one installed .hi is hashed.
+Under build/rubbish-literals/:
+  pre.cbd, post.cbd: IN parsed/optimized source templates, installed literal
+    unfoldings and producer's GHC-API transformations; OUT direct serializer CBDs.
+  native.ll (AArch64): IN transformed Core/GHC LLVM backend; OUT LLVM IR.
+  native.s: IN native Core backend, or native.ll through GHC/LLVM on AArch64;
+    OUT assembly. Host dynamic/static/profile ways are consumed.
+  native.o: IN assembly/GHC assembler; OUT object loaded and linked in producer.
+  native-codegen.json: IN emitted files/hashes/binder names; OUT codegen metadata.
+  oracle.json: IN loaded native object, installed runtime/package symbols, embedded
+    seed cases; OUT continuation observations. No standalone native executable.
+  originals.json: IN observed installed interface literal occurrences; OUT inventory.
+  pre.audit.json, post.audit.json: IN corresponding CBD, entry list, Python auditor/
+    thc-compact/data closure; OUT reports.
+  logs/<label>.{stdout,stderr,command.json}: version, info, libdir,
+    imports-ghc-internal, native-llvm when used, native-assemble, pre/post-audit.
+  manifest.json: IN artifacts/logs, source receipt, installed interface bytes;
+    OUT hashes and inventories. ghc/ compiler scratch is also produced.
+Java reads receipts/installed interface, logs/info.stdout, CBDs/oracle/reports;
+  its malformed-Core audit control additionally writes/reads temporary CBD/report
+  files and invokes python3 auditor. Encoder dependency follows its writing helper.
+
+044  boxed-cas
+Producer: t/haskell-fixtures/BoxedCasFixtures.hs:prepareBoxedCas.
+Consumer: thc.runtime.BoxedCasTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC;
+  t/fixtures/compiler/BoxedCasAudit.hs, BoxedCasNative.hs,
+  t/fixtures/core/BoxedCasCounter.hs; native 64-bit GHC9.14.1.
+Under build/boxed-cas/, producer chooses a new run-N from existing directory names:
+  run-N/pre-core/{BoxedCasAudit,BoxedCasCounter,THC.InterfaceClosure}.cbd;
+  run-N/post-core/same (actual set obtained by directory listing)
+    IN audit/example sources/exporter/closure roots; OUT CBDs and stage-ghc/.
+  run-N/<stage>-<entry>.audit.json: IN stage CBD list/entry/auditor/data;
+    OUT one report per each of ten entries per stage.
+  run-N/native/boxed-cas-oracle: IN native/audit/example sources, native packages;
+    OUT executable/native intermediates.
+  run-N/logs/native-oracle.stdout: IN executable's embedded cases; OUT oracle.
+  Other logs: ghc-version/info, pre/post-export, stage-audit-entry, native-compile;
+    each label produces stdout/stderr/command.json, including native-oracle.
+  manifest.json: IN all fresh outputs/logs/source receipt; OUT hashes and paths.
+  Existing manifest.json is MOVED to run-N/previous-manifest.json first. Directory
+    state chooses output names; previous run directories accumulate. Candidate for
+    replacing with fixed owning outputs and retiring archival behavior.
+Consumer reads manifest/receipt paths, selected CBDs/reports and recorded oracle path.
+
+045  fetch-add-int-array
+Producer: t/haskell-fixtures/FetchAddIntArrayFixtures.hs:prepareFetchAddIntArray.
+Consumer: thc.runtime.FetchAddIntArrayTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC9.14.1;
+  t/fixtures/compiler/FetchAddIntArrayAudit.hs.
+Under build/fetch-add-int-array/:
+  pre/core/FetchAddIntArrayAudit.cbd, pre/core/THC.InterfaceClosure.cbd; post/same
+    IN source/exporter, fetchComposite root/stage option; OUT CBDs and stage/ghc/.
+    Exact two-file CBD inventory is checked; extra stale CBD causes failure.
+  pre/fetchComposite.audit.json, post/fetchComposite.audit.json
+    IN matching CBD pair/entry/auditor/data; OUT reports.
+  NativeFetchAddIntArray.hs: IN producer driver template; OUT source.
+  native/fetch-add-oracle: IN driver and audit source/native packages;
+    OUT executable/native intermediates.
+  oracle.tsv: IN executable and producer's in-memory cases; OUT native results.
+  manifest.json: IN driver, TSV, CBDs/reports, short source receipt; OUT hashes.
+Consumer reads receipt paths, CBDs/reports and TSV. Native executable not hashed;
+  receipt misses shared inputs. Compare semantic value with fetchAdd coverage in
+  046 before retaining this additional producer; composite ordering may be distinct.
+
+046  atomic-int-arrays
+Producer: t/haskell-fixtures/AtomicIntArrayFixtures.hs:prepareAtomicIntArrays.
+Consumer: thc.runtime.AtomicIntArrayTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter/auditor;
+  t/fixtures/compiler/AtomicIntArrayAudit.hs, GHC9.14.1/native packages.
+Under build/atomic-int-arrays/:
+  pre/core/AtomicIntArrayAudit.cbd, pre/core/THC.InterfaceClosure.cbd; post/same
+    IN source/exporter, twelve roots/stage option; OUT CBDs and stage/ghc/.
+  <stage>/<entry>.audit.json: IN stage pair/auditor/data; OUT 24 reports.
+    Entries fetch{Add,Sub,And,Nand,Or,Xor}Result, casInt{,8,16,32,64}Result,
+    atomicLoadStore. Exact stage CBD inventory rejects extras.
+  NativeAtomicIntArrays.hs: IN producer template; OUT native driver source.
+  requests.tsv: IN entries/cases; OUT space-separated native stdin rows.
+  native/atomic-int-array-oracle: IN driver plus audit source/native packages;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable/requests.tsv; OUT native results.
+  commands logs: stage-export, stage-entry-audit, native-build/native-oracle;
+    OUT three standard files per label.
+  manifest.json: IN driver/requests/TSV, CBDs/reports/logs, source receipt;
+    OUT hashes/stages. Native executable not in artifactHashes.
+Consumer reads manifest/receipt paths, native results, stage CBDs and audit reports.
+
+047  shrink-bytearrays
+Producer: t/haskell-fixtures/ShrinkByteArrayFixtures.hs:prepareShrinkByteArrays.
+Consumer: thc.runtime.ShrinkByteArrayTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC9.14.1;
+  t/fixtures/compiler/ShrinkMutableByteArrayAudit.hs.
+Under build/shrink-bytearrays/:
+  pre/core/ShrinkMutableByteArrayAudit.cbd, pre/core/THC.InterfaceClosure.cbd;
+  post/same: IN source/exporter, shrinkBytes/shrinkPinned roots and stage option;
+    OUT two CBDs per stage, stage/ghc/; exact directory inventory checked.
+  <stage>/{shrinkBytes,shrinkPinned}.audit.json
+    IN matching CBD pair/entry/auditor; OUT four reports.
+  NativeShrinkByteArrays.hs: IN producer template; OUT native driver.
+  native/shrink-bytearray-oracle: IN driver/source/native GHC packages;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable/in-memory seed-size cases; OUT native results.
+  manifest.json: IN driver/TSV, CBDs/reports, short source receipt; OUT hashes.
+Consumer reads receipt paths, CBDs/reports/TSV. Executable not hashed; source receipt
+  omits plugin.py and auditor imports/tables. Compare with resize/size coverage
+  without discarding distinct shrink-in-place/pinned semantics.
+
+048  small-arrays
+Producer: t/haskell-fixtures/SmallArrayFixtures.hs:prepareSmallArrays.
+Consumer: thc.runtime.SmallArrayTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC9.14.1;
+  t/fixtures/compiler/SmallArrayAudit.hs, SmallArrayAuditNative.hs.
+Under build/small-arrays/:
+  native/oracle: IN both sources/native packages; OUT executable/native intermediates.
+  oracle.tsv: IN executable and nine in-memory inputs; OUT native results.
+  pre/core/SmallArrayAudit.cbd, post/core/SmallArrayAudit.cbd
+    IN audit source/exporter/stage option; OUT CBDs and stage/ghc/ intermediates.
+  pre/audit.json, post/audit.json: IN stage CBD, smallComposite/safeSliceComposite
+    roots and auditor closure; OUT reports.
+  manifest.json: IN executable/TSV, CBDs/reports, source receipt; OUT hashes.
+Consumer reads receipts, CBDs, TSV and audits. Producer does not remove old
+  manifest before work, so failed generation can leave an old completion-looking
+  receipt. Auditor input-table omissions remain.
