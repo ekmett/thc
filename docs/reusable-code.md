@@ -7,6 +7,21 @@ guest bodies. `PreparedCode.newInstance(language)` creates a fresh ordinary
 again. Definitions outside the selected dependency set stay unprepared; asking
 for one fails rather than lowering it during execution.
 
+Preparation uses up to four workers once dependency discovery exposes parallel
+work. Set `-Dthc.prepareCodeJobs=N` (1–64), or use the explicit `prepareCode`
+overload, to change that budget. Each binding is claimed once before its
+dependencies are queued, so shared references and cycles do not duplicate work
+or wait on a topological ordering. Workers own their source and operand scratch
+state; constructor layouts, native-call slots and the completed target inventory
+have shared synchronization. A failed request joins its workers and publishes no
+prepared program. A dependency chain with only one ready binding stays on the
+calling thread.
+
+This pool lowers the selected detached Core into Truffle roots. CBD selection
+and decoding still precede it; Graal's subsequent machine-code compilation owns
+its own scheduling. Preparation neither evaluates CAF bodies nor trains guest
+profiles, and each later program instance still owns fresh CAF cells.
+
 Admission covers exact numeric scalars, data and closures, unboxed tuples and
 sums, supported vectors, and State#/Void# values. Ordinary calls, partial
 applications, nested closures and thunks, cases, nonrecursive unlifted aggregate

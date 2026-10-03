@@ -9,6 +9,8 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import static thc.runtime.Alternative.*;
@@ -47,23 +49,28 @@ public final class Program implements ExecutableProgram {
     private final boolean reusableCode;
     private final Object codeIdentity;
     private final thc.Language.State contextOwner;
-    private final Set<String> codeDependencies = new LinkedHashSet<>();
     private final List<RootCallTarget> codeTargets;
     private final boolean delimited;
     private final boolean containsDelimited;
     private final CoreSources sources;
-    private CoreSourceLocation currentSource;
-    private OperandBuilder operandBuilder;
-    private int attachedRootCount;
-    private int constructedRootCount;
-    private int initializedBindingCount;
+    private final class LoweringState {
+        CoreSourceLocation source;
+        OperandBuilder operands;
+        final Set<String> dependencies = new LinkedHashSet<>();
+    }
+    private final LoweringState serialLowering = new LoweringState();
+    private ThreadLocal<LoweringState> parallelLowering;
+    private LoweringState lowering() { return parallelLowering == null ? serialLowering : parallelLowering.get(); }
+    private final AtomicInteger attachedRootCount = new AtomicInteger();
+    private final AtomicInteger constructedRootCount = new AtomicInteger();
+    private final AtomicInteger initializedBindingCount = new AtomicInteger();
     private final Object preparationLock = new Object();
     private final boolean diagnosticUnsupported;
     private final Set<String> deferredUnsupported = new LinkedHashSet<>();
     private final List<Map<String, Object>> bindings;
     private final Map<String, Map<String, Object>> constructors;
     private final Map<String, DataLayout> dataLayouts;
-    private final Map<String, Integer> constructorIndices = new LinkedHashMap<>();
+    private final Map<String, Integer> constructorIndices = Collections.synchronizedMap(new LinkedHashMap<>());
     private final DataLayout[] indexedLayouts;
     private final Map<String, GlobalBinding> globals;
     private final GlobalBinding[] indexedGlobals;
@@ -104,7 +111,7 @@ public final class Program implements ExecutableProgram {
         this.language = language; this.enableAsync = true; this.outlineCaseArms = outlineCaseArms;
         eagerAsyncPolls = enableAsync;
         this.reusableCode = reusableCode;
-        this.codeTargets = reusableCode && prepared == null ? new ArrayList<>() : List.of();
+        this.codeTargets = reusableCode && prepared == null ? Collections.synchronizedList(new ArrayList<>()) : List.of();
         this.codeIdentity = prepared == null ? new Object() : prepared.identity;
         this.contextOwner = reusableCode ? thc.Language.currentState() : null;
         this.deferDefaultArm = deferDefaultArm;
@@ -143,7 +150,7 @@ public final class Program implements ExecutableProgram {
                 localConstructors.put((String) constructor.get("id"), constructor);
             }
         constructors = demand == null ? localConstructors : demand.constructors(localConstructors);
-        dataLayouts = demand == null ? new LinkedHashMap<>() : demand.getLayouts();
+        dataLayouts = demand == null ? Collections.synchronizedMap(new LinkedHashMap<>()) : demand.getLayouts();
         indexedLayouts = !reusableCode ? null : new DataLayout[prepared == null ? constructors.size() : prepared.layouts.size()];
         if (prepared != null) for (DataLayout.Reusable storage : prepared.layouts) {
             int index = constructorIndices.size();
@@ -182,11 +189,11 @@ public final class Program implements ExecutableProgram {
                 else if (nativeStartup) {
                     required(globals, id).defer(preparationLock, () -> {
                         Object value = code.instantiate(this);
-                        initializedBindingCount++;
+                        initializedBindingCount.incrementAndGet();
                         return value;
                     });
                     pending.add(id);
-                } else { required(globals, id).initialize(code.instantiate(this)); initializedBindingCount++; }
+                } else { required(globals, id).initialize(code.instantiate(this)); initializedBindingCount.incrementAndGet(); }
             }
             if (nativeStartup) { pendingInitializers = List.copyOf(pending); return; }
             // The loader has linked these declarations in the current State.
@@ -207,7 +214,9 @@ public final class Program implements ExecutableProgram {
                 eager.add(binding);
                 if (!nativeStartup) continue;
             }
-            required(globals, (String) binding.get("id")).defer(preparationLock, () -> {
+            // Reusable initializers create closed code or literals; they cannot
+            // evaluate other globals. Their cells can therefore prepare independently.
+            required(globals, (String) binding.get("id")).defer(reusableCode ? new Object() : preparationLock, () -> {
                 if (reusableCode) {
                     List<Object> body = (List<Object>) binding.get("expr");
                     if (!representation(binding) && !Arrays.asList("lit", "void").contains(body.getFirst()))
@@ -222,7 +231,7 @@ public final class Program implements ExecutableProgram {
                 if (reusableCode) frame.setObject(scope.programSlot, this);
                 Object value = initializer.execute(frame);
                 CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates);
-                initializedBindingCount++;
+                initializedBindingCount.incrementAndGet();
                 return value;
             });
         }
@@ -240,7 +249,7 @@ public final class Program implements ExecutableProgram {
             Object value = initializers.get(i).execute(frame);
             CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates);
             required(globals, (String) binding.get("id")).initialize(value);
-            initializedBindingCount++;
+            initializedBindingCount.incrementAndGet();
         }
     }
 
@@ -257,6 +266,12 @@ public final class Program implements ExecutableProgram {
     /** Explicit experimental admission using the ordinary AST lowerer, without executing guest bodies.
      * Unselected definitions stay unprepared. Context sharing and AOT preparation remain separate. */
     public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries) {
+        return prepareCode(language, module, entries, Integer.parseInt(System.getProperty("thc.prepareCodeJobs", "4")));
+    }
+
+    /** Prepare reachable bindings with a bounded pool; CAF bodies remain unevaluated. */
+    public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries, int jobs) {
+        if (jobs < 1 || jobs > 64) throw new IllegalArgumentException("Core preparation jobs must be between 1 and 64");
         if (language != LANGUAGES.get(null)) throw new UnsupportedCore("Reusable AST preparation requires the current language");
         if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("nativeCallbacks")))
             throw new UnsupportedCore("Reusable AST admission requires detached modules without native callback labels");
@@ -284,40 +299,7 @@ public final class Program implements ExecutableProgram {
                 ManagedExportScalar.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, export.wordBits(), builder::dataLayout);
             ManagedExportScalar.fromNormalizedType(export.result(), ManagedExportScalar.Role.RESULT, export.wordBits(), builder::dataLayout);
         }
-        while (!pending.isEmpty()) {
-            Map<String,Object> binding = builder.bindings.get(builder.bindingIndex(pending.removeFirst()));
-            String id = (String) binding.get("id");
-            if (values.containsKey(id)) continue;
-            List<Object> expression = (List<Object>) binding.get("expr");
-            if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("bignat")) {
-                builder.validateBindings(List.of(binding));
-                BigNatLiterals.proof(expression);
-                // Preparation stores inert bytes even when its context selects native guest storage.
-                values.put(id, new CodeValue(null, null, 0, BigNatLiterals.decode((String) expression.get(2)), -1));
-                continue;
-            }
-            if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("rubbish")) {
-                builder.validateBindings(List.of(binding));
-                var proof = RubbishLiterals.proof(expression);
-                CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
-                CoreRepresentations.requireNoSum(proof, "global binding");
-                builder.checkArgument(proof, false, builder.representation(binding));
-                // A proof is inert; each load creates its own reference filler.
-                values.put(id, new CodeValue(null, null, 0, proof, -1));
-                continue;
-            }
-            if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("function-addr")) {
-                // Never resolve a native label while preparing the source. The
-                // descriptor has no provider or context; each load resolves its own.
-                values.put(id, new CodeValue(null, null, 0, new CFinalizerLabels((String) expression.get(2),
-                    CoreRepresentations.expression(expression)), -1));
-                continue;
-            }
-            Object value = builder.entryValue(id);
-            values.put(id, CodeValue.from(value, builder, (List<?>) binding.get("expr")));
-            pending.addAll(builder.codeDependencies);
-            builder.codeDependencies.clear();
-        }
+        builder.prepareBindings(pending, values, jobs);
         List<Map<String, Object>> headers = new ArrayList<>();
         for (Map<String, Object> binding : builder.bindings) {
             // Deliberately do not retain source bodies, demand suppliers or the preparation instance.
@@ -336,6 +318,89 @@ public final class Program implements ExecutableProgram {
             builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(),
             List.copyOf(builder.packageCalls), registrations, List.copyOf(checkedExports), builder.codeIdentity, language);
     }
+    private record PreparedBinding(String id, CodeValue value, List<String> dependencies) {}
+
+    private PreparedBinding prepareSelected(Map<String,Object> binding) {
+        CodeValue value = prepareBinding(binding);
+        var dependencies = List.copyOf(lowering().dependencies);
+        lowering().dependencies.clear();
+        return new PreparedBinding((String) binding.get("id"), value, dependencies);
+    }
+
+    private void prepareBindings(ArrayDeque<String> pending, Map<String,CodeValue> values, int jobs) {
+        // A narrow dependency chain needs no worker threads. Start the pool only
+        // when discovery exposes independent bindings to prepare.
+        while (!pending.isEmpty() && (jobs == 1 || pending.size() == 1)) {
+            var binding = bindings.get(bindingIndex(pending.removeFirst()));
+            if (values.containsKey(binding.get("id"))) continue;
+            var prepared = prepareSelected(binding);
+            values.put(prepared.id, prepared.value); pending.addAll(prepared.dependencies);
+        }
+        if (pending.isEmpty()) return;
+        parallelLowering = ThreadLocal.withInitial(LoweringState::new);
+        var context = contextOwner.getEnv().getContext();
+        var claimed = new HashSet<>(values.keySet());
+        try (var workers = Executors.newFixedThreadPool(jobs)) {
+            var completed = new ExecutorCompletionService<PreparedBinding>(workers);
+            int active = 0;
+            try {
+                while (!pending.isEmpty() || active != 0) {
+                    while (active < jobs && !pending.isEmpty()) {
+                        var binding = bindings.get(bindingIndex(pending.removeFirst()));
+                        if (!claimed.add((String) binding.get("id"))) continue;
+                        completed.submit(() -> {
+                            Object previous = context.enter(null);
+                            try { return prepareSelected(binding); }
+                            finally { parallelLowering.remove(); context.leave(null, previous); }
+                        });
+                        active++;
+                    }
+                    if (active == 0) break;
+                    var prepared = completed.take().get(); active--;
+                    values.put(prepared.id, prepared.value); pending.addAll(prepared.dependencies);
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new CancellationException("Core preparation interrupted");
+            } catch (ExecutionException failed) {
+                if (failed.getCause() instanceof RuntimeException runtime) throw runtime;
+                if (failed.getCause() instanceof Error error) throw error;
+                throw new RuntimeException("Core preparation failed", failed.getCause());
+            } finally {
+                // No workers or half-prepared result may escape a failed request.
+                workers.shutdownNow();
+            }
+        }
+    }
+
+    private CodeValue prepareBinding(Map<String,Object> binding) {
+        String id = (String) binding.get("id");
+        List<Object> expression = (List<Object>) binding.get("expr");
+        if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("bignat")) {
+            validateBindings(List.of(binding));
+            BigNatLiterals.proof(expression);
+            // Preparation stores inert bytes even when its context selects native guest storage.
+            return new CodeValue(null, null, 0, BigNatLiterals.decode((String) expression.get(2)), -1);
+        }
+        if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("rubbish")) {
+            validateBindings(List.of(binding));
+            var proof = RubbishLiterals.proof(expression);
+            CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
+            CoreRepresentations.requireNoSum(proof, "global binding");
+            checkArgument(proof, false, representation(binding));
+            // A proof is inert; each load creates its own reference filler.
+            return new CodeValue(null, null, 0, proof, -1);
+        }
+        if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("function-addr")) {
+            // Never resolve a native label while preparing the source. The
+            // descriptor has no provider or context; each load resolves its own.
+            return new CodeValue(null, null, 0, new CFinalizerLabels((String) expression.get(2),
+                CoreRepresentations.expression(expression)), -1);
+        }
+        Object value = entryValue(id);
+        return CodeValue.from(value, this, (List<?>) binding.get("expr"));
+    }
+
     private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty() || value instanceof Map<?,?> map && map.isEmpty(); }
     public static final class PreparedCode {
         private final Map<String, Object> module;
@@ -629,14 +694,14 @@ public final class Program implements ExecutableProgram {
         }
     }
     private <T> T withSource(CoreSourceLocation location, Supplier<T> action) {
-        CoreSourceLocation previous = currentSource;
-        currentSource = location;
+        CoreSourceLocation previous = lowering().source;
+        lowering().source = location;
         try { return action.get(); }
-        finally { currentSource = previous; }
+        finally { lowering().source = previous; }
     }
     private CoreSourceLocation rootSource(Expr body) {
-        CoreSourceLocation result = body.getCoreSourceLocation() != null ? body.getCoreSourceLocation() : currentSource;
-        if (result != null && sources.getEnabled()) attachedRootCount++;
+        CoreSourceLocation result = body.getCoreSourceLocation() != null ? body.getCoreSourceLocation() : lowering().source;
+        if (result != null && sources.getEnabled()) attachedRootCount.incrementAndGet();
         return result;
     }
 
@@ -696,8 +761,8 @@ public final class Program implements ExecutableProgram {
         return hostEntryTarget(0);
     }
     @Override public Map<String, Object> rootCounts() {
-        return Map.of("sourceRootCount", attachedRootCount, "loweredRootCount", constructedRootCount,
-            "hostEntryRootCount", hostEntries.size(), "initializedBindingCount", initializedBindingCount);
+        return Map.of("sourceRootCount", attachedRootCount.get(), "loweredRootCount", constructedRootCount.get(),
+            "hostEntryRootCount", hostEntries.size(), "initializedBindingCount", initializedBindingCount.get());
     }
     @Override public Map<String, Object> diagnostics() {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -906,9 +971,9 @@ public final class Program implements ExecutableProgram {
                 FunctionRootRole.PASS_THROUGH, true, false, true);
             side.configureForeignExceptionBridge(foreignExceptionBridge);
             candidate.node.prepare(side.getCallTarget(), prepared);
-            constructedRootCount++;
+            constructedRootCount.incrementAndGet();
         }
-        constructedRootCount++;
+        constructedRootCount.incrementAndGet();
         root.configureForeignExceptionBridge(reusableCode ? null : foreignExceptionBridge);
         if (language instanceof thc.Language thc) root.configureTypedInput(TypedInputLayout.create(thc, inputLayout, captures != null));
         // Leading-case plans retain concrete layouts. Reusable cases resolve
@@ -972,10 +1037,10 @@ public final class Program implements ExecutableProgram {
     }
     private Expr caseArm(List<Object> expression, Scope scope, boolean tail, int alternativeCount, boolean substantialSiblings) {
         if (sameFrameCandidate(expression, scope)) {
-            OperandBuilder operands = operandBuilder;
-            operandBuilder = null;
+            OperandBuilder operands = lowering().operands;
+            lowering().operands = null;
             try { return new AstSameFrameArm(compile(expression, scope, tail)); }
-            finally { operandBuilder = operands; }
+            finally { lowering().operands = operands; }
         }
         if (expression == scope.deferredExpression) {
             CoreRepresentation proof = CoreRepresentations.expression(expression);
@@ -1005,13 +1070,13 @@ public final class Program implements ExecutableProgram {
                 }
                 CaptureLayout captures = count == 0 ? null : CaptureLayout.withVectors(Objects.requireNonNull(language),
                     new CoreRepresentation[count], exactLong, exactLong, new Class<?>[count], exactFloat, exactDouble, narrow);
-                OperandBuilder operands = operandBuilder;
-                operandBuilder = null;
+                OperandBuilder operands = lowering().operands;
+                lowering().operands = null;
                 Scope child = scope.child();
                 child.self = null;
                 Expr body;
                 try { body = compile(expression, child, tail); }
-                finally { operandBuilder = operands; }
+                finally { lowering().operands = operands; }
                 AstDeferredArm node = new AstDeferredArm(body, captures, slots, tail);
                 scope.deferredArms.add(new DeferredArm(node, captures, slots));
                 return node;
@@ -1029,13 +1094,13 @@ public final class Program implements ExecutableProgram {
             for (String free : coreFreeVariables(expression)) if (scope.joins.containsKey(free)) { hasLocalJoin = true; break; }
         if (!outline || !Arrays.asList("app", "case", "let").contains(expression.getFirst()) || hasLocalJoin)
             return compile(expression, scope, tail);
-        OperandBuilder operands = operandBuilder;
-        operandBuilder = null;
+        OperandBuilder operands = lowering().operands;
+        lowering().operands = null;
         FunctionSpec fn;
         try { fn = function("case arm", List.of(), expression, scope, CoreRepresentations.expression(expression),
             new boolean[0], FunctionRootRole.PASS_THROUGH, tail); }
-        finally { operandBuilder = operands; }
-        return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail, scope.programSlot).located(currentSource);
+        finally { lowering().operands = operands; }
+        return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail, scope.programSlot).located(lowering().source);
     }
     private FrameSlotKind outlinedSlotKind(CoreRepresentation proof, boolean cell) {
         if (reusableCode) return cell || !proof.getEvaluated() || proof.getKind() == CoreKind.UNKNOWN
@@ -1058,15 +1123,15 @@ public final class Program implements ExecutableProgram {
         TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
         if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
         return new Delay(fn.target, fn.captureLayout, fn.captures, scope.programSlot).proven(evaluated(CoreRepresentations.expression(expr), false))
-            .located(sources.expression(expr, currentSource));
+            .located(sources.expression(expr, lowering().source));
     }
     private Expr argument(List<Object> expr, Scope scope, boolean lifted) { return argument(expr, scope, lifted, "argument thunk", false, lifted); }
     private Expr argument(List<Object> expr, Scope scope, boolean lifted, String label, boolean allowEmpty, boolean declaredLifted) {
-        OperandBuilder operands = operandBuilder;
-        operandBuilder = null;
+        OperandBuilder operands = lowering().operands;
+        lowering().operands = null;
         Expr result;
         try { result = argumentUnsequenced(expr, scope, lifted, label, allowEmpty, declaredLifted); }
-        finally { operandBuilder = operands; }
+        finally { lowering().operands = operands; }
         return operands == null ? result : operands.operand(result);
     }
     private void checkArgument(CoreRepresentation proof, boolean allowEmpty, boolean declaredLifted) {
@@ -1102,7 +1167,7 @@ public final class Program implements ExecutableProgram {
             Expr application = compile(expr, scope, false);
             checkArgument(application.getRepresentation(), allowEmpty, declaredLifted);
             return new DeferredPap(Objects.requireNonNull(demand.cell(headId)), ((List<?>) expr.get(2)).size(),
-                application, delay(expr, scope, label)).located(sources.expression(expr, currentSource));
+                application, delay(expr, scope, label)).located(sources.expression(expr, lowering().source));
         }
         if (!unopenedHead && CoreApplicationCertificates.eagerApplication(expr, certificate)) {
             Expr result = compile(expr, scope, false);
@@ -1148,21 +1213,21 @@ public final class Program implements ExecutableProgram {
     private Expr compile(List<Object> expr, Scope scope, boolean tail) {
         List<Object> inline = CoreStateApplications.inline(expr);
         if (inline != null) return compile(inline, scope, tail);
-        OperandBuilder outer = operandBuilder;
+        OperandBuilder outer = lowering().operands;
         Object head = at(expr, 1) instanceof List<?> value ? at(value, 0) : null;
         var metadata = CoreRepresentations.metadata(expr);
         boolean foreign = "var".equals(head) && metadata != null && metadata.containsKey("foreignCall");
         // A foreign operand can suspend before the call, just like a primop operand.
         OperandBuilder operands = capturesContinuations && "app".equals(at(expr, 0)) && (Arrays.asList("prim", "con").contains(head) || foreign) ?
             new OperandBuilder(scope.layout) : null;
-        operandBuilder = operands;
+        lowering().operands = operands;
         Expr result;
         try {
-            result = withSource(sources.expression(expr, currentSource), () -> {
-                Expr node = compileLocated(expr, scope, tail).located(currentSource);
-                return (operands == null ? node : operands.finish(node)).located(currentSource);
+            result = withSource(sources.expression(expr, lowering().source), () -> {
+                Expr node = compileLocated(expr, scope, tail).located(lowering().source);
+                return (operands == null ? node : operands.finish(node)).located(lowering().source);
             });
-        } finally { operandBuilder = outer; }
+        } finally { lowering().operands = outer; }
         return outer == null ? result : outer.operand(result);
     }
     private Expr compileLocated(List<Object> expr, Scope scope, boolean tail) {
@@ -1176,12 +1241,12 @@ public final class Program implements ExecutableProgram {
             if (!diagnosticUnsupported) throw gap;
             String message = gap.getMessage() != null ? gap.getMessage() : "Unsupported Core";
             deferredUnsupported.add(message);
-            Expr body = new UnsupportedExpression(message, metrics).located(currentSource);
+            Expr body = new UnsupportedExpression(message, metrics).located(lowering().source);
             RootCallTarget target = new FunctionRoot(language, new FrameLayout().build(), "unsupported: " + message, null,
                 new int[0], new int[0], new int[0], body, metrics, new CoreRepresentation[0], body.getRepresentation(),
                 rootSource(body), new boolean[0], null, null, new int[0], null, false, new int[0][], false,
                 FunctionRootRole.FUNCTION, outlineCaseArms).getCallTarget();
-            constructedRootCount++;
+            constructedRootCount.incrementAndGet();
             return new DiagnosticUnavailable(target, message, metrics);
         }
     }
@@ -1271,7 +1336,7 @@ public final class Program implements ExecutableProgram {
         Expr[] operands = new Expr[read.getArguments().size()];
         for (int i = 0; i < operands.length; i++) operands[i] = compile(read.getArguments().get(i), scope, false);
         Expr value = (read.getOperation().isAddress() ? new VectorAddressExpression(read.getOperation(), operands) :
-            new VectorByteArrayExpression(read.getOperation(), operands)).located(currentSource);
+            new VectorByteArrayExpression(read.getOperation(), operands)).located(lowering().source);
         Expr body = compile(read.getBody(), local, tail);
         return new Let(new int[] {-1}, new Expr[] {value}, new boolean[] {false}, body, false, new int[][] {lanes});
     }
@@ -1424,7 +1489,7 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < definitions.size(); i++) {
             CoreJoinDefinition definition = definitions.get(i);
             Scope bodyScope = bodyScopes.get(i);
-            bodies.add(withSource(sources.binding(definition.getBinding(), currentSource), () -> {
+            bodies.add(withSource(sources.binding(definition.getBinding(), lowering().source), () -> {
                 Expr node = compile(definition.getBody(), bodyScope, tail);
                 node.setRepresentation(node.getRepresentation().refine(evaluated(definition.getResult(), false)));
                 return node;
@@ -1446,7 +1511,7 @@ public final class Program implements ExecutableProgram {
             local.layout.bind("<join result>", reusableCode ? FrameLayout.carrierKind(result) : FrameSlotKind.Illegal),
             nodes, result, recursive, tuple, tupleSlots, delimited);
     }
-    private DataLayout dataLayout(String id) {
+    private synchronized DataLayout dataLayout(String id) {
         DataLayout layout = dataLayouts.get(id);
         if (layout != null) return layout;
         Map<String, Object> info = constructors.get(id);
@@ -1583,7 +1648,7 @@ public final class Program implements ExecutableProgram {
                 }
                 GlobalBinding global = globals.get(id);
                 if (global != null) {
-                    if (reusableCode) codeDependencies.add(id);
+                    if (reusableCode) lowering().dependencies.add(id);
                     yield (reusableCode ? new GlobalRead(required(indices, id), scope.programSlot) : new GlobalRead(global))
                         .proven(proof != null ? proof : required(globalProofs, id));
                 }
@@ -1651,7 +1716,7 @@ public final class Program implements ExecutableProgram {
         Expr[] rhs = new Expr[group.size()];
         for (int i = 0; i < rhs.length; i++) {
             Map<String, Object> binding = group.get(i);
-            rhs[i] = withSource(sources.binding(binding, currentSource), () -> {
+            rhs[i] = withSource(sources.binding(binding, lowering().source), () -> {
                 List<Object> body = (List<Object>) binding.get("expr");
                 boolean lifted = representation(binding);
                 if (recursive && !lifted) throw new UnsupportedCore("Recursive unlifted binding unsupported");
@@ -1997,7 +2062,8 @@ public final class Program implements ExecutableProgram {
             if (reusableCode) {
                 if (packageScalar.getKind() != PackageScalarCall.Kind.STATIC)
                     throw new UnsupportedCore("Reusable AST native callback/dynamic labels are not prepared");
-                int index = packageCalls.size(); packageCalls.add(packageScalar);
+                int index;
+                synchronized (packageCalls) { index = packageCalls.size(); packageCalls.add(packageScalar); }
                 return new PackageScalarExpression(packageScalar, operands, tupleProof, scope.programSlot, index);
             }
             return new PackageScalarExpression(packageScalar, operands, tupleProof);
@@ -2239,7 +2305,7 @@ public final class Program implements ExecutableProgram {
             String id = Objects.requireNonNull(CoreArithmeticExceptions.payload(name));
             GlobalBinding payload = globals.get(id);
             if (payload == null) throw new UnsupportedCore("Unresolved implicit exception binding " + id);
-            if (reusableCode) codeDependencies.add(id);
+            if (reusableCode) lowering().dependencies.add(id);
             Expr value = reusableCode ? new GlobalRead(required(indices, id), scope.programSlot) : new GlobalRead(payload);
             return new RaiseArithmeticException(operand, new RaiseException(value, true));
         }

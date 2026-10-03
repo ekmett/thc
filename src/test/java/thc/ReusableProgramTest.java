@@ -7,6 +7,8 @@ import com.oracle.truffle.api.Truffle;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import thc.runtime.*;
@@ -924,7 +926,8 @@ class ReusableProgramTest {
         }
     }
 
-    @Test void realLoweredRootsShareCodeButNotCafUpdatesFailuresOrMetrics() {
+    @ParameterizedTest @ValueSource(ints = {1, 4})
+    void realLoweredRootsShareCodeButNotCafUpdatesFailuresOrMetrics(int jobs) {
         var untouched = new AtomicInteger();
         var lazy = new CoreBindingBody(new CoreBindingBody.Header(2, Map.of(0, "var", 1, "unused"), false), null,
             () -> { untouched.incrementAndGet(); throw new AssertionError("untouched definition was decoded"); });
@@ -938,7 +941,7 @@ class ReusableProgramTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var code = Program.prepareCode(language, module, List.of("read", "readAgain", "bottom"));
+                var code = Program.prepareCode(language, module, List.of("read", "readAgain", "bottom"), jobs);
                 var first = code.newInstance(language);
                 var second = code.newInstance(language);
                 assertEquals(0, untouched.get());
