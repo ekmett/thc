@@ -7,8 +7,8 @@
 -- Produces/consumed result: ClosureInspectionAudit CBD and native oracle.tsv.
 -- Cost and overlap: Keep the documented inspection contract. Native GHC layout/root counts
 --   must not become immutable implementation requirements for THC.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: cmake/AuditedFixtures.cmake owns the named Core/oracle/report files.
+--   One audit covers all nine entries. No compiler root count is an assertion.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 059.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -22,7 +22,7 @@
 --
 -- Fixture acquisition support for closure inspection.
 module ClosureInspectionFixtures (prepareClosureInspection) where
-import Control.Monad (forM_, unless, when)
+import Control.Monad (unless, when)
 import Data.Aeson (object, (.=))
 import Data.List (isPrefixOf, sort)
 import FixtureSupport (hashes, run, runWithTimeout, writeJson)
@@ -47,10 +47,10 @@ prepareClosureInspection root = do
   unless (version == "9.14.1\n") (die "Closure inspection fixtures require GHC 9.14.1")
   _ <- run root [("THC_CORE_OUT", output </> "core"), ("THC_GHC_OUT", output </> "ghc")]
     "bin/export-core.sh" [source] ""
-  forM_ entries $ \entry -> do
-    _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:ClosureInspectionAudit." ++ entry,
-      "--output", directory </> entry ++ ".audit.json", directory </> "core/ClosureInspectionAudit.cbd"] ""
-    pure ()
+  _ <- run root [] "python3"
+    (["bin/audit-core.py", "--output", directory </> "audit.json",
+      directory </> "core/ClosureInspectionAudit.cbd"] ++
+     concatMap (\entry -> ["--entry", "main:ClosureInspectionAudit." ++ entry]) entries) ""
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-fno-info-table-map", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
@@ -68,7 +68,7 @@ prepareClosureInspection root = do
     ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
     ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
   artifactHashes <- hashes root ([directory </> "oracle.tsv", directory </> "native/oracle",
-    directory </> "core/ClosureInspectionAudit.cbd"] ++ [directory </> entry ++ ".audit.json" | entry <- entries])
+    directory </> "core/ClosureInspectionAudit.cbd", directory </> "audit.json"])
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entries" .= entries, "nativeRows" .= (45 :: Int),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]

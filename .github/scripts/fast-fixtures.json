@@ -395,6 +395,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "closure-inspection": {
+      "cmakeTarget": "fixture-closure-inspection",
       "junit": ["thc.runtime.ClosureInspectionTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "closure-inspection"]}],
       "outputs": ["build/closure-inspection"],
@@ -1505,10 +1506,11 @@
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "cstring": {
+      "cmakeTarget": "fixture-cstring",
       "requires": ["compact-model"],
       "junit": ["thc.CStringTest"],
-      "commands": [{"argv": ["python3", "bin/export-boot.py"]}],
-      "outputs": ["build/map/boot-core", "build/map/boot-provenance.json"],
+      "commands": [{"argv": ["python3", "bin/export-boot.py", "--frontier", "cstring", "--build-dir", "build/cstring"]}],
+      "outputs": ["build/cstring/boot-core", "build/cstring/boot-provenance.json"],
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "empty-join-input": {

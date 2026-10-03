@@ -2120,8 +2120,7 @@ Purpose: Check supported closure-inspection results and unsupported representati
 Produces/consumed result: ClosureInspectionAudit CBD and native oracle.tsv.
 Cost and overlap: Keep the documented inspection contract. Native GHC layout/root counts
   must not become immutable implementation requirements for THC.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: Named files owned by cmake/AuditedFixtures.cmake.
 
 Producer: t/haskell-fixtures/ClosureInspectionFixtures.hs.
 Consumer: thc.runtime.ClosureInspectionTest.
@@ -2129,13 +2128,15 @@ IN: t/fixtures/compiler/ClosureInspectionAudit.hs, ClosureInspectionNative.hs;
   producer/Main/FixtureSupport, shared tools/native GHC9.14.1.
 Under build/closure-inspection/:
   core/ClosureInspectionAudit.cbd: IN audit source/exporter; OUT CBD/ghc/.
-  <entry>.audit.json: IN CBD/auditor/nine producer entries; OUT reports.
+  audit.json: IN CBD/auditor/all nine producer entries; OUT one report.
   native/oracle: IN both sources/native packages, -O2 -fno-info-table-map
     -fforce-recomp -dcore-lint -dstg-lint; OUT executable/intermediates.
   oracle.tsv: IN executable; OUT 45 observations.
   manifest.json: IN executable/TSV/CBD/audits/source receipt; OUT hashes.
 Consumer reads manifest/all receipt paths/CBD/TSV. Old manifest removed first;
-  no command logs. Receipt omits scalar-signature/polyglot/SIMD auditor tables.
+  no command logs. CMake declares scalar-signature/polyglot/SIMD auditor tables.
+Consumer retains lazy-payload and continuation behavior checks; no predicted
+  compiler-root count.
 
 060  hint-trace
 Fixture rationale (060 hint-trace)
@@ -4059,27 +4060,25 @@ Consumer reads CBD and writes temporary model/driver CBDs via encoder (041).
 
 121 cstring
 Fixture rationale (121 cstring)
-Purpose: Check installed CString routines execute correctly through THC string/memory
-  paths.
-Produces/consumed result: GHC.Internal.CString CBD from the boot export.
-Cost and overlap: Keep package behavior, but default acquisition of the exceptions
-  frontier is wider than this consumer needs. Give it the exact CString closure, not
-  unrelated boot outputs.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Purpose: Check CString library behavior through THC string/memory paths.
+Produces/consumed result: GHC.Internal.CString CBD and private interface overlay.
+Cost and overlap: Export only CString, not the exceptions frontier. Synthetic
+  address/transport tests share the compact-model encoder dependency.
+Build status: Named files owned by cmake/BootFixtures.cmake.
 
-Producer in index: python3 bin/export-boot.py (default frontier exceptions).
+Producer: python3 bin/export-boot.py --frontier cstring --build-dir build/cstring.
 Consumer: thc.CStringTest.
-IN pinned ghc-internal CString.hs,Err.hs,Exception/Type.hs,Exception.hs/license,
-  t/fixtures/package-roots/InterfaceRoots.hs, installed interface/header closure,
-  export-boot.py/shared plugin/GHC. Shared boot flow already described in 022/024.
-OUT build/map/boot-core/GHC.Internal.{CString,Err,Exception.Type,Exception}.cbd,
-  matching build/map/core/ copies, boot-ghc/ overlay/intermediates,
-  build/map/interface-core/THC.InterfaceClosure.cbd copied to core/GHC.InterfaceClosure.cbd,
-  build/map/interface-ghc/ intermediates and boot-provenance.json.
-Consumer only reads build/map/boot-core/GHC.Internal.CString.cbd and writes temporary
-  model CBDs via encoder (041). Default exceptions frontier does extra work for this
-  consumer; narrower existing --frontier cstring is an obvious candidate.
+IN pinned ghc-internal src/GHC/Internal/CString.hs and LICENSE;
+  installed ghc-internal dynamic interfaces, compiler installation and declared
+  plugin publication; bin/export-boot.py and bin/plugin.py. Graph mode does not
+  build the compiler from inside the exporter.
+OUT build/cstring/boot-core/GHC.Internal.CString.cbd and core/GHC.Internal.CString.cbd;
+  boot-ghc/ contains named overlay interfaces plus GHC/Internal/CString.hi/.o;
+  boot-provenance.json describes the pinned source inputs.
+CMake enumerates installed interface INPUTS to declare the corresponding overlay
+  output names. It never discovers generated outputs. This private directory is
+  separate from all other boot frontiers. The Java consumer reads the boot-core
+  CBD and writes temporary model CBDs through the declared encoder (041).
 
 122 truffle-strings
 Fixture rationale (122 truffle-strings)

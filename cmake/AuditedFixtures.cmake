@@ -467,3 +467,10 @@ audited_fixture(ghc-bco GhcBCO
   SOURCES t/fixtures/core/GhcBCO.hs t/fixtures/compiler/GhcBCONative.hs
   OBJECT_DIRS native pre/ghc post/ghc
   OUTPUTS ${bco_outputs})
+
+# 059: inspection exposes payloads without entering thunks and preserves
+# continuation/annotation behavior. One audit covers all exported observations.
+audited_fixture(closure-inspection ClosureInspectionAudit
+  SOURCES t/fixtures/compiler/ClosureInspectionAudit.hs t/fixtures/compiler/ClosureInspectionNative.hs
+  OBJECT_DIRS native ghc
+  OUTPUTS manifest.json core/ClosureInspectionAudit.cbd native/oracle oracle.tsv audit.json)

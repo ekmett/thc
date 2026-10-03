@@ -151,7 +151,7 @@ class CStringTest {
         var matches = constructors.stream().filter(value -> Objects.equals(value.get("name"), name)).toList(); assertEquals(1, matches.size()); return (String) matches.getFirst().get("id");
     }
     @Test void genuineGhcCStringDecoderConsumesLiteralBytesBeforeAndAfterCompilation() throws Exception {
-        var root = Path.of(System.getProperty("thc.projectRoot")); var original = root.resolve("build/map/boot-core/GHC.Internal.CString.cbd"); var exported = CoreCbdFixtures.read(original);
+        var root = Path.of(System.getProperty("thc.projectRoot")); var original = root.resolve("build/cstring/boot-core/GHC.Internal.CString.cbd"); var exported = CoreCbdFixtures.read(original);
         var constructors = objects(exported.get("constructors")); var bindings = objects(exported.get("bindings"));
         var matches = bindings.stream().filter(value -> Objects.equals(value.get("id"), "ghc-internal:GHC.Internal.CString.unpackCString#")).toList(); assertEquals(1, matches.size()); var unpack = (String) matches.getFirst().get("id");
         var summed = primitive("+#", integerRep, primitive("ord#", integerRep, variable("char", characterRep)),

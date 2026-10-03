@@ -24,7 +24,7 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `simd-int32x4`, `simd-floatx4`, `simd-doublex2`, `simd-calls`, `simd-floatx4-fma`,
 `simd-wide-floating-fma`, `io-main-pap`, `simd-wide-arrays`, `simd128-arrays`,
 `simd-arithmetic`, `pinned-addresses`, `record-fields`, `rts-diagnostics` and
-`rts-shutdown`, `original-errno` and `ghc-bco`. Each has a `fixture-<group>` target. `make fixtures` requires an
+`rts-shutdown`, `original-errno`, `ghc-bco`, `closure-inspection` and `cstring`. Each has a `fixture-<group>` target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
 
@@ -60,7 +60,7 @@ providers or runtime test results follow from successfully generating fixtures.
 
 Local graph verification (macOS arm64, GHC 9.14.1)
 
-- 61 groups now have rules, covering 100 mapped JUnit classes. The four latest
+- 63 groups now have rules, covering 102 mapped JUnit classes. The four latest
   producers generated: 2,880 wide-memory native rows, 2,304 ARM vector-memory
   model requests, 336 native shuffle rows and 6,387 pinned-address native rows.
   The SIMD memory/shuffle producers use 3 auditor processes instead of 216 on
@@ -69,6 +69,11 @@ Local graph verification (macOS arm64, GHC 9.14.1)
   nested tool build in graph mode. Seven native rows match before/after Tidy;
   direct and hydrated Core, audit reports and logs all have graph writers. Its
   immediate rebuild did no work. The interface helper is built only on demand.
+- Closure inspection generates 45 native observations with one nine-entry audit.
+  Its consumer no longer predicts compiled-root entry counts. CString exports
+  only its pinned module into a private directory, with every overlay interface
+  declared. Both targets rebuilt with no work; 48 selector and 23 plugin checks
+  passed.
 - Errno generates five signed-boundary observations and pre/post installed wrappers.
   BCO generation compares 105 native values and audits all 35 entries with two
   auditor processes instead of 70. Both targets rebuild with no work; every
@@ -119,5 +124,5 @@ These checks establish local generation and dependency behavior. They do not
 establish JVM execution or Linux/Windows results. The changed Java report readers and encoder helper have not been compiled or run
 with the pinned GraalVM here; available JDKs are older than the required JDK 25.
 Native Windows graph support and migration of the CI entry point remain open.
-Thirty-two indexed groups still lack rules and are rejected by this entry point;
+Thirty indexed groups still lack rules and are rejected by this entry point;
 46 more are quarantined.

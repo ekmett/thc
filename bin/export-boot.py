@@ -6,11 +6,9 @@
 # Purpose: Check installed CString routines execute correctly through THC string/memory
 #   paths.
 # Produces/consumed result: GHC.Internal.CString CBD from the boot export.
-# Cost and overlap: Keep package behavior, but default acquisition of the exceptions
-#   frontier is wider than this consumer needs. Give it the exact CString closure, not
-#   unrelated boot outputs.
-# Build status: Value review only; admission still requires explicit inputs and single-
-#   owner outputs.
+# Cost and overlap: The CString fixture selects --frontier cstring and a private
+#   build/cstring directory. Other frontiers are separate caller-owned exports.
+# Build status: cmake/BootFixtures.cmake declares the CString inputs/outputs.
 # Detailed file inputs/outputs: docs/fixture-inputs.log, entry 121.
 
 """Export a bounded real boot-library frontier; never synthesize missing bodies."""
@@ -30,7 +28,12 @@ if subprocess.check_output([ghc, '--numeric-version'], text=True).strip() != '9.
 if subprocess.check_output([ghc_pkg, '--version'], text=True).strip() != 'GHC package manager version 9.14.1':
     raise SystemExit('THC requires ghc-pkg 9.14.1')
 root = Path(__file__).resolve().parent.parent
-subprocess.run([str(root / 'bin/build-compiler.sh')], cwd=root, check=True)
+publication = os.environ.get('THC_PLUGIN_MANIFEST')
+if publication:
+    if Path(publication).resolve() != root / 'build/compiler/plugin.json':
+        raise SystemExit("Expected this checkout's build/compiler/plugin.json")
+else:
+    subprocess.run([str(root / 'bin/build-compiler.sh')], cwd=root, check=True)
 plugin_info = read_plugin(root)
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build-dir', type=Path, default=root / 'build/map',
