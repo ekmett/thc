@@ -581,7 +581,7 @@ def compile_common(recorder, *, reuse_daemon=False):
     recorder.data["selection"] = {"mode": "compile-only", "reasons": []}
     recorder.command("common-cabal", ["cabal", "build", "exe:thc"])
     recorder.command("common-gradle", ["./gradlew", "--daemon" if reuse_daemon else "--no-daemon",
-                                      "--max-workers=2", "--build-cache", "--profile", "installDist"])
+                                      "--max-workers=4", "--build-cache", "--profile", "installDist"])
     recorder.data.update(passed=True, nativeInputs="not acquired")
     recorder.save()
 
@@ -596,9 +596,9 @@ def compile_test_support(recorder, *, reuse_daemon=False):
         if os.environ.get(tool):
             configure.append("-D" + tool + "=" + os.environ[tool])
     recorder.command("common-fixture-configure", configure)
-    recorder.command("common-fixture-tools", ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", "fixture-tools"])
+    recorder.command("common-fixture-tools", ["cmake", "--build", "build/fixtures", "--parallel", "4", "--target", "fixture-tools"])
     recorder.command("common-test-classes", ["./gradlew", "--daemon" if reuse_daemon else "--no-daemon",
-                                            "--max-workers=2", "--build-cache", "--profile", "testClasses", "toolsJar"])
+                                            "--max-workers=4", "--build-cache", "--profile", "testClasses", "toolsJar"])
     recorder.data.update(passed=True, nativeInputs="not acquired")
     recorder.save()
 
@@ -638,14 +638,15 @@ def restore_common(root, archive):
         bundle.extractall(root, members=members, filter="data")
 
 
-def run_group(recorder, name, *, reuse_daemon=False, cadence=None):
+def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=False):
     import fast_select
     selection = fast_select.group_selection(recorder.root, name, cadence=cadence)
     manifest, owners = fixtures._manifest(recorder.root)
     require(all(c in owners for c in selection["junit"]["classes"]), "Unowned selected class")
     recorder.data["selection"] = {"mode": "group", "group": name, "cadence": cadence, "reasons": []}
     # Unknown ownership fails above; a group job must never widen to all fixtures.
-    recorder.data["nativeInputs"] = fixtures.prepare_cmake(recorder.root, selection, recorder.command)
+    recorder.data["nativeInputs"] = ({"mode": "cmake-graph"} if prepared else
+                                    fixtures.prepare_cmake(recorder.root, selection, recorder.command))
     for group in fixtures._group_order(manifest, {owners[c] for c in selection["junit"]["classes"] if owners[c]}):
         for index, check in enumerate(manifest["groups"][group].get("ciChecks", [])):
             if check["platform"] == platform.system():
@@ -676,9 +677,70 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None):
     recorder.save()
 
 
+# These are the admitted standalone checks previously listed in test-common.yml.
+# Only the two CBD consumers require built tools; other models read source files.
+COMMON_PYTHON_CHECKS = (
+    "test-audit-core", "test-plugin", "test-core-enums", "test-sum-layout", "test-core-sums",
+    "test-tuple-inputs", "test-empty-join-inputs", "test-library-frontier", "test-sequence-model",
+    "test-core-vectors", "test-simd-families", "test-floatx4-model", "test-doublex2-model",
+    "test-core-vector-memory", "test-core-word32-vector-memory", "test-core-float-vector-memory",
+    "test-core-double-vector-memory", "test-core-bytearrays", "test-core-arrays", "test-address-fields",
+    "test-core-data-tags", "test-show-word-list-model", "test-short-bytes-slices-model", "test-array-slice-model",
+)
+COMMON_OPTIMIZED_CHECKS = (
+    "test-build-cbits", "test-core-managed-memory", "test-core-managed-files", "test-core-package-manifest",
+    "test-managed-mvar-fixtures", "test-managed-mvars", "test-synchronous-exception-fixtures",
+)
+
+
+def commit_plan(root, base, head):
+    import fast_select
+    # Cadence applies to the runtime group below. This selection supplies only
+    # source/model checks; an uncertain or dirty diff conservatively runs them all.
+    changed = fast_select.select(root, base, head)
+    require(changed.get("runnable"), "Cannot establish CI check ownership")
+    full = changed["mode"] == "full"
+    affected = changed["affected"]
+    scripts = [{"path": "bin/" + name + ".py", "optimized": name in COMMON_OPTIMIZED_CHECKS}
+               for name in (*COMMON_PYTHON_CHECKS, *COMMON_OPTIMIZED_CHECKS)
+               if full or "bin/" + name + ".py" in affected["python"]]
+    paths = set(changed["changedPaths"])
+    if full or paths & {"tools/compare-map-runtimes.py", "tools/test-compare-map-runtimes.py"}:
+        scripts.append({"path": "tools/test-compare-map-runtimes.py", "optimized": False})
+    suites = ["primop-tools", "compact-core-tests", "driver-tests", "cpu-affinity-api"] if full else affected["haskell"]
+    runtime = fast_select.group_selection(root, "commit", cadence="commit")
+    manifest, owners = fixtures._manifest(root)
+    groups = fixtures._group_order(manifest, {owners[name] for name in runtime["junit"]["classes"] if owners[name]})
+    return {"python": scripts, "haskell": suites, "primops": "primop-tools" in suites,
+            "protocol": full or any(path.startswith(("tools/truffle-protocol/", "src/gradle/materializable-api",
+                                                     "src/gradle/protocol-runtime")) for path in paths),
+            "fixtures": [manifest["groups"][name]["cmakeTarget"] for name in groups],
+            "selection": {key: changed[key] for key in ("mode", "base", "head", "reasons", "affected")}}
+
+
+def commit_checks(recorder, base, head):
+    plan = commit_plan(recorder.root, base, head)
+    selection = recorder.directory / "selection.json"
+    write_json(selection, plan)
+    configure = ["cmake", "-S", ".", "-B", "build/ci/graph", "-G", "Ninja",
+                 "-DTHC_BUILD_JOBS=4", "-DTHC_CI_SELECTION=" + str(selection)]
+    for tool in ("GHC", "GHC_PKG", "CABAL"):
+        if os.environ.get(tool):
+            configure.append("-D" + tool + "=" + os.environ[tool])
+    recorder.command("check-graph", configure)
+    recorder.command("check-build", ["cmake", "--build", "build/ci/graph", "--parallel", "4", "--target", "ci-commit"])
+    recorder.data.update(passed=True, selection=plan["selection"])
+    recorder.save()
+
+
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    execution = []
+    if "--" in argv:
+        split = argv.index("--")
+        argv, execution = argv[:split], argv[split + 1:]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain"))
+    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain", "commit-checks", "jvm-group", "check-command"))
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
@@ -689,7 +751,12 @@ def main(argv=None):
     parser.add_argument("--base", default=os.environ.get("FAST_BASE_SHA", ""))
     parser.add_argument("--head", default=os.environ.get("FAST_HEAD_SHA", "HEAD"))
     args = parser.parse_args(argv)
-    recorder = Recorder(ROOT, args.report_dir.resolve())
+    # Each fresh graph test invocation retains its own XML, including failures.
+    # Re-running Ninja must not require the user to empty a report directory.
+    report_dir = args.report_dir.resolve()
+    if args.command == "jvm-group":
+        report_dir /= "run-" + str(time.time_ns())
+    recorder = Recorder(ROOT, report_dir)
     identity_path = args.identity or recorder.directory / "identity.json"
     try:
         if args.command == "start":
@@ -703,6 +770,15 @@ def main(argv=None):
             compile_common(recorder, reuse_daemon=args.reuse_daemon)
         elif args.command == "compile-test-support":
             compile_test_support(recorder, reuse_daemon=args.reuse_daemon)
+        elif args.command == "commit-checks":
+            commit_checks(recorder, args.base, args.head)
+        elif args.command == "check-command":
+            require(bool(execution), "A graph check needs its explicit command")
+            recorder.command("check", execution)
+            recorder.data["passed"] = True
+            recorder.save()
+        elif args.command == "jvm-group":
+            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence, prepared=True)
         elif args.command == "group":
             run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence)
         elif args.command == "pack-common":

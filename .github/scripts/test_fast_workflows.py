@@ -159,8 +159,8 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("inputs.cadence", workflow)
         common = (WORKFLOW.parent / "test-common.yml").read_text()
         commands = [line.strip() for line in (workflow + common).splitlines() if "cabal test driver-tests" in line]
-        self.assertEqual(3, len(commands))
-        for option in ("--unit-only", "--public-packages-only", "--acquire-project-only"):
+        self.assertEqual(2, len(commands))
+        for option in ("--public-packages-only", "--acquire-project-only"):
             self.assertEqual(1, sum("--test-options=" + option in command for command in commands))
         self.assertIn("name: Build JVM distribution from source\n", workflow)
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
@@ -177,37 +177,23 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         common = (WORKFLOW.parent / "test-common.yml").read_text()
         self.assertIn("value: ${{ jobs.compile.outputs.matrix }}", common)
         self.assertIn("matrix: ${{ steps.inventory.outputs.matrix }}", common)
-        for name in (
-            "Check the primop checklist",
-            "Check pinned guest protocol artifacts",
-            "Check driver units and CPU affinity API",
-            "Check exact dependency auditor and library frontier",
-            "Check merged fixture and runtime recipes with and without assertions",
-            "Check benchmark power provenance",
-        ):
-            with self.subTest(name=name):
-                self.assertNotIn("name: " + name, workflow)
-                self.assertEqual(1, common.count("name: " + name + "\n"))
-                block = common.split("name: " + name + "\n", 1)[1].split("\n      - ", 1)[0]
-                self.assertIn("if: inputs.cadence == 'commit'", block)
-                self.assertLess(common.index("fast_ci.py compile-common"), common.index("name: " + name))
-        self.assertNotIn("cabal run exe:thc-primops -- scalars", grouped)
-        self.assertNotIn("cabal build exe:thc", grouped)
-        self.assertIn("cabal run thc --offline -fdevelopment -- --help", common)
+        block = common.split("name: Build and check declared dependencies with Ninja\n", 1)[1].split("\n      - ", 1)[0]
+        self.assertIn("if: inputs.cadence == 'commit'", block)
+        self.assertIn("fast_ci.py commit-checks", block)
+        self.assertNotIn("cabal test ", common)
         self.assertNotIn("continue-on-error", common)
-        self.assertIn("name: Verify pinned toolchain\n        if: inputs.cadence == 'commit'", common)
-        self.assertIn("python3 bin/test-audit-core.py", common)
-        self.assertIn("testMaterializableApi testReturnPolicy testReturnContinuations", common)
+        self.assertIn("build/ci/check-results/", common)
+        self.assertIn("build/ci/graph/.ninja_log", common)
+        for name in ("Compile and package the application", "Compile shared test classes and fixture tools without running tests"):
+            block = common.split("name: " + name + "\n", 1)[1].split("\n      - ", 1)[0]
+            self.assertIn("if: inputs.cadence != 'commit'", block)
 
     def test_build_runs_driver_units_without_selecting_package_integration(self):
-        workflow = (WORKFLOW.parent / "test-common.yml").read_text()
-        block = workflow.split("name: Check driver units and CPU affinity API", 1)[1].split("\n      - ", 1)[0]
-        commands = [line.strip() for line in block.splitlines() if line.strip().startswith("cabal test ")]
-        self.assertEqual(commands, [
-            "cabal test driver-tests -fdevelopment --test-options=--unit-only --test-show-details=direct",
-            "cabal test cpu-affinity-api -fdevelopment --test-show-details=direct",
-        ])
-        self.assertNotIn("continue-on-error", block)
+        graph = (WORKFLOW.parents[2] / "cmake/Checks.cmake").read_text()
+        self.assertIn('if(suite STREQUAL "driver-tests")', graph)
+        self.assertIn('set(options --unit-only)', graph)
+        self.assertNotIn('--public-packages-only', graph)
+        self.assertNotIn('cabal test', graph)
 
     def test_library_and_map_launchers_resolve_the_required_vector_module(self):
         workflow = (WORKFLOW.parent / "intensive.yml").read_text()
@@ -299,15 +285,6 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("'thc.runtime.BitPrimopsTest'", runtime)
         codepages = (project / 't/haskell-fixtures/WindowsCodePageFixtures.hs').read_text()
         self.assertIn('lookupEnv "GHC_PKG"', codepages)
-
-    def test_stdio_checks_use_haskell_and_java_not_a_python_test_family(self):
-        workflow = (WORKFLOW.parent / "test-common.yml").read_text()
-        block = workflow.split("name: Check merged fixture and runtime recipes with and without assertions", 1)[1].split("      - name:", 1)[0]
-        for name in ("test-core-original-stdio.py", "test-original-stdio-fixtures.py", "test-generate-stdio-abi.py"):
-            self.assertNotIn("bin/" + name, block)
-            self.assertFalse((WORKFLOW.parents[2] / "bin" / name).exists(), name)
-        self.assertIn('python3 "$test"', block)
-        self.assertIn('python3 -O "$test"', block)
 
     def test_title_skip_preserves_normal_pr_gate(self):
         workflow = WORKFLOW.read_text()

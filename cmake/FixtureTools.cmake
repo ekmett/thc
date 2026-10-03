@@ -2,8 +2,13 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 # Cabal selects tool paths and dependency units; configure only resolves a plan.
 set(cabal_options --offline "--with-compiler=${GHC}" "--with-hc-pkg=${GHC_PKG}")
+set(cabal_targets lib:thc exe:thc-fixtures exe:thc-compact exe:thc-interface ${ci_cabal_targets})
+if(THC_CI_SELECTION)
+  # CI may acquire missing dependencies from the frozen cabal.project index.
+  list(REMOVE_ITEM cabal_options --offline)
+endif()
 execute_process(COMMAND ${fixture_env} "${CABAL}" build ${cabal_options}
-  lib:thc exe:thc-fixtures exe:thc-compact exe:thc-interface --dry-run
+  ${cabal_targets} --dry-run
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)
 set(plan_path "${PROJECT_SOURCE_DIR}/dist-newstyle/cache/plan.json")
 file(READ "${plan_path}" plan)
@@ -17,6 +22,14 @@ file(GLOB_RECURSE tool_sources CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/src/compiler/*.hs" "${PROJECT_SOURCE_DIR}/src/cbd/*.hs"
   "${PROJECT_SOURCE_DIR}/src/core-symbols/*.hs" "${PROJECT_SOURCE_DIR}/src/driver/*.hs"
   "${PROJECT_SOURCE_DIR}/t/haskell-fixtures/*.hs")
+if(THC_CI_SELECTION)
+  file(GLOB_RECURSE ci_haskell_sources CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/src/tools/primops/*.hs" "${PROJECT_SOURCE_DIR}/src/runtime/*.hs"
+    "${PROJECT_SOURCE_DIR}/src/runtime/*.c" "${PROJECT_SOURCE_DIR}/src/runtime/*.h"
+    "${PROJECT_SOURCE_DIR}/t/haskell-driver/*.hs" "${PROJECT_SOURCE_DIR}/t/haskell-affinity/*.hs"
+    "${PROJECT_SOURCE_DIR}/t/compact-core/*.hs" "${PROJECT_SOURCE_DIR}/t/primop-tools/*.hs")
+  list(APPEND tool_sources ${ci_haskell_sources})
+endif()
 file(GLOB cabal_configs CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/cabal.project.local" "${PROJECT_SOURCE_DIR}/cabal.project.freeze")
 list(APPEND cabal_inputs ${cabal_configs})
@@ -63,10 +76,12 @@ foreach(i RANGE ${last})
   set(unit_index_${unit} ${i})
   string(JSON component ERROR_VARIABLE no_component GET "${plan}" install-plan ${i} component-name)
   string(JSON style ERROR_VARIABLE no_style GET "${plan}" install-plan ${i} style)
-  if(style STREQUAL "local" AND component MATCHES "^(lib|lib:compact-core|lib:core-symbols|lib:driver|exe:thc-fixtures|exe:thc-compact|exe:thc-interface)$")
+  if(style STREQUAL "local" AND (component MATCHES "^(lib|lib:compact-core|lib:core-symbols|lib:driver|exe:thc-fixtures|exe:thc-compact|exe:thc-interface)$" OR component IN_LIST ci_cabal_targets))
     string(JSON dist GET "${plan}" install-plan ${i} dist-dir)
-    if(component MATCHES "^exe:")
+    if(component MATCHES "^(exe|test):")
       string(JSON binary GET "${plan}" install-plan ${i} bin-file)
+      string(MAKE_C_IDENTIFIER "${component}" binary_key)
+      set(ci_binary_${binary_key} "${binary}")
       set(component_outputs "${binary}")
       if(component STREQUAL "exe:thc-fixtures")
         set(fixtures_exe "${binary}")
@@ -107,7 +122,7 @@ endif()
 add_custom_command(OUTPUT ${tool_outputs}
   BYPRODUCTS "${plan_path}" "${PROJECT_SOURCE_DIR}/dist-newstyle/packagedb/ghc-9.14.1/package.cache"
   COMMAND "${CMAKE_COMMAND}" -DREPAIR=ON -P "${CMAKE_CURRENT_BINARY_DIR}/CabalProducts.cmake"
-  COMMAND ${fixture_env} "${CABAL}" build ${cabal_options} lib:thc exe:thc-fixtures exe:thc-compact exe:thc-interface -j2
+  COMMAND ${fixture_env} "${CABAL}" build ${cabal_options} ${cabal_targets} "-j${THC_BUILD_JOBS}"
   COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/CabalProducts.cmake"
   DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CabalProducts.cmake" ${cabal_inputs} ${tool_sources} ${toolchain_inputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM

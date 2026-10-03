@@ -32,6 +32,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           submodules: false
+          fetch-depth: 32
           persist-credentials: false
       - name: Check dispatched revision before setup
         env:
@@ -70,85 +71,26 @@ jobs:
         with:
           path: dist-newstyle
           key: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
-          restore-keys: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
+          restore-keys: |
+            cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
+            cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-
       - name: Compile and package the application
+        if: inputs.cadence != 'commit'
         run: |
           python3 .github/scripts/fast_ci.py start --report-dir build/ci/common-results
           python3 .github/scripts/fast_ci.py compile-common --reuse-daemon --report-dir build/ci/common-results
       - name: Compile shared test classes and fixture tools without running tests
+        if: inputs.cadence != 'commit'
         run: python3 .github/scripts/fast_ci.py compile-test-support --reuse-daemon --report-dir build/ci/common-results
       - name: Pack common compilation for scheduled groups
         if: inputs.cadence != 'commit'
         run: python3 .github/scripts/fast_ci.py pack-common --archive build/ci/common.tar.gz
-      - name: Check the primop checklist
+      - name: Build and check declared dependencies with Ninja
         if: inputs.cadence == 'commit'
-        run: |
-          cabal run exe:thc-primops -- coverage --check
-          # Cabal's pre-test setup resolves sibling libraries from the combined plan.
-          # Register them before any suite starts, including on a clean build.
-          cabal build test:primop-tools test:compact-core-tests -fdevelopment
-          cabal test primop-tools compact-core-tests -fdevelopment --test-show-details=direct
-      - name: Check pinned guest protocol artifacts
-        if: inputs.cadence == 'commit'
-        run: ./gradlew --daemon --max-workers=2 --continue testMaterializableApi testReturnPolicy testReturnContinuations
-      - name: Check driver units and CPU affinity API
-        if: inputs.cadence == 'commit'
-        shell: bash
-        run: |
-          set -euo pipefail
-          cabal run thc --offline -fdevelopment -- --help
-          cabal test driver-tests -fdevelopment --test-options=--unit-only --test-show-details=direct
-          cabal test cpu-affinity-api -fdevelopment --test-show-details=direct
-      - name: Check exact dependency auditor and library frontier
-        if: inputs.cadence == 'commit'
-        run: |
-          python3 bin/test-audit-core.py
-          python3 bin/test-plugin.py
-          python3 bin/test-core-enums.py
-          python3 bin/test-sum-layout.py
-          python3 bin/test-core-sums.py
-          python3 bin/test-tuple-inputs.py
-          python3 bin/test-empty-join-inputs.py
-          python3 bin/test-library-frontier.py
-          python3 bin/test-sequence-model.py
-          python3 bin/test-core-vectors.py
-          python3 bin/test-simd-families.py
-          python3 bin/test-floatx4-model.py
-          python3 bin/test-doublex2-model.py
-          python3 bin/test-core-vector-memory.py
-          python3 bin/test-core-word32-vector-memory.py
-          python3 bin/test-core-float-vector-memory.py
-          python3 bin/test-core-double-vector-memory.py
-          python3 bin/test-core-bytearrays.py
-          python3 bin/test-core-arrays.py
-          python3 bin/test-address-fields.py
-          python3 bin/test-core-data-tags.py
-          python3 bin/test-show-word-list-model.py
-          python3 bin/test-short-bytes-slices-model.py
-          python3 bin/test-array-slice-model.py
-      - name: Check merged fixture and runtime recipes with and without assertions
-        if: inputs.cadence == 'commit'
-        shell: bash
-        run: |
-          set -euo pipefail
-          for test in \
-            bin/test-build-cbits.py \
-            bin/test-core-managed-memory.py \
-            bin/test-core-managed-files.py \
-            bin/test-core-package-manifest.py \
-            bin/test-managed-mvar-fixtures.py \
-            bin/test-managed-mvars.py \
-            bin/test-synchronous-exception-fixtures.py; do
-            python3 "$test"
-            python3 -O "$test"
-          done
-      - name: Check benchmark power provenance
-        if: inputs.cadence == 'commit'
-        run: python3 tools/test-compare-map-runtimes.py
-      - name: Run commit group with existing compilation and both handoff modes
-        if: inputs.cadence == 'commit'
-        run: |
-          python3 .github/scripts/fast_ci.py group --group commit --cadence commit --reuse-daemon --report-dir build/ci/group-results/commit
+        env:
+          FAST_BASE_SHA: ${{ github.event.before || '' }}
+          FAST_HEAD_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/fast_ci.py commit-checks --report-dir build/ci/common-results
       - name: Stop the job's Gradle worker
         if: always() && env.JAVA_HOME != ''
         run: ./gradlew --stop
@@ -161,6 +103,8 @@ jobs:
             build/ci/setup-results/
             build/ci/common-results/
             build/ci/group-results/
+            build/ci/check-results/
+            build/ci/graph/.ninja_log
             build/reports/profile/
             build/test-results/testDefault/
             build/test-results/testDense/

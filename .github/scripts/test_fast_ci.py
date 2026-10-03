@@ -19,6 +19,26 @@ SPEC.loader.exec_module(ci)
 
 
 class FastRunnerTest(unittest.TestCase):
+    def test_commit_graph_selects_changed_models_without_dropping_runtime_coverage(self):
+        import fast_select
+        changed = dict(mode="narrow", runnable=True, changedPaths=["bin/core-package-manifest.py"],
+                       base="a" * 40, head="b" * 40, reasons=[],
+                       affected=dict(python=["bin/test-core-package-manifest.py"], haskell=[], junit=[]))
+        manifest = {"groups": {"runtime": {"cmakeTarget": "fixture-runtime", "requires": []}}}
+        with patch.object(fast_select, "select", return_value=changed), \
+             patch.object(fast_select, "group_selection", return_value={"junit": {"classes": ["RuntimeTest"]}}), \
+             patch.object(ci.fixtures, "_manifest", return_value=(manifest, {"RuntimeTest": "runtime"})):
+            plan = ci.commit_plan(self.root, "HEAD~1", "HEAD")
+            self.assertEqual([dict(path="bin/test-core-package-manifest.py", optimized=True)], plan["python"])
+            self.assertEqual(["fixture-runtime"], plan["fixtures"])
+            self.assertFalse(plan["protocol"])
+            self.assertEqual([], plan["haskell"])
+            changed["mode"] = "full"
+            plan = ci.commit_plan(self.root, "missing-base", "HEAD")
+            self.assertIn(dict(path="bin/test-audit-core.py", optimized=False), plan["python"])
+            self.assertIn("driver-tests", plan["haskell"])
+            self.assertTrue(plan["protocol"])
+
     def test_application_and_test_support_are_separate_build_stages(self):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "setup")

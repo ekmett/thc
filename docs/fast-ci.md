@@ -32,12 +32,21 @@ submodule checkout on the same runner. Setup joins every process before building
 and terminates the other processes on failure; timings and logs are retained in
 `build/ci/setup-results`. Verified tools are saved before compilation starts.
 
-Application compilation builds the Cabal driver and Gradle `installDist` first.
-The following test-support stage builds shared Java test classes, diagnostics and
-CMake fixture tools. Neither stage runs tests. Scheduled jobs share both stages'
-outputs; protocol and patched-artifact checks run only during verification.
-Hosted stages reuse one job-owned Gradle worker, stopped on success or failure.
-Per-stage timings and Gradle task profiles accompany the job's logs.
+Commit builds run `ci-commit` in the CMake/Ninja graph with four workers.
+Gradle application packaging, Cabal tools and source-only Python checks can start
+independently. CBD model checks depend on their encoder and compact tool; Haskell
+tests depend on their executables; JVM tests depend on Java compilation and their
+selected fixture targets. Checks produce fresh results on every invocation.
+Cabal has one producer for its shared plan and package database. A Ninja job pool
+allows one Gradle invocation to mutate its project state at a time; it does not
+block unrelated work. Gradle and Cabal also use four build workers.
+
+The existing source ownership selector chooses affected Python and Haskell checks
+and patch controls. Unknown changes or an unavailable comparison base retain the
+full admitted checks. Runtime per-commit coverage remains unchanged. The selection,
+individual command timings, Ninja log and Gradle profiles accompany the job logs.
+Scheduled jobs still share common compilation before distributing their groups.
+The job's Gradle worker is stopped on success or failure.
 
 `cabal.project` pins the Hackage `index-state`. CI updates the index only when that
 snapshot is absent from its cache. To update dependencies deliberately, change

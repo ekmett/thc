@@ -124,7 +124,7 @@ def prepare_cmake(root, selection, run):
             if os.environ.get(tool):
                 configure.append("-D" + tool + "=" + os.environ[tool])
         run("fixture-configure", configure)
-        run("fixture-build", ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", *targets])
+        run("fixture-build", ["cmake", "--build", "build/fixtures", "--parallel", "4", "--target", *targets])
     return {"mode": "cmake", "targets": targets}
 
 
