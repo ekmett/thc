@@ -33,6 +33,9 @@ and terminates the other processes on failure; timings and logs are retained in
 `build/ci/setup-results`. Verified tools are saved before compilation starts.
 
 Commit builds run `ci-commit` in the CMake/Ninja graph with four workers.
+Linux, macOS and automation jobs start independently. Each platform checks
+Hourly health before setup, preserving the stop-on-regression policy without
+waiting for the unrelated automation tests.
 Gradle application packaging, Cabal tools and source-only Python checks can start
 independently. CBD model checks depend on their encoder and compact tool; Haskell
 tests depend on their executables; JVM tests depend on Java compilation and their

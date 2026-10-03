@@ -125,8 +125,16 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("run: python3 .github/scripts/hourly_health.py", gate)
         self.assertIn("  actions: read", workflow)
         self.assertNotIn("continue-on-error", gate)
+        entry = (WORKFLOW.parent / "build.yml").read_text()
+        self.assertNotIn("needs: automation", entry)
+        common = (WORKFLOW.parent / "test-common.yml").read_text()
+        gate = common.split("name: Stop commit builds when Hourly is failing\n", 1)[1].split("\n      - ", 1)[0]
+        self.assertIn("if: inputs.cadence == 'commit'", gate)
+        self.assertIn("run: python3 .github/scripts/hourly_health.py", gate)
+        self.assertNotIn("continue-on-error", gate)
+        self.assertLess(common.index("name: Stop commit builds when Hourly is failing"),
+                        common.index("uses: ./.github/actions/setup"))
         for filename, jobs in (
-            ("build.yml", ("jvm-linux", "jvm-macos")),
             ("hourly.yml", ("jvm-linux", "jvm-macos", "windows")),
             ("intensive.yml", ("jvm-linux", "jvm-macos", "build")),
         ):

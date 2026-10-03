@@ -20,6 +20,7 @@ on:
         value: ${{ jobs.compile.outputs.matrix }}
 permissions:
   contents: read
+  actions: read
 jobs:
   compile:
     name: ${{ inputs.cadence == 'commit' && 'Build and test' || 'Compile shared tools' }} (${{ inputs.os }})
@@ -40,6 +41,11 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Stop commit builds when Hourly is failing
+        if: inputs.cadence == 'commit'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/hourly_health.py
       - uses: ./.github/actions/setup
       - name: Verify source and complete fixture ownership
         id: inventory
