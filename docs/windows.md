@@ -47,6 +47,23 @@ installation can be selected directly with JAVA_HOME, GHC, GHC_PKG, CABAL,
 THC_CLANG, and THC_PYTHON; bootstrap is optional. CABAL_DIR and GRADLE_USER_HOME
 can point to task-local caches.
 
+`Test` defaults to `-TestGroup All`. Hosted Windows runs independent `Driver`
+and `Runtime` groups with separate evidence and the same 45-minute job budget:
+
+~~~powershell
+./bin/windows.ps1 -Action Test -TestGroup Driver -Jobs 4
+./bin/windows.ps1 -Action Test -TestGroup Runtime -Jobs 4
+~~~
+
+Each group builds its own prerequisites. Driver prepares `windows-driver` and
+`windows-codepages`, then checks code pages and the public driver, Haskell host
+entry and exact runtime publication in both handoff modes. Code pages use the
+selected, validated `GHC_PKG`, reusing Driver's pinned-Core acquisition. Runtime
+prepares `windows-smoke`, runs the package-native and lock suites, and retains
+the remaining smoke, tuple, array, allocation, directory and ABI checks. Its
+smoke tasks do not require a driver fixture or acquire pinned Core. All runs
+both groups and retains their separate smoke and combined focused reports.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:

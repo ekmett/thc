@@ -1634,8 +1634,13 @@ if (windowsHost) {
                 "thc.WindowsDistributionTest",
                 "thc.runtime.WindowsSulongLibraryLookupTest",
                 "thc.runtime.NarrowReturnedPointerTest"].each { includeTestsMatching(it) }
+            ["publicDriverMatchesNativeCompletionInEveryBackendAndHandoffMode",
+                "genuineHaskellHostEntryPreservesTheThunkAndStrictIoSignature",
+                "nativeSourceArchiveAndRuntimeProjectionKeepExactModuleBytes"].each {
+                excludeTestsMatching("thc.WindowsDistributionTest.$it")
+            }
         }
-        inputs.files("build/windows-smoke/provenance.json", "build/windows-driver/provenance.json")
+        inputs.files("build/windows-smoke/provenance.json")
         dependsOn(tasks.installDist)
         maxParallelForks = 1
     }

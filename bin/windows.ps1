@@ -3,13 +3,16 @@
 param(
     [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'NativeLinkTest', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'MallocTest', 'CheckCore')]
     [string]$Action = 'Build',
-    [ValidateRange(1, 32)][int]$Jobs = 4
+    [ValidateRange(1, 32)][int]$Jobs = 4,
+    [ValidateSet('All', 'Driver', 'Runtime')][string]$TestGroup = 'All'
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
 . "$PSScriptRoot/windows-common.ps1"
 if ($env:OS -ne 'Windows_NT') { throw 'Use the native Windows host for this script' }
 if (!$env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME = Join-Path $root '.gradle-user-home' }
+$testDriver = $Action -eq 'Test' -and $TestGroup -in @('All', 'Driver')
+$testRuntime = $Action -eq 'Test' -and $TestGroup -in @('All', 'Runtime')
 Push-Location $root
 New-Item -ItemType Directory -Force "$root/build" | Out-Null
 $lease = [IO.File]::Open("$root/build/.native-windows-build.lock",
@@ -36,27 +39,38 @@ try {
     }
     if ($Action -in @('Fixtures', 'Test')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
+    }
+    if ($Action -eq 'Fixtures' -or $testRuntime) {
         Invoke-ThcTool $fixture @('windows-smoke')
     }
-    if ($Action -in @('Test', 'NativeLinkTest')) {
+    if ($testRuntime -or $Action -eq 'NativeLinkTest') {
         if (!$env:THC_TEST_ROOT) { $env:THC_TEST_ROOT = $root }
         if (!$env:THC_TEST_SCRATCH) { $env:THC_TEST_SCRATCH = Join-Path $root 'build/windows-native-link-tests' }
         New-Item -ItemType Directory -Force $env:THC_TEST_SCRATCH | Out-Null
         Invoke-ThcTool $cabal (@('test', 'driver-tests', '--test-options=--package-native-only',
             '--test-show-details=direct') + $flags)
     }
-    if ($Action -eq 'Test') {
+    if ($testRuntime) {
         Invoke-ThcTool $cabal (@('test', 'driver-lock-tests', '--test-show-details=direct') + $flags)
+    }
+    if ($testDriver) {
         Invoke-ThcTool $fixture @('windows-driver')
+    }
+    if ($testRuntime) {
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs",
             'windowsSmokeTest', 'windowsDenseSmokeTest', '--rerun')
     }
     $focusedTests = @()
-    if ($Action -eq 'Test') {
+    if ($testDriver) {
+        $focusedTests += @('thc.WindowsDistributionTest.publicDriverMatchesNativeCompletionInEveryBackendAndHandoffMode',
+            'thc.WindowsDistributionTest.genuineHaskellHostEntryPreservesTheThunkAndStrictIoSignature',
+            'thc.WindowsDistributionTest.nativeSourceArchiveAndRuntimeProjectionKeepExactModuleBytes')
+    }
+    if ($testRuntime) {
         Invoke-ThcTool $fixture @('tuple-arithmetic')
         $focusedTests += @('thc.runtime.TupleArithmeticTest', 'thc.runtime.WordCarryTest')
     }
-    if ($Action -in @('Test', 'ArrayTest')) {
+    if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         foreach ($group in @('int-arrays', 'int8-arrays', 'int16-arrays', 'int32-arrays', 'double-arrays', 'float-word-arrays')) {
@@ -66,7 +80,7 @@ try {
             'thc.runtime.Int16ArrayNativeTest', 'thc.runtime.Int32ArrayNativeTest',
             'thc.runtime.DoubleArrayNativeTest', 'thc.runtime.FloatWordArrayNativeTest')
     }
-    if ($Action -in @('Test', 'MallocTest')) {
+    if ($testRuntime -or $Action -eq 'MallocTest') {
         Assert-ThcJava
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('native-addresses')
@@ -83,15 +97,15 @@ try {
         $focusedTests += @('thc.runtime.PosixStdioHostAbiModelTest', 'thc.runtime.StdioHostAbiFailureTest',
             'thc.runtime.WindowsStdioHostAbiTest')
     }
-    if ($Action -in @('Test', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest')) {
+    if ($testRuntime -or $Action -in @('DirectoryTest', 'CodePageTest', 'WindowsServicesTest')) {
         $focusedTests += 'thc.runtime.WindowsAbiInitializationTest'
     }
-    if ($Action -in @('Test', 'DirectoryTest', 'WindowsServicesTest')) {
+    if ($testRuntime -or $Action -in @('DirectoryTest', 'WindowsServicesTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-directory')
         $focusedTests += 'thc.runtime.WindowsDirectoryStreamsTest'
     }
-    if ($Action -in @('Test', 'CodePageTest', 'WindowsServicesTest')) {
+    if ($testDriver -or $Action -in @('CodePageTest', 'WindowsServicesTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-codepages')
         $focusedTests += 'thc.runtime.WindowsCodePagesTest'
