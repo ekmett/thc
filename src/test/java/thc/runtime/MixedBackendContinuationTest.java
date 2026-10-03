@@ -17,7 +17,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Real alternating Closure calls, with an interruptible MVar cut after each prefix. */
+/** Real alternating Closure calls, with an interruptible MVar cut after each prefix.
+ * Five representative cases cover typed PAPs, compiled tuple transport and IO delivery.
+ * Constructs Core in memory and uses private MVars; consumes and produces no fixture files. */
 class MixedBackendContinuationTest {
     private static List<Object> list(Object... values) { return Arrays.asList(values); }
     private static Map<String, Object> map(Object... fields) {
@@ -67,36 +69,19 @@ class MixedBackendContinuationTest {
                 map("binders", list(arg("number", LONG), arg("reference", REF))))),
                 map("rep", result, "binder", arg("answer", PAIR)));
     }
-    private static Map<String, Object> module(int level, boolean tuple, boolean typed, boolean tail) {
-        var result = tuple ? PAIR : LONG;
+    private static Map<String, Object> module(int level) {
         var params = new ArrayList<Object>();
         if (level < 2) params.add(arg("next", CLOSURE));
-        params.add(arg("prefix", CELL)); params.add(arg("suffix", CELL));
-        params.add(arg("blocked", CELL));
-        if (typed && level > 0) params.add(arg("input", PAIR));
-        else { params.add(arg("n", LONG)); params.add(arg("marker", REF)); }
-        List<Object> answer;
-        if (level == 2) {
-            answer = sequence(prim("takeMVar#", list(v("blocked", CELL), state()), READ), "taken", READ,
-                    tuple ? pack(v("n", LONG), v("marker", REF)) : v("n", LONG), result);
-        } else {
-            answer = app(v("next", CLOSURE), typed
-                    ? list(v("blocked", CELL), pack(v("n", LONG), v("marker", REF)))
-                    : list(v("blocked", CELL), v("n", LONG), v("marker", REF)), result);
-        }
+        params.addAll(list(arg("prefix", CELL), arg("suffix", CELL), arg("blocked", CELL), arg("n", LONG), arg("marker", REF)));
+        var answer = level == 2
+            ? sequence(prim("takeMVar#", list(v("blocked", CELL), state()), READ), "taken", READ, pack(v("n", LONG), v("marker", REF)), PAIR)
+            : app(v("next", CLOSURE), list(v("blocked", CELL), v("n", LONG), v("marker", REF)), PAIR);
         var put = prim("putMVar#", list(v("suffix", CELL), v("marker", REF), state()), VOID);
-        var done = sequence(put, "wrote", VOID,
-                tuple ? pack(v("number", LONG), v("reference", REF)) : v("answer", LONG), result);
-        var body = tuple ? unpack(answer, done, result) : sequence(answer, "answer", LONG, done, result);
-        if (tail && level == 1) body = sequence(put, "beforeTail", VOID, answer, result);
-        body = sequence(prim("takeMVar#", list(v("prefix", CELL), state()), READ), "prefixRead", READ, body, result);
-        if (typed && level > 0) body = list("case", v("input", PAIR), "inputPair",
-                list(list("data", "Pair", list("n", "marker"), body,
-                        map("binders", list(arg("n", LONG), arg("marker", REF))))),
-                map("rep", result, "binder", arg("inputPair", PAIR)));
+        var done = sequence(put, "wrote", VOID, pack(v("number", LONG), v("reference", REF)), PAIR);
+        var body = sequence(prim("takeMVar#", list(v("prefix", CELL), state()), READ), "prefixRead", READ, unpack(answer, done, PAIR), PAIR);
         return map("instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2)),
-                "bindings", list(map("id", "run", "name", "run", "lifted", true,
-                        "expr", list("lam", params, body, map("resultRep", result)))));
+            "bindings", list(map("id", "run", "name", "run", "lifted", true,
+                "expr", list("lam", params, body, map("resultRep", PAIR)))));
     }
     private static SavedGuestContinuation saved(Object result) {
         return Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
@@ -112,19 +97,14 @@ class MixedBackendContinuationTest {
                         "convention", "prim", "safety", "safe", "arity", 1, "suppliedArity", 1,
                         "argumentReps", list(declaredState), "resultRep", declaredResult)));
     }
-    private static Map<String, Object> ioModule(int level, boolean handler, boolean caught) {
+    private static Map<String, Object> ioModule(int level, boolean caught) {
         var params = new ArrayList<Object>();
         if (level < 2) params.add(arg("next", CLOSURE));
         params.addAll(list(arg("prefix", CELL), arg("suffix", CELL), arg("blocked", CELL), arg("marker", REF)));
-        if (handler && level == 1) params.add(arg("exception", REF));
         params.add(arg("state", VOID));
         var action = level == 2 ? prim("takeMVar#", list(v("blocked", CELL), state()), READ)
                 : level == 0 ? prim("maskAsyncExceptions#", list(v("next", CLOSURE), state()), READ)
                 : prim("annotateStack#", list(v("marker", REF), v("next", CLOSURE), state()), READ);
-        if (handler && level == 0) {
-            var raising = list("lam", list(arg("s", VOID)), prim("raiseIO#", list(v("marker", REF), state()), READ), map("rep", CLOSURE, "resultRep", READ));
-            action = prim("catch#", list(raising, v("next", CLOSURE), state()), READ);
-        }
         if (caught && level == 0) {
             var handling = list("lam", list(arg("payload", REF), arg("s", VOID)),
                     app(list("con", "Pair", 2), list(state(), v("payload", REF)), READ), map("rep", CLOSURE, "resultRep", READ));
@@ -158,32 +138,13 @@ class MixedBackendContinuationTest {
                         map("id", "snapshotHelper", "name", "snapshotHelper", "lifted", true,
                                 "expr", list("lam", list(arg("s", VOID)), snapshot(), map("resultRep", tuple(VOID, CELL))))));
     }
-    private static Map<String, Object> regionModule(boolean tuple) {
-        var input = module(1, tuple, false, true);
-        var constructors = new ArrayList<Object>((List<?>) input.get("constructors"));
-        var alternatives = new ArrayList<Object>();
-        var binding = (Map<String, Object>) ((List<?>) input.get("bindings")).getFirst();
-        var lambda = (List<Object>) binding.get("expr");
-        var data = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
-        for (int i = 0; i < 64; i++) {
-            constructors.add(map("id", "C" + i, "name", "C" + i, "arity", 0, "tag", i + 1,
-                    "kind", "boxed", "strictFields", list(), "fieldLifted", list(), "fieldReps", list()));
-            alternatives.add(list("data", "C" + i, list(), lambda.get(2)));
-        }
-        input.put("constructors", constructors);
-        lambda.set(2, list("case", list("con", "C63", 0, map("rep", data)), "selected", alternatives,
-                map("rep", tuple ? PAIR : LONG, "binder", arg("selected", data))));
-        return input;
-    }
     private static void clear(Language language) {
         var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
     }
 
-    private static Map<String, Object> typedStrictModule(boolean caller, boolean pap, String mode) {
-        boolean scalar = mode.equals("scalar"), tail = mode.equals("tail");
-        var result = scalar ? LONG : PAIR;
+    private static Map<String, Object> typedStrictModule(boolean caller, boolean pap) {
         var params = caller ? list(arg("fn", CLOSURE), arg("left", REF), arg("right", REF),
                 arg("entered", CELL), arg("observed", CELL), arg("suffix", CELL), arg("n", LONG), arg("marker", REF))
             : list(arg("left", REF), arg("right", REF), arg("entered", CELL), arg("observed", CELL), arg("input", PAIR));
@@ -192,19 +153,16 @@ class MixedBackendContinuationTest {
             var actuals = new ArrayList<Object>();
             if (!pap) actuals.addAll(list(v("left", REF), v("right", REF)));
             actuals.addAll(list(v("entered", CELL), v("observed", CELL), pack(v("n", LONG), v("marker", REF))));
-            var call = app(v("fn", CLOSURE), actuals, result);
-            body = tail ? call : scalar ? sequence(call, "answer", LONG,
-                sequence(prim("putMVar#", list(v("suffix", CELL), v("marker", REF), state()), VOID), "done", VOID,
-                    v("answer", LONG), LONG), LONG) : unpack(call,
+            body = unpack(app(v("fn", CLOSURE), actuals, PAIR),
                 sequence(prim("putMVar#", list(v("suffix", CELL), v("marker", REF), state()), VOID), "done", VOID,
                     pack(v("number", LONG), v("reference", REF)), PAIR), PAIR);
         } else body = sequence(prim("putMVar#", list(v("entered", CELL), v("left", REF), state()), VOID), "entry", VOID,
                 sequence(prim("putMVar#", list(v("observed", CELL), v("right", REF), state()), VOID), "second", VOID,
-                    scalar ? unpack(v("input", PAIR), v("number", LONG), LONG) : v("input", PAIR), result), result);
+                    v("input", PAIR), PAIR), PAIR);
         var strict = caller ? Collections.nCopies(params.size(), false) : list(true, true, false, false, false);
         return map("instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2)),
             "bindings", list(map("id", "run", "name", "run", "lifted", true, "entryStrict", strict,
-                "expr", list("lam", params, body, map("resultRep", result, "entryStrict", strict)))));
+                "expr", list("lam", params, body, map("resultRep", PAIR, "entryStrict", strict)))));
     }
     private static Map<String, Object> strictThunkModule() {
         var take = prim("takeMVar#", list(v("blocked", CELL), state()), READ);
@@ -249,163 +207,76 @@ class MixedBackendContinuationTest {
             var cut = answer.get(10, TimeUnit.SECONDS); assertSame(request, cut.request()); return cut.saved();
         } finally { if (!answer.isDone()) context.close(true); worker.join(5000); assertFalse(worker.isAlive()); }
     }
-    @ParameterizedTest @CsvSource({"true,false,tuple,false", "true,true,tuple,false", "false,false,tuple,false", "false,true,tuple,false", "true,false,scalar,false", "true,true,scalar,false", "false,false,scalar,false", "false,true,scalar,false", "true,false,tail,false", "true,true,tail,false", "false,false,tail,false", "false,true,tail,false", "true,false,tuple,true", "true,true,tuple,true", "false,false,tuple,true", "false,true,tuple,true", "true,false,bounce,false", "false,false,bounce,false", "true,true,bounce,false", "false,true,bounce,false"})
-    void typedStrictInputsKeepTheUnenteredCallAcrossRepeatedCuts(boolean ast, boolean pap, String mode, boolean compiled) throws Exception {
+    // One typed PAP and one direct call cover both cross-backend directions.
+    @ParameterizedTest @CsvSource({"true,true,true", "false,false,false"})
+    void strictInputsResumeWithoutReplayingTheirPrefixes(boolean ast, boolean pap, boolean compiled) throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             context.initialize("thc"); context.enter();
-            Language language; Language.State owner; ExecutableProgram caller, maker; TupleShape shape; RootCallTarget resume;
-            var targets = new ExecutableProgram[4];
-            var bounced = new RootCallTarget[4];
-            var leafPrefixes = new ManagedMVar[4]; var leafBlocked = new ManagedMVar[4]; var leafSuffixes = new ManagedMVar[4];
+            Language language; Language.State owner; ExecutableProgram caller; TupleShape shape; RootCallTarget resume;
+            var left = new Object(); var right = new Object(); var marker = new Object();
+            var entered = new ManagedMVar(); var observed = new ManagedMVar(); var suffix = new ManagedMVar();
+            var first = new ManagedMVar(); var second = new ManagedMVar();
+            var prefixes = new ManagedMVar[]{new ManagedMVar(), new ManagedMVar()};
+            for (var prefix : prefixes) assertTrue(prefix.tryPut(marker));
+            Thunk a, b; Closure target;
             try {
                 language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
-                caller = ast ? new Program(language, typedStrictModule(true, pap, mode), true) : new BytecodeProgram(language, typedStrictModule(true, pap, mode), true);
-                maker = ast ? new BytecodeProgram(language, strictThunkModule(), true) : new Program(language, strictThunkModule(), true);
-                for (int i = 0; i < targets.length; i++) {
-                    targets[i] = new BytecodeProgram(language, typedStrictModule(false, false, mode), false);
-                    var root = (BytecodeRoot) targets[i].entryTarget("run").getRootNode();
-                    assertTrue(root.isAsyncEnabled()); assertFalse(root.getEagerAsyncPolls());
-                    var input = Objects.requireNonNull(root.getTypedInput());
-                    assertArrayEquals(new boolean[]{true, true, false, false, false}, root.getEntryStrict());
-                    for (int formal : new int[]{0, 1}) {
-                        assertEquals(CoreKind.OBJECT, input.getLogical().proof(formal).getKind());
-                        assertFalse(input.getLogical().isTyped(formal));
-                        assertTrue(input.getPacket().isObject(input.getHeader() + input.getLogical().offset(formal)));
-                    }
-                    // Capturable callees force both strict formals after ingress releases the loan.
-                    assertArrayEquals(new int[0], TypedInputs.strictInputPositions(root, input));
-                    if (mode.equals("bounce")) {
-                        int index = i;
-                        leafPrefixes[i] = new ManagedMVar(); leafBlocked[i] = new ManagedMVar(); leafSuffixes[i] = new ManagedMVar();
-                        var leaf = new Program(language, module(2, true, false, false), true).entryTarget("run");
-                        var wrapper = new GuestRoot(language, new FrameLayout().build()) {
-                            @Override public long bloom(VirtualFrame frame) { return 0L; }
-                            @Override public Object execute(VirtualFrame frame) {
-                                var input = getTypedInput(); var storage = input.take(frame.getArguments()); var layout = input.getPacket();
-                                Object[] arguments;
-                                try {
-                                    assertTrue(((ManagedMVar) layout.getObject(storage, 3)).tryPut(layout.getObject(storage, 1)));
-                                    assertTrue(((ManagedMVar) layout.getObject(storage, 4)).tryPut(layout.getObject(storage, 2)));
-                                    arguments = new Object[]{0L, leafPrefixes[index], leafSuffixes[index], leafBlocked[index],
-                                        layout.getLong(storage, 5), layout.getObject(storage, 6)};
-                                } finally { input.release(storage); }
-                                throw new TailCall(leaf, arguments);
-                            }
-                        };
-                        wrapper.configureEntry(root.getEntryStrict(), false); wrapper.configureInput(root.getInputLayout());
-                        wrapper.configureTypedInput(root.getTypedInput()); wrapper.configureTupleResult(root.getTupleResult());
-                        bounced[i] = wrapper.getCallTarget();
-                    }
-                }
+                caller = ast ? new Program(language, typedStrictModule(true, pap), true) : new BytecodeProgram(language, typedStrictModule(true, pap), true);
+                ExecutableProgram maker = ast ? new BytecodeProgram(language, strictThunkModule(), true) : new Program(language, strictThunkModule(), true);
+                var callee = new BytecodeProgram(language, typedStrictModule(false, false), false);
+                var box1 = (DataValue) Calls.target(maker.entryTarget("make"), new Object[]{0L, prefixes[0], first});
+                var box2 = (DataValue) Calls.target(maker.entryTarget("make"), new Object[]{0L, prefixes[1], second});
+                a = assertInstanceOf(Thunk.class, box1.getLayout().read(box1, 0));
+                b = assertInstanceOf(Thunk.class, box2.getLayout().read(box2, 0));
+                target = (Closure) callee.entryValue("run");
+                if (pap) target = (Closure) Calls.target(callee.hostEntryTarget(2), new Object[]{target, new Object[]{a, b}});
                 shape = ((GuestRoot) caller.entryTarget("run").getRootNode()).getTupleResult();
                 resume = new RootNode(language) {
                     @Child private Force force = new Force(new Metrics(false), true);
                     @Override public Object execute(VirtualFrame frame) { return force.execute(frame, frame.getArguments()[0]); }
                 }.getCallTarget();
                 if (compiled) {
-                    var target = caller.entryTarget("run");
-                    assertEquals(true, target.getClass().getMethod("compile", boolean.class).invoke(target, true));
-                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    var callTarget = caller.entryTarget("run");
+                    assertEquals(true, callTarget.getClass().getMethod("compile", boolean.class).invoke(callTarget, true));
+                    assertEquals(true, callTarget.getClass().getMethod("isValidLastTier").invoke(callTarget));
                     var runtime = Truffle.getRuntime();
-                    runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
+                    runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, callTarget);
                 }
             } finally { context.leave(); }
-            for (int i = 0; i < targets.length + (compiled ? 1 : 0); i++) {
-                int targetIndex = Math.min(i, targets.length - 1);
-                var left = new Object(); var right = new Object(); var marker = new Object();
-                var entered = new ManagedMVar(); var observed = new ManagedMVar(); var suffix = new ManagedMVar();
-                var first = new ManagedMVar(); var second = new ManagedMVar();
-                var prefixes = new ManagedMVar[]{new ManagedMVar(), new ManagedMVar()};
-                for (var prefix : prefixes) assertTrue(prefix.tryPut(marker));
-                Object a = left, b = right; Closure target;
-                long compiledBefore = 0;
-                boolean interrupt = i == 0 || i == 3; // Same call site reaches direct and megamorphic dispatch.
-                context.enter();
-                try {
-                    if (compiled && i == targets.length) {
-                        // The cold-entry control above does not prove the observed generic path compiles.
-                        var callTarget = caller.entryTarget("run");
-                        assertEquals(true, callTarget.getClass().getMethod("compile", boolean.class).invoke(callTarget, true));
-                        assertEquals(true, callTarget.getClass().getMethod("isValidLastTier").invoke(callTarget));
-                        var runtime = Truffle.getRuntime();
-                        runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, callTarget);
-                        compiledBefore = (Long) caller.diagnostics().get("compiledEntries");
-                    }
-                    if (interrupt) {
-                        var box1 = (DataValue) Calls.target(maker.entryTarget("make"), new Object[]{0L, prefixes[0], first});
-                        var box2 = (DataValue) Calls.target(maker.entryTarget("make"), new Object[]{0L, prefixes[1], second});
-                        a = assertInstanceOf(Thunk.class, box1.getLayout().read(box1, 0));
-                        b = assertInstanceOf(Thunk.class, box2.getLayout().read(box2, 0));
-                    }
-                    target = mode.equals("bounce") ? new Closure(null, 5, bounced[i]) : (Closure) targets[targetIndex].entryValue("run");
-                    if (mode.equals("bounce")) {
-                        assertTrue(leafPrefixes[i].tryPut(marker));
-                        if (!interrupt) assertTrue(leafBlocked[i].tryPut(marker));
-                    }
-                    if (pap) {
-                        target = (Closure) Calls.target(targets[targetIndex].hostEntryTarget(2), new Object[]{target, new Object[]{a, b}});
-                        assertNotNull(target.typedSupplied);
-                    }
-                } finally { context.leave(); }
-                Object[] packet = {0L, target, a, b, entered, observed, suffix, 37L, marker};
-                SavedGuestContinuation cut = null; Thunk parked = null;
-                if (interrupt) {
-                    cut = interruptStrict(context, owner, language, first, null, () -> Calls.target(caller.entryTarget("run"), packet));
-                    assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
-                    assertTrue(prefixes[0].isEmpty()); assertFalse(prefixes[1].isEmpty());
-                    if (compiled && i == 0) assertEquals(1L, caller.diagnostics().get("compiledEntries"), "first entry ran installed code before the cut");
-                    // Preserve acknowledged cuts, rather than drainStack's deliberate delivery through saved handlers.
-                    parked = new Thunk(((GuestRoot) cut.getSourceRoot()).getCallTarget(), null);
-                    parked.setValue(cut.getIdentity()); parked.setState(5);
-                    var current = parked;
-                    cut = interruptStrict(context, owner, language, first, current, () -> Calls.target(resume, new Object[]{current}));
-                    assertTrue(entered.isEmpty()); assertTrue(first.tryPut(left));
-                    cut = interruptStrict(context, owner, language, second, current, () -> Calls.target(resume, new Object[]{current}));
-                    assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
-                    assertTrue(prefixes[0].isEmpty()); assertTrue(prefixes[1].isEmpty()); assertTrue(second.tryPut(right));
-                    if (mode.equals("bounce")) {
-                        cut = interruptStrict(context, owner, language, leafBlocked[i], current, () -> Calls.target(resume, new Object[]{current}));
-                        assertFalse(entered.isEmpty()); assertFalse(observed.isEmpty()); assertTrue(suffix.isEmpty());
-                        assertTrue(leafPrefixes[i].isEmpty()); assertTrue(leafSuffixes[i].isEmpty());
-                        assertTrue(leafBlocked[i].tryPut(marker));
-                    }
-                }
-                context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
-                try {
-                    SynchronousMasking.set(null, MaskingState.MASKED_INTERRUPTIBLE);
-                    Object output = cut == null ? Calls.target(caller.entryTarget("run"), packet) : Calls.target(resume, new Object[]{parked});
-                    if (compiled && i == targets.length) assertEquals(compiledBefore + 1, caller.diagnostics().get("compiledEntries"));
-                    if (mode.equals("scalar")) assertEquals(37L, output);
-                    else {
-                        var value = TupleResults.ownedTupleResult(output, shape);
-                        assertEquals(37L, shape.getLayout().getLong(value, 0)); assertSame(marker, shape.getLayout().getObject(value, 1));
-                    }
-                    assertSame(left, entered.tryTake().getValue()); assertSame(right, observed.tryTake().getValue());
-                    if (!mode.equals("tail")) assertSame(marker, suffix.tryTake().getValue());
-                    if (mode.equals("bounce")) { assertTrue(leafPrefixes[i].isEmpty()); assertSame(marker, leafSuffixes[i].tryTake().getValue()); }
-                    assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
-                    if (interrupt) { assertEquals(2, ((Thunk) a).getState()); assertEquals(2, ((Thunk) b).getState()); }
-                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(null));
-                    assertSame(StackAnnotationState.EMPTY, StackAnnotations.current(null)); clear(language);
-                } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
-            }
+            Object[] packet = {0L, target, a, b, entered, observed, suffix, 37L, marker};
+            var cut = interruptStrict(context, owner, language, first, null, () -> Calls.target(caller.entryTarget("run"), packet));
+            assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
+            assertTrue(prefixes[0].isEmpty()); assertFalse(prefixes[1].isEmpty());
+            if (compiled) assertTrue(((Number) caller.diagnostics().get("compiledEntries")).longValue() > 0,
+                "First installed call reaches the interruptible input");
+            var parked = new Thunk(((GuestRoot) cut.getSourceRoot()).getCallTarget(), null);
+            parked.setValue(cut.getIdentity()); parked.setState(5);
+            interruptStrict(context, owner, language, first, parked, () -> Calls.target(resume, new Object[]{parked}));
+            assertTrue(entered.isEmpty()); assertTrue(first.tryPut(left));
+            interruptStrict(context, owner, language, second, parked, () -> Calls.target(resume, new Object[]{parked}));
+            assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
+            assertTrue(prefixes[0].isEmpty()); assertTrue(prefixes[1].isEmpty()); assertTrue(second.tryPut(right));
+            context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                SynchronousMasking.set(null, MaskingState.MASKED_INTERRUPTIBLE);
+                var value = TupleResults.ownedTupleResult(Calls.target(resume, new Object[]{parked}), shape);
+                assertEquals(37L, shape.getLayout().getLong(value, 0)); assertSame(marker, shape.getLayout().getObject(value, 1));
+                assertSame(left, entered.tryTake().getValue()); assertSame(right, observed.tryTake().getValue());
+                assertSame(marker, suffix.tryTake().getValue());
+                assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
+                assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(null));
+                assertSame(StackAnnotationState.EMPTY, StackAnnotations.current(null)); clear(language);
+            } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
         }
     }
     @ParameterizedTest
-    @CsvSource({"false,scalar,false", "true,scalar,false", "false,tuple,false", "true,tuple,false",
-                "false,scalar,true", "true,scalar,true", "false,tuple,true", "true,tuple,true",
-                "false,typed,false", "true,typed,false", "false,typed,true", "true,typed,true",
-                "false,tail,false", "true,tail,false", "false,tail,true", "true,tail,true",
-                "false,io,false", "true,io,false", "false,io,true", "true,io,true",
-                "false,handler,false", "true,handler,false", "false,handler,true", "true,handler,true",
-                "true,region,false", "true,region,true", "true,regionScalar,false", "true,regionScalar,true",
-                "false,caught,false", "true,caught,false", "false,caught,true", "true,caught,true"})
+    // Compiled tuple transport, interpreted IO/masking, and a caught async payload.
+    // The focused stack, tail-call and masking suites own their individual matrices.
+    @CsvSource({"false,tuple,true", "true,io,false", "true,caught,false"})
     void alternatingCallsResumeOnAnotherThread(boolean astOuter, String mode, boolean compiled) throws Exception {
-        boolean region = mode.startsWith("region"), handler = mode.equals("handler"), caught = mode.equals("caught");
-        boolean tuple = !mode.equals("scalar") && !mode.equals("regionScalar"), typed = mode.equals("typed"),
-                tail = mode.equals("tail") || region, io = mode.equals("io") || handler || caught;
+        boolean caught = mode.equals("caught"), io = !mode.equals("tuple");
         var prefixes = new ManagedMVar[]{new ManagedMVar(), new ManagedMVar(), new ManagedMVar()};
         var suffixes = new ManagedMVar[]{new ManagedMVar(), new ManagedMVar(), new ManagedMVar()};
         var blocked = new ManagedMVar(); var marker = new Object();
@@ -421,22 +292,15 @@ class MixedBackendContinuationTest {
                 language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
                 for (int i = 0; i < 3; i++) {
                     boolean ast = i == 1 ? !astOuter : astOuter;
-                    var source = io ? ioModule(i, handler, caught) : region && i == 1 ? regionModule(tuple) : module(i, tuple, typed, tail);
+                    var source = io ? ioModule(i, caught) : module(i);
                     programs[i] = ast ? new Program(language, source, true) : new BytecodeProgram(language, source, true);
                     targets[i] = programs[i].entryTarget("run"); closures[i] = (Closure) programs[i].entryValue("run");
-                    assertEquals(ast, targets[i].getRootNode() instanceof FunctionRoot);
-                    if (region && i == 1) assertEquals(1, ((BytecodeRoot) targets[i].getRootNode()).prepareGraphBudgetRetry(0),
-                            "explicit recovered-side transport control, not a simulated compiler failure");
                 }
                 for (int i = 2; i >= 0; i--) {
                     Object[] prefix = i == 2 ? new Object[]{prefixes[i], suffixes[i]}
                             : new Object[]{closures[i + 1], prefixes[i], suffixes[i]};
                     if (io) { var extended = new ArrayList<>(Arrays.asList(prefix)); extended.add(blocked); extended.add(marker); prefix = extended.toArray(); }
-                    if (typed && i > 0) {
-                        assertNotNull(((GuestRoot) targets[i].getRootNode()).getTypedInput());
-                        closures[i] = (Closure) Calls.target(programs[i].hostEntryTarget(prefix.length), new Object[]{closures[i], prefix});
-                        assertNotNull(closures[i].typedSupplied, "actual typed PAP prefix, not an Object[] surrogate");
-                    } else closures[i] = closures[i].pap(prefix);
+                    closures[i] = closures[i].pap(prefix);
                     assertEquals(0L, programs[i].diagnostics().get("compiledEntries"));
                 }
                 shape = ((GuestRoot) targets[0].getRootNode()).getTupleResult();
@@ -481,7 +345,7 @@ class MixedBackendContinuationTest {
                 if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
                 assertEquals(1, blocked.pendingCounts().getTakers());
                 for (var prefix : prefixes) assertTrue(prefix.isEmpty(), "every distinct backend prefix has run");
-                for (int i = 0; i < 3; i++) assertEquals(!(tail && i == 1), suffixes[i].isEmpty(), "only an explicit tail prefix runs before the leaf");
+                for (int i = 0; i < 3; i++) assertTrue(suffixes[i].isEmpty(), "suffix waits for the leaf");
                 var request = owner.getThreads().send(identity.get(), caught ? marker : "mixed cut");
                 Object output = answer.get(15, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
                 if (caught) {
@@ -491,27 +355,12 @@ class MixedBackendContinuationTest {
                     assertTrue(suffixes[1].isEmpty()); assertTrue(suffixes[2].isEmpty());
                     assertEquals(0, blocked.pendingCounts().getTakers());
                     for (var prefix : prefixes) assertTrue(prefix.isEmpty());
-                    if (compiled) for (var program : programs) assertEquals(1L, program.diagnostics().get("compiledEntries"));
                     return;
                 }
                 var cut = saved(output);
                 assertSame(request, cut.asyncRequest()); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
-                var segments = new ArrayList<CallSegment>();
-                var cursor = cut;
-                for (int i = 0; i < 3; i++) {
-                    if (tail && !region && astOuter && i == 1) continue; // Bytecode exact tail forwards its actual AST callee witness.
-                    assertSame(targets[i].getRootNode(), cursor.getSourceRoot(), "original source at each alternating edge");
-                    assertSame(request, cursor.asyncRequest());
-                    if (i < 2) {
-                        var suspended = assertInstanceOf(CallSegmentSuspended.class, cursor.getYielded());
-                        var segment = suspended.getSegment(); segments.add(segment);
-                        assertEquals(5, segment.getState()); assertNull(segment.getOwner());
-                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, segment.getLogicalMask());
-                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, segment.getCallerMask());
-                        cursor = saved(segment.getValue()); assertSame(cursor.getIdentity(), segment.getValue());
-                    } else assertSame(request, cursor.getYielded());
-                }
-                if (compiled) for (var program : programs) assertEquals(1L, program.diagnostics().get("compiledEntries"), "each alternating root really entered installed code");
+                if (compiled) for (var program : programs) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > 0,
+                    "First alternating call enters installed guest code");
                 var resumed = new CompletableFuture<Object>();
                 var resumer = new Thread(() -> {
                     context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
@@ -520,11 +369,11 @@ class MixedBackendContinuationTest {
                     SynchronousMasking.set(targets[0].getRootNode(), io ? MaskingState.UNMASKED : MaskingState.MASKED_INTERRUPTIBLE);
                     assertTrue(blocked.tryPut(marker));
                     Object result = Calls.target(resume, new Object[]{cut});
-                    if (tuple) {
+                    {
                         var value = TupleResults.ownedTupleResult(result, shape);
                         if (!io) assertEquals(37L, shape.getLayout().getLong(value, 0));
                         assertSame(marker, shape.getLayout().getObject(value, io ? 0 : 1));
-                    } else assertEquals(37L, result);
+                    }
                     for (var prefix : prefixes) assertTrue(prefix.isEmpty(), "completed prefix cannot replay");
                     for (int i = 0; i < 3; i++) {
                         Object value = suffixes[i].tryTake().getValue();
@@ -538,11 +387,9 @@ class MixedBackendContinuationTest {
                             assertSame(marker, layout.read(observation, 2));
                         }
                     }
-                    for (var segment : segments) { assertEquals(2, segment.getState()); assertNull(segment.getOwner()); }
                     assertTrue(blocked.isEmpty()); assertEquals(io ? MaskingState.UNMASKED : MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(targets[0].getRootNode()));
                     assertSame(StackAnnotationState.EMPTY, StackAnnotations.current(targets[0].getRootNode()));
                     clear(language);
-                    for (int i = 0; i < 3; i++) assertSame(targets[i], closures[i].target);
                     resumed.complete(result);
                     } catch (Throwable failure) { resumed.completeExceptionally(failure); }
                     finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }

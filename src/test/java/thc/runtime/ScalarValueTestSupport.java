@@ -8,8 +8,16 @@ import com.oracle.truffle.api.bytecode.Instruction;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.TruffleLanguage;
+import java.util.function.LongUnaryOperator;
+import org.graalvm.polyglot.Context;
+import thc.CoreModules;
+import thc.EntryValue;
+import thc.Json;
+import thc.Language;
+import static org.junit.jupiter.api.Assertions.*;
 
-/** Nullable metadata builders shared by scalar/value test controls. */
+/** Scalar/value fixture comparisons and nullable metadata builders. */
 final class ScalarValueTestSupport {
     private ScalarValueTestSupport() {}
     @SafeVarargs static <T> List<T> list(T... values) { return Arrays.asList(values); }
@@ -34,6 +42,44 @@ final class ScalarValueTestSupport {
     @FunctionalInterface interface CheckedConsumer<T> { void accept(T value) throws Exception; }
     @FunctionalInterface interface CheckedBiConsumer<T, U> { void accept(T first, U second) throws Exception; }
     @FunctionalInterface interface CheckedRunnable { void run() throws Exception; }
+    /** Compare a small native oracle in both backends, with optional first-compiled-call coverage. */
+    static void nativeValues(Map<String, Object> module, String entry, Map<List<Object>, Long> cases,
+                             boolean compiled, LongUnaryOperator normalize) {
+        assertFalse(cases.isEmpty(), entry);
+        for (boolean ast : new boolean[]{true, false}) try (var context = Context.newBuilder("thc")
+                .allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
+                .option("engine.SingleTierCompilationThreshold", "10000000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var source = with(CoreModules.reachable(module, entry), "instrument", true);
+                ExecutableProgram program = ast ? new Program(language, source) : new BytecodeProgram(language, source);
+                var function = context.asValue(new EntryValue(program, entry, cases.keySet().iterator().next().size()));
+                for (int phase = 0; phase < (compiled ? 2 : 1); phase++) {
+                    if (phase == 1) {
+                        var before = program.diagnostics().get("compiledEntries");
+                        assertTrue(function.invokeMember("compile").asBoolean(), entry);
+                        assertEquals(before, program.diagnostics().get("compiledEntries"), "Compilation executes no guest work");
+                    }
+                    boolean first = phase == 1;
+                    for (var row : cases.entrySet()) {
+                        long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        assertEquals(normalize.applyAsLong(row.getValue()),
+                            normalize.applyAsLong(function.execute(row.getKey().toArray()).asBigInteger().longValue()),
+                            (ast ? "ast/" : "bytecode/") + entry + row.getKey());
+                        if (first) {
+                            assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,
+                                "First installed call enters compiled guest code");
+                            var diagnostics = object(Json.parse(function.getMember("diagnostics").asString()));
+                            assertEquals(true, object(diagnostics.get("explicitCompilation")).get("validLastTier"));
+                            first = false;
+                        }
+                    }
+                }
+            } finally { context.leave(); }
+        }
+    }
     static List<RootCallTarget> activeTargets(RootCallTarget entry) {
         var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
         var targets = new ArrayList<RootCallTarget>();

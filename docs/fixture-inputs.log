@@ -387,6 +387,10 @@ Build status: Value review only; admission still requires explicit inputs and si
 
 Producer: Main.hs:prepareArray, arraySpec "int-arrays".
 Consumer: src/test/java/thc/runtime/IntArrayNativeTest.java.
+  Reads the four post-stage CBD paths from manifest.json and native oracle.tsv.
+  Checks six signed/overflow inputs for four public/aliasing entries; compiles
+  unboxedST once per backend. Produces no files. Shared memory tests own bounds
+  and lifetime checks; loader tests own malformed Core.
 Under build/int-arrays/, for each stage pre and post:
   stage/0/core/UnboxedArrays.cbd, stage/0/core/THC.InterfaceClosure.cbd
     IN: t/fixtures/core/UnboxedArrays.hs, array interfaces, shared exporter.
@@ -740,7 +744,9 @@ Under build/tuple-arithmetic/:
     IN: export arguments/options; OUT response files consumed by PowerShell export.
   manifest.json: IN two CBDs/reports, both TSVs, driver, native executable,
     Windows response files if used, source receipt, GHC --info; OUT manifest.
-Consumer reads receipt paths, CBDs and TSVs; WordCarryTest also reads audits.
+TupleArithmeticTest reads receipt paths, CBDs and TSVs. WordCarryTest reads only
+  the post CBD and call-oracle.tsv, checking carry/borrow across calls; direct
+  arithmetic is already covered by TupleArithmeticTest. Neither creates fixtures.
 Ownership collision with 014 confirmed at pre-core/TupleArithmeticAudit.cbd.
   Here the options match the unrooted pre export in cbv-coercion; it should be a
   shared artifact, not an independent producer. Receipt omits some auditor tables.
@@ -1000,7 +1006,9 @@ Fixture rationale (024 float-decode)
 Purpose: Check floating decomposition agrees with GHC on signs, exponents and mantissas.
 Produces/consumed result: Pre/post CBDs, native bit-pattern observations, two audits
   and the original Integer worker called by public exponent.
-Cost and overlap: Independent integer model covers subnormals, infinities and NaNs.
+Cost and overlap: Native GHC covers twelve IEEE boundary inputs per precision;
+  direct decode is compiled once per backend. Public exponent is interpreted.
+  No duplicate integer emulator or per-fixture metadata corruption matrix.
   The private bignum export is a separate reusable dependency, not repeated preparation.
 Build status: cmake/BootFixtures.cmake owns every file and compilation directory.
 
@@ -1036,9 +1044,8 @@ Separate dependency products under build/float-decode/original/:
     {hi,o,hi-boot,o-boot}, boot-core/GHC.Internal.Bignum.
     {BigNat,Integer,Natural}.cbd, copies in core/, boot-provenance.json. Only Integer
     and provenance are retained in the fixture's artifact receipt.
-Consumer reads manifest/receipt paths, CBDs, TSV and audit reports; mutation
-  controls also write temp CBD/report/stdout/stderr using shared encoder and
-  python3 auditor. Native objects are native/{Main,FloatDecodeAudit,FloatDecode}.
+Consumer reads the two post CBDs, original Integer CBD and oracle.tsv, and produces
+  no files. Native objects are native/{Main,FloatDecodeAudit,FloatDecode}.
   {hi,o}; all selected tool/package inputs and overlay files are in the CMake graph.
 
 025  floating-remainder
@@ -1375,8 +1382,10 @@ Under build/fused-floating/:
   pre-audit.json, post-audit.json: IN respective CBD/eight entries/auditor closure;
     OUT stage reports.
   manifest.json: IN TSV, CBDs, reports, source receipt, GHC --info; OUT hashes.
-Consumer reads manifest/receipt paths, CBDs, TSV and audits. Native executable is
-  produced but excluded from artifact hashes. Auditor tables/tool closure omitted.
+Consumer reads the post CBD and oracle.tsv, checking ten boundary triples for
+  all four operations in both precisions. Only fused add is compiled per precision
+  and backend. It produces no files. Native executable is produced but excluded
+  from artifact hashes. Auditor tables/tool closure omitted.
 
 035  simd-floatx4-fma (also FloatX8, DoubleX2 and DoubleX4)
 Fixture rationale (035 simd-floatx4-fma)

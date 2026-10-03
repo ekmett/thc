@@ -37,13 +37,14 @@ compiler and its companion package manager (`GHC_PKG` can override the latter).
 After preparing fixtures, run selected JVM tests without preparing them again:
 
 ```sh
-./gradlew --max-workers=2 --continue \
+./gradlew --max-workers=4 --continue \
   testDefault --tests 'thc.RuntimeTest' \
   testDense --tests 'thc.RuntimeTest'
 ```
 
-These tasks run separate JVMs with explicit default/dense handoff settings and
-share compilation. Add `installDist` when testing the command-line driver.
+These tasks share compilation and run one handoff mode at a time, distributing
+classes across up to four isolated JVM workers. Add `installDist` when testing
+the command-line driver.
 Selectors apply to the preceding task. Results are in
 `build/test-results/testDefault` and `build/test-results/testDense`, with HTML
 under `build/reports/tests`. See [handoff storage](handoff-slabs.md) for the

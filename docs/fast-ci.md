@@ -42,7 +42,16 @@ tests depend on their executables; JVM tests depend on Java compilation and thei
 selected fixture targets. Checks produce fresh results on every invocation.
 Cabal has one producer for its shared plan and package database. A Ninja job pool
 allows one Gradle invocation to mutate its project state at a time; it does not
-block unrelated work. Gradle and Cabal also use four build workers.
+block unrelated work. Gradle and Cabal also use four build workers. Ordinary JVM
+tests distribute classes across four isolated JVMs within each handoff mode;
+the modes run sequentially to keep the total at four test workers. Methods remain
+serial within a class because some tests change process-wide runtime settings.
+
+Scalar fixtures use small native-GHC boundary sets with representative compiled
+entries in both backends. General arithmetic, memory and loader suites own their
+negative controls; scalar fixtures do not repeat pre/post/inlining matrices or
+assert compiler-internal target counts. Mixed-backend continuation coverage uses
+five cases for strict inputs, typed PAPs, tuple transport, masking and async delivery.
 
 The existing source ownership selector chooses affected Python and Haskell checks
 and patch controls. Unknown changes or an unavailable comparison base retain the
