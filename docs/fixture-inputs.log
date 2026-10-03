@@ -1,0 +1,885 @@
+Fixture input/output scan
+Base revision: 58fbbd1119cc63e9f73b3fe0a5c40c7a52c37b44
+Method: read each producer and its consumers sequentially. These are static
+observations, not claims that a clean build or complete dependency closure passes.
+Intended build driver: CMake generating Ninja; no implementation during this scan.
+No fixture generation or test execution is part of this scan. Shared tool inputs
+are called out separately from fixture outputs; unresolved closure is explicit.
+
+001  narrow-literal-proofs
+Producer: bin/prepare-narrow-literal-proofs.py:main
+Consumers: thc.runtime.NarrowLiteralProofTest; producer --check-only.
+The deleted test-narrow-literal-proofs.py is not a current consumer.
+
+Apparent direct inputs:
+  t/fixtures/compiler/NarrowLiteralProofAudit.hs
+  t/fixtures/compiler/NarrowLiteralProofAuditNative.hs (imports the first module)
+  bin/prepare-narrow-literal-proofs.py (generation, projections and checked model)
+  bin/build-compiler.sh, bin/export-core.sh, bin/toolchain.sh, bin/plugin.py
+  bin/core_package_manifest.py and bin/core_original_foreign.py (CBD inspection)
+  bin/audit-core.py and its imported core_* modules
+  bin/core-capabilities.json
+  src/main/resources/thc/scalar-primop-signatures.json
+  src/test/resources/thc/polyglot-abi.json (audit-core import-time read)
+  bin/simd-families.json (core_vectors import-time read)
+  Tools: selected GHC 9.14.1, matching ghc-pkg, Cabal, Python, shell;
+    THC Core plugin/shared library and package registration; thc-compact executable.
+  Native Haskell inputs include GHC.Exts and its selected compiler package closure.
+  The plugin/tool build reads thc.cabal, cabal.project, Setup.hs, relevant Haskell
+    component sources and Cabal's resolved plan/package databases. That shared
+    build closure is not yet individually enumerated here.
+
+Selection/configuration consumed:
+  GHC, GHC_PKG, CABAL, THC_COMPACT; PATH for unresolved tool names.
+  THC_SOURCE_NOTES defaults to true in export-core.sh.
+  GHC_ENVIRONMENT and Cabal configuration are inherited, not cleared by this script.
+  Producer supplies THC_CORE_OUT and THC_GHC_OUT per stage.
+  Export flags: -O2 -dynamic -fforce-recomp -dcore-lint; post stage adds post-tidy.
+  Native flags: --make -O2 -fforce-recomp; target platform/word size/native ABI apply.
+
+Published outputs, relative to build/narrow-literal-proofs/:
+  pre-core/NarrowLiteralProofAudit.cbd
+  post-core/NarrowLiteralProofAudit.cbd
+  pre-audit.json, post-audit.json
+  oracle.tsv
+  native/narrow-literal-oracle
+  manifest.json (sources/artifacts with hashes, commands and model inventory)
+Intermediate outputs:
+  pre-ghc/, post-ghc/, native/ object/interface files; compiler/plugin publication;
+  Cabal build products; temporary CBD inspection files. Exporter may emit further
+  diagnostic products: inspect the exporter/plugin closure before declaring these.
+
+Actual test reads:
+  manifest.json; every path in its sources and artifacts sections;
+  pre/post CBD and oracle.tsv. Native executable/audit files are also read as bytes
+  by manifest verification, even when the test does not execute/read their contents.
+  Runtime/test classpath and test implementation are separate test inputs.
+
+Artifact-by-artifact file flow (paths below use this fixture directory):
+  native/narrow-literal-oracle
+    IN: NarrowLiteralProofAuditNative.hs, NarrowLiteralProofAudit.hs, selected
+        GHC package interfaces/libraries and native linker/compiler tools.
+    OUT: native/narrow-literal-oracle; native object/interface intermediates.
+  pre-core/NarrowLiteralProofAudit.cbd
+    IN: NarrowLiteralProofAudit.hs, published THC plugin/package DB, GHC package
+        interfaces, export-core.sh/toolchain.sh/plugin.py and export flags.
+    OUT: that CBD; pre-ghc/ intermediates. Further plugin side outputs unresolved.
+  post-core/NarrowLiteralProofAudit.cbd
+    IN: same as pre, plus the post-tidy plugin option.
+    OUT: that CBD; post-ghc/ intermediates. Further plugin side outputs unresolved.
+  oracle.tsv
+    IN: native/narrow-literal-oracle (executed with its embedded input cases).
+    OUT: captured stdout as oracle.tsv.
+  pre-audit.json / post-audit.json (two separate files)
+    IN: the corresponding stage CBD, oracle.tsv, checked model in the producer,
+        thc-compact, auditor Python import closure and JSON tables listed above.
+    OUT: corresponding audit JSON; temporary decoded Core JSON is not published.
+  manifest.json
+    IN: all six artifact files above (both CBDs, both audits, oracle TSV and
+        native executable); the exact source paths assembled in main(); commands.
+    OUT: manifest.json. This happens after all generation/checks succeed.
+
+Missing edges / caveats:
+  The producer builds the plugin itself, and each export builds it again. Those are
+  procedural calls rather than shared producer edges.
+  Decoder availability is reached indirectly through build-compiler.sh, which
+  currently builds exe:thc-compact; inspection otherwise only locates the executable.
+  The fixture's source receipt omits bin/plugin.py and polyglot-abi.json despite
+  consuming them; bin/simd-families.json is also an imported data input. Its src/compiler/THC/**/*.hs and core_*.py lists also hash files
+  more broadly than their proven consumption.
+  --check-only rewrites pre/post audit JSON; it is not a read-only verification step.
+  Current Gradle input globs do not create a producer dependency. The former Python
+  test exposed this by reading oracle.tsv before any producer had run.
+
+002  empty-join-input
+Producer: bin/prepare-empty-join-input.py:main / verify
+Consumers: thc.runtime.EmptyJoinInputTest; producer --check-only.
+bin/test-empty-join-inputs.py imports model definitions, not these generated outputs.
+
+Apparent direct inputs:
+  t/fixtures/compiler/EmptyJoinInputAudit.hs
+  t/fixtures/compiler/EmptyJoinInputAuditNative.hs (imports the first module)
+  bin/prepare-empty-join-input.py (generation and independent 64-bit formulas)
+  Same exporter/plugin, CBD inspector, auditor, capability tables and tool/package
+    dependencies as 001, including the polyglot-abi.json and simd-families.json import-time reads.
+  Haskell source supplies -fno-full-laziness -fno-worker-wrapper -fno-specialise
+    -fno-spec-constr; these are part of the producer code/input, not test setup.
+  GHC/GHC_PKG/CABAL/THC_COMPACT/PATH/THC_SOURCE_NOTES and inherited package
+    environment/configuration apply as in 001; GHC --info is recorded in output.
+
+Published outputs, relative to build/empty-join-input/:
+  pre-core/EmptyJoinInputAudit.cbd, post-core/EmptyJoinInputAudit.cbd
+  pre-audit.json, post-audit.json, checks.json
+  oracle.tsv, native/oracle, provenance.json
+Intermediate outputs:
+  pre-ghc/, post-ghc/, native/ object/interface files; shared plugin/Cabal products;
+  temporary CBD decode files. Native executable is compiled -O2 -fforce-recomp
+    -dcore-lint; pre/post exporters use the flags recorded under 001.
+
+Actual test reads:
+  provenance.json and every path named by inputs/artifacts, including native/oracle
+    and checks.json through byte hashing; both CBD files, pre/post audit JSON and
+    oracle.tsv directly. Runtime/test classpath and implementation are test inputs.
+
+Artifact-by-artifact file flow (paths below use this fixture directory):
+  native/oracle
+    IN: EmptyJoinInputAuditNative.hs, EmptyJoinInputAudit.hs, selected GHC package
+        interfaces/libraries and native linker/compiler tools.
+    OUT: native/oracle; native object/interface intermediates.
+  pre-core/EmptyJoinInputAudit.cbd
+    IN: EmptyJoinInputAudit.hs, published plugin/package DB, GHC package
+        interfaces, exporter/toolchain/plugin scripts and export flags.
+    OUT: that CBD; pre-ghc/ intermediates. Further plugin side outputs unresolved.
+  post-core/EmptyJoinInputAudit.cbd
+    IN: same as pre plus post-tidy plugin option.
+    OUT: that CBD; post-ghc/ intermediates. Further plugin side outputs unresolved.
+  oracle.tsv
+    IN: native/oracle (its source embeds cases and expected observation format).
+    OUT: captured stdout as oracle.tsv.
+  pre-audit.json / post-audit.json (two separate files)
+    IN: corresponding CBD, oracle.tsv, formulas/structural checks in verify(),
+        thc-compact and the auditor import/data closure.
+    OUT: corresponding audit JSON.
+  checks.json
+    IN: both decoded CBDs, oracle.tsv, formulas and checks in verify(), both
+        in-memory audit reports. Reads no previous checks.json while generating.
+    OUT: combined stage/row/join inventory in checks.json.
+  provenance.json
+    IN: the seven artifact files listed above, the source paths assembled in
+        main(), commands, selected GHC version and GHC --info output.
+    OUT: provenance.json, written after verify() succeeds.
+
+Missing edges / caveats:
+  Plugin construction is called at top level and again by each export.
+  Provenance hashes only src/compiler/THC/*.hs (nonrecursive); imported deeper
+    compiler modules are not covered by that list. It also omits plugin.py,
+    thc.cabal, polyglot-abi.json and simd-families.json, although invoked tools
+    consume them.
+  verify() writes both audit files and checks.json. --check-only first validates
+    old hashes, then calls this writer; it is not a read-only input check.
+  This producer has no dependency on another fixture's generated oracle/Core.
+    Its missing graph edges are the shared tools and its own consumers.
+
+003  signed-narrow-primops
+Producer: t/haskell-fixtures/Main.hs:prepare root SignedNarrow, invoked as
+  cabal run exe:thc-fixtures --offline -- signed-narrow.
+Consumer: src/test/java/thc/SignedNarrowPrimopsTest.java.
+
+Files/tools in:
+  t/fixtures/compiler/SignedNarrowPrimopsAudit.hs
+  t/haskell-fixtures/Main.hs (entry list, operand cases, generated native driver)
+  t/haskell-fixtures/FixtureSupport.hs (subprocesses, platform adapter, hashing)
+  Built exe:thc-fixtures and its Cabal component/package closure.
+  Shared exporter/plugin/GHC package inputs from 001. No Python auditor stage.
+  Windows: bin/export-core.ps1 and bin/windows-common.ps1; PowerShell, generated
+    GHC response file; native executable has .exe suffix.
+  GHC selects native compiler; exporter additionally selects GHC_PKG/CABAL and
+    THC_SOURCE_NOTES. Inherited environment/package configuration remains input.
+
+Artifact-by-artifact flow under build/signed-narrow-primops/:
+  core/SignedNarrowPrimopsAudit.cbd and core/THC.InterfaceClosure.cbd
+    IN: SignedNarrowPrimopsAudit.hs, shared plugin/package interfaces and exporter;
+        named closure roots from Main.hs (48 wrappers plus signedNarrowDispatch).
+    OUT: both CBD files; core-ghc/ GHC interfaces/objects/Windows export.args.
+  NativeSignedNarrowPrimops.hs
+    IN: Main.hs oracleDriver, entries SignedNarrow and module name.
+    OUT: generated native oracle driver source importing SignedNarrowPrimopsAudit.
+  native/signed-narrow-primops-oracle[.exe]
+    IN: generated driver, SignedNarrowPrimopsAudit.hs, selected GHC packages and
+        native tools; --make -O2 -fforce-recomp -dcore-lint -dstg-lint.
+    OUT: native executable and native/ .hi/.o intermediates.
+  oracle.tsv
+    IN: native executable; stdin request rows computed from Main.hs operands.
+    OUT: four-column native results after checking exact requested row keys.
+  manifest.json
+    IN: two CBDs, generated driver, oracle.tsv, native executable; hashes of
+        inputPaths (fixture source, thc.cabal, Main.hs, FixtureSupport.hs, shell/
+        PowerShell exporter files, toolchain.sh, plugin.py, top-level compiler hs).
+    OUT: entries, module paths, composite name, row count, exclusions, hashes.
+
+Actual test reads/writes:
+  Reads manifest.json, all inputHashes/artifactHashes paths, both CBDs and TSV.
+  Independent ScalarPrimopModel checks native results. NumericPrimopCoreEvidence
+    reads decoded modules; CoreCbdFixtures reads CBDs using the Java loader.
+  Direct canonical-result and wrong-arity controls also read entries from manifest.
+    They write temporary synthetic CBDs through CoreCbdFixtures.write; that adds
+    the shared CBD encoder (exe:thc-fixtures), even beyond preparation itself.
+  Runtime/test classpath and helper implementations are separate test inputs.
+
+Missing edges / caveats:
+  Source receipts enumerate only top-level src/compiler/THC/*.hs, not recursive
+    compiler modules or Cabal's full dependency closure. They are not build edges.
+  Exporter builds its own plugin and compact tool. Runtime-generated synthetic
+    CBDs need an explicit encoder dependency, not a previously built sidecar.
+  All family outputs are produced in order by one function; the manifest is
+    removed first, but old CBD files remain. Existence checks alone cannot prove
+    that this invocation produced both modules.
+  No other fixture directory is read by this producer.
+
+004  bit-primops
+Producer: Main.hs:prepare root Bit (thc-fixtures bit).
+Consumer: src/test/java/thc/runtime/BitPrimopsTest.java.
+Shared tool, platform, environment and receipt caveats: 003.
+Files specific to this fixture: t/fixtures/compiler/BitPrimopsAudit.hs;
+  Main.hs entries Bit, operands Bit, oracleDriver and requestText.
+
+Artifact flow under build/bit-primops/:
+  pre-core/BitPrimopsAudit.cbd, pre-core/THC.InterfaceClosure.cbd
+    IN: fixture source, plugin/exporter and GHC interfaces; named wrapper roots
+        and bitPrimops composite root from Main.hs.
+    OUT: these two CBDs; pre-core-ghc/ object/interface files.
+  post-core/BitPrimopsAudit.cbd, post-core/THC.InterfaceClosure.cbd
+    IN: same source/tool inputs with post-tidy option.
+    OUT: these two CBDs; post-core-ghc/ object/interface files.
+  NativeBitPrimops.hs
+    IN: Main.hs entry list/driver template. OUT: generated native driver source.
+  native/bit-primops-oracle[.exe]
+    IN: that driver, BitPrimopsAudit.hs, native GHC/package/linker inputs.
+    OUT: executable and native/ intermediates; native flags as in 003.
+  oracle.tsv
+    IN: executable, operand requests from Main.hs; driver masks only bits GHC
+        defines for byteSwap/bitReverse. OUT: three-column native results.
+  manifest.json
+    IN: four CBDs, driver, TSV, executable and inputPaths source receipt.
+    OUT: hashes, entries, two stage module lists, row count, masking policy.
+Consumer reads all receipt paths, both stage module pairs, TSV and manifest.
+  Wrong-arity controls read manifest entries and write temporary CBDs through
+  the shared encoder; CoreCbdFixtures.read itself uses Java, not thc-compact.
+No generated input from another fixture was found in this producer.
+
+005  integer-primops (fixed-width Int#/Word# operations, not Integer package smoke)
+Producer: Main.hs:prepare root IntegerWord (thc-fixtures integer).
+Consumer: src/test/java/thc/IntegerPrimopsTest.java.
+Shared inputs/caveats: 003; fixture source t/fixtures/compiler/IntegerPrimopsAudit.hs.
+
+Artifact flow under build/integer-primops/:
+  core/IntegerPrimopsAudit.cbd, core/THC.InterfaceClosure.cbd
+    IN: fixture source, plugin/exporter/GHC interfaces; entries IntegerWord and
+        composite closure root in Main.hs. OUT: both CBDs; core-ghc/ intermediates.
+  NativeIntegerPrimops.hs
+    IN: Main.hs entries IntegerWord and oracleDriver. OUT: native driver source.
+  native/integer-primops-oracle[.exe]
+    IN: driver, IntegerPrimopsAudit.hs, native tool/package inputs.
+    OUT: executable and native/ intermediates; flags as in 003.
+  oracle.tsv
+    IN: executable and Main.hs-generated request rows. OUT: four-column TSV.
+  manifest.json
+    IN: two CBDs, driver, executable, TSV and inputPaths source receipt.
+    OUT: hashes, entries, module list and composite dispatch description.
+Consumer reads those artifacts and every hash receipt path. Wrong-arity controls
+  also read entries and write temporary synthetic CBDs using shared encoder.
+  bytecodeSignedRemainderPreservesLongBoundaries is independent of this fixture.
+No other generated fixture directory is consumed by this producer.
+
+006  explicit64-primops
+Producer: Main.hs:prepare root Explicit64 (thc-fixtures explicit64).
+Consumer: src/test/java/thc/runtime/Explicit64PrimopsTest.java; additional CBV
+  consumers select this same CBD through the cbv-coercion group (scan pending).
+Shared inputs/caveats: 003; source t/fixtures/compiler/Explicit64PrimopsAudit.hs.
+
+Artifact flow under build/explicit64-primops/:
+  core/Explicit64PrimopsAudit.cbd
+    IN: fixture source, plugin/exporter/GHC interfaces, named wrapper closure roots
+        from Main.hs entries Explicit64. OUT: CBD; core-ghc/ intermediates.
+    This family does not require THC.InterfaceClosure.cbd in relativeCore().
+  NativeExplicit64.hs
+    IN: Main.hs entries, oracleDriver and hostWrapper conversions between host
+        Int#/Word# and explicit Int64#/Word64#. OUT: native driver source.
+  native/explicit64-oracle[.exe]
+    IN: driver, Explicit64PrimopsAudit.hs, native tools/packages.
+    OUT: executable and native/ intermediates; flags as in 003.
+  oracle.tsv
+    IN: executable, operand requests from Main.hs. OUT: four-column native TSV.
+  manifest.json
+    IN: CBD, driver, executable, TSV, inputPaths receipt and GHC --info.
+    OUT: hashes, entries, toolchain information and excluded-input description.
+Consumer reads manifest, hash receipt paths, CBD and TSV. Further primitive arity
+  checks use runtime nodes directly; this class does not write synthetic CBDs.
+Ownership collision: cbv-coercion also exports Explicit64PrimopsAudit.hs into
+  core/Explicit64PrimopsAudit.cbd, with a different GHC scratch directory and
+  without this producer's closure-root options. There must be one owner per
+  output, or distinct output paths, before parallel graph execution is safe.
+
+Shared array producer observed while scanning 007-012
+  t/haskell-fixtures/Main.hs:prepareArray and arrayDriverSource own the following
+  file operations; FixtureSupport.hs owns subprocesses/hashing. Uses built
+  thc-fixtures (with its in-process CBD decoder), shared exporter/plugin, GHC
+  9.14.1, matching ghc-pkg and installed array-0.5.8.0 plus base/GHC interfaces.
+  The selected package DB's array registration is read with ghc-pkg field/describe.
+  Native drivers require 64-bit Int. Host byte order and GHC --info enter manifest.
+  Each indexed source is exported separately at pre and post-tidy boundaries,
+  with its named entry roots and THC_SOURCE_NOTES=true. Each invocation calls
+  the shared exporter and rebuilds/checks plugin tools internally.
+  A generated driver imports every source module for that family. GHC --make
+  -O2 -fforce-recomp -dcore-lint -dstg-lint compiles it with the two fixture include
+  directories, then the producer feeds declared cases on stdin and checks row keys.
+  Manifests hash every listed CBD, native driver, native executable and oracle,
+  plus fixture sources, Main.hs, FixtureSupport.hs, thc.cabal, platform exporter
+  scripts and only top-level src/compiler/THC/*.hs. Full tool closure remains
+  broader. Existing CBDs are not cleared first; old manifest/obsolete audit/expected
+  files are removed. These source receipts do not establish producer edges.
+  Windows uses PowerShell and writes stage/index/export.args; native suffix .exe.
+  For every stage/index, GHC writes scratch files in stage/index/ghc/.
+  Java consumers read manifest, every receipt path, all stage CBDs and oracle TSV;
+  Java loads CBD directly. The checked consumers below do not write synthetic CBDs.
+
+007  int-arrays
+Producer: Main.hs:prepareArray, arraySpec "int-arrays".
+Consumer: src/test/java/thc/runtime/IntArrayNativeTest.java.
+Under build/int-arrays/, for each stage pre and post:
+  stage/0/core/UnboxedArrays.cbd, stage/0/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/core/UnboxedArrays.hs, array interfaces, shared exporter.
+    OUT: those two CBDs; stage/0/ghc/ intermediates.
+  stage/1/core/IntArrayAudit.cbd, stage/1/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/compiler/IntArrayAudit.hs, GHC interfaces, shared exporter.
+    OUT: those two CBDs; stage/1/ghc/ intermediates.
+  NativeIntArray.hs: IN Main.hs array spec/template; OUT generated driver.
+  native/int-array-oracle[.exe]: IN driver plus both sources and packages;
+    OUT executable, native/ objects/interfaces.
+  oracle.tsv: IN executable plus Main.hs shared cases; OUT native three-column TSV.
+  manifest.json: IN eight CBDs, driver, executable, TSV and source/tool facts
+    described above; OUT hashes, entries, inputs, stages and platform facts.
+
+008  int8-arrays
+Producer: Main.hs:prepareArray, arraySpec "int8-arrays".
+Consumer: src/test/java/thc/runtime/Int8ArrayNativeTest.java.
+Under build/int8-arrays/, for each stage pre and post:
+  stage/0/core/Unboxed8Arrays.cbd, stage/0/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/core/Unboxed8Arrays.hs and array/GHC/plugin inputs.
+  stage/1/core/Int8ArrayAudit.cbd, stage/1/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/compiler/Int8ArrayAudit.hs and GHC/plugin inputs.
+  Each pair is the corresponding export's output; scratch files as above.
+  NativeInt8Array.hs: IN Main.hs spec/template; OUT driver with explicit carrier
+    conversions for raw signed/unsigned byte reads.
+  native/int8-array-oracle[.exe]: IN driver plus both sources/native packages;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable and Main.hs byte/boundary cases; OUT native TSV.
+  manifest.json: IN eight CBDs, driver, executable, TSV and common receipt inputs;
+    OUT manifest including elementBits=8. No separate literal oracle.
+
+009  int16-arrays
+Producer: Main.hs:prepareArray, arraySpec "int16-arrays".
+Consumers: src/test/java/thc/runtime/Int16ArrayNativeTest.java and
+  Int16BoundaryCompilationTest.java (uses the former's fixture access).
+Under build/int16-arrays/, for each stage pre and post:
+  stage/0/core/Unboxed16Arrays.cbd, stage/0/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/core/Unboxed16Arrays.hs and array/GHC/plugin inputs.
+  stage/1/core/Int16ArrayAudit.cbd, stage/1/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/compiler/Int16ArrayAudit.hs and GHC/plugin inputs.
+  Each pair is the corresponding export's output; scratch files as above.
+  NativeInt16Array.hs: IN Main.hs spec/template; OUT driver including literal cases.
+  native/int16-array-oracle[.exe]: IN driver, both sources and native packages;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable and array cases in Main.hs; OUT native TSV.
+  literal-oracle.tsv: IN same executable and separate literal requests in Main.hs;
+    OUT native literal TSV. Tests consume this separately from oracle.tsv.
+  manifest.json: IN eight CBDs, driver, executable, both TSVs, common receipt inputs;
+    OUT hashes, stage inventory, elementBits=16 and both case inventories.
+
+010  int32-arrays
+Producer: Main.hs:prepareArray, arraySpec "int32-arrays".
+Consumer: src/test/java/thc/runtime/Int32ArrayNativeTest.java.
+Under build/int32-arrays/, for each stage pre and post:
+  stage/0/core/Unboxed32Arrays.cbd, stage/0/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/core/Unboxed32Arrays.hs and array/GHC/plugin inputs.
+  stage/1/core/Int32ArrayAudit.cbd, stage/1/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/compiler/Int32ArrayAudit.hs and GHC/plugin inputs.
+  Each pair is the corresponding export's output; scratch files as above.
+  NativeInt32Array.hs: IN Main.hs spec/template; OUT driver including literal cases.
+  native/int32-array-oracle[.exe]: IN driver, both sources and native packages;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable and regular cases; OUT native array TSV.
+  literal-oracle.tsv: IN same executable and separate literal requests; OUT TSV.
+  manifest.json: IN eight CBDs, driver, executable, both TSVs, common receipt inputs;
+    OUT hashes, elementBits=32, stages and both case inventories.
+
+011  double-arrays
+Producer: Main.hs:prepareArray, arraySpec "double-arrays".
+Consumer: src/test/java/thc/runtime/DoubleArrayNativeTest.java.
+Under build/double-arrays/, for each stage pre and post:
+  stage/0/core/UnboxedDoubleArrays.cbd, stage/0/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/core/UnboxedDoubleArrays.hs and array/GHC/plugin inputs.
+  stage/1/core/DoubleArrayAudit.cbd, stage/1/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/compiler/DoubleArrayAudit.hs and GHC/plugin inputs.
+  Each pair is the corresponding export's output; scratch files as above.
+  NativeDoubleArray.hs: IN Main.hs spec/template; OUT generated driver.
+  native/double-array-oracle[.exe]: IN driver, both sources/native packages;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable and doubleArrayInputs (excludes signaling NaNs);
+    OUT three-column native TSV.
+  manifest.json: IN eight CBDs, driver, executable, TSV and common receipt inputs;
+    OUT hashes, stages, cases and signaling-NaN exclusion description.
+
+012  float-word-arrays
+Producer: Main.hs:prepareArray, arraySpec "float-word-arrays".
+Consumer: src/test/java/thc/runtime/FloatWordArrayNativeTest.java.
+Under build/float-word-arrays/, for each stage pre and post:
+  stage/0/core/UnboxedFloatArrays.cbd, stage/0/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/core/UnboxedFloatArrays.hs and array/GHC/plugin inputs.
+  stage/1/core/UnboxedWordArrays.cbd, stage/1/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/core/UnboxedWordArrays.hs and array/GHC/plugin inputs.
+  stage/2/core/FloatArrayAudit.cbd, stage/2/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/compiler/FloatArrayAudit.hs and GHC/plugin inputs.
+  stage/3/core/WordArrayAudit.cbd, stage/3/core/THC.InterfaceClosure.cbd
+    IN: t/fixtures/compiler/WordArrayAudit.hs and GHC/plugin inputs.
+  Each pair is the corresponding export's output; scratch files as above.
+  NativeFloatWordArray.hs: IN Main.hs spec/template; OUT generated driver.
+  native/float-word-array-oracle[.exe]: IN driver, all four sources/native packages;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable, per-entry floatWordInputs cases; OUT native TSV.
+  manifest.json: IN sixteen CBDs, driver, executable, TSV and common receipt inputs;
+    OUT hashes, stages, per-entry cases and signaling-NaN exclusions.
+
+Shared Java synthetic-CBD artifact (consumed by 003-005 and other model tests)
+  Producer: src/test/java/thc/CoreCbdTestSupport.java:writeModel via
+    CoreCbdFixtures.write. OUT: caller-selected temporary CBD.
+  IN: test-created model, Java Json/inspection code, built thc-fixtures executable
+    compact-model command and its CBD writer library. Intermediate temp JSON, stdout
+    log and stderr file are deleted by the helper. No other fixture CBD is required.
+  Executable resolution reads THC_FIXTURES; otherwise build/thc-fixtures.path if
+    present; otherwise CABAL/PATH and cabal list-bin exe:thc-fixtures --offline.
+  Missing edge: discovery is not construction. The fallback is not explicitly tied
+    to selected GHC/GHC_PKG. The sidecar's producer still needs a separate scan.
+
+013  pinned-pointer-cells
+Producer: t/haskell-fixtures/Main.hs:preparePinnedPointers.
+Consumer: src/test/java/thc/runtime/PinnedPointerCellsTest.java.
+Inputs: t/fixtures/compiler/PinnedPointerCellsAudit.hs and
+  PinnedPointerCellsNative.hs; Main.hs, FixtureSupport.hs, built thc-fixtures;
+  shared exporter/plugin/native GHC closure and Python auditor closure from 001.
+  Native source imports audit source, GHC.Exts and Data.List. GHC=9.14.1 enforced.
+Under build/pinned-pointer-cells/:
+  native/oracle
+    IN: both Haskell sources, GHC packages/native tools; --make -O2 -dynamic
+        -fforce-recomp -dcore-lint. OUT: executable, native/ objects/interfaces.
+  oracle.tsv
+    IN: executable, thirteen stdin values embedded in Main.hs. OUT: native TSV.
+  pre/core/PinnedPointerCellsAudit.cbd, pre/core/THC.InterfaceClosure.cbd
+    IN: audit source and exporter/plugin, twelve named closure roots.
+    OUT: those CBDs; pre/ghc/ intermediates.
+  post/core/PinnedPointerCellsAudit.cbd, post/core/THC.InterfaceClosure.cbd
+    IN: same plus post-tidy. OUT: those CBDs; post/ghc/ intermediates.
+  pre/audit.json, post/audit.json
+    IN: corresponding two CBDs, twelve requested entry names, auditor/decoder
+        and capability/import-time JSON tables. OUT: per-stage audit report.
+  manifest.json
+    IN: TSV, four CBDs, both reports; source receipt assembled in Main.hs.
+    OUT: source/artifact hashes and GHC version. Native executable is not hashed.
+Consumer independently lists top-level compiler hs/core_*.py files and demands
+  exact receipt keys, then hashes them; reads TSV, both CBD pairs and audit JSON.
+Gaps: auditor's scalar signatures, polyglot ABI and SIMD table reads are absent
+  from the receipt. Windows export adapter dependencies are also omitted there;
+  native binary name has no explicit Windows suffix handling in this producer.
+No other generated fixture directory is read.
+
+014  cbv-coercion / demand metadata
+Producer sequence currently in .github/scripts/fast-fixtures.json:cbv-coercion.
+Consumers: thc.RealCoreCallDemandTest, thc.RealCoreEntryContractTest,
+  thc.runtime.BoxedLexicalProofTest, BoxedValueCacheTest, ScalarLexicalProofTest,
+  ScalarPrimitiveSignatureTest; bin/check-cbv-metadata.py and
+  bin/check-demand-metadata.py --ghc-api.
+Shared inputs: exporter/plugin/GHC packages; Python, core_package_manifest.py,
+  core_original_foreign.py and thc-compact for check scripts' CBD inspection.
+  These two check scripts do not invoke the general audit-core.py auditor.
+Artifact flows (all paths repository-relative):
+  build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd
+    IN: t/fixtures/compiler/TupleArithmeticAudit.hs, exporter/plugin/GHC inputs.
+    OUT: CBD plus build/tuple-arithmetic/pre-ghc/ scratch outputs.
+  build/explicit64-primops/core/Explicit64PrimopsAudit.cbd
+    IN: t/fixtures/compiler/Explicit64PrimopsAudit.hs, shared exporter inputs.
+    OUT: CBD plus build/explicit64-primops/ghc/ scratch outputs.
+  build/core/CBVAudit.cbd, CBVJoinAudit.cbd, CBVCoercionAudit.cbd, DemandAudit.cbd
+    IN: respective t/fixtures/compiler/<module>.hs files, shared exporter inputs.
+    OUT: these four CBDs; default build/ghc/ intermediates.
+  build/cbv-post-core/CBVAudit.cbd, CBVJoinAudit.cbd, CBVCoercionAudit.cbd
+    IN: same three CBV sources, exporter/plugin with post-tidy option.
+    OUT: three CBDs; build/cbv-post-ghc/ intermediates.
+  Temporary demand API Main.hs
+    IN: API_CHECK string in bin/check-demand-metadata.py. OUT: temporary source.
+  Temporary check-demand executable
+    IN: that source, src/compiler/THC/Demands.hs, selected GHC 9.14.1 ghc package;
+        --make -O0 -dynamic -package ghc -isrc/compiler.
+    OUT: executable and temporary .hi/.o files; executed as an API assertion check.
+  Temporary precise-exception DemandAudit.cbd
+    IN: DemandAudit.hs, shared exporter/plugin, -DTHC_PRECISE_EXCEPTION_AUDIT.
+    OUT: temporary core/DemandAudit.cbd plus temporary ghc/ outputs.
+  The temporary trees are deleted on leaving Python TemporaryDirectory contexts.
+Checks consume pre/post CBV CBDs, DemandAudit CBD, and their own assertion code;
+  emit stdout only, no persistent successful-check artifact currently exists.
+Java reads the relevant CBDs directly. ScalarLexicalProofTest additionally reads
+  the tuple CBD; the manifest group lists explicit64 too (individual consumption
+  through helper arguments needs checking before retaining this extra dependency).
+Ownership gaps: tuple-arithmetic and explicit64 groups also write the first two
+  paths. build/core and build/ghc are shared default directories. Distinct commands
+  with different options must not own the same file. The demand --ghc-api check
+  hides two more compilations behind a check command; these have concrete source
+  and output edges above and should be represented as such.
+
+015  integer-completion
+Producer: t/haskell-fixtures/IntegerCompletionFixtures.hs:prepareIntegerCompletion.
+Consumer: src/test/java/thc/runtime/IntegerCompletionTest.java.
+IN common: producer, Main.hs/FixtureSupport.hs and built thc-fixtures;
+  t/fixtures/compiler/IntegerCompletionAudit.hs; native 64-bit GHC 9.14.1;
+  exporter/plugin plus auditor/decoder/data closure from 001.
+Under build/integer-completion/:
+  pre-core/IntegerCompletionAudit.cbd, post-core/IntegerCompletionAudit.cbd
+    IN: audit source and exporter/plugin (post adds post-tidy). OUT: stage CBDs,
+        pre-ghc/ and post-ghc/ scratch outputs.
+  pre-audit.json, post-audit.json
+    IN: corresponding CBD, eleven entry names, Python auditor and data inputs.
+    OUT: stage audit reports.
+  NativeIntegerCompletion.hs: IN producer's driver/names; OUT native driver source.
+  requests.tsv: IN producer's deterministic requests; OUT four-column stdin file.
+  native/integer-completion-oracle
+    IN: generated driver, audit source and native GHC/package/linker inputs.
+    OUT: executable and native/ interfaces/objects.
+  oracle.tsv: IN executable and requests.tsv; OUT checked six-column native TSV.
+  commands/<label>.stdout, .stderr, .command.json
+    IN: corresponding command, environment, inputs, exit status; OUT captured
+        stdout/stderr and command record. Labels: ghc-version, ghc-info, pre-export,
+        pre-audit, post-export, post-audit, native-build, native-oracle.
+  manifest.json: IN all files above and producer's source receipt; OUT hashes,
+    entry inventory, 3373 rows and domain description.
+Consumer reads requests/TSV, CBDs, audit reports, command records and all receipt
+  paths. Receipt omits auditor's polyglot ABI and SIMD JSON inputs and deeper
+  compiler modules. Binary name does not explicitly handle Windows .exe here.
+
+016  word-floating
+Producer: t/haskell-fixtures/WordFloatingFixtures.hs:prepareWordFloating.
+Consumer: src/test/java/thc/runtime/WordFloatingTest.java.
+IN common: producer, Main.hs/FixtureSupport.hs and built thc-fixtures;
+  t/fixtures/compiler/WordFloatingAudit.hs and WordFloatingNative.hs;
+  native 64-bit GHC 9.14.1 (host must equal target); exporter and auditor as in 001.
+Under build/word-floating/:
+  pre-core/WordFloatingAudit.cbd, post-core/WordFloatingAudit.cbd
+    IN: audit source, exporter/plugin/GHC interfaces and stage option.
+    OUT: stage CBDs; pre-ghc/, post-ghc/ intermediates.
+  native/word-floating-oracle[.exe]
+    IN: both Haskell sources, native GHC/packages/tools; --make -O2
+        -fforce-recomp -dcore-lint -dstg-lint.
+    OUT: native executable and native/ .hi/.o files.
+  oracle.tsv: IN executable and producer's unsigned rounding-boundary cases;
+    OUT three-column integer/float-bits/double-bits native results.
+  pre-audit.json, post-audit.json: IN corresponding CBD, wordFloat/wordDouble
+    entry names, auditor/decoder/data closure; OUT stage reports.
+  manifest.json: IN TSV, two CBDs, two reports, source receipt, GHC --info;
+    OUT hashes, input count, platform and entry/stage information.
+Consumer reads those files and all receipt paths; also enumerates compiler and
+  core_*.py directories. Native binary is produced but absent from artifact hashes.
+Receipt includes scalar signatures but omits auditor's polyglot ABI/SIMD tables.
+
+017  tuple-arithmetic
+Producer: t/haskell-fixtures/AggregateFixtures.hs:prepareTupleArithmetic.
+Consumers: src/test/java/thc/runtime/TupleArithmeticTest.java, WordCarryTest.java;
+  ScalarLexicalProofTest also consumes the pre CBD (014).
+IN common: producer/FixtureSupport.hs/Main.hs, built thc-fixtures;
+  t/fixtures/compiler/TupleArithmeticAudit.hs; 64-bit GHC 9.14.1;
+  shared exporter/plugin and auditor/decoder/data inputs.
+Under build/tuple-arithmetic/:
+  pre-core/TupleArithmeticAudit.cbd, post-core/TupleArithmeticAudit.cbd
+    IN: source and exporter/plugin, post-tidy for post. OUT: CBDs and stage-ghc/.
+  pre-audit.json, post-audit.json
+    IN: matching CBD, directNames/callNames in producer, auditor/data closure.
+    OUT: reports for nine primitives and two mixed-result calls.
+  NativeTupleArithmetic.hs: IN oracleDriver template/names; OUT generated source.
+  native/tuple-arithmetic-oracle[.exe]
+    IN: generated driver plus audit source and native packages/toolchain.
+    OUT: executable and native/ objects/interfaces.
+  oracle.tsv: IN executable and requests directNames; OUT direct native results.
+  call-oracle.tsv: IN same executable and requests callNames; OUT call results.
+  pre-export.args, post-export.args (Windows only)
+    IN: export arguments/options; OUT response files consumed by PowerShell export.
+  manifest.json: IN two CBDs/reports, both TSVs, driver, native executable,
+    Windows response files if used, source receipt, GHC --info; OUT manifest.
+Consumer reads receipt paths, CBDs and TSVs; WordCarryTest also reads audits.
+Ownership collision with 014 confirmed at pre-core/TupleArithmeticAudit.cbd.
+  Here the options match the unrooted pre export in cbv-coercion; it should be a
+  shared artifact, not an independent producer. Receipt omits some auditor tables.
+
+014 follow-up: no explicit64 CBD reference was found in any of the six listed
+  Java consumers or their local module/export helper arguments. This group's
+  extra explicit64 export is a candidate for deletion, pending final caller check.
+
+Shared command-log artifacts (used by 015 and later runLogged producers)
+  t/haskell-fixtures/FixtureSupport.hs:runLoggedExpectInput writes exactly
+  <logs>/<label>.stdout, <label>.stderr, <label>.command.json. An optional stdin
+  file is opened before the child starts and is a genuine file input. The command
+  record includes cwd, explicit environment overrides, argv, timeout and exit;
+  inherited environment still affects commands but is not recorded in full.
+  runLoggedWithInput has a file edge; run/runWithTimeout instead pass an in-memory
+  string. JSON reports/receipts are real outputs, not evidence of execution by JVM.
+
+Shared byte-array producer observed for 018-022
+  t/haskell-fixtures/ByteArrayFixtures.hs:prepareByteArrayFamily plus Main.hs,
+  FixtureSupport.hs and built thc-fixtures. Reads native 64-bit GHC 9.14.1 and
+  bytestring-0.12.2.0 registration; uses exporter/plugin and auditor closure (001).
+  Every stage exports named roots then lists ALL *.cbd in the destination and
+  passes that list to each entry audit. Old CBDs are not removed first: directory
+  contents are an undeclared, open-ended input. Exact closure outputs need fixing.
+  Manifest reads all selected CBDs, entry audits, request/oracle files, native
+  executable, generated driver if any, command logs and source receipt.
+  Commands always write the three log files documented after 017. Common labels:
+  ghc-version, ghc-info, bytestring-version, bytestring-description, pre-export,
+  post-export, pre-<entry>-audit, post-<entry>-audit, native-build, native-oracle.
+  Families Mutable/Resize/Size also run compiler-build and primop-coverage, then
+  read build/primop-coverage.json. This global file has multiple procedural callers.
+  Receipts omit auditor polyglot ABI/SIMD tables and recursive compiler closure.
+  Consumers use ByteArrayFixtureEvidence for source/artifact/command checks;
+  its exact extra file reads remain to be checked separately.
+  Triage note: validateAudit still pins exact primitive-use counts for orderedBytes
+  and copiedBytes. These assertions are candidates for removal, not requirements
+  for the future graph. Semantic/native checks are separate.
+
+018  bytearray
+Producer: ByteArrayFixtures.hs, family Bytes; consumer thc.runtime.ByteArrayTest.
+Under build/bytearray/:
+  pre-core/ByteArrayAudit.cbd, post-core/ByteArrayAudit.cbd
+    IN: t/fixtures/compiler/ByteArrayAudit.hs, exporter/GHC/plugin, entries
+        orderedBytes/copiedBytes. OUT: these CBDs and stage-ghc/ scratch files;
+        possible interface-closure CBDs are selected by the directory scan above.
+  pre-orderedBytes.audit.json, pre-copiedBytes.audit.json,
+  post-orderedBytes.audit.json, post-copiedBytes.audit.json
+    IN: stage CBD list, entry name, auditor/decoder/data. OUT: audit per entry.
+  NativeByteArray.hs: IN producer nativeDriver Bytes; OUT generated native source.
+  native/bytearray-oracle: IN generated source plus audit source/GHC packages;
+    OUT executable and native/ interfaces/objects.
+  requests.tsv: IN producer unaryInputs Bytes and entries; OUT native stdin rows.
+  oracle.tsv: IN executable, requests.tsv and independent producer model checks;
+    OUT three-column TSV. Commands logs and manifest: shared description above.
+Consumer reads manifest, named CBDs, TSV and receipt paths.
+  Current group sources still list export-boot.py and pinned List sources, although
+  this family no longer invokes originalList: apparent obsolete dependencies.
+
+019  mutable-bytearrays
+Producer: ByteArrayFixtures.hs, family Mutable.
+Consumer: thc.runtime.MutableByteArrayNativeTest.
+Under build/mutable-bytearrays/:
+  pre-core/MutableByteArrayAudit.cbd, post-core/MutableByteArrayAudit.cbd
+    IN: t/fixtures/compiler/MutableByteArrayAudit.hs, GHC/bytestring interfaces,
+        plugin/exporter. OUT: stage CBDs/possible closure; stage-ghc/ scratch.
+  For each stage pre/post, <stage>-<entry>.audit.json
+    Entries: filledBytes, movedBytes, disjointBytes, copiedMutableBytes,
+      copiedDisjointBytes, publicReplicate.
+    IN: that stage's enumerated CBDs, entry, auditor/data. OUT: twelve reports.
+  NativeMutableByteArrays.hs: IN nativeDriver Mutable; OUT generated source.
+  native/mutable-bytearrays-oracle: IN driver, audit source, GHC/bytestring packages;
+    OUT executable and native/ objects/interfaces.
+  requests.tsv: IN producer mutableInputs and entries; OUT native stdin.
+  oracle.tsv: IN executable plus requests.tsv, checked against independent model;
+    OUT four-column TSV. Manifest/logs as above, plus coverage input noted above.
+Consumer reads manifest, receipt paths, CBDs, TSV and per-entry audits.
+
+020  resize-bytearrays
+Producer: ByteArrayFixtures.hs, family Resize; consumer thc.runtime.ResizeByteArrayTest.
+Under build/resize-bytearrays/:
+  pre-core/ResizeByteArrayAudit.cbd, post-core/ResizeByteArrayAudit.cbd
+    IN: t/fixtures/compiler/ResizeByteArrayAudit.hs, shared exporter inputs.
+    OUT: stage CBDs/possible closure and stage-ghc/ scratch.
+  <stage>-resizedBytes.audit.json, <stage>-resizedTwiceWrites.audit.json (pre/post)
+    IN: stage CBD list, named entry, auditor/data. OUT: four reports.
+  native/resize-bytearrays-oracle
+    IN: tracked t/fixtures/compiler/ResizeByteArrayNative.hs, ResizeByteArrayAudit.hs,
+        ByteArrayFixtureInputs.hs, GHC packages; -main-is ResizeByteArrayNative.main.
+    OUT: executable plus native/ .o/.hi.
+  commands/native-inputs.stdout (plus .stderr/.command.json)
+    IN: executable --inputs. OUT: ordered raw/code input pairs.
+  requests.tsv: IN those pairs, producer entries; OUT expected request inventory.
+  oracle.tsv: IN executable run with no stdin (native source owns cases), checked
+    against requests.tsv-equivalent in-memory inventory. OUT: native results.
+  Manifest/logs and shared coverage dependency as above. Consumer reads manifest,
+    receipt paths, stage CBDs, TSV and per-entry audits.
+
+021  mutable-bytearray-size
+Producer: ByteArrayFixtures.hs, family Size; consumer thc.runtime.MutableByteArraySizeTest.
+Under build/mutable-bytearray-size/:
+  pre-core/MutableByteArraySizeAudit.cbd, post-core/MutableByteArraySizeAudit.cbd
+    IN: t/fixtures/compiler/MutableByteArraySizeAudit.hs, shared exporter inputs.
+    OUT: stage CBDs/possible closure and stage-ghc/ scratch.
+  <stage>-<entry>.audit.json (pre/post)
+    Entries: freshSize, pureSize, resizedSizes, pureAfterResize, orderedSize.
+    IN: stage CBD list, entry, auditor/data. OUT: ten entry reports.
+  native/mutable-bytearray-size-oracle
+    IN: tracked t/fixtures/compiler/MutableByteArraySizeNative.hs,
+        MutableByteArraySizeAudit.hs, ByteArrayFixtureInputs.hs and GHC packages;
+        -main-is MutableByteArraySizeNative.main. OUT: executable/native intermediates.
+  commands/native-inputs.stdout (plus companion log files)
+    IN: executable --inputs. OUT: raw/code inventory.
+  requests.tsv: IN observed input pairs and entries; OUT expected request rows.
+  oracle.tsv: IN executable with no stdin (embedded cases), checked against expected
+    inventory; OUT native results. Manifest/logs/coverage as above.
+Consumer reads manifest, receipt paths, CBDs, TSV and per-entry audit files.
+
+022  compare-byte-arrays
+Producer: ByteArrayFixtures.hs, family Compare; consumer thc.runtime.CompareByteArraysTest.
+Under build/compare-byte-arrays/, for each stage pre/post:
+  stage/core/CompareByteArraysAudit.cbd and any interface-closure CBD
+    IN: t/fixtures/compiler/CompareByteArraysAudit.hs, bytestring/GHC interfaces,
+        shared plugin/exporter. OUT: CBDs and stage/ghc/ scratch files.
+  stage/core/GHC.Internal.Base.cbd, stage/core/GHC.Internal.List.cbd
+    IN: bin/export-boot.py --frontier lists, shared published plugin, installed
+        ghc-internal dynamic interfaces, pinned sources described below.
+    OUT: these copied CBDs, originals in stage/boot-core/, stage/boot-ghc/ overlay,
+        stage/boot-provenance.json. This helper always exports boot modules post-tidy.
+  stage/<entry>.audit.json
+    Entries: shortCompare, shortPrefix, shortSuffix, rangeCompare, aliasCompare.
+    IN: ALL CBDs listed in stage/core/, entry, auditor/data. OUT: ten reports total.
+  NativeCompareByteArrays.hs: IN producer nativeDriver Compare; OUT native driver.
+  native/compare-byte-arrays-oracle: IN driver, audit source, native packages/tools;
+    OUT executable and native/ .o/.hi.
+  requests.tsv: IN unaryInputs Compare and entries; OUT request rows.
+  oracle.tsv: IN executable, request file and independent list model check;
+    OUT sign-only native comparison results. Manifest/logs as shared description,
+    plus pre-original-list and post-original-list command logs and boot provenance.
+Consumer reads manifest, receipt paths (including boot provenance and pinned
+  sources), selected stage CBDs, TSV; reads no previous other fixture directory.
+
+Shared List export used by 022
+  bin/export-boot.py --frontier lists consumes bin/build-compiler.sh/plugin.py,
+  published plugin shared library/package DB, selected GHC/GHC_PKG,
+  THC_SOURCE_NOTES, and installed ghc-internal import-dir recursively (*.dyn_hi).
+  Pinned files under nih/pinned/ghc-9.14.1/libraries/ghc-internal/:
+    LICENSE; src/GHC/Internal/Base.hs; src/GHC/Internal/List.hs;
+    src/GHC/Internal/Exception/Type.hs-boot; src/GHC/Internal/IO.hs-boot;
+    src/GHC/Internal/Num.hs-boot; src/GHC/Internal/Enum.hs-boot;
+    src/GHC/Internal/Real.hs-boot.
+  OUT per supplied build-dir: boot-ghc/ symlink interface overlay and generated
+    .hi/.o/.hi-boot/.o-boot; boot-core/GHC.Internal.Base.cbd and
+    boot-core/GHC.Internal.List.cbd; copies in core/; boot-provenance.json.
+  Installed interfaces and CPP include closure remain part of compiler inputs;
+  hashing the eight pinned files alone does not capture that closure.
+
+Shared primop coverage report used by 019-021
+  build/primop-coverage.json
+    IN: built exe:thc-primops, src/tools/primops/PrimopTools.hs, thc.cabal,
+        bin/core-capabilities.json, src/main/resources/thc/scalar-primop-signatures.json;
+        linked pinned GHC API and GHC --numeric-version/--info, native word size.
+    OUT: report; ordinary coverage command does not write docs/primops.md.
+  Producer command: cabal run exe:thc-primops -- coverage (currently no --offline
+    or explicit selected compiler in this call). Report path can be passed with
+    --output. Multiple callers must share one graph producer or use distinct paths.
+
+018-022 consumer closure confirmed: ByteArrayFixtureEvidence.java reads every
+  manifest receipt path, every command record and entry audit; for Compare also
+  boot provenance and all pinned source bytes. It expects exactly the audit module
+  plus THC.InterfaceClosure.cbd in each normal stage, plus Base/List for Compare.
+  Thus those interface-closure CBDs are required outputs, not merely optional.
+  It does not read build/primop-coverage.json directly: selected signatures are
+  embedded in the manifest. Its directory enumeration is only for source receipts.
+
+023  scalar-bitcasts
+Producer: t/haskell-fixtures/ScalarBitCastFixtures.hs:prepareScalarBitCasts.
+Consumer: src/test/java/thc/runtime/ScalarBitCastTest.java.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter and
+  auditor; t/fixtures/compiler/ScalarBitCastAudit.hs and ScalarBitCastNative.hs;
+  native 64-bit GHC 9.14.1; core-capabilities.json also read directly for arities.
+Under build/scalar-bitcasts/:
+  pre-core/ScalarBitCastAudit.cbd, post-core/ScalarBitCastAudit.cbd
+    IN: audit source and shared exporter/plugin, stage option.
+    OUT: two CBDs plus stage-ghc/ intermediates.
+  <stage>-<entry>-audit.json (twenty reports)
+    Entries float/double combined with Roundtrip, Field, Captured, Decode, Encode.
+    IN: stage CBD, entry name, auditor/decoder/data. OUT: per-entry report.
+  pre-audit.json, post-audit.json
+    IN: each stage's in-memory per-entry reports; OUT: combined report objects.
+  inputs.tsv: IN producer integer bit-pattern cases; OUT native stdin inventory.
+  native/scalar-bitcast-oracle[.exe]
+    IN: both tracked Haskell sources and native packages/tools.
+    OUT: executable and native/ objects/interfaces.
+  oracle.tsv: IN executable and inputs.tsv, integer-bit validation in producer;
+    OUT native TSV.
+  commands/<label>.{stdout,stderr,command.json}
+    Labels pre/post-export, pre/post-<entry>-audit, native-build, native-oracle.
+    IN corresponding commands; OUT logs as described after 017.
+  manifest.json: IN all artifacts above, source receipt and GHC --info;
+    OUT hashes, bitcast arities, inputs, stages and audit summaries.
+Consumer reads receipt paths, CBDs, manifest, oracle, scalar signature JSON.
+  Auditor controls additionally generate temporary CBDs via shared encoder and
+  run THC_PYTHON/default python3 bin/audit-core.py to write temporary report JSON,
+  stdout and stderr; these require encoder AND auditor/decoder at test time.
+Receipt hashes PrimopTools.hs although this producer does not run thc-primops;
+  it omits auditor's polyglot ABI/SIMD tables. Evaluate unnecessary receipt entries.
+
+024  float-decode
+Producer: t/haskell-fixtures/FloatDecodeFixtures.hs:prepareFloatDecode.
+Consumer: src/test/java/thc/runtime/FloatDecodeTest.java.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures;
+  t/fixtures/compiler/FloatDecodeAudit.hs and FloatDecodeNative.hs,
+  t/fixtures/core/FloatDecode.hs; native 64-bit GHC 9.14.1; exporter/auditor closure.
+Under build/float-decode/:
+  inputs.tsv: IN producer bit patterns/entry names; OUT native stdin inventory.
+  native/oracle: IN three Haskell files, native GHC/package tools;
+    OUT executable/native intermediates.
+  oracle.tsv: IN executable and inputs.tsv; OUT four-column native results.
+  original/GHC.Internal.Bignum.Integer.cbd and original/boot-provenance.json
+    IN: corresponding build/float-decode-originals/core/ and root provenance
+        produced by export-boot.py --frontier bignum; OUT copied retained files.
+  pre-core/{FloatDecodeAudit,FloatDecode}.cbd and post-core/same
+    IN: audit/example Haskell sources, shared exporter/plugin with stage option.
+    OUT: four CBDs and pre-ghc/post-ghc scratch files.
+  <stage>-<entry>-audit.json
+    Entries float/double with Direct, Call, Exponent plus floatExampleExponent,
+      doubleExampleExponent. IN: stage CBD pair and original Integer CBD,
+      named entry and auditor/data. OUT: sixteen audit reports.
+  commands/<label>.{stdout,stderr,command.json}
+    Labels native-build, native-oracle, boot-export, pre/post-export,
+      pre/post-<entry>-audit. OUT: corresponding command logs.
+  manifest.json: IN all retained artifacts/logs and source receipt; OUT manifest.
+Additional produced tree build/float-decode-originals/:
+  IN: export-boot.py/plugin plus installed ghc-internal dynamic interfaces;
+      pinned Bignum/{BigNat,Integer,Natural}.{hs,hs-boot}, include/WordSize.h,
+      LICENSE under nih/pinned/ghc-9.14.1/libraries/ghc-internal/ (hs under src/GHC/Internal/).
+  OUT: boot-ghc/ private overlay/objects/interfaces, boot-core/GHC.Internal.Bignum.
+    {BigNat,Integer,Natural}.cbd, copies in core/, boot-provenance.json. Only Integer
+    and provenance are retained in the fixture's artifact receipt.
+Consumer reads manifest/receipt paths, CBDs, TSV and audit reports; mutation
+  controls also write temp CBD/report/stdout/stderr using shared encoder and
+  hardcoded python3 auditor. Missing receipt tables/tool closure as in 023.
+
+025  floating-remainder
+Producer: t/haskell-fixtures/FloatingRemainderFixtures.hs:prepareFloatingRemainder.
+Consumer: src/test/java/thc/runtime/FloatingRemainderTest.java.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor closure;
+  t/fixtures/compiler/FloatingRemainderAudit.hs, FloatingRemainderNative.hs,
+  t/fixtures/core/InverseHyperbolic.hs; native 64-bit GHC 9.14.1.
+Under build/floating-remainder/:
+  inputs.tsv: IN producer requests; OUT space-separated native request rows.
+  native/oracle: IN those three sources/native GHC packages/tools;
+    OUT executable and native/ intermediates.
+  oracle.tsv: IN executable and inputs.tsv; OUT checked seven-column native rows.
+  pre-core/{FloatingRemainderAudit,InverseHyperbolic}.cbd and post-core/same
+    IN: audit/example sources and exporter/plugin, stage option.
+    OUT: four CBDs and stage-ghc/ intermediates.
+  <stage>-<entry>-audit.json
+    Entries asinh/acosh/atanh/min/max x Float/Double, decodeWordsDirect,
+      decodeWordsCall, asinhExample.
+    IN: stage CBD pair, entry and auditor/decoder/data. OUT: twenty-six reports.
+  commands logs: native-build, native-oracle, pre/post-export,
+    pre/post-<entry>-audit, with the three standard suffixes.
+  manifest.json: IN inputs/oracle/native binary, stage CBDs/reports/logs and
+    source receipt; OUT hashes and entry/toolchain inventory.
+Consumer reads inputs, TSV, manifest/receipt paths, CBDs and audit reports;
+  mutation controls also require temp CBD encoder and python3 auditor/report files.
+
+026  sqrt
+Producer: t/haskell-fixtures/SqrtFixtures.hs:prepareSqrt.
+Consumer: src/test/java/thc/runtime/SqrtPrimitiveTest.java.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor;
+  t/fixtures/compiler/SqrtAudit.hs and SqrtAuditNative.hs; GHC 9.14.1/native packages.
+Under build/sqrt/ (whole directory removed at producer start):
+  inputs.tsv: IN producer inputRows (integer patterns plus host Float/Double bit
+    conversions for math inputs); OUT native request file.
+  native/oracle: IN both Haskell sources/GHC tools/packages;
+    OUT executable and native/ interfaces/objects.
+  oracle.tsv: IN executable, inputs.tsv passed as filename argument;
+    OUT checked three-column native results.
+  integer-oracle.tsv: IN oracle stdout filtered to floatCase/doubleCase;
+    OUT subset TSV (consumer hashes it via receipt).
+  post-core/SqrtAudit.cbd: IN audit source/exporter, post-tidy and source notes;
+    OUT CBD and post-ghc/ intermediates. There is no pre stage in this producer.
+  post-audit.json: IN post CBD, all entry names, auditor/decoder/data; OUT report.
+  manifest.json: IN all six artifacts above, source receipt, GHC --info; OUT hashes.
+Consumer directly reads manifest, receipts, CBD, oracle.tsv and post-audit.json.
+  Receipt hashes PrimopTools.hs without executing it, and omits auditor tables.
+  The destructive directory reset prevents independent incremental output edges
+  inside this function until generation is split into owning operations.
+
