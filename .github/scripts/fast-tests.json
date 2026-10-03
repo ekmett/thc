@@ -240,19 +240,19 @@
       "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedMutVar.java": {
-      "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
+      "junit": ["thc.runtime.MutVarTest", "thc.runtime.MutVarNativeTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
     "src/main/java/thc/runtime/ModifiedMutVar.java": {
-      "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
+      "junit": ["thc.runtime.MutVarTest", "thc.runtime.MutVarNativeTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
     "src/main/java/thc/runtime/MutVarModifySite.java": {
-      "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
+      "junit": ["thc.runtime.MutVarTest", "thc.runtime.MutVarNativeTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
     "src/main/java/thc/runtime/MutVarOp.java": {
-      "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
+      "junit": ["thc.runtime.MutVarTest", "thc.runtime.MutVarNativeTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
     "src/main/java/thc/runtime/StablePointers.java": {
@@ -2673,7 +2673,7 @@
         "thc.runtime.OriginalStrerrorNativeTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest",
-        "thc.runtime.MutVarTest",
+        "thc.runtime.MutVarNativeTest",
         "thc.runtime.BoxedCasTest",
         "thc.runtime.StablePointerTest",
         "thc.runtime.ManagedWeakTest",
@@ -2812,7 +2812,7 @@
       "python": []
     },
     "t/haskell-fixtures/MutVarFixtures.hs": {
-      "junit": ["thc.runtime.MutVarTest"],
+      "junit": ["thc.runtime.MutVarNativeTest"],
       "python": []
     },
     "t/haskell-fixtures/StablePointerFixtures.hs": {
@@ -2864,7 +2864,7 @@
       "python": []
     },
     "t/fixtures/compiler/MutVarAudit.hs": {
-      "junit": ["thc.runtime.MutVarTest"],
+      "junit": ["thc.runtime.MutVarNativeTest"],
       "python": []
     },
     "t/fixtures/compiler/LargeLiteralCaseAudit.hs": {
@@ -3568,6 +3568,7 @@
       "thc.runtime.ManagedProcessesTest",
       "thc.runtime.ManagedWeakTest",
       "thc.runtime.MaskFunctionNativeTest",
+      "thc.runtime.MutVarNativeTest",
       "thc.runtime.MutableByteArrayNativeTest",
       "thc.runtime.MutableByteArraySizeTest",
       "thc.runtime.NarrowLiteralProofTest",

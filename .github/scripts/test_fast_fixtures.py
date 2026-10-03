@@ -2175,10 +2175,10 @@ class FixturePreparationTest(unittest.TestCase):
                          {"mode": "selected", "rebuilt": [], "reused": []})
         self.assertEqual(self.calls, [])
 
-    def test_mixed_backend_and_stock_recovery_need_no_exported_fixture(self):
+    def test_direct_runtime_controls_need_no_exported_fixture(self):
         project = Path(__file__).resolve().parents[2]
         _, owners = fast_fixtures._manifest(project)
-        for simple_name in ("MixedBackendContinuationTest", "StockGraphRecoveryTest"):
+        for simple_name in ("MixedBackendContinuationTest", "StockGraphRecoveryTest", "MutVarTest"):
             name = "thc.runtime." + simple_name
             self.assertIn(name, owners)
             self.assertIsNone(owners[name])

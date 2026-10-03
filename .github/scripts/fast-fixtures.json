@@ -72,6 +72,7 @@
     "thc.runtime.CoreTouchTest",
     "thc.runtime.MutableByteArrayContentsTest",
     "thc.runtime.MutableByteArrayTest",
+    "thc.runtime.MutVarTest",
     "thc.runtime.CallMaskSegmentsTest",
     "thc.CoreLinkerTest",
     "thc.CoreForeignArtifactsTest",
@@ -580,7 +581,7 @@
       ]
     },
     "mutvar": {
-      "junit": ["thc.runtime.MutVarTest"],
+      "junit": ["thc.runtime.MutVarNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutvar"]}],
       "outputs": ["build/mutvar"],
       "sources": [
