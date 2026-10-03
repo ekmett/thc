@@ -513,3 +513,32 @@ audited_fixture(hint-trace HintTraceAudit
   OBJECT_DIRS native pre/ghc post/ghc
   OUTPUTS manifest.json oracle.tsv native/oracle
     pre/core/HintTraceAudit.cbd post/core/HintTraceAudit.cbd pre/audit.json post/audit.json)
+
+# 108: saved calls and lazy catch/keepAlive callbacks need independent native
+# Main objects. Literal-case consumers have their own target below.
+audited_fixture(core-continuation ""
+  SOURCES t/fixtures/compiler/CoreContinuationAudit.hs t/fixtures/compiler/CoreContinuationNative.hs
+    t/fixtures/compiler/LazyIOCallbackAudit.hs t/fixtures/compiler/LazyIOCallbackNative.hs
+  OUTPUTS core/CoreContinuationAudit.cbd core/LazyIOCallbackAudit.cbd audit.json lazy-audit.json
+    native-oracle lazy-native-oracle native-output.txt lazy-native-output.txt
+  BYPRODUCTS ghc/CoreContinuationAudit.hi ghc/CoreContinuationAudit.o
+    ghc/LazyIOCallbackAudit.hi ghc/LazyIOCallbackAudit.o
+    native/CoreContinuationAudit.hi native/CoreContinuationAudit.o
+    native/lazy/Main.hi native/lazy/Main.o native/lazy/LazyIOCallbackAudit.hi native/lazy/LazyIOCallbackAudit.o)
+
+set(literal_out "${PROJECT_SOURCE_DIR}/build/large-literal-cases")
+set(literal_outputs)
+foreach(output core/LargeLiteralCaseAudit.cbd audit.json literal-manifest.json literal-native-output.txt literal-native-oracle)
+  list(APPEND literal_outputs "${literal_out}/${output}")
+endforeach()
+add_custom_command(OUTPUT ${literal_outputs}
+  BYPRODUCTS "${literal_out}/ghc/LargeLiteralCaseAudit.hi" "${literal_out}/ghc/LargeLiteralCaseAudit.o"
+    "${literal_out}/native/LargeLiteralCaseAudit.hi" "${literal_out}/native/LargeLiteralCaseAudit.o"
+  COMMAND ${fixture_env} "${fixtures_exe}" large-literal-cases
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/LargeLiteralCaseAudit.hs"
+    ${tool_sources} ${cabal_inputs} ${audit_inputs} ${toolchain_inputs}
+    "${fixtures_exe}" "${compact_exe}" ${plugin_outputs}
+    "${PROJECT_SOURCE_DIR}/bin/export-core.sh" "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate the independent large-literal Core and native oracle")
+add_custom_target(fixture-large-literal-cases DEPENDS ${literal_outputs})

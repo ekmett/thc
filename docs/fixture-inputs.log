@@ -3712,43 +3712,39 @@ Under build/mask-functions/:
   manifest.json: IN source/product/log hashes; no old receipt invalidation.
 Consumer reads receipt/hash files/oracle stdout/CBDs/audits.
 
-108 core-continuation
-Fixture rationale (108 core-continuation)
-Purpose: Check continuation resumption, lazy I/O callbacks and large-literal cases
-  preserve results.
-Produces/consumed result: Three Core modules and native-output files from three native
-  programs.
-Cost and overlap: Continuation behavior is essential; large-literal selection is a
-  separate concern. Split ownership without compiling three native programs or launching
-  many audits for every consumer.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+108 core-continuation / large-literal-cases
+Fixture rationale (108 core-continuation / large-literal-cases)
+Purpose: Check saved calls/lazy callback behavior and, independently, signed/unsigned
+  large-literal selection and lazy tuple cases.
+Produces/consumed result: Named CBDs, one audit per module and native observations.
+Cost and overlap: Literal consumers build only their own tiny program. The two
+  continuation programs use separate object directories and two batched audits.
+Build status: CMake declares single-owner outputs for the two independent groups.
 
-Producer: t/haskell-fixtures/ContinuationFixtures.hs.
-Consumers: thc.runtime.CoreContinuationNativeTest, LargeLiteralCaseNativeTest.
-IN t/fixtures/compiler/{CoreContinuationAudit,LazyIOCallbackAudit,LargeLiteralCaseAudit,
-  CoreContinuationNative,LazyIOCallbackNative}.hs, shared tools/data/native GHC.
+Producer: prepareCoreContinuation / prepareLargeLiteralCases in
+  t/haskell-fixtures/ContinuationFixtures.hs.
+Consumer core-continuation: thc.runtime.CoreContinuationNativeTest.
+IN t/fixtures/compiler/{CoreContinuationAudit,CoreContinuationNative,
+  LazyIOCallbackAudit,LazyIOCallbackNative}.hs and declared shared tools/data/GHC.
 Under build/core-continuation/:
-  core/{CoreContinuationAudit,LazyIOCallbackAudit,LargeLiteralCaseAudit}.cbd, ghc/:
-    IN three audit sources/exporter, pre stage only.
-  literal-<largeInt|largeWordCheck|largeLazy|boxInt>-audit.json:
-    IN LargeLiteralCaseAudit.cbd/auditor.
-  <lazy-action|lazy-handler|keep-alive-scalar|keep-alive-tuple>-audit.json:
-    IN LazyIOCallbackAudit.cbd/auditor.
-  audit.json, <application|overapplication|overapplication-tail|
-    direct-overapplication-tail|compact-scalar|typed-scalar|nested|catch-action|
-    catch-failure|nested-catch|async-payload|tuple-application|tuple-overapplication|
-    tuple-tail-overapplication|tuple-application-failure|tuple-compact|tuple-raise|
-    handler|masked|unmasked|uninterruptible|force-value>-audit.json:
-    IN CoreContinuationAudit.cbd/auditor and corresponding entry.
-  native-oracle, lazy-native-oracle, literal-native-oracle, native/ intermediates:
-    IN matching audit/native sources/GHC; literal audit has its own main.
-  native-output.txt, lazy-native-output.txt, literal-native-output.txt:
-    IN respective binary, observations checked against fixed expectations.
-  literal-manifest.json: IN literal source/producer/literal CBD/literal output hashes.
-Consumers read relevant CBDs/native outputs; literal test also reads receipt/hashes.
-No general receipt. Three native builds share native/ (including Main intermediates).
-Many separate auditor starts inspect the same Core; record cost for later reduction.
+  core/{CoreContinuationAudit,LazyIOCallbackAudit}.cbd, ghc/<module>.{hi,o}:
+    IN the two audit sources/exporter, pre stage.
+  audit.json: IN CoreContinuationAudit.cbd/auditor and 23 named entries.
+  lazy-audit.json: IN LazyIOCallbackAudit.cbd/auditor and four named entries.
+  native-oracle, native/{Main,CoreContinuationAudit}.{hi,o}: IN continuation pair/GHC.
+  lazy-native-oracle, native/lazy/{Main,LazyIOCallbackAudit}.{hi,o}: IN lazy pair/GHC.
+  native-output.txt, lazy-native-output.txt: IN respective binaries; 19 and four rows.
+Consumer reads the two CBDs and both native-output files.
+
+Consumer large-literal-cases: thc.runtime.LargeLiteralCaseNativeTest.
+IN t/fixtures/compiler/LargeLiteralCaseAudit.hs and declared shared tools/data/GHC.
+Under build/large-literal-cases/:
+  core/LargeLiteralCaseAudit.cbd, ghc/LargeLiteralCaseAudit.{hi,o}: IN source/exporter.
+  audit.json: IN CBD/auditor and four entries largeInt,largeWordCheck,largeLazy,boxInt.
+  literal-native-oracle, native/LargeLiteralCaseAudit.{hi,o}: IN source/GHC/main-is.
+  literal-native-output.txt: IN binary; 52 observations.
+  literal-manifest.json: IN source/producer/CBD/native-output hashes.
+Consumer reads the CBD, native rows and receipt; it has no continuation dependency.
 
 109 thread-status
 Fixture rationale (109 thread-status)

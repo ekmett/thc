@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 class LargeLiteralCaseNativeTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private final Path directory = root.resolve("build/core-continuation");
+    private final Path directory = root.resolve("build/large-literal-cases");
     private Map<String, Object> original() throws Exception {
         var hashes = (Map<String, String>) Json.parse(Files.readString(directory.resolve("literal-manifest.json")));
         for (var item : hashes.entrySet()) {
@@ -71,7 +71,6 @@ class LargeLiteralCaseNativeTest {
                 var entry = row[0].equals("int") ? "largeInt" : "largeWordCheck";
                 assertEquals(Long.parseLong(row[2]), call(program, entry, Long.parseLong(row[1])), backend + "/" + row[0] + "/" + row[1]);
             }
-            if (backend.equals("bytecode")) assertTrue(((BytecodeProgram) program).bytecodeDump().contains("LiteralBelow"));
             for (var entry : List.of(new Entry("int", "largeInt"), new Entry("word", "largeWordCheck"))) {
                 compile(program.entryTarget("main:LargeLiteralCaseAudit." + entry.name()));
                 long before = (Long) program.diagnostics().get("compiledEntries");

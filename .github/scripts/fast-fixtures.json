@@ -1201,20 +1201,18 @@
       ]
     },
     "core-continuation": {
-      "junit": ["thc.runtime.CoreContinuationNativeTest", "thc.runtime.LargeLiteralCaseNativeTest"],
+      "cmakeTarget": "fixture-core-continuation",
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "core-continuation"]}],
       "outputs": ["build/core-continuation"],
-      "sources": [
-        "t/haskell-fixtures/ContinuationFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal",
-        "t/fixtures/compiler/CoreContinuationAudit.hs",
-        "t/fixtures/compiler/LargeLiteralCaseAudit.hs",
-        "t/fixtures/compiler/CoreContinuationNative.hs",
-        "t/fixtures/compiler/LazyIOCallbackAudit.hs",
-        "t/fixtures/compiler/LazyIOCallbackNative.hs"
-      ]
+      "sources": ["t/haskell-fixtures/ContinuationFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/CoreContinuationAudit.hs", "t/fixtures/compiler/CoreContinuationNative.hs", "t/fixtures/compiler/LazyIOCallbackAudit.hs", "t/fixtures/compiler/LazyIOCallbackNative.hs"]
+    },
+    "large-literal-cases": {
+      "cmakeTarget": "fixture-large-literal-cases",
+      "junit": ["thc.runtime.LargeLiteralCaseNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "large-literal-cases"]}],
+      "outputs": ["build/large-literal-cases"],
+      "sources": ["t/haskell-fixtures/ContinuationFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/LargeLiteralCaseAudit.hs"]
     },
     "thread-status": {
       "cmakeTarget": "fixture-thread-status",

@@ -64,6 +64,14 @@ class FixturePreparationTest(unittest.TestCase):
                 result = fast_fixtures.prepare_cmake(project, self.selection(name), mock.Mock())
                 self.assertEqual(["fixture-process-lifecycle-native"], result["targets"])
 
+    def test_literal_cases_and_continuations_have_independent_producers(self):
+        project = Path(__file__).resolve().parents[2]
+        for name, target in (("thc.runtime.LargeLiteralCaseNativeTest", "fixture-large-literal-cases"),
+                             ("thc.runtime.CoreContinuationNativeTest", "fixture-core-continuation")):
+            with self.subTest(test=name):
+                result = fast_fixtures.prepare_cmake(project, self.selection(name), mock.Mock())
+                self.assertEqual([target], result["targets"])
+
     def test_every_real_quarantined_fixture_stops_before_toolchain_or_generation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)
