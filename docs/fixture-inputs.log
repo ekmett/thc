@@ -1668,3 +1668,408 @@ Under build/thread-label/:
   manifest.json: IN oracle text/CBD/audits/source receipt; OUT hashes/results.
 Consumer reads receipt paths/CBD/oracle. Executable not hashed; manifest removed
   first; no command logs. Scalar-signature/polyglot/SIMD tables omitted from receipt.
+
+062  original-tcsetattr
+Producer: t/haskell-fixtures/OriginalTcsetattrFixtures.hs.
+Consumer: thc.runtime.OriginalTcsetattrTest; Linux x86_64 only.
+IN: t/fixtures/compiler/OriginalTcsetattrAudit.hs, OriginalTcsetattrNative.hs;
+  producer/Main/FixtureSupport, shared tools, native GHC9.14.1/ghc-internal/unix.
+Under build/original-tcsetattr/:
+  native/oracle: IN native source/native packages/system PTY APIs; OUT executable
+    and native/ intermediates. Source imports determine native module closure.
+  oracle.json: IN native/oracle stdout parsed as termios size and 22 rows;
+    OUT checked image/status/errno observations.
+  <pre|post>/core/OriginalTcsetattrAudit.cbd, THC.InterfaceClosure.cbd
+    IN audit source/exporter/closure=originalTcsetattr/installed interfaces/stage;
+    OUT CBD pair and stage/ghc/.
+  <stage>/originalTcsetattr.audit.json: IN exact CBD pair/shared auditor; OUT report.
+  logs/: ghc-version/info,native-build/run,pre/post-export/audit-originalTcsetattr;
+    OUT standard log triplets. manifest.json reads all above/source hashes.
+Other hosts produce only supported=false manifest with source hashes. Old manifest
+  removed first. Tests read receipts/CBDs/audits/oracle.json AND execute oracle
+  --serve, requiring a working PTY; their own temporary regular files are outputs.
+StdioHostAbi generated runtime resource is an additional test input. Do not treat
+  this as merely recorded-result consumption. Installed interface files not hashed.
+
+063  original-tcgetattr
+Producer: t/haskell-fixtures/OriginalTcgetattrFixtures.hs.
+Consumer: thc.runtime.OriginalTcgetattrTest; Linux x86_64 only.
+IN: t/fixtures/compiler/OriginalTcgetattrAudit.hs, OriginalTcgetattrNative.hs;
+  producer/Main/FixtureSupport, shared tools/GHC9.14.1/ghc-internal/unix/system PTY.
+Under build/original-tcgetattr/:
+  native/oracle: IN native source/packages; OUT executable/native intermediates.
+  oracle.json: IN executable stdout; OUT termios size and 12 image/status/errno rows.
+  <pre|post>/core/OriginalTcgetattrAudit.cbd, THC.InterfaceClosure.cbd
+    IN audit source/exporter/closure=originalTcgetattr/installed interfaces/stage;
+    OUT CBD pair and stage/ghc/ intermediates.
+  <stage>/originalTcgetattr.audit.json: IN exact CBD pair/auditor; OUT report.
+  logs/: ghc-version/info,native-build/run,pre/post-export/audit-originalTcgetattr;
+    OUT log triplets. manifest.json reads all outputs/source hashes.
+Unsupported hosts emit only negative manifest; old manifest removed first.
+Consumer reads receipts/CBDs/audits/oracle and executes native/oracle --serve on a
+  PTY, using generated StdioHostAbi; temporary regular files are test outputs.
+This and 062 need value review against package/FFI coverage; PTY state and buffer
+  transport checks are distinct from retesting libc's own implementation.
+
+064  original-fcntl
+Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalFcntl.
+Consumer: thc.runtime.OriginalFcntlTest; Linux x86_64 LP64 only.
+IN: t/fixtures/compiler/OriginalFcntlAudit.hs, OriginalFcntlNative.hs;
+  built thc-fixtures/shared tools/GHC9.14.1, installed ghc-internal/unix.
+Under build/original-fcntl/:
+  native/oracle: IN native source/packages; OUT executable/intermediates.
+  oracle.json: IN executable run with native/private-file path; OUT constants,
+    four shared-status rows and invalid-call results. private-file is scratch.
+  <pre|post>/core/OriginalFcntlAudit.cbd, THC.InterfaceClosure.cbd
+    IN audit source/exporter/14 closure roots/installed interfaces; OUT CBDs/ghc/.
+  <stage>/<name>.audit.json: IN stage pair/auditor/14 names; OUT 28 reports.
+  logs/: ghc-version/info,native-build/run,pre/post-export,stage-audit-name;
+    OUT log triplets. manifest.json reads artifacts/source hashes; old removed.
+Unsupported host emits only negative manifest. Tests read receipts/CBDs/reports/
+  oracle.json/generated StdioHostAbi and create their own temporary files.
+InstalledCoreFixtures.hs is listed by CI but this producer does not acquire whole
+  installed archives. Retest of 12 package constants is a value-review candidate.
+
+065  original-errno
+Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalErrno.
+Consumer: thc.runtime.OriginalErrnoTest; Linux/macOS LP64.
+IN: t/fixtures/compiler/OriginalErrnoAudit.hs, OriginalErrnoNative.hs;
+  built thc-fixtures/shared tools/native GHC9.14.1/ghc-internal package.
+Under build/original-errno/:
+  native/oracle: IN native source/packages; OUT executable/intermediates.
+  native/observations.txt: IN executable run with this output path; OUT five
+    seven-value observations; stale file removed before execution.
+  oracle.json: IN observations.txt parsed by producer; OUT named results.
+  <pre|post>/core/OriginalErrnoAudit.cbd, THC.InterfaceClosure.cbd
+    IN audit source/exporter/closure=originalResetErrno/source-notes=true/stage;
+    OUT CBD pairs/ghc/ intermediates.
+  <stage>/originalResetErrno.audit.json: IN CBD pair/auditor; OUT report.
+  logs/: ghc-version/info,native-build/run,pre/post-export/audit-originalResetErrno;
+    OUT log triplets. manifest.json consumes all above/source hashes.
+Tests read manifest/receipts/CBD/audits/oracle. Unsupported hosts get only negative
+  manifest. No whole installed acquisition here. Exact FCall count assertion also
+  needs distinction from the actual errno transport/semantics contract.
+
+066  original-process-identity
+Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalProcessIdentity.
+Consumer: thc.runtime.OriginalProcessIdentityTest; shared installed outputs also
+  consumed by other original-* groups (record each edge as those are scanned).
+IN: t/fixtures/compiler/OriginalProcessIdentityAudit.hs, OriginalProcessIdentityNative.hs;
+  src/runtime/THC/Exception.hs and THC/Internal/Exception.hs; built thc-fixtures,
+  shared exporter/auditor/GHC9.14.1/ghc-internal/pinned unix, InstalledCoreFixtures.
+Under build/original-process-identity/:
+  native/oracle: IN native source/packages; OUT executable/intermediates.
+  native/observations.txt: IN executable; OUT live pid,parentPid,euid.
+  oracle.json: IN that file parsed by producer; OUT named values (not deterministic).
+  <pre|post>/core/OriginalProcessIdentityAudit.cbd, THC.InterfaceClosure.cbd
+    IN audit source/two closure roots/exporter/installed interfaces/stage;
+    OUT CBD pairs/ghc/ intermediates.
+  <stage>/<originalGetPid|originalGetEuid>.audit.json: IN pair/auditor; OUT reports.
+  runtime-core/THC.Exception.cbd, THC.Internal.Exception.cbd
+    IN runtime Haskell sources/exporter/post-tidy; OUT CBDs/runtime-ghc/.
+  installed/packages.json, bundles/*.zip, unit-core/v3/<digest>/*:
+    IN shared InstalledCoreFixtures flow below with additional library unix;
+    OUT authentic installed bundle copies, published module CBDs and publication.json.
+  logs/: ghc-version/info,unix-unit,native-build/run,runtime-export,stage-export/
+    audit-entry and installed-helper commands; OUT log triplets.
+  manifest.json: IN all above/installed publications/source receipt; OUT hashes.
+Consumer reads receipts/Core/audits/oracle, so even hashing couples this test to the
+  full acquisition. Unsupported platforms get negative manifest; old removed first.
+
+Shared installed fixture artifact flow (read once for later entries)
+Owner: t/haskell-fixtures/InstalledCoreFixtures.hs:prepareInstalledCoreProfile.
+IN: selected GHC/GHC_PKG/CABAL; built thc-fixtures and production Driver modules;
+  thc.cabal/Cabal package closure; dist-newstyle/cache/plan.json; installed package
+  registrations, their transitive interfaces/native libraries; target-layout.c.
+  Optional THC_INSTALLED_CORE_GHC and THC_INSTALLED_CORE_GHC_PKG select a complete
+  Core provider; THC_INSTALLED_CORE_GHC_SOURCE or explicit source selects foreign
+  annotation rebuild. THC_CACHE_HOME selects shared cache location.
+Artifacts relative to caller's fixture directory:
+  logs/helper-build.*: Cabal builds exe:thc and exe:thc-interface (shared dist-newstyle).
+  logs/helper-location.*, driver-location.*: discover the two executables.
+  installed/staging/: Project.prepareInstalledBundle uses selected interfaces/
+    native libraries and src/driver/cbits/target-layout.c to produce/validate bundle.
+  Shared cache: IN interface/compiler/native identity; OUT production bundles;
+    missing retained Core invokes Wired.preparePinnedInterfaces, which additionally
+    reads build/compiler/plugin.json and its packageDb/unitId/sharedLibrary.
+    Foreign profile additionally consumes supplied compiler source, registered
+    Cabal library and driver executable hash. Exact provider/cache files unresolved
+    until shared production driver scan; do not infer a complete dependency closure.
+  installed/bundles/<unit-id>.zip: IN corresponding verified cache bundle;
+    OUT fixture-local copy after hash comparison.
+  installed/unit-core/v3/<bundle-hash>/: IN copied bundle/Driver.CoreSymbols;
+    OUT per-module CBD files and publication.json, named by returned package records.
+  installed/packages.json: IN all published unit records/dependency closure;
+    OUT format thc-core-packages, schema 1.
+Returned artifacts exclude staging/helper binaries and include package manifest,
+  ZIPs, published CBDs/publications. Caller hashes these; command logs include
+  version, helper build/locations, provider version if set, package registrations.
+This helper assumes compiler/plugin.json already exists when fallback is needed;
+  the helper's Cabal build does not publish it. Make that producer dependency explicit.
+
+067  original-termios
+Producer: t/haskell-fixtures/OriginalTermiosFixtures.hs.
+Consumer: thc.runtime.OriginalSavedTermiosTest; Linux x86_64 only.
+IN: t/fixtures/compiler/OriginalSavedTermiosAudit.hs, OriginalSavedTermiosNative.hs;
+  producer/Main/FixtureSupport/shared tools/native GHC9.14.1/ghc-internal.
+Under build/original-termios/:
+  saved/native/oracle: IN native source/package RTS; OUT executable/intermediates.
+  saved/oracle.json: IN oracle stdout; OUT 28 pointer-retention rows.
+  saved/<pre|post>/core/OriginalSavedTermiosAudit.cbd, THC.InterfaceClosure.cbd
+    IN audit source/exporter/two saved-termios roots/stage; OUT CBD pairs/ghc/.
+  saved/<stage>/<originalGetSavedTermios|originalSetSavedTermios>.audit.json
+    IN CBD pair/auditor; OUT four reports.
+  logs/: ghc-version/info,saved-native-build/run,saved-stage-export/audit-entry;
+    OUT log triplets. manifest.json reads all artifacts/source hashes.
+Consumer reads receipts/CBD/audits/oracle. Unsupported hosts get negative manifest.
+This tests retained-pointer ownership, not the termios image protocol of 062/063.
+
+068  native-addresses (also native-malloc)
+Producer: t/haskell-fixtures/NativeAddressFixtures.hs.
+Consumers: thc.runtime.NativeAddressTest, NativeMallocTest.
+IN: t/fixtures/compiler/NativeAddressNative.hs, NativeMallocNative.hs;
+  producer/Main/FixtureSupport/thc.cabal/built thc-fixtures/native GHC9.14.1.
+  NativeMallocTest also reads tracked src/test/resources/core/original-malloc-descriptors.json.
+  Producer hashes that JSON but does not use it to calculate the native result.
+Under build/native-addresses/:
+  native/oracle[.exe]: IN address source/native packages; OUT executable/intermediates.
+  oracle.json: IN executable stdout; OUT nine boolean observations.
+  logs/ghc-version.*,native-build.*,native-oracle.*: OUT standard log triplets.
+  manifest.json: IN source receipt/oracle.json only; OUT hashes.
+Under build/native-malloc/:
+  native/oracle[.exe]: IN malloc source/native packages; OUT executable/intermediates.
+  oracle.txt: IN executable stdout; OUT four alias/copy rows.
+  logs/native-build.*,native-oracle.*: OUT log triplets.
+  manifest.json: IN source receipt (including descriptor JSON)/oracle.txt; OUT hashes.
+Both old manifests removed. Neither receipt hashes native binary/logs. Windows
+  uses .exe and omits -dynamic. Tests consume oracle/receipts and descriptor JSON;
+  these producers do not export any Core or require the Core auditor.
+
+069  original-open
+Producer: t/haskell-fixtures/OriginalOpenFixtures.hs.
+Consumers: thc.runtime.OriginalOpenTest, LoomOriginalOpenTest.
+IN: t/fixtures/compiler/OriginalOpenAudit.hs, OriginalOpenNative.hs,
+  OriginalOpenRequestNative.hs; src/main/c/native-open-request.c;
+  shared exporter/auditor/GHC9.14.1/ghc-internal/unix and Driver.NativeCache's
+  SDK compiler/linker flags, system headers/pthread.
+Under build/original-open/:
+  native/oracle: IN native driver/request module/C implementation/native packages,
+    -threaded, THC_OPEN_REQUEST_TEST, C11 warnings and SDK flags;
+    OUT executable/intermediates.
+  native/cases/: IN executable's generated cases; OUT scratch filesystem tree,
+    removed before each native run. oracle.json: IN oracle stdout; OUT 13 cases.
+  <pre|post>/core/OriginalOpenAudit.cbd, THC.InterfaceClosure.cbd
+    IN audit source/exporter/unsafe,safe,interruptible closure roots/stage;
+    OUT CBD pair and stage/ghc/.
+  <stage>/<originalOpen|originalOpenSafe|originalOpenInterruptible>.audit.json
+    IN CBD pair/auditor; OUT six reports.
+  logs/: ghc-version/info,native-build/run,stage-export/audit-entry;
+    OUT log triplets. manifest.json reads all published artifacts/source receipt.
+Linux x86_64 and macOS x86_64/arm64 supported; other hosts only negative manifest.
+Tests read receipts/Core/audits/oracle and generated StdioHostAbi/native open
+  transport resources. They create FIFOs using mkfifo, temporary files/symlinks;
+  read /proc on Linux, run /bin/sh for umask on macOS. Loom class reuses same
+  artifacts/behavior with different thread hosting. Exact binding/lambda counts
+  in OriginalOpenTest are another compiler-shape review candidate.
+
+070  rts-diagnostics
+Producer: t/haskell-fixtures/RtsDiagnosticFixtures.hs.
+Consumer: thc.runtime.RtsDiagnosticsTest.
+IN: t/fixtures/compiler/RtsDiagnosticsNative.hs; producer/Main/FixtureSupport,
+  built thc-fixtures/native GHC9.14.1/ghc-internal.
+Under build/rts-diagnostics/:
+  native/oracle: IN native source/package RTS, -O2 -dynamic; OUT executable/objects.
+  logs/<case>.stdout/.stderr/.command.json: IN executable with ten CString cases,
+    trace-nul,stack,heap; OUT 13 command observations. version/native-build logs too.
+  oracle.json: IN those streams + producer payload/offset model; OUT byte results.
+  manifest.json: IN oracle/logs/source hashes; OUT receipt; executable not hashed.
+Test reads oracle/receipt paths and uses in-memory synthetic ABI controls. No CBD
+  producer/encoder/auditor here. Old manifest removed before work.
+
+071  rts-shutdown
+Producer: t/haskell-fixtures/RtsShutdownFixtures.hs.
+Consumer: thc.runtime.RtsShutdownTest.
+IN: t/fixtures/compiler/RtsShutdownNative.hs; producer/Main/FixtureSupport,
+  built thc-fixtures/native GHC9.14.1/unix and host signal semantics.
+Under build/rts-shutdown/:
+  native/oracle: IN native source/native packages, -O2 -dynamic; OUT executable/objects.
+  logs/signals.stdout: IN oracle --signals; OUT native TERM/STOP numbers.
+  logs/<exit-0..4|term|stop>-<0|1>.*: IN oracle/case/native signal numbers;
+    OUT 14 exit/signal observations, stdout/stderr/command.json per case.
+  logs/version.*,native-build.*: OUT tool logs.
+  oracle.json: IN successful expected-status checks; OUT 14 recorded cases.
+  manifest.json: IN oracle/logs/source hashes; OUT receipt; executable not hashed.
+Test reads cases/receipts and builds controls in memory. Guest context shutdown
+  is THC-owned behavior; no CBD export/audit needed. Old manifest removed first.
+
+072  original-rts-locks
+Producer: t/haskell-fixtures/OriginalRtsLocksFixtures.hs; --require-supported
+  enables four auditor outputs and is set by the CI entry.
+Consumer: thc.runtime.OriginalRtsLocksTest.
+IN: t/fixtures/compiler/OriginalRtsLocksAudit.hs; built thc-fixtures GHC API/
+  THC.Plugin/compact components; selected GHC9.14.1/GHC_PKG libdir, package
+  registration and installed GHC/Internal/IO/FD.hi; native RTS/interpreter.
+Under build/original-rts-locks/:
+  declarations.cbd: IN installed interface unfoldings; OUT foreign-declaration subset.
+  declarations.json: IN installed path/subset metadata; OUT diagnostic receipt.
+  template-pre.cbd: IN source compiled/simplified by GHC API; OUT original template.
+  pre.cbd, post.cbd: IN template + original lock/unlock FCallIds/type equality;
+    OUT specialized Core and ghc/ intermediates.
+  oracle.json: IN GHC-compiled specialized native expressions executed in producer
+    against RTS state and errno; OUT 14 observations. No standalone oracle executable.
+  <pre|post>-<originalLock|originalUnlock>.audit.json: IN stage CBD/auditor;
+    OUT four reports when requireSupported.
+  logs/version.*,info.*,libdir.*,imports.*,<stage>-<entry>.*: OUT log triplets.
+  manifest.json: IN six main outputs/audits/logs/source receipt; OUT hashes.
+Consumer reads receipts/Core/declaration evidence/oracle/audits. Installed interface
+  not hashed and old manifest not removed. Declaration/template archival value
+  should be reviewed separately from the useful THC lock ownership semantics.
+
+073  original-strerror
+Producer: t/haskell-fixtures/OriginalStrerrorFixtures.hs.
+Consumer: thc.runtime.OriginalStrerrorNativeTest.
+IN: t/fixtures/compiler/OriginalStrerrorNative.hs; built thc-fixtures/FixtureSupport,
+  native GHC9.14.1/ghc-internal/libc; oracle environment LC_ALL=C.
+Under build/original-strerror/:
+  native/oracle: IN native source/package headers/libraries; OUT executable/objects.
+  oracle.json: IN executable stdout; OUT two error messages/four bounded-buffer rows.
+  logs/ghc-version.*,native-build.*,native-oracle.*: OUT log triplets.
+  manifest.json: IN native source and oracle.json only; OUT hashes.
+Consumer also calls OriginalStdioChecks.nativeModules: reads 066's manifest,
+  installed/packages.json, all receipt artifacts, module metadata, native link
+  records, runtime-core exception CBDs and their selected installed closure.
+That helper resolves/link-loads package cbits. This is an explicit edge to 066,
+  not merely this fixture's native executable. Receipt omits producer/tool inputs;
+  old manifest remains during generation. Candidate consolidate with general
+  package/native buffer transport tests rather than maintain a strerror harness.
+
+074  original-fd-ready
+Producer: t/haskell-fixtures/OriginalFdReadyFixtures.hs.
+Consumer: thc.runtime.OriginalFdReadyNativeTest.
+IN: t/fixtures/compiler/OriginalFdReadyAudit.hs, OriginalFdReadyAuditNative.hs;
+  built thc-fixtures/GHC API/THC.Interface/Plugin/compact; GHC9.14.1/GHC_PKG,
+  installed GHC/Internal/IO/FD.hi and package interfaces/libraries, auditor closure.
+Under build/original-fd-ready/:
+  native/oracle, native/OriginalFdReadyAudit.hi: IN both sources/native GHC with
+    -fwrite-if-simplified-core, ghc-internal/unix; OUT executable/interface/objects.
+  native/private-file: IN oracle execution's scenario data; OUT recorded file.
+  oracle.json: IN oracle stdout (168 rows); OUT named readiness observations.
+  OriginalFDDeclarations.cbd: IN installed FD.hi unfoldings; OUT declaration subset.
+  OriginalFdReadyAudit.cbd: IN generated template .hi + installed safe/unsafe FCallIds;
+    OUT adapted executable Core.
+  <originalReadySafe|originalReadyUnsafe>.audit.json: IN adapted CBD/auditor;
+    OUT two reports.
+  negative/<label>.cbd: IN adapted CBD decoded/mutated/reencoded by built compact
+    library; OUT ten descriptor controls. Labels: wrong-unit,non-function,
+    wrong-convention,interruptible,wrong-arity,wrong-supplied-arity,signed-cbool,
+    machine-timeout,scalar-state,machine-result.
+  negative/<label>-<entry>.audit.json: IN control CBD/auditor/each entry;
+    OUT 20 rejected reports.
+  logs/: ghc-version/info/libdir,ghc-internal-imports,native-build/observations,
+    audit-entry,negative-label-entry; OUT log triplets.
+  manifest.json: IN executable,private-file,oracle,all CBDs/audits/logs/source receipt;
+    OUT hashes. Consumer reads these receipts/CBDs/oracle/reports, creates own files.
+Old manifest not invalidated; consumed installed FD.hi omitted from hashes.
+
+075  original-posix-stat (ten producers behind one indexed group)
+Dispatcher: t/haskell-fixtures/OriginalPosixStatFixtures.hs:prepareOriginalPosixStat.
+Linux only; other hosts write build/original-posix-stat/manifest.json supported=false.
+All ten consumers live in thc.runtime; their names follow below. Shared inputs:
+  built thc-fixtures/FixtureSupport/Main, GHC9.14.1/GHC_PKG/native package closure,
+  THC.Plugin/Interface, auditor/decoder/data tables. Runtime tests also need generated
+  StdioHostAbi/native filesystem transport; they create their own scratch trees.
+
+A. OriginalPosixStatFixtures.hs -> build/original-posix-stat/
+   Consumer OriginalFstatTest.
+   native/oracle: IN t/fixtures/compiler/OriginalPosixStatNative.hs and its audit
+     module OriginalPosixStatAudit.hs, ghc-internal/native GHC; OUT binary/objects.
+   oracle.json: IN native/oracle run with native/ scratch path; OUT sizeof/stat rows.
+   <pre|post>/core/OriginalPosixStatAudit.cbd, THC.InterfaceClosure.cbd:
+     IN audit source/exporter/installed interfaces, originalFstat/Errno closures;
+     OUT stage CBD pairs/ghc/ intermediates.
+   <stage>/<entry>.audit.json: IN pair/auditor/two entries; OUT four reports.
+   logs/ghc-version,ghc-info,native-build,native-run,stage-export/audit-entry:
+     OUT standard triplets. manifest.json reads above/source hashes. Old manifest
+     is not removed before work.
+
+B. OriginalPathStatFixtures.hs -> build/original-path-stat/
+   Consumer OriginalPathStatTest.
+   IN t/fixtures/compiler/OriginalPathStatAudit.hs; installed ghc-internal
+     GHC/Internal/System/Posix/Internals.hi and unix System/Posix/Files/PosixString.hi.
+   Entries pathStat,pathLstat,unixPathLstat; OUT common artifacts below.
+C. OriginalPathModeFixtures.hs -> build/original-path-mode/
+   Consumer OriginalPathModeTest.
+   IN t/fixtures/compiler/OriginalPathModeAudit.hs; installed ghc-internal
+     GHC/Internal/System/Posix/Internals.hi and unix System/Posix/Directory.hi.
+   Entries pathMkdir,pathChmod; OUT common artifacts below.
+D. OriginalPathLinkFixtures.hs -> build/original-path-link/
+   Consumer OriginalPathLinkTest.
+   IN t/fixtures/compiler/OriginalPathLinkAudit.hs; installed ghc-internal
+     GHC/Internal/System/Posix/Internals.hi and unix System/Posix/Files.hi.
+   Entries pathSymlink,pathReadlink,pathRename; OUT common artifacts below.
+E. OriginalPathAccessFixtures.hs -> build/original-path-access/
+   Consumer OriginalPathAccessTest.
+   IN t/fixtures/compiler/OriginalPathAccessAudit.hs; installed ghc-internal
+     GHC/Internal/System/Posix/Internals.hi; entry pathAccess.
+   OUT common artifacts below. Reads current credentials/permissions in oracle.
+F. OriginalUnlinkAtFixtures.hs -> build/original-unlinkat/
+   Consumer OriginalUnlinkAtTest.
+   IN t/fixtures/compiler/OriginalUnlinkAtAudit.hs; installed directory
+     System/Directory/Internal/Posix.hi; entry pathUnlinkAt.
+   ghc/stdio-abi-probe: IN src/main/c/stdio-abi-probe.c, CC/system headers;
+     OUT native ABI probe. logs/abi-run.stdout: IN probe; OUT JSON constants
+     AT_FDCWD/AT_REMOVEDIR/O_RDONLY consumed in oracle. OUT common artifacts below.
+G. OriginalFstatAtFixtures.hs -> build/original-fstatat/
+   Consumer OriginalFstatAtTest.
+   IN t/fixtures/compiler/OriginalFstatAtAudit.hs; same directory interface as F;
+     entry pathFstatAt. Independently produces its own ghc/stdio-abi-probe and
+     logs/abi-run.stdout from the SAME C source, consuming AT_FDCWD,
+     AT_SYMLINK_NOFOLLOW/AT_EMPTY_PATH/O_RDONLY. OUT common artifacts below.
+H. OriginalCurrentDirectoryFixtures.hs -> build/original-current-directory/
+   Consumer OriginalCurrentDirectoryTest.
+   IN t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs; built fixture executable
+     launches itself with THC_CURRENT_DIRECTORY_FIXTURE_CHILD=1 to isolate chdir.
+   vendor/archives/unix-2.8.8.0.tar.gz: IN pinned Hackage URL/curl if absent;
+     OUT archive with hard-coded SHA256 check.
+   unix-source-<timestamp>/unix-2.8.8.0/**: IN archive/tar; OUT NEW extracted tree.
+   unix.project: IN absolute extracted path/shared/os-string/retained-Core options;
+     OUT Cabal project. unix-dist/**: IN project/extracted sources/Cabal/native
+     toolchain/offline dependencies; OUT Unix library/interfaces/private package DB.
+   IN that rebuilt System/Posix/Directory/PosixPath.hi; entries pathChdir/pathGetCwd;
+     OUT common artifacts below plus unix-source.json (source hashes/DB/unit),
+     logs/unix-download (conditional),unix-extract,unix-build,native-child triplets.
+   Coordinator reads and rewrites child manifest to add native-child log hashes.
+I. OriginalDirectoryStreamsFixtures.hs -> build/original-directory-streams/
+   Consumer OriginalDirectoryStreamsTest.
+   IN t/fixtures/compiler/OriginalDirectoryStreamsAudit.hs; H's unix-source.json,
+     every source it hashes, recorded private DB/unit registration, rebuilt
+     System/Posix/Directory/{PosixPath,Common}.hi. Missing receipt/DB invokes H.
+   unix-source.json: IN H's receipt; OUT copy. Entries directoryOpen/FdOpen/Close/
+     Read/Name/Free; OUT common artifacts below. Hashes interfaces/registration too.
+J. OriginalDirectoryPathsFixtures.hs -> build/original-directory-paths/
+   Consumer OriginalDirectoryPathsTest.
+   IN t/fixtures/compiler/OriginalDirectoryPathsAudit.hs; installed ghc-internal
+     GHC/Internal/System/Environment/ExecutablePath.hi and unix
+     System/Posix/Directory/PosixPath.hi (not H's private DB).
+   Entries pathRemoveDirectory/executableReadlink; OUT common artifacts below.
+
+Common file flow for B-J, within EACH directory (distinct owners):
+  pre.cbd, post.cbd: IN its audit source + genuine FCallIds from named interfaces,
+    GHC API specialization/simplify/tidy; OUT two CBDs and ghc/ intermediates.
+  native-paths/: IN producer's case model; OUT private files/directories/symlinks,
+    removed before regeneration. Source methods execute native compiled expressions
+    through GHC's in-process interpreter; no standalone oracle binary.
+  oracle.json: IN native expression results and scratch-tree observations;
+    OUT structured expected behavior.
+  <pre|post>-<entry>.audit.json: IN matching CBD/auditor; OUT one report per entry.
+  logs/{version,libdir,imports,unit,ghc-imports,stage-audit-entry}.*:
+    OUT stdout/stderr/command.json; F/G add abi-compile/run logs.
+  manifest.json: IN CBD/oracle/audits/logs and selected source hashes; OUT receipt,
+    removed before generation. H/I add their source/interface/package evidence.
+Consumers read matching CBD/oracle/audits/manifests and receipt paths; directory
+  streams additionally reads unix-source.json. Some inspect /proc/self/cwd.
+Most installed-interface inputs are unhashed; copied source history is not a
+  substitute for a dependency. H/I require retained Core; B-G/J use unfoldings.
+Value review: ten separately maintained libc/Unix harnesses, repeated source
+  rebuilding and per-fixture ABI compiles. Preserve only THC boundary/lifetime/raw
+  path semantics that package/general FFI tests do not already establish.
