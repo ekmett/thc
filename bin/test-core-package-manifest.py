@@ -2,7 +2,12 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Package manifests reject stale, mismatched and pre-Tidy Core artifacts."""
+"""Package manifests reject stale, mismatched and pre-Tidy Core artifacts.
+
+Consumes built thc-fixtures and thc-compact tools; writes only temporary CBD
+models. CMake declares their producers and supplies THC_FIXTURES/THC_COMPACT.
+Standalone invocation may locate existing Cabal outputs but never builds them.
+"""
 
 import hashlib
 import gc
@@ -30,9 +35,14 @@ def fixture_executable():
         return configured
     root = Path(__file__).resolve().parent.parent
     cabal = os.environ.get('CABAL', 'cabal')
-    subprocess.run([cabal, 'build', 'exe:thc-fixtures', 'exe:thc-compact', '--offline'], cwd=root, check=True)
-    return subprocess.check_output([cabal, 'list-bin', 'exe:thc-fixtures', '--offline'],
-                                   cwd=root, text=True).strip()
+    options = [f'--with-compiler={os.environ["GHC"]}'] if os.environ.get('GHC') else []
+    if os.environ.get('GHC_PKG'):
+        options.append(f'--with-hc-pkg={os.environ["GHC_PKG"]}')
+    executable = subprocess.check_output([cabal, 'list-bin', 'exe:thc-fixtures', '--offline', *options],
+                                        cwd=root, text=True).strip()
+    if not Path(executable).is_file():
+        raise RuntimeError('Missing thc-fixtures input; build fixture-tools with CMake first')
+    return executable
 
 
 class FixtureExecutableTest(unittest.TestCase):
@@ -47,33 +57,25 @@ class FixtureExecutableTest(unittest.TestCase):
         build.assert_not_called()
         locate.assert_not_called()
 
-    def test_default_encoder_and_decoder_are_built_once_before_location_and_reuse(self):
-        commands = []
-        def build(argv, **kwargs):
-            commands.append(argv)
-            self.assertEqual(dict(cwd=Path(__file__).resolve().parent.parent, check=True), kwargs)
-        def locate(argv, **kwargs):
-            commands.append(argv)
-            self.assertEqual(2, len(commands), 'build must finish before locating the encoder')
-            self.assertEqual(dict(cwd=Path(__file__).resolve().parent.parent, text=True), kwargs)
-            return '/built/encoder\n'
-        with patch.dict(os.environ, {'THC_FIXTURES': '', 'CABAL': 'selected-cabal'}), \
-                patch.object(subprocess, 'run', side_effect=build), \
-                patch.object(subprocess, 'check_output', side_effect=locate):
-            self.assertEqual('/built/encoder', fixture_executable())
-            self.assertEqual('/built/encoder', fixture_executable())
-        self.assertEqual([['selected-cabal', 'build', 'exe:thc-fixtures', 'exe:thc-compact', '--offline'],
-                          ['selected-cabal', 'list-bin', 'exe:thc-fixtures', '--offline']], commands)
-
-    def test_failed_codec_build_cannot_reuse_a_previous_executable(self):
-        with patch.dict(os.environ, {'THC_FIXTURES': '', 'CABAL': 'selected-cabal'}), \
-                patch.object(subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'cabal')) as build, \
-                patch.object(subprocess, 'check_output') as locate, \
-                self.assertRaises(subprocess.CalledProcessError):
-            fixture_executable()
-        build.assert_called_once_with(['selected-cabal', 'build', 'exe:thc-fixtures', 'exe:thc-compact', '--offline'],
-                                      cwd=Path(__file__).resolve().parent.parent, check=True)
-        locate.assert_not_called()
+    def test_standalone_lookup_uses_selected_toolchain_without_building(self):
+        with TemporaryDirectory() as temporary:
+            selected = Path(temporary) / 'encoder'
+            selected.touch()
+            with patch.dict(os.environ, {'THC_FIXTURES': '', 'CABAL': 'selected-cabal',
+                                        'GHC': 'selected-ghc', 'GHC_PKG': 'selected-ghc-pkg'}), \
+                    patch.object(subprocess, 'run') as build, \
+                    patch.object(subprocess, 'check_output', return_value=str(selected) + '\n') as locate:
+                self.assertEqual(str(selected), fixture_executable())
+                self.assertEqual(str(selected), fixture_executable())
+                build.assert_not_called()
+                locate.assert_called_once_with(
+                    ['selected-cabal', 'list-bin', 'exe:thc-fixtures', '--offline',
+                     '--with-compiler=selected-ghc', '--with-hc-pkg=selected-ghc-pkg'],
+                    cwd=Path(__file__).resolve().parent.parent, text=True)
+                selected.unlink()
+                fixture_executable.cache_clear()
+                with self.assertRaisesRegex(RuntimeError, 'Missing thc-fixtures input'):
+                    fixture_executable()
 
 
 class CompactExecutableTest(unittest.TestCase):

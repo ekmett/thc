@@ -4,7 +4,7 @@
 # Gradle owns Java task freshness. Its project state has one writer at a time.
 set_property(GLOBAL APPEND PROPERTY JOB_POOLS gradle=1)
 set(ci_env "${CMAKE_COMMAND}" -E env "GHC=${GHC}" "GHC_PKG=${GHC_PKG}"
-  "CABAL=${CABAL}" "THC_COMPACT=${compact_exe}")
+  "CABAL=${CABAL}" "THC_FIXTURES=${fixtures_exe}" "THC_COMPACT=${compact_exe}")
 set(ci_runner "${Python3_EXECUTABLE}" .github/scripts/fast_ci.py)
 set(ci_reports "${PROJECT_SOURCE_DIR}/build/ci/check-results")
 add_custom_target(ci-commit)
@@ -64,7 +64,7 @@ if(python_count GREATER 0)
     get_filename_component(name "${script}" NAME_WE)
     set(dependencies "${PROJECT_SOURCE_DIR}/${script}")
     if(name STREQUAL "test-audit-core" OR name STREQUAL "test-core-package-manifest")
-      list(APPEND dependencies "${encoder_path}" "${compact_exe}")
+      list(APPEND dependencies "${fixtures_exe}" "${compact_exe}")
     endif()
     add_custom_target("ci-${name}"
       COMMAND ${ci_env} ${ci_runner} check-command --report-dir "${ci_reports}/${name}" --
