@@ -888,12 +888,16 @@ def fixture_components(manifest):
 
 
 def cadence_assignments(manifest, owners, policy):
+    import fast_fixtures
     scheduled = policy["cadence"]
     nightly = set(scheduled["nightlyFixtures"])
     if nightly - set(manifest["groups"]):
         raise SelectionError("Unknown nightly fixture: " + repr(sorted(nightly - set(manifest["groups"]))))
-    components = fixture_components(manifest)
-    nightly = {name for name, component in components.items() if component & nightly}
+    # Only consumers inherit an expensive prerequisite's cadence. A shared tool
+    # must not pull its other consumers into nightly alongside one costly user.
+    for name in fast_fixtures._group_order(manifest, manifest["groups"]):
+        if nightly.intersection(manifest["groups"][name].get("requires", [])):
+            nightly.add(name)
     assigned = {name: "nightly" if owner in nightly else
                 "hourly" if name in scheduled["hourlyJunit"] else "commit"
                 for name, owner in owners.items()}

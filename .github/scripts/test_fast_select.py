@@ -134,6 +134,19 @@ class FastSelectionTest(unittest.TestCase):
         with self.assertRaisesRegex(select.SelectionError, "Unknown CI group"):
             select.group_selection(self.repo, "consumer", cadence="nightly")
 
+    def test_nightly_consumer_does_not_move_shared_tools_or_other_consumers(self):
+        manifest = self.cadence_fixture(hourly=["example.LeafTest"], nightly=["consumer"])
+        manifest["fixtureFreeJunit"].remove("example.SmokeTest")
+        manifest["groups"]["provider"]["junit"].append("example.SmokeTest")
+        self.write(".github/scripts/fast-fixtures.json", json.dumps(manifest))
+        self.commit()
+        for cadence, expected in (("commit", {"example.SmokeTest"}),
+                                  ("hourly", {"example.LeafTest"}),
+                                  ("nightly", {"example.OtherTest"})):
+            with self.subTest(cadence=cadence):
+                actual = {name for tests in select.groups(self.repo, cadence=cadence).values() for name in tests}
+                self.assertEqual(expected, actual)
+
     def test_nightly_provider_moves_transitive_consumers_and_overrides_hourly(self):
         import fast_fixtures
         manifest = self.cadence_fixture(hourly=["example.OtherTest"], nightly=["provider"])
