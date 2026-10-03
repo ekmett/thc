@@ -11,17 +11,6 @@
 --   owner outputs.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 065.
 --
--- Fixture rationale (066 original-process-identity)
--- Purpose: Check process identity calls execute through ordinary package linkage.
--- Produces/consumed result: CBDs, oracle.json and installed package/runtime modules reused
---   by other groups.
--- Cost and overlap: No standalone libc identity harness is justified. Keep package-call
---   smoke only; move shared package acquisition to its own owner and never cache live
---   PID/UID observations as stable results.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
--- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 066.
---
 -- Fixture rationale (080 original-stdio-read)
 -- Purpose: Check reads preserve buffer contents, lengths, EOF and file-position behavior.
 -- Inputs: OriginalStdioReadAudit.hs/Native.hs, embedded requests/payload, selected
@@ -45,7 +34,7 @@
 --
 -- Production of native observations only. Independent semantics, host ABI and
 -- exact original FCall proofs are checked by the Java fixture consumers.
-module OriginalStdioFixtures (prepareOriginalStdioRead, prepareOriginalErrno, prepareOriginalProcessIdentity) where
+module OriginalStdioFixtures (prepareOriginalStdioRead, prepareOriginalErrno) where
 
 import Control.Monad (forM, unless, when)
 import Data.Aeson (object, (.=), toJSON)
@@ -54,7 +43,6 @@ import qualified Data.ByteString.Char8 as BSC
 import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import FixtureSupport
-import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCoreUnits)
 import Foreign.C.Types (CInt, CLong)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (sizeOf)
@@ -245,107 +233,3 @@ prepareOriginalErrno root = do
         "audits" .= Map.fromList [(stage, reports) | (stage, _, reports, _, _) <- exports],
         "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
       putStrLn "original-errno: five native signed CInt observations, genuine pre/post resetErrno Core"
-
--- Original installed process-identity declarations and independent native
--- observations. PID values are local to the process that observed them.
-prepareOriginalProcessIdentity :: FilePath -> IO ()
-prepareOriginalProcessIdentity root = do
-  let output = "build/original-process-identity"
-      coreSource = "t/fixtures/compiler/OriginalProcessIdentityAudit.hs"
-      nativeSource = "t/fixtures/compiler/OriginalProcessIdentityNative.hs"
-      names = ["originalGetPid", "originalGetEuid" :: String]
-      execute = runLogged 180 root (output </> "logs")
-      binary = output </> "native/oracle"
-      observedPath = output </> "native/observations.txt"
-      oracle = output </> "oracle.json"
-      manifest = root </> output </> "manifest.json"
-  createDirectoryIfMissing True (root </> output </> "native")
-  stale <- doesFileExist manifest
-  when stale (removeFile manifest)
-  plugin <- listDirectory (root </> "src/compiler/THC")
-  scripts <- listDirectory (root </> "bin")
-  let sources = sort $ [coreSource, nativeSource, "thc.cabal", "t/haskell-fixtures/Main.hs",
-        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/OriginalStdioFixtures.hs",
-        "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/THC/Driver/Installed.hs",
-        "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs",
-        "src/driver/THC/Driver/PackageNative.hs", "src/driver/cbits/target-layout.c",
-        "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs",
-        "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/ProcessIdentity.java",
-        "src/main/resources/thc/scalar-primop-signatures.json",
-        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
-        ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-        ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
-  inputHashes <- hashes root sources
-  if not (Host.os `elem` ["linux", "darwin"] && sizeOf (0 :: CInt) == 4 &&
-          sizeOf (0 :: CLong) == 8 && sizeOf (nullPtr :: Ptr ()) == 8)
-    then do
-      writeJson manifest $ object ["schema" .= (1 :: Int), "platform" .= Host.os,
-        "supported" .= False, "reason" .= ("Original Linux/macOS LP64 process identity declarations only" :: String),
-        "inputHashes" .= inputHashes, "artifactHashes" .= object []]
-      putStrLn "original-process-identity: explicitly excluded on this platform"
-    else do
-      ghc <- maybe "ghc" id <$> lookupEnv "GHC"
-      version <- execute "ghc-version" [] ghc ["--numeric-version"]
-      unless (commandStdout version == "9.14.1\n") (die "Original process identity requires GHC 9.14.1")
-      pkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
-      unit <- execute "unix-unit" [] pkg ["field", "unix", "id", "--simple-output"]
-      owner <- case BSC.lines (commandStdout unit) of
-        [value] -> pure (BSC.unpack value)
-        _ -> die "Expected one installed Unix unit"
-      unless (isOriginalUnixUnit owner)
-        (die "Original process identity requires the pinned Unix unit")
-      info <- execute "ghc-info" [] ghc ["--info"]
-      case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String, String)] of
-        Just target | Just host <- lookup "Host platform" target,
-                      not (null host), lookup "Target platform" target == Just host,
-                      lookup "target word size" target == Just "8" -> pure ()
-        _ -> die "Original process identity requires a native 64-bit GHC"
-      compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-        "-package", "ghc-internal", "-package", "unix", "-it/fixtures/compiler", "-odir", root </> output </> "native",
-        "-hidir", root </> output </> "native", nativeSource, "-o", root </> binary]
-      old <- doesFileExist (root </> observedPath)
-      when old (removeFile (root </> observedPath))
-      observed <- execute "native-run" [] (root </> binary) [root </> observedPath]
-      unless (BS.null (commandStdout observed) && BS.null (commandStderr observed))
-        (die "Original process identity native oracle unexpectedly wrote stdout/stderr")
-      text <- BSC.unpack <$> BS.readFile (root </> observedPath)
-      values <- maybe (die "Malformed original process identity observations") pure (readMaybe text :: Maybe [Integer])
-      unless (length values == 3)
-        (die "Incomplete original process identity observations")
-      let fields = ["pid", "parentPid", "euid"]
-      writeJson (root </> oracle) (object (zipWith (.=) fields values))
-      exports <- forM ["pre", "post"] $ \stage -> do
-        let core = output </> stage </> "core"
-            modules = [core </> "OriginalProcessIdentityAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
-            options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-              ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
-        exported <- execute (stage ++ "-export")
-          [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> output </> stage </> "ghc"),
-           ("THC_SOURCE_NOTES", "true")]
-          "bin/export-core.sh" (["-package", "ghc-internal", "-package", "unix"] ++ options ++ [coreSource])
-        audits <- forM names $ \name -> do
-          let path = output </> stage </> name ++ ".audit.json"
-          audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
-            (["bin/audit-core.py", "--entry", "main:OriginalProcessIdentityAudit." ++ name, "--output", path] ++ modules)
-          pure (name, path, audited)
-        pure (stage, modules, Map.fromList [(name, path) | (name, path, _) <- audits],
-              exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])
-      runtimeExport <- execute "runtime-export"
-        [("THC_CORE_OUT", root </> output </> "runtime-core"), ("THC_GHC_OUT", root </> output </> "runtime-ghc")]
-        "bin/export-core.sh" ["-isrc/runtime", "-fplugin-opt=THC.Plugin:post-tidy", "src/runtime/THC/Exception.hs"]
-      let runtimeModules = [output </> "runtime-core" </> name | name <- ["THC.Exception.cbd", "THC.Internal.Exception.cbd"]]
-      installed <- prepareInstalledCoreUnits root output ["unix"]
-      let commands = fixtureCommands installed ++ [version, info, unit, compiled, observed, runtimeExport] ++ concat [cs | (_, _, _, cs, _) <- exports]
-          artifacts = fixtureArtifacts installed ++ runtimeModules ++ [binary, observedPath, oracle] ++ concat [paths | (_, _, _, _, paths) <- exports] ++
-            concatMap commandArtifacts commands
-      artifactHashes <- hashes root artifacts
-      writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= names,
-        "platform" .= Host.os, "supported" .= True, "installedArtifactsHashed" .= True,
-        "packageManifest" .= fixturePackages installed, "runtimeModules" .= runtimeModules,
-        "installedPublications" .= filter (\path -> takeExtension path /= ".zip" && path /= fixturePackages installed) (fixtureArtifacts installed),
-        "installedBundles" .= filter ((== ".zip") . takeExtension) (fixtureArtifacts installed),
-        "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= (1 :: Int), "unixUnit" .= owner,
-        "stages" .= Map.fromList [(stage, modules) | (stage, modules, _, _, _) <- exports],
-        "audits" .= Map.fromList [(stage, reports) | (stage, _, reports, _, _) <- exports],
-        "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-      putStrLn "original-process-identity: live native PID/parent PID/effective UID, two genuine pre/post Core roots"

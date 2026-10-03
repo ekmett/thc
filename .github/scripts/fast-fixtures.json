@@ -34,6 +34,7 @@
     "thc.WindowsDistributionTest"
   ],
   "fixtureFreeJunit": [
+    "thc.runtime.OriginalProcessIdentityTest",
     "thc.runtime.ForkHostFailureTest",
     "thc.runtime.LoomSignalProcessTest",
     "thc.BoxedForeignProvenanceTest",
@@ -501,12 +502,6 @@
         "t/fixtures/compiler/OriginalErrnoAudit.hs", "t/fixtures/compiler/OriginalErrnoNative.hs",
         "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
-    "original-process-identity": {
-      "junit": ["thc.runtime.OriginalProcessIdentityTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-process-identity"]}],
-      "outputs": ["build/original-process-identity"],
-      "sources": ["t/fixtures/compiler/OriginalProcessIdentityAudit.hs", "t/fixtures/compiler/OriginalProcessIdentityNative.hs", "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/cbits/target-layout.c", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java", "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs"]
     },
     "original-termios": {
       "cmakeTarget": "fixture-original-termios",

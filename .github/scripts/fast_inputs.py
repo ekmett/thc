@@ -63,7 +63,7 @@ MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-li
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-open original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-open original-errno original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
@@ -572,7 +572,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/original-stdio-read/native/original-stdio-read-oracle",
     "build/original-open/native/oracle",
     "build/original-errno/native/oracle",
-    "build/original-process-identity/native/oracle",
     "build/original-tcsetattr/native/oracle",
     "build/original-tcgetattr/native/oracle",
     "build/original-termios/saved/native/oracle",
@@ -668,18 +667,6 @@ ORIGINAL_ERRNO_OUTPUTS = frozenset("build/original-errno/" + name for name in (
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalErrnoAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_ERRNO_ENTRIES))),
-))
-
-ORIGINAL_PROCESS_IDENTITY_ENTRIES = ("originalGetPid", "originalGetEuid")
-ORIGINAL_PROCESS_IDENTITY_OUTPUTS = frozenset("build/original-process-identity/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle", "native/observations.txt", "installed/packages.json", "runtime-core/THC.Exception.cbd", "runtime-core/THC.Internal.Exception.cbd",
-    *(f"logs/{label}.{suffix}" for label in (
-        "ghc-version", "ghc-info", "unix-unit", "helper-build", "helper-location", "driver-location", "ghc-internal-unit", "native-build", "native-run", "pre-export", "post-export", "runtime-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PROCESS_IDENTITY_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalProcessIdentityAudit.cbd", "core/THC.InterfaceClosure.cbd",
-        *(f"{entry}.audit.json" for entry in ORIGINAL_PROCESS_IDENTITY_ENTRIES))),
 ))
 
 ORIGINAL_TCSETATTR_ENTRIES = ("originalTcsetattr",)
@@ -1002,42 +989,6 @@ def errno_artifact_hashes(manifest):
     require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_ERRNO_OUTPUTS - {"build/original-errno/manifest.json"},
             "Incomplete/unreviewed original errno artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid errno hash")
-    return artifacts
-
-def process_identity_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
-            "Invalid original process identity manifest")
-    if not ERRNO_NATIVE_HOST:
-        require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported process identity host")
-        return {}
-    require(manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_PROCESS_IDENTITY_ENTRIES) and
-            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
-            manifest.get("installedArtifactsHashed") is True and
-            manifest.get("packageManifest") == "build/original-process-identity/installed/packages.json" and
-            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 1,
-            "Invalid original process identity proof")
-    bundles = manifest.get("installedBundles")
-    require(isinstance(bundles, list) and bool(bundles) and all(isinstance(path, str) and
-            re.fullmatch(r"build/original-process-identity/installed/bundles/[A-Za-z0-9][A-Za-z0-9_.+-]*\.zip", path)
-            for path in bundles) and len(set(bundles)) == len(bundles) and
-            f"build/original-process-identity/installed/bundles/{manifest['unixUnit']}.zip" in bundles and
-            any(re.fullmatch(r"build/original-process-identity/installed/bundles/ghc-internal-9\.1401\.0-(?:inplace|[0-9a-f]+)\.zip", path) for path in bundles),
-            "Incomplete original process installed bundle inventory")
-    publications = manifest.get("installedPublications")
-    require(isinstance(publications, list) and bool(publications) and len(set(publications)) == len(publications) and
-            all(isinstance(path, str) and re.fullmatch(r"build/original-process-identity/installed/unit-core/v3/[0-9a-f]{64}/(?:[0-9]+\.cbd|publication\.json)", path) for path in publications),
-            "Incomplete original process CBD publication inventory")
-    for path in publications:
-        require(path.rsplit("/", 1)[0] + "/publication.json" in publications, "Missing original process publication receipt")
-    require(manifest.get("runtimeModules") == ["build/original-process-identity/runtime-core/THC.Exception.cbd", "build/original-process-identity/runtime-core/THC.Internal.Exception.cbd"], "Incomplete original exception runtime")
-    artifacts = manifest.get("artifactHashes")
-    provider_logs = {f"build/original-process-identity/logs/core-provider-version.{suffix}"
-                     for suffix in ("stdout", "stderr", "command.json")}
-    optional = provider_logs if isinstance(artifacts, dict) and provider_logs & set(artifacts) else set()
-    require(isinstance(artifacts, dict) and set(artifacts) ==
-            (ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {"build/original-process-identity/manifest.json"}) | set(bundles) | set(publications) | optional,
-            "Incomplete/unreviewed original process identity artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid process identity hash")
     return artifacts
 
 def tcsetattr_artifact_hashes(manifest):
@@ -1663,11 +1614,6 @@ def allowed_payload(name):
         return name in ORIGINAL_OPEN_OUTPUTS
     if parts[1] == "original-errno":
         return name in ORIGINAL_ERRNO_OUTPUTS
-    if parts[1] == "original-process-identity":
-        return name in ORIGINAL_PROCESS_IDENTITY_OUTPUTS or bool(re.fullmatch(
-            r"build/original-process-identity/installed/(?:bundles/[A-Za-z0-9][A-Za-z0-9_.+-]*\.zip|unit-core/v3/[0-9a-f]{64}/(?:[0-9]+\.cbd|publication\.json))", name)) or name in {
-                f"build/original-process-identity/logs/core-provider-version.{suffix}"
-                for suffix in ("stdout", "stderr", "command.json")}
     if parts[1] == "original-termios":
         return name in ORIGINAL_TERMIOS_OUTPUTS
     if parts[1] == "original-tcsetattr":
@@ -1854,8 +1800,6 @@ def inventory(root, current, read, core_files, verified=None):
             original_open_artifact_hashes(doc)
         if name == "build/original-errno/manifest.json":
             errno_artifact_hashes(doc)
-        if name == "build/original-process-identity/manifest.json":
-            process_identity_artifact_hashes(doc)
         if name == "build/original-termios/manifest.json":
             termios_artifact_hashes(doc)
         if name == "build/original-tcsetattr/manifest.json":

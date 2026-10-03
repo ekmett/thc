@@ -2277,42 +2277,6 @@ Tests read manifest/receipts/CBD/audits/oracle. Unsupported hosts get only negat
   manifest. No whole installed acquisition here. Consumer checks behavior and first compiled execution without requiring exact
   FCall counts, lambda nesting or compiled-root entry counts.
 
-066  original-process-identity
-Fixture rationale (066 original-process-identity)
-Purpose: Check process identity calls execute through ordinary package linkage.
-Produces/consumed result: CBDs, oracle.json and installed package/runtime modules reused
-  by other groups.
-Cost and overlap: No standalone libc identity harness is justified. Keep package-call
-  smoke only; move shared package acquisition to its own owner and never cache live
-  PID/UID observations as stable results.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
-Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalProcessIdentity.
-Consumer: thc.runtime.OriginalProcessIdentityTest; shared installed outputs also
-  consumed by other original-* groups (record each edge as those are scanned).
-IN: t/fixtures/compiler/OriginalProcessIdentityAudit.hs, OriginalProcessIdentityNative.hs;
-  src/runtime/THC/Exception.hs and THC/Internal/Exception.hs; built thc-fixtures,
-  shared exporter/auditor/GHC9.14.1/ghc-internal/pinned unix, InstalledCoreFixtures.
-Under build/original-process-identity/:
-  native/oracle: IN native source/packages; OUT executable/intermediates.
-  native/observations.txt: IN executable; OUT live pid,parentPid,euid.
-  oracle.json: IN that file parsed by producer; OUT named values (not deterministic).
-  <pre|post>/core/OriginalProcessIdentityAudit.cbd, THC.InterfaceClosure.cbd
-    IN audit source/two closure roots/exporter/installed interfaces/stage;
-    OUT CBD pairs/ghc/ intermediates.
-  <stage>/<originalGetPid|originalGetEuid>.audit.json: IN pair/auditor; OUT reports.
-  runtime-core/THC.Exception.cbd, THC.Internal.Exception.cbd
-    IN runtime Haskell sources/exporter/post-tidy; OUT CBDs/runtime-ghc/.
-  installed/packages.json, bundles/*.zip, unit-core/v3/<digest>/*:
-    IN shared InstalledCoreFixtures flow below with additional library unix;
-    OUT authentic installed bundle copies, published module CBDs and publication.json.
-  logs/: ghc-version/info,unix-unit,native-build/run,runtime-export,stage-export/
-    audit-entry and installed-helper commands; OUT log triplets.
-  manifest.json: IN all above/installed publications/source receipt; OUT hashes.
-Consumer reads receipts/Core/audits/oracle, so even hashing couples this test to the
-  full acquisition. Unsupported platforms get negative manifest; old removed first.
-
 Shared installed fixture artifact flow (read once for later entries)
 Owner: t/haskell-fixtures/InstalledCoreFixtures.hs:prepareInstalledCoreProfile.
 IN: selected GHC/GHC_PKG/CABAL; built thc-fixtures and production Driver modules;

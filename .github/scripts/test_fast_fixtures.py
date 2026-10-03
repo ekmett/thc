@@ -18,17 +18,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fast_fixtures
 
 
-def process_identity_provider(unit):
-    prefix = 'build/original-process-identity/'
-    publication = prefix + 'installed/unit-core/v3/' + 'a' * 64 + '/'
-    return dict(packageManifest=prefix + 'installed/packages.json',
-        installedBundles=[prefix + 'installed/bundles/ghc-internal-9.1401.0-inplace.zip',
-                          prefix + 'installed/bundles/' + unit + '.zip'],
-        installedPublications=[publication + '0.cbd', publication + 'publication.json'],
-        runtimeModules=[prefix + 'runtime-core/THC.Exception.cbd',
-                        prefix + 'runtime-core/THC.Internal.Exception.cbd'])
-
-
 class FixturePreparationTest(unittest.TestCase):
     def test_cmake_selection_never_falls_back_to_ordered_recipes(self):
         self.manifest["groups"]["alpha"]["cmakeTarget"] = "fixture-alpha"
@@ -210,18 +199,12 @@ class FixturePreparationTest(unittest.TestCase):
                 ('original-path-stat', cache.ORIGINAL_PATH_STAT_ENTRIES, cache.ORIGINAL_PATH_STAT_OUTPUTS, cache.original_path_stat_artifact_hashes),
                 ('original-path-mode', cache.ORIGINAL_PATH_MODE_ENTRIES, cache.ORIGINAL_PATH_MODE_OUTPUTS, cache.original_path_mode_artifact_hashes),
                 ('original-path-link', cache.ORIGINAL_PATH_LINK_ENTRIES, cache.ORIGINAL_PATH_LINK_OUTPUTS, cache.original_path_link_artifact_hashes),
-                ('original-path-access', cache.ORIGINAL_PATH_ACCESS_ENTRIES, cache.ORIGINAL_PATH_ACCESS_OUTPUTS, cache.original_path_access_artifact_hashes),
-                ('original-process-identity', cache.ORIGINAL_PROCESS_IDENTITY_ENTRIES, cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS, cache.process_identity_artifact_hashes)):
+                ('original-path-access', cache.ORIGINAL_PATH_ACCESS_ENTRIES, cache.ORIGINAL_PATH_ACCESS_OUTPUTS, cache.original_path_access_artifact_hashes)):
             artifacts = {name: 'a' * 64 for name in outputs if name != 'build/' + stem + '/manifest.json'}
             receipt = dict(schema=1, ghc='9.14.1', entries=list(entries), supported=True,
                 strictAccepted=True, runtimeVerified=False, nativeRows=1, installedArtifactsHashed=False,
                 artifactHashes=artifacts)
             for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
-                if stem == 'original-process-identity':
-                    provider = process_identity_provider(unit)
-                    artifacts = {name: 'a' * 64 for name in outputs | set(provider['installedBundles']) | set(provider['installedPublications'])
-                                 if name != 'build/' + stem + '/manifest.json'}
-                    receipt = dict(receipt, installedArtifactsHashed=True, artifactHashes=artifacts, **provider)
                 self.assertEqual(artifacts, validate(dict(receipt, unixUnit=unit)), (stem, unit))
             for unit in (None, 42, 'unix-2.8.8.0', 'unix-2.8.8.0-', 'unix-2.8.8.0-ABCD',
                          'unix-2.8.8.0-xyz', 'unix-2.8.7.0-460b', 'base-2.8.8.0-460b',

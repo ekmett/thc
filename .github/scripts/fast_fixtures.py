@@ -296,10 +296,6 @@ def _output_hashes(root, group):
         name = "build/original-errno/manifest.json"
         expected = fast_inputs.errno_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
-    if group["outputs"] == ["build/original-process-identity"]:
-        name = "build/original-process-identity/manifest.json"
-        expected = fast_inputs.process_identity_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-termios"]:
         name = "build/original-termios/manifest.json"
         expected = fast_inputs.termios_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
