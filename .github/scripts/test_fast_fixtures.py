@@ -42,6 +42,14 @@ class FixturePreparationTest(unittest.TestCase):
                     fast_fixtures.prepare(project, self.selection(*group["junit"]), run, {})
                 run.assert_not_called()
 
+    def test_explicit_quarantine_also_blocks_fixture_free_selection(self):
+        self.manifest["quarantinedJunit"] = ["thc.FreeTest"]
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        self.assertIn("thc.FreeTest", fast_fixtures.quarantined_classes(self.root))
+        with self.assertRaisesRegex(ValueError, "Quarantined tests cannot run: thc.FreeTest"):
+            self.prepare("thc.FreeTest")
+        self.assertEqual([], self.calls)
+
     def test_unknown_or_wildcard_selection_stops_before_any_producer(self):
         for selector in ("thc.UnknownTest", "*Alpha*"):
             with self.subTest(selector=selector):
@@ -178,56 +186,6 @@ class FixturePreparationTest(unittest.TestCase):
                 fast_fixtures._output_hashes(self.root, group)
 
 
-    def test_foreign_exception_preparation_installs_runtime_before_cli_consumers(self):
-        project = Path(__file__).resolve().parents[2]
-        planned = subprocess.run(
-            ["make", "--dry-run", "--no-print-directory", "foreign-exception-fixtures"],
-            cwd=project, check=True, capture_output=True, text=True).stdout
-        # Package-native-demand calls the installed CLI even on a fresh checkout.
-        self.assertIn("./gradlew installDist", planned)
-        self.assertLess(planned.index("./gradlew installDist"),
-                        planned.index(" -- foreign-exceptions"))
-
-    def test_foreign_exception_native_consumers_use_matching_configured_ghc(self):
-        project = Path(__file__).resolve().parents[2]
-        fixture = self.root / "fixture"
-        fixture.write_text('#!/bin/sh\nprintf "%s\\t%s\\n" "$1" "${THC_INSTALLED_CORE_GHC_SOURCE:-missing}"\n')
-        fixture.chmod(0o755)
-        cabal = self.root / "cabal"
-        cabal.write_text('#!/bin/sh\ntest "$1" = list-bin || exit 1\nprintf "%s\\n" "$TEST_FIXTURE_BIN"\n')
-        cabal.chmod(0o755)
-        planned = subprocess.run(
-            ["make", "--dry-run", "--no-print-directory", "foreign-exception-fixtures", "CABAL=" + str(cabal)],
-            cwd=project, check=True, capture_output=True, text=True).stdout
-        # Execute the real broad-consumer recipe, replacing only its compilers.
-        recipe = planned[planned.index("set -eu;"):]
-        source = str(self.root / "configured ghc")
-        consumed = subprocess.run(["sh", "-c", recipe], cwd=project, check=True,
-            capture_output=True, text=True, env={"PATH": "/usr/bin:/bin",
-                "TEST_FIXTURE_BIN": str(fixture), "THC_FOREIGN_EXCEPTION_GHC_SOURCE": source,
-                "THC_INSTALLED_CORE_GHC_SOURCE": "wrong compiler tree"}).stdout.splitlines()
-        self.assertTrue(consumed, "The recipe must exercise its configured consumers")
-        for row in consumed:
-            self.assertEqual(source, row.split("\t", 1)[1])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def test_build_installs_matching_llvm_tools_on_macos(self):
         project = Path(__file__).resolve().parents[2]
         source = (project / '.github/workflows/checks.yml').read_text()
@@ -236,8 +194,6 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"', source)
         self.assertIn('for tool in clang llc opt llvm-nm llvm-link llvm-objcopy; do', source)
         self.assertIn("- name: Check LLVM backend tools\n        if: inputs.cadence != 'commit'", source)
-
-
 
 
     def test_shared_stdio_probe_changes_invalidate_the_posix_fixture_key(self):
@@ -281,10 +237,6 @@ class FixturePreparationTest(unittest.TestCase):
                     validate(dict(receipt, unixUnit=unit))
 
 
-
-
-
-
     def test_original_fd_ready_selected_receipt_preserves_rejection_stages_and_hashes(self):
         self.assertTrue(hasattr(fast_fixtures.fast_inputs, 'fd_ready_artifact_hashes'))
         project = Path(__file__).resolve().parents[2]
@@ -321,7 +273,6 @@ class FixturePreparationTest(unittest.TestCase):
             elif change == 'changed': artifact.write_text('changed')
             else: artifact.unlink(); artifact.symlink_to(path)
             with self.assertRaises((RuntimeError, FileNotFoundError)): fast_fixtures._output_hashes(self.root, group)
-
 
 
     def test_rts_lock_selected_receipt_requires_complete_strict_unchanged_artifacts(self):
@@ -675,7 +626,6 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn("CoreCbdFixtures.read", consumer)
 
 
-
     def test_floating_model_controls_are_explicitly_fixture_free(self):
         project = Path(__file__).resolve().parents[2]
         _, owners = fast_fixtures._manifest(project)
@@ -724,7 +674,6 @@ class FixturePreparationTest(unittest.TestCase):
                                      ([] if machine == "x86_64" else ["--export-only"]), actual)
 
 
-
     def test_bignat_loader_controls_are_fixture_free(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -758,8 +707,6 @@ class FixturePreparationTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "Missing fixture source"):
                     fast_fixtures.cache_key(self.root, "float-decode", group, {})
                 path.write_bytes(original)
-
-
 
 
     def test_original_stdio_selected_receipt_covers_haskell_producer_and_all_outputs(self):

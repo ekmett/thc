@@ -381,8 +381,9 @@ def quarantined_classes(root):
         return set()  # The standalone selector also supports non-THC test repos.
     manifest, owners = _manifest(Path(root))
     blocked = {name for name, group in manifest["groups"].items() if group.get("quarantined")}
-    return {name for name, owner in owners.items() if owner is not None
-            and blocked.intersection(_group_order(manifest, [owner]))}
+    return set(manifest.get("quarantinedJunit", [])) | {
+        name for name, owner in owners.items() if owner is not None
+        and blocked.intersection(_group_order(manifest, [owner]))}
 
 
 def prepare(root, selection, run, toolchain):
@@ -401,6 +402,11 @@ def prepare(root, selection, run, toolchain):
         raise ValueError("Blanket fixture preparation is quarantined; select an exact nonquarantined test class")
     if selection.get("mode") not in ("narrow", "full"):
         raise ValueError("Invalid selected test mode")
+
+    withheld = set(classes) & set(manifest.get("quarantinedJunit", []))
+    if withheld:
+        raise ValueError("Quarantined tests cannot run: " + ", ".join(sorted(withheld))
+                         + "; see docs/fixture-quarantine.log")
 
     groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None})
     blocked = [name for name in groups if manifest["groups"][name].get("quarantined")]

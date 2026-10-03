@@ -232,7 +232,7 @@ while (quarantineChanged) {
     quarantineChanged = quarantinedFixtureGroups.addAll(dependents)
 }
 def quarantinedFixtureTests = quarantinedFixtureGroups.collectMany { fixtureGroups[it].junit } +
-    (fixtureInventory.quarantinedFullCoreJunit ?: [])
+    (fixtureInventory.quarantinedJunit ?: [])
 tasks.withType(Test).configureEach {
     useJUnitPlatform { excludeTags(*(fixtureInventory.quarantinedJunitTags ?: [])) }
     filter { quarantinedFixtureTests.each { excludeTestsMatching(it) } }

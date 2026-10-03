@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (167 libyaml-native)
+-- Purpose: Check original libyaml package parser/encoder linkage and C-only dependency.
+-- Consumes: THC_LIBYAML_CAPTURE_STAGE plan/capture/store/native-pieces, exact native
+--   registrations/archives, OriginalLibyamlNative.hs and selected GHC/package tool.
+-- Produces/consumed result: libyaml.zip, native.tsv, generated input.yaml and manifest.
+-- Cost and overlap: Package parser/encoder smoke supplies the useful behavior. A
+--   retained-Cabal-capture fixture and per-C-library harness add unjustified setup.
+-- Build status: QUARANTINED. Output directory must not exist; an independently built
+--   capture/store is required and native-pieces is symlinked to that external attempt.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 167.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

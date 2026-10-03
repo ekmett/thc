@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (166 package-native-originals)
+-- Purpose: Exercise digest, erf and primitive through original package Core/native
+--   linkage; compare checksum, floating and primitive-array observations.
+-- Consumes: External digest/erf/primitive source trees, native toolchain, driver/plugin,
+--   five Original* oracle/entry sources and pinned zlib sources.
+-- Produces/consumed result: Captured/linked package CBDs, three native TSVs and manifest.
+-- Cost and overlap: Public package smoke is sufficient for these libraries. This
+--   bespoke three-package acquisition, 1078 rows and zlib conformance setup is excess.
+-- Build status: QUARANTINED. Copied-source leftovers require a fresh output directory;
+--   staging also enumerates captured CBDs and fixes exact package-module inventories.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 166.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

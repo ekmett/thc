@@ -1,5 +1,20 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Shared fixture prerequisite: installed or pinned package Core (entry 066).
+-- Purpose: Reuse production acquisition for genuine transitive package Core/native
+--   linkage; this helper is not an independently valuable test.
+-- Consumes: Selected GHC/package registrations/interfaces/native libraries, Cabal
+--   plan/helper/driver, target-layout.c, optional complete-Core provider/GHC sources,
+--   and build/compiler/plugin.json plus its libraries when source fallback is needed.
+-- Produces: Caller-local installed/packages.json, bundles/<unit>.zip, published
+--   unit-core/v3/<digest> CBDs/publication.json and command logs; production shared
+--   cache products are owned by the driver, not independently by each caller.
+-- Cost: Package acquisition should have one reusable owner per toolchain/profile.
+--   Repeating it inside each fixture is not justified. Keep both pinned-source and
+--   complete-installed-Core paths; neither permits an untracked plugin prerequisite.
+-- Graph status: Split tool/plugin publication and acquisition into explicit inputs
+--   and outputs before admission. Full artifact flow: docs/fixture-inputs.log, 066.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

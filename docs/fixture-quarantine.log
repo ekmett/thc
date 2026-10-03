@@ -5,6 +5,9 @@ them, CI selection withholds them, and Gradle excludes their consumer classes in
 all modes. The existing selection manifest carries quarantined=true on each named
 group. The blanket preparation entry point now stops without running producers.
 Do not register these producers or consumers in the new CMake/Ninja graph.
+Additional classes use quarantinedJunit; mixed-class full-Core methods use
+quarantinedJunitTags. Ordered foreign-exception Make preparation stops immediately.
+Windows PowerShell selects only the remaining portable and direct ABI checks.
 Direct producer commands remain source material for isolated repair, not build
 entry points. No fixture generation is being run during this inventory.
 
@@ -84,7 +87,7 @@ Compiler-structure assertions (also excluded):
     receipt/audit files are not consumed by their behavioral tests.
   original-time-clock (140, custom full-Core): expects exactly one/two executed
     roots and retains a dedicated time/base CAPI fixture harness. Its consumer
-    is listed in quarantinedFullCoreJunit and excluded by every Gradle Test task.
+    is listed in quarantinedJunit and excluded by every Gradle Test task.
 
   rts-event (141, custom full-Core): three recursive producer subprocesses rewrite
     the parent's GHC/log paths; exact compiled-entry counts and a broad native
@@ -164,3 +167,45 @@ Compiler-structure assertions (also excluded):
   package-native-demand and package-scalar-cbits (165): both execute THC_TEST_RUNTIME/default installDist during preparation with
     no build edge. Scalar custom consumer and demand full-Core tag excluded; retain
     canonical state/ABI/isolation in one lean package integration case.
+
+  package-native-originals (166): copied source inventory requires a fresh directory when files disappear;
+    CBD staging enumerates outputs. PackageNativeOriginalsTest excluded. Replace
+    standalone digest/erf/primitive scaffolding with public package integration.
+
+  libyaml-native (167): requires nonexistent output and a prebuilt capture/store, then symlinks to
+    that attempt's native pieces. LibyamlNativeProductsTest excluded; ordinary YAML
+    package smoke should replace this retained-Cabal-stage fixture.
+
+  wcwidth (168): requires an exact output-directory inventory and literal upstream source
+    lines. WcwidthTest excluded; ordinary package-level coverage should replace this
+    standalone locale/libc harness.
+
+  getentropy (169): fresh copied-source directory required after deletions and captured Core
+    inventory is exact. GetEntropyTest excluded; replace per-libc entropy machinery
+    with ordinary splitmix initialization coverage.
+
+  hashable-ffi (170): runs a prebuilt THC runtime during fixture preparation without an owning
+    build edge. HashableFfiFullCoreTest excluded; keep public hashing behavior in
+    intensive package integration using shared acquisition.
+
+  package-native-archives (171): recursive capture-directory CBD enumeration supplies modules. Full-Core
+    archive consumer excluded; retain native linker/ABI and deliberately invalid
+    declaration controls with explicit outputs and shared acquisition.
+
+  windows-codepages (172): publishes a new timestamped interfaces/providers/runtime-support tree each
+    run. WindowsCodePagesTest and its PowerShell producer selection excluded; retain
+    required platform ownership/error tests using normal package linkage.
+
+  windows-directory (173): publishes fresh timestamped upstream source evidence and rebuilds a private
+    Win32 package on every attempt. Directory consumer/PowerShell producer selection
+    excluded; private filesystem cases themselves are legitimate runtime state.
+
+  windows-smoke, bridge, driver and timeout (174): smoke writes general corpus/native/CString products; bridge/driver discover
+    outputs and publish timestamped trees. WindowsDistributionTest and automated
+    smoke/driver preparation excluded; standalone timeout diagnostic remains usable.
+
+Current admission summary (inventory through174): 43 indexed groups excluded,
+  plus30 explicit classes (27 custom and3 ordinary Windows). Total91 distinct
+  excluded classes; foreign-exceptions-full-core-tagged methods also withheld.
+  Ordinary selector: 411 active classes /64 withheld. These are selection counts,
+  not pass/fail counts. Repair/consolidation and runtime validation remain required.

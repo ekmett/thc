@@ -5,7 +5,7 @@ observations, not claims that a clean build or complete dependency closure passe
 Intended build driver: CMake generating Ninja; no implementation during this scan.
 Quarantine decisions: docs/fixture-quarantine.log. Listed fixtures are excluded
 from the new graph pending repair; inventory is not admission.
-No fixture generation or test execution is part of this scan. Shared tool inputs
+No fixture generation or runtime test execution is part of this scan. Shared tool inputs
 are called out separately from fixture outputs; unresolved closure is explicit.
 
 001  narrow-literal-proofs
@@ -5589,3 +5589,300 @@ Verification checkpoint after entry 165 (base a697900e6, local changes):
     untagged fixture-free methods. make foreign-exception-test-modes exited2 in its
     prerequisite, before Gradle/runtime/generation. git diff --check passed.
   No fixture generation, runtime suite, push or CI dispatch performed.
+
+166 package-native-originals (custom fixture)
+Fixture rationale (166 package-native-originals)
+Purpose: Exercise digest, erf and primitive through original package Core/native
+  linkage; compare checksum, floating and primitive-array observations.
+Consumes: External digest/erf/primitive source trees, native toolchain, driver/plugin,
+  five Original* oracle/entry sources and pinned zlib sources.
+Produces/consumed result: Captured/linked package CBDs, three native TSVs and manifest.
+Cost and overlap: Public package smoke is sufficient for these libraries. This
+  bespoke three-package acquisition, 1078 rows and zlib conformance setup is excess.
+Build status: QUARANTINED. Copied-source leftovers require a fresh output directory;
+  staging also enumerates captured CBDs and fixes exact package-module inventories.
+Consumer: PackageNativeOriginalsTest. Under build/original-native/:
+  sources/{digest-0.0.2.1,erf-2.0.0.0,primitive-0.9.1.0}/** <- selected external
+    THC_DIGEST_SOURCE/THC_ERF_SOURCE/THC_PRIMITIVE_SOURCE trees (default sibling dirs).
+    Copies enumerate every file; deleted inputs leave leftovers and abort reruns.
+  digest.project, ghc-proxy-<driver hash>.sh <- templates/tool identity.
+  native-<hash>/{cache/plan.json,package db,objects...}, capture-<hash>/**, pieces-<hash>/**
+    <- Cabal through production GHC proxy, three packages/plugin/interface/native capture.
+  linked/<unit>/*.cbd/native products <- enumerated captures/finishPackageNative;
+    requires three digest, one erf and fourteen primitive modules.
+  {digest,erf,primitive}-oracle and corresponding *-oracle-objects/ <- Original*Native.hs
+    + acquired native package DB; *-native.tsv <- 270/88/720 rows respectively.
+  {erf,primitive}-entry/units/<unit>/<entry>.cbd and compiler intermediates <-
+    OriginalErfEntry/OriginalPrimitiveEntry.hs, acquired packages/plugin.
+  {erf,primitive}-audit.json <- entry/package CBDs and auditor.
+  negative-header/{zlib.h,mismatch.c} <- invented bad-version header/pinned provider
+    implementation; clang expected rejection (mismatch.o is unsuccessful output).
+  negative-source/nih/pinned/zlib-1.2.11/** <- copied pinned tree with altered adler32.c;
+    provider expected to reject hash mismatch. These tooling controls need no packages.
+  logs/* triplets, manifest.json <- selected source/copied-source/linked CBD/oracle/
+    entry/audit hashes and command records; no old success invalidation.
+Reject the fresh-directory prerequisite and native library conformance ceremony;
+  retain only package integration cases not already covered by public smoke.
+
+167 libyaml-native (custom fixture)
+Fixture rationale (167 libyaml-native)
+Purpose: Check original libyaml package parser/encoder linkage and C-only dependency.
+Consumes: THC_LIBYAML_CAPTURE_STAGE plan/capture/store/native-pieces, exact native
+  registrations/archives, OriginalLibyamlNative.hs and selected GHC/package tool.
+Produces/consumed result: libyaml.zip, native.tsv, generated input.yaml and manifest.
+Cost and overlap: Package parser/encoder smoke supplies the useful behavior. A
+  retained-Cabal-capture fixture and per-C-library harness add unjustified setup.
+Build status: QUARANTINED. Output directory must not exist; an independently built
+  capture/store is required and native-pieces is symlinked to that external attempt.
+Consumer: LibyamlNativeProductsTest. Output defaults build/libyaml-native/ or
+  THC_LIBYAML_FIXTURE_OUTPUT; refuses any preexisting output path.
+  capture/<resolved libyaml unit>/** <- copied external stage/capture unit selected
+    from dist/cache/plan.json (libyaml0.1.4 + libyaml-clib0.2.5 dependency).
+  native-pieces symlink <- stage/native-pieces, retaining live external dependence.
+  libyaml.zip and native products <- publishCapturedStoreUnit using external plan,
+    store/package registrations, dist and copied capture.
+  native + objects/ <- OriginalLibyamlNative.hs, registered .a files of both units,
+    GHC --make -O0 -hide-all-packages with base/bytestring.
+  input.yaml <- native executable's test file; native.tsv <- executable stdout.
+  native-source.sha256, manifest.json <- oracle/source/input/bundle/native archive
+    hashes and command records. logs/native-{build,run} triplets <- commands.
+External registration search enumerates store partitions and candidate library dirs.
+  None of these inputs has a producer rule here. Do not port retained attempt state
+  or fresh-output rejection into the build graph.
+
+168 wcwidth (custom fixture)
+Fixture rationale (168 wcwidth)
+Purpose: Check locale-sensitive character widths through a safe CAPI call.
+Consumes: run-wcwidth package sources, external Tasty1.5.4 source/license,
+  C/C.UTF-8 locale data, GHC/Cabal/native tools and driver/plugin.
+Produces/consumed result: Width.cbd/native linkage, two native TSVs, audits/manifest.
+Cost and overlap: Public Tasty/package behavior is enough. Source-line matching,
+  copied upstream source and a dedicated wcwidth acquisition are unnecessary.
+Build status: QUARANTINED. Captured CBD directory must contain exactly Width.cbd;
+  generation additionally pins verbatim upstream declaration/fallback lines.
+Consumer: WcwidthTest. Under build/wcwidth/:
+  ConsoleReporter.hs, TASTY-LICENSE <- THC_TASTY_SOURCE; exact declaration and fallback
+    text required even though a separate run-wcwidth package is compiled.
+  ghc-proxy-<driver hash>.sh <- proxy template; native-<hash>/ plan/package products,
+    capture-<hash>/, pieces-<hash>/ <- Cabal exe:oracle via GHC proxy/plugin/helper.
+  C.tsv, C.UTF-8.tsv <- native executable from plan with LC_ALL explicitly set;
+    twelve rows each. Presence/version of those locales is still a platform input.
+  Width.cbd/native products <- recursive captured-CBD listing, exact singleton
+    requirement, staged copy and finishPackageNative.
+  rawWidth.json, displayWidth.json <- staged CBD/auditor.
+  logs/* triplets, manifest.json <- source/copied upstream/Core/oracle/audit/log
+    hashes; driver hash names work directories. Old manifest is not invalidated.
+Replace bespoke package/source-shape proof with normal package acquisition plus
+  representative public width/encoding behavior where that package needs coverage.
+
+169 getentropy (custom fixture)
+Fixture rationale (169 getentropy)
+Purpose: Check splitmix initialization reaches native entropy and respects buffer
+  bounds/status through foreign calls.
+Consumes: External splitmix0.1.3.2 sources, OriginalSplitmixEntry/Native.hs,
+  NativeGetEntropy.c, driver/plugin/native tools and Linux x86_64 target libraries.
+Produces/consumed result: Splitmix/entry CBDs, audit, native TSVs, control.so/ll, manifest.
+Cost and overlap: Public splitmix initialization smoke is enough for this dependency.
+  Separate native entropy conformance and IR controls add little compiler value.
+Build status: QUARANTINED. Copied-source deletion demands a fresh directory;
+  recursive Core staging requires exact module inventory, with a fixed Linux target.
+Consumer: GetEntropyTest. Under build/getentropy/:
+  sources/splitmix-0.1.3.2/** <- THC_SPLITMIX_SOURCE; copied/retained inventories must
+    match, so deleted source files poison subsequent runs.
+  splitmix.project, ghc-proxy-<driver hash>.sh <- templates; native-<hash>/ plan/db,
+    capture-<hash>/ and pieces-<hash>/ <- Cabal/proxy acquisition.
+  System.Random.{SplitMix,SplitMix.Init,SplitMix32}.cbd/native products <- enumerated
+    captures and finishPackageNative; exact three-module requirement.
+  entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.cbd, entry-objects/
+    <- entry source/acquired packages/plugin; audit.json <- entry+package CBDs.
+  splitmix-oracle/objects, splitmix-native.tsv <- OriginalSplitmixNative.hs/GHC and
+    native execution (eight rows).
+  oracle, native.tsv <- NativeGetEntropy.c/Clang -DTHC_NATIVE_ORACLE, nine status rows.
+  control.so <- same C, --target=x86_64-unknown-linux-gnu -fembed-bitcode -shared -lc;
+    control.ll <- same target -emit-llvm -S.
+  logs/* triplets, manifest.json <- selected source/copied source/Core/audit/TSV/
+    control/log hashes; old manifest not invalidated. Native executables are omitted
+    from artifactHashes. Runtime randomness should be checked by invariants, not
+    cached random bytes; package-level initialization can retain that behavior.
+
+170 hashable-ffi (custom fixture)
+Fixture rationale (170 hashable-ffi)
+Purpose: Check public Hashable text/bytes instances agree with native GHC through
+  ordinary package-native linkage, including lazy and short representations.
+Consumes: run-hashable-ffi Cabal/Haskell inputs, Hashable1.5.1.0, selected tools,
+  installed Core/optional GHC sources and prebuilt THC_TEST_RUNTIME/installDist.
+Produces/consumed result: Package Core/native artifacts, 300 observations, manifest.
+Cost and overlap: Useful public-package integration; merge representative cases
+  into intensive package smoke instead of maintaining another acquisition harness.
+Build status: QUARANTINED. Preparation runs a preexisting runtime with no producing
+  dependency. Separate build/acquisition/oracle generation from guest execution.
+Consumer: HashableFfiFullCoreTest. Under build/hashable-ffi/:
+  shared Cabal exe:thc build <- selected compiler and driver sources.
+  acquired/{native/cache/plan.json,packages.json,audit.json,Core/native products}
+    <- thc run --verify-artifacts, original fixture project, installed-core required,
+    optional GHC sources and supplied runtime. Package flags explicitly require
+    random-initial-seed=false and arch-native=false (good reproducibility inputs).
+  logs/thc-run.stdout and native-oracle.stdout <- guest and plan-selected native
+    executable; require 300 matching rows across five text/bytes instances.
+  bundles/ <- retained hash-checked unit artifacts for every acquired unit;
+    packages.json <- package manifest rewritten to retained artifact paths.
+  logs/{driver-build,driver-location,thc-run,native-oracle} triplets; manifest.json
+    <- selected source/plan/packages/audit/retained-artifact/log hashes plus observations.
+Old receipt removed first. Acquisition caches are not hidden prerequisites after
+  retention; runtime itself and resolved upstream dependency/tool versions still
+  need graph ownership. No measured duration is claimed from the 2400-second cap.
+
+171 package-native-archives (custom fixture)
+Fixture rationale (171 package-native-archives)
+Purpose: Check native archive dependency linking, mixed scalar/CAPI ABI, lifecycle
+  and rejection of unsupported or conflicting foreign declarations.
+Consumes: run-native-archive packages/C sources, THC_PACKAGE_NATIVE_SUPPORT and
+  referenced dependency closure, GHC/Cabal/Clang/llvm-ar, driver/plugin/auditor.
+Produces/consumed result: Linked package CBD/native products, audits and manifest.
+Cost and overlap: Real linker/ABI/rejection boundaries justify a compact integration
+  case. Consolidate with package scalar coverage and retain direct rejection tests.
+Build status: QUARANTINED. Recursive captured-CBD listing determines consumed
+  modules; replace it with named owned outputs before graph admission.
+Consumer: PackageNativeArchiveFullCoreTest. Separate from GC-carrier producer096.
+Under build/native-archive/:
+  runtime-support.json <- transitive bridge/ghc-internal units selected from external
+    support manifest; referenced artifacts remain external dependencies.
+  dependency.o, libthc_archive_dependency.a <- provider/dependency.c, Clang embedded
+    bitcode and llvm-ar. Archive must contain only declared members on reruns.
+  ghc-proxy-<driver hash>.sh <- proxy template; native-<hash>/ plan/db/native products,
+    capture-<hash>/ and pieces-<hash>/ <- Cabal exe:oracle over four fixture units.
+  logs/native-oracle.stdout <- native executable selected from plan; initial controls,
+    36 mixed-header observations and partial-call/lifecycle values.
+  linked/<unit>/*.cbd/native products <- every discovered capture CBD/finishPackageNative.
+  supported-audit.json <- nine supported entries + linked modules/support manifest;
+    rejected-audit.json <- four intentionally unsupported entries, exit1 required.
+    This is an intentional negative input, unlike compact's unrelated discovery error.
+  logs/* triplets; manifest.json <- source/linked module/audit hashes, support hash,
+    parsed native observations and command records; no old-receipt invalidation.
+Do not discard unsupported-declaration controls merely because they expect failure;
+  eliminate output discovery and repeated tool acquisition instead.
+
+172 windows-codepages (custom fixture)
+Fixture rationale (172 windows-codepages)
+Purpose: Check Windows encoding/error/buffer behavior across foreign-call transport.
+Consumes: WindowsCodePageAudit.hs, pinned ghc-internal Windows/CodePage modules and
+  headers/catalogue, installed interfaces/native archives, GHC/Clang and runtime Core.
+Produces/consumed result: Pre/post CBDs, oracle.json, provider adapters/DLL, manifest.
+Cost and overlap: Preserve buffer ownership/error semantics in platform integration;
+  ordinary encoding correctness belongs in public package smoke, not Win32 conformance.
+Build status: QUARANTINED. Every run publishes timestamped interfaces/providers and
+  rebuilds a separate original-declaration/native adapter pipeline.
+Consumer: WindowsCodePagesTest; native Windows only. Under build/windows-codepages/:
+  <timestamp>/runtime-support/* <- prepareWindowsRuntime and selected Cabal driver;
+    actual runtime package closure is a shared acquisition candidate.
+  <timestamp>/interfaces/** <- every installed ghc-internal .hi, then four pinned
+    Windows/encoding module interfaces recompiled into that overlay with native headers.
+  <timestamp>/providers/<four modules>.cbd <- complete recompiled interfaces.
+  providers/adapters.c, adapters.bc <- typed native wrapper generator/Clang using
+    x86_64-pc-windows-msvc19.33.0; dependencies.def/DLL <- declaration symbols,
+    selected native package archives and ordinary linker inputs.
+  <timestamp>/{pre,post}.cbd <- typed audit source specialized to original FCallIds,
+    GHC simplifier/tidier; consumer/ compiler/interpreter intermediates.
+  oracle.json <- native GHC-compiled calls checking codepage info, conversions,
+    sizing/aliasing/buffers and error state. No standalone native oracle executable.
+  <stage>-<operation>.audit.json <- CBD/auditor, one per stage/operation.
+  command triplets, manifest.json <- catalogue/pinned-source/inherited-interface/
+    native-archive/input/artifact hashes and ABI records; old receipt removed.
+All output paths in the receipt depend on wall clock. Native locale/codepage state
+  must be explicit or observations relational. No Windows execution was performed.
+
+173 windows-directory (custom fixture)
+Fixture rationale (173 windows-directory)
+Purpose: Check Windows directory handles, UTF-16 names, buffer bounds, errors
+  and cleanup through native foreign calls.
+Consumes: WindowsDirectoryAudit.hsc, pinned Win32 archive, GHC/Cabal/hsc2hs,
+  installed native headers/libraries and typed interface exporter/auditor.
+Produces/consumed result: Pre/post CBDs, native oracle.json and source/fixture manifests.
+Cost and overlap: Keep handle ownership/buffer checks in platform integration;
+  full private Win32 rebuild and declaration specialization are excessive for scans.
+Build status: QUARANTINED. Re-extracts a timestamped source tree and rebuilds Win32
+  on every run; published evidence paths vary rather than having stable owners.
+Consumer: WindowsDirectoryStreamsTest; native Windows only.
+  vendor/archives/Win32-2.14.2.1.tar.gz <- curl if absent, pinned SHA256 verified;
+    shared download needs one owner.
+Under build/windows-directory/:
+  source-<timestamp>/Win32-2.14.2.1/** <- tar extraction of verified archive.
+  Setup.hs, setup.exe, setup-objects/ <- template/GHC Cabal API.
+  original-win32/{package.conf.inplace,build/**} <- Setup configure/build against
+    extracted source, os-string, vanilla/full Core; source unchanged checked.
+  WindowsDirectoryAudit.hs <- audit .hsc/hsc2hs/native headers.
+  pre.cbd, post.cbd <- typed consumer with original File.Internal/Types FCallIds,
+    GHC simplify/tidy; ghc/ intermediates. Exactly four original FCallIds demanded.
+  native-<timestamp>/ test files/directories <- oracle's private filesystem cases;
+    this state is legitimate for directory behavior, not an empty-output rule.
+  oracle.json <- native interpreted calls/layout, ten directory/error cases.
+  <stage>-<four entries>.audit.json <- CBD/auditor (eight audits).
+  logs/* triplets, win32-source.json <- archive/extracted-source/interface/registration
+    hashes; manifest.json <- named output/audit/log/input hashes; old receipt removed.
+Quarantine concerns published acquisition paths/rebuilds, not private test files.
+  Share acquired Win32 products and exercise its public directory API where possible.
+
+174 windows-smoke, bridge, driver and timeout (custom fixture)
+Fixture rationale (174 windows-smoke, bridge, driver and timeout)
+Purpose: Check native Windows compiler/runtime smoke, exception bridge ownership,
+  CLI paths with spaces/tool selection, and subprocess timeout/error propagation.
+Consumes: Fixtures/NativeOracle/THC.Prim.Test sources, pinned CString and interfaces,
+  WindowsBridgeAudit/runtime package, run-pure package, GHC/Cabal/PowerShell/THC runtime.
+Produces/consumed result: Shared smoke CBD/oracle, bridge linked/provenance files,
+  four driver acquisition/run records, and standalone timeout diagnostic logs.
+Cost and overlap: Keep small portable semantic/CLI cases and process-timeout checks.
+  Four full acquisitions and per-entry audits are excessive for a smoke target.
+Build status: QUARANTINED smoke/bridge/driver: joint global outputs, directory
+  discovery and timestamped product trees. Timeout is a standalone helper test,
+  not a fixture prerequisite and not excluded for keeping private diagnostic logs.
+Consumers: WindowsDistributionTest uses smoke/driver receipts and global CBDs;
+  bridge command has no direct JVM consumer located (manual diagnostic production).
+Smoke:
+  build/core/{Fixtures,THC.Prim.Test}.cbd <- Fixtures.hs/export-core.ps1; same paths
+    owned by general corpus producer119: joint producer, prohibited.
+  build/native/native-oracle.exe, objects/interfaces, oracle.tsv <- NativeOracle
+    and imported sources/GHC, 133 rows; shares general native output namespace.
+  build/windows-smoke/<timestamp>/<entry>.audit.json <- 19 roots/named CBDs;
+    missing.audit.json <- deliberately nonexistent entry; command triplets.
+  <timestamp>/cstring-interfaces/** <- installed .hi copies plus recompiled pinned
+    CString.hs; build/map/boot-core/GHC.Internal.CString.cbd <- interface helper;
+    overlaps shared boot acquisition. provenance.json <- source/product/log hashes.
+Bridge:
+  build/windows-bridge/<timestamp>/native/oracle.exe/objects <- WindowsBridgeAudit
+    with Cabal lib:runtime owner; native output three rows, four operations each.
+  runtime-support/* <- prepareWindowsRuntime; export.args <- package/support/root
+    options; core/*.cbd <- PowerShell exporter, subsequently enumerated.
+  <four roots>.audit.json plus missing-support.audit.json <- modules/support/auditor.
+  linked.json, provenance.json <- discovered module paths, owner, native rows and
+    source/support/product/log hashes. Driver list-bin assumes already-built exe:thc.
+Driver:
+  build/windows-driver/<timestamp>/package with spaces/{run-pure.cabal,app/*.hs}
+    <- tracked run-pure inputs; native/completed.exe and objects <- GHC.
+  four dist with spaces <backend>-<dense>/ acquisition/runtime-support/Core products
+    <- thc run using prebuilt driver/runtime, mode/tool-selection variations;
+    first explicitly audited, later three intentionally unaudited.
+  missing-selected-ghc logs <- deliberate missing compiler rejection before acquisition.
+  provenance.json <- copied inputs, support manifests, enumerated Core outputs,
+    conditional audits/export.args/native executable and command hashes.
+Timeout diagnostic (no fixture consumer):
+  build/windows-timeout/<timestamp>/{sleep,long-failure}.{stdout,stderr,command.json},
+    failure-diagnostic.stderr <- PowerShell child timeout and explicit exit23;
+    tests actual deadline, exit propagation, full stderr and bounded visible diagnostic.
+Native Windows execution is unverified here. Replace shared outputs and hidden
+  tool/runtime prerequisites; keep cheap timeout and portable direct tests separate.
+
+Inventory/header checkpoint after entry 174 (base 16c7b9355, local changes):
+  Every inventory entry001-174 has a value rationale at its producer or input header;
+    common Main/InstalledCore helpers identify shared ownership separately. Eleven
+    new Haskell header edits compared with HEAD: noncomment code unchanged.
+  python3 -B .github/scripts/test_fast_fixtures.py: 47 passed in1.204s.
+  python3 -B .github/scripts/test_fast_select.py: 102 passed in33.650s.
+  python3 -B .github/scripts/test_fast_workflows.py: 19 passed in0.448s.
+  Retired two checks that required the now-quarantined blanket Make recipe, and
+    removed assertions about the retired Windows driver preparation branch.
+  Standalone Groovy evaluation: 43 indexed groups, 91 classes and full-Core exception
+    tag excluded. Of 475 ordinary indexed classes, 64 withheld and 411 selectable.
+    Thirty explicit exclusions include custom suites and three ordinary Windows
+    classes. Mixed-class tagged methods add further excluded coverage, not a class count.
+  git diff --check passed. PowerShell unavailable locally; native Windows script
+    execution is unverified. No fixture/runtime builds, pushes or CI dispatches.

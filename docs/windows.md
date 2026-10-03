@@ -1,5 +1,11 @@
 # Native Windows builds
 
+During fixture triage, smoke, driver, directory and codepage fixture lanes are
+[quarantined](fixture-quarantine.log). `bin/windows.ps1 -Action Test` runs the
+remaining portable and direct ABI checks and reports these exclusions. Explicit
+requests for the quarantined lanes stop before building. Native Windows execution
+of this quarantine change has not yet been verified.
+
 The Windows path builds the JVM runtime, the GHC plugin, the driver, and native
 fixtures with **GHC 9.14.1**, **cabal-install 3.16.0.0**, and
 **GraalVM 25.3.4.1 / JDK 25**. Run it in native PowerShell, not WSL.

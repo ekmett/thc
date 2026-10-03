@@ -1,5 +1,19 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (174 windows-smoke, bridge, driver and timeout)
+-- Purpose: Check native Windows compiler/runtime smoke, exception bridge ownership,
+--   CLI paths with spaces/tool selection, and subprocess timeout/error propagation.
+-- Consumes: Fixtures/NativeOracle/THC.Prim.Test sources, pinned CString and interfaces,
+--   WindowsBridgeAudit/runtime package, run-pure package, GHC/Cabal/PowerShell/THC runtime.
+-- Produces/consumed result: Shared smoke CBD/oracle, bridge linked/provenance files,
+--   four driver acquisition/run records, and standalone timeout diagnostic logs.
+-- Cost and overlap: Keep small portable semantic/CLI cases and process-timeout checks.
+--   Four full acquisitions and per-entry audits are excessive for a smoke target.
+-- Build status: QUARANTINED smoke/bridge/driver: joint global outputs, directory
+--   discovery and timestamped product trees. Timeout is a standalone helper test,
+--   not a fixture prerequisite and not excluded for keeping private diagnostic logs.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 174.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

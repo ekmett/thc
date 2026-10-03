@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (172 windows-codepages)
+-- Purpose: Check Windows encoding/error/buffer behavior across foreign-call transport.
+-- Consumes: WindowsCodePageAudit.hs, pinned ghc-internal Windows/CodePage modules and
+--   headers/catalogue, installed interfaces/native archives, GHC/Clang and runtime Core.
+-- Produces/consumed result: Pre/post CBDs, oracle.json, provider adapters/DLL, manifest.
+-- Cost and overlap: Preserve buffer ownership/error semantics in platform integration;
+--   ordinary encoding correctness belongs in public package smoke, not Win32 conformance.
+-- Build status: QUARANTINED. Every run publishes timestamped interfaces/providers and
+--   rebuilds a separate original-declaration/native adapter pipeline.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 172.
 {-# LANGUAGE CPP, OverloadedStrings #-}
 
 -- |

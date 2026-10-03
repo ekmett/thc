@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (169 getentropy)
+-- Purpose: Check splitmix initialization reaches native entropy and respects buffer
+--   bounds/status through foreign calls.
+-- Consumes: External splitmix0.1.3.2 sources, OriginalSplitmixEntry/Native.hs,
+--   NativeGetEntropy.c, driver/plugin/native tools and Linux x86_64 target libraries.
+-- Produces/consumed result: Splitmix/entry CBDs, audit, native TSVs, control.so/ll, manifest.
+-- Cost and overlap: Public splitmix initialization smoke is enough for this dependency.
+--   Separate native entropy conformance and IR controls add little compiler value.
+-- Build status: QUARANTINED. Copied-source deletion demands a fresh directory;
+--   recursive Core staging requires exact module inventory, with a fixed Linux target.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 169.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

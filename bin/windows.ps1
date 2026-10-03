@@ -13,6 +13,13 @@ if ($env:OS -ne 'Windows_NT') { throw 'Use the native Windows host for this scri
 if (!$env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME = Join-Path $root '.gradle-user-home' }
 $testDriver = $Action -eq 'Test' -and $TestGroup -in @('All', 'Driver')
 $testRuntime = $Action -eq 'Test' -and $TestGroup -in @('All', 'Runtime')
+# These fixture producers have unstable/shared outputs; fail before any build.
+if ($Action -in @('Fixtures', 'DirectoryTest', 'CodePageTest') -or ($testDriver -and !$testRuntime)) {
+    throw 'Requested Windows fixture lane is quarantined; see docs/fixture-quarantine.log'
+}
+if ($Action -eq 'Test') {
+    Write-Warning 'Smoke/driver/directory/codepage fixtures are quarantined; running the remaining portable and ABI checks.'
+}
 Push-Location $root
 New-Item -ItemType Directory -Force "$root/build" | Out-Null
 $lease = [IO.File]::Open("$root/build/.native-windows-build.lock",
@@ -40,9 +47,6 @@ try {
     if ($Action -in @('Fixtures', 'Test')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
     }
-    if ($Action -eq 'Fixtures' -or $testRuntime) {
-        Invoke-ThcTool $fixture @('windows-smoke')
-    }
     if ($testRuntime -or $Action -eq 'NativeLinkTest') {
         if (!$env:THC_TEST_ROOT) { $env:THC_TEST_ROOT = $root }
         if (!$env:THC_TEST_SCRATCH) { $env:THC_TEST_SCRATCH = Join-Path $root 'build/windows-native-link-tests' }
@@ -53,19 +57,7 @@ try {
     if ($testRuntime) {
         Invoke-ThcTool $cabal (@('test', 'driver-lock-tests', '--test-show-details=direct') + $flags)
     }
-    if ($testDriver) {
-        Invoke-ThcTool $fixture @('windows-driver')
-    }
-    if ($testRuntime) {
-        Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs",
-            'windowsSmokeTest', 'windowsDenseSmokeTest', '--rerun')
-    }
     $focusedTests = @()
-    if ($testDriver) {
-        $focusedTests += @('thc.WindowsDistributionTest.publicDriverMatchesNativeCompletionInEveryBackendAndHandoffMode',
-            'thc.WindowsDistributionTest.genuineHaskellHostEntryPreservesTheThunkAndStrictIoSignature',
-            'thc.WindowsDistributionTest.nativeSourceArchiveAndRuntimeProjectionKeepExactModuleBytes')
-    }
     if ($testRuntime) {
         Invoke-ThcTool $fixture @('tuple-arithmetic')
         Invoke-ThcTool $fixture @('bit')
@@ -102,16 +94,6 @@ try {
     }
     if ($testRuntime -or $Action -in @('DirectoryTest', 'CodePageTest', 'WindowsServicesTest')) {
         $focusedTests += 'thc.runtime.WindowsAbiInitializationTest'
-    }
-    if ($testRuntime -or $Action -in @('DirectoryTest', 'WindowsServicesTest')) {
-        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
-        Invoke-ThcTool $fixture @('windows-directory')
-        $focusedTests += 'thc.runtime.WindowsDirectoryStreamsTest'
-    }
-    if ($testDriver -or $Action -in @('CodePageTest', 'WindowsServicesTest')) {
-        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
-        Invoke-ThcTool $fixture @('windows-codepages')
-        $focusedTests += 'thc.runtime.WindowsCodePagesTest'
     }
     if ($focusedTests.Count) {
         # One shared compilation and one pair of reports retain every selected

@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (173 windows-directory)
+-- Purpose: Check Windows directory handles, UTF-16 names, buffer bounds, errors
+--   and cleanup through native foreign calls.
+-- Consumes: WindowsDirectoryAudit.hsc, pinned Win32 archive, GHC/Cabal/hsc2hs,
+--   installed native headers/libraries and typed interface exporter/auditor.
+-- Produces/consumed result: Pre/post CBDs, native oracle.json and source/fixture manifests.
+-- Cost and overlap: Keep handle ownership/buffer checks in platform integration;
+--   full private Win32 rebuild and declaration specialization are excessive for scans.
+-- Build status: QUARANTINED. Re-extracts a timestamped source tree and rebuilds Win32
+--   on every run; published evidence paths vary rather than having stable owners.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 173.
 {-# LANGUAGE CPP, OverloadedStrings #-}
 
 -- |

@@ -1,6 +1,20 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Shared fixture dispatch and scalar-array/pointer producers.
+-- Purpose: Route existing fixture commands; this module adds no separate test value.
+-- Per-fixture rationale belongs at the producing module or the named audit source.
+--   Array inputs/outputs/value: IntArrayAudit, Int8ArrayAudit, Int16ArrayAudit,
+--   Int32ArrayAudit, DoubleArrayAudit and FloatWordArrayAudit.hs (entries 007-012).
+--   Pointer ownership/value: PinnedPointerCellsAudit.hs (entry 013).
+-- Consumes: Selected family audit/native Haskell inputs, GHC, exporter/plugin and
+--   auditor; built tool closure includes all imported producer modules.
+-- Produces: Selected family native oracle, named pre/post CBDs/audits and manifest.
+-- Cost: Compile this tool once; invoking a command must not imply preparing other
+--   fixture families. Common tool and package products need one owning build rule.
+-- Admission/quarantine and detailed paths: docs/fixture-inputs.log and
+--   docs/fixture-quarantine.log. Direct commands remain available for isolated repair.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

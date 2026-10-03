@@ -97,8 +97,8 @@ test: fixtures
 test-modes: fixtures
 	./gradlew $(GRADLE_FLAGS) --continue testDefault $(if $(TESTS),--tests '$(TESTS)') testDense $(if $(TESTS),--tests '$(TESTS)')
 
-# This lane needs complete installed Core plus matching configured GHC sources.
-# Missing prerequisites are errors; run it alongside the portable test targets.
+# Disabled until named runtime/package/fixture products replace ordered setup.
+# The detailed input/output contracts and readmission requirements are documented.
 foreign-exception-fixtures:
 	@printf '%s\n' 'Foreign-exception preparation is quarantined: see docs/fixture-quarantine.log.' >&2
 	@exit 2

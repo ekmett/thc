@@ -1,6 +1,18 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (171 package-native-archives)
+-- Purpose: Check native archive dependency linking, mixed scalar/CAPI ABI, lifecycle
+--   and rejection of unsupported or conflicting foreign declarations.
+-- Consumes: run-native-archive packages/C sources, THC_PACKAGE_NATIVE_SUPPORT and
+--   referenced dependency closure, GHC/Cabal/Clang/llvm-ar, driver/plugin/auditor.
+-- Produces/consumed result: Linked package CBD/native products, audits and manifest.
+-- Cost and overlap: Real linker/ABI/rejection boundaries justify a compact integration
+--   case. Consolidate with package scalar coverage and retain direct rejection tests.
+-- Build status: QUARANTINED. Recursive captured-CBD listing determines consumed
+--   modules; replace it with named owned outputs before graph admission.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 171.
+
 -- Fixture rationale (096 package-native-gc-carriers)
 -- Purpose: Check boxed/primitive GC carriers cross package foreign boundaries safely.
 -- Produces/consumed result: Externally supplied package CBDs, generated carrier CBD and

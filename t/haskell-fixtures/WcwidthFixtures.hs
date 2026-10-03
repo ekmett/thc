@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (168 wcwidth)
+-- Purpose: Check locale-sensitive character widths through a safe CAPI call.
+-- Consumes: run-wcwidth package sources, external Tasty1.5.4 source/license,
+--   C/C.UTF-8 locale data, GHC/Cabal/native tools and driver/plugin.
+-- Produces/consumed result: Width.cbd/native linkage, two native TSVs, audits/manifest.
+-- Cost and overlap: Public Tasty/package behavior is enough. Source-line matching,
+--   copied upstream source and a dedicated wcwidth acquisition are unnecessary.
+-- Build status: QUARANTINED. Captured CBD directory must contain exactly Width.cbd;
+--   generation additionally pins verbatim upstream declaration/fallback lines.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 168.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

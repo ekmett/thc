@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (170 hashable-ffi)
+-- Purpose: Check public Hashable text/bytes instances agree with native GHC through
+--   ordinary package-native linkage, including lazy and short representations.
+-- Consumes: run-hashable-ffi Cabal/Haskell inputs, Hashable1.5.1.0, selected tools,
+--   installed Core/optional GHC sources and prebuilt THC_TEST_RUNTIME/installDist.
+-- Produces/consumed result: Package Core/native artifacts, 300 observations, manifest.
+-- Cost and overlap: Useful public-package integration; merge representative cases
+--   into intensive package smoke instead of maintaining another acquisition harness.
+-- Build status: QUARANTINED. Preparation runs a preexisting runtime with no producing
+--   dependency. Separate build/acquisition/oracle generation from guest execution.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 170.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
