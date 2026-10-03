@@ -16,7 +16,9 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `double-arrays`, `float-word-arrays`, `pinned-pointer-cells`, `integer-completion`,
 `word-floating`, `tuple-arithmetic`, `scalar-bitcasts`, `floating-remainder`,
 `fused-floating`, `small-arrays`, `managed-address-reads`, `wide-char-address`
-and `scalar-memory-utilities`. Each has a `fixture-<group>` target. `make fixtures` requires an
+`scalar-memory-utilities`, `thread-scheduling`, `thread-label`, `weak-explicit`,
+`stable-names`, `explicit64-arrays`, `floating-address`, `floating-byte-offset`,
+`atomic-address` and `unaligned-scalar-memory`. Each has a `fixture-<group>` target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
 
@@ -34,7 +36,9 @@ The Cabal plan determines executable paths and plugin dependency units. One rule
 builds the shared tools, another publishes the plugin library, package cache and
 every non-boot registration. Publication records the actual external registrations
 and dynamic libraries in a Ninja depfile. The Java synthetic-CBD encoder's path
-sidecar also has one writer. Gradle is not invoked by fixture generation.
+sidecar also has one writer. Gradle is not invoked by fixture generation. Native/Core compilation uses the
+selected global package database, with ambient GHC package environments and
+`GHC_PACKAGE_PATH` excluded. The published plugin database is an explicit input.
 
 This is an incremental migration of the [audited flows](fixture-inputs.log).
 [Quarantined producers](fixture-quarantine.log) have no graph targets. In particular,
@@ -45,7 +49,7 @@ providers or runtime test results follow from successfully generating fixtures.
 
 Local graph verification (macOS arm64, GHC 9.14.1)
 
-- All 25 admitted targets (58 mapped JUnit classes) generated successfully, then Ninja reported no
+- The first 25 admitted targets (58 mapped JUnit classes) generated successfully, then Ninja reported no
   work. The six array families together took 20.6 seconds including their shared
   tool rebuild (Ninja command log); native comparisons contained 19,175 rows.
 - Removing the Integer/Word interface-closure CBD rebuilt both CBD outputs and
@@ -56,6 +60,10 @@ Local graph verification (macOS arm64, GHC 9.14.1)
 - Managed-address reads now passes the exact two CBD paths to the auditor. A
   deliberately malformed extra CBD was ignored while a missing required CBD
   was regenerated; it did not enter the receipt.
+- The next nine groups (thread scheduling/labels, weak pointers, stable names and
+  five memory families) generated with a deliberately invalid ambient
+  `GHC_PACKAGE_PATH`. The graph supplied its selected database. The weak fixture
+  also rebuilt with an unrelated malformed CBD present, then returned to no-op.
 - `python3 bin/test-plugin.py`: 23 checks passed.
   `python3 .github/scripts/test_fast_fixtures.py`: 48 checks passed.
 

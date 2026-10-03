@@ -375,6 +375,7 @@
       "sources": ["t/fixtures/core/DelimitedContinuations.hs", "t/fixtures/compiler/DelimitedContinuationsNative.hs", "t/haskell-fixtures/DelimitedContinuationsFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-scheduling": {
+      "cmakeTarget": "fixture-thread-scheduling",
       "junit": ["thc.runtime.ThreadSchedulingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-scheduling"]}],
       "outputs": ["build/thread-scheduling"],
@@ -436,6 +437,7 @@
         "t/haskell-fixtures/Simd128ArrayFixtures.hs", "bin/simd-families.json"]
     },
     "thread-label": {
+      "cmakeTarget": "fixture-thread-label",
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-label"]}],
       "outputs": ["build/thread-label"],
@@ -636,6 +638,7 @@
       ]
     },
     "weak-explicit": {
+      "cmakeTarget": "fixture-weak-explicit",
       "junit": ["thc.runtime.ManagedWeakTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "weak-explicit"]}],
       "outputs": ["build/weak-explicit"],
@@ -648,6 +651,7 @@
       ]
     },
     "stable-names": {
+      "cmakeTarget": "fixture-stable-names",
       "junit": ["thc.runtime.StableNamesTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-names"]}],
       "outputs": ["build/stable-names"],
@@ -841,6 +845,7 @@
       "ciChecks": [{"platform": "Linux", "argv": ["python3", "-c", "import json\nfrom pathlib import Path\nproof = json.loads(Path('build/simd-doublex2-bytearray/provenance.json').read_text())\nassert proof['nativeRows'] == 4384 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof\n"]}]
     },
     "explicit64-arrays": {
+      "cmakeTarget": "fixture-explicit64-arrays",
       "junit": ["thc.runtime.Explicit64ArrayTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "explicit64-arrays"]}],
       "outputs": ["build/explicit64-arrays"],
@@ -854,6 +859,7 @@
       ]
     },
     "floating-address": {
+      "cmakeTarget": "fixture-floating-address",
       "junit": ["thc.runtime.FloatingAddressTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-address"]}],
       "outputs": ["build/floating-address"],
@@ -867,6 +873,7 @@
       ]
     },
     "atomic-address": {
+      "cmakeTarget": "fixture-atomic-address",
       "junit": ["thc.runtime.AtomicAddressTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "atomic-address"]}],
       "outputs": ["build/atomic-address"],
@@ -880,6 +887,7 @@
       ]
     },
     "floating-byte-offset": {
+      "cmakeTarget": "fixture-floating-byte-offset",
       "junit": ["thc.runtime.FloatingByteOffsetTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-byte-offset"]}],
       "outputs": ["build/floating-byte-offset"],
@@ -893,6 +901,7 @@
       ]
     },
     "unaligned-scalar-memory": {
+      "cmakeTarget": "fixture-unaligned-scalar-memory",
       "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "unaligned-scalar-memory"]}],
       "outputs": ["build/unaligned-scalar-memory"],

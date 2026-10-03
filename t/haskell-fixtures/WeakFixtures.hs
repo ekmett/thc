@@ -83,9 +83,6 @@ prepareWeaks root = do
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=weakComposite", source]) ""
-    exported <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory (root </> core)
-    unless (exported == ["THC.InterfaceClosure.cbd", "WeakAudit.cbd"]) $
-      die ("Unexpected explicit weak module inventory: " ++ show exported)
     _ <- run root [] "python3" (["bin/audit-core.py", "--entry", "main:WeakAudit.weakComposite", "--output",
       stageDir </> "audit.json"] ++ modules) ""
     pure (stage, modules)

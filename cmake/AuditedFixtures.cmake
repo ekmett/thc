@@ -190,3 +190,102 @@ audited_fixture(scalar-memory-utilities ScalarMemoryUtilities
   OUTPUTS manifest.json oracle.tsv native/oracle
     pre/core/ScalarMemoryUtilities.cbd post/core/ScalarMemoryUtilities.cbd
     pre/audit.json post/audit.json ${memory_logs})
+
+# 057: observable scheduling behavior; no assertions about an incidental order.
+set(scheduling_reports)
+foreach(stage pre post)
+  foreach(entry emptySpark lazyPar lazySpark sparkValue currentCounter negativeCounter pinnedFork otherCounter timedDelay)
+    list(APPEND scheduling_reports "${stage}/${entry}-audit.json")
+  endforeach()
+endforeach()
+audited_fixture(thread-scheduling ThreadScheduling
+  SOURCES t/fixtures/core/ThreadScheduling.hs t/fixtures/compiler/ThreadSchedulingNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.txt native/oracle pre/core/ThreadScheduling.cbd
+    post/core/ThreadScheduling.cbd ${scheduling_reports})
+
+# 061: label replacement and labels on completed threads.
+set(label_reports)
+foreach(stage pre post)
+  foreach(entry selfLabel overwriteLabel emptyLabel deadLabel deadOverwrite)
+    list(APPEND label_reports "${stage}/${entry}-audit.json")
+  endforeach()
+endforeach()
+audited_fixture(thread-label ThreadLabelAudit
+  SOURCES t/fixtures/compiler/ThreadLabelAudit.hs t/fixtures/compiler/ThreadLabelNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.txt native/oracle pre/core/ThreadLabelAudit.cbd
+    post/core/ThreadLabelAudit.cbd ${label_reports})
+
+# 082: explicit weak operations; this does not test GC scheduling.
+audited_fixture(weak-explicit WeakAudit
+  SOURCES t/fixtures/compiler/WeakAudit.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json NativeWeak.hs oracle.tsv native/weak-oracle
+    pre/core/WeakAudit.cbd pre/core/THC.InterfaceClosure.cbd pre/audit.json
+    post/core/WeakAudit.cbd post/core/THC.InterfaceClosure.cbd post/audit.json)
+
+# 083: stable-name equality follows sharing, not native hash values.
+set(stable_reports)
+set(stable_labels ghc-version native-build native-run)
+foreach(stage pre post)
+  list(APPEND stable_labels "${stage}-export")
+  foreach(entry sameLifted sameUnlifted differentUnlifted unevaluatedName)
+    list(APPEND stable_reports "${stage}/${entry}-audit.json")
+    list(APPEND stable_labels "${stage}-audit-${entry}")
+  endforeach()
+endforeach()
+set(stable_logs)
+foreach(label IN LISTS stable_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND stable_logs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(stable-names StableNames
+  SOURCES t/fixtures/core/StableNames.hs t/fixtures/compiler/StableNamesNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json native/oracle pre/core/StableNames.cbd post/core/StableNames.cbd
+    ${stable_reports} ${stable_logs})
+
+# 091,092,094: distinct explicit-width, address and byte-offset memory boundaries.
+audited_fixture(explicit64-arrays Explicit64ArrayAudit
+  SOURCES t/fixtures/compiler/Explicit64ArrayAudit.hs t/fixtures/compiler/Explicit64ArrayNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.tsv native/oracle pre/core/Explicit64ArrayAudit.cbd
+    post/core/Explicit64ArrayAudit.cbd pre/audit.json post/audit.json)
+audited_fixture(floating-address FloatingAddressAudit
+  SOURCES t/fixtures/compiler/FloatingAddressAudit.hs t/fixtures/compiler/FloatingAddressNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.tsv native/oracle pre/core/FloatingAddressAudit.cbd
+    post/core/FloatingAddressAudit.cbd pre/audit.json post/audit.json)
+audited_fixture(floating-byte-offset FloatingByteOffsetAudit
+  SOURCES t/fixtures/compiler/FloatingByteOffsetAudit.hs t/fixtures/compiler/FloatingByteOffsetNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.tsv native/oracle pre/core/FloatingByteOffsetAudit.cbd
+    post/core/FloatingByteOffsetAudit.cbd pre/audit.json post/audit.json)
+
+# 093: native-address atomics must preserve values across the memory boundary.
+set(atomic_logs)
+foreach(label version export-pre export-post audit-pre audit-post native-build native-oracle)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND atomic_logs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(atomic-address AtomicAddressAudit
+  SOURCES t/fixtures/compiler/AtomicAddressAudit.hs t/fixtures/compiler/AtomicAddressNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json inputs.txt oracle.tsv native/oracle pre/core/AtomicAddressAudit.cbd
+    post/core/AtomicAddressAudit.cbd pre/audit.json post/audit.json ${atomic_logs})
+
+# 095: unaligned loads/stores exercise different offsets from aligned accesses.
+set(unaligned_logs)
+foreach(label ghc-version ghc-inventory pre-export post-export pre-audit post-audit native-build native-oracle)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND unaligned_logs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(unaligned-scalar-memory UnalignedScalarMemoryAudit
+  SOURCES t/fixtures/compiler/UnalignedScalarMemoryAudit.hs t/fixtures/compiler/UnalignedScalarMemoryNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json inputs.txt oracle.tsv native/oracle pre/core/UnalignedScalarMemoryAudit.cbd
+    post/core/UnalignedScalarMemoryAudit.cbd pre/audit.json post/audit.json ${unaligned_logs})
