@@ -26,6 +26,8 @@ add_custom_target(ci-driver-help
 add_dependencies(ci-commit ci-driver-help)
 
 get_filename_component(primop_bin "${ci_binary_exe_thc_primops}" DIRECTORY)
+get_filename_component(driver_bin "${ci_binary_exe_thc}" DIRECTORY)
+get_filename_component(interface_bin "${interface_exe}" DIRECTORY)
 if(ci_suite_count GREATER 0)
   foreach(i RANGE ${ci_suite_last})
     string(JSON suite GET "${ci_selection}" haskell ${i})
@@ -35,9 +37,9 @@ if(ci_suite_count GREATER 0)
       set(options --unit-only)
     endif()
     add_custom_target("ci-${suite}"
-      COMMAND ${ci_env} "PATH=${primop_bin}:$ENV{PATH}" ${ci_runner} check-command
+      COMMAND ${ci_env} "PATH=${primop_bin}:${driver_bin}:${interface_bin}:$ENV{PATH}" ${ci_runner} check-command
         --report-dir "${ci_reports}/${suite}" -- "${ci_binary_${key}}" ${options}
-      DEPENDS "${ci_binary_${key}}" "${ci_binary_exe_thc_primops}"
+      DEPENDS "${ci_binary_${key}}" "${ci_binary_exe_thc_primops}" "${ci_binary_exe_thc}" "${interface_exe}"
       WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
     add_dependencies(ci-commit "ci-${suite}")
   endforeach()
