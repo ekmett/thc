@@ -102,6 +102,7 @@ filesUnder directory = do
 prepareWindowsCodePages :: FilePath -> IO ()
 prepareWindowsCodePages root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC" >>= canonicalizePath
+  pkg <- maybe (takeDirectory ghc </> "ghc-pkg.exe") id <$> lookupEnv "GHC_PKG"
   python <- maybe "python" id <$> lookupEnv "THC_PYTHON"
   stamp <- formatTime defaultTimeLocale "%Y%m%dT%H%M%S%q" <$> getCurrentTime
   let directory = "build/windows-codepages"
@@ -111,7 +112,6 @@ prepareWindowsCodePages root = do
       output = root </> logs </> "consumer"
       source = "t/fixtures/compiler/WindowsCodePageAudit.hs"
       execute = runLogged 180 root logs
-      pkg = takeDirectory ghc </> "ghc-pkg.exe"
       oneLine = BS.unpack . BS.takeWhile (/= '\r') . BS.takeWhile (/= '\n') . commandStdout
       modules = ["GHC.Internal.Windows","GHC.Internal.IO.Encoding.CodePage","GHC.Internal.IO.Encoding.CodePage.API",
         "GHC.Internal.IO.Windows.Encoding"]
