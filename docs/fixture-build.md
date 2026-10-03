@@ -27,7 +27,7 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `rts-shutdown`, `original-errno`, `ghc-bco`, `closure-inspection`, `cstring`,
 `thread-inventory`, `process-lifecycle-native`, `delimited-continuations`, `hint-trace`,
 `core-continuation`, `large-literal-cases`, `original-termios`, `original-rts-locks`,
-`rubbish-literals`, `original-tcgetattr` and `original-tcsetattr`. Each has a `fixture-<group>`
+`rubbish-literals`, `original-tcgetattr`, `original-tcsetattr` and `float-decode`. Each has a `fixture-<group>`
 target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
@@ -66,8 +66,8 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 74 graph targets covering 115 mapped JUnit classes, 46 quarantined
-groups and 18 groups still awaiting file rules. The native process target is
+There are 75 graph targets covering 116 mapped JUnit classes, 46 quarantined
+groups and 17 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -92,6 +92,12 @@ Terminal get/set targets own their Linux PTY servers, Core, audits and observati
 On macOS both emitted explicit unsupported receipts and returned to no work; Linux
 generation and runtime execution remain unverified here. Unsupported terminal targets
 do not publish an unused plugin database.
+
+Floating decomposition passed ten executions across both handoff modes in 32 seconds.
+All 326 declared files existed and all 29 consumed artifacts had matching hashes and
+graph writers. On the settled graph, deleting the native oracle rebuilt only its
+fixture in 3.36 seconds, kept the bignum dependency untouched and returned to no work
+in 0.41 seconds. Its audits dropped from 16 to two; obsolete bignum copies freed 14.4 MiB.
 
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread

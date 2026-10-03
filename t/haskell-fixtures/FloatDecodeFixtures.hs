@@ -3,12 +3,13 @@
 
 -- Fixture rationale (024 float-decode)
 -- Purpose: Check floating decomposition agrees with GHC on signs, exponents and mantissas.
--- Produces/consumed result: CBDs, oracle.tsv and decoded original implementation facts.
--- Cost and overlap: Keep arithmetic observations and relevant negative controls.
---   Installed-Core acquisition is justified only where the original implementation is
---   actually exercised.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Consumes: FloatDecodeAudit.hs, FloatDecodeNative.hs, FloatDecode.hs, selected GHC,
+--   owned original Integer CBD/provenance, exporter/plugin and auditor.
+-- Produces: Native bit-pattern observations, pre/post CBDs, two audits and logs.
+-- Cost and overlap: Independent integer model checks mantissas/exponents including
+--   subnormals, infinities and NaNs. Public exponent calls execute the original
+--   Integer worker; its separate CMake edge reuses the private bignum export.
+-- Build status: cmake/BootFixtures.cmake owns each file and compilation directory.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 024.
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -33,7 +34,7 @@ import qualified Data.ByteString.Char8 as BSC
 import Data.List (isInfixOf, isPrefixOf, sort)
 import qualified Data.Set as Set
 import FixtureSupport (CommandResult(..), hashes, readInteger, run, runLogged, runLoggedWithInput, splitTab, writeJson)
-import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
+import System.Directory ( createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
@@ -102,35 +103,27 @@ prepareFloatDecode root = do
     (traverse parse (lines (BSC.unpack (commandStdout executed))))
   unless ([(name,bits) | (name,bits,_,_) <- rows] == requests) (die "Changed native decode corpus")
   BS.writeFile (output </> "oracle.tsv") (commandStdout executed)
-  -- Public Double.exponent calls GHC's opaque integerFromInt64# worker.
-  -- Retain the complete unchanged original module; never synthesize its body.
-  -- The private interface overlay is build scratch, not a fixture-cache input.
-  let boot = "build/float-decode-originals"
-      original = directory </> "original/GHC.Internal.Bignum.Integer.cbd"
+  -- CMake owns this private original-source export. This operation consumes its
+  -- named files; it never acquires or overwrites a dependency's products.
+  let original = directory </> "original/core/GHC.Internal.Bignum.Integer.cbd"
       provenance = directory </> "original/boot-provenance.json"
-  bootExport <- runLogged 300 root logs "boot-export" [] "python3"
-    ["bin/export-boot.py","--frontier","bignum","--build-dir",boot]
-  createDirectoryIfMissing True (output </> "original")
-  copyFile (root </> boot </> "core/GHC.Internal.Bignum.Integer.cbd") (root </> original)
-  copyFile (root </> boot </> "boot-provenance.json") (root </> provenance)
   stages <- forM ["pre","post"] $ \stage -> do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
     let corePaths = [directory </> stage ++ "-core" </> name ++ ".cbd" | name <- ["FloatDecodeAudit","FloatDecode"]]
-    reports <- forM entries $ \name -> do
-      let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
-      audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        (["bin/audit-core.py"] ++ corePaths ++ [original,"--entry",
-          "main:" ++ (if "Example" `isInfixOf` name then "FloatDecode" else "FloatDecodeAudit") ++ "." ++ name,"--output",reportPath])
-      report <- BS.readFile (root </> reportPath) >>= either die pure . eitherDecodeStrict'
-      case report of
-        Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
-          KeyMap.lookup "issues" fields == Just (Array mempty),
-          KeyMap.lookup "missingGlobals" fields == Just (Array mempty) -> pure ()
-        _ -> die ("Strict floating decode audit rejected " ++ stage ++ "/" ++ name)
-      pure (reportPath:commandArtifacts audited)
-    pure (corePaths ++ commandArtifacts exported ++ concat reports)
+    let reportPath = directory </> stage ++ "-audit.json"
+        roots = concat [["--entry", "main:" ++
+          (if "Example" `isInfixOf` name then "FloatDecode" else "FloatDecodeAudit") ++ "." ++ name] | name <- entries]
+    audited <- runLogged 120 root logs (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py"] ++ corePaths ++ [original,"--output",reportPath] ++ roots)
+    report <- BS.readFile (root </> reportPath) >>= either die pure . eitherDecodeStrict'
+    case report of
+      Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
+        KeyMap.lookup "issues" fields == Just (Array mempty),
+        KeyMap.lookup "missingGlobals" fields == Just (Array mempty) -> pure ()
+      _ -> die ("Strict floating decode audit rejected " ++ stage)
+    pure (corePaths ++ commandArtifacts exported ++ [reportPath] ++ commandArtifacts audited)
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,example,"thc.cabal","t/haskell-fixtures/Main.hs",
@@ -141,7 +134,7 @@ prepareFloatDecode root = do
         ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [requestPath,directory </> "oracle.tsv",binary,original,provenance] ++ concat stages ++
-        commandArtifacts compiled ++ commandArtifacts executed ++ commandArtifacts bootExport
+        commandArtifacts compiled ++ commandArtifacts executed
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),

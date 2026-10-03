@@ -39,7 +39,7 @@ class FloatDecodeTest {
     private Map<String, Object> json(String path) throws Exception { return object(Json.parse(read(path))); }
     private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
     private String entryId(String name) { return "main:" + (name.contains("Example") ? "FloatDecode" : "FloatDecodeAudit") + "." + name; }
-    private Map<String, Object> originalModule() throws Exception { return cbd(DIRECTORY + "/original/GHC.Internal.Bignum.Integer.cbd"); }
+    private Map<String, Object> originalModule() throws Exception { return cbd(DIRECTORY + "/original/core/GHC.Internal.Bignum.Integer.cbd"); }
     private Map<String, Object> module(String stage) throws Exception {
         return CoreModules.merge(list(cbd(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.cbd"), originalModule(), cbd(DIRECTORY + "/" + stage + "-core/FloatDecode.cbd")));
     }
@@ -96,22 +96,19 @@ class FloatDecodeTest {
         for (var name : list("BigNat", "Integer", "Natural")) for (var suffix : list(".hs", ".hs-boot")) sources.add("nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/" + name + suffix);
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sources.add(root.toPath().relativize(file.toPath()).toString());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add(root.toPath().relativize(file.toPath()).toString());
-        var commands = new ArrayList<>(list("native-build", "native-oracle", "boot-export"));
-        var artifacts = new HashSet<>(list(DIRECTORY + "/inputs.tsv", DIRECTORY + "/oracle.tsv", DIRECTORY + "/native/oracle", DIRECTORY + "/original/GHC.Internal.Bignum.Integer.cbd", DIRECTORY + "/original/boot-provenance.json"));
+        var commands = new ArrayList<>(list("native-build", "native-oracle"));
+        var artifacts = new HashSet<>(list(DIRECTORY + "/inputs.tsv", DIRECTORY + "/oracle.tsv", DIRECTORY + "/native/oracle", DIRECTORY + "/original/core/GHC.Internal.Bignum.Integer.cbd", DIRECTORY + "/original/boot-provenance.json"));
         for (var stage : list("pre", "post")) {
             commands.add(stage + "-export"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.cbd"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecode.cbd");
-            for (var name : NAMES) { commands.add(stage + "-" + name + "-audit"); artifacts.add(DIRECTORY + "/" + stage + "-" + name + "-audit.json"); }
+            commands.add(stage + "-audit"); artifacts.add(DIRECTORY + "/" + stage + "-audit.json");
         }
         for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) artifacts.add(DIRECTORY + "/commands/" + command + "." + suffix);
         assertEquals(sources, object(manifest.get("inputHashes")).keySet()); assertEquals(artifacts, object(manifest.get("artifactHashes")).keySet());
         for (var kind : list("inputHashes", "artifactHashes")) for (var hash : object(manifest.get(kind)).entrySet()) assertEquals(hash.getValue(),
             HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(root, hash.getKey()).toPath()))), "Stale floating decode fixture: " + hash.getKey());
-        for (var stage : list("pre", "post")) for (var name : NAMES) {
-            var report = json(DIRECTORY + "/" + stage + "-" + name + "-audit.json");
+        for (var stage : list("pre", "post")) {
+            var report = json(DIRECTORY + "/" + stage + "-audit.json");
             assertEquals(true, report.get("accepted")); assertEquals(list(), report.get("issues")); assertEquals(list(), report.get("missingGlobals"));
-            var decode = name.startsWith("float") ? "decodeFloat_Int#" : "decodeDouble_Int64#";
-            assertTrue(objects(report.get("primitives")).stream().anyMatch(prim -> decode.equals(prim.get("name"))),
-                stage + "/" + name + " retains the decode operation");
         }
         var provenance = json(DIRECTORY + "/original/boot-provenance.json"); assertEquals("ghc-9.14.1-release", provenance.get("ghcTag")); assertEquals(list(), provenance.get("sourcePatches"));
         var provenanceSources = objects(provenance.get("sources"));

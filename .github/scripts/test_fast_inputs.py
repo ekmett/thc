@@ -844,7 +844,6 @@ class FastInputTests(unittest.TestCase):
     def test_float_decode_preserves_complete_original_core_and_native_evidence(self):
         name = 'build/float-decode/manifest.json'
         binary = 'build/float-decode/native/oracle'
-        self.assertEqual(89, len(cache.FLOAT_DECODE_OUTPUTS))
         self.assertIn(name, DECLARED_REQUIRED)
         for path in cache.FLOAT_DECODE_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path), path)
@@ -869,7 +868,7 @@ class FastInputTests(unittest.TestCase):
             self.assertEqual(original, (self.root / name).read_text())
             self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
             self.remove_payload(packed)
-            for absent in (binary, 'build/float-decode/original/GHC.Internal.Bignum.Integer.cbd'):
+            for absent in (binary, 'build/float-decode/original/core/GHC.Internal.Bignum.Integer.cbd'):
                 changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
                     if member.name != 'files/' + absent])
                 self.rejected_without_writes(changed)

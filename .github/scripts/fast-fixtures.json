@@ -810,6 +810,7 @@
         "t/fixtures/compiler/FloatingRemainderNative.hs", "t/fixtures/core/InverseHyperbolic.hs"]
     },
     "float-decode": {
+      "cmakeTarget": "fixture-float-decode",
       "requires": ["compact-model"],
       "junit": ["thc.runtime.FloatDecodeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-decode"]}],

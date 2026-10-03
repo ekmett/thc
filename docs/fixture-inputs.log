@@ -998,12 +998,11 @@ Receipt hashes PrimopTools.hs although this producer does not run thc-primops;
 024  float-decode
 Fixture rationale (024 float-decode)
 Purpose: Check floating decomposition agrees with GHC on signs, exponents and mantissas.
-Produces/consumed result: CBDs, oracle.tsv and decoded original implementation facts.
-Cost and overlap: Keep arithmetic observations and relevant negative controls.
-  Installed-Core acquisition is justified only where the original implementation is
-  actually exercised.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Produces/consumed result: Pre/post CBDs, native bit-pattern observations, two audits
+  and the original Integer worker called by public exponent.
+Cost and overlap: Independent integer model covers subnormals, infinities and NaNs.
+  The private bignum export is a separate reusable dependency, not repeated preparation.
+Build status: cmake/BootFixtures.cmake owns every file and compilation directory.
 
 Producer: t/haskell-fixtures/FloatDecodeFixtures.hs:prepareFloatDecode.
 Consumer: src/test/java/thc/runtime/FloatDecodeTest.java.
@@ -1015,30 +1014,32 @@ Under build/float-decode/:
   native/oracle: IN three Haskell files, native GHC/package tools;
     OUT executable/native intermediates.
   oracle.tsv: IN executable and inputs.tsv; OUT four-column native results.
-  original/GHC.Internal.Bignum.Integer.cbd and original/boot-provenance.json
-    IN: corresponding build/float-decode-originals/core/ and root provenance
-        produced by export-boot.py --frontier bignum; OUT copied retained files.
+  original/core/GHC.Internal.Bignum.Integer.cbd and original/boot-provenance.json
+    IN: export-boot.py --frontier bignum with declared pinned sources, installed
+        interfaces and plugin. OUT: directly consumed dependency files; no extra copies.
   pre-core/{FloatDecodeAudit,FloatDecode}.cbd and post-core/same
     IN: audit/example Haskell sources, shared exporter/plugin with stage option.
-    OUT: four CBDs and pre-ghc/post-ghc scratch files.
-  <stage>-<entry>-audit.json
+    OUT: four CBDs and pre-ghc/post-ghc/{FloatDecodeAudit,FloatDecode}.{hi,o}.
+  <stage>-audit.json
     Entries float/double with Direct, Call, Exponent plus floatExampleExponent,
       doubleExampleExponent. IN: stage CBD pair and original Integer CBD,
-      named entry and auditor/data. OUT: sixteen audit reports.
+      all eight named entries and auditor/data. OUT: two audit reports.
   commands/<label>.{stdout,stderr,command.json}
-    Labels native-build, native-oracle, boot-export, pre/post-export,
-      pre/post-<entry>-audit. OUT: corresponding command logs.
+    Labels native-build, native-oracle, pre/post-export, pre/post-audit.
+    OUT: corresponding command logs.
   manifest.json: IN all retained artifacts/logs and source receipt; OUT manifest.
-Additional produced tree build/float-decode-originals/:
+Separate dependency products under build/float-decode/original/:
   IN: export-boot.py/plugin plus installed ghc-internal dynamic interfaces;
       pinned Bignum/{BigNat,Integer,Natural}.{hs,hs-boot}, include/WordSize.h,
       LICENSE under nih/pinned/ghc-9.14.1/libraries/ghc-internal/ (hs under src/GHC/Internal/).
-  OUT: boot-ghc/ private overlay/objects/interfaces, boot-core/GHC.Internal.Bignum.
+  OUT: boot-ghc/ named interface overlay plus Bignum/{BigNat,Natural,Integer}.
+    {hi,o,hi-boot,o-boot}, boot-core/GHC.Internal.Bignum.
     {BigNat,Integer,Natural}.cbd, copies in core/, boot-provenance.json. Only Integer
     and provenance are retained in the fixture's artifact receipt.
 Consumer reads manifest/receipt paths, CBDs, TSV and audit reports; mutation
   controls also write temp CBD/report/stdout/stderr using shared encoder and
-  hardcoded python3 auditor. Missing receipt tables/tool closure as in 023.
+  python3 auditor. Native objects are native/{Main,FloatDecodeAudit,FloatDecode}.
+  {hi,o}; all selected tool/package inputs and overlay files are in the CMake graph.
 
 025  floating-remainder
 Fixture rationale (025 floating-remainder)

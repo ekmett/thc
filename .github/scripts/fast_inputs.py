@@ -532,16 +532,14 @@ REQUIRED = tuple(sorted({
 BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-path-stat", "original-path-mode", "original-path-link", "original-directory-paths", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
-FLOAT_DECODE_ENTRIES = (*tuple(family + suffix for family in ("float", "double") for suffix in ("Direct", "Call", "Exponent")),
-                        "floatExampleExponent", "doubleExampleExponent")
-FLOAT_DECODE_COMMANDS = ("native-build", "native-oracle", "boot-export",
+FLOAT_DECODE_COMMANDS = ("native-build", "native-oracle",
                         *(label for stage in ("pre", "post") for label in
-                          (f"{stage}-export", *(f"{stage}-{name}-audit" for name in FLOAT_DECODE_ENTRIES))))
+                          (f"{stage}-export", f"{stage}-audit")))
 FLOAT_DECODE_OUTPUTS = frozenset("build/float-decode/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
-    "original/GHC.Internal.Bignum.Integer.cbd", "original/boot-provenance.json",
+    "original/core/GHC.Internal.Bignum.Integer.cbd", "original/boot-provenance.json",
     *(f"{stage}-core/{module}.cbd" for stage in ("pre", "post") for module in ("FloatDecodeAudit", "FloatDecode")),
-    *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in FLOAT_DECODE_ENTRIES),
+    *(f"{stage}-audit.json" for stage in ("pre", "post")),
     *(f"commands/{command}.{suffix}" for command in FLOAT_DECODE_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 FLOATING_REMAINDER_ENTRIES = (*(op + kind for kind in ("Float", "Double") for op in ("asinh", "acosh", "atanh", "min", "max")),
                             "decodeWordsDirect", "decodeWordsCall", "asinhExample")
