@@ -35,7 +35,7 @@ execute_process(COMMAND ${fixture_env} "${GHC}" --print-libdir OUTPUT_VARIABLE g
   OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
 file(GLOB_RECURSE ghc_package_inputs CONFIGURE_DEPENDS
   "${ghc_libdir}/*.hi" "${ghc_libdir}/*.dyn_hi" "${ghc_libdir}/*.a"
-  "${ghc_libdir}/*.so" "${ghc_libdir}/*.dylib" "${ghc_db}/*.conf")
+  "${ghc_libdir}/*.so" "${ghc_libdir}/*.dylib" "${ghc_libdir}/*.h" "${ghc_db}/*.conf")
 list(APPEND toolchain_inputs "${ghc_libdir}/settings" ${ghc_package_inputs})
 execute_process(COMMAND ${fixture_env} "${GHC}" --info OUTPUT_VARIABLE ghc_info
   COMMAND_ERROR_IS_FATAL ANY)

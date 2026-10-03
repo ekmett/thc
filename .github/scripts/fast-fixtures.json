@@ -517,6 +517,7 @@
       "sources": ["t/fixtures/compiler/OriginalOpenAudit.hs", "t/fixtures/compiler/OriginalOpenNative.hs", "t/fixtures/compiler/OriginalOpenRequestNative.hs", "src/main/c/native-open-request.c", "src/driver/THC/Driver/NativeCache.hs", "t/haskell-fixtures/OriginalOpenFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "rts-diagnostics": {
+      "cmakeTarget": "fixture-rts-diagnostics",
       "junit": ["thc.runtime.RtsDiagnosticsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rts-diagnostics"]}],
       "outputs": ["build/rts-diagnostics"],
@@ -524,6 +525,7 @@
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "rts-shutdown": {
+      "cmakeTarget": "fixture-rts-shutdown",
       "junit": ["thc.runtime.RtsShutdownTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rts-shutdown"]}],
       "outputs": ["build/rts-shutdown"],

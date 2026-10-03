@@ -307,7 +307,10 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
     commandFiles names = [directory </> "commands" </> name ++ "." ++ suffix | name <- names, suffix <- ["stdout","stderr","command.json"]]
     audit stage label paths entry expectedExit = do
       let output = directory </> stage </> label ++ ".audit.json"
-          args = ["bin/audit-core.py"] ++ paths ++ ["--entry",prefix ++ entry,"--output",output]
+          -- Expected rejection controls are small and already retain named
+          -- reports/logs. Do not leak a failure catalogue for each successful test.
+          args = ["bin/audit-core.py"] ++ ["--eager" | expectedExit == Just 1] ++ paths ++
+            ["--entry",prefix ++ entry,"--output",output]
           commandPrefix = root </> directory </> "commands" </> stage ++ "-" ++ label ++ "-audit"
           permitted = maybe [0,1] (:[]) expectedExit
       createDirectoryIfMissing True (root </> directory </> "commands")
