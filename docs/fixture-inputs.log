@@ -2698,3 +2698,419 @@ Under build/address-array-copy/:
 Consumer reads receipt/hashed files/oracle/CBDs/audits. It also creates temporary
   mutated CBDs via compact-model encoder (041), invokes Python auditor on them and
   reads temporary <label>-report.json: both tools/data are TEST dependencies.
+
+103 synchronous-exceptions
+Producer: bin/prepare-synchronous-exceptions.py; index first removes its output tree.
+Consumer: thc.runtime.SynchronousExceptionsNativeTest.
+IN t/fixtures/compiler/SynchronousExceptionsAudit.hs, SynchronousExceptionsNative.hs,
+  producer model/shared tools/data, GHC/native packages and published plugin/DB.
+Under build/synchronous-exceptions/ (or --out; must be absent before generation):
+  plugin-artifact snapshots: IN plugin sharedLibrary/cabalSharedLibrary paths;
+    OUT copied libraries (names computed by plugin_snapshot); shared build/compiler/plugin.json
+    and original plugin files remain receipt/check inputs too.
+  <pre|post>/core/{SynchronousExceptionsAudit,THC.InterfaceClosure}.cbd, stage/ghc/:
+    IN audit source/plugin, closure roots, stage flags, -g/source notes.
+  stage/<entry>.audit.json: IN all stage *.cbd/in-process auditor/data.
+  contracts.json: IN audited reachable expressions; OUT observed exception contracts.
+  native/synchronous-exception-oracle and intermediates: IN driver/audit source/GHC.
+  oracle.tsv: IN binary plus generated entry/value stdin corpus/model.
+  logs/: OUT triplets ghc-version,python-version,cabal-plugin-build,plugin-metadata,
+    pre-export,post-export,native-build,native-word-bits,native-oracle.
+  manifest.json: IN all named products/logs/source hashes/plugin snapshots; OUT receipt.
+--check-only reads receipt and all referenced products/plugin metadata/optional original
+  plugin paths; no generation. Consumer reads receipt/hash files/oracle/stage CBD sets.
+Producer refuses existing directory, so index currently destroys/rebuilds everything.
+
+104 deep-evaluation
+Producer: t/haskell-fixtures/DeepEvaluationFixtures.hs; consumer: thc.runtime.AstStackNativeTest.
+IN t/fixtures/compiler/DeepEvaluation.hs, DeepEvaluationNative.hs, shared tools/data,
+  native GHC; published build/compiler/plugin.json and its sharedLibrary are receipt inputs.
+Under build/deep-evaluation/:
+  native/oracle and intermediates: IN native/audit sources/GHC.
+  logs/native-oracle.stdout: IN binary; OUT five depth/result observations.
+  <pre|post>/core/{DeepEvaluation,THC.InterfaceClosure}.cbd and stage/ghc/:
+    IN source/probe closure/exporter.
+  stage/audit.json: IN CBD pair/auditor.
+  logs/: OUT ghc-version,native-compile,native-oracle,stage-export/audit triplets.
+  manifest.json: IN sources/products/logs/plugin hashes; no old receipt invalidation.
+Consumer reads receipt/hash files/oracle stdout/stage CBD pairs/audits.
+
+105 exception-result-layouts
+Producer: t/haskell-fixtures/ExceptionResultLayoutsFixtures.hs.
+Consumer: thc.runtime.ExceptionResultLayoutsNativeTest.
+IN t/fixtures/compiler/ExceptionResultLayoutsAudit.hs, ExceptionResultLayoutsNative.hs,
+  shared tools/data/native GHC and host architecture.
+Under build/exception-result-layouts/:
+  native/oracle and intermediates: IN native driver/GHC (boxed effects/model).
+  logs/native-<entry>-<mode>.stdout and oracle.tsv: IN binary per entry/mode;
+    TSV concatenates 47 invocations, 141 rows.
+  <stage>/core/ExceptionResultLayoutsAudit.cbd and stage/ghc/: IN audit source/exporter;
+    stages pre/post except aarch64: pre only with -fno-code/-fwrite-if-simplified-core.
+  stage/<entry>-audit.json: IN stage CBD/auditor; entries <int8,word8,int16,word16,
+    int32,word32,int64,word64,float,double,empty,nested,sum,vector,unlifted,
+    unliftedPayload>Result. Modes 0,1,2 except unliftedPayload uses 0,1.
+  logs/: OUT all native/export/audit/version command triplets.
+  manifest.json: IN source/product/log hashes/architecture-derived stage set;
+    no old receipt invalidation.
+Consumer reads receipt/hash files/oracle/CBDs/audits. Flag per-entry process overhead.
+
+106 scalar-exception-results
+Producer: t/haskell-fixtures/ScalarExceptionResultsFixtures.hs.
+Consumer: thc.runtime.ScalarExceptionResultsNativeTest.
+IN t/fixtures/compiler/ScalarExceptionResultsAudit.hs, ScalarExceptionResultsNative.hs,
+  shared tools/data/native GHC.
+Under build/scalar-exception-results/:
+  native/oracle and intermediates: IN native/audit sources/GHC.
+  logs/native-oracle.stdout: IN binary; OUT 36 observations.
+  <pre|post>/core/ScalarExceptionResultsAudit.cbd and stage/ghc/: IN source/exporter.
+  stage/<entry>-audit.json: IN CBD/auditor; entries <normal|throw|interrupt><Int|Word|Addr>.
+  logs/: OUT version/native-compile/oracle/stage-export/entry-audit triplets.
+  manifest.json: IN source/product/log hashes; no old receipt invalidation.
+Consumer reads receipt/hash files/oracle stdout/CBDs/audits. Review overlap with 105.
+
+107 mask-functions
+Producer: t/haskell-fixtures/MaskFunctionFixtures.hs; consumer: thc.runtime.MaskFunctionNativeTest.
+IN t/fixtures/compiler/MaskFunctionAudit.hs, MaskFunctionNative.hs, shared tools/data/GHC.
+Under build/mask-functions/:
+  native/oracle and intermediates: IN native/audit sources/GHC.
+  logs/native-oracle.stdout: IN binary; OUT fifteen observations.
+  <pre|post>/core/MaskFunctionAudit.cbd and stage/ghc/: IN source/exporter.
+  stage/<entry>-audit.json: IN CBD/auditor; entries maskedFunction,unmaskedFunction,
+    uninterruptibleFunction,lazyFunctions,bareMasks.
+  logs/: OUT version/native-compile/oracle/stage-export/entry-audit triplets.
+  manifest.json: IN source/product/log hashes; no old receipt invalidation.
+Consumer reads receipt/hash files/oracle stdout/CBDs/audits.
+
+108 core-continuation
+Producer: t/haskell-fixtures/ContinuationFixtures.hs.
+Consumers: thc.runtime.CoreContinuationNativeTest, LargeLiteralCaseNativeTest.
+IN t/fixtures/compiler/{CoreContinuationAudit,LazyIOCallbackAudit,LargeLiteralCaseAudit,
+  CoreContinuationNative,LazyIOCallbackNative}.hs, shared tools/data/native GHC.
+Under build/core-continuation/:
+  core/{CoreContinuationAudit,LazyIOCallbackAudit,LargeLiteralCaseAudit}.cbd, ghc/:
+    IN three audit sources/exporter, pre stage only.
+  literal-<largeInt|largeWordCheck|largeLazy|boxInt>-audit.json:
+    IN LargeLiteralCaseAudit.cbd/auditor.
+  <lazy-action|lazy-handler|keep-alive-scalar|keep-alive-tuple>-audit.json:
+    IN LazyIOCallbackAudit.cbd/auditor.
+  audit.json, <application|overapplication|overapplication-tail|
+    direct-overapplication-tail|compact-scalar|typed-scalar|nested|catch-action|
+    catch-failure|nested-catch|async-payload|tuple-application|tuple-overapplication|
+    tuple-tail-overapplication|tuple-application-failure|tuple-compact|tuple-raise|
+    handler|masked|unmasked|uninterruptible|force-value>-audit.json:
+    IN CoreContinuationAudit.cbd/auditor and corresponding entry.
+  native-oracle, lazy-native-oracle, literal-native-oracle, native/ intermediates:
+    IN matching audit/native sources/GHC; literal audit has its own main.
+  native-output.txt, lazy-native-output.txt, literal-native-output.txt:
+    IN respective binary, observations checked against fixed expectations.
+  literal-manifest.json: IN literal source/producer/literal CBD/literal output hashes.
+Consumers read relevant CBDs/native outputs; literal test also reads receipt/hashes.
+No general receipt. Three native builds share native/ (including Main intermediates).
+Many separate auditor starts inspect the same Core; record cost for later reduction.
+
+109 thread-status
+Producer: t/haskell-fixtures/ThreadStatusFixtures.hs; consumer: thc.runtime.ThreadStatusNativeTest.
+IN t/fixtures/compiler/ThreadStatusAudit.hs, ThreadStatusNative.hs, shared tools/data/GHC.
+Under build/thread-status/:
+  <pre|post>/core/ThreadStatusAudit.cbd and stage/ghc/: IN source/exporter.
+  stage/<selfStatus|maskedStatus|finishedStatus|diedStatus|blockedStatus>-audit.json:
+    IN stage CBD/auditor.
+  native/oracle and intermediates: IN native/audit sources/threaded dynamic GHC.
+  oracle.txt: IN binary +RTS -N2; OUT six status observations.
+  manifest.json: IN sources/oracle/CBDs/audits; old receipt removed.
+Consumer reads receipt/hash files/oracle/CBDs.
+
+110 thread-async
+Producer: t/haskell-fixtures/ThreadAsyncFixtures.hs.
+Consumers: thc.runtime.ThreadAsyncNativeTest, LoomNativeTest.
+IN t/fixtures/compiler/{ThreadAsyncAudit,ThreadAsyncNative,LazyForkAudit,LazyForkNative}.hs,
+  shared tools/data/threaded dynamic native GHC.
+Under build/thread-async/:
+  <pre|post>/core/{ThreadAsyncAudit,LazyForkAudit}.cbd, stage/{ghc,lazy-ghc}/:
+    IN corresponding audit source/exporter, separate export calls into shared core/.
+  stage/<entry>-audit.json: IN matching CBD/auditor; thread entries forkAndThrow,
+    killUncaught,selfThrow,maskedUnmaskSelf,promptSelfThrow,promptMaskedUnmaskSelf,
+    savedSelfThrow,savedMaskedSelf,savedSuffixSelf,savedMaskCatchSelf,externalSaved,
+    scheduledSaved,yieldProbe,yieldMasked; lazy entry lazyFork.
+  native/oracle, native/lazy-oracle and shared intermediates:
+    IN corresponding driver/audit sources/GHC.
+  oracle.txt, extra-oracle.txt, saved-oracle.txt, external-saved-oracle.txt,
+    scheduled-saved-oracle.txt, yield-oracle.txt: IN oracle with respective modes
+    default/extras/saved/external-saved/scheduled-saved/yield and +RTS -N2.
+  lazy-oracle.txt: IN lazy-oracle +RTS -N2.
+  manifest.json: IN source hashes/observations/CBDs/audits; old receipt removed.
+ThreadAsyncNativeTest reads receipt/hash files/observations/CBDs.
+
+111 uncaught-self
+Producer: t/haskell-fixtures/UncaughtSelfFixtures.hs.
+Consumer: thc.runtime.UncaughtSelfNativeTest.
+IN t/fixtures/compiler/UncaughtSelfAudit.hs, UncaughtSelfNative.hs, shared tools/data/GHC.
+Under build/uncaught-self/:
+  <pre|post>/core/UncaughtSelfAudit.cbd and stage/ghc/: IN source/exporter.
+  stage/audit.json, stage/io-audit.json: IN CBD/auditor for selfUncaught/selfUncaughtIO
+    (latter with --io-main).
+  native/oracle and intermediates: IN native/audit sources/threaded dynamic GHC.
+  manifest.json: IN source/CBD/audit/binary hashes; old receipt removed.
+Consumer reads receipt/hash files/CBDs/audits and RUNS native/oracle +RTS -N2 itself
+  to compare failure behavior. No saved native observation artifact from producer.
+
+112 io-main-pap
+Producer: bin/prepare-io-main-pap.py; consumer: thc.runtime.IoMainPapNativeTest.
+IN t/fixtures/compiler/IoMainPapAudit.hs, IoMainPapNative.hs, producer/shared tools/data/GHC.
+Under build/io-main-pap/:
+  <pre|post>/core/{IoMainPapAudit,THC.InterfaceClosure}.cbd and stage/ghc/:
+    IN source/goodMain,badMain closure roots/exporter; exact CBD inventory checked.
+  stage/<goodMain|badMain>-audit.json: IN CBD pair/in-process auditor --io-main.
+  native/io-main-pap-oracle and intermediates: IN native/audit sources/GHC.
+  oracle.tsv, native-stderr.txt: IN binary; completion/exception observations.
+  provenance.json: IN sources/CBDs/audits/binary/observations; old receipt removed;
+    recordedAtUtc is a non-content timestamp.
+--check-only reads receipt/all hashes/oracle/audits. Consumer reads these and writes
+  temporary control CBDs, requiring compact-model encoder (041).
+Producer enforces exact two-argument PAP/three-formal worker structure; review whether
+  that is necessary to target PAP semantics or freezes incidental GHC output.
+
+113 runtime-core-native
+Producers: bin/export-core.sh t/fixtures/core/Fixtures.hs; bin/native-oracle.sh.
+Consumers: thc.BytecodeBackendTest, FastSmokeTest, RuntimeTest, SelfTailProfileTest.
+  build/core/{THC.Prim.Test,Fixtures}.cbd, build/ghc/ intermediates:
+    IN t/fixtures/core/Fixtures.hs, t/fixtures/compiler/THC/Prim/Test.hs/shared exporter.
+  build/native/native-oracle, *.hi/*.o/*.dump-simpl:
+    IN t/fixtures/core/{NativeOracle,NativeTiming,Fixtures,MapWorkload}.hs,
+    THC/Prim/Test.hs, bin/native-oracle.sh, toolchain/native GHC/package closure.
+  build/native/oracle.tsv: IN binary stdout; redirection is owned by fast-fixtures.json
+    command runner, NOT by native-oracle.sh. Standalone script prints to caller stdout.
+Consumers read the two CBDs/oracle TSV. Script always recompiles/dumps before executing;
+  ordinary runtime test input does not need the simplifier dumps.
+
+114 tuple-input
+Producer: bin/prepare-tuple-input-audit.py; consumer: thc.runtime.TupleInputNativeTest.
+IN t/fixtures/compiler/TupleInputAudit.hs, TupleInputAuditNative.hs, producer model,
+  shared tools/data/GHC and ghc-pkg executables.
+Under build/tuple-input/:
+  native/tuple-input and intermediates: IN native/audit sources/GHC.
+  oracle.tsv, oracle-pairs.tsv: IN binary default/--pairs.
+  <pre|post>-core/TupleInputAudit.cbd and stage-ghc/: IN audit source/exporter.
+  stage-audit.json: IN stage CBD/auditor/all model entries and pairInputs.
+  provenance.json: IN recursively all non-JSON native/core files, TSVs/audits,
+    source hashes/GHC/ghc-pkg binaries/toolchain facts.
+  checks.json: IN receipt/hash files/CBD inspection/independent model/oracles.
+--check-only still writes checks.json. No old receipt invalidation; recursive input set.
+Consumer reads receipts/all hashes/checks/oracles/audits/CBDs. Exact shape checks merit review.
+
+115 live-async
+Producer: t/haskell-fixtures/LiveAsyncFixtures.hs.
+Consumers: thc.runtime.AsyncStrictEntryNativeTest, LiveAsyncNativeTest.
+IN t/fixtures/compiler/LiveAsyncAudit.hs, LiveAsyncNative.hs, shared tools/data/threaded GHC.
+Under build/live-async/:
+  <pre|post>/core/LiveAsyncAudit.cbd and stage/ghc/: IN source/exporter.
+  stage/<entry>-audit.json: IN CBD/auditor; forceShared,strictWorker,strictCall,
+    strictEntry,takeReady,takeRunning,releaseGate,prefixCount,warmLoop,asyncPayload.
+  native/oracle and intermediates: IN native/audit sources/GHC.
+  oracle.txt, strict-oracle.txt: IN binary default/strict, both +RTS -N2.
+  manifest.json: IN sources/observations/CBDs/audits; old receipt removed.
+Consumers read receipt/all hashes/their oracle/CBDs/audits.
+
+116 simd-capability-smoke
+Producer: bin/prepare-simd-capability-smoke.py.
+Consumer: thc.runtime.SimdCapabilitySmokeTest.
+IN bin/{generate-simd-families.py,simd_family_model.py,simd-families.json}, capabilities,
+  shared exporter/auditor/data, GHC and native flags.
+Generator --check --verify-ghc reads generated regions in BytecodeRoot.java and
+  BytecodeProgram.java and GHC primop signatures. Despite --check it WRITES generated
+  output files under build/generated/simd/ when absent/changed:
+  java/thc/runtime/{GeneratedVectors,GeneratedVectorExpressions}.java and fixtures/
+  GeneratedSimdSmoke{,Scalar,ScalarNative,VectorNative}.hs plus other family fixtures.
+  This is shared ownership with Gradle's SIMD generator, not a smoke-private product.
+Under build/simd-capability-smoke/:
+  pre-core/GeneratedSimdSmoke.cbd, ghc/: IN generated audit source/exporter -fno-code.
+  audits.json: IN CBD/in-process auditor/family contracts.
+  native/simd-smoke-oracle and intermediates: IN generated ScalarNative+Scalar source;
+    --native-vector selects VectorNative and adds generated vector audit module.
+  cases.tsv: IN binary with producer/generator request corpus stdin.
+  manifest.json: IN generated source/tool/CBD/audit/cases/binary hashes and flags;
+    no old receipt invalidation.
+Consumer reads receipt/hash files/Core/cases. Broad local SIMD coverage is a candidate
+  baseline against which narrow duplicate SIMD fixtures should be evaluated.
+
+117 unix-libc
+Producer: t/haskell-fixtures/UnixLibcFixtures.hs; consumer: thc.runtime.UnixLibcTest.
+IN t/fixtures/compiler/UnixLibcAudit.hs, producer/THC.Plugin/GHC API libraries,
+  installed unix 2.8.8.0 registration plus System/Posix/{IO/Common,Terminal/Common,
+  Env/PosixString}.hi and imported interface/native-library closure, shared auditor/data.
+Under build/unix-libc/:
+  pre.cbd, post.cbd: IN source+foreign declarations extracted from those interfaces,
+    typed/specialized through GHC API; serialized directly, no export shell step.
+  ghc/: GHC API working intermediates.
+  native-file: IN producer literal Z; temporary file used/deleted during native lifecycle.
+  oracle.json: IN GHC-interpreted native calls, private file, controlled THC_UNIX_FFI_*
+    environment variables; OUT lifecycle/invalid-descriptor/environment observations.
+  <pre|post>-<unixClose|unixDup|unixIsatty|unixGetenv>.audit.json: IN stage CBD/auditor.
+  logs/: OUT version/libdir/imports/unit and eight audit command triplets.
+  manifest.json: IN sources/products/logs; old receipt removed. Receipt includes runtime
+    Java sources/descriptor JSON unused in generation, while installed interface closure
+    is external. Windows producer rejects.
+Consumer reads receipt/hash files/Core/oracle/audits and tracked
+  src/test/resources/core/original-unix-libc-descriptors.json; writes temporary test files.
+Review ordinary libc coverage versus real package-level behavior per user direction.
+
+118 source-core
+Producers: bin/export-core.sh with THC_SOURCE_NOTES=true, then bin/check-source-metadata.py --fixture.
+Consumers: thc.RealCoreJoinTest, thc.runtime.CoreSourceTest.
+IN t/fixtures/compiler/{SourceNotes,RepresentationAudit}.hs/shared exporter;
+  metadata checker/shared decoder.
+OUT build/source-core/{SourceNotes,RepresentationAudit}.cbd and build/source-ghc/.
+Checker reads both CBDs with source metadata; reports checks to stdout, no saved artifact.
+Consumers read CBDs/source spans. RealCoreJoinTest also writes temporary driver CBDs
+  using compact-model encoder (041).
+
+119 corpus
+Producer: bin/prepare-corpus.py; consumers: thc.CoverageCorpusTest, Int64ConversionTest,
+  NarrowWordPrimitiveTest.
+IN t/fixtures/core/coverage.json, sources there: Int64Conversions.hs,ListCoverage.hs,
+  FunctionCoverage.hs,TreeCoverage.hs,NumericCoverage.hs,NarrowIntCoverage.hs,
+  NarrowWordCoverage.hs,PointerCoverage.hs and shared CoverageSupport.hs;
+  producer/shared tools/data, bin/check-corpus-structure.py and native GHC packages.
+Under build/corpus/:
+  groups/<group>/core/<Module>.cbd, optional CoverageSupport.cbd/THC.InterfaceClosure.cbd,
+    groups/<group>/ghc/: IN corresponding source/coverage.json closure roots/exporter.
+    Each group directory is deleted before export. Group/module pairs are
+    int64-conversions/Int64Conversions,lists/ListCoverage,functions/FunctionCoverage,
+    trees/TreeCoverage,numeric/NumericCoverage,narrow-ints/NarrowIntCoverage,
+    narrow-words/NarrowWordCoverage,pointers/PointerCoverage.
+  groups/lists/{boot-core,boot-ghc,core}/ and boot-provenance.json:
+    IN export-boot.py --frontier lists, pinned list source/installed interfaces;
+    shared boot flow (022) rooted in this group directory.
+  groups/<group>/<entry>.audit.json: IN all group CBDs/capabilities/coverage.json.
+  structure.json: IN coverage.json/group CBDs/check-corpus-structure.py/decoder;
+    OUT retained structural witnesses, subsequently read by producer.
+  NativeCorpus.hs: IN coverage.json entry/input sets and producer template.
+  native/corpus-oracle and intermediates: IN generated driver/all corpus modules/GHC.
+  oracle.tsv: IN executable; full input-domain check.
+  corpus.json: IN oracle/structure/group CBDs/boot receipt/source hashes;
+    embeds native results. Old receipt removed before preparation.
+Receipt hashes ALL t/fixtures/core and src/compiler Haskell sources, broader than
+  actual inputs. Group audits/generated driver/binary are outputs but not artifact hashes.
+Consumers read receipt/hash files/CBDs/oracle. Int64ConversionTest also writes model
+  CBDs via encoder (041). Structural sharing-path checks need value review.
+
+120 strict-fields
+Producer: bin/export-core.sh t/fixtures/compiler/StrictFields.hs.
+Consumer: thc.StrictFieldsTest.
+IN that source/shared exporter/GHC interfaces.
+OUT build/core/StrictFields.cbd and build/ghc/ intermediates (shared default directories).
+Consumer reads CBD and writes temporary model/driver CBDs via encoder (041).
+
+121 cstring
+Producer in index: python3 bin/export-boot.py (default frontier exceptions).
+Consumer: thc.CStringTest.
+IN pinned ghc-internal CString.hs,Err.hs,Exception/Type.hs,Exception.hs/license,
+  t/fixtures/package-roots/InterfaceRoots.hs, installed interface/header closure,
+  export-boot.py/shared plugin/GHC. Shared boot flow already described in 022/024.
+OUT build/map/boot-core/GHC.Internal.{CString,Err,Exception.Type,Exception}.cbd,
+  matching build/map/core/ copies, boot-ghc/ overlay/intermediates,
+  build/map/interface-core/THC.InterfaceClosure.cbd copied to core/GHC.InterfaceClosure.cbd,
+  build/map/interface-ghc/ intermediates and boot-provenance.json.
+Consumer only reads build/map/boot-core/GHC.Internal.CString.cbd and writes temporary
+  model CBDs via encoder (041). Default exceptions frontier does extra work for this
+  consumer; narrower existing --frontier cstring is an obvious candidate.
+
+122 truffle-strings
+Producer: t/haskell-fixtures/TruffleStringFixtures.hs.
+Consumers: thc.runtime.TruffleStringTest, IntrinsicOperandContinuationTest.
+IN src/examples/StringPrimitives.hs, t/fixtures/core/IntrinsicOperands.hs,
+  t/fixtures/compiler/{TruffleStringExceptions,StringScalar}.hs,
+  src/runtime/THC/{Prim,Exception,Internal/Exception}.hs/shared exporter/GHC.
+Under build/truffle-strings/:
+  core/{THC.Prim,StringPrimitives,IntrinsicOperands,TruffleStringExceptions,
+    THC.Exception,THC.Internal.Exception}.cbd and ghc/: IN sources/post-Tidy exporter.
+  native/oracle and intermediates: IN StringScalar.hs/GHC.
+  oracle.json: IN binary; OUT code-point model results.
+  manifest.json: IN source/Core/oracle/binary hashes; no old receipt invalidation.
+Consumers read receipt/all hashes, corresponding CBDs/oracle JSON.
+
+123 array-slices
+Producer: bin/prepare-array-slices.py; consumer: thc.runtime.ArraySliceTest.
+IN t/fixtures/compiler/ArraySliceAudit.hs, producer model/driver template,
+  shared exporter/auditor/data, thc-primops/PrimopTools.hs, GHC/array 0.5.8.0.
+  build/primop-coverage.json: IN thc-primops coverage/GHC; OUT shared inventory, then
+    read for cloneArray#/freezeArray#/thawArray# signatures. Another writer of the
+    shared artifact already noted in bytearray groups.
+Under build/array-slices/:
+  <pre|post>-core/{ArraySliceAudit,THC.InterfaceClosure}.cbd and stage-ghc/:
+    IN source/entry closure roots/exporter; reads all stage *.cbd, including stale files.
+  stage-<entry>.audit.json: IN CBD set/in-process auditor.
+  NativeArraySlices.hs: IN producer template/entries.
+  native/array-slices-oracle and intermediates: IN generated driver/audit source/GHC.
+  oracle.tsv: IN binary/generated input rows, checked against producer model.
+  manifest.json: IN sources/Core/audits/driver/binary/oracle/signatures; old receipt removed.
+Consumer reads receipt/all hashes/advertised CBDs/oracle. Exact missing-global and
+  recursive-bottom shape checks need review alongside boxed-arrays coverage.
+
+124 tuple-join
+Producer: bin/prepare-tuple-join-audit.py; consumer: thc.runtime.TupleJoinResultTest.
+IN t/fixtures/compiler/TupleJoinAudit.hs, TupleJoinAuditNative.hs, producer model,
+  shared exporter/auditor/decoder/data/native GHC.
+Under build/tuple-join/:
+  <pre|post>-core/TupleJoinAudit.cbd and stage-ghc/: IN audit source/exporter.
+  native/oracle and intermediates: IN driver/audit source/GHC.
+  oracle.tsv: IN binary.
+  provenance.json: IN source/tool/CBD/binary/oracle hashes/toolchain facts.
+  checks.json: IN CBDs/in-process auditor/model/oracle; written even by --check-only.
+Receipt omits producer itself and much shared tool closure; no old receipt invalidation.
+Consumer directly reads stage CBDs/oracle, not provenance/checks. Review unused receipt work.
+
+125 vector-api
+Producer: t/haskell-fixtures/VectorApiFixtures.hs; consumer: thc.runtime.VectorApiTest.
+IN src/examples/VectorLoops.hs, src/runtime/THC/Prim.hs,
+  t/fixtures/compiler/VectorScalar.hs/shared exporter/native GHC.
+  build/vector-api/core/{VectorLoops,THC.Prim}.cbd, ghc/: IN example/API/post-Tidy exporter.
+  build/vector-api/native/oracle and intermediates: IN VectorScalar.hs/GHC.
+  build/vector-api/oracle.tsv: IN binary; consumer reads TSV/Core. No receipt.
+
+126 empty-tuple-input
+Producer: bin/prepare-empty-tuple-input-audit.py; consumer: thc.runtime.EmptyTupleInputNativeTest.
+IN t/fixtures/compiler/EmptyTupleInputAudit.hs, EmptyTupleInputAuditNative.hs,
+  producer model/shared tools/data/GHC/ghc-pkg.
+Under build/empty-tuple-input/:
+  native/empty-tuple-input and intermediates: IN native/audit sources/GHC.
+  oracle.tsv, oracle-pairs.tsv: IN binary default/--pairs.
+  <pre|post>-core/EmptyTupleInputAudit.cbd and stage-ghc/: IN source/exporter.
+  stage-audit.json: IN stage CBD/auditor/model entries and betweenInputs.
+  provenance.json: IN recursive non-JSON native/core products/TSVs/audits/sources,
+    GHC/ghc-pkg binary hashes; no old receipt invalidation.
+  checks.json: IN receipts/hashes/CBD inventory/model/oracles; --check-only also writes.
+Consumer reads receipt/hashes/CBDs/audits/oracles. Assess overlap with tuple-input/empty-join.
+
+127 show-word-list
+Producer: bin/prepare-show-word-list.py; consumer: thc.runtime.ShowWordListTest.
+IN t/fixtures/compiler/{ShowWordListAudit,ShowWordListAuditNative}.hs,
+  bin/show_word_list_model.py, shared exporter/auditor/data and export-boot.py,
+  pinned ghc-internal Show.hs/CString.hs/license/installed interfaces/header closure/GHC.
+Under build/show-word-list/:
+  boot/{boot-core,core}/GHC.Internal.Show.cbd, boot/boot-ghc/, boot/boot-provenance.json:
+    IN export-boot --frontier show (shared boot flow).
+  cstring/{boot-core,core}/GHC.Internal.CString.cbd, cstring/boot-ghc/,
+    cstring/boot-provenance.json: IN export-boot --frontier cstring.
+  <pre|post>-core/ShowWordListAudit.cbd and stage-ghc/: IN public audit source/exporter.
+  stage-<entry>.audit.json: IN stage CBD + Show/CString source CBDs/auditor/model entries.
+  native/show-word-list-oracle and intermediates: IN native/audit sources/GHC.
+  requests.tsv: IN model requests; oracle.tsv: IN binary with those requests stdin.
+  manifest.json: IN sources including boot receipts' sources, selected CBDs/audits/TSVs,
+    boot receipts and recursive native files; no old receipt invalidation.
+--check-only runs inventory again and REWRITES audits, in addition to reading hashes/oracle.
+Consumer reads manifest/CBDs/oracle/audits. PrimopTools.hs is hashed without being executed.
+
+128 state-tuple
+Producer: bin/prepare-state-tuple-audit.py; consumer: thc.runtime.StateTupleTest.
+IN t/fixtures/compiler/StateTupleAudit.hs, StateTupleAuditNative.hs, producer model,
+  shared exporter/auditor/decoder/data/native GHC.
+Under build/state-tuple/:
+  native/state-tuple and intermediates: IN driver/audit sources/GHC.
+  oracle.tsv: IN binary.
+  <pre|post>-core/StateTupleAudit.cbd and stage-ghc/: IN source/exporter.
+  stage-audit.json: IN CBD/auditor/declared entries.
+  provenance.json: IN recursive native/core files/TSV/audits/source hashes.
+  checks.json: IN receipt/hashes/oracle/model/CBD shape; --check-only also writes.
+No old receipt invalidation. Unused PrimopTools.hs included when present.
+Consumer reads receipt/hashes/oracle/CBDs/audits; review shape ceremony and tuple-suite overlap.
