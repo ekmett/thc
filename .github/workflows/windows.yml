@@ -2,38 +2,39 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 name: Native Windows smoke
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, closed]
+  workflow_call:
+    inputs:
+      testGroup:
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      testGroup:
+        description: Native Windows test group
+        type: choice
+        options: [Runtime, Driver]
+        default: Runtime
+        required: true
 permissions:
   contents: read
 concurrency:
-  # A merged PR's close event keeps its PR group even when its ref becomes main.
-  # Missing PR metadata stays in a run-specific PR group, never main's.
-  group: native-windows-${{ github.event_name == 'pull_request' && (github.event.number || format('pr-{0}', github.run_id)) || github.ref }}
-  # Finish active main checks; PR updates and close cancel their obsolete run.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: native-windows-${{ inputs.testGroup }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   windows:
-    if: github.event_name != 'pull_request' || github.event.action != 'closed'
-    name: Windows (${{ matrix.testGroup }})
-    strategy:
-      fail-fast: false
-      matrix:
-        testGroup: [Driver, Runtime]
+    name: Windows (${{ inputs.testGroup }})
     runs-on: windows-2025
     timeout-minutes: 45
     # Upstream submodules do not inherit the root .gitattributes file.
     env:
+      THC_WINDOWS_TEST_GROUP: ${{ inputs.testGroup }}
       GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: core.autocrlf
       GIT_CONFIG_VALUE_0: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           submodules: true
           persist-credentials: false
       - uses: actions/setup-python@v6
@@ -43,6 +44,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          if ($env:THC_WINDOWS_TEST_GROUP -notin @('Driver', 'Runtime')) {
+            throw 'testGroup must be Driver or Runtime'
+          }
           New-Item -ItemType Directory -Force build | Out-Null
           $env:LLD_REPRODUCE = Join-Path $PWD 'build/windows-native-link.tar'
           & {
@@ -50,13 +54,13 @@ jobs:
             & ./bin/test-windows-python.ps1
             & ./bin/test-windows-cabal-config.ps1
             Invoke-ThcTool $env:CABAL @('update')
-            & ./bin/windows.ps1 -Action Test -Jobs 4 -TestGroup '${{ matrix.testGroup }}'
+            & ./bin/windows.ps1 -Action Test -Jobs 4 -TestGroup $env:THC_WINDOWS_TEST_GROUP
           } *>&1 | Tee-Object build/windows-ci.log
       - name: Preserve native evidence
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: native-windows-evidence-${{ matrix.testGroup }}
+          name: native-windows-evidence-${{ inputs.testGroup }}
           if-no-files-found: warn
           path: |
             build/windows-ci.log
