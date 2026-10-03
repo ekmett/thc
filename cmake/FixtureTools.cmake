@@ -29,6 +29,26 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${cabal_inputs})
 execute_process(COMMAND "${GHC}" --print-global-package-db OUTPUT_VARIABLE ghc_db
   OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
 set(toolchain_inputs "${GHC}" "${GHC_PKG}" "${CABAL}" "${ghc_db}/package.cache" "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/bin/toolchain.sh")
+# Changes within a selected compiler installation must invalidate fixture files,
+# including replacing interfaces with retained Core under the same GHC version.
+execute_process(COMMAND ${fixture_env} "${GHC}" --print-libdir OUTPUT_VARIABLE ghc_libdir
+  OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+file(GLOB_RECURSE ghc_package_inputs CONFIGURE_DEPENDS
+  "${ghc_libdir}/*.hi" "${ghc_libdir}/*.dyn_hi" "${ghc_libdir}/*.a"
+  "${ghc_libdir}/*.so" "${ghc_libdir}/*.dylib" "${ghc_db}/*.conf")
+list(APPEND toolchain_inputs "${ghc_libdir}/settings" ${ghc_package_inputs})
+execute_process(COMMAND ${fixture_env} "${GHC}" --info OUTPUT_VARIABLE ghc_info
+  COMMAND_ERROR_IS_FATAL ANY)
+string(REGEX MATCHALL [[\("[^"]+ command","[^"]+"\)]] ghc_commands "${ghc_info}")
+foreach(command IN LISTS ghc_commands)
+  string(REGEX REPLACE [[.*","([^"]+)"\)]] "\\1" program_name "${command}")
+  unset(program)
+  find_program(program NAMES "${program_name}" NO_CACHE)
+  if(program)
+    list(APPEND toolchain_inputs "${program}")
+  endif()
+endforeach()
+list(REMOVE_DUPLICATES toolchain_inputs)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${toolchain_inputs})
 
 if(APPLE)

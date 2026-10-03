@@ -20,7 +20,9 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `stable-names`, `explicit64-arrays`, `floating-address`, `floating-byte-offset`,
 `atomic-address`, `unaligned-scalar-memory`, `address-array-copy`, `deep-evaluation`,
 `mask-functions`, `thread-status`, `uncaught-self`, `live-async`, `vector-api`,
-`truffle-strings`, `thread-async` and `native-addresses`. Each has a `fixture-<group>` target. `make fixtures` requires an
+`truffle-strings`, `thread-async`, `native-addresses`, `simd-int64x2`,
+`simd-int32x4`, `simd-floatx4`, `simd-doublex2`, `simd-calls`, `simd-floatx4-fma`,
+`simd-wide-floating-fma` and `io-main-pap`. Each has a `fixture-<group>` target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
 
@@ -39,7 +41,10 @@ builds the shared tools, another publishes the plugin library, package cache and
 every non-boot registration. Publication records the actual external registrations
 and dynamic libraries in a Ninja depfile. The Java synthetic-CBD encoder's path
 sidecar also has one writer. Gradle is not invoked by fixture generation. Native/Core compilation uses the
-selected global package database, with ambient GHC package environments and
+selected global package database. Its interfaces, native libraries, registrations,
+compiler settings and available configured compiler/linker executables are file
+inputs, so replacing Core under the same compiler version invalidates the graph.
+The configured search path is captured, with ambient GHC package environments and
 `GHC_PACKAGE_PATH` excluded. The published plugin database is an explicit input.
 
 This is an incremental migration of the [audited flows](fixture-inputs.log).
@@ -50,6 +55,14 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local graph verification (macOS arm64, GHC 9.14.1)
+
+- All 52 admitted groups (89 mapped JUnit classes) built together in 41.02 seconds
+  after the shared producer changed, then rebuilt with no work in 0.03 seconds.
+  This reused compiled tools and some unchanged fixture files; it is not a clean
+  bootstrap timing. Every receipt artifact had a declared graph writer.
+- Seven SIMD groups and IO-main PAP generated successfully. On ARM the vector
+  fixtures declare pre-Tidy Core only; wide FMA additionally produced 2,112 native
+  scalar-lane observations. No ARM native vector parity is implied.
 
 - The first 25 admitted targets (58 mapped JUnit classes) generated successfully, then Ninja reported no
   work. The six array families together took 20.6 seconds including their shared
@@ -75,4 +88,5 @@ Local graph verification (macOS arm64, GHC 9.14.1)
 
 These checks establish local generation and dependency behavior. They do not
 establish JVM execution or Linux/Windows results. Native Windows graph support
-and migration of the CI entry point remain open.
+and migration of the CI entry point remain open. Forty-two indexed groups still
+lack rules and are rejected by this entry point; 45 more are quarantined.

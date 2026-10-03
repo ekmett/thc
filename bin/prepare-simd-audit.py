@@ -79,7 +79,6 @@ def main():
     def run(argv, env=None):
         commands.append(dict(argv=argv, env=env or {}))
         subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
-    run(['bin/build-compiler.sh'])
     stages = ['pre'] if args.export_only else ['pre', 'post']
     for stage in stages:
         (OUT / f'{stage}-core/{module_name}.cbd').unlink(missing_ok=True)

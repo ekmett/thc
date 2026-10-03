@@ -1,0 +1,153 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+# The existing producers use pre-Tidy export-only mode on ARM. Declare only
+# those files there; neither a native oracle nor a post-Tidy result is implied.
+set(simd_stages pre post)
+set(simd_options)
+if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+  set(simd_stages pre)
+  set(simd_options --export-only)
+endif()
+foreach(shape int64x2 int32x4 floatx4 doublex2)
+  if(shape STREQUAL "int64x2")
+    set(module SimdInt64X2)
+    set(directory simd)
+    set(script prepare-simd-audit.py)
+    set(options --vector int64x2)
+    set(native_name simd)
+  elseif(shape STREQUAL "int32x4")
+    set(module SimdInt32X4)
+    set(directory simd-int32x4)
+    set(script prepare-simd-audit.py)
+    set(options --vector int32x4)
+    set(native_name simd)
+  elseif(shape STREQUAL "floatx4")
+    set(module SimdFloatX4)
+    set(directory simd-floatx4)
+    set(script prepare-floatx4-audit.py)
+    set(options)
+    set(native_name floatx4-oracle)
+  else()
+    set(module SimdDoubleX2)
+    set(directory simd-doublex2)
+    set(script prepare-doublex2-audit.py)
+    set(options)
+    set(native_name doublex2-oracle)
+  endif()
+  set(out "${PROJECT_SOURCE_DIR}/build/${directory}")
+  set(outputs "${out}/provenance.json")
+  set(objects)
+  set(inputs "${PROJECT_SOURCE_DIR}/bin/${script}"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/${module}.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/${module}Native.hs")
+  if(shape MATCHES "^(floatx4|doublex2)$")
+    list(APPEND outputs "${out}/expected.tsv")
+    list(APPEND inputs "${PROJECT_SOURCE_DIR}/bin/test-${shape}-model.py")
+  endif()
+  if(shape STREQUAL "doublex2")
+    list(APPEND inputs "${PROJECT_SOURCE_DIR}/bin/doublex2_model.py")
+  endif()
+  foreach(stage IN LISTS simd_stages)
+    list(APPEND outputs "${out}/${stage}-core/${module}.cbd")
+    list(APPEND objects "${out}/${stage}-ghc/${module}.hi")
+    if(NOT simd_options)
+      list(APPEND objects "${out}/${stage}-ghc/${module}.o")
+    endif()
+    if(shape MATCHES "^(floatx4|doublex2)$")
+      list(APPEND outputs "${out}/${stage}-audit.json")
+    endif()
+  endforeach()
+  if(NOT simd_options)
+    list(APPEND outputs "${out}/oracle.tsv" "${out}/native/${native_name}")
+    foreach(module_name Main "${module}")
+      list(APPEND objects "${out}/native/${module_name}.hi" "${out}/native/${module_name}.o")
+    endforeach()
+  endif()
+  add_custom_command(OUTPUT ${outputs} BYPRODUCTS ${objects}
+    COMMAND ${fixture_env} "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/bin/${script}" ${options} ${simd_options}
+    DEPENDS ${inputs} ${api_export_inputs} ${audit_inputs} ${tool_sources}
+      "${compact_exe}" ${plugin_outputs} ${toolchain_inputs}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+    COMMENT "Generate ${shape}: declared platform-specific Core and oracle files")
+  add_custom_target(fixture-simd-${shape} DEPENDS ${outputs})
+endforeach()
+
+# 037: actual vector calls, captures and exception continuations are distinct
+# from lane arithmetic. The auditor accepts all entries in one process.
+set(call_out "${PROJECT_SOURCE_DIR}/build/simd-calls")
+set(call_outputs "${call_out}/manifest.json")
+set(call_objects)
+foreach(stage IN LISTS simd_stages)
+  list(APPEND call_outputs "${call_out}/${stage}-core/SimdCallAudit.cbd" "${call_out}/${stage}-audit.json")
+  list(APPEND call_objects "${call_out}/${stage}-ghc/SimdCallAudit.hi")
+  if(NOT simd_options)
+    list(APPEND call_objects "${call_out}/${stage}-ghc/SimdCallAudit.o")
+  endif()
+endforeach()
+if(NOT simd_options)
+  list(APPEND call_outputs "${call_out}/oracle.tsv" "${call_out}/native/simd-call-oracle")
+  foreach(module Main SimdCallAudit)
+    list(APPEND call_objects "${call_out}/native/${module}.hi" "${call_out}/native/${module}.o")
+  endforeach()
+endif()
+add_custom_command(OUTPUT ${call_outputs} BYPRODUCTS ${call_objects}
+  COMMAND ${fixture_env} "${fixtures_exe}" simd-calls
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SimdCallAudit.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SimdCallNative.hs"
+    ${api_export_inputs} ${audit_inputs} "${fixtures_exe}" "${compact_exe}" ${plugin_outputs} ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM COMMENT "Generate vector call and continuation Core")
+add_custom_target(fixture-simd-calls DEPENDS ${call_outputs})
+
+# 035/036: fused rounding, including wide layout. ARM's wide oracle executes
+# scalar lanes; no native SIMD parity is claimed there.
+foreach(family simd-floatx4-fma simd-wide-floating-fma)
+  set(out "${PROJECT_SOURCE_DIR}/build/${family}")
+  set(outputs "${out}/manifest.json")
+  set(objects)
+  if(family STREQUAL "simd-floatx4-fma")
+    set(module SimdFloatFma)
+    set(stages ${simd_stages})
+    set(native_name oracle)
+    set(native_enabled TRUE)
+    if(simd_options)
+      set(native_enabled FALSE)
+    endif()
+  else()
+    set(module SimdWideFloatFma)
+    set(stages pre)
+    set(native_name scalar-lane-oracle)
+    set(native_enabled TRUE)
+  endif()
+  foreach(stage IN LISTS stages)
+    list(APPEND outputs "${out}/${stage}-core/${module}.cbd"
+      "${out}/${stage}-audit.json" "${out}/${stage}-double-audit.json")
+    list(APPEND objects "${out}/${stage}-ghc/${module}.hi")
+    if(family STREQUAL "simd-floatx4-fma" AND NOT simd_options)
+      list(APPEND objects "${out}/${stage}-ghc/${module}.o")
+    endif()
+    foreach(kind audit double-audit)
+      set(label "${kind}")
+      if(family STREQUAL "simd-floatx4-fma")
+        set(label "${stage}-${kind}")
+      endif()
+      foreach(suffix stdout stderr command.json)
+        list(APPEND outputs "${out}/logs/${label}.${suffix}")
+      endforeach()
+    endforeach()
+  endforeach()
+  if(native_enabled)
+    list(APPEND outputs "${out}/oracle.txt" "${out}/native/${native_name}")
+    list(APPEND objects "${out}/native/Main.hi" "${out}/native/Main.o")
+    if(family STREQUAL "simd-floatx4-fma")
+      list(APPEND objects "${out}/native/${module}.hi" "${out}/native/${module}.o")
+    endif()
+  endif()
+  add_custom_command(OUTPUT ${outputs} BYPRODUCTS ${objects}
+    COMMAND ${fixture_env} "${fixtures_exe}" "${family}"
+    DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/${module}.hs"
+      "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/${module}Native.hs"
+      ${api_export_inputs} ${audit_inputs} "${fixtures_exe}" "${compact_exe}" ${plugin_outputs} ${toolchain_inputs}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+    COMMENT "Generate ${family}: declared platform-specific fused results")
+  add_custom_target(fixture-${family} DEPENDS ${outputs})
+endforeach()

@@ -133,7 +133,6 @@ def main():
         subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
     wanted = model_rows()
     (OUT / 'expected.tsv').write_text(''.join('\t'.join(map(str, (*key, answer)))+'\n' for key, answer in wanted.items()))
-    run(['bin/build-compiler.sh'])
     stages = ['pre'] if args.export_only else ['pre', 'post']
     spec = importlib.util.spec_from_file_location('doublex2_auditor', ROOT / 'bin/audit-core.py')
     auditor = importlib.util.module_from_spec(spec)

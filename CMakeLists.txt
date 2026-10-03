@@ -21,21 +21,22 @@ execute_process(COMMAND "${CMAKE_COMMAND}" -E env --unset=GHC_PACKAGE_PATH "GHC_
 string(REPLACE "\n" ";" toolchain "${toolchain}")
 list(GET toolchain 0 GHC)
 list(GET toolchain 1 GHC_PKG)
+get_filename_component(python_bin "${Python3_EXECUTABLE}" DIRECTORY)
 set(fixture_env "${CMAKE_COMMAND}" -E env --unset=GHC_PACKAGE_PATH "GHC=${GHC}" "GHC_PKG=${GHC_PKG}"
-  "CABAL=${CABAL}" "GHC_ENVIRONMENT=-" "THC_SOURCE_NOTES=true" "THC_PYTHON=${Python3_EXECUTABLE}")
+  "PATH=${python_bin}:$ENV{PATH}" "CABAL=${CABAL}" "GHC_ENVIRONMENT=-" "THC_SOURCE_NOTES=true" "THC_PYTHON=${Python3_EXECUTABLE}")
 include(cmake/FixtureTools.cmake)
 # Fixtures use the selected boot database plus the explicit plugin database.
 # A user's package DB or GHC_PACKAGE_PATH must not supply an undeclared import.
 list(APPEND fixture_env "GHC_PACKAGE_PATH=${ghc_db}"
   "THC_PLUGIN_MANIFEST=${plugin_manifest}" "THC_COMPACT=${compact_exe}")
-get_filename_component(python_bin "${Python3_EXECUTABLE}" DIRECTORY)
-list(APPEND fixture_env "PATH=${python_bin}:$ENV{PATH}")
 include(cmake/ScalarFixtures.cmake)
 include(cmake/CoreFixtures.cmake)
 include(cmake/ArrayFixtures.cmake)
 include(cmake/AuditedFixtures.cmake)
 include(cmake/ApiFixtures.cmake)
 include(cmake/NativeFixtures.cmake)
+include(cmake/SimdFixtures.cmake)
+include(cmake/ScriptFixtures.cmake)
 
 # Keep the audited quarantine authoritative even for direct Ninja invocations.
 set(inventory_path "${PROJECT_SOURCE_DIR}/.github/scripts/fast-fixtures.json")

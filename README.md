@@ -61,8 +61,11 @@ retained Core with `thc run TARGET --installed-core required`.
 contain the needed Core. The [GHC build guide](docs/ghc-core.md) shows how to
 apply the flag when building GHC 9.14.1, the version THC currently supports.
 
-Use `make test` for the test suite and `make clean` to remove build products.
-`make test-modes` runs both handoff modes in separate JVMs from one shared build.
+Fixture tests also require CMake 3.24+ and Ninja. During fixture triage, use an
+exact admitted class, for example `make test TESTS=thc.RuntimeTest`.
+`make test-modes TESTS=thc.RuntimeTest` runs both handoff modes from shared fixture
+files; see the [fixture graph and current limits](docs/fixture-build.md).
+`make clean` removes build products.
 `make distclean` also removes the checkout's Gradle caches.
 `make run ARGS='--help'` builds and runs the driver; the equivalent Cabal command
 is `cabal run thc -- --help`.
