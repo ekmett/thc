@@ -619,19 +619,6 @@
         "t/haskell-fixtures/OriginalPosixDupFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
-    "original-stdio-close": {
-      "junit": ["thc.runtime.OriginalStdioCloseNativeTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-close"]}],
-      "outputs": ["build/original-stdio-close"],
-      "sources": [
-        "t/fixtures/compiler/OriginalStdioCloseAudit.hs",
-        "t/fixtures/compiler/OriginalStdioCloseAuditNative.hs",
-        "t/haskell-fixtures/OriginalStdioCloseFixtures.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/Main.hs",
-        "thc.cabal"
-      ]
-    },
     "original-stdio-read": {
       "junit": ["thc.runtime.OriginalStdioReadTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-read"]}],

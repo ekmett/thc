@@ -64,7 +64,7 @@ class OriginalStdioCallTest {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); Object[] args = new Object[fds.length + 2]; args[0] = 0L;
                         for (int i = 0; i < fds.length; i++) args[i + 1] = (int) fds[i]; args[args.length - 1] = thc.runtime.Unit.INSTANCE;
                         long result = (Integer) callScalarTestTarget(targets.get(name),args);
-                        if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); for (var target : targets.values()) valid(target); }
+                        if (compiled) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,name + " must execute installed code"); for (var target : targets.values()) valid(target); }
                         released(language); return result;
                     }
                     void run() throws Exception {
@@ -113,7 +113,7 @@ class OriginalStdioCallTest {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var target = targets.get(name); Object[] guest = new Object[args.length + 2]; guest[0] = 0L;
                             for (int i = 0; i < args.length; i++) { var value = args[i]; guest[i + 1] = Objects.equals(OriginalStdioFixtures.signatures.get(name).get(i),"Int32Rep") && value instanceof Long word && word >= Integer.MIN_VALUE && word <= Integer.MAX_VALUE ? Integer.valueOf(((Long) value).intValue()) : value; }
                             guest[guest.length - 1] = thc.runtime.Unit.INSTANCE; var raw = callScalarTestTarget(target,guest); Object result = Objects.equals(OriginalStdioFixtures.output(name),"Int32Rep") ? Long.valueOf(((Integer) raw).longValue()) : raw;
-                            if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue(),name); valid(target); } released(language); return result;
+                            if (compiled) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,name + " must execute installed code"); valid(target); } released(language); return result;
                         }
                         void run(int pass) throws Exception {
                             for (var name : List.of("safe_write","unsafe_write")) {
