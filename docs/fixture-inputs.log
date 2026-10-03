@@ -1399,3 +1399,272 @@ Under build/small-arrays/:
 Consumer reads receipts, CBDs, TSV and audits. Producer does not remove old
   manifest before work, so failed generation can leave an old completion-looking
   receipt. Auditor input-table omissions remain.
+
+049  boxed-array-extensions
+Producer: t/haskell-fixtures/BoxedArrayExtensionsFixtures.hs:prepareBoxedArrayExtensions.
+Consumer: thc.runtime.BoxedArrayExtensionsTest.
+IN: producer/Main.hs/FixtureSupport.hs and built thc-fixtures; shared exporter/
+  auditor/native 64-bit GHC9.14.1; t/fixtures/compiler/BoxedArrayExtensionsAudit.hs
+  and BoxedArrayExtensionsNative.hs.
+Under build/boxed-array-extensions/, new run-N chosen from existing names:
+  run-N/<stage>-core/BoxedArrayExtensionsAudit.cbd and any interface closure
+    IN audit source/closure roots/exporter; OUT CBDs, run-N/<stage>-ghc/.
+  run-N/<stage>-<entry>.audit.json: IN enumerated stage CBDs/auditor; OUT report
+    for boxedExtSizes/Clone/Copy/Move/Thaw/Lazy at pre/post stages.
+  run-N/native/boxed-array-extensions-oracle: IN both sources/native packages;
+    OUT executable/intermediates.
+  run-N/logs/native-oracle.stdout: IN executable's embedded cases; OUT oracle.
+  Logs for ghc-version/info, pre/post-export, stage-audit-entry, native-compile,
+    native-oracle: three standard files per label.
+  manifest.json: IN all fresh artifacts/source receipt; OUT hashes and paths.
+Existing manifest moves to run-N/previous-manifest.json. Same prior-directory
+  naming/accumulation issue as 044. Tests read manifest/receipts, stage CBD/audits,
+  recorded native stdout. No synthetic encoder subprocess found in this class.
+
+050  managed-address-reads
+Producer: t/haskell-fixtures/ManagedAddressReadFixtures.hs:prepareManagedAddressReads.
+Consumer: thc.runtime.ManagedAddressReadTest.
+IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC9.14.1;
+  t/fixtures/compiler/ManagedAddressReadAudit.hs and ManagedAddressReadNative.hs;
+  host and target word size must both be 64 bits.
+Under build/managed-address-reads/:
+  requests.tsv: IN producer requests; OUT inventory (native actually receives the
+    same in-memory string, not a read of this file).
+  native/managed-address-read-oracle: IN both sources/native packages, -j2;
+    OUT executable/native intermediates.
+  oracle.tsv: IN executable/request string; OUT native results.
+  pre-core/ManagedAddressReadAudit.cbd, post-core/same plus interface closure
+    IN source/exporter, four read roots; OUT CBDs and stage-ghc/ intermediates.
+  <stage>-{word32Read,wordRead,int32Read,intRead}.audit.json
+    IN whole stage core directory/auditor/data; OUT eight reports.
+  manifest.json: IN executable/requests/TSV, listed stage CBDs/reports and source
+    receipt; OUT hashes. Tests read these artifacts and receipt paths.
+Whole-directory audit inputs are open-ended; source receipt omits import-time tables.
+
+051  wide-char-address
+Producer: t/haskell-fixtures/WideCharAddressFixtures.hs:prepareWideCharAddress.
+Consumer: thc.runtime.WideCharAddressTest.
+IN: t/fixtures/compiler/WideCharAddressAudit.hs, WideCharAddressNative.hs;
+  producer/Main.hs/FixtureSupport.hs and built thc-fixtures; exporter/auditor/tool
+  closure, native 64-bit GHC9.14.1 with matching host/target.
+Under build/wide-char-address/:
+  native/oracle: IN both Haskell sources/native packages, --make -O2 -dynamic
+    -fforce-recomp -dcore-lint -dstg-lint; OUT executable/native intermediates.
+  logs/native-oracle.stdout: IN executable (no stdin); OUT 15 oracle rows.
+  <pre|post>/core/WideCharAddressAudit.cbd, THC.InterfaceClosure.cbd
+    IN audit source, wideCharRoundtrip closure/exporter/stage option;
+    OUT CBD pair per stage and stage/ghc/ intermediates.
+  <stage>/audit.json: IN exact CBD pair/entry/auditor; OUT report.
+  Logs ghc-version/info, native-compile/oracle, pre/post-export/audit:
+    OUT stdout/stderr/command.json per label.
+  manifest.json: IN executable, four CBDs/two audits, all logs and source receipt;
+    OUT hashes. Consumer reads receipts, oracle stdout, CBDs and audits.
+Old manifest is not removed before generation. Source receipt is incomplete:
+  top-level compiler files/core_*.py collection misses actual auditor JSON tables.
+
+052  aligned-scalar-memory
+Producer: t/haskell-fixtures/AlignedScalarMemoryFixtures.hs:prepareAlignedScalarMemory.
+Consumer: thc.runtime.AlignedScalarMemoryTest.
+IN: t/fixtures/compiler/AlignedScalarMemoryAudit.hs, AlignedScalarMemoryNative.hs;
+  t/fixtures/core/StableWideCells.hs; producer/Main.hs/FixtureSupport.hs, built
+  thc-fixtures, exporter/auditor/tool closure; native 64-bit GHC9.14.1.
+Under build/aligned-scalar-memory/:
+  <pre|post>/core/AlignedScalarMemoryAudit.cbd: IN audit source/exporter/stage
+    option; OUT CBD plus stage/ghc/ intermediates.
+  <stage>/audit.json: IN stage CBD, alignedWideChar/alignedStablePtr entries,
+    auditor/data; OUT report.
+  native/oracle: IN native driver/audit source/native packages, --make -O2
+    -dynamic -dcore-lint -dstg-lint; OUT executable/native intermediates.
+  inputs.txt: IN producer WideChar/StablePtr cases; OUT requests.
+  oracle.tsv: IN native/oracle and inputs.txt read as stdin; OUT results.
+  native/stable-wide-cells: IN StableWideCells.hs/native packages; OUT executable
+    and native/example/ intermediates.
+  logs/example-run.stdout: IN stable-wide-cells execution; OUT two checked lines.
+  Logs ghc-version/info/inventory, pre/post-export/audit, native-build/oracle,
+    example-build/run: OUT three standard files per label. Inventory reads GHC
+    package via -package ghc -e, not a tracked text inventory.
+  manifest.json: IN both executables, requests/TSV, CBDs/reports/logs/source
+    receipt; OUT hashes. Old manifest removed first.
+Consumer reads receipts, oracle.tsv, CBDs and audits. It also asserts exact Core
+  binding/lambda counts (1 binding, 2 original lambdas, 1 lowered label) and 12
+  original calls: review as compiler-shape fossilization, separate from useful
+  memory behavior/ABI checks. Receipt misses polyglot ABI/SIMD auditor tables.
+
+053  scalar-memory-utilities
+Producer: t/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs.
+Consumer: thc.runtime.ScalarMemoryUtilitiesTest.
+IN: t/fixtures/compiler/ScalarMemoryUtilities.hs and ScalarMemoryUtilitiesNative.hs;
+  producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter/auditor,
+  native GHC9.14.1/package closure.
+Under build/scalar-memory-utilities/:
+  native/oracle: IN both Haskell sources; OUT executable/native intermediates.
+  oracle.tsv: IN executable's embedded cases; OUT 271 rows.
+  <pre|post>/core/ScalarMemoryUtilities.cbd: IN source/exporter/stage option;
+    OUT CBD and stage/ghc/ intermediates.
+  <stage>/audit.json: IN stage CBD/auditor/eight named entries; OUT report.
+  commands/{native-build,native-oracle,pre-export,pre-audit,post-export,post-audit}:
+    OUT .stdout/.stderr/.command.json per label.
+  manifest.json: IN executable, TSV, CBDs/reports/logs/source receipt; OUT hashes.
+Consumer reads receipts/TSV/CBD/audits. Manifest invalidated first; receipt omits
+  polyglot ABI/SIMD tables. Compare its pin/thaw/shrink checks with dedicated groups.
+
+054  process-lifecycle
+Producer: t/haskell-fixtures/ProcessLifecycleFixtures.hs plus Gradle's
+  prepareProcessLifecycleOracle (build.gradle), two separate output owners.
+Consumers: thc.runtime.CoreProcessForeignTest, ManagedProcessForeignTest,
+  ManagedProcessesTest, ProcessLifecycleCoreTest; Linux x86_64 only.
+Under build/process-lifecycle/:
+  acquisition/process-1.6.26.1.tar.gz: IN pinned Hackage URL via curl if absent;
+    OUT archive verified against hard-coded SHA256.
+  acquisition/source-<timestamp>/process-1.6.26.1/**: IN archive/tar;
+    OUT new full source tree EVERY preparation, never reused by this producer.
+  acquisition/process.project: IN generated absolute source path/build options;
+    OUT Cabal project requiring shared library and retained interface Core.
+  acquisition/dist/**: IN extracted package source, project, GHC/GHC_PKG/CABAL,
+    offline package closure; OUT package library/intermediates/private package DB.
+  core/pre.cbd, core/post.cbd: IN installed System/Process.hi and
+    System/Process/Posix.hi (from rebuilt package), GHC libdir/package interfaces,
+    t/fixtures/compiler/ProcessLifecycleAudit.hs, built fixture executable's
+    THC.Interface/Plugin; OUT specialized genuine FCallId consumers and core/ghc/.
+  core/<stage>.audit.json: IN stage CBD/four entries/shared auditor; OUT report.
+  core/source.json: IN archive digest/extracted source hashes/process unit;
+    OUT source receipt. core/manifest.json reads sources, installed interfaces,
+    CBD/audits/source.json/logs; OUT hashes and command records.
+  core/logs/: version/libdir/unit/imports, source-download (only absent archive),
+    source-extract/build, pre/post-audit; OUT standard three files per command.
+  native/process-oracle: IN t/fixtures/process-lifecycle/Main.hs, native GHC
+    -O1 -threaded, installed process/unix packages; OUT executable/intermediates.
+  native/sigchld-policy: IN t/fixtures/process-lifecycle/sigchld-policy.c and
+    src/main/c/native-process-api.c, THC_CLANG, system headers/linker,
+    -Wl,--wrap=posix_spawn; OUT standalone control executable.
+Consumers read Core/manifest/audits and receipt paths, execute native controls,
+  and create temporary files/children. Host tools include /bin/sh, /bin/true,
+  /bin/cat; Linux /proc supplies process/descriptor observations.
+The native executables are not produced by the Haskell command or included in its
+  manifest. Gradle currently makes EVERY Test task depend on their build. Record
+  this broad dependency and timestamped package rebuild as cost/scope candidates.
+Full package native headers/link inputs remain an unresolved shared closure.
+
+055  ghc-bco
+Producer: t/haskell-fixtures/GhcBCOFixtures.hs. Consumer: thc.runtime.GhcBCOTest.
+IN: t/fixtures/core/GhcBCO.hs, t/fixtures/compiler/GhcBCONative.hs;
+  producer/Main/FixtureSupport, built thc-fixtures/shared exporter/auditor/GHC9.14.1.
+Under build/ghc-bco/:
+  native/oracle: IN sources/native packages; OUT executable/intermediates.
+  commands/native-run.stdout: IN oracle no stdin; OUT 105 integer observations.
+  <pre|post>/core/GhcBCO.cbd: IN Core source/exporter/stage option; OUT CBD/ghc/.
+  <stage>/<entry>-audit.json: IN stage CBD/auditor/each of 35 producer entries;
+    OUT 70 separate reports (and 70 auditor processes).
+  commands/: ghc-version,native-build/run,pre/post-export,stage-audit-entry;
+    OUT standard log triplets.
+  manifest.json: IN native stdout parsed into values, CBD/reports/logs/source
+    hashes; OUT embedded native results and hashes. Executable not hashed.
+Consumer reads manifest/receipt paths/CBDs. Old manifest not invalidated at start.
+Auditor table omissions recur; consider one multi-entry audit per stage.
+
+056  delimited-continuations
+Producer: t/haskell-fixtures/DelimitedContinuationsFixtures.hs.
+Consumers: thc.runtime.DelimitedContinuationsTest, CaseArmOutliningTest.
+IN: t/fixtures/core/DelimitedContinuations.hs, ParkedControl.hs;
+  t/fixtures/compiler/DelimitedContinuationsNative.hs, ParkedControlNative.hs;
+  producer/Main/FixtureSupport, shared tools/native GHC9.14.1/package closure.
+Under build/delimited-continuations/:
+  native/oracle: IN Delimited pair; OUT executable/native intermediates.
+  parked/native/oracle: IN Parked pair; OUT executable/parked native intermediates.
+  commands/native-run.stdout, parked-native-run.stdout: IN corresponding
+    executable; OUT 51 and 2 native observations respectively.
+  <pre|post>/core/DelimitedContinuations.cbd: IN Delimited source/exporter/stage;
+    OUT CBD and stage/ghc/ intermediates.
+  <stage>/<entry>-audit.json: IN stage CBD/auditor/17 entry names; OUT 34 reports.
+  parked/core/ParkedControl.cbd: IN Parked source/exporter; OUT CBD/parked/ghc/.
+  parked/audit.json: IN Parked CBD/observe entry/auditor; OUT report.
+  commands/: ghc-version,native-build/run,parked-native-build/run,parked-export/
+    audit,pre/post-export,stage-audit-entry; OUT log triplets.
+  manifest.json: IN stdout parsed as results,CBD/audits/logs/source receipt;
+    OUT native/parkedNative values and hashes. Native executables not hashed.
+Consumers read manifest/receipts/CBDs. Old manifest remains during generation;
+  polyglot ABI/SIMD table omissions recur. Parked sources are actual inputs even
+  though absent from this group's fast-fixtures.json source list.
+
+057  thread-scheduling
+Producer: t/haskell-fixtures/ThreadSchedulingFixtures.hs.
+Consumer: thc.runtime.ThreadSchedulingTest.
+IN: t/fixtures/core/ThreadScheduling.hs, t/fixtures/compiler/ThreadSchedulingNative.hs;
+  producer/Main/FixtureSupport, shared exporter/auditor/native GHC9.14.1.
+Under build/thread-scheduling/:
+  <pre|post>/core/ThreadScheduling.cbd: IN source/exporter/stage; OUT CBD/ghc/.
+  <stage>/<entry>-audit.json: IN stage CBD/auditor/nine entries; OUT 18 reports.
+  native/oracle: IN both sources/native packages, non-threaded RTS deliberately
+    required by direct delay#; OUT executable/intermediates.
+  oracle.txt: IN oracle execution; OUT nine checked observations.
+  manifest.json: IN TSV-free oracle text,CBD/audits/source receipt; OUT hashes
+    and embedded expected values. Manifest removed first; executable not hashed.
+Consumer reads all these/receipts. No per-command log files. Auditor JSON table
+  omissions remain. Scheduling behavior is distinct from thread inventory below.
+
+058  thread-inventory
+Producer: t/haskell-fixtures/ThreadInventoryFixtures.hs.
+Consumer: thc.runtime.ThreadInventoryNativeTest.
+IN: t/fixtures/core/ThreadInventory.hs, t/fixtures/compiler/ThreadInventoryNative.hs,
+  CallbackIdentityNative.hs and callback-identity.c; producer/Main/FixtureSupport,
+  shared exporter/auditor/native GHC9.14.1 with threaded RTS and native C toolchain.
+Under build/thread-inventory/:
+  <pre|post>/core/ThreadInventory.cbd: IN Core source/exporter/stage; OUT CBD/ghc/.
+  <stage>/<entry>-audit.json: IN stage CBD/auditor/nine entries; OUT 18 reports.
+  native/oracle: IN main source/driver, --make -O2 -dynamic -threaded;
+    OUT executable/intermediates.
+  native/callback-oracle: IN callback driver/C source/Core source, same flags
+    plus -Wall -Werror and stubdir; OUT executable/native intermediates/C stubs.
+  oracle.txt, callback-oracle.txt: IN respective executable +RTS -N2; OUT checked
+    observations. Both builds share native/ (including Main object/interface paths).
+  manifest.json: IN text results/CBD/audits/source receipt; OUT hashes/native
+    values. Old manifest removed; executables not hashed; no command log files.
+Consumer reads all these and reproduces receipt directory inventories. Runtime
+  library/native callback support remains separate test input, not oracle output.
+
+059  closure-inspection
+Producer: t/haskell-fixtures/ClosureInspectionFixtures.hs.
+Consumer: thc.runtime.ClosureInspectionTest.
+IN: t/fixtures/compiler/ClosureInspectionAudit.hs, ClosureInspectionNative.hs;
+  producer/Main/FixtureSupport, shared tools/native GHC9.14.1.
+Under build/closure-inspection/:
+  core/ClosureInspectionAudit.cbd: IN audit source/exporter; OUT CBD/ghc/.
+  <entry>.audit.json: IN CBD/auditor/nine producer entries; OUT reports.
+  native/oracle: IN both sources/native packages, -O2 -fno-info-table-map
+    -fforce-recomp -dcore-lint -dstg-lint; OUT executable/intermediates.
+  oracle.tsv: IN executable; OUT 45 observations.
+  manifest.json: IN executable/TSV/CBD/audits/source receipt; OUT hashes.
+Consumer reads manifest/all receipt paths/CBD/TSV. Old manifest removed first;
+  no command logs. Receipt omits scalar-signature/polyglot/SIMD auditor tables.
+
+060  hint-trace
+Producer: t/haskell-fixtures/HintTraceFixtures.hs. Consumer: thc.runtime.HintTraceTest.
+IN: t/fixtures/compiler/HintTraceAudit.hs, HintTraceNative.hs;
+  producer/Main/FixtureSupport, shared exporter/auditor/native GHC9.14.1.
+Under build/hint-trace/:
+  <pre|post>/core/HintTraceAudit.cbd: IN source/exporter/stage; OUT CBD/ghc/.
+  <stage>/<entry>.audit.json: IN stage CBD/auditor/six entries; OUT 12 reports.
+  native/oracle: IN source/driver/native packages, -O2 -eventlog -fforce-recomp;
+    OUT executable/intermediates.
+  native/oracle.eventlog, oracle.tsv: IN oracle +RTS -l -ol<eventlog>;
+    OUT native event stream and ten result rows. Producer reads eventlog payloads.
+  manifest.json: IN executable/eventlog/TSV/CBD/audits/source receipt; OUT hashes.
+Consumer reads manifest/receipt paths/CBD/TSV. Eventlog bytes vary with runtime;
+  this is an observation artifact, not a deterministic compiler product. Old
+  manifest removed; no command logs. Auditor input-table omissions recur.
+
+061  thread-label
+Producer: t/haskell-fixtures/ThreadLabelFixtures.hs.
+Consumer: thc.runtime.ThreadLabelNativeTest.
+IN: t/fixtures/compiler/ThreadLabelAudit.hs, ThreadLabelNative.hs;
+  producer/Main/FixtureSupport, shared exporter/auditor/native GHC9.14.1.
+Under build/thread-label/:
+  <pre|post>/core/ThreadLabelAudit.cbd: IN source/exporter/stage; OUT CBD/ghc/.
+  <stage>/<entry>-audit.json: IN stage CBD/auditor/five label entries;
+    OUT ten reports checked for labelThread#/threadLabel# presence.
+  native/oracle: IN source/driver/native packages, -O2 -dynamic -threaded;
+    OUT executable/intermediates.
+  oracle.txt: IN oracle +RTS -N2 and embedded seeds; OUT 15 checked results.
+  manifest.json: IN oracle text/CBD/audits/source receipt; OUT hashes/results.
+Consumer reads receipt paths/CBD/oracle. Executable not hashed; manifest removed
+  first; no command logs. Scalar-signature/polyglot/SIMD tables omitted from receipt.
