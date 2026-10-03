@@ -1599,6 +1599,7 @@
       "sources": ["t/haskell-fixtures/ProcessSignalFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"]
     },
     "record-fields": {
+      "cmakeTarget": "fixture-record-fields",
       "junit": ["thc.runtime.RecordFieldNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "record-fields"]}],
       "outputs": ["build/record-fields"],

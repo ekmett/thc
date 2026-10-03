@@ -3,7 +3,7 @@
 # Cabal selects tool paths and dependency units; configure only resolves a plan.
 set(cabal_options --offline "--with-compiler=${GHC}" "--with-hc-pkg=${GHC_PKG}")
 execute_process(COMMAND ${fixture_env} "${CABAL}" build ${cabal_options}
-  lib:thc exe:thc-fixtures exe:thc-compact --dry-run
+  lib:thc exe:thc-fixtures exe:thc-compact exe:thc-interface --dry-run
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)
 set(plan_path "${PROJECT_SOURCE_DIR}/dist-newstyle/cache/plan.json")
 file(READ "${plan_path}" plan)
@@ -63,15 +63,19 @@ foreach(i RANGE ${last})
   set(unit_index_${unit} ${i})
   string(JSON component ERROR_VARIABLE no_component GET "${plan}" install-plan ${i} component-name)
   string(JSON style ERROR_VARIABLE no_style GET "${plan}" install-plan ${i} style)
-  if(style STREQUAL "local" AND component MATCHES "^(lib|lib:compact-core|lib:core-symbols|lib:driver|exe:thc-fixtures|exe:thc-compact)$")
+  if(style STREQUAL "local" AND component MATCHES "^(lib|lib:compact-core|lib:core-symbols|lib:driver|exe:thc-fixtures|exe:thc-compact|exe:thc-interface)$")
     string(JSON dist GET "${plan}" install-plan ${i} dist-dir)
     if(component MATCHES "^exe:")
       string(JSON binary GET "${plan}" install-plan ${i} bin-file)
-      list(APPEND tool_outputs "${binary}")
+      if(NOT component STREQUAL "exe:thc-interface")
+        list(APPEND tool_outputs "${binary}")
+      endif()
       if(component STREQUAL "exe:thc-fixtures")
         set(fixtures_exe "${binary}")
       elseif(component STREQUAL "exe:thc-compact")
         set(compact_exe "${binary}")
+      elseif(component STREQUAL "exe:thc-interface")
+        set(interface_exe "${binary}")
       endif()
     else()
       set(library_dir "${dist}/build")
@@ -137,3 +141,13 @@ add_custom_command(OUTPUT "${encoder_path}"
   COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_BINARY_DIR}/thc-fixtures.path" "${encoder_path}"
   DEPENDS "${fixtures_exe}" "${CMAKE_CURRENT_BINARY_DIR}/thc-fixtures.path" VERBATIM)
 add_custom_target(fixture-compact-model DEPENDS "${encoder_path}" "${fixtures_exe}")
+
+# Interface hydration is only built when a selected fixture consumes it. It
+# shares the already-built plugin libraries, so parallel Cabal writers cannot
+# race over those components.
+add_custom_command(OUTPUT "${interface_exe}"
+  COMMAND ${fixture_env} "${CABAL}" build ${cabal_options} exe:thc-interface -j2
+  DEPENDS "${PROJECT_SOURCE_DIR}/src/compiler/interface/Main.hs"
+    ${plugin_build_inputs} ${cabal_inputs} ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Build the selected interface Core reader with Cabal")

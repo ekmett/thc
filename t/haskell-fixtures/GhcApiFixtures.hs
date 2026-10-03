@@ -49,16 +49,25 @@ prepareRecordFields root = do
         [value] -> pure (BS.unpack value)
         _ -> die "record-fields: expected one output line"
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
-  ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
-  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
-  plugin <- execute "plugin-build" [] "bin/build-compiler.sh" []
-  pluginInfo <- readJson (root </> "build/compiler/plugin.json")
+  suppliedPlugin <- lookupEnv "THC_PLUGIN_MANIFEST"
+  suppliedHelper <- lookupEnv "THC_INTERFACE"
+  (pluginInfo, helper, toolCommands) <- case (suppliedPlugin, suppliedHelper) of
+    (Just publication, Just helper) -> do
+      info <- readJson publication
+      pure (info, helper, [])
+    (Nothing, Nothing) -> do
+      ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+      cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+      plugin <- execute "plugin-build" [] "bin/build-compiler.sh" []
+      info <- readJson (root </> "build/compiler/plugin.json")
+      let selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ ghcPkg]
+      helperBuild <- execute "helper-build" [] cabal ("build" : selection)
+      helperLocation <- execute "helper-location" [] cabal ("list-bin" : selection)
+      helper <- single helperLocation
+      pure (info, helper, [plugin, helperBuild, helperLocation])
+    _ -> die "Record fields require both THC_PLUGIN_MANIFEST and THC_INTERFACE when using declared tools"
   packageDb <- field pluginInfo "packageDb"
   pluginUnit <- field pluginInfo "unitId"
-  let selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ ghcPkg]
-  helperBuild <- execute "helper-build" [] cabal ("build" : selection)
-  helperLocation <- execute "helper-location" [] cabal ("list-bin" : selection)
-  helper <- single helperLocation
   library <- execute "libdir" [] ghc ["--print-libdir"]
   libdir <- single library
   createDirectoryIfMissing True (root </> directory </> "installed")
@@ -88,7 +97,7 @@ prepareRecordFields root = do
         "--output", directory </> stage </> entry ++ "-audit.json"] ++
        map (\name -> directory </> stage </> name ++ ".cbd") modules)
   inputs <- hashes root (sources ++ ["src/compiler/THC/Plugin.hs", "t/haskell-fixtures/GhcApiFixtures.hs"])
-  let records = [plugin, helperBuild, helperLocation, library] ++ commands ++ audits
+  let records = toolCommands ++ [library] ++ commands ++ audits
   artifacts <- hashes root (concatMap commandArtifacts records ++
     [directory </> stage </> name ++ ".cbd" | stage <- ["pre", "post", "installed"], name <- modules])
   writeJson (root </> directory </> "manifest.json") $ object
