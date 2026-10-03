@@ -143,6 +143,11 @@ dependency graph and module inventory. The selected compiler libdir and ordered
 private package databases travel together through probes, compiler replay and
 native linking. Cache identities include that view; a different private database
 does not reuse a bundle from the original global database.
+
+The Core cache resolver uses forward slashes for Windows roots, including
+`THC_CACHE_HOME`, so slash and backslash spellings select the same identity.
+Distinct roots remain distinct; existing entries are not moved or relabelled.
+
 Windows configure receives the selected GHC's recorded host triplet so the
 original upstream scripts select their Windows branches and type fallbacks.
 

@@ -11,7 +11,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for native cache.
-module NativeCacheTests (tests, withScratch, withEnvironment, writeExecutable) where
+module NativeCacheTests (tests, cacheDirectoryTest, withScratch, withEnvironment, writeExecutable) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM_, void)
@@ -32,12 +32,40 @@ import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), takeDirectory)
 import System.IO (hClose, openTempFile)
 import System.IO.Error (tryIOError)
+import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
+import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
+
+cacheDirectoryTest :: Test
+cacheDirectoryTest = TestLabel "Core cache directory identity" $ TestCase $ withScratch $ \root -> do
+  let cache = root </> "core"
+      resolve path = withEnvironment [("THC_CACHE_HOME", path)] coreCacheDirectory
+  (selected, alternate) <- if os == "mingw32" then do
+      let forward = map (\c -> if c == '\\' then '/' else c) cache
+          backward = map (\c -> if c == '/' then '\\' else c) cache
+      first <- resolve forward
+      second <- resolve backward
+      assertEqual "Windows separators select one cache identity" first second
+      assertEqual "Windows cache identity uses forward separators" forward first
+      pure (first, backward)
+    else do
+      let literal = cache ++ "\\literal"
+      assertEqual "Unix backslashes remain filename characters" literal =<< resolve literal
+      pure (literal, literal)
+  assertEqual "resolving a cache does not create it" False =<< Directory.doesDirectoryExist selected
+  createDirectory selected
+  writeFile (selected </> "complete") "completed cache entry"
+  assertEqual "the alternate spelling reuses the completed entry" "completed cache entry" =<<
+    (readFile . (</> "complete") =<< resolve alternate)
+  other <- resolve (root </> "other")
+  assertBool "distinct cache roots retain their ownership" (other /= selected)
+  expectFailure "relative cache roots remain rejected" (resolve "relative/core")
 
 tests :: Test
 tests = TestLabel "native cache identity" $ TestList
-  [ TestCase $ withScratch $ \root -> withTools (root </> "missing") $ do
+  [ cacheDirectoryTest
+  , TestCase $ withScratch $ \root -> withTools (root </> "missing") $ do
       observed <- nativeToolIdentity
       forM_ toolVariables $ \name -> assertEqual "missing tools do not require LLVM for pure Haskell"
         Null (member "executable" (member name (member "tools" observed)))
