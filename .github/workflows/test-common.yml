@@ -71,10 +71,12 @@ jobs:
           path: dist-newstyle
           key: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
           restore-keys: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
-      - name: Compile common tools and test classes without acquiring fixtures or running tests
+      - name: Compile and package the application
         run: |
           python3 .github/scripts/fast_ci.py start --report-dir build/ci/common-results
-          python3 .github/scripts/fast_ci.py compile-common --report-dir build/ci/common-results
+          python3 .github/scripts/fast_ci.py compile-common --reuse-daemon --report-dir build/ci/common-results
+      - name: Compile shared test classes and fixture tools without running tests
+        run: python3 .github/scripts/fast_ci.py compile-test-support --reuse-daemon --report-dir build/ci/common-results
       - name: Pack common compilation for scheduled groups
         if: inputs.cadence != 'commit'
         run: python3 .github/scripts/fast_ci.py pack-common --archive build/ci/common.tar.gz
@@ -88,7 +90,7 @@ jobs:
           cabal test primop-tools compact-core-tests -fdevelopment --test-show-details=direct
       - name: Check pinned guest protocol artifacts
         if: inputs.cadence == 'commit'
-        run: ./gradlew --no-daemon --max-workers=2 --continue testMaterializableApi testReturnPolicy testReturnContinuations
+        run: ./gradlew --daemon --max-workers=2 --continue testMaterializableApi testReturnPolicy testReturnContinuations
       - name: Check driver units and CPU affinity API
         if: inputs.cadence == 'commit'
         shell: bash
@@ -146,9 +148,10 @@ jobs:
       - name: Run commit group with existing compilation and both handoff modes
         if: inputs.cadence == 'commit'
         run: |
-          ./gradlew --stop
-          trap './gradlew --stop' EXIT
           python3 .github/scripts/fast_ci.py group --group commit --cadence commit --reuse-daemon --report-dir build/ci/group-results/commit
+      - name: Stop the job's Gradle worker
+        if: always() && env.JAVA_HOME != ''
+        run: ./gradlew --stop
       - name: Preserve common compilation and commit test output
         if: always()
         uses: actions/upload-artifact@v7.0.1
@@ -158,6 +161,7 @@ jobs:
             build/ci/setup-results/
             build/ci/common-results/
             build/ci/group-results/
+            build/reports/profile/
             build/test-results/testDefault/
             build/test-results/testDense/
             build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd

@@ -127,4 +127,4 @@ def verifyWindowsSulongSelection = tasks.register("verifyWindowsSulongSelection"
     }
 }
 tasks.withType(Test).configureEach { dependsOn(verifyWindowsSulongSelection) }
-tasks.named("startScripts") { dependsOn(verifyWindowsSulongSelection) }
+tasks.named("check") { dependsOn(verifyWindowsSulongSelection) }

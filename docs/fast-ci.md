@@ -32,6 +32,13 @@ submodule checkout on the same runner. Setup joins every process before building
 and terminates the other processes on failure; timings and logs are retained in
 `build/ci/setup-results`. Verified tools are saved before compilation starts.
 
+Application compilation builds the Cabal driver and Gradle `installDist` first.
+The following test-support stage builds shared Java test classes, diagnostics and
+CMake fixture tools. Neither stage runs tests. Scheduled jobs share both stages'
+outputs; protocol and patched-artifact checks run only during verification.
+Hosted stages reuse one job-owned Gradle worker, stopped on success or failure.
+Per-stage timings and Gradle task profiles accompany the job's logs.
+
 `cabal.project` pins the Hackage `index-state`. CI updates the index only when that
 snapshot is absent from its cache. To update dependencies deliberately, change
 that timestamp and run `cabal update`; editing `thc.cabal` does not refresh it.

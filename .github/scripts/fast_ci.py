@@ -574,14 +574,22 @@ COMMON_OUTPUTS = ("dist-newstyle", ".gradle", "src/build/build", "src/build/.gra
                   "build/native", "build/compiler", "build/thc-fixtures.path", "build/fixtures")
 
 
-def compile_common(recorder):
+def compile_common(recorder, *, reuse_daemon=False):
     recorder.data["selection"] = {"mode": "compile-only", "reasons": []}
-    recorder.command("common-cabal", ["cabal", "build", "exe:thc", "exe:thc-primops"])
+    recorder.command("common-cabal", ["cabal", "build", "exe:thc"])
+    recorder.command("common-gradle", ["./gradlew", "--daemon" if reuse_daemon else "--no-daemon",
+                                      "--max-workers=2", "--build-cache", "--profile", "installDist"])
+    recorder.data.update(passed=True, nativeInputs="not acquired")
+    recorder.save()
+
+
+def compile_test_support(recorder, *, reuse_daemon=False):
+    recorder.command("common-test-tools", ["cabal", "build", "exe:thc-primops"])
     recorder.command("common-scalars", ["cabal", "run", "exe:thc-primops", "--", "scalars"])
     recorder.command("common-fixture-configure", ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"])
     recorder.command("common-fixture-tools", ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", "fixture-tools"])
-    recorder.command("common-gradle", ["./gradlew", "--no-daemon", "--max-workers=2", "--build-cache",
-                                      "testClasses", "installDist", "toolsJar"])
+    recorder.command("common-test-classes", ["./gradlew", "--daemon" if reuse_daemon else "--no-daemon",
+                                            "--max-workers=2", "--build-cache", "--profile", "testClasses", "toolsJar"])
     recorder.data.update(passed=True, nativeInputs="not acquired")
     recorder.save()
 
@@ -661,13 +669,13 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "setup-toolchain"))
+    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain"))
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
     parser.add_argument("--cadence", choices=("commit", "hourly", "nightly"))
     parser.add_argument("--reuse-daemon", action="store_true",
-                        help="Reuse the CI batch's worker daemon for grouped tests")
+                        help="Reuse the CI job's worker daemon for builds and grouped tests")
     parser.add_argument("--archive", type=Path)
     parser.add_argument("--base", default=os.environ.get("FAST_BASE_SHA", ""))
     parser.add_argument("--head", default=os.environ.get("FAST_HEAD_SHA", "HEAD"))
@@ -683,7 +691,9 @@ def main(argv=None):
         elif args.command == "setup-toolchain":
             setup_toolchain(recorder)
         elif args.command == "compile-common":
-            compile_common(recorder)
+            compile_common(recorder, reuse_daemon=args.reuse_daemon)
+        elif args.command == "compile-test-support":
+            compile_test_support(recorder, reuse_daemon=args.reuse_daemon)
         elif args.command == "group":
             run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence)
         elif args.command == "pack-common":

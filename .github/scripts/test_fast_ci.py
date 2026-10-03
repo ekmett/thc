@@ -19,6 +19,23 @@ SPEC.loader.exec_module(ci)
 
 
 class FastRunnerTest(unittest.TestCase):
+    def test_application_and_test_support_are_separate_build_stages(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        with patch.object(recorder, "command") as command:
+            ci.compile_common(recorder, reuse_daemon=True)
+            application = [call.args[1] for call in command.call_args_list]
+            self.assertEqual(["cabal", "build", "exe:thc"], application[0])
+            self.assertEqual("installDist", application[1][-1])
+            self.assertIn("--daemon", application[1])
+            self.assertFalse(any("testClasses" in argv or "fixture-tools" in argv for argv in application))
+            command.reset_mock()
+            ci.compile_test_support(recorder, reuse_daemon=True)
+            support = [call.args[1] for call in command.call_args_list]
+            self.assertTrue(any("fixture-tools" in argv for argv in support))
+            self.assertEqual(["testClasses", "toolsJar"], support[-1][-2:])
+            self.assertFalse(any("testDefault" in argv or "testDense" in argv for argv in support))
+
     def test_setup_processes_start_together_and_join(self):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "setup")

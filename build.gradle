@@ -97,7 +97,6 @@ if (stockTruffle) {
         }
     }
     tasks.withType(Test).configureEach { dependsOn(verifyStockTruffle) }
-    tasks.named("startScripts") { dependsOn(verifyStockTruffle) }
     tasks.named("check") { dependsOn(verifyStockTruffle) }
 }
 apply(from: "src/gradle/bytecode-metadata.gradle")
