@@ -569,19 +569,8 @@ class FastRunnerTest(unittest.TestCase):
         self.assertNotIn('-- foreign-exceptions', makefile)
         self.assertIn('--continue foreignExceptionTest foreignExceptionDenseTest', makefile)
         workflow = (root / ".github/workflows/checks.yml").read_text()
-        lane = workflow.split('  foreign-exceptions:\n', 1)[1].split('  library:\n', 1)[0]
-        self.assertIn('if: ${{ false }}', lane)
-        self.assertNotIn('continue-on-error', lane)
-        self.assertIn('runs-on: [self-hosted, Linux, X64, thc-fast]', lane)
-        self.assertIn('persist-credentials: false', lane)
-        self.assertIn('path: work/foreign-exceptions', lane)
-        self.assertIn('vars.THC_FULL_CORE_ENVIRONMENT', lane)
-        self.assertIn('test -n "$THC_FULL_CORE_ENVIRONMENT" && test -f "$THC_FULL_CORE_ENVIRONMENT"', lane)
-        self.assertIn('make foreign-exception-test-modes', lane)
-        self.assertIn('GRADLE_USER_HOME="$RUNNER_TEMP/thc-foreign-exceptions/gradle"', lane)
-        self.assertIn('THC_CACHE_HOME="$RUNNER_TEMP/thc-foreign-exceptions/core"', lane)
-        self.assertIn('build/test-results/foreignExceptionTest/*.xml', lane)
-        self.assertIn('build/test-results/foreignExceptionDenseTest/*.xml', lane)
+        self.assertNotIn('  foreign-exceptions:', workflow)
+        self.assertNotIn('make foreign-exception-test-modes', workflow)
 
     def test_descriptor_flags_keep_native_regressions_in_affected_fast_tests(self):
         root = Path(__file__).parents[2]

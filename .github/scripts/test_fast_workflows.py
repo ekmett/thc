@@ -69,7 +69,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("run: python3 .github/scripts/hourly_health.py", gate)
         self.assertIn("  actions: read", workflow)
         self.assertNotIn("continue-on-error", gate)
-        for job in ("jvm-linux", "jvm-macos", "windows", "build", "foreign-exceptions"):
+        for job in ("jvm-linux", "jvm-macos", "windows", "build"):
             self.assertIn("  " + job + ":\n    needs: automation\n", workflow)
         self.assertIn("    needs: build\n", workflow.split("  library:\n", 1)[1])
 
@@ -90,10 +90,9 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                          "narrow-integer-transport", "tuple-join", "sum-input",
                          "sum-join-input", "tuple-capture"):
             self.assertNotIn("--offline -- " + producer, workflow)
-        for job, condition in (("foreign-exceptions", "if: ${{ false }}"),
-                               ("library", "if: inputs.cadence == 'nightly'")):
-            block = workflow.split("  " + job + ":\n", 1)[1].split("    steps:", 1)[0]
-            self.assertIn(condition, block)
+        self.assertNotIn("  foreign-exceptions:", workflow)
+        library = workflow.split("  library:\n", 1)[1].split("    steps:", 1)[0]
+        self.assertIn("if: inputs.cadence == 'nightly'", library)
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
         commands = [line.strip() for line in (workflow + grouped).splitlines() if "cabal test driver-tests" in line]
         self.assertEqual(3, len(commands))
@@ -131,26 +130,6 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("name: Verify pinned toolchain\n        if: inputs.cadence == 'commit'", common)
         self.assertIn("python3 bin/test-audit-core.py", common)
         self.assertIn("testMaterializableApi testReturnPolicy testReturnContinuations", common)
-
-    def test_nightly_foreign_exception_runner_rejects_untrusted_events(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
-        lane = workflow.split("  foreign-exceptions:\n", 1)[1]
-        block = lane.split("name: Require a trusted repository branch\n", 1)[1].split("\n      - ", 1)[0]
-        script = textwrap.dedent(block.split("        run: |\n", 1)[1])
-        for event, ref, expected in (
-            ("schedule", "refs/heads/main", True),
-            ("schedule", "refs/heads/feature", False),
-            ("push", "refs/heads/main", True),
-            ("push", "refs/heads/feature", False),
-            ("workflow_dispatch", "refs/heads/feature", True),
-            ("workflow_dispatch", "refs/tags/v1", False),
-            ("pull_request", "refs/pull/1/merge", False),
-            ("pull_request_target", "refs/heads/main", False),
-        ):
-            with self.subTest(event=event, ref=ref):
-                result = subprocess.run(["bash", "-e", "-c", script],
-                    env=dict(os.environ, GITHUB_EVENT_NAME=event, GITHUB_REF=ref), capture_output=True)
-                self.assertEqual(expected, result.returncode == 0)
 
     def test_build_runs_driver_units_without_selecting_package_integration(self):
         workflow = (WORKFLOW.parent / "test-groups.yml").read_text()
