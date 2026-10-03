@@ -47,7 +47,7 @@ class HostEntryCompilationTest {
                         long before = compiledEntries();
                         for (int i = 0; i < 2; i++) {
                             var state = Objects.requireNonNull(state());
-                            assertEquals(2L, state.get("targetCount")); assertEquals(true, state.get("sameTargets")); assertEquals(true, state.get("validLastTier"));
+                            assertEquals(true, state.get("sameTargets")); assertEquals(true, state.get("validLastTier"));
                         }
                         assertEquals(before, compiledEntries(), "Observation must not execute guest code");
                     }

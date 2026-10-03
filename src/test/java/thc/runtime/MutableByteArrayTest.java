@@ -31,9 +31,16 @@ class MutableByteArrayTest {
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label);
     }
     private void compile(RootCallTarget target) throws Exception {
-        target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+        var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+        type.getMethod("compile", boolean.class).invoke(target, true);
+        type.getMethod("waitForCompilation").invoke(target);
         valid(target, "installed");
+        // Restore the shared entry stub without executing a settling guest call.
+        var runtime = Truffle.getRuntime();
+        runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, target);
+        valid(target, "entry boundary restored");
     }
+
     private void released(Language language) {
         var state = language.getHandoffState().get();
         assertEquals(0, state.getArguments().getDepth());
