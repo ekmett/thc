@@ -22,9 +22,9 @@ module THC.Driver.Installed
   ) where
 
 import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
-import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
+import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newEmptyMVar, newMVar, putMVar, readMVar)
 import Control.Exception (SomeException, bracket, evaluate, finally, mask, mask_, onException, throwIO, try)
-import Control.Monad (filterM, foldM, forM, forM_, unless, void)
+import Control.Monad (filterM, foldM, forM, forM_, replicateM_, unless, void)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -406,35 +406,48 @@ probeInstalledUnits context requested units = do
 
 -- | Hydrate genuine complete Core for a discovered unit. Missing payloads are
 -- returned separately from corrupt or inconsistent evidence, which fails in IO.
--- @THC_INSTALLED_CORE_JOBS@ bounds helper concurrency (default 2, range 1–64).
+-- @THC_INSTALLED_CORE_JOBS@ bounds helper concurrency (default 4, range 1–64).
 acquireInstalled :: InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
 acquireInstalled context unit = do
   selected <- lookupEnv "THC_INSTALLED_CORE_JOBS"
   jobs <- case selected of
-    Nothing -> pure 2
+    Nothing -> pure 4
     Just value -> maybe (fail "THC_INSTALLED_CORE_JOBS must be an integer from 1 to 64") pure (readMaybe value)
   acquireInstalledWithJobs jobs context unit
 
 type LoadedInterface = Either MissingCore (String, String, BS.ByteString)
-type InterfaceWorker = (ThreadId, MVar (Either SomeException LoadedInterface))
+type InterfaceWorker = (ThreadId, MVar ())
 
--- Only helper hydration overlaps. Consume in registration order, retaining the
--- original first failure, owner check, strict serialized payloads and final
--- registration check. At most `jobs` responses can be pending; a slow early
--- module must not let the whole package's decoded trees accumulate behind it.
+-- Workers claim the next interface as soon as they finish. Keep strict CBD
+-- bytes in inventory slots, never decoded GHC trees in the parent. Publication
+-- and first-failure reporting retain registration order even when work finishes
+-- out of order. Each helper owns its GHC session and is reaped before return.
 acquireInstalledWithJobs :: Int -> InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
 acquireInstalledWithJobs jobs context unit = do
   unless (jobs >= 1 && jobs <= 64) (fail "THC_INSTALLED_CORE_JOBS must be an integer from 1 to 64")
   mask $ \restore -> do
+    pending <- forM (installedInterfaces unit) $ \item -> (,) item <$> newEmptyMVar
+    queue <- newMVar pending
     active <- newIORef ([] :: [InterfaceWorker])
-    let spawn item = mask_ $ do
-          result <- newEmptyMVar
-          thread <- forkIOWithUnmask $ \unmask -> do
-            loaded <- try (unmask (load item))
-            putMVar result loaded
-          let worker = (thread, result)
-          modifyIORef' active (worker :)
-          pure worker
+    let work unmask = do
+          next <- modifyMVar queue $ \items -> pure $ case items of
+            [] -> ([], Nothing)
+            item : rest -> (rest, Just item)
+          case next of
+            Nothing -> pure ()
+            Just (item, result) -> do
+              loaded <- try (unmask (load item)) :: IO (Either SomeException LoadedInterface)
+              case loaded of
+                Right (Right _) -> putMVar result loaded >> work unmask
+                _ -> do
+                  -- Earlier slots have already been claimed. Let those finish
+                  -- for deterministic failure reporting, but assign no new work.
+                  modifyMVar_ queue (const (pure []))
+                  putMVar result loaded
+        spawn = mask_ $ do
+          done <- newEmptyMVar
+          thread <- forkIOWithUnmask $ \unmask -> work unmask `finally` putMVar done ()
+          modifyIORef' active ((thread, done) :)
         stop = do
           workers <- readIORef active
           forM_ workers $ \(thread, result) -> do
@@ -443,23 +456,16 @@ acquireInstalledWithJobs jobs context unit = do
             -- the worker publishes cancellation. Do not leave an
             -- exporting helper alive after failure, timeout or caller unwind.
             void (readMVar result)
-        go modules [] [] = finish modules
-        go modules ((thread, result):pending) rest = do
+        go modules [] = finish modules
+        go modules (result:rest) = do
           loaded <- readMVar result
-          modifyIORef' active (filter ((/= thread) . fst))
           value <- either throwIO pure loaded
           case value of
             Left missing -> pure (Left missing)
-            Right entry -> case rest of
-              [] -> go (entry : modules) pending []
-              next : later -> do
-                worker <- spawn next
-                go (entry : modules) (pending ++ [worker]) later
-        go _ [] _ = fail "installed-Core worker inventory became inconsistent"
+            Right entry -> go (entry : modules) rest
         start = do
-          let (first, later) = splitAt jobs (installedInterfaces unit)
-          pending <- mapM spawn first
-          restore (go [] pending later)
+          replicateM_ (min jobs (length pending)) spawn
+          restore (go [] (map snd pending))
     start `finally` stop
   where
     finish modules = do

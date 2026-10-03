@@ -126,8 +126,13 @@ explicitly. The [foreign guide](interface-foreign.md#acquire-installed-foreign-d
 explains this requirement. The Windows simple-package backend does not support
 this complete-interface provider.
 
-Cold hydration uses at most two helper processes. `THC_INSTALLED_CORE_JOBS`
-selects a bound from 1 to 64; higher values need more CPU and memory.
+Cold hydration uses four workers by default. `THC_INSTALLED_CORE_JOBS` selects a
+bound from 1 to 64; higher values need more CPU and memory. Each worker converts
+one installed interface in an isolated GHC helper, then takes the next queued
+interface immediately. A slow earlier module does not stall free workers.
+Results retain registration order and identical CBD bytes; failure or cancellation
+terminates and reaps outstanding helpers before returning. This conversion reads
+already compiled interfaces, so it needs no ordering between CBD output files.
 
 ## Runtime selection and host resources
 

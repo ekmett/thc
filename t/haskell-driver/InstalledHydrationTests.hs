@@ -200,12 +200,13 @@ tests = TestLabel "bounded installed-interface hydration" $ TestList
       flip finally (killThread thread >> readMVar result >> pure ()) $ do
         mapM_ (awaitFile . (directory </>)) ["A.started", "B.started"]
         started <- doesFileExist (directory </> "C.started")
-        assertBool "Only two interfaces may start before a response is consumed" (not started)
-        writeFile (directory </> "A.release") ""
-        awaitFile (directory </> "C.finished")
-        fourth <- doesFileExist (directory </> "D.started")
-        assertBool "An early slow module bounds the completed response backlog" (not fourth)
+        assertBool "Only two interfaces may run at once" (not started)
         writeFile (directory </> "B.release") ""
+        awaitFile (directory </> "C.finished")
+        awaitFile (directory </> "D.finished")
+        first <- doesFileExist (directory </> "A.finished")
+        assertBool "A slow first module does not block other workers from draining the queue" (not first)
+        writeFile (directory </> "A.release") ""
         parallel <- readMVar result >>= either (fail . show) pure
         assertEqual "Payload bytes, owner and inventory order match serial hydration" serial parallel
         case parallel of
