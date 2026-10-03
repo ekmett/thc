@@ -502,6 +502,15 @@ def handoffModeTests = [["testDefault", false],[ "testDense", true]].collect { t
         useJUnitPlatform { excludeTags("simd-families-experiment", "foreign-exceptions-full-core", "truffle-strings-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        if ("true".equalsIgnoreCase(System.getenv("THC_EMPTY_JOIN_DIAGNOSTICS"))) {
+            systemProperty("thc.emptyJoinDiagnostics", "true")
+            def run = "${System.getenv('GITHUB_RUN_ID') ?: 'local'}-${System.getenv('GITHUB_RUN_ATTEMPT') ?: '1'}"
+            systemProperty("jdk.graal.Dump", "Truffle:2")
+            systemProperty("jdk.graal.MethodFilter", "*emptyJoinDiagnostic*")
+            systemProperty("jdk.graal.DumpPath", file("build/empty-join-diagnostics/${run}/${dense ? 'dense' : 'default'}").absolutePath)
+            systemProperty("jdk.graal.PrintGraph", "File")
+            systemProperty("jdk.graal.PrintGraphWithSchedule", "true")
+        }
         maxParallelForks = 1
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Handoff mode evidence requires a fresh test process") { true }
