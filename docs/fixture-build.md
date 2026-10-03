@@ -25,7 +25,7 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `simd-wide-floating-fma`, `io-main-pap`, `simd-wide-arrays`, `simd128-arrays`,
 `simd-arithmetic`, `pinned-addresses`, `record-fields`, `rts-diagnostics`,
 `rts-shutdown`, `original-errno`, `ghc-bco`, `closure-inspection`, `cstring`,
-`thread-inventory` and `process-lifecycle-native`. Each has a `fixture-<group>`
+`thread-inventory`, `process-lifecycle-native`, `delimited-continuations` and `hint-trace`. Each has a `fixture-<group>`
 target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
@@ -64,8 +64,8 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 65 graph targets covering 105 mapped JUnit classes, 46 quarantined
-groups and 29 groups still awaiting file rules. The native process target is
+There are 67 graph targets covering 108 mapped JUnit classes, 46 quarantined
+groups and 27 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -76,6 +76,12 @@ Gradle no longer builds these process controls for every unrelated test.
 - `make test-modes TESTS=thc.runtime.BigNatLiteralTest` passed another ten
   executions in 33 seconds with the declared model encoder. Make and direct
   Gradle now share the standard dependency cache unless explicitly overridden.
+- Continuation and hint/trace consumers passed 90 executions across both handoff
+  modes in 1m39s, including case-arm consumers. The native trace-lifetime control
+  skipped once per mode because this host does not provide its native allocator.
+  Both new targets returned to no work; their 45 receipt artifacts had graph writers.
+  Continuation audits dropped from 35 to three and hint/trace from 12 to two.
+  Hint/trace no longer generates or hashes the native GHC eventlog.
 - Thread inventory has separate native object directories, two nine-entry
   audits instead of 18, and no source-shape/root-count predictions. Its first
   compiled calls, interpreter-bypass negative control, callback masking and
@@ -83,6 +89,9 @@ Gradle no longer builds these process controls for every unrelated test.
 - BCO audits use two processes instead of 70; closure inspection uses one
   instead of nine. SIMD memory/shuffle uses three instead of 216 on ARM
   (four instead of 252 on Linux), covering the same entry sets.
+- All 65 targets before continuation admission generated on macOS in 3m12s.
+  With the graph unchanged, the repeat did no work in 0.45 seconds. All 1,324
+  artifact hashes across 59 receipts matched files with declared graph writers.
 - Missing CBD siblings, oracle files and the encoder sidecar rebuilt through
   their owning rules. Unrelated extra CBD files did not enter the inputs.
   Deleting the interface-reader executable rebuilt it and its record-field
@@ -95,7 +104,7 @@ Gradle no longer builds these process controls for every unrelated test.
 - Pinned-address rejection controls passed without leaving scratch catalogues.
   Removed 48 unreferenced catalogues (9.8 MiB), retaining named reports and logs.
 
-The focused JVM results do not establish that all 105 mapped classes pass.
+The focused JVM results do not establish that all 108 mapped classes pass.
 Linux generation/execution of the newly migrated rules, native Windows graph
 support and migration of the CI entry point remain open. Successful local
 fixture generation is not a claim that CI is green.

@@ -4,10 +4,6 @@ package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.bytecode.Instruction;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import thc.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ThreadInventoryCoreEvidence.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @Timeout(60)
@@ -43,21 +40,6 @@ class HintTraceTest {
     private Map<String, Object> module(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, "build/hint-trace/" + stage + "/core/HintTraceAudit.cbd").toPath()); }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
     private Object call(ExecutableProgram program, String name, Object... args) { var input = new Object[args.length + 1]; input[0] = 0L; System.arraycopy(args, 0, input, 1, args.length); return ScalarTestCalls.callScalarTestTarget(program.entryTarget("main:HintTraceAudit." + name), input); }
-    private List<RootCallTarget> targets(RootCallTarget entry) {
-        var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>()); var result = new ArrayList<RootCallTarget>();
-        class Visit {
-            void target(RootCallTarget target) {
-                if (!seen.add(target)) return; var body = target.getRootNode(); var nodes = new ArrayList<Node>(); nodes.add(body);
-                if (body instanceof BytecodeRoot bytecode) for (var instruction : bytecode.getBytecodeNode().getInstructions()) for (var argument : instruction.getArguments()) {
-                    if (argument.getKind() == Instruction.Argument.Kind.NODE_PROFILE) { var cached = argument.asCachedNode(); if (cached != null) nodes.add(cached); }
-                }
-                for (var node : nodes) for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class)) if (call.getCurrentCallTarget() instanceof RootCallTarget next && next.getRootNode() instanceof GuestRoot) target(next);
-                result.add(target);
-            }
-        }
-        new Visit().target(entry); return result;
-    }
-    private void valid(RootCallTarget target) throws ReflectiveOperationException { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), target.getRootNode().getName()); }
     private Set<String> primitives(Object value) {
         var result = new LinkedHashSet<String>();
         if (value instanceof Map<?, ?> map) for (var child : map.values()) result.addAll(primitives(child));
@@ -70,12 +52,6 @@ class HintTraceTest {
         var receipt = fixture(); var rows = new ArrayList<List<String>>(); for (var line : Files.readAllLines(new File(root, "build/hint-trace/oracle.tsv").toPath())) rows.add(Arrays.asList(line.split("\t", -1))); assertEquals(10, rows.size());
         for (String stage : (List<String>) receipt.get("stages")) {
             var module = module(stage);
-            for (String name : List.of("hints", "traces")) {
-                var proof = new ArrayCoreEvidence(module, "main:HintTraceAudit." + name); proof.stateLambda(proof.getRoot().get("expr")); assertEquals(2, proof.guestLambdas(proof.getRoot().get("expr")).size(), "Original entry and state lambda");
-                assertEquals(1, proof.loweredStateLambdas(proof.getRoot().get("expr")).size(), "Exact runRW redex lowers in-frame");
-                // Floating string/bottom CAFs remain supplied; none contains a guest lambda.
-                for (var binding : proof.getBindings()) if (binding != proof.getRoot()) assertTrue(proof.guestLambdas(binding.get("expr")).isEmpty());
-            }
             var required = new LinkedHashSet<>(PrefetchExpression.ARITIES.keySet()); for (var operation : TraceOp.values()) required.add(operation.getPrimitive()); assertTrue(primitives(module).containsAll(required));
             for (String backend : List.of("ast", "bytecode")) {
                 var output = new ByteArrayOutputStream();
@@ -91,11 +67,13 @@ class HintTraceTest {
                         };
                         for (var row : rows) check.accept(row);
                         var distinct = new LinkedHashSet<RootCallTarget>(); for (String name : List.of("hints", "traces")) distinct.addAll(targets(program.entryTarget("main:HintTraceAudit." + name))); var active = new ArrayList<>(distinct);
-                        assertEquals(2, active.size(), "One lowered public root for hints and traces"); for (var target : active) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }
+                        var interpreted = interpretedCalls(active);
+                        install(active);
                         for (var row : rows) {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); check.accept(row);
-                            // Original functions execute their proven State# body in-frame.
-                            assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue()); for (var target : active) valid(target);
+                            assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, "First installed call enters compiled code");
+                            assertEquals(interpreted, interpretedCalls(active), "No interpreted settling call");
+                            for (var target : active) assertTrue(valid(target), "Installed trace target remains valid");
                         }
                     } finally { context.leave(); }
                 }

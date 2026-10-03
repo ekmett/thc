@@ -1416,7 +1416,7 @@
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "src/test/java/thc/runtime/ThreadInventoryCoreEvidence.java": {
-      "junit": ["thc.runtime.TupleCompletionTest", "thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.GhcBCOContinuationTest", "thc.runtime.ProcessSignalsTest"], "python": []
+      "junit": ["thc.runtime.HintTraceTest", "thc.runtime.TupleCompletionTest", "thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.GhcBCOContinuationTest", "thc.runtime.ProcessSignalsTest"], "python": []
     },
     "src/main/java/thc/runtime/StableNames.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "src/main/java/thc/runtime/StableNameOp.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
@@ -2062,11 +2062,9 @@
         "thc.runtime.UnixLibcTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
-        "thc.runtime.HintTraceTest",
         "thc.runtime.OriginalOpenTest",
         "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest",
         "thc.runtime.AtomicIntArrayTest",
-        "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.AlignedScalarMemoryTest",
         "thc.runtime.IntegerCompletionTest",
         "thc.runtime.UnalignedScalarMemoryTest",

@@ -383,10 +383,11 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "delimited-continuations": {
+      "cmakeTarget": "fixture-delimited-continuations",
       "junit": ["thc.runtime.CaseArmOutliningTest", "thc.runtime.DelimitedContinuationsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "delimited-continuations"]}],
       "outputs": ["build/delimited-continuations"],
-      "sources": ["t/fixtures/core/DelimitedContinuations.hs", "t/fixtures/compiler/DelimitedContinuationsNative.hs", "t/haskell-fixtures/DelimitedContinuationsFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/core/DelimitedContinuations.hs", "t/fixtures/core/ParkedControl.hs", "t/fixtures/compiler/ParkedControlNative.hs", "t/fixtures/compiler/DelimitedContinuationsNative.hs", "t/haskell-fixtures/DelimitedContinuationsFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-scheduling": {
       "cmakeTarget": "fixture-thread-scheduling",
@@ -417,6 +418,7 @@
         "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "hint-trace": {
+      "cmakeTarget": "fixture-hint-trace",
       "junit": ["thc.runtime.HintTraceTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "hint-trace"]}],
       "outputs": ["build/hint-trace"],

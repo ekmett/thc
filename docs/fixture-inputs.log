@@ -2036,10 +2036,10 @@ Fixture rationale (056 delimited-continuations)
 Purpose: Check prompt/control capture, resumption and case-arm continuation behavior.
 Produces/consumed result: Continuation and parked-control CBDs.
 Cost and overlap: Keep runtime control-flow semantics, sharing and rejection boundaries.
-  Thirty-five preparation reports are disproportionate; batch or remove reports
-  unrelated to assertions.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+  Three batched audits cover the same entries. Native and first compiled calls
+  compare observable results without predicting compiler root or lambda counts.
+Build status: CMake owns each named product; native and Core object directories
+  are separate for each program and stage.
 
 Producer: t/haskell-fixtures/DelimitedContinuationsFixtures.hs.
 Consumers: thc.runtime.DelimitedContinuationsTest, CaseArmOutliningTest.
@@ -2053,16 +2053,16 @@ Under build/delimited-continuations/:
     executable; OUT 51 and 2 native observations respectively.
   <pre|post>/core/DelimitedContinuations.cbd: IN Delimited source/exporter/stage;
     OUT CBD and stage/ghc/ intermediates.
-  <stage>/<entry>-audit.json: IN stage CBD/auditor/17 entry names; OUT 34 reports.
+  <stage>/audit.json: IN stage CBD/auditor/17 entry names; OUT two reports.
   parked/core/ParkedControl.cbd: IN Parked source/exporter; OUT CBD/parked/ghc/.
   parked/audit.json: IN Parked CBD/observe entry/auditor; OUT report.
   commands/: ghc-version,native-build/run,parked-native-build/run,parked-export/
-    audit,pre/post-export,stage-audit-entry; OUT log triplets.
+    audit,pre/post-export,pre/post-audit; OUT log triplets.
   manifest.json: IN stdout parsed as results,CBD/audits/logs/source receipt;
     OUT native/parkedNative values and hashes. Native executables not hashed.
 Consumers read manifest/receipts/CBDs. Old manifest remains during generation;
-  polyglot ABI/SIMD table omissions recur. Parked sources are actual inputs even
-  though absent from this group's fast-fixtures.json source list.
+  CMake declares the auditor ABI/SIMD tables and both parked sources as inputs.
+  A failed command leaves its target dirty; no receipt bypasses the graph.
 
 057  thread-scheduling
 Fixture rationale (057 thread-scheduling)
@@ -2146,28 +2146,25 @@ Consumer retains lazy-payload and continuation behavior checks; no predicted
 060  hint-trace
 Fixture rationale (060 hint-trace)
 Purpose: Check hint/trace/event/marker primops preserve program results and observable
-  trace behavior.
-Produces/consumed result: CBDs, oracle.tsv and native eventlog used as evidence.
-Cost and overlap: Keep a small behavior/control check. Nondeterministic eventlog bytes
-  and exact native trace implementation are not reusable fixture identities; JFR wiring
-  needs separate tests.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+  THC trace behavior, including bounds/lifetimes, context isolation and lazy prefetch.
+Produces/consumed result: Two CBDs, two batched audits and native oracle.tsv.
+Cost and overlap: Native GHC supplies result values. Its eventlog encoding is not a THC
+  contract and is not generated. JFR wiring needs separate tests.
+Build status: CMake owns the named products; no generated directory is an input.
 
 Producer: t/haskell-fixtures/HintTraceFixtures.hs. Consumer: thc.runtime.HintTraceTest.
-IN: t/fixtures/compiler/HintTraceAudit.hs, HintTraceNative.hs;
-  producer/Main/FixtureSupport, shared exporter/auditor/native GHC9.14.1.
+IN: t/fixtures/compiler/{HintTraceAudit,HintTraceNative}.hs;
+  producer/Main/FixtureSupport, shared exporter/auditor inputs/native GHC9.14.1.
 Under build/hint-trace/:
-  <pre|post>/core/HintTraceAudit.cbd: IN source/exporter/stage; OUT CBD/ghc/.
-  <stage>/<entry>.audit.json: IN stage CBD/auditor/six entries; OUT 12 reports.
-  native/oracle: IN source/driver/native packages, -O2 -eventlog -fforce-recomp;
-    OUT executable/intermediates.
-  native/oracle.eventlog, oracle.tsv: IN oracle +RTS -l -ol<eventlog>;
-    OUT native event stream and ten result rows. Producer reads eventlog payloads.
-  manifest.json: IN executable/eventlog/TSV/CBD/audits/source receipt; OUT hashes.
-Consumer reads manifest/receipt paths/CBD/TSV. Eventlog bytes vary with runtime;
-  this is an observation artifact, not a deterministic compiler product. Old
-  manifest removed; no command logs. Auditor input-table omissions recur.
+  <pre|post>/core/HintTraceAudit.cbd: IN source/exporter/stage.
+  <stage>/ghc/HintTraceAudit.{hi,o}: IN corresponding export command.
+  <stage>/audit.json: IN CBD/auditor/six named entries; OUT two reports.
+  native/oracle, native/{Main,HintTraceAudit}.{hi,o}: IN source/driver/GHC -O2.
+  oracle.tsv: IN oracle executable; OUT ten result rows.
+  manifest.json: IN executable/TSV/two CBDs/two audits/source hashes.
+Consumer reads those receipt files, CBDs and TSV; no eventlog or directory discovery.
+Compiled checks discover actual targets and require installed code on the first call
+without predicting root/lambda counts; runtime behavior supplies expected values.
 
 061  thread-label
 Fixture rationale (061 thread-label)

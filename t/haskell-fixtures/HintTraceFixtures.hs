@@ -4,12 +4,11 @@
 -- Fixture rationale (060 hint-trace)
 -- Purpose: Check hint/trace/event/marker primops preserve program results and observable
 --   trace behavior.
--- Produces/consumed result: CBDs, oracle.tsv and native eventlog used as evidence.
--- Cost and overlap: Keep a small behavior/control check. Nondeterministic eventlog bytes
---   and exact native trace implementation are not reusable fixture identities; JFR wiring
---   needs separate tests.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Produces/consumed result: Two CBDs, two batched audits and native oracle.tsv.
+-- Cost and overlap: Check THC trace records, bounds/lifetimes and non-strict prefetch
+--   behavior. Native GHC supplies result values; its eventlog encoding is not a THC
+--   contract and is not generated. JFR wiring needs separate tests.
+-- Build status: CMake owns the named products; no generated directory is an input.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 060.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -25,7 +24,6 @@
 module HintTraceFixtures (prepareHintTrace) where
 import Control.Monad (forM_, unless, when)
 import Data.Aeson (object, (.=))
-import qualified Data.ByteString as BS
 import Data.List (isPrefixOf, sort)
 import FixtureSupport (hashes, run, runWithTimeout, writeJson)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
@@ -52,24 +50,20 @@ prepareHintTrace root = do
     let core = directory </> stage </> "core"
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
-    forM_ entries $ \entry -> do
-      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "main:HintTraceAudit." ++ entry,
-        "--output", directory </> stage </> entry ++ ".audit.json", core </> "HintTraceAudit.cbd"] ""
-      pure ()
+    _ <- run root [] "python3"
+      (["bin/audit-core.py", "--output", directory </> stage </> "audit.json", core </> "HintTraceAudit.cbd"] ++
+       concatMap (\entry -> ["--entry", "main:HintTraceAudit." ++ entry]) entries) ""
+    pure ()
   let native = output </> "native"
-      eventlog = native </> "oracle.eventlog"
   createDirectoryIfMissing True native
-  _ <- run root [] ghc ["--make", "-O2", "-eventlog", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
+  _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
     "-i" ++ (root </> "t/fixtures/compiler"), "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle")
-    ["+RTS", "-l", "-ol" ++ eventlog, "-RTS"] ""
+    [] ""
   let expected = unlines [name ++ "\t" ++ show x ++ "\t" ++ show (x + delta)
         | x <- [-3,0,1,37,999 :: Int], (name,delta) <- [("hints",1),("traces",19)]]
   unless (observations == expected) (die "Native hint/trace results disagree")
-  emitted <- BS.readFile eventlog
-  unless (all (`BS.isInfixOf` emitted) ["hint-trace-event", "hint-trace-marker", BS.pack [65,0,66,0]]) $
-    die "Native GHC did not emit the expected user-event payloads"
   writeFile (output </> "oracle.tsv") observations
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
@@ -79,11 +73,10 @@ prepareHintTrace root = do
     "bin/audit-core.py", "bin/core-capabilities.json"] ++
     ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
     ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
-  artifactHashes <- hashes root ([directory </> "oracle.tsv", directory </> "native/oracle",
-    directory </> "native/oracle.eventlog"] ++
+  artifactHashes <- hashes root ([directory </> "oracle.tsv", directory </> "native/oracle"] ++
     [directory </> stage </> suffix | stage <- stages,
-      suffix <- "core/HintTraceAudit.cbd" : [entry ++ ".audit.json" | entry <- entries]])
+      suffix <- ["core/HintTraceAudit.cbd", "audit.json"]])
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entries" .= entries, "stages" .= stages, "nativeRows" .= (10 :: Int),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "hint-trace: 19 primops, strict pre/post Core, 10 native observations and native event payloads"
+  putStrLn "hint-trace: 19 primops, strict pre/post Core, 10 native observations and target trace controls"

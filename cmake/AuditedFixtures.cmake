@@ -194,6 +194,26 @@ audited_fixture(scalar-memory-utilities ScalarMemoryUtilities
     pre/core/ScalarMemoryUtilities.cbd post/core/ScalarMemoryUtilities.cbd
     pre/audit.json post/audit.json ${memory_logs})
 
+# 056: shared mutable state, prompt resumption, catch/mask state and parked
+# continuations; native observations stay independent of compiler root layouts.
+set(continuation_logs)
+foreach(label ghc-version native-build native-run parked-native-build parked-native-run
+    parked-export parked-audit pre-export post-export pre-audit post-audit)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND continuation_logs "commands/${label}.${suffix}")
+  endforeach()
+endforeach()
+audited_fixture(delimited-continuations DelimitedContinuations
+  SOURCES t/fixtures/core/DelimitedContinuations.hs t/fixtures/compiler/DelimitedContinuationsNative.hs
+    t/fixtures/core/ParkedControl.hs t/fixtures/compiler/ParkedControlNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json native/oracle parked/native/oracle
+    pre/core/DelimitedContinuations.cbd post/core/DelimitedContinuations.cbd
+    pre/audit.json post/audit.json parked/core/ParkedControl.cbd parked/audit.json ${continuation_logs}
+  BYPRODUCTS parked/native/Main.hi parked/native/Main.o
+    parked/native/ParkedControl.hi parked/native/ParkedControl.o
+    parked/ghc/ParkedControl.hi parked/ghc/ParkedControl.o)
+
 # 057: observable scheduling behavior; no assertions about an incidental order.
 set(scheduling_reports)
 foreach(stage pre post)
@@ -485,3 +505,11 @@ audited_fixture(thread-inventory ThreadInventory
     native/callback/ThreadInventory.hi native/callback/ThreadInventory.o
   OUTPUTS manifest.json native/oracle native/callback-oracle oracle.txt callback-oracle.txt
     pre/core/ThreadInventory.cbd pre/audit.json post/core/ThreadInventory.cbd post/audit.json)
+
+# 060: no-op prefetch and observable THC trace records. Native GHC supplies only
+# the semantic oracle; its nondeterministic eventlog format is not our fixture.
+audited_fixture(hint-trace HintTraceAudit
+  SOURCES t/fixtures/compiler/HintTraceAudit.hs t/fixtures/compiler/HintTraceNative.hs
+  OBJECT_DIRS native pre/ghc post/ghc
+  OUTPUTS manifest.json oracle.tsv native/oracle
+    pre/core/HintTraceAudit.cbd post/core/HintTraceAudit.cbd pre/audit.json post/audit.json)

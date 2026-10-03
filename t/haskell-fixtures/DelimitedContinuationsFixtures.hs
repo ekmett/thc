@@ -5,10 +5,10 @@
 -- Purpose: Check prompt/control capture, resumption and case-arm continuation behavior.
 -- Produces/consumed result: Continuation and parked-control CBDs.
 -- Cost and overlap: Keep runtime control-flow semantics, sharing and rejection boundaries.
---   Thirty-five preparation reports are disproportionate; batch or remove reports
---   unrelated to assertions.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+--   Three batched audits cover the same entries; execution checks native values,
+--   shared state and first compiled calls without predicting compiler root counts.
+-- Build status: CMake owns each named product; native and Core object directories
+--   are separate for each program and stage.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 056.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -74,18 +74,17 @@ prepareDelimitedContinuations root = do
     exported <- runLogged 180 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    audits <- fmap concat $ forM entries $ \entry -> do
-      let report = directory </> stage </> (entry ++ "-audit.json")
-      audited <- runLogged 30 root logs (stage ++ "-audit-" ++ entry) [] "python3"
-        ["bin/audit-core.py", "--entry", "main:DelimitedContinuations." ++ entry, "--output", report, core </> "DelimitedContinuations.cbd"]
-      bytes <- BS.readFile (root </> report)
-      case decodeStrict' bytes of
-        Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
-          KeyMap.lookup "issues" value == Just (Array mempty),
-          KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
-        _ -> die ("Strict continuation audit rejected " ++ entry)
-      pure (report : commandArtifacts audited)
-    pure ([core </> "DelimitedContinuations.cbd"] ++ commandArtifacts exported ++ audits)
+    let report = directory </> stage </> "audit.json"
+    audited <- runLogged 30 root logs (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py", "--output", report, core </> "DelimitedContinuations.cbd"] ++
+       concatMap (\entry -> ["--entry", "main:DelimitedContinuations." ++ entry]) entries)
+    bytes <- BS.readFile (root </> report)
+    case decodeStrict' bytes of
+      Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
+        KeyMap.lookup "issues" value == Just (Array mempty),
+        KeyMap.lookup "missingGlobals" value == Just (Array mempty) -> pure ()
+      _ -> die ("Strict continuation audit rejected " ++ stage)
+    pure ([core </> "DelimitedContinuations.cbd", report] ++ commandArtifacts exported ++ commandArtifacts audited)
   plugins <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = [source, driver, parkedSource, parkedDriver, "thc.cabal", "t/haskell-fixtures/Main.hs",
