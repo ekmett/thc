@@ -30,7 +30,7 @@ def fixture_executable():
         return configured
     root = Path(__file__).resolve().parent.parent
     cabal = os.environ.get('CABAL', 'cabal')
-    subprocess.run([cabal, 'build', 'exe:thc-fixtures', '--offline'], cwd=root, check=True)
+    subprocess.run([cabal, 'build', 'exe:thc-fixtures', 'exe:thc-compact', '--offline'], cwd=root, check=True)
     return subprocess.check_output([cabal, 'list-bin', 'exe:thc-fixtures', '--offline'],
                                    cwd=root, text=True).strip()
 
@@ -40,14 +40,14 @@ class FixtureExecutableTest(unittest.TestCase):
         fixture_executable.cache_clear()
         self.addCleanup(fixture_executable.cache_clear)
 
-    def test_explicit_encoder_does_not_invoke_cabal(self):
+    def test_explicit_encoder_does_not_invoke_tool_build(self):
         with patch.dict(os.environ, {'THC_FIXTURES': '/chosen/encoder'}), \
                 patch.object(subprocess, 'run') as build, patch.object(subprocess, 'check_output') as locate:
             self.assertEqual('/chosen/encoder', fixture_executable())
         build.assert_not_called()
         locate.assert_not_called()
 
-    def test_default_encoder_is_built_once_before_location_and_reuse(self):
+    def test_default_encoder_and_decoder_are_built_once_before_location_and_reuse(self):
         commands = []
         def build(argv, **kwargs):
             commands.append(argv)
@@ -62,15 +62,17 @@ class FixtureExecutableTest(unittest.TestCase):
                 patch.object(subprocess, 'check_output', side_effect=locate):
             self.assertEqual('/built/encoder', fixture_executable())
             self.assertEqual('/built/encoder', fixture_executable())
-        self.assertEqual([['selected-cabal', 'build', 'exe:thc-fixtures', '--offline'],
+        self.assertEqual([['selected-cabal', 'build', 'exe:thc-fixtures', 'exe:thc-compact', '--offline'],
                           ['selected-cabal', 'list-bin', 'exe:thc-fixtures', '--offline']], commands)
 
-    def test_failed_encoder_build_cannot_reuse_a_previous_executable(self):
-        with patch.dict(os.environ, {'THC_FIXTURES': ''}), \
-                patch.object(subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'cabal')), \
+    def test_failed_codec_build_cannot_reuse_a_previous_executable(self):
+        with patch.dict(os.environ, {'THC_FIXTURES': '', 'CABAL': 'selected-cabal'}), \
+                patch.object(subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'cabal')) as build, \
                 patch.object(subprocess, 'check_output') as locate, \
                 self.assertRaises(subprocess.CalledProcessError):
             fixture_executable()
+        build.assert_called_once_with(['selected-cabal', 'build', 'exe:thc-fixtures', 'exe:thc-compact', '--offline'],
+                                      cwd=Path(__file__).resolve().parent.parent, check=True)
         locate.assert_not_called()
 
 
