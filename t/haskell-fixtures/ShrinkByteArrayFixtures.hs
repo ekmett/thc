@@ -1,6 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (047 shrink-bytearrays)
+-- Purpose: Check in-place shrinking, including pinned arrays, preserves retained contents.
+-- Produces/consumed result: CBD pairs and oracle.tsv.
+-- Cost and overlap: Pinned shrink semantics can add value beyond resize. Fold into byte-
+--   array lifecycle coverage after removing exact-directory requirements; quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 047.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

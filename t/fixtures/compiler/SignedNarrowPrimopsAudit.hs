@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (003 signed-narrow-primops)
+-- Purpose: Check sign extension, narrowing and signed boundary arithmetic against GHC.
+-- Produces/consumed result: Exported primitive CBDs and native oracle.tsv.
+-- Cost and overlap: Keep one bounded signed-width corpus. Fold duplicate literal cases
+--   from narrow-literal-proofs into it where the same execution path is exercised.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 003.
+
 {-# LANGUAGE MagicHash #-}
 
 -- |

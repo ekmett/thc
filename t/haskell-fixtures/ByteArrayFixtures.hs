@@ -1,6 +1,48 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (018 bytearray)
+-- Purpose: Check byte-array construction, copy order and immutable byte observations.
+-- Produces/consumed result: ByteArrayAudit CBDs and oracle.tsv.
+-- Cost and overlap: Semantic byte behavior is useful, exact primitive counts are not.
+--   Quarantined because output-directory contents become inputs; combine with other byte-
+--   array cases after repair.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 018.
+--
+-- Fixture rationale (019 mutable-bytearrays)
+-- Purpose: Check mutable fill, overlapping move, disjoint copy and later reads.
+-- Produces/consumed result: CBD closure and oracle.tsv.
+-- Cost and overlap: Retain aliasing/order cases in one byte-array corpus. Rewriting global
+--   coverage and enumerating old CBDs are unjustified setup dependencies; quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 019.
+--
+-- Fixture rationale (020 resize-bytearrays)
+-- Purpose: Check resizing preserves the retained prefix and subsequent writes.
+-- Produces/consumed result: CBD closure and oracle.tsv.
+-- Cost and overlap: Retain resize semantics alongside size/shrink cases. Separate repeated
+--   coverage generation and directory-dependent acquisition are not justified;
+--   quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 020.
+--
+-- Fixture rationale (021 mutable-bytearray-size)
+-- Purpose: Check reported size changes consistently after allocation and resize.
+-- Produces/consumed result: CBD closure and oracle.tsv.
+-- Cost and overlap: Fold into resize coverage; a separate native pipeline to recheck size
+--   is disproportionate. Directory-state and shared-coverage writes keep it quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 021.
+--
+-- Fixture rationale (022 compare-byte-arrays)
+-- Purpose: Check lexicographic byte comparison, prefixes, ranges and aliases.
+-- Produces/consumed result: Comparison CBD closure and oracle.tsv.
+-- Cost and overlap: Boundary cases add value; reuse byte-array/package integration setup.
+--   Open-ended CBD discovery and broad boot acquisition do not; quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 022.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

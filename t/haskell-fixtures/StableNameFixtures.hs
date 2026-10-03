@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (083 stable-names)
+-- Purpose: Check stable-name equality/hash behavior follows object identity and sharing.
+-- Produces/consumed result: CBDs and native observations embedded in manifest.json.
+-- Cost and overlap: Keep identity semantics, not particular native hash numbers or
+--   allocation counts. One native reference and shared pointer setup suffice.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 083.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

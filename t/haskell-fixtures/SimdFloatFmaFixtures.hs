@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (035 simd-floatx4-fma)
+-- Purpose: Check vector fused operations preserve per-lane fused results for supported
+--   widths.
+-- Produces/consumed result: Pre/post CBDs and native oracle when the platform supports it.
+-- Cost and overlap: Keep representative vector fusion cases and share setup with wide FMA.
+--   Separate per-width provenance machinery is not justified.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 035.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

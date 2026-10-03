@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (097 compiled-thunk-retention)
+# Purpose: Check compiled code retains shared thunks and lazy boxed-array elements
+#   correctly.
+# Produces/consumed result: Boxed-array and floating CBDs plus their native oracle.tsv
+#   files.
+# Cost and overlap: Sharing/lifetime coverage is essential. Grouping unrelated floating
+#   acquisition and consuming all CBD leftovers is not; quarantined, split and simplify
+#   without weakening the sharing checks.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 097.
+
 """Export pinned GHC scalar floating Core and check native IEEE edge expectations."""
 import hashlib
 import importlib.util

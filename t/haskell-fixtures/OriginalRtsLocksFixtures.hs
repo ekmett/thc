@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (072 original-rts-locks)
+-- Purpose: Check the supported RTS lock boundary and reject calls outside its contract.
+-- Produces/consumed result: Declarations/templates, oracle.json and optional auditor
+--   reports.
+-- Cost and overlap: Keep only THC-owned synchronization or required rejection behavior.
+--   Frozen declaration/template archives are not independent coverage and should be
+--   removed.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 072.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

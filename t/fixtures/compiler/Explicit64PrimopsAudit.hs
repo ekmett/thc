@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (006 explicit64-primops)
+-- Purpose: Check explicit Int64#/Word64# operations retain width and signedness.
+-- Produces/consumed result: Primitive CBDs and native oracle.tsv.
+-- Cost and overlap: Keep explicit-width transport where it differs from host Int/Word.
+--   Share numeric production; another exporter must not write these outputs.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 006.
+
 {-# LANGUAGE MagicHash, ExtendedLiterals #-}
 
 -- |

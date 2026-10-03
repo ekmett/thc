@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (078 original-posix-dup)
+-- Purpose: Check duplicated descriptors share the intended resource state and close
+--   ownership.
+-- Produces/consumed result: CBDs and oracle.json with per-case file observations.
+-- Cost and overlap: Descriptor ownership is a meaningful boundary. Put it in one file-
+--   lifecycle suite; nineteen separate native launches are not intrinsically justified.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 078.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

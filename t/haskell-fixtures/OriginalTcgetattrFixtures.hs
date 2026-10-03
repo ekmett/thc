@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (063 original-tcgetattr)
+-- Purpose: Check termios reads copy the correct image/status through the runtime boundary.
+-- Produces/consumed result: Core CBDs, oracle.json and native/oracle --serve.
+-- Cost and overlap: Share the PTY/server with tcsetattr. Keep transport/error cases that
+--   exercise THC; repeating native terminal semantics adds little.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 063.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

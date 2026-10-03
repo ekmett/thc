@@ -1,6 +1,41 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (030 simd-int32x4-bytearray)
+-- Purpose: Check signed Int32x4 vector/scalar offsets, reads and writes in byte arrays.
+-- Produces/consumed result: Stage CBDs and oracle.tsv; audit mutations check rejection
+--   boundaries.
+-- Cost and overlap: Keep signed vector-memory semantics in a shared corpus. Copying
+--   previous attempts, randomized published paths and archival receipts are unjustified;
+--   quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 030.
+--
+-- Fixture rationale (031 simd-word32x4-bytearray)
+-- Purpose: Check Word32x4 high bits and unsigned vector memory transport.
+-- Produces/consumed result: Stage CBDs and oracle.tsv; negative audit variants.
+-- Cost and overlap: Unsigned boundaries add cases, not a reason for another setup
+--   pipeline. Previous-output acquisition and attempt archives keep this quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 031.
+--
+-- Fixture rationale (032 simd-floatx4-bytearray)
+-- Purpose: Check FloatX4 memory operations preserve lane values and bit patterns.
+-- Produces/consumed result: Stage CBDs and native oracle.tsv with audit controls.
+-- Cost and overlap: Floating storage cases may add value beyond integer vectors.
+--   Historical-attempt dependencies and duplicated memory preparation are unjustified;
+--   quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 032.
+--
+-- Fixture rationale (033 simd-doublex2-bytearray)
+-- Purpose: Check DoubleX2 byte-array offsets and lane storage.
+-- Produces/consumed result: Stage CBDs and native oracle.tsv with audit controls.
+-- Cost and overlap: Retain Double lane/offset cases within one memory corpus. Previous
+--   receipts must not be prerequisites; quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 033.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

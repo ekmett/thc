@@ -1,6 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (073 original-strerror)
+-- Purpose: Check foreign string results are transported into guest-visible error text.
+-- Produces/consumed result: Oracle/Core artifacts plus installed modules from process-
+--   identity.
+-- Cost and overlap: A package-level failing operation already exercises error strings.
+--   Standalone strerror conformance is not justified; consolidate a transport case into
+--   errno/package smoke.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 073.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

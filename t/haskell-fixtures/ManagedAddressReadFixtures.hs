@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (050 managed-address-reads)
+-- Purpose: Check typed reads through managed addresses match native values.
+-- Produces/consumed result: CBDs and oracle.tsv.
+-- Cost and overlap: Keep the managed-address boundary, which native-address tests do not
+--   cover. Consolidate width cases with memory tests rather than duplicate acquisition.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 050.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

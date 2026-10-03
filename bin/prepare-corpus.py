@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (119 corpus)
+# Purpose: Check a broad set of ordinary Haskell semantics and integer conversions against
+#   native GHC.
+# Produces/consumed result: Per-group CBDs, native reference results and coverage
+#   declarations.
+# Cost and overlap: A shared semantic corpus has value and can absorb small duplicate
+#   fixtures. Current directory-clearing acquisition is quarantined; coverage bookkeeping
+#   alone is not a reason to keep every case.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 119.
+
 """Export independent real-Core bundles and generate native results for the coverage corpus."""
 import hashlib
 from core_package_manifest import inspect_cbd

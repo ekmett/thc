@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (056 delimited-continuations)
+-- Purpose: Check prompt/control capture, resumption and case-arm continuation behavior.
+-- Produces/consumed result: Continuation and parked-control CBDs.
+-- Cost and overlap: Keep runtime control-flow semantics, sharing and rejection boundaries.
+--   Thirty-five preparation reports are disproportionate; batch or remove reports
+--   unrelated to assertions.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 056.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

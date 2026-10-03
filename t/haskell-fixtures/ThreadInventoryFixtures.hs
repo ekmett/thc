@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (058 thread-inventory)
+-- Purpose: Check thread inventory and callback-visible thread state.
+-- Produces/consumed result: CBDs, oracle.txt and callback-oracle.txt.
+-- Cost and overlap: Keep API-visible membership/state behavior. Reproducing filesystem
+--   receipt inventories in the consumer adds no runtime coverage.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 058.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (010 int32-arrays)
+-- Purpose: Check 32-bit loads/stores and high-bit literal transport.
+-- Produces/consumed result: Array CBDs, oracle.tsv and literal-oracle.tsv.
+-- Cost and overlap: Retain width-specific cases in the scalar-array corpus. A separate
+--   receipt framework is unnecessary.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 010.
+
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 
 -- |

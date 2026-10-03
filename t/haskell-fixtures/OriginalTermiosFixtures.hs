@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (067 original-termios)
+-- Purpose: Check retained termios pointers preserve ownership/lifetime across calls.
+-- Produces/consumed result: Saved-termios CBDs and oracle.json.
+-- Cost and overlap: The retained-pointer boundary is distinct from get/set image
+--   transport. Keep a small lifetime test and share package/native setup.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 067.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -2,6 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (127 show-word-list)
+# Purpose: Check ordinary list/word rendering works through public package code.
+# Produces/consumed result: Core/boot CBDs and oracle.tsv.
+# Cost and overlap: Useful package smoke, not a reason for a dedicated boot/export/receipt
+#   harness. Quarantine recursive native inventory; move a small rendering case into
+#   shared package behavior coverage.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 127.
+
 """Fresh public Show Word/list oracle and full, pinned original Show source export."""
 import argparse
 from datetime import datetime, timezone

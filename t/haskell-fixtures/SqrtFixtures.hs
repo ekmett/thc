@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (026 sqrt)
+-- Purpose: Check Float/Double square root at exceptional and rounding boundaries.
+-- Produces/consumed result: SqrtAudit CBD, oracle.tsv and post audit; integer-oracle.tsv
+--   is only receipt-hashed.
+-- Cost and overlap: Move useful cases into floating arithmetic. Deleting the published
+--   output directory and producing a redundant oracle subset are not justified;
+--   quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 026.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

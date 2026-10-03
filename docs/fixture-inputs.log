@@ -3,10 +3,23 @@ Base revision: 58fbbd1119cc63e9f73b3fe0a5c40c7a52c37b44
 Method: read each producer and its consumers sequentially. These are static
 observations, not claims that a clean build or complete dependency closure passes.
 Intended build driver: CMake generating Ninja; no implementation during this scan.
+Quarantine decisions: docs/fixture-quarantine.log. Listed fixtures are excluded
+from the new graph pending repair; inventory is not admission.
 No fixture generation or test execution is part of this scan. Shared tool inputs
 are called out separately from fixture outputs; unresolved closure is explicit.
 
 001  narrow-literal-proofs
+Fixture rationale (001 narrow-literal-proofs)
+Purpose: Check signed and high-bit narrow literals survive real Core export and runtime
+  lowering.
+Produces/consumed result: Pre/post CBDs and native oracle.tsv; tests also consume
+  projected/mutated Core.
+Cost and overlap: Keep the boundary behavior; compare with signed-narrow and array
+  literal cases before retaining a separate native build. Metadata-only proof ceremony
+  is not a benefit.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: bin/prepare-narrow-literal-proofs.py:main
 Consumers: thc.runtime.NarrowLiteralProofTest; producer --check-only.
 The deleted test-narrow-literal-proofs.py is not a current consumer.
@@ -92,6 +105,15 @@ Missing edges / caveats:
   test exposed this by reading oracle.tsv before any producer had run.
 
 002  empty-join-input
+Fixture rationale (002 empty-join-input)
+Purpose: Check empty-tuple arguments do not shift live join arguments or change results.
+Produces/consumed result: Pre/post CBDs and native oracle.tsv.
+Cost and overlap: Distinct argument-erasure regression, including first compiled
+  execution. Two exports and one native reference are defensible; exact join shapes are
+  not the contract.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: bin/prepare-empty-join-input.py:main / verify
 Consumers: thc.runtime.EmptyJoinInputTest; producer --check-only.
 bin/test-empty-join-inputs.py imports model definitions, not these generated outputs.
@@ -161,6 +183,14 @@ Missing edges / caveats:
     Its missing graph edges are the shared tools and its own consumers.
 
 003  signed-narrow-primops
+Fixture rationale (003 signed-narrow-primops)
+Purpose: Check sign extension, narrowing and signed boundary arithmetic against GHC.
+Produces/consumed result: Exported primitive CBDs and native oracle.tsv.
+Cost and overlap: Keep one bounded signed-width corpus. Fold duplicate literal cases
+  from narrow-literal-proofs into it where the same execution path is exercised.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/Main.hs:prepare root SignedNarrow, invoked as
   cabal run exe:thc-fixtures --offline -- signed-narrow.
 Consumer: src/test/java/thc/SignedNarrowPrimopsTest.java.
@@ -217,6 +247,14 @@ Missing edges / caveats:
   No other fixture directory is read by this producer.
 
 004  bit-primops
+Fixture rationale (004 bit-primops)
+Purpose: Check shifts, rotations and bit operations at zero, sign and width boundaries.
+Produces/consumed result: Primitive CBDs and native oracle.tsv.
+Cost and overlap: Useful runtime arithmetic coverage. One shared native reference is
+  enough; per-operation compiler receipts do not add semantics.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepare root Bit (thc-fixtures bit).
 Consumer: src/test/java/thc/runtime/BitPrimopsTest.java.
 Shared tool, platform, environment and receipt caveats: 003.
@@ -248,6 +286,15 @@ Consumer reads all receipt paths, both stage module pairs, TSV and manifest.
 No generated input from another fixture was found in this producer.
 
 005  integer-primops (fixed-width Int#/Word# operations, not Integer package smoke)
+Fixture rationale (005 integer-primops)
+Purpose: Check fixed-width Int#/Word# arithmetic, comparisons and overflow behavior.
+Produces/consumed result: Primitive CBDs and native oracle.tsv.
+Cost and overlap: Keep the math and independent model. This is not arbitrary-precision
+  Integer package coverage; consolidate overlapping arithmetic cases rather than add
+  proof artifacts.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepare root IntegerWord (thc-fixtures integer).
 Consumer: src/test/java/thc/IntegerPrimopsTest.java.
 Shared inputs/caveats: 003; fixture source t/fixtures/compiler/IntegerPrimopsAudit.hs.
@@ -272,6 +319,14 @@ Consumer reads those artifacts and every hash receipt path. Wrong-arity controls
 No other generated fixture directory is consumed by this producer.
 
 006  explicit64-primops
+Fixture rationale (006 explicit64-primops)
+Purpose: Check explicit Int64#/Word64# operations retain width and signedness.
+Produces/consumed result: Primitive CBDs and native oracle.tsv.
+Cost and overlap: Keep explicit-width transport where it differs from host Int/Word.
+  Share numeric production; another exporter must not write these outputs.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepare root Explicit64 (thc-fixtures explicit64).
 Consumer: src/test/java/thc/runtime/Explicit64PrimopsTest.java; additional CBV
   consumers select this same CBD through the cbv-coercion group (scan pending).
@@ -324,6 +379,14 @@ Shared array producer observed while scanning 007-012
   Java loads CBD directly. The checked consumers below do not write synthetic CBDs.
 
 007  int-arrays
+Fixture rationale (007 int-arrays)
+Purpose: Check machine-width array reads and writes preserve values and indices.
+Produces/consumed result: Pre/post array CBDs and native oracle.tsv.
+Cost and overlap: Keep as one member of a scalar-array corpus; six separate setup
+  pipelines are not justified by six element types.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepareArray, arraySpec "int-arrays".
 Consumer: src/test/java/thc/runtime/IntArrayNativeTest.java.
 Under build/int-arrays/, for each stage pre and post:
@@ -341,6 +404,14 @@ Under build/int-arrays/, for each stage pre and post:
     described above; OUT hashes, entries, inputs, stages and platform facts.
 
 008  int8-arrays
+Fixture rationale (008 int8-arrays)
+Purpose: Check byte-array sign extension, truncation and byte indexing.
+Produces/consumed result: Pre/post array CBDs and native oracle.tsv.
+Cost and overlap: Retain byte boundaries in a shared scalar-array corpus. Rebuilding
+  tools or launching a separate harness per width adds no coverage.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepareArray, arraySpec "int8-arrays".
 Consumer: src/test/java/thc/runtime/Int8ArrayNativeTest.java.
 Under build/int8-arrays/, for each stage pre and post:
@@ -358,6 +429,14 @@ Under build/int8-arrays/, for each stage pre and post:
     OUT manifest including elementBits=8. No separate literal oracle.
 
 009  int16-arrays
+Fixture rationale (009 int16-arrays)
+Purpose: Check 16-bit loads/stores and boundary literals through compiled execution.
+Produces/consumed result: Array CBDs, oracle.tsv and literal-oracle.tsv.
+Cost and overlap: Boundary compiled-call coverage is useful. Share acquisition with
+  other scalar widths; preserve the execution check, not source-shape counts.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepareArray, arraySpec "int16-arrays".
 Consumers: src/test/java/thc/runtime/Int16ArrayNativeTest.java and
   Int16BoundaryCompilationTest.java (uses the former's fixture access).
@@ -377,6 +456,14 @@ Under build/int16-arrays/, for each stage pre and post:
     OUT hashes, stage inventory, elementBits=16 and both case inventories.
 
 010  int32-arrays
+Fixture rationale (010 int32-arrays)
+Purpose: Check 32-bit loads/stores and high-bit literal transport.
+Produces/consumed result: Array CBDs, oracle.tsv and literal-oracle.tsv.
+Cost and overlap: Retain width-specific cases in the scalar-array corpus. A separate
+  receipt framework is unnecessary.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepareArray, arraySpec "int32-arrays".
 Consumer: src/test/java/thc/runtime/Int32ArrayNativeTest.java.
 Under build/int32-arrays/, for each stage pre and post:
@@ -394,6 +481,14 @@ Under build/int32-arrays/, for each stage pre and post:
     OUT hashes, elementBits=32, stages and both case inventories.
 
 011  double-arrays
+Fixture rationale (011 double-arrays)
+Purpose: Check Double array storage preserves numeric and bit-level results.
+Produces/consumed result: Array CBDs and native oracle.tsv.
+Cost and overlap: Floating storage differs from integer storage, so retain cases. Share
+  setup; do not infer signaling-NaN coverage from a corpus that excludes it.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepareArray, arraySpec "double-arrays".
 Consumer: src/test/java/thc/runtime/DoubleArrayNativeTest.java.
 Under build/double-arrays/, for each stage pre and post:
@@ -411,6 +506,14 @@ Under build/double-arrays/, for each stage pre and post:
     OUT hashes, stages, cases and signaling-NaN exclusion description.
 
 012  float-word-arrays
+Fixture rationale (012 float-word-arrays)
+Purpose: Check Float/Word element transport and storage boundaries.
+Produces/consumed result: Array CBDs and native oracle.tsv.
+Cost and overlap: Retain representation-crossing cases; consolidate native preparation
+  with scalar arrays and bitcasts where their paths coincide.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: Main.hs:prepareArray, arraySpec "float-word-arrays".
 Consumer: src/test/java/thc/runtime/FloatWordArrayNativeTest.java.
 Under build/float-word-arrays/, for each stage pre and post:
@@ -442,6 +545,16 @@ Shared Java synthetic-CBD artifact (consumed by 003-005 and other model tests)
     to selected GHC/GHC_PKG. The sidecar's producer still needs a separate scan.
 
 013  pinned-pointer-cells
+Fixture rationale (013 pinned-pointer-cells)
+Purpose: Check stored pointers survive cell reads/writes with the intended identity and
+  lifetime.
+Produces/consumed result: CBDs, oracle.tsv and cell audit reports.
+Cost and overlap: Real pointer lifetime/transport coverage can justify native
+  comparison. Exact receipt-directory membership is ceremony and must not define
+  correctness.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/Main.hs:preparePinnedPointers.
 Consumer: src/test/java/thc/runtime/PinnedPointerCellsTest.java.
 Inputs: t/fixtures/compiler/PinnedPointerCellsAudit.hs and
@@ -473,6 +586,16 @@ Gaps: auditor's scalar signatures, polyglot ABI and SIMD table reads are absent
 No other generated fixture directory is read.
 
 014  cbv-coercion / demand metadata
+Fixture rationale (014 cbv-coercion)
+Purpose: Check call demands and erased coercion arguments preserve laziness and argument
+  positions.
+Produces/consumed result: CBV/demand CBDs plus a tuple-arithmetic CBD consumed by
+  lexical tests.
+Cost and overlap: Keep semantic demand/erasure controls. The recipe currently writes
+  other groups' outputs and exports an apparently unconsumed explicit64 CBD; no build
+  admission in this form.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer sequence currently in .github/scripts/fast-fixtures.json:cbv-coercion.
 Consumers: thc.RealCoreCallDemandTest, thc.RealCoreEntryContractTest,
   thc.runtime.BoxedLexicalProofTest, BoxedValueCacheTest, ScalarLexicalProofTest,
@@ -516,6 +639,16 @@ Ownership gaps: tuple-arithmetic and explicit64 groups also write the first two
   and output edges above and should be represented as such.
 
 015  integer-completion
+Fixture rationale (015 integer-completion)
+Purpose: Check remaining integer operations against GHC and an independent arithmetic
+  model.
+Produces/consumed result: CBDs, requests.tsv and oracle.tsv.
+Cost and overlap: Useful only for operations missing from the main numeric corpus. Merge
+  overlapping cases; thousands of rows and command receipts alone do not justify a
+  second producer.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/IntegerCompletionFixtures.hs:prepareIntegerCompletion.
 Consumer: src/test/java/thc/runtime/IntegerCompletionTest.java.
 IN common: producer, Main.hs/FixtureSupport.hs and built thc-fixtures;
@@ -545,6 +678,15 @@ Consumer reads requests/TSV, CBDs, audit reports, command records and all receip
   compiler modules. Binary name does not explicitly handle Windows .exe here.
 
 016  word-floating
+Fixture rationale (016 word-floating)
+Purpose: Check unsigned integer-to-floating conversion at rounding and high-bit
+  boundaries.
+Produces/consumed result: WordFloatingAudit CBDs and oracle.tsv of float/double bits.
+Cost and overlap: Keep the unsigned conversion cases: signed numeric tests are not
+  substitutes. Batch them with other numeric oracles.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/WordFloatingFixtures.hs:prepareWordFloating.
 Consumer: src/test/java/thc/runtime/WordFloatingTest.java.
 IN common: producer, Main.hs/FixtureSupport.hs and built thc-fixtures;
@@ -569,6 +711,15 @@ Consumer reads those files and all receipt paths; also enumerates compiler and
 Receipt includes scalar signatures but omits auditor's polyglot ABI/SIMD tables.
 
 017  tuple-arithmetic
+Fixture rationale (017 tuple-arithmetic)
+Purpose: Check carry, wide multiply and quotient/remainder return all result components
+  correctly.
+Produces/consumed result: CBDs, oracle.tsv and call-oracle.tsv.
+Cost and overlap: Keep multi-result arithmetic and cross-call cases. One native
+  executable already serves both; this producer must solely own its CBDs.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/AggregateFixtures.hs:prepareTupleArithmetic.
 Consumers: src/test/java/thc/runtime/TupleArithmeticTest.java, WordCarryTest.java;
   ScalarLexicalProofTest also consumes the pre CBD (014).
@@ -631,6 +782,14 @@ Shared byte-array producer observed for 018-022
   for the future graph. Semantic/native checks are separate.
 
 018  bytearray
+Fixture rationale (018 bytearray)
+Purpose: Check byte-array construction, copy order and immutable byte observations.
+Produces/consumed result: ByteArrayAudit CBDs and oracle.tsv.
+Cost and overlap: Semantic byte behavior is useful, exact primitive counts are not.
+  Quarantined because output-directory contents become inputs; combine with other byte-
+  array cases after repair.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: ByteArrayFixtures.hs, family Bytes; consumer thc.runtime.ByteArrayTest.
 Under build/bytearray/:
   pre-core/ByteArrayAudit.cbd, post-core/ByteArrayAudit.cbd
@@ -651,6 +810,13 @@ Consumer reads manifest, named CBDs, TSV and receipt paths.
   this family no longer invokes originalList: apparent obsolete dependencies.
 
 019  mutable-bytearrays
+Fixture rationale (019 mutable-bytearrays)
+Purpose: Check mutable fill, overlapping move, disjoint copy and later reads.
+Produces/consumed result: CBD closure and oracle.tsv.
+Cost and overlap: Retain aliasing/order cases in one byte-array corpus. Rewriting global
+  coverage and enumerating old CBDs are unjustified setup dependencies; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: ByteArrayFixtures.hs, family Mutable.
 Consumer: thc.runtime.MutableByteArrayNativeTest.
 Under build/mutable-bytearrays/:
@@ -670,6 +836,14 @@ Under build/mutable-bytearrays/:
 Consumer reads manifest, receipt paths, CBDs, TSV and per-entry audits.
 
 020  resize-bytearrays
+Fixture rationale (020 resize-bytearrays)
+Purpose: Check resizing preserves the retained prefix and subsequent writes.
+Produces/consumed result: CBD closure and oracle.tsv.
+Cost and overlap: Retain resize semantics alongside size/shrink cases. Separate repeated
+  coverage generation and directory-dependent acquisition are not justified;
+  quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: ByteArrayFixtures.hs, family Resize; consumer thc.runtime.ResizeByteArrayTest.
 Under build/resize-bytearrays/:
   pre-core/ResizeByteArrayAudit.cbd, post-core/ResizeByteArrayAudit.cbd
@@ -690,6 +864,13 @@ Under build/resize-bytearrays/:
     receipt paths, stage CBDs, TSV and per-entry audits.
 
 021  mutable-bytearray-size
+Fixture rationale (021 mutable-bytearray-size)
+Purpose: Check reported size changes consistently after allocation and resize.
+Produces/consumed result: CBD closure and oracle.tsv.
+Cost and overlap: Fold into resize coverage; a separate native pipeline to recheck size
+  is disproportionate. Directory-state and shared-coverage writes keep it quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: ByteArrayFixtures.hs, family Size; consumer thc.runtime.MutableByteArraySizeTest.
 Under build/mutable-bytearray-size/:
   pre-core/MutableByteArraySizeAudit.cbd, post-core/MutableByteArraySizeAudit.cbd
@@ -710,6 +891,13 @@ Under build/mutable-bytearray-size/:
 Consumer reads manifest, receipt paths, CBDs, TSV and per-entry audit files.
 
 022  compare-byte-arrays
+Fixture rationale (022 compare-byte-arrays)
+Purpose: Check lexicographic byte comparison, prefixes, ranges and aliases.
+Produces/consumed result: Comparison CBD closure and oracle.tsv.
+Cost and overlap: Boundary cases add value; reuse byte-array/package integration setup.
+  Open-ended CBD discovery and broad boot acquisition do not; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: ByteArrayFixtures.hs, family Compare; consumer thc.runtime.CompareByteArraysTest.
 Under build/compare-byte-arrays/, for each stage pre/post:
   stage/core/CompareByteArraysAudit.cbd and any interface-closure CBD
@@ -767,6 +955,16 @@ Shared primop coverage report used by 019-021
   embedded in the manifest. Its directory enumeration is only for source receipts.
 
 023  scalar-bitcasts
+Fixture rationale (023 scalar-bitcasts)
+Purpose: Check Float/Double bitcasts through fields, captures and direct operations
+  preserve bits.
+Produces/consumed result: CBDs and oracle.tsv containing independent bit patterns.
+Cost and overlap: Keep representation-sensitive paths including nonordinary floating
+  values. Share native/model cases with scalar storage rather than duplicate receipt
+  checking.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ScalarBitCastFixtures.hs:prepareScalarBitCasts.
 Consumer: src/test/java/thc/runtime/ScalarBitCastTest.java.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter and
@@ -800,6 +998,15 @@ Receipt hashes PrimopTools.hs although this producer does not run thc-primops;
   it omits auditor's polyglot ABI/SIMD tables. Evaluate unnecessary receipt entries.
 
 024  float-decode
+Fixture rationale (024 float-decode)
+Purpose: Check floating decomposition agrees with GHC on signs, exponents and mantissas.
+Produces/consumed result: CBDs, oracle.tsv and decoded original implementation facts.
+Cost and overlap: Keep arithmetic observations and relevant negative controls.
+  Installed-Core acquisition is justified only where the original implementation is
+  actually exercised.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/FloatDecodeFixtures.hs:prepareFloatDecode.
 Consumer: src/test/java/thc/runtime/FloatDecodeTest.java.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures;
@@ -836,6 +1043,15 @@ Consumer reads manifest/receipt paths, CBDs, TSV and audit reports; mutation
   hardcoded python3 auditor. Missing receipt tables/tool closure as in 023.
 
 025  floating-remainder
+Fixture rationale (025 floating-remainder)
+Purpose: Check the remaining floating functions, min/max and decoded-word results.
+Produces/consumed result: CBDs and oracle.tsv of native floating results.
+Cost and overlap: Retain uncovered arithmetic functions; batch native cases with the
+  numeric corpus. The family name does not justify a separate harness or metadata
+  inventory.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/FloatingRemainderFixtures.hs:prepareFloatingRemainder.
 Consumer: src/test/java/thc/runtime/FloatingRemainderTest.java.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor closure;
@@ -861,6 +1077,15 @@ Consumer reads inputs, TSV, manifest/receipt paths, CBDs and audit reports;
   mutation controls also require temp CBD encoder and python3 auditor/report files.
 
 026  sqrt
+Fixture rationale (026 sqrt)
+Purpose: Check Float/Double square root at exceptional and rounding boundaries.
+Produces/consumed result: SqrtAudit CBD, oracle.tsv and post audit; integer-oracle.tsv
+  is only receipt-hashed.
+Cost and overlap: Move useful cases into floating arithmetic. Deleting the published
+  output directory and producing a redundant oracle subset are not justified;
+  quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/SqrtFixtures.hs:prepareSqrt.
 Consumer: src/test/java/thc/runtime/SqrtPrimitiveTest.java.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor;
@@ -884,6 +1109,14 @@ Consumer directly reads manifest, receipts, CBD, oracle.tsv and post-audit.json.
   inside this function until generation is split into owning operations.
 
 027  simd-address-families
+Fixture rationale (027 simd-address-families)
+Purpose: Check vector-address lane ordering, offsets and scalar/vector memory agreement.
+Produces/consumed result: Stage CBDs and scalar/vector native oracle TSVs.
+Cost and overlap: Memory semantics are distinct from arithmetic smoke. Generated-source
+  directory scans admit leftovers; quarantine and consolidate overlapping vector-memory
+  producers.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/SimdAddressFixtures.hs:prepareSimdAddresses.
 Consumer: src/test/java/thc/runtime/SimdAddressFamiliesTest.java.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures; shared exporter/auditor,
@@ -921,6 +1154,14 @@ Consumer reads manifest, all receipt paths, stage CBD/report and available nativ
   CPU support; this scan does not establish which platform execution passes.
 
 028  simd128-arrays
+Fixture rationale (028 simd128-arrays)
+Purpose: Check 128-bit integer vector array loads/stores across element widths.
+Produces/consumed result: CBDs, input cases and native/model oracle rows.
+Cost and overlap: Keep width/lane memory cases, sharing setup with the broader vector-
+  memory corpus. ARM model-only coverage must not be described as native verification.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/Simd128ArrayFixtures.hs:prepareSimd128Arrays.
 Consumer: src/test/java/thc/runtime/Simd128ArrayNativeTest.java.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures;
@@ -946,6 +1187,14 @@ Under build/simd128-arrays/:
 Consumer reads inputs, manifest/receipt paths, CBDs/reports, oracle when present.
 
 029  simd-wide-arrays
+Fixture rationale (029 simd-wide-arrays)
+Purpose: Check wide vector array storage and lane extraction.
+Produces/consumed result: Pre CBD and scalar-lane native oracle.tsv.
+Cost and overlap: Wide layouts need coverage beyond 128-bit cases. Reuse the vector-
+  memory pipeline; separate historical audit inventories add no value.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/SimdWideArrayFixtures.hs:prepareSimdWideArrays.
 Consumer: src/test/java/thc/runtime/SimdWideArrayNativeTest.java.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures; GHC 9.14.1;
@@ -1028,6 +1277,15 @@ Shared SIMD byte-array producer, 030-033
   oracle TSV. Their local helper file reads are included; no subprocess in Java.
 
 030  simd-int32x4-bytearray
+Fixture rationale (030 simd-int32x4-bytearray)
+Purpose: Check signed Int32x4 vector/scalar offsets, reads and writes in byte arrays.
+Produces/consumed result: Stage CBDs and oracle.tsv; audit mutations check rejection
+  boundaries.
+Cost and overlap: Keep signed vector-memory semantics in a shared corpus. Copying
+  previous attempts, randomized published paths and archival receipts are unjustified;
+  quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
   Directory: build/simd-int32x4-bytearray; family argument int32x4-bytearray.
   Source: t/fixtures/compiler/SimdInt32X4ByteArray.hs.
   Native source: t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs imports it.
@@ -1039,6 +1297,13 @@ Shared SIMD byte-array producer, 030-033
     group ciChecks also reads provenance.json on Linux.
 
 031  simd-word32x4-bytearray
+Fixture rationale (031 simd-word32x4-bytearray)
+Purpose: Check Word32x4 high bits and unsigned vector memory transport.
+Produces/consumed result: Stage CBDs and oracle.tsv; negative audit variants.
+Cost and overlap: Unsigned boundaries add cases, not a reason for another setup
+  pipeline. Previous-output acquisition and attempt archives keep this quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
   Directory: build/simd-word32x4-bytearray; family argument word32x4-bytearray.
   Source: t/fixtures/compiler/SimdWord32X4ByteArray.hs.
   Native source: t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs imports it.
@@ -1048,6 +1313,14 @@ Shared SIMD byte-array producer, 030-033
   Consumer: thc.runtime.SimdWord32ByteArrayTest and helpers; Linux provenance check.
 
 032  simd-floatx4-bytearray
+Fixture rationale (032 simd-floatx4-bytearray)
+Purpose: Check FloatX4 memory operations preserve lane values and bit patterns.
+Produces/consumed result: Stage CBDs and native oracle.tsv with audit controls.
+Cost and overlap: Floating storage cases may add value beyond integer vectors.
+  Historical-attempt dependencies and duplicated memory preparation are unjustified;
+  quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
   Directory: build/simd-floatx4-bytearray; family argument floatx4-bytearray.
   Source: t/fixtures/compiler/SimdFloatX4ByteArray.hs.
   Native source: t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs imports it.
@@ -1062,6 +1335,13 @@ Shared SIMD byte-array producer, 030-033
     signaling-NaN files also become receipt-hashed inputs.
 
 033  simd-doublex2-bytearray
+Fixture rationale (033 simd-doublex2-bytearray)
+Purpose: Check DoubleX2 byte-array offsets and lane storage.
+Produces/consumed result: Stage CBDs and native oracle.tsv with audit controls.
+Cost and overlap: Retain Double lane/offset cases within one memory corpus. Previous
+  receipts must not be prerequisites; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
   Directory: build/simd-doublex2-bytearray; family argument doublex2-bytearray.
   Source: t/fixtures/compiler/SimdDoubleX2ByteArray.hs.
   Native source: t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs imports it.
@@ -1073,6 +1353,15 @@ Shared SIMD byte-array producer, 030-033
   Consumer: thc.runtime.SimdDoubleByteArrayTest and helpers; Linux provenance check.
 
 034  fused-floating
+Fixture rationale (034 fused-floating)
+Purpose: Check fused multiply-add/subtract rounding differs correctly from separate
+  operations.
+Produces/consumed result: CBDs and native oracle.tsv from --fused cases.
+Cost and overlap: Retain fusion-sensitive values; ordinary multiply/add tests cannot
+  replace them. One batched native oracle is justified.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/FusedFloatingFixtures.hs:prepareFusedFloating.
 Consumer: thc.runtime.FusedFloatingTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter/auditor;
@@ -1091,6 +1380,15 @@ Consumer reads manifest/receipt paths, CBDs, TSV and audits. Native executable i
   produced but excluded from artifact hashes. Auditor tables/tool closure omitted.
 
 035  simd-floatx4-fma (also FloatX8, DoubleX2 and DoubleX4)
+Fixture rationale (035 simd-floatx4-fma)
+Purpose: Check vector fused operations preserve per-lane fused results for supported
+  widths.
+Produces/consumed result: Pre/post CBDs and native oracle when the platform supports it.
+Cost and overlap: Keep representative vector fusion cases and share setup with wide FMA.
+  Separate per-width provenance machinery is not justified.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/SimdFloatFmaFixtures.hs:prepareSimdFloatFma.
 Consumer: thc.runtime.SimdFloatFmaTest.
 IN: producer/FixtureSupport.hs/Main.hs and built thc-fixtures;
@@ -1115,6 +1413,14 @@ Consumer reads receipt paths, available oracle, CBDs/audits. Small receipt omits
   most exporter/auditor imports and data; it is not a complete dependency closure.
 
 036  simd-wide-floating-fma
+Fixture rationale (036 simd-wide-floating-fma)
+Purpose: Check 512-bit fused operations and wide result layouts.
+Produces/consumed result: Wide CBDs and scalar-lane oracle.txt.
+Cost and overlap: Keep only distinct wide-layout execution cases; reuse the narrower FMA
+  producer/data rather than a second harness.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/SimdWideFloatFmaFixtures.hs:prepareSimdWideFloatFma.
 Consumer: thc.runtime.SimdWideFloatFmaTest using SimdFloatFmaTest's shared checker.
 IN: producer, SimdFloatFmaFixtures.hs inputs/doubleInputs, Main.hs/FixtureSupport.hs;
@@ -1135,6 +1441,14 @@ Consumer's helper selects this directory for 512-bit tests; normal SimdFloatFmaT
   tests select 035. Code sharing here does not require 035's generated artifacts.
 
 037  simd-calls
+Fixture rationale (037 simd-calls)
+Purpose: Check vector arguments/results survive actual function calls and captures.
+Produces/consumed result: SimdCallAudit CBDs and native oracle.tsv where supported.
+Cost and overlap: Keep: arithmetic smoke alone does not exercise calling convention
+  boundaries. Native reference plus real call Core is proportionate.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/SimdCallFixtures.hs:prepareSimdCalls.
 Consumer: thc.runtime.SimdCallNativeTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures;
@@ -1154,6 +1468,14 @@ Consumer reads manifest/receipt paths, stage CBDs/reports, optional TSV. Native
   executable not hashed; short source receipt omits shared inputs listed in 001.
 
 038  simd-arithmetic (shuffle)
+Fixture rationale (038 simd-arithmetic)
+Purpose: Check vector shuffle results and lane selection.
+Produces/consumed result: CBD, input TSV and scalar-lane native oracle.tsv.
+Cost and overlap: The distinctive behavior is shuffling, not a second all-arithmetic
+  suite. Merge ordinary lane arithmetic with generated SIMD smoke.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/SimdArithmeticFixtures.hs:prepareSimdArithmetic.
 Consumer: thc.runtime.SimdArithmeticTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures; bin/simd-families.json
@@ -1178,6 +1500,14 @@ Consumer reads receipt paths, manifest, native TSV, pre CBD and reports. Group
   executes that generator; keep table ownership separate from its consumer.
 
 039  data-to-tag
+Fixture rationale (039 data-to-tag)
+Purpose: Check constructor tags survive evaluation and accepted/rejected representation
+  cases.
+Produces/consumed result: Stage CBDs and oracle.tsv.
+Cost and overlap: Retain observable tag behavior and essential rejection cases. Exact
+  application counts and output-directory discovery are unjustified; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-data-to-tag.py:main; consumer thc.runtime.DataToTagTest.
 IN: producer, t/fixtures/compiler/DataToTagAudit.hs, exporter/plugin and full
   auditor/decoder closure (001). GHC9.14.1 also runs a ghc-package -e signature query.
@@ -1200,6 +1530,16 @@ Consumer reads manifest/receipts, stage CBD, oracle. Receipt omits plugin.py,
   producer deserve later redundancy/optimization review.
 
 040  backend-annotations
+Fixture rationale (040 backend-annotations)
+Purpose: Check declared backend policy is exported, honored and rejects invalid
+  declarations.
+Produces/consumed result: Pre/post/interface BackendAnnotations CBDs and compiler
+  diagnostics.
+Cost and overlap: Backend selection is a public compiler contract. Duplicated encoder-
+  path publication is not; quarantine this recipe until it consumes one shared encoder
+  owner.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/BackendAnnotationFixtures.hs:prepareBackendAnnotations.
 Consumer: thc.CoreBackendPolicyTest; producer also executes compiler rejection tests.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures and linked compiler/CBD
@@ -1229,6 +1569,15 @@ No manifest. Java directly reads the three BackendAnnotations capture paths and
 Group wrapper also builds exe:thc-fixtures and writes build/thc-fixtures.path (041).
 
 041  compact-model / shared test encoder
+Fixture rationale (041 compact-model)
+Purpose: Encode small caller-supplied Core models for runtime and codec tests.
+Produces/consumed result: Exactly the requested temporary CBD from input JSON; shared
+  executable location.
+Cost and overlap: Useful shared tool, not an oracle fixture. Build it once; do not
+  create per-test archives or let several recipes publish its location file.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: .github/scripts/fast-fixtures.json:compact-model builds exe:thc-fixtures
   with Cabal --offline and selected GHC/GHC_PKG; then cabal list-bin writes
   build/thc-fixtures.path. Backend-annotations duplicates that write; additional
@@ -1249,6 +1598,14 @@ Java CoreCbdTestSupport resolution/temporary files recorded after 012. Indexed
   from an old path file. No complete Cabal source closure is claimed in this entry.
 
 042  proxy-void
+Fixture rationale (042 proxy-void)
+Purpose: Check zero-width proxy arguments do not consume runtime value slots.
+Produces/consumed result: Pre/post CBDs and native oracle.tsv.
+Cost and overlap: Distinct erasure behavior may belong in the empty-tuple argument
+  corpus. Directory-dependent CBD discovery and duplicate predicate setup keep this
+  quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/ProxyVoidFixtures.hs:prepareProxyVoid.
 Consumer: thc.runtime.ProxyVoidTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter/auditor;
@@ -1271,6 +1628,16 @@ Under build/proxy-void/:
     OUT hashes and entry inventory. Java reads receipts, CBD, audits and TSV.
 
 043  rubbish-literals
+Fixture rationale (043 rubbish-literals)
+Purpose: Check authentic GHC rubbish literals are handled with their representation
+  semantics.
+Produces/consumed result: Installed literal inventory, CBDs and native oracle.json.
+Cost and overlap: Keep a small original-Core boundary check if synthetic models miss it.
+  Native object/disassembly acquisition must serve this contract, not a frozen lowering
+  shape.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/RubbishLiteralFixtures.hs:prepareRubbishLiterals.
 Consumer: thc.runtime.RubbishLiteralTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures with linked GHC/THC.Plugin/
@@ -1299,6 +1666,13 @@ Java reads receipts/installed interface, logs/info.stdout, CBDs/oracle/reports;
   files and invokes python3 auditor. Encoder dependency follows its writing helper.
 
 044  boxed-cas
+Fixture rationale (044 boxed-cas)
+Purpose: Check boxed compare-and-swap success/failure and pointer identity.
+Produces/consumed result: Stage CBDs and native observations in command stdout.
+Cost and overlap: Keep CAS semantics and sharing controls. Run-number directories and
+  previous-manifest archives are unrelated to them; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/BoxedCasFixtures.hs:prepareBoxedCas.
 Consumer: thc.runtime.BoxedCasTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC;
@@ -1322,6 +1696,13 @@ Under build/boxed-cas/, producer chooses a new run-N from existing directory nam
 Consumer reads manifest/receipt paths, selected CBDs/reports and recorded oracle path.
 
 045  fetch-add-int-array
+Fixture rationale (045 fetch-add-int-array)
+Purpose: Check composite fetch-add returns the old value and preserves operation order.
+Produces/consumed result: CBD pair per stage and oracle.tsv.
+Cost and overlap: Atomic-int-arrays already covers fetch-add. Retain only a distinct
+  composite-order case there; exact directory inventory makes this producer quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/FetchAddIntArrayFixtures.hs:prepareFetchAddIntArray.
 Consumer: thc.runtime.FetchAddIntArrayTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC9.14.1;
@@ -1342,6 +1723,14 @@ Consumer reads receipt paths, CBDs/reports and TSV. Native executable not hashed
   046 before retaining this additional producer; composite ordering may be distinct.
 
 046  atomic-int-arrays
+Fixture rationale (046 atomic-int-arrays)
+Purpose: Check fetch operations, compare-and-swap widths and atomic load/store results.
+Produces/consumed result: CBD pairs, requests.tsv and oracle.tsv.
+Cost and overlap: Keep one consolidated atomic-array corpus; 24 per-entry audit reports
+  need a specific failure contract. Directory inventory preconditions keep it
+  quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/AtomicIntArrayFixtures.hs:prepareAtomicIntArrays.
 Consumer: thc.runtime.AtomicIntArrayTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, shared exporter/auditor;
@@ -1364,6 +1753,13 @@ Under build/atomic-int-arrays/:
 Consumer reads manifest/receipt paths, native results, stage CBDs and audit reports.
 
 047  shrink-bytearrays
+Fixture rationale (047 shrink-bytearrays)
+Purpose: Check in-place shrinking, including pinned arrays, preserves retained contents.
+Produces/consumed result: CBD pairs and oracle.tsv.
+Cost and overlap: Pinned shrink semantics can add value beyond resize. Fold into byte-
+  array lifecycle coverage after removing exact-directory requirements; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/ShrinkByteArrayFixtures.hs:prepareShrinkByteArrays.
 Consumer: thc.runtime.ShrinkByteArrayTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC9.14.1;
@@ -1384,6 +1780,15 @@ Consumer reads receipt paths, CBDs/reports/TSV. Executable not hashed; source re
   without discarding distinct shrink-in-place/pinned semantics.
 
 048  small-arrays
+Fixture rationale (048 small-arrays)
+Purpose: Check small boxed-array operations and safe slices preserve values and
+  laziness.
+Produces/consumed result: Pre/post CBDs and oracle.tsv.
+Cost and overlap: Keep the distinct small-array representation cases. Share setup with
+  boxed arrays; stale completion receipts are a repair item, not a test contract.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/SmallArrayFixtures.hs:prepareSmallArrays.
 Consumer: thc.runtime.SmallArrayTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC9.14.1;
@@ -1401,6 +1806,13 @@ Consumer reads receipts, CBDs, TSV and audits. Producer does not remove old
   receipt. Auditor input-table omissions remain.
 
 049  boxed-array-extensions
+Fixture rationale (049 boxed-array-extensions)
+Purpose: Check clone/copy/move/thaw and lazy elements of boxed arrays.
+Produces/consumed result: Stage CBDs and native observations.
+Cost and overlap: Useful aliasing/laziness cases belong with general boxed arrays.
+  Attempt directories and old-manifest retention add no semantic coverage; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/BoxedArrayExtensionsFixtures.hs:prepareBoxedArrayExtensions.
 Consumer: thc.runtime.BoxedArrayExtensionsTest.
 IN: producer/Main.hs/FixtureSupport.hs and built thc-fixtures; shared exporter/
@@ -1422,6 +1834,14 @@ Existing manifest moves to run-N/previous-manifest.json. Same prior-directory
   recorded native stdout. No synthetic encoder subprocess found in this class.
 
 050  managed-address-reads
+Fixture rationale (050 managed-address-reads)
+Purpose: Check typed reads through managed addresses match native values.
+Produces/consumed result: CBDs and oracle.tsv.
+Cost and overlap: Keep the managed-address boundary, which native-address tests do not
+  cover. Consolidate width cases with memory tests rather than duplicate acquisition.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ManagedAddressReadFixtures.hs:prepareManagedAddressReads.
 Consumer: thc.runtime.ManagedAddressReadTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor/GHC9.14.1;
@@ -1442,6 +1862,15 @@ Under build/managed-address-reads/:
 Whole-directory audit inputs are open-ended; source receipt omits import-time tables.
 
 051  wide-char-address
+Fixture rationale (051 wide-char-address)
+Purpose: Check wide-character address reads/writes use the correct representation and
+  offsets.
+Produces/consumed result: CBD pair and native observations.
+Cost and overlap: Retain a targeted character-width case in scalar memory coverage. A
+  separate receipt pipeline is not justified by one element kind.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/WideCharAddressFixtures.hs:prepareWideCharAddress.
 Consumer: thc.runtime.WideCharAddressTest.
 IN: t/fixtures/compiler/WideCharAddressAudit.hs, WideCharAddressNative.hs;
@@ -1463,6 +1892,15 @@ Old manifest is not removed before generation. Source receipt is incomplete:
   top-level compiler files/core_*.py collection misses actual auditor JSON tables.
 
 052  aligned-scalar-memory
+Fixture rationale (052 aligned-scalar-memory)
+Purpose: Check aligned loads/stores for each scalar kind and offset.
+Produces/consumed result: Stage CBDs and oracle.tsv.
+Cost and overlap: Keep data/offset behavior, merge duplicate width cases with
+  address/array tests. Exact root or primitive-use counts must be removed before
+  optimization work.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/AlignedScalarMemoryFixtures.hs:prepareAlignedScalarMemory.
 Consumer: thc.runtime.AlignedScalarMemoryTest.
 IN: t/fixtures/compiler/AlignedScalarMemoryAudit.hs, AlignedScalarMemoryNative.hs;
@@ -1491,6 +1929,15 @@ Consumer reads receipts, oracle.tsv, CBDs and audits. It also asserts exact Core
   memory behavior/ABI checks. Receipt misses polyglot ABI/SIMD auditor tables.
 
 053  scalar-memory-utilities
+Fixture rationale (053 scalar-memory-utilities)
+Purpose: Check memory utility operations preserve bytes, lengths and offsets.
+Produces/consumed result: CBDs and native oracle.tsv.
+Cost and overlap: Keep only THC-owned transport/aliasing semantics. Hundreds of
+  observations do not justify retesting arbitrary libc implementations; consolidate
+  overlapping copies/fills.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs.
 Consumer: thc.runtime.ScalarMemoryUtilitiesTest.
 IN: t/fixtures/compiler/ScalarMemoryUtilities.hs and ScalarMemoryUtilitiesNative.hs;
@@ -1509,6 +1956,17 @@ Consumer reads receipts/TSV/CBD/audits. Manifest invalidated first; receipt omit
   polyglot ABI/SIMD tables. Compare its pin/thaw/shrink checks with dedicated groups.
 
 054  process-lifecycle
+Fixture rationale (054 process-lifecycle)
+Purpose: Check process launch/wait/status and signal policy across the THC host
+  boundary.
+Produces/consumed result: Core fixtures and native process-oracle/sigchld-policy
+  executables.
+Cost and overlap: Real child-process lifecycle needs integration coverage. Preparing
+  these controls for every unrelated Gradle Test is unjustified; depend on them only for
+  their consumers.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ProcessLifecycleFixtures.hs plus Gradle's
   prepareProcessLifecycleOracle (build.gradle), two separate output owners.
 Consumers: thc.runtime.CoreProcessForeignTest, ManagedProcessForeignTest,
@@ -1546,6 +2004,16 @@ The native executables are not produced by the Haskell command or included in it
 Full package native headers/link inputs remain an unresolved shared closure.
 
 055  ghc-bco
+Fixture rationale (055 ghc-bco)
+Purpose: Check the runtime contract for GHC bytecode-object primops and unsupported
+  cases.
+Produces/consumed result: Two CBDs consumed by GhcBCOTest.
+Cost and overlap: A small behavior/rejection test can be useful. Seventy auditor
+  subprocesses for two CBDs are not justified; collapse duplicate reports before
+  admission.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/GhcBCOFixtures.hs. Consumer: thc.runtime.GhcBCOTest.
 IN: t/fixtures/core/GhcBCO.hs, t/fixtures/compiler/GhcBCONative.hs;
   producer/Main/FixtureSupport, built thc-fixtures/shared exporter/auditor/GHC9.14.1.
@@ -1563,6 +2031,15 @@ Consumer reads manifest/receipt paths/CBDs. Old manifest not invalidated at star
 Auditor table omissions recur; consider one multi-entry audit per stage.
 
 056  delimited-continuations
+Fixture rationale (056 delimited-continuations)
+Purpose: Check prompt/control capture, resumption and case-arm continuation behavior.
+Produces/consumed result: Continuation and parked-control CBDs.
+Cost and overlap: Keep runtime control-flow semantics, sharing and rejection boundaries.
+  Thirty-five preparation reports are disproportionate; batch or remove reports
+  unrelated to assertions.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/DelimitedContinuationsFixtures.hs.
 Consumers: thc.runtime.DelimitedContinuationsTest, CaseArmOutliningTest.
 IN: t/fixtures/core/DelimitedContinuations.hs, ParkedControl.hs;
@@ -1587,6 +2064,14 @@ Consumers read manifest/receipts/CBDs. Old manifest remains during generation;
   though absent from this group's fast-fixtures.json source list.
 
 057  thread-scheduling
+Fixture rationale (057 thread-scheduling)
+Purpose: Check fork/yield/delay and callback scheduling observations.
+Produces/consumed result: CBDs and native oracle.txt.
+Cost and overlap: Keep bounded concurrency semantics; do not assert incidental
+  scheduling order. Shared prerequisite for async tests should be produced once.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ThreadSchedulingFixtures.hs.
 Consumer: thc.runtime.ThreadSchedulingTest.
 IN: t/fixtures/core/ThreadScheduling.hs, t/fixtures/compiler/ThreadSchedulingNative.hs;
@@ -1603,6 +2088,14 @@ Consumer reads all these/receipts. No per-command log files. Auditor JSON table
   omissions remain. Scheduling behavior is distinct from thread inventory below.
 
 058  thread-inventory
+Fixture rationale (058 thread-inventory)
+Purpose: Check thread inventory and callback-visible thread state.
+Produces/consumed result: CBDs, oracle.txt and callback-oracle.txt.
+Cost and overlap: Keep API-visible membership/state behavior. Reproducing filesystem
+  receipt inventories in the consumer adds no runtime coverage.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ThreadInventoryFixtures.hs.
 Consumer: thc.runtime.ThreadInventoryNativeTest.
 IN: t/fixtures/core/ThreadInventory.hs, t/fixtures/compiler/ThreadInventoryNative.hs,
@@ -1623,6 +2116,15 @@ Consumer reads all these and reproduces receipt directory inventories. Runtime
   library/native callback support remains separate test input, not oracle output.
 
 059  closure-inspection
+Fixture rationale (059 closure-inspection)
+Purpose: Check supported closure-inspection results and unsupported representation
+  boundaries.
+Produces/consumed result: ClosureInspectionAudit CBD and native oracle.tsv.
+Cost and overlap: Keep the documented inspection contract. Native GHC layout/root counts
+  must not become immutable implementation requirements for THC.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ClosureInspectionFixtures.hs.
 Consumer: thc.runtime.ClosureInspectionTest.
 IN: t/fixtures/compiler/ClosureInspectionAudit.hs, ClosureInspectionNative.hs;
@@ -1638,6 +2140,16 @@ Consumer reads manifest/all receipt paths/CBD/TSV. Old manifest removed first;
   no command logs. Receipt omits scalar-signature/polyglot/SIMD auditor tables.
 
 060  hint-trace
+Fixture rationale (060 hint-trace)
+Purpose: Check hint/trace/event/marker primops preserve program results and observable
+  trace behavior.
+Produces/consumed result: CBDs, oracle.tsv and native eventlog used as evidence.
+Cost and overlap: Keep a small behavior/control check. Nondeterministic eventlog bytes
+  and exact native trace implementation are not reusable fixture identities; JFR wiring
+  needs separate tests.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/HintTraceFixtures.hs. Consumer: thc.runtime.HintTraceTest.
 IN: t/fixtures/compiler/HintTraceAudit.hs, HintTraceNative.hs;
   producer/Main/FixtureSupport, shared exporter/auditor/native GHC9.14.1.
@@ -1654,6 +2166,14 @@ Consumer reads manifest/receipt paths/CBD/TSV. Eventlog bytes vary with runtime;
   manifest removed; no command logs. Auditor input-table omissions recur.
 
 061  thread-label
+Fixture rationale (061 thread-label)
+Purpose: Check label assignment, replacement and dead-thread label behavior.
+Produces/consumed result: CBDs and native oracle.txt.
+Cost and overlap: Keep observable labeling semantics. Share thread setup; repeated per-
+  entry evidence files are not a reason for a separate suite.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ThreadLabelFixtures.hs.
 Consumer: thc.runtime.ThreadLabelNativeTest.
 IN: t/fixtures/compiler/ThreadLabelAudit.hs, ThreadLabelNative.hs;
@@ -1670,6 +2190,16 @@ Consumer reads receipt paths/CBD/oracle. Executable not hashed; manifest removed
   first; no command logs. Scalar-signature/polyglot/SIMD tables omitted from receipt.
 
 062  original-tcsetattr
+Fixture rationale (062 original-tcsetattr)
+Purpose: Check termios writes cross the managed/native boundary without corrupting the
+  image.
+Produces/consumed result: Core CBDs, oracle.json and a native PTY server executed by the
+  test.
+Cost and overlap: PTY transport can justify an integration test. Merge get/set setup; do
+  not maintain a separate libc conformance suite or duplicate ABI probes.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalTcsetattrFixtures.hs.
 Consumer: thc.runtime.OriginalTcsetattrTest; Linux x86_64 only.
 IN: t/fixtures/compiler/OriginalTcsetattrAudit.hs, OriginalTcsetattrNative.hs;
@@ -1692,6 +2222,14 @@ StdioHostAbi generated runtime resource is an additional test input. Do not trea
   this as merely recorded-result consumption. Installed interface files not hashed.
 
 063  original-tcgetattr
+Fixture rationale (063 original-tcgetattr)
+Purpose: Check termios reads copy the correct image/status through the runtime boundary.
+Produces/consumed result: Core CBDs, oracle.json and native/oracle --serve.
+Cost and overlap: Share the PTY/server with tcsetattr. Keep transport/error cases that
+  exercise THC; repeating native terminal semantics adds little.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalTcgetattrFixtures.hs.
 Consumer: thc.runtime.OriginalTcgetattrTest; Linux x86_64 only.
 IN: t/fixtures/compiler/OriginalTcgetattrAudit.hs, OriginalTcgetattrNative.hs;
@@ -1712,6 +2250,15 @@ This and 062 need value review against package/FFI coverage; PTY state and buffe
   transport checks are distinct from retesting libc's own implementation.
 
 064  original-fcntl
+Fixture rationale (064 original-fcntl)
+Purpose: Check descriptor flags and fcntl argument transport through installed package
+  Core.
+Produces/consumed result: CBD pair and oracle.json, with runtime ABI resources.
+Cost and overlap: A small unix-package integration case can cover this. Twelve package-
+  constant checks and a standalone native harness are not independently justified.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalFcntl.
 Consumer: thc.runtime.OriginalFcntlTest; Linux x86_64 LP64 only.
 IN: t/fixtures/compiler/OriginalFcntlAudit.hs, OriginalFcntlNative.hs;
@@ -1731,6 +2278,15 @@ InstalledCoreFixtures.hs is listed by CI but this producer does not acquire whol
   installed archives. Retest of 12 package constants is a value-review candidate.
 
 065  original-errno
+Fixture rationale (065 original-errno)
+Purpose: Check errno is read/written in the correct native context across foreign calls.
+Produces/consumed result: CBDs and oracle.json derived from native observations.
+Cost and overlap: Keep the FFI errno boundary, especially thread/context isolation.
+  Consolidate into package FFI integration; do not test the system errno constants
+  themselves.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalErrno.
 Consumer: thc.runtime.OriginalErrnoTest; Linux/macOS LP64.
 IN: t/fixtures/compiler/OriginalErrnoAudit.hs, OriginalErrnoNative.hs;
@@ -1751,6 +2307,16 @@ Tests read manifest/receipts/CBD/audits/oracle. Unsupported hosts get only negat
   needs distinction from the actual errno transport/semantics contract.
 
 066  original-process-identity
+Fixture rationale (066 original-process-identity)
+Purpose: Check process identity calls execute through ordinary package linkage.
+Produces/consumed result: CBDs, oracle.json and installed package/runtime modules reused
+  by other groups.
+Cost and overlap: No standalone libc identity harness is justified. Keep package-call
+  smoke only; move shared package acquisition to its own owner and never cache live
+  PID/UID observations as stable results.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalProcessIdentity.
 Consumer: thc.runtime.OriginalProcessIdentityTest; shared installed outputs also
   consumed by other original-* groups (record each edge as those are scanned).
@@ -1808,6 +2374,14 @@ This helper assumes compiler/plugin.json already exists when fallback is needed;
   the helper's Cabal build does not publish it. Make that producer dependency explicit.
 
 067  original-termios
+Fixture rationale (067 original-termios)
+Purpose: Check retained termios pointers preserve ownership/lifetime across calls.
+Produces/consumed result: Saved-termios CBDs and oracle.json.
+Cost and overlap: The retained-pointer boundary is distinct from get/set image
+  transport. Keep a small lifetime test and share package/native setup.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalTermiosFixtures.hs.
 Consumer: thc.runtime.OriginalSavedTermiosTest; Linux x86_64 only.
 IN: t/fixtures/compiler/OriginalSavedTermiosAudit.hs, OriginalSavedTermiosNative.hs;
@@ -1825,6 +2399,15 @@ Consumer reads receipts/CBD/audits/oracle. Unsupported hosts get negative manife
 This tests retained-pointer ownership, not the termios image protocol of 062/063.
 
 068  native-addresses (also native-malloc)
+Fixture rationale (068 native-addresses)
+Purpose: Check native pointer aliasing, copying and allocation transport.
+Produces/consumed result: Native address oracle.json and malloc oracle.txt; tracked
+  malloc descriptors.
+Cost and overlap: Keep THC FFI pointer/ownership behavior. Native allocation internals
+  are not the contract; fold these cases into one boundary suite.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/NativeAddressFixtures.hs.
 Consumers: thc.runtime.NativeAddressTest, NativeMallocTest.
 IN: t/fixtures/compiler/NativeAddressNative.hs, NativeMallocNative.hs;
@@ -1846,6 +2429,14 @@ Both old manifests removed. Neither receipt hashes native binary/logs. Windows
   these producers do not export any Core or require the Core auditor.
 
 069  original-open
+Fixture rationale (069 original-open)
+Purpose: Check open requests preserve resource ownership and blocking/async behavior.
+Produces/consumed result: Core CBDs, oracle.json and the runtime native-open provider.
+Cost and overlap: Retain open/cancel/resource-leak behavior. Exact internal root counts
+  must go; native provider testing is justified only by THC-owned request state.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalOpenFixtures.hs.
 Consumers: thc.runtime.OriginalOpenTest, LoomOriginalOpenTest.
 IN: t/fixtures/compiler/OriginalOpenAudit.hs, OriginalOpenNative.hs,
@@ -1873,6 +2464,16 @@ Tests read receipts/Core/audits/oracle and generated StdioHostAbi/native open
   in OriginalOpenTest are another compiler-shape review candidate.
 
 070  rts-diagnostics
+Fixture rationale (070 rts-diagnostics)
+Purpose: Check diagnostics route the expected bytes without violating runtime
+  boundaries.
+Produces/consumed result: oracle.json assembled from native stdout/stderr; synthetic ABI
+  controls.
+Cost and overlap: Keep observable diagnostic routing. A compact model plus one native
+  reference is enough; no Core export or package-wide acquisition is needed.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/RtsDiagnosticFixtures.hs.
 Consumer: thc.runtime.RtsDiagnosticsTest.
 IN: t/fixtures/compiler/RtsDiagnosticsNative.hs; producer/Main/FixtureSupport,
@@ -1887,6 +2488,16 @@ Test reads oracle/receipt paths and uses in-memory synthetic ABI controls. No CB
   producer/encoder/auditor here. Old manifest removed before work.
 
 071  rts-shutdown
+Fixture rationale (071 rts-shutdown)
+Purpose: Check guest shutdown returns the intended outcome without shutting down the
+  host.
+Produces/consumed result: Native exit/signal cases in oracle.json and in-memory
+  controls.
+Cost and overlap: Keep host survival and shutdown outcome checks. Child processes are
+  justified for isolation, but duplicate exit cases/receipts should be minimized.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/RtsShutdownFixtures.hs.
 Consumer: thc.runtime.RtsShutdownTest.
 IN: t/fixtures/compiler/RtsShutdownNative.hs; producer/Main/FixtureSupport,
@@ -1903,6 +2514,16 @@ Test reads cases/receipts and builds controls in memory. Guest context shutdown
   is THC-owned behavior; no CBD export/audit needed. Old manifest removed first.
 
 072  original-rts-locks
+Fixture rationale (072 original-rts-locks)
+Purpose: Check the supported RTS lock boundary and reject calls outside its contract.
+Produces/consumed result: Declarations/templates, oracle.json and optional auditor
+  reports.
+Cost and overlap: Keep only THC-owned synchronization or required rejection behavior.
+  Frozen declaration/template archives are not independent coverage and should be
+  removed.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalRtsLocksFixtures.hs; --require-supported
   enables four auditor outputs and is set by the CI entry.
 Consumer: thc.runtime.OriginalRtsLocksTest.
@@ -1926,6 +2547,16 @@ Consumer reads receipts/Core/declaration evidence/oracle/audits. Installed inter
   should be reviewed separately from the useful THC lock ownership semantics.
 
 073  original-strerror
+Fixture rationale (073 original-strerror)
+Purpose: Check foreign string results are transported into guest-visible error text.
+Produces/consumed result: Oracle/Core artifacts plus installed modules from process-
+  identity.
+Cost and overlap: A package-level failing operation already exercises error strings.
+  Standalone strerror conformance is not justified; consolidate a transport case into
+  errno/package smoke.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalStrerrorFixtures.hs.
 Consumer: thc.runtime.OriginalStrerrorNativeTest.
 IN: t/fixtures/compiler/OriginalStrerrorNative.hs; built thc-fixtures/FixtureSupport,
@@ -1944,6 +2575,14 @@ That helper resolves/link-loads package cbits. This is an explicit edge to 066,
   package/native buffer transport tests rather than maintain a strerror harness.
 
 074  original-fd-ready
+Fixture rationale (074 original-fd-ready)
+Purpose: Check descriptor readiness integrates with blocking/cancellation semantics.
+Produces/consumed result: Declaration/Core fixtures, oracle.json and ABI controls.
+Cost and overlap: Keep the runtime waiting boundary. Avoid duplicating readiness in fd-
+  ready, handle-readiness and process scheduling; share controls and acquisition.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalFdReadyFixtures.hs.
 Consumer: thc.runtime.OriginalFdReadyNativeTest.
 IN: t/fixtures/compiler/OriginalFdReadyAudit.hs, OriginalFdReadyAuditNative.hs;
@@ -1972,6 +2611,17 @@ Under build/original-fd-ready/:
 Old manifest not invalidated; consumed installed FD.hi omitted from hashes.
 
 075  original-posix-stat (ten producers behind one indexed group)
+Fixture rationale (075 original-posix-stat)
+Purpose: Check filesystem calls transport ABI data, paths, errors and resource
+  ownership.
+Produces/consumed result: Per-operation CBDs/oracle.json for stat, mode, links, access,
+  directory and relative-path cases.
+Cost and overlap: Ten native producer flows are disproportionate to package linkage.
+  Consolidate package-level filesystem behavior; retain only distinct THC
+  ABI/authority/lifetime cases, not libc conformance.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Dispatcher: t/haskell-fixtures/OriginalPosixStatFixtures.hs:prepareOriginalPosixStat.
 Linux only; other hosts write build/original-posix-stat/manifest.json supported=false.
 All ten consumers live in thc.runtime; their names follow below. Shared inputs:
@@ -2075,6 +2725,14 @@ Value review: ten separately maintained libc/Unix harnesses, repeated source
   path semantics that package/general FFI tests do not already establish.
 
 076  original-stdio-truncate
+Fixture rationale (076 original-stdio-truncate)
+Purpose: Check truncation updates length and position through the guest I/O boundary.
+Produces/consumed result: CBDs and oracle.json from result files.
+Cost and overlap: Fold essential length/position behavior into one file-lifecycle test.
+  Fourteen per-case native executions and a standalone harness need no preservation.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalStdioTruncateFixtures.hs.
 Consumer: thc.runtime.OriginalStdioTruncateNativeTest. Linux/macOS LP64.
 IN: t/fixtures/compiler/OriginalStdioTruncateAudit.hs and AuditNative.hs (same
@@ -2093,6 +2751,15 @@ Consumer reads receipts/Core/oracle/audits. Result files cleared before native r
   old manifest not invalidated. Shared auditor-table omissions remain.
 
 077  original-stdio-seek
+Fixture rationale (077 original-stdio-seek)
+Purpose: Check guest seek results, errors and file-position state.
+Produces/consumed result: CBDs/oracle.json plus shared installed modules.
+Cost and overlap: Retain a small seek/read/write lifecycle case. Twenty-four native
+  cases, constant discovery and separate acquisition are excessive for ordinary package
+  behavior.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalStdioSeekFixtures.hs.
 Consumer: thc.runtime.OriginalStdioSeekNativeTest. Linux/macOS LP64.
 IN: t/fixtures/compiler/OriginalStdioSeekAudit.hs, OriginalStdioSeekAuditNative.hs;
@@ -2113,6 +2780,15 @@ Tests read these and call nativeModules, adding 066 installed/native/runtime
   assess repeated package seek mechanics for consolidation.
 
 078  original-posix-dup
+Fixture rationale (078 original-posix-dup)
+Purpose: Check duplicated descriptors share the intended resource state and close
+  ownership.
+Produces/consumed result: CBDs and oracle.json with per-case file observations.
+Cost and overlap: Descriptor ownership is a meaningful boundary. Put it in one file-
+  lifecycle suite; nineteen separate native launches are not intrinsically justified.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalPosixDupFixtures.hs.
 Consumer: thc.runtime.OriginalPosixDupNativeTest. Linux/macOS LP64.
 IN: t/fixtures/compiler/OriginalPosixDupAudit.hs, OriginalPosixDupAuditNative.hs;
@@ -2131,6 +2807,14 @@ Under build/original-posix-dup/:
 Consumer reads receipts/Core/audits/oracle and native command JSON explicitly.
 
 079  original-stdio-close
+Fixture rationale (079 original-stdio-close)
+Purpose: Check closing a guest resource releases it and reports invalid reuse correctly.
+Produces/consumed result: CBDs and four native cases in oracle.json.
+Cost and overlap: Merge into open/dup/resource-disposal coverage. No distinct need for
+  another compiler/native pipeline has been established.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalStdioCloseFixtures.hs.
 Consumer: thc.runtime.OriginalStdioCloseNativeTest. Linux/macOS LP64.
 IN: t/fixtures/compiler/OriginalStdioCloseAudit.hs, OriginalStdioCloseAuditNative.hs;
@@ -2148,6 +2832,15 @@ Consumer reads receipt paths/oracle/Core/reports. Per-case result txt removed fi
 Compare close behavior with broader open/dup/resource-disposal tests.
 
 080  original-stdio-read
+Fixture rationale (080 original-stdio-read)
+Purpose: Check reads preserve buffer contents, lengths, EOF and file-position behavior.
+Produces/consumed result: CBDs, input.bin and oracle.json from forty native cases.
+Cost and overlap: Keep guest buffer/EOF behavior in package I/O integration. A new
+  process per input is unnecessary; seekable stdin must remain an explicit input where
+  needed.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalStdioFixtures.hs:prepareOriginalStdioRead.
 Consumer: thc.runtime.OriginalStdioReadTest. Linux/macOS LP64.
 IN: t/fixtures/compiler/OriginalStdioReadAudit.hs, OriginalStdioReadNative.hs;
@@ -2167,6 +2860,14 @@ Consumer reads receipts/Core/audits/oracle. The seekable file on stdin is a real
   native command input, not interchangeable with an empty pipe or closed fd0.
 
 081  mutvar
+Fixture rationale (081 mutvar)
+Purpose: Check mutable references preserve read/write order, identity and lazy contents.
+Produces/consumed result: CBD pairs and oracle.tsv.
+Cost and overlap: Keep state/sharing semantics. Exact output-directory membership is
+  unrelated and blocks incremental use; quarantined, then consolidate with mutable-
+  reference coverage.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/MutVarFixtures.hs. Consumer: thc.runtime.MutVarNativeTest.
 IN: t/fixtures/compiler/MutVarAudit.hs; producer/Main/FixtureSupport/shared tools/GHC9.14.1.
 Under build/mutvar/:
@@ -2181,6 +2882,16 @@ Consumer reads receipts/oracle/Core/audits; executable not hashed, no command lo
 Old manifest removed; unexpected old CBDs cause exact directory inventory failure.
 
 082  weak-explicit
+Fixture rationale (082 weak-explicit)
+Purpose: Check explicit weak-pointer/finalizer operations preserve documented state
+  transitions.
+Produces/consumed result: CBDs and oracle.tsv from a bounded model/native comparison.
+Cost and overlap: Keep explicit operations; do not pretend a deterministic arithmetic
+  oracle validates nondeterministic garbage-collection timing. Avoid expanding this into
+  GC scheduling assertions.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/WeakFixtures.hs. Consumer: thc.runtime.ManagedWeakTest.
 IN: t/fixtures/compiler/WeakAudit.hs; producer/shared tools/native GHC9.14.1.
 Under build/weak-explicit/:
@@ -2195,6 +2906,14 @@ Consumer reads receipts/oracle/CBDs/reports. Executable not hashed; no command l
 Explicit weak operations only; this fixture does not demonstrate GC finalization.
 
 083  stable-names
+Fixture rationale (083 stable-names)
+Purpose: Check stable-name equality/hash behavior follows object identity and sharing.
+Produces/consumed result: CBDs and native observations embedded in manifest.json.
+Cost and overlap: Keep identity semantics, not particular native hash numbers or
+  allocation counts. One native reference and shared pointer setup suffice.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/StableNameFixtures.hs. Consumer: thc.runtime.StableNamesTest.
 IN: t/fixtures/core/StableNames.hs, t/fixtures/compiler/StableNamesNative.hs;
   producer/shared tools/native GHC9.14.1.
@@ -2210,6 +2929,15 @@ Under build/stable-names/:
 Native binary not hashed and old manifest not invalidated.
 
 084  stable-pointers
+Fixture rationale (084 stable-pointers)
+Purpose: Check stable pointers retain/release the correct object across foreign calls.
+Produces/consumed result: CBDs, synthetic original-call CBD and oracle.tsv.
+Cost and overlap: Keep ownership and sharing. Review the synthetic original-call
+  certificate against installed foreign-registration coverage; historical certificate
+  reproduction is not its own test purpose.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/StablePointerFixtures.hs. Consumer: thc.runtime.StablePointerTest.
 IN: t/fixtures/compiler/StablePointerAudit.hs, SharedCAFNative.hs,
   SharedCAFOriginalCalls.json; producer/shared tools/native GHC9.14.1/compact library.
@@ -2230,6 +2958,17 @@ Consumer reads receipts/base and synthetic CBDs/TSV/audits. Old manifest removed
   deserves value review against current installed foreign-registration tests.
 
 085  interface-core
+Fixture rationale (085 interface-core)
+Purpose: Check installed interfaces export executable Core and correct
+  foreign/import/export linkage.
+Produces/consumed result: Interface CBDs, package manifests and native observations for
+  the consumer scenarios.
+Cost and overlap: Core-bearing versus thin interfaces and linkage need integration
+  tests. Split independent scenarios: cache-corruption experiments, repeated audits and
+  every negative variant must not run whenever any consumer needs one CBD.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/InterfaceFixtures.hs plus InterfaceForeignFacts.hs
   and InstalledCacheFixtures.hs. Consumers: thc.CoreUnitManagedExportTest,
   ManagedExportsNativeTest, ManagedForeignRootsNativeTest, ManagedImportStubsNativeTest,
@@ -2327,6 +3066,14 @@ This producer executes an entire cache correctness suite before publishing ordin
   interface fixtures. Separate those test operations from reusable fixture products.
 
 086 floating-tuples
+Fixture rationale (086 floating-tuples)
+Purpose: Check mixed floating aggregate results survive calls and joins.
+Produces/consumed result: Pre/post CBDs, oracle.tsv and bits.tsv.
+Cost and overlap: Aggregate floating transport is useful; combine with general tuple
+  result coverage. Recursive receipts and frozen CPR/tuple/join shapes keep this recipe
+  quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-floating-tuples.py; consumer: thc.runtime.FloatingTupleTest.
 Inputs: t/fixtures/compiler/FloatingTupleAudit.hs and FloatingTupleAuditNative.hs,
   producer, shared exporter/plugin/auditor/decoder and pinned GHC/native libraries.
@@ -2348,6 +3095,14 @@ Exact CPR producer/tuple/join shapes are asserted; review for compiler fossiliza
 Receipt includes unused PrimopTools.hs but misses shared auditor data tables.
 
 087 pinned-addresses
+Fixture rationale (087 pinned-addresses)
+Purpose: Check pinning and address lifetime preserve native-visible storage.
+Produces/consumed result: CBDs and oracle.tsv.
+Cost and overlap: Keep pinning/lifetime behavior; ordinary unpinned array tests are
+  insufficient. Share memory setup and avoid duplicate audit work.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/PinnedAddressFixtures.hs (thc-fixtures command).
 Consumer: thc.runtime.PinnedAddressTest.
 Inputs: t/fixtures/compiler/PinnedAddressAudit.hs, PinnedAddressAuditNative.hs,
@@ -2377,6 +3132,16 @@ Consumer reads receipts, TSVs, CBDs, audit/negative reports and command records.
 Receipt again includes unused PrimopTools.hs and omits shared auditor data tables.
 
 088 sum-results (three indexed commands, four producer flows)
+Fixture rationale (088 sum-results)
+Purpose: Check sum alternatives and aggregate result layouts carry the right values
+  through execution.
+Produces/consumed result: Aggregate-frontier, aggregate-layout, sum-layout and sum-
+  result CBDs/oracles.
+Cost and overlap: Retain semantic layout cases in one aggregate corpus. Four producer
+  flows, recursive receipts and shape proofs are not justified; quarantined pending
+  consolidation.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Consumers: thc.AggregateFrontierTest, AggregateLayoutTest, SumLayoutMetadataTest;
   thc.runtime.SumProtocolTest, SumResultTest, TupleRepresentationTest,
   UnknownBoxedNativeTest. AggregateFrontierTest and SumProtocolTest also write
@@ -2431,6 +3196,15 @@ Recursive receipts turn stale compiler intermediates into extra inputs; output s
   before carrying all four producers into the graph.
 
 089 simd-floatx4
+Fixture rationale (089 simd-floatx4)
+Purpose: Check FloatX4 arithmetic and floating lane behavior.
+Produces/consumed result: CBDs, modeled expectations and native oracle when supported.
+Cost and overlap: Compare with generated SIMD capability smoke; retain only missing
+  floating edge cases there. A separate arithmetic producer is not justified by vector
+  spelling.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: bin/prepare-floatx4-audit.py; consumer: thc.runtime.SimdFloatVectorTest.
 IN t/fixtures/compiler/SimdFloatX4.hs, SimdFloatX4Native.hs, producer model,
   shared exporter/auditor/decoder/data, pinned GHC/native libraries.
@@ -2452,6 +3226,14 @@ Receipt includes test-floatx4-model.py without executing it, broad core_*.py and
   nonrecursive compiler source glob; shared input-closure gaps still apply.
 
 090 simd-doublex2
+Fixture rationale (090 simd-doublex2)
+Purpose: Check DoubleX2 arithmetic and floating lane behavior.
+Produces/consumed result: CBDs, expected.tsv and optional native oracle.tsv.
+Cost and overlap: Merge covered operations into SIMD smoke and keep distinct double edge
+  cases. Separate model/receipt machinery is not itself valuable.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: bin/prepare-doublex2-audit.py; consumer: thc.runtime.SimdDoubleVectorTest.
 IN t/fixtures/compiler/SimdDoubleX2.hs, SimdDoubleX2Native.hs,
   bin/doublex2_model.py, producer and shared tools/data/native libraries.
@@ -2462,6 +3244,15 @@ Consumer reads receipt/all hashed files, expected/optional oracle TSV and stage 
 Receipt includes test-doublex2-model.py without execution; same closure/shape concerns.
 
 091 explicit64-arrays
+Fixture rationale (091 explicit64-arrays)
+Purpose: Check Int64#/Word64# array transport keeps exact width and high bits.
+Produces/consumed result: CBDs and oracle.tsv.
+Cost and overlap: Retain explicit-width cases in the scalar-array corpus. Reusing
+  machine-Int results alone may miss representation errors; duplicated setup still
+  should go.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/Explicit64ArrayFixtures.hs.
 Consumer: thc.runtime.Explicit64ArrayTest.
 IN t/fixtures/compiler/Explicit64ArrayAudit.hs, Explicit64ArrayNative.hs,
@@ -2477,6 +3268,14 @@ Consumer reads receipt/all hashes, oracle.tsv, both CBDs/audits. Native binary a
   compiler intermediates are outputs but not receipt inputs. Shared closure gaps apply.
 
 092 floating-address
+Fixture rationale (092 floating-address)
+Purpose: Check Float/Double address loads and stores retain numeric/bit results.
+Produces/consumed result: CBDs and oracle.tsv.
+Cost and overlap: Keep the address boundary; combine cases with aligned scalar memory.
+  Another full acquisition pipeline is not warranted.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/FloatingAddressFixtures.hs.
 Consumer: thc.runtime.FloatingAddressTest.
 IN t/fixtures/compiler/FloatingAddressAudit.hs, FloatingAddressNative.hs,
@@ -2490,6 +3289,14 @@ Under build/floating-address/:
 Consumer reads receipt/all hashes, oracle.tsv, both CBDs/audits.
 
 093 atomic-address
+Fixture rationale (093 atomic-address)
+Purpose: Check native-address atomic fetch/CAS/load/store semantics.
+Produces/consumed result: CBDs and oracle.tsv.
+Cost and overlap: Keep native-address safety and transport, which heap-array atomics do
+  not exercise. Share the atomic corpus and native process.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/AtomicAddressFixtures.hs.
 Consumer: thc.runtime.AtomicAddressTest.
 IN t/fixtures/compiler/AtomicAddressAudit.hs, AtomicAddressNative.hs,
@@ -2506,6 +3313,14 @@ Under build/atomic-address/:
 Consumer reads receipt/all hashes, oracle.tsv and stage CBDs/audits.
 
 094 floating-byte-offset
+Fixture rationale (094 floating-byte-offset)
+Purpose: Check byte-offset floating accesses use byte units and preserve values.
+Produces/consumed result: CBDs and oracle.tsv.
+Cost and overlap: Keep unit/offset boundary cases within scalar-memory coverage.
+  Separate preparation per operation family is unnecessary.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/FloatingByteOffsetFixtures.hs.
 Consumer: thc.runtime.FloatingByteOffsetTest.
 IN t/fixtures/compiler/FloatingByteOffsetAudit.hs, FloatingByteOffsetNative.hs,
@@ -2519,6 +3334,14 @@ Under build/floating-byte-offset/:
 Consumer reads receipt/all hashes, oracle.tsv and stage CBDs/audits.
 
 095 unaligned-scalar-memory
+Fixture rationale (095 unaligned-scalar-memory)
+Purpose: Check unaligned scalar accesses preserve bytes across widths.
+Produces/consumed result: CBDs and oracle.tsv.
+Cost and overlap: Distinct from aligned memory and worth retaining. Use shared scalar-
+  memory preparation; one independent native reference per target is sufficient.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/UnalignedScalarMemoryFixtures.hs.
 Consumer: thc.runtime.UnalignedScalarMemoryTest.
 IN t/fixtures/compiler/UnalignedScalarMemoryAudit.hs, UnalignedScalarMemoryNative.hs,
@@ -2537,6 +3360,16 @@ Consumer reads receipt/all hashes, oracle.tsv, stage CBDs/audits. Review overlap
   explicit64/floating-byte-offset/aligned scalar suites using behavior coverage.
 
 096 package-native-gc-carriers
+Fixture rationale (096 package-native-gc-carriers)
+Purpose: Check boxed/primitive GC carriers cross package foreign boundaries safely.
+Produces/consumed result: Externally supplied package CBDs, generated carrier CBD and
+  oracle.txt.
+Cost and overlap: Keep the actual carrier boundary only with declared package inputs.
+  Current environment-selected CBDs and assumption-based absence are not self-contained
+  acquisition; no admission until those inputs have owners.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: preparePackageNativeGcCarriers in
   t/haskell-fixtures/PackageNativeArchiveFixtures.hs.
 Consumers: thc.BoxedForeignProvenanceTest, PrimForeignProvenanceTest.
@@ -2577,6 +3410,16 @@ Consumers require THC_TEST_GC_CARRIERS_CBD, THC_TEST_STACK_PRIM_CBD,
 UnknownPrim is validated during production but not read by these two test classes.
 
 097 compiled-thunk-retention (two producers)
+Fixture rationale (097 compiled-thunk-retention)
+Purpose: Check compiled code retains shared thunks and lazy boxed-array elements
+  correctly.
+Produces/consumed result: Boxed-array and floating CBDs plus their native oracle.tsv
+  files.
+Cost and overlap: Sharing/lifetime coverage is essential. Grouping unrelated floating
+  acquisition and consuming all CBD leftovers is not; quarantined, split and simplify
+  without weakening the sharing checks.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Consumers: thc.runtime.BoxedArrayTest, CompiledThunkRetentionTest, FloatingPrimitiveTest.
 A. bin/prepare-boxed-arrays.py:
   IN t/fixtures/compiler/BoxedArrayAudit.hs, producer model/template, shared tools/data,
@@ -2607,6 +3450,15 @@ Consumers read receipts/hash files, advertised CBDs and oracle rows. FloatingPri
   writes temporary model CBDs and therefore also needs compact-model encoder (041).
 
 098 original-stack
+Fixture rationale (098 original-stack)
+Purpose: Check supported stack consumer behavior and decoder boundary handling.
+Produces/consumed result: Attempt-named CBDs, native stack observations and frozen proof
+  inputs.
+Cost and overlap: Stack depth/layout/root counts cannot fossilize the compiler.
+  Quarantine run archives; replace useful API behavior with a bounded semantic test and
+  retire historical proof comparison.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: t/haskell-fixtures/StackFixtures.hs.
 Consumers: thc.runtime.OriginalStackConsumerProofTest, OriginalStackDecoderCallTest.
 IN t/fixtures/compiler/OriginalStackAudit.hs, OriginalStackAuditNative.hs,
@@ -2630,6 +3482,15 @@ Tests write build/reports/original-stack/proof.json and temporary containment fi
 Review frozen proof/archive comparison and run-N accumulation before graph conversion.
 
 099 original-stdio
+Fixture rationale (099 original-stdio)
+Purpose: Check public writes preserve bytes/counts and descriptor behavior.
+Produces/consumed result: Installed/Core fixtures and oracle.json for write operations.
+Cost and overlap: One package I/O integration test can cover this. 144 native process
+  starts for four write operations are unjustified; batch cases and retire the separate
+  conformance harness.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: bin/prepare-original-stdio.sh --require-supported ->
   t/haskell-fixtures/OriginalStdioFixtures.hs prepareOriginalStdio.
 Consumer: thc.runtime.OriginalStdioNativeTest.
@@ -2653,6 +3514,15 @@ Consumer reads receipt/hash files, oracle, result files/stdout/stderr, CBD pairs
 144 process starts for four write operations: flag cost/value for later triage.
 
 100 original-handle-readiness
+Fixture rationale (100 original-handle-readiness)
+Purpose: Check handle readiness across guest buffers and a live PTY.
+Produces/consumed result: CBDs, oracle data and native/oracle --hold-pty executed at
+  test time.
+Cost and overlap: Retain buffered-handle distinctions not covered by raw fd readiness.
+  Share PTY controls and acquisition; do not duplicate system readiness testing.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/OriginalHandleReadinessFixtures.hs.
 Consumer: thc.runtime.OriginalHandleReadinessNativeTest.
 IN t/fixtures/compiler/OriginalHandleReadinessAudit.hs, OriginalHandleReadinessNative.hs,
@@ -2671,6 +3541,14 @@ Consumer reads receipt/hashed files/oracle/CBD pairs/audits and also executes
 Thus native/oracle is an executable TEST input, not merely an oracle-generation tool.
 
 101 address-identity
+Fixture rationale (101 address-identity)
+Purpose: Check address equality/offset identity agrees across native and managed
+  execution.
+Produces/consumed result: CBDs, oracle.txt and pre/post audits.
+Cost and overlap: Retain boundary identity cases in native-address coverage. Clearing
+  the whole output tree and maintaining another producer are unjustified; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-address-identity.sh; consumer: thc.runtime.AddressIdentityNativeTest.
 IN t/fixtures/compiler/AddressIdentityAudit.hs, AddressIdentityAuditNative.hs,
   bin/toolchain.sh, shared exporter/auditor/data and native GHC.
@@ -2682,6 +3560,16 @@ Entire build/addr-identity/ is removed before production.
 Consumer reads oracle.txt/two CBDs/two audit reports. No receipt.
 
 102 address-array-copy
+Fixture rationale (102 address-array-copy)
+Purpose: Check copying pointer/address arrays preserves aliases and values.
+Produces/consumed result: CBDs/oracle plus temporary synthetic CBDs/audits written by
+  the test.
+Cost and overlap: Keep address transport/lifetime cases beyond ordinary byte copies.
+  Share memory setup and make the test-time encoder/auditor explicit rather than
+  assuming preparation built them.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/AddressArrayCopyFixtures.hs.
 Consumer: thc.runtime.AddressArrayCopyTest.
 IN t/fixtures/compiler/AddressArrayCopyAudit.hs, AddressArrayCopyNative.hs,
@@ -2700,6 +3588,14 @@ Consumer reads receipt/hashed files/oracle/CBDs/audits. It also creates temporar
   reads temporary <label>-report.json: both tools/data are TEST dependencies.
 
 103 synchronous-exceptions
+Fixture rationale (103 synchronous-exceptions)
+Purpose: Check synchronous throw/catch preserves state, evaluation order and exception
+  contracts.
+Produces/consumed result: Stage CBDs, contracts.json and native observations.
+Cost and overlap: Keep semantics and negative controls. Requiring output-tree deletion
+  and auditing a directory glob is unacceptable; quarantined until outputs are closed.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-synchronous-exceptions.py; index first removes its output tree.
 Consumer: thc.runtime.SynchronousExceptionsNativeTest.
 IN t/fixtures/compiler/SynchronousExceptionsAudit.hs, SynchronousExceptionsNative.hs,
@@ -2722,6 +3618,14 @@ Under build/synchronous-exceptions/ (or --out; must be absent before generation)
 Producer refuses existing directory, so index currently destroys/rebuilds everything.
 
 104 deep-evaluation
+Fixture rationale (104 deep-evaluation)
+Purpose: Check deep guest evaluation remains stack-safe and matches native results.
+Produces/consumed result: CBDs and native observations consumed by AstStackNativeTest.
+Cost and overlap: Retain bounded stack-safety behavior; shallow smoke cannot replace it.
+  Depth is a regression workload, not permission for unbounded or slow preparation.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/DeepEvaluationFixtures.hs; consumer: thc.runtime.AstStackNativeTest.
 IN t/fixtures/compiler/DeepEvaluation.hs, DeepEvaluationNative.hs, shared tools/data,
   native GHC; published build/compiler/plugin.json and its sharedLibrary are receipt inputs.
@@ -2736,6 +3640,16 @@ Under build/deep-evaluation/:
 Consumer reads receipt/hash files/oracle stdout/stage CBD pairs/audits.
 
 105 exception-result-layouts
+Fixture rationale (105 exception-result-layouts)
+Purpose: Check exception continuations preserve each result representation and aggregate
+  layout.
+Produces/consumed result: CBDs and oracle.tsv across result layouts.
+Cost and overlap: Keep distinct continuation layouts but consolidate with scalar-
+  exception-results. Forty-seven native process starts for 141 rows are avoidable; one
+  batched oracle can supply them.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ExceptionResultLayoutsFixtures.hs.
 Consumer: thc.runtime.ExceptionResultLayoutsNativeTest.
 IN t/fixtures/compiler/ExceptionResultLayoutsAudit.hs, ExceptionResultLayoutsNative.hs,
@@ -2755,6 +3669,15 @@ Under build/exception-result-layouts/:
 Consumer reads receipt/hash files/oracle/CBDs/audits. Flag per-entry process overhead.
 
 106 scalar-exception-results
+Fixture rationale (106 scalar-exception-results)
+Purpose: Check catch/mask/continuation paths preserve scalar result values.
+Produces/consumed result: CBDs and native oracle observations.
+Cost and overlap: Fold scalar rows into the general exception-result corpus unless a
+  separate compiled path is demonstrated. Separate compiler/native preparation is not
+  justified by scalar names.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ScalarExceptionResultsFixtures.hs.
 Consumer: thc.runtime.ScalarExceptionResultsNativeTest.
 IN t/fixtures/compiler/ScalarExceptionResultsAudit.hs, ScalarExceptionResultsNative.hs,
@@ -2769,6 +3692,15 @@ Under build/scalar-exception-results/:
 Consumer reads receipt/hash files/oracle stdout/CBDs/audits. Review overlap with 105.
 
 107 mask-functions
+Fixture rationale (107 mask-functions)
+Purpose: Check masking/unmasking functions preserve mask state, laziness and exception
+  delivery.
+Produces/consumed result: MaskFunctionAudit CBDs and oracle.tsv.
+Cost and overlap: Keep: masking is a runtime contract that arithmetic tests do not
+  cover. Use a bounded shared exception/thread corpus and avoid scheduling assumptions.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/MaskFunctionFixtures.hs; consumer: thc.runtime.MaskFunctionNativeTest.
 IN t/fixtures/compiler/MaskFunctionAudit.hs, MaskFunctionNative.hs, shared tools/data/GHC.
 Under build/mask-functions/:
@@ -2782,6 +3714,17 @@ Under build/mask-functions/:
 Consumer reads receipt/hash files/oracle stdout/CBDs/audits.
 
 108 core-continuation
+Fixture rationale (108 core-continuation)
+Purpose: Check continuation resumption, lazy I/O callbacks and large-literal cases
+  preserve results.
+Produces/consumed result: Three Core modules and native-output files from three native
+  programs.
+Cost and overlap: Continuation behavior is essential; large-literal selection is a
+  separate concern. Split ownership without compiling three native programs or launching
+  many audits for every consumer.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ContinuationFixtures.hs.
 Consumers: thc.runtime.CoreContinuationNativeTest, LargeLiteralCaseNativeTest.
 IN t/fixtures/compiler/{CoreContinuationAudit,LazyIOCallbackAudit,LargeLiteralCaseAudit,
@@ -2809,6 +3752,15 @@ No general receipt. Three native builds share native/ (including Main intermedia
 Many separate auditor starts inspect the same Core; record cost for later reduction.
 
 109 thread-status
+Fixture rationale (109 thread-status)
+Purpose: Check reported thread status reflects live, masked, blocked and completed
+  states.
+Produces/consumed result: CBDs and oracle.txt.
+Cost and overlap: Keep observable states, synchronized to events rather than
+  timing/order. Share thread setup; historical report inventories add no confidence.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ThreadStatusFixtures.hs; consumer: thc.runtime.ThreadStatusNativeTest.
 IN t/fixtures/compiler/ThreadStatusAudit.hs, ThreadStatusNative.hs, shared tools/data/GHC.
 Under build/thread-status/:
@@ -2821,6 +3773,17 @@ Under build/thread-status/:
 Consumer reads receipt/hash files/oracle/CBDs.
 
 110 thread-async
+Fixture rationale (110 thread-async)
+Purpose: Check asynchronous exceptions and saved continuations preserve masking and
+  state.
+Produces/consumed result: CBDs plus ordinary/lazy/saved native observation files;
+  thread-scheduling inputs.
+Cost and overlap: Keep async semantics, including Loom paths. Multiple scenarios should
+  share declared producers and use deterministic synchronization; do not rebuild
+  scheduling fixtures per consumer.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/ThreadAsyncFixtures.hs.
 Consumers: thc.runtime.ThreadAsyncNativeTest, LoomNativeTest.
 IN t/fixtures/compiler/{ThreadAsyncAudit,ThreadAsyncNative,LazyForkAudit,LazyForkNative}.hs,
@@ -2842,6 +3805,15 @@ Under build/thread-async/:
 ThreadAsyncNativeTest reads receipt/hash files/observations/CBDs.
 
 111 uncaught-self
+Fixture rationale (111 uncaught-self)
+Purpose: Check an uncaught self-directed exception produces the right process outcome.
+Produces/consumed result: CBDs and native executable run by JUnit.
+Cost and overlap: Child-process isolation is justified to observe termination safely.
+  Explicitly declare the executable as a runtime test input instead of treating
+  preparation as execution evidence.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/UncaughtSelfFixtures.hs.
 Consumer: thc.runtime.UncaughtSelfNativeTest.
 IN t/fixtures/compiler/UncaughtSelfAudit.hs, UncaughtSelfNative.hs, shared tools/data/GHC.
@@ -2855,6 +3827,15 @@ Consumer reads receipt/hash files/CBDs/audits and RUNS native/oracle +RTS -N2 it
   to compare failure behavior. No saved native observation artifact from producer.
 
 112 io-main-pap
+Fixture rationale (112 io-main-pap)
+Purpose: Check an IO main supplied through a partial application executes correctly.
+Produces/consumed result: IoMainPapAudit CBDs and native oracle.
+Cost and overlap: Keep this small application-entry regression; general arithmetic calls
+  do not necessarily exercise main/PAP startup. Setup should remain a single
+  source/oracle flow.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: bin/prepare-io-main-pap.py; consumer: thc.runtime.IoMainPapNativeTest.
 IN t/fixtures/compiler/IoMainPapAudit.hs, IoMainPapNative.hs, producer/shared tools/data/GHC.
 Under build/io-main-pap/:
@@ -2871,6 +3852,15 @@ Producer enforces exact two-argument PAP/three-formal worker structure; review w
   that is necessary to target PAP semantics or freezes incidental GHC output.
 
 113 runtime-core-native
+Fixture rationale (113 runtime-core-native)
+Purpose: Check representative real GHC Core executes correctly on both THC
+  backends/modes.
+Produces/consumed result: Fixtures/THC.Prim.Test CBDs and build/native/oracle.tsv.
+Cost and overlap: This is the natural shared semantic smoke corpus. Extend it for
+  ordinary behavior instead of adding a new exporter/native harness for each primop.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producers: bin/export-core.sh t/fixtures/core/Fixtures.hs; bin/native-oracle.sh.
 Consumers: thc.BytecodeBackendTest, FastSmokeTest, RuntimeTest, SelfTailProfileTest.
   build/core/{THC.Prim.Test,Fixtures}.cbd, build/ghc/ intermediates:
@@ -2884,6 +3874,15 @@ Consumers read the two CBDs/oracle TSV. Script always recompiles/dumps before ex
   ordinary runtime test input does not need the simplifier dumps.
 
 114 tuple-input
+Fixture rationale (114 tuple-input)
+Purpose: Check aggregate arguments preserve component values and calling convention
+  layout.
+Produces/consumed result: TupleInputAudit CBDs and oracle TSVs.
+Cost and overlap: Keep aggregate transport cases, sharing the aggregate corpus.
+  Recursive output receipts make this recipe quarantined; no need to archive compiler
+  intermediates.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-tuple-input-audit.py; consumer: thc.runtime.TupleInputNativeTest.
 IN t/fixtures/compiler/TupleInputAudit.hs, TupleInputAuditNative.hs, producer model,
   shared tools/data/GHC and ghc-pkg executables.
@@ -2899,6 +3898,16 @@ Under build/tuple-input/:
 Consumer reads receipts/all hashes/checks/oracles/audits/CBDs. Exact shape checks merit review.
 
 115 live-async
+Fixture rationale (115 live-async)
+Purpose: Check async delivery during live/strict execution preserves sharing and
+  continuation state.
+Produces/consumed result: CBDs, oracle.txt and strict-oracle.txt.
+Cost and overlap: Keep synchronized live-delivery regressions distinct from static
+  exception tests. One shared thread/native setup is enough; no timing-dependent success
+  criteria.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/LiveAsyncFixtures.hs.
 Consumers: thc.runtime.AsyncStrictEntryNativeTest, LiveAsyncNativeTest.
 IN t/fixtures/compiler/LiveAsyncAudit.hs, LiveAsyncNative.hs, shared tools/data/threaded GHC.
@@ -2912,6 +3921,16 @@ Under build/live-async/:
 Consumers read receipt/all hashes/their oracle/CBDs/audits.
 
 116 simd-capability-smoke
+Fixture rationale (116 simd-capability-smoke)
+Purpose: Check the declared SIMD operation families actually execute with correct lane
+  results.
+Produces/consumed result: Generated smoke sources, CBD, cases.tsv, audits and native
+  oracle.
+Cost and overlap: Prefer this general corpus over duplicate arithmetic families. It
+  currently also regenerates application sources; quarantine until the shared generator
+  has one owner.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-simd-capability-smoke.py.
 Consumer: thc.runtime.SimdCapabilitySmokeTest.
 IN bin/{generate-simd-families.py,simd_family_model.py,simd-families.json}, capabilities,
@@ -2934,6 +3953,17 @@ Consumer reads receipt/hash files/Core/cases. Broad local SIMD coverage is a can
   baseline against which narrow duplicate SIMD fixtures should be evaluated.
 
 117 unix-libc
+Fixture rationale (117 unix-libc)
+Purpose: Check unix package foreign declarations resolve through the expected
+  ABI/linkage boundary.
+Produces/consumed result: Exported/declaration Core facts derived from installed unix
+  interfaces.
+Cost and overlap: No separate libc implementation audit is justified. Retain only THC
+  ABI/transport negative controls; successful package integration should cover ordinary
+  library behavior.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/UnixLibcFixtures.hs; consumer: thc.runtime.UnixLibcTest.
 IN t/fixtures/compiler/UnixLibcAudit.hs, producer/THC.Plugin/GHC API libraries,
   installed unix 2.8.8.0 registration plus System/Posix/{IO/Common,Terminal/Common,
@@ -2955,6 +3985,17 @@ Consumer reads receipt/hash files/Core/oracle/audits and tracked
 Review ordinary libc coverage versus real package-level behavior per user direction.
 
 118 source-core
+Fixture rationale (118 source-core)
+Purpose: Check real source notes survive export and remain available to runtime
+  diagnostics.
+Produces/consumed result: SourceNotes and RepresentationAudit CBDs plus metadata check
+  results.
+Cost and overlap: Keep user-visible source mapping and essential join behavior. Share
+  the exports; exact compiler representation structure needs its own contract or
+  removal.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producers: bin/export-core.sh with THC_SOURCE_NOTES=true, then bin/check-source-metadata.py --fixture.
 Consumers: thc.RealCoreJoinTest, thc.runtime.CoreSourceTest.
 IN t/fixtures/compiler/{SourceNotes,RepresentationAudit}.hs/shared exporter;
@@ -2965,6 +4006,16 @@ Consumers read CBDs/source spans. RealCoreJoinTest also writes temporary driver 
   using compact-model encoder (041).
 
 119 corpus
+Fixture rationale (119 corpus)
+Purpose: Check a broad set of ordinary Haskell semantics and integer conversions against
+  native GHC.
+Produces/consumed result: Per-group CBDs, native reference results and coverage
+  declarations.
+Cost and overlap: A shared semantic corpus has value and can absorb small duplicate
+  fixtures. Current directory-clearing acquisition is quarantined; coverage bookkeeping
+  alone is not a reason to keep every case.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-corpus.py; consumers: thc.CoverageCorpusTest, Int64ConversionTest,
   NarrowWordPrimitiveTest.
 IN t/fixtures/core/coverage.json, sources there: Int64Conversions.hs,ListCoverage.hs,
@@ -2995,6 +4046,15 @@ Consumers read receipt/hash files/CBDs/oracle. Int64ConversionTest also writes m
   CBDs via encoder (041). Structural sharing-path checks need value review.
 
 120 strict-fields
+Fixture rationale (120 strict-fields)
+Purpose: Check strict constructor fields force values at the correct time.
+Produces/consumed result: StrictFields.cbd consumed directly by StrictFieldsTest.
+Cost and overlap: Keep laziness/exception-sensitive constructor semantics. One Core
+  export is proportionate; no native harness or extra receipt is needed for its checked
+  model.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: bin/export-core.sh t/fixtures/compiler/StrictFields.hs.
 Consumer: thc.StrictFieldsTest.
 IN that source/shared exporter/GHC interfaces.
@@ -3002,6 +4062,16 @@ OUT build/core/StrictFields.cbd and build/ghc/ intermediates (shared default dir
 Consumer reads CBD and writes temporary model/driver CBDs via encoder (041).
 
 121 cstring
+Fixture rationale (121 cstring)
+Purpose: Check installed CString routines execute correctly through THC string/memory
+  paths.
+Produces/consumed result: GHC.Internal.CString CBD from the boot export.
+Cost and overlap: Keep package behavior, but default acquisition of the exceptions
+  frontier is wider than this consumer needs. Give it the exact CString closure, not
+  unrelated boot outputs.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer in index: python3 bin/export-boot.py (default frontier exceptions).
 Consumer: thc.CStringTest.
 IN pinned ghc-internal CString.hs,Err.hs,Exception/Type.hs,Exception.hs/license,
@@ -3016,6 +4086,16 @@ Consumer only reads build/map/boot-core/GHC.Internal.CString.cbd and writes temp
   consumer; narrower existing --frontier cstring is an obvious candidate.
 
 122 truffle-strings
+Fixture rationale (122 truffle-strings)
+Purpose: Check the public string intrinsics and suspended operand evaluation preserve
+  results.
+Produces/consumed result: THC.Prim/string/exception CBDs and oracle.json.
+Cost and overlap: Keep THC-owned intrinsic/continuation semantics. Share runtime-module
+  production; ordinary text operations should reuse package integration rather than
+  duplicate native internals.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/TruffleStringFixtures.hs.
 Consumers: thc.runtime.TruffleStringTest, IntrinsicOperandContinuationTest.
 IN src/examples/StringPrimitives.hs, t/fixtures/core/IntrinsicOperands.hs,
@@ -3030,6 +4110,14 @@ Under build/truffle-strings/:
 Consumers read receipt/all hashes, corresponding CBDs/oracle JSON.
 
 123 array-slices
+Fixture rationale (123 array-slices)
+Purpose: Check slices, offsets and lazy array contents remain correct.
+Produces/consumed result: ArraySliceAudit/closure CBDs and oracle.tsv.
+Cost and overlap: Compare with small/boxed-array copy and slice cases; retain only
+  distinct laziness/offset behavior there. Directory scans and shared coverage writes
+  keep this quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-array-slices.py; consumer: thc.runtime.ArraySliceTest.
 IN t/fixtures/compiler/ArraySliceAudit.hs, producer model/driver template,
   shared exporter/auditor/data, thc-primops/PrimopTools.hs, GHC/array 0.5.8.0.
@@ -3048,6 +4136,17 @@ Consumer reads receipt/all hashes/advertised CBDs/oracle. Exact missing-global a
   recursive-bottom shape checks need review alongside boxed-arrays coverage.
 
 124 tuple-join
+Fixture rationale (124 tuple-join)
+Purpose: Check joins transporting tuple results preserve values across branches and
+  recursion.
+Produces/consumed result: TupleJoinAudit CBDs and oracle.tsv; generated receipt/audits
+  are not consumer inputs.
+Cost and overlap: Keep distinct join-result execution in the aggregate corpus. Drop
+  unused receipt work and exact join/state-lambda counts; do not retain a whole pipeline
+  for metadata ceremony.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: bin/prepare-tuple-join-audit.py; consumer: thc.runtime.TupleJoinResultTest.
 IN t/fixtures/compiler/TupleJoinAudit.hs, TupleJoinAuditNative.hs, producer model,
   shared exporter/auditor/decoder/data/native GHC.
@@ -3061,6 +4160,15 @@ Receipt omits producer itself and much shared tool closure; no old receipt inval
 Consumer directly reads stage CBDs/oracle, not provenance/checks. Review unused receipt work.
 
 125 vector-api
+Fixture rationale (125 vector-api)
+Purpose: Check the public THC vector API and example loops execute with native-
+  equivalent results.
+Produces/consumed result: THC.Prim/VectorLoops CBDs and oracle.tsv.
+Cost and overlap: Public API integration adds value beyond raw primops. Keep a compact
+  workload, sharing runtime Core and generator outputs with their single owners.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
 Producer: t/haskell-fixtures/VectorApiFixtures.hs; consumer: thc.runtime.VectorApiTest.
 IN src/examples/VectorLoops.hs, src/runtime/THC/Prim.hs,
   t/fixtures/compiler/VectorScalar.hs/shared exporter/native GHC.
@@ -3069,6 +4177,13 @@ IN src/examples/VectorLoops.hs, src/runtime/THC/Prim.hs,
   build/vector-api/oracle.tsv: IN binary; consumer reads TSV/Core. No receipt.
 
 126 empty-tuple-input
+Fixture rationale (126 empty-tuple-input)
+Purpose: Check erased empty-tuple parameters leave ordinary arguments/results intact.
+Produces/consumed result: EmptyTupleInputAudit CBDs and oracle TSVs.
+Cost and overlap: Consolidate with empty-join and tuple-input, retaining any distinct
+  call boundary. Recursive receipts keep this separate recipe quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-empty-tuple-input-audit.py; consumer: thc.runtime.EmptyTupleInputNativeTest.
 IN t/fixtures/compiler/EmptyTupleInputAudit.hs, EmptyTupleInputAuditNative.hs,
   producer model/shared tools/data/GHC/ghc-pkg.
@@ -3083,6 +4198,14 @@ Under build/empty-tuple-input/:
 Consumer reads receipt/hashes/CBDs/audits/oracles. Assess overlap with tuple-input/empty-join.
 
 127 show-word-list
+Fixture rationale (127 show-word-list)
+Purpose: Check ordinary list/word rendering works through public package code.
+Produces/consumed result: Core/boot CBDs and oracle.tsv.
+Cost and overlap: Useful package smoke, not a reason for a dedicated boot/export/receipt
+  harness. Quarantine recursive native inventory; move a small rendering case into
+  shared package behavior coverage.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-show-word-list.py; consumer: thc.runtime.ShowWordListTest.
 IN t/fixtures/compiler/{ShowWordListAudit,ShowWordListAuditNative}.hs,
   bin/show_word_list_model.py, shared exporter/auditor/data and export-boot.py,
@@ -3102,6 +4225,14 @@ Under build/show-word-list/:
 Consumer reads manifest/CBDs/oracle/audits. PrimopTools.hs is hashed without being executed.
 
 128 state-tuple
+Fixture rationale (128 state-tuple)
+Purpose: Check State#-containing tuple results preserve effects and live value
+  positions.
+Produces/consumed result: StateTupleAudit CBDs and oracle.tsv.
+Cost and overlap: Keep effect/value transport within the aggregate corpus. Recursive
+  output receipts and a separate setup pipeline are unjustified; quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
 Producer: bin/prepare-state-tuple-audit.py; consumer: thc.runtime.StateTupleTest.
 IN t/fixtures/compiler/StateTupleAudit.hs, StateTupleAuditNative.hs, producer model,
   shared exporter/auditor/decoder/data/native GHC.
@@ -3114,3 +4245,515 @@ Under build/state-tuple/:
   checks.json: IN receipt/hashes/oracle/model/CBD shape; --check-only also writes.
 No old receipt invalidation. Unused PrimopTools.hs included when present.
 Consumer reads receipt/hashes/oracle/CBDs/audits; review shape ceremony and tuple-suite overlap.
+
+129 short-bytes-slices
+Fixture rationale (129 short-bytes-slices)
+Purpose: Check public ShortByteString slicing preserves bounds and byte contents.
+Produces/consumed result: Fixture/boot CBDs, requests.tsv and oracle.tsv.
+Cost and overlap: Package behavior is useful, duplicating bytestring/C internals is not.
+  Merge representative slicing into package smoke after removing recursive inventory;
+  quarantined.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
+Producer: bin/prepare-short-bytes-slices.py; consumer: thc.runtime.ShortByteStringSliceTest.
+IN t/fixtures/compiler/{ShortByteStringSliceAudit,ShortByteStringSliceAuditNative}.hs,
+  bin/short_bytes_slice_model.py/shared tools/data, native 64-bit GHC/bytestring 0.12.2.0,
+  installed Data/ByteString/Short/Internal.dyn_hi and registration/import closure.
+Under build/short-bytes-slices/:
+  list/{core,boot-core}/GHC.Internal.List.cbd, list/boot-ghc/,list/boot-provenance.json:
+    IN export-boot --frontier lists/pinned sources/installed interfaces.
+  cstring/{core,boot-core}/*.cbd, boot-ghc/,interface-core/,interface-ghc/,
+    cstring/boot-provenance.json: IN export-boot --frontier exceptions (despite dirname).
+    Same exceptions products as 121, rooted here.
+  <pre|post>-core/{ShortByteStringSliceAudit,THC.InterfaceClosure}.cbd, stage-ghc/:
+    IN public source/closure roots/exporter; inventory reads every stage CBD.
+  stage-<entry>.audit.json: IN stage closure + original List/CString CBDs/auditor.
+  native/short-bytes-slices-oracle and intermediates: IN native/audit sources/GHC.
+  requests.tsv: IN model; oracle.tsv: IN binary with model request stdin.
+  manifest.json: IN all source/boot receipts/products/recursive native files and
+    installed Short.Internal.dyn_hi hash; old receipt removed.
+--check-only also calls ghc-pkg and inventory (rewrites audits). Consumer reads
+  manifest/advertised CBDs/oracle/audits. Check whether exceptions export is overbroad.
+
+130 tuple-return
+Fixture rationale (130 tuple-return)
+Purpose: Check tuple-valued returns preserve components through callers and aggregate
+  paths.
+Produces/consumed result: TupleReturnAudit CBDs/oracle.tsv and aggregate-frontier
+  CBDs/oracle.
+Cost and overlap: Keep result transport in the general aggregate corpus. This is not
+  independent of sum-results; recursive receipts and undeclared-looking setup complexity
+  justify quarantine.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
+Producer: bin/prepare-tuple-return-audit.py; consumer: thc.runtime.TupleResultTest.
+IN t/fixtures/compiler/TupleReturnAudit.hs, TupleReturnAuditNative.hs, producer model,
+  shared exporter/decoder/GHC/ghc-pkg, plugin manifest/shared library.
+Under build/tuple-return/:
+  native/tuple-return and intermediates: IN native/audit sources/GHC.
+  oracle.tsv: IN binary.
+  <pre|post>-core/TupleReturnAudit.cbd and stage-ghc/: IN audit source/exporter.
+  provenance.json: IN recursively native/core/ghc files except JSON, oracle, source
+    hashes, plugin manifest/library, GHC/ghc-pkg binaries/package descriptions/environment.
+  checks.json: IN receipt/hashes/CBD shape/oracle/model; --check-only also writes.
+No old receipt invalidation. No standalone audit report from this producer.
+Consumer reads tuple-return CBDs/oracle AND build/aggregate-core/AggregateFrontier.cbd,
+  build/aggregate-post-core/AggregateFrontier.cbd, build/aggregate-native/oracle.tsv
+  from 088. This is an explicit cross-group dependency, even when selecting this class alone.
+
+131 process-signals
+Fixture rationale (131 process-signals)
+Purpose: Check guest signals and child-process host failures respect JVM/guest
+  isolation.
+Produces/consumed result: oracle.txt, native-controls.txt and the Gradle-built thc
+  launcher.
+Cost and overlap: Separate processes are necessary for signal isolation. Keep bounded
+  THC boundary cases; reuse the application launcher and do not rebuild it inside
+  fixture production.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
+Producer: t/haskell-fixtures/ProcessSignalFixtures.hs.
+Consumers: thc.runtime.ForkHostFailureTest, LoomSignalProcessTest, ProcessSignalsTest.
+IN t/fixtures/compiler/ProcessSignalsNative.hs, src/test/c/native-process-signals-test.c
+  (includes src/main/c/native-process-signal-api.c), native GHC/clang/system headers/libs;
+  receipt also reads tracked original-signal-install-descriptor.json and
+  original-unix-signal-install-descriptor.json under src/test/resources/core/.
+Under build/process-signals/ on Linux x86_64:
+  native/oracle and intermediates: IN Haskell source/GHC.
+  oracle.txt: IN native oracle; eight signal action observations.
+  native/capture-test: IN C control source/runtime C include/clang -ldl.
+  native-controls.txt: IN capture-test (41 isolated native controls).
+  logs/: OUT ghc-version,native-build,oracle,capture-build,child-controls triplets.
+  manifest.json: IN source/oracle/control hashes; old receipt removed.
+Other platforms produce only manifest.json with supported=false/source hashes.
+Tests also launch JVM children using current Java/classpath/native runtime libraries,
+  write child logs, and ProcessSignalsTest reads/runs build/scripts/thc (Gradle
+  startScripts output). Generated launcher/native libraries are separate TEST inputs.
+
+132 record-fields
+Fixture rationale (132 record-fields)
+Purpose: Check record-field selection works through direct and installed-interface Core.
+Produces/consumed result: RecordFieldLibrary/Client CBDs and pre/post native
+  observations.
+Cost and overlap: Retain an installed-interface record case if it exercises a distinct
+  path. Share interface acquisition; three repeated exports/audits for ordinary
+  selectors need reduction.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
+Producer: prepareRecordFields in t/haskell-fixtures/GhcApiFixtures.hs.
+Consumer: thc.runtime.RecordFieldNativeTest.
+IN t/fixtures/compiler/{RecordFieldLibrary,RecordFieldClient,RecordFieldNative}.hs,
+  shared plugin build, build/compiler/plugin.json/DB/unit, exe:thc-interface/GHC libdir,
+  shared auditor/data and GHC -O0 -dynamic-too -fwrite-if-simplified-core.
+Under build/record-fields/:
+  <pre|post>/{RecordFieldLibrary,RecordFieldClient,Main}.cbd, stage/ghc/ interfaces/objects,
+    stage/oracle: IN three Haskell sources/plugin/GHC at corresponding stage.
+    Main CBD is a compiler side product; receipt explicitly lists only Library/Client.
+  logs/<pre|post>-native.stdout: IN stage/oracle; OUT native observations.
+  installed/{RecordFieldLibrary,RecordFieldClient}.cbd:
+    IN post/ghc/<module>.hi and interface helper/home interface closure.
+  <pre|post|installed>/<fieldAlias|duplicateFields>-audit.json: IN module pair/auditor.
+  logs/: OUT plugin/helper build/location/libdir/compile/native/hydration/audit triplets.
+  manifest.json: IN three sources/plugin source/producer, module CBDs and command logs;
+    audit JSONs are generated but not hashed. No old receipt invalidation.
+Consumer reads receipt/hashes/native stdout and three module pairs. Receipt source
+  closure misses substantial shared tooling and interface/native package dependencies.
+
+133 managed-mvars
+Fixture rationale (133 managed-mvars)
+Purpose: Check MVar blocking, wakeup and cross-context isolation preserve runtime
+  semantics.
+Produces/consumed result: CBDs, oracle.tsv and context-oracle.tsv; native concurrency
+  controls.
+Cost and overlap: Keep the concurrency/context contracts. Refresh deleting the output
+  tree is not acceptable acquisition; quarantine until named outputs can be regenerated
+  incrementally.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
+Producer: bin/prepare-managed-mvars.py --refresh.
+Consumers: thc.runtime.ManagedMVarContextTest, ManagedMVarNativeTest.
+IN t/fixtures/compiler/{ManagedMVarAudit,ManagedMVarNative}.hs, producer model,
+  shared plugin/auditor/decoder/data, selected GHC global DB/installed packages.
+Under build/managed-mvars/:
+  plugin/thc-core-plugin.<so|dylib>: IN published plugin shared library; private copy.
+  <pre|post>/core/{ManagedMVarAudit,THC.InterfaceClosure}.cbd, stage/ghc/:
+    IN source/declared closure roots/private plugin/registered package DB/direct GHC.
+  stage/<entry>.audit.json: IN CBD pair/in-process auditor for ENTRIES+CONTEXT_ENTRIES
+    defined in producer; contracts.json records primitive roles/context entry layouts.
+  native/managed-mvar-oracle and intermediates: IN native/audit sources/threaded GHC.
+  oracle.tsv, context-oracle.tsv: IN binary +RTS -N1/generated entry/value requests;
+    split from logs/native-ready.stdout.
+  logs/native-concurrent-N{1,2}.stdout: IN binary/concurrent request model/RTS capability count.
+  logs/: OUT all version/package-db/info/plugin/export/native command triplets.
+  manifest.json: IN exact expected products/source hashes/audits/contracts/observations.
+Existing valid receipt is checked/reused; --refresh deletes entire stale output tree
+  then rebuilds. Consumer reads receipt/all hashes/CBDs and its oracle TSV.
+Some source hashes include recursive src/core-symbols even though actual closure
+  belongs to Cabal; receipt is not a replacement for that tool dependency graph.
+
+134 unsafe-equality
+Fixture rationale (134 unsafe-equality)
+Purpose: Check unsafe equality/coercion boundaries erase proofs without moving live
+  values or effects.
+Produces/consumed result: CBDs, oracle.tsv and predicate/control evidence.
+Cost and overlap: Keep essential soundness/rejection cases, not exact lowering counts.
+  Recursive output receipts keep this recipe quarantined; combine erasure cases with
+  proxy/empty-tuple coverage.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
+Producer: t/haskell-fixtures/UnsafeEqualityFixtures.hs; consumer: thc.runtime.UnsafeEqualityTest.
+IN t/fixtures/compiler/{UnsafeEqualityAudit,UnsafeEqualityAuditNative,
+  UnsafeEqualityPredicate}.hs, shared tools/data/native GHC/ghc API, installed unsafeCoerce unfolding.
+Under build/unsafe-equality/:
+  api/predicate and intermediates: IN predicate source/imported src/compiler modules,
+    dynamic GHC ghc-package; execution consumes GHC libdir, outputs predicate check stdout.
+  native/oracle and intermediates: IN native/audit sources/GHC.
+  oracle.tsv: IN binary; compared to signed Int64 model.
+  <pre|post>-core/{UnsafeEqualityAudit,THC.InterfaceClosure}.cbd and stage-ghc/:
+    IN audit source/positive+frontier+effect closure roots/exporter.
+  stage-audit.json, stage-<firstClassProof|liveBinder>-audit.json:
+    IN CBD directory/auditor; positive report and two expected rejected frontiers.
+  provenance.json: IN recursive native/api/core products, matching *-audit.json files,
+    oracle/source hashes; old provenance/checks removed first.
+  checks.json: IN provenance/all hashes/oracle/model/CBD/source-metadata inventory;
+    --check-only still writes this file.
+Consumer reads receipt/hashes/Core/oracle. Exact single-lowering/shape constraints need
+  review for essential unsafe-coercion semantics versus incidental compiler structure.
+
+135 tag-to-enum
+Fixture rationale (135 tag-to-enum)
+Purpose: Check tag-to-enum produces the correct constructor and respects required
+  evaluation behavior.
+Produces/consumed result: Audit/external/frontier CBDs and oracle.tsv.
+Cost and overlap: Keep inverse-tag semantics and meaningful rejection controls. Open-
+  ended CBD/native discovery is unjustified; quarantine and combine with constructor-tag
+  coverage.
+Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+
+Producer: bin/prepare-tag-to-enum-audit.py; consumer: thc.runtime.TagToEnumTest.
+IN t/fixtures/compiler/{TagToEnumAudit,TagToEnumExternal,TagToEnumAuditNative,
+  TagToEnumFrontier}.hs, producer model/shared tools/data/native GHC.
+Under build/tag-to-enum/:
+  inputs.tsv: IN producer constructor tables/lazy input domain.
+  native/oracle and intermediates: IN native/audit/external source/GHC.
+  oracle.tsv: IN binary with inputs.tsv pathname argument.
+  <pre|post>-core/{TagToEnumAudit,TagToEnumExternal,TagToEnumFrontier}.cbd, stage-ghc/:
+    IN audit/frontier/imported external source/exporter.
+  stage-audit.json: IN all stage *.cbd/auditor/positive entries.
+  provenance.json: IN recursive native/core products, TSVs/audits/source hashes.
+  checks.json: IN receipts/hashes/model/oracle/Core inventories; --check-only writes too.
+Consumer reads receipt/hashes/oracle/Core/audits. No old receipt invalidation.
+
+136 address-fields
+Fixture rationale (136 address-fields)
+Purpose: Check pointer-valued constructor fields preserve addresses across storage and
+  calls.
+Produces/consumed result: AddressFieldAudit CBDs and oracle.tsv/expected.tsv.
+Cost and overlap: Retain field transport if native-address tests do not exercise it.
+  Share pointer setup and delete incidental shape constraints; one generated driver
+  suffices.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
+Producer: bin/prepare-address-fields.py; consumer: thc.runtime.AddressFieldTest.
+IN t/fixtures/compiler/AddressFieldAudit.hs, producer model/template/shared tools/data/GHC.
+Under build/address-fields/:
+  <pre|post>/core/AddressFieldAudit.cbd and stage/ghc/: IN source/exporter.
+  stage/<entry>.audit.json: IN CBD/in-process auditor.
+  NativeAddressFields.hs: IN producer template/entry list.
+  native/address-fields-oracle and intermediates: IN generated driver/audit source/GHC.
+  oracle.tsv, expected.tsv: IN binary/generated requests/independent bounded byte model.
+  manifest.json: IN source/Core/audit/driver/binary/TSV hashes; old receipt removed.
+Consumer reads receipt/all hashes/advertised CBDs/oracle. Shape checks are separate
+  from the byte/field behavior being tested; assess before preserving them.
+
+137 sum-join
+Fixture rationale (137 sum-join)
+Purpose: Check sum alternatives and payloads survive joins and recursion.
+Produces/consumed result: SumJoinAudit CBDs and oracle.tsv; manifest/audits are not
+  consumed by the test.
+Cost and overlap: Keep distinct join/sum execution cases within one aggregate corpus.
+  Drop unused receipts and exact join/state-lambda/case counts rather than fossilize
+  lowering.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
+Producer: t/haskell-fixtures/SumJoinFixtures.hs; consumer: thc.runtime.SumJoinResultTest.
+IN t/fixtures/compiler/SumJoinAudit.hs, SumJoinAuditNative.hs, shared tools/data/GHC.
+Under build/sum-join/:
+  native/oracle and intermediates: IN native/audit sources/GHC.
+  oracle.tsv: IN binary (42 observations).
+  <pre|post>/core/SumJoinAudit.cbd and stage/ghc/: IN source/exporter.
+  stage/audit.json: IN CBD/auditor; forwardCase,recursiveCase,nestedCase,
+    stateForwardCase,stateRecursiveCase,tupleForwardCase,sumForwardCase.
+  commands/: OUT ghc-version,native-build/run,stage-export/audit triplets.
+  manifest.json: IN sources/TSV/Core/audits/logs; no old receipt invalidation.
+Consumer reads Core/oracle directly. Producer enforces join/state-lambda counts and
+  exact case shapes. Review unused receipt work and overlap with 088/124/130.
+
+138 simd-int64x2
+Fixture rationale (138 simd-int64x2)
+Purpose: Check Int64x2 lane arithmetic and signed wraparound.
+Produces/consumed result: Pre/post CBDs and optional native oracle.tsv.
+Cost and overlap: Likely overlap with general SIMD smoke: retain uncovered 64-bit edge
+  cases there. Separate arithmetic preparation needs demonstrated distinct coverage, not
+  a vector name.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
+Producer: bin/prepare-simd-audit.py --vector int64x2; consumer: thc.runtime.SimdVectorTest.
+IN t/fixtures/compiler/SimdInt64X2.hs, SimdInt64X2Native.hs, producer model,
+  shared exporter/decoder/GHC/native codegen options.
+Under build/simd/:
+  <pre|post>-core/SimdInt64X2.cbd and stage-ghc/: IN source/exporter/stage flags.
+  native/simd and intermediates: IN native/audit sources/GHC.
+  oracle.tsv: IN binary; compared to producer signed wraparound model.
+  provenance.json: IN sources/Core/optional native binary+oracle/toolchain facts.
+--export-only uses pre only with -fno-code/-fwrite-if-simplified-core; no native/post
+  products (CI ARM). Target stage CBD removed first, but old receipt/oracle remain
+  until publication. Consumer reads receipt/hashed products/CBDs/optional oracle.
+No separate audit report. Receipt omits shared script/decoder dependencies.
+
+139 simd-int32x4
+Fixture rationale (139 simd-int32x4)
+Purpose: Check Int32x4 lane arithmetic and signed wraparound.
+Produces/consumed result: Pre/post CBDs and optional native oracle.tsv.
+Cost and overlap: Likely overlap with general SIMD smoke: migrate missing 32-bit cases.
+  Another compiler/native pipeline is not justified merely by a different lane count.
+Build status: Value review only; admission still requires explicit inputs and single-
+  owner outputs.
+
+Producer: bin/prepare-simd-audit.py --vector int32x4; consumer: thc.runtime.SimdInt32VectorTest.
+IN t/fixtures/compiler/SimdInt32X4.hs, SimdInt32X4Native.hs, producer four-lane model,
+  shared exporter/decoder/GHC/native codegen options.
+Same flow/options as 138 under build/simd-int32x4/:
+  stage-core/SimdInt32X4.cbd, stage-ghc/, native/simd/intermediates, oracle.tsv,
+  provenance.json. Consumer reads receipt/hash products/CBDs/optional oracle.
+Review both narrow arithmetic suites against general simd-capability-smoke (116).
+
+Shared producers and entry points (outside individual group numbering)
+
+Directory state is a defect, not a prerequisite to preserve
+  An empty output directory is not a file input. Do not translate that requirement
+  into an order-only "clean" step. A rule must consume named inputs and own named
+  outputs; unrelated files must not affect those outputs. Private scratch state is
+  different from a shared/published output directory.
+  Concrete examples already found above:
+  - 030-033 SIMD bytearray: previous receipt and all old artifacts are copied before
+    generation; a missing old artifact can prevent its own replacement. Random
+    attempt directories also enter the new receipt. Remove the backwards edge.
+  - 045 fetch-add-int-array and 081 mutvar: extra CBDs in the output directory fail
+    exact-inventory checks. Consume the declared CBD pair, not a directory listing.
+  - 088 aggregate/sum producers: recursive output scans incorporate stale compiler
+    intermediates into receipts and therefore into consumer input sets.
+  - 044 boxed-cas and 098 original-stack: directory state selects run-N output paths;
+    previous receipts and attempt directories accumulate.
+  - 026 sqrt deletes its output tree; 119 corpus deletes group directories; 133
+    managed-mvars refresh deletes its tree. Those observations identify current
+    replacement policy; they do not justify a clean-directory graph dependency.
+  - prepare-tests.sh removes build/synchronous-exceptions before its producer.
+    This is another procedural workaround, not a source-to-output edge.
+  Some filesystem behavior tests legitimately create/remove their own test files
+  (unlink, directory operations). Their isolated test data is distinct from build
+  output cleanup. Do not conflate the two when removing these requirements.
+  Required incremental behavior: rerunning a producer over existing outputs works;
+  deleting one owned output rebuilds it; adding an unrelated file changes nothing;
+  failure cannot leave a fresh receipt claiming all outputs were completed.
+
+Shared Haskell component builds
+  Owner: Cabal, declared by thc.cabal, cabal.project and Setup.hs. cabal.project
+  enables shared libraries and the development flag. Setup.hs uses defaultMain.
+  IN selected GHC/ghc-pkg, Cabal/config/project-local settings if present, target,
+  component flags, resolved package plan and package DBs, component source files
+  and imported interfaces/native libraries. Cabal owns the transitive package
+  build closure; fixture rules should depend on its products, not rebuild it in
+  every export or invent a second package source graph.
+  OUT dist-newstyle/cache/plan.json, component objects/interfaces/registrations,
+  shared libraries and executables under Cabal's compiler/configuration paths.
+  Resolve executable paths through the selected Cabal plan/list-bin, not guessed
+  hashes or a list-bin invocation for a different compiler configuration.
+  lib:thc:
+    IN src/compiler/THC/{Plugin,Interface,BackendAnnotations,CBV,Demands,
+      ForeignExports,ForeignExportProvenance,ForeignImportProvenance,JSON,Sources,
+      Wired}.hs; compact-core; GHC/ghc-boot 9.14.1; Cabal-declared libraries.
+    OUT THC plugin shared library and its registration/interfaces.
+  lib:compact-core:
+    IN src/cbd/THC/Compact/{Wire,Writer,Core,Facts,Module,JSON,Inspect,Encode,Decode,
+      Debug,Annotations,Compression,Zip}.hs; core-symbols; declared codec/zip libs.
+    OUT compact-core library/interfaces consumed by tools and fixture executable.
+  lib:core-symbols:
+    IN src/core-symbols/THC/CoreSymbols.hs; base/bytestring.
+    OUT core-symbols library/interfaces.
+  exe:thc-compact:
+    IN src/cbd/tool/Main.hs; compact-core/base/aeson/bytestring.
+    OUT decoder/encoder executable. CBD inspection in Python requires this tool.
+  exe:thc-interface:
+    IN src/compiler/interface/Main.hs; lib:thc; GHC and declared libraries.
+    OUT interface extraction executable used by installed-Core acquisition.
+  lib:driver:
+    IN declared src/driver/THC/Driver modules; compact-core, Cabal/Cabal-syntax,
+      ghc-boot and other thc.cabal libraries, unix on non-Windows.
+    OUT driver library/interfaces consumed by fixture acquisition helpers.
+  exe:thc-fixtures:
+    IN t/haskell-fixtures/Main.hs and all producer/support modules listed in
+      thc.cabal, driver/compact-core/core-symbols/thc and declared packages.
+    OUT one executable containing all registered fixture producers. Invoking one
+      producer currently requires building this entire component.
+  exe:thc-primops:
+    IN src/tools/primops/PrimopTools.hs and its thc.cabal component dependencies.
+    OUT tool used for coverage checks and scalar signature generation.
+  bin/build-compiler.sh publishes build/compiler/plugin.json, plugin-package-dbs
+    and a shared-library copy through bin/plugin.py, which reads the Cabal plan
+    and local/store/global registrations. Building lib:thc alone does not publish
+    this separate plugin description. See 001/066 for actual consumer paths.
+  build/thc-fixtures.path:
+    IN resolved executable path. OUT plain path sidecar, written by several entry
+    points (including prepare-tests.sh and fast CI common-encoder setup).
+    Consumers can instead select THC_FIXTURES or invoke Cabal list-bin. The current
+    fallback can select a different compiler configuration; it is not acquisition.
+
+Application native resources (Gradle-owned products used by fixture consumers)
+  Owner: build.gradle native tasks, processResources and the application classpath.
+  Shared IN selected clang (THC_CLANG/PATH), target/native headers/libraries, SDKROOT
+  or macOS xcrun-selected SDK, command flags and platform. Header/tool identity is
+  part of the real closure even where today's Gradle input declarations omit it.
+  Output paths below are relative to build/generated/ unless stated otherwise.
+  generateStdioAbi:
+    IN src/main/c/stdio-abi-probe.c or windows-stdio-abi-probe.c.
+    OUT build/tmp/generateStdioAbi/stdio-abi-probe[.exe]; executing it produces
+      stdio-abi/thc/native/stdio-host-abi.json (POSIX schema 1, Windows schema 2).
+    Currently outputs.upToDateWhen false; always runs.
+  generatePosixStatAbi:
+    IN src/main/c/posix-stat-abi-probe.c and stdio-host-abi.json.
+    OUT temporary native probe and posix-stat-abi/thc/native/posix-stat-abi.json.
+    Currently always runs; unavailable on Windows.
+  generateTermiosAbi:
+    IN src/main/c/termios-abi-probe.c and stdio-host-abi.json.
+    OUT temporary native probe and termios-abi/thc/native/termios-abi.json.
+    Currently always runs; unavailable on Windows.
+  generateWindowsDirectoryAbi:
+    IN src/main/c/windows-directory-abi.c and selected Windows compiler/headers.
+    OUT temporary probe and windows-directory-abi/thc/native/windows-directory-abi.json.
+  Native providers also consume stdio-host-abi.json to select the target:
+    src/main/c/native-atomic-api.c ->
+      native-atomics/thc/native/native-atomic-api.{so|dylib}.
+    src/main/c/native-file-api.c ->
+      native-files/thc/native/native-file-api.{so|dylib} and native-file-api.bc.
+    src/main/c/native-directory-api.c ->
+      native-directories/thc/native/native-directory-api.{so|dylib}.
+    src/main/c/native-process-api.c ->
+      native-processes/thc/native/native-process-api.so (Linux x86_64).
+    src/main/c/native-open-request.c ->
+      native-open-requests/thc/native/native-open-request.{so|dylib} (-pthread).
+    src/main/c/native-process-signal-api.c ->
+      native-process-signals/thc/native/native-process-signal-api.{so|dylib}
+      (Linux links -ldl).
+    These POSIX providers are disabled on Windows; individual host checks remain
+    in build.gradle. They are application implementation artifacts, not separate
+    justification for dependent-package C fixture suites.
+  compileCbits -> bin/build-cbits.py --output build/generated/cbits:
+    IN src/main/c/{package-pointer-api,iconv-api,wait-status-api,windows-malloc}.c,
+      pinned GHC rts/StgPrimFloat.{c,h}, ghc-internal cbits/include, selected GHC
+      libdir HsFFI.h/HsBaseConfig.h, installed HsUnix.h/HsUnixConfig.h where used,
+      clang/system libraries and target. Windows bitcode also uses THC_LLVM_DIS.
+    OUT cbits/thc/cbits/package-pointer.bc on all hosts; iconv.bc on Linux/Darwin;
+      wait-status.bc on Linux x86_64; rts-float.{so|dylib|dll}; manifest.json.
+    Windows additionally produces windows-malloc.dll, windows-malloc-probe.exe and
+      windows-malloc-abi.json; the executed probe verifies its CRT/ABI behavior.
+    Windows pointer bitcode uses the Sulong MSVC target while native GHC DLLs use
+      the selected GNU toolchain. These are distinct tool/target inputs.
+    Currently always runs and removes the owned thc/cbits directory first.
+    Windows processResources excludes the malloc probe and stale POSIX artifacts.
+  prepareProcessLifecycleOracle (also 054):
+    IN t/fixtures/process-lifecycle/Main.hs + GHC process/unix package closure ->
+      build/process-lifecycle/native/process-oracle and GHC intermediates.
+    IN t/fixtures/process-lifecycle/sigchld-policy.c + src/main/c/native-process-api.c
+      + clang/headers/-Wl,--wrap=posix_spawn -> same native/sigchld-policy.
+    Linux x86_64 only, but every Gradle Test task depends on this preparation,
+      including unrelated selected tests. This edge is too broad.
+  generateSimdFamilies writes generated Java and fixture sources even with --check;
+    see 116 for the shared generator/spec and overlapping fixture invocation.
+  startScripts -> build/scripts/thc, executed by ProcessSignalsTest (131).
+
+Fixture entry points and their extra products
+  Makefile fixtures with TESTS selects .github/scripts/fast_fixtures.py; without
+  TESTS it runs bin/prepare-tests.sh. Gradle file-tree input declarations observe
+  files; they do not create these fixture producers.
+  Selected dispatch reads .github/scripts/fast-fixtures.json and fast_inputs.py,
+  expands group dependencies, then hashes source patterns/toolchain/group commands.
+  A miss triggers shared scalar generation and build-compiler.sh before the group
+  commands. Group stamps are build/fast/fixtures/<group>.json, containing source
+  identity and output hashes. The source key deliberately does not hash GHC itself.
+  Unknown classes/wildcards fall back to the full shell preparation. Full stamp is
+  build/fast/fixtures/full.json: IN fast_inputs.identity, script plan, build.gradle,
+  Cabal configuration, fixture index/dispatcher, and recursively inspected outputs.
+  The full receipt rejects unreviewed top-level build/ entries; unrelated build
+  contents can therefore prevent cache reuse. A missing/invalid full receipt is
+  reported after preparation and causes preparation again next time.
+  These receipts document current behavior; they are not proof of complete edges.
+
+  Additional default-script metadata products:
+    t/fixtures/compiler/{SpeculationAudit,RepresentationAudit,SourceNotes,CBVAudit,
+      CBVJoinAudit,CBVCoercionAudit,ConstructorFieldAudit,DemandAudit}.hs and
+      t/fixtures/core/Fixtures.hs + StrictFields.hs + shared exporter/plugin/GHC ->
+      build/core/<module>.cbd and build/ghc/ compiler intermediates.
+    CBVAudit/CBVJoinAudit/CBVCoercionAudit with post-tidy ->
+      build/cbv-post-core/<module>.cbd and build/cbv-post-ghc/ intermediates.
+    bin/check-{speculation,representation,cbv,constructor-field}-metadata.py consume
+      the corresponding CBDs through the decoder and emit checks/stdout, no required
+      persistent report. check-cbv compares the pre/post products.
+    bin/check-demand-metadata.py consumes DemandAudit/CBVCoercionAudit CBDs;
+      precise_exception_checks exports DemandAudit with THC_PRECISE_EXCEPTION_AUDIT
+      into a private temporary core/ghc tree, decodes it and checks demand metadata.
+      --ghc-api writes embedded API_CHECK to temporary Main.hs, compiles it with
+      GHC's ghc package and src/compiler imports, then executes check-demand.
+    source-core/source-ghc and source metadata checks: already 118.
+    default boot export: already 121; native/oracle.tsv: 113; corpus: 119.
+
+  Additional default producer: selector-proof
+    Owner t/haskell-fixtures/SelectorProofFixtures.hs; invoked by prepare-tests.sh.
+    IN t/fixtures/compiler/{SelectorProofAudit,SelectorProofPredicate}.hs, shared
+      exporter/compact codec, GHC ghc API and imported src/compiler modules.
+    Under build/selector-proof/:
+      <pre|post>/core/SelectorProofAudit.cbd and stage/ghc/ <- audit source/exporter.
+      stage/SelectorProofAudit.roundtrip.cbd <- original CBD, parseModuleWithoutDebug
+        and writeModule; inspectContainer checks the resulting container.
+      api/predicate + GHC intermediates <- predicate source, -O0 -dynamic -package ghc.
+      commands/{pre-export,post-export,predicate-build,libdir,predicate-run} each
+        write .stdout/.stderr/.command.json; predicate consumes libdir/audit source.
+      manifest.json <- source/original CBD/roundtrip/log hashes; predicate binary
+        is not artifact-hashed; old receipt is not removed first.
+    Checks during generation assert selector/dictionary/case counts and layouts plus
+    codec roundtrip. No native behavioral oracle. No selector-proof reference found
+    in src/test, src/fullCoreTest or the 139-group index. Review value before graphing.
+
+Scope checkpoint
+  All 139 groups in .github/scripts/fast-fixtures.json have individual entries above.
+  Shared producer notes and default-script extras are now recorded too. This is a
+  source inspection log, not evidence that those groups pass or are hermetic.
+  Custom/fullCore/nightly producers outside that index still need individual scans;
+  do not equate index coverage with every repository test being inventoried.
+
+Quarantine enforcement checkpoint
+  Existing selection manifest now marks the 39 quarantined groups. Their 56
+  consumer classes are withheld by CI selection, refused by fixture preparation,
+  and excluded in every Gradle Test task. Dependencies on a quarantined group
+  are withheld as well. These are absent coverage, not passing/deferred tests.
+  Blanket preparation now exits 2 before any producer; its full-output receipt
+  machinery and obsolete recipe/receipt contract tests were removed.
+  139 indexed entries now start with purpose, consumed result, cost/overlap and
+  build admission notes, also placed at fixture source/producer headers.
+  Verification: python3 -B .github/scripts/test_fast_fixtures.py: 48 passed,
+  1.207s; python3 -B .github/scripts/test_fast_select.py: 102 passed, 32.098s.
+  Source comparison verified 145 rationale-bearing source files changed only
+  comments (Python AST equality; Haskell/shell noncomment text unchanged).
+  Full local selection reports 419 selected classes and 56 quarantined, with no
+  overlap. This is selection evidence, not fixture/runtime execution evidence.
+  Further checks: test_fast_ci.py 46 passed (0.446s); test_fast_workflows.py
+  19 passed (0.315s). The Gradle quarantine configuration was evaluated with its
+  bundled Groovy runtime: 39 groups / 56 classes, RuntimeTest retained. Grouped
+  CI selection contains 103 groups / 419 classes and no quarantined consumers.
+  Direct quarantined/wildcard CLI requests exit 2 with PATH=/nonexistent, before
+  toolchain discovery. No Gradle application build or runtime suite was executed.

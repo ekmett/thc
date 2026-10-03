@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (025 floating-remainder)
+-- Purpose: Check the remaining floating functions, min/max and decoded-word results.
+-- Produces/consumed result: CBDs and oracle.tsv of native floating results.
+-- Cost and overlap: Retain uncovered arithmetic functions; batch native cases with the
+--   numeric corpus. The family name does not justify a separate harness or metadata
+--   inventory.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 025.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

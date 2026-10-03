@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (136 address-fields)
+# Purpose: Check pointer-valued constructor fields preserve addresses across storage and
+#   calls.
+# Produces/consumed result: AddressFieldAudit CBDs and oracle.tsv/expected.tsv.
+# Cost and overlap: Retain field transport if native-address tests do not exercise it.
+#   Share pointer setup and delete incidental shape constraints; one generated driver
+#   suffices.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 136.
+
 """Native GHC managed literal addresses in constructors and unboxed tuples."""
 import core_package_manifest
 import hashlib

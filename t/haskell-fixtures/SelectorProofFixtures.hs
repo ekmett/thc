@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (selector-proof; outside the indexed runtime groups)
+-- Purpose: Check selector metadata/predicates and a debug-stripped CBD roundtrip.
+-- Produces: pre/post SelectorProofAudit CBDs, roundtrip CBDs, predicate executable
+--   and manifest; no consumer was found in ordinary/fullCore JUnit sources.
+-- Cost and overlap: Two exports, a GHC API binary and shape-count assertions are
+--   not justified without a distinct contract. Codec tests already have a home;
+--   move an essential selector behavior case into runtime coverage if missing.
+-- Build status: Excluded with the retired blanket recipe. Do not admit this
+--   producer merely to preserve counts, manifests or historical proof structure.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, additional default producer.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Check representation certificates on genuine exported selector templates.

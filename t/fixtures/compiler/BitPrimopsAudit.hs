@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (004 bit-primops)
+-- Purpose: Check shifts, rotations and bit operations at zero, sign and width boundaries.
+-- Produces/consumed result: Primitive CBDs and native oracle.tsv.
+-- Cost and overlap: Useful runtime arithmetic coverage. One shared native reference is
+--   enough; per-operation compiler receipts do not add semantics.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 004.
+
 {-# LANGUAGE MagicHash #-}
 
 -- |

@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (084 stable-pointers)
+-- Purpose: Check stable pointers retain/release the correct object across foreign calls.
+-- Produces/consumed result: CBDs, synthetic original-call CBD and oracle.tsv.
+-- Cost and overlap: Keep ownership and sharing. Review the synthetic original-call
+--   certificate against installed foreign-registration coverage; historical certificate
+--   reproduction is not its own test purpose.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 084.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,6 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (082 weak-explicit)
+-- Purpose: Check explicit weak-pointer/finalizer operations preserve documented state
+--   transitions.
+-- Produces/consumed result: CBDs and oracle.tsv from a bounded model/native comparison.
+-- Cost and overlap: Keep explicit operations; do not pretend a deterministic arithmetic
+--   oracle validates nondeterministic garbage-collection timing. Avoid expanding this into
+--   GC scheduling assertions.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 082.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

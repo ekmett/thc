@@ -1,6 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (045 fetch-add-int-array)
+-- Purpose: Check composite fetch-add returns the old value and preserves operation order.
+-- Produces/consumed result: CBD pair per stage and oracle.tsv.
+-- Cost and overlap: Atomic-int-arrays already covers fetch-add. Retain only a distinct
+--   composite-order case there; exact directory inventory makes this producer quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 045.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (070 rts-diagnostics)
+-- Purpose: Check diagnostics route the expected bytes without violating runtime
+--   boundaries.
+-- Produces/consumed result: oracle.json assembled from native stdout/stderr; synthetic ABI
+--   controls.
+-- Cost and overlap: Keep observable diagnostic routing. A compact model plus one native
+--   reference is enough; no Core export or package-wide acquisition is needed.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 070.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

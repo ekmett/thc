@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (121 cstring)
+# Purpose: Check installed CString routines execute correctly through THC string/memory
+#   paths.
+# Produces/consumed result: GHC.Internal.CString CBD from the boot export.
+# Cost and overlap: Keep package behavior, but default acquisition of the exceptions
+#   frontier is wider than this consumer needs. Give it the exact CString closure, not
+#   unrelated boot outputs.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 121.
+
 """Export a bounded real boot-library frontier; never synthesize missing bodies."""
 import argparse
 import hashlib

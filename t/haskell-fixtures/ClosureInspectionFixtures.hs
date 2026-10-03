@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (059 closure-inspection)
+-- Purpose: Check supported closure-inspection results and unsupported representation
+--   boundaries.
+-- Produces/consumed result: ClosureInspectionAudit CBD and native oracle.tsv.
+-- Cost and overlap: Keep the documented inspection contract. Native GHC layout/root counts
+--   must not become immutable implementation requirements for THC.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 059.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

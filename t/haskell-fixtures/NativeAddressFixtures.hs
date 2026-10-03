@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (068 native-addresses)
+-- Purpose: Check native pointer aliasing, copying and allocation transport.
+-- Produces/consumed result: Native address oracle.json and malloc oracle.txt; tracked
+--   malloc descriptors.
+-- Cost and overlap: Keep THC FFI pointer/ownership behavior. Native allocation internals
+--   are not the contract; fold these cases into one boundary suite.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 068.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

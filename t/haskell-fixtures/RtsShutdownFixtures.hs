@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (071 rts-shutdown)
+-- Purpose: Check guest shutdown returns the intended outcome without shutting down the
+--   host.
+-- Produces/consumed result: Native exit/signal cases in oracle.json and in-memory
+--   controls.
+-- Cost and overlap: Keep host survival and shutdown outcome checks. Child processes are
+--   justified for isolation, but duplicate exit cases/receipts should be minimized.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 071.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

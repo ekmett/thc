@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (037 simd-calls)
+-- Purpose: Check vector arguments/results survive actual function calls and captures.
+-- Produces/consumed result: SimdCallAudit CBDs and native oracle.tsv where supported.
+-- Cost and overlap: Keep: arithmetic smoke alone does not exercise calling convention
+--   boundaries. Native reference plus real call Core is proportionate.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 037.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

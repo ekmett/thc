@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (052 aligned-scalar-memory)
+-- Purpose: Check aligned loads/stores for each scalar kind and offset.
+-- Produces/consumed result: Stage CBDs and oracle.tsv.
+-- Cost and overlap: Keep data/offset behavior, merge duplicate width cases with
+--   address/array tests. Exact root or primitive-use counts must be removed before
+--   optimization work.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 052.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

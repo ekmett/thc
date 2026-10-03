@@ -219,8 +219,21 @@ tasks.named("run", JavaExec) {
         environment("_JAVA_SR_SIGNUM", "64")
     }
 }
+// Quarantine excludes execution in every cadence and handoff mode, including direct Gradle runs.
+// These declarations remain visible for repair; they are not a passing test inventory.
+def fixtureGroups = new JsonSlurper().parse(file(".github/scripts/fast-fixtures.json")).groups
+def quarantinedFixtureGroups = new LinkedHashSet(fixtureGroups.findAll { name, group -> group.quarantined }.keySet())
+boolean quarantineChanged = true
+while (quarantineChanged) {
+    def dependents = fixtureGroups.findAll { name, group ->
+        (group.requires ?: []).any { quarantinedFixtureGroups.contains(it) }
+    }.keySet()
+    quarantineChanged = quarantinedFixtureGroups.addAll(dependents)
+}
+def quarantinedFixtureTests = quarantinedFixtureGroups.collectMany { fixtureGroups[it].junit }
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    filter { quarantinedFixtureTests.each { excludeTestsMatching(it) } }
     // JUnit may inspect compiler-typed helpers before Truffle installs its exports.
     jvmArgs("--add-exports=org.graalvm.truffle.compiler/com.oracle.truffle.compiler=ALL-UNNAMED")
     dependsOn(tasks.startScripts)

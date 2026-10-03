@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (015 integer-completion)
+-- Purpose: Check remaining integer operations against GHC and an independent arithmetic
+--   model.
+-- Produces/consumed result: CBDs, requests.tsv and oracle.tsv.
+-- Cost and overlap: Useful only for operations missing from the main numeric corpus. Merge
+--   overlapping cases; thousands of rows and command receipts alone do not justify a
+--   second producer.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 015.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

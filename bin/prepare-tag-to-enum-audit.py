@@ -2,6 +2,16 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (135 tag-to-enum)
+# Purpose: Check tag-to-enum produces the correct constructor and respects required
+#   evaluation behavior.
+# Produces/consumed result: Audit/external/frontier CBDs and oracle.tsv.
+# Cost and overlap: Keep inverse-tag semantics and meaningful rejection controls. Open-
+#   ended CBD/native discovery is unjustified; quarantine and combine with constructor-tag
+#   coverage.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 135.
+
 """Exact saturated tagToEnum# families: fresh native valid tags and pre/post Core."""
 import argparse
 import hashlib

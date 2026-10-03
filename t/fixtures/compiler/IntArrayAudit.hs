@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (007 int-arrays)
+-- Purpose: Check machine-width array reads and writes preserve values and indices.
+-- Produces/consumed result: Pre/post array CBDs and native oracle.tsv.
+-- Cost and overlap: Keep as one member of a scalar-array corpus; six separate setup
+--   pipelines are not justified by six element types.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 007.
+
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 
 -- |

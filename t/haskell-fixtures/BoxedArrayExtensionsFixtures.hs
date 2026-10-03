@@ -1,6 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (049 boxed-array-extensions)
+-- Purpose: Check clone/copy/move/thaw and lazy elements of boxed arrays.
+-- Produces/consumed result: Stage CBDs and native observations.
+-- Cost and overlap: Useful aliasing/laziness cases belong with general boxed arrays.
+--   Attempt directories and old-manifest retention add no semantic coverage; quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 049.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

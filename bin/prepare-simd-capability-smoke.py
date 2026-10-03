@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (116 simd-capability-smoke)
+# Purpose: Check the declared SIMD operation families actually execute with correct lane
+#   results.
+# Produces/consumed result: Generated smoke sources, CBD, cases.tsv, audits and native
+#   oracle.
+# Cost and overlap: Prefer this general corpus over duplicate arithmetic families. It
+#   currently also regenerates application sources; quarantine until the shared generator
+#   has one owner.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 116.
+
 """Compare individual SIMD operations against native Haskell scalar arithmetic.
 
 The default native oracle contains no vectors and needs no AVX512. Enable the

@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (094 floating-byte-offset)
+-- Purpose: Check byte-offset floating accesses use byte units and preserve values.
+-- Produces/consumed result: CBDs and oracle.tsv.
+-- Cost and overlap: Keep unit/offset boundary cases within scalar-memory coverage.
+--   Separate preparation per operation family is unnecessary.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 094.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

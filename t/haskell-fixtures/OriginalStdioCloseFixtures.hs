@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (079 original-stdio-close)
+-- Purpose: Check closing a guest resource releases it and reports invalid reuse correctly.
+-- Produces/consumed result: CBDs and four native cases in oracle.json.
+-- Cost and overlap: Merge into open/dup/resource-disposal coverage. No distinct need for
+--   another compiler/native pipeline has been established.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 079.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

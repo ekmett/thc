@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (034 fused-floating)
+-- Purpose: Check fused multiply-add/subtract rounding differs correctly from separate
+--   operations.
+-- Produces/consumed result: CBDs and native oracle.tsv from --fused cases.
+-- Cost and overlap: Retain fusion-sensitive values; ordinary multiply/add tests cannot
+--   replace them. One batched native oracle is justified.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 034.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

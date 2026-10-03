@@ -2,6 +2,14 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (126 empty-tuple-input)
+# Purpose: Check erased empty-tuple parameters leave ordinary arguments/results intact.
+# Produces/consumed result: EmptyTupleInputAudit CBDs and oracle TSVs.
+# Cost and overlap: Consolidate with empty-join and tuple-input, retaining any distinct
+#   call boundary. Recursive receipts keep this separate recipe quarantined.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 126.
+
 """Export exact empty-tuple input boundaries and verify native wraparound results."""
 import argparse
 from datetime import datetime, timezone

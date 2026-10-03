@@ -2,6 +2,16 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (089 simd-floatx4)
+# Purpose: Check FloatX4 arithmetic and floating lane behavior.
+# Produces/consumed result: CBDs, modeled expectations and native oracle when supported.
+# Cost and overlap: Compare with generated SIMD capability smoke; retain only missing
+#   floating edge cases there. A separate arithmetic producer is not justified by vector
+#   spelling.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 089.
+
 """Pinned real FloatX4 Core, independent binary32 model, and optional native oracle."""
 import argparse
 import hashlib

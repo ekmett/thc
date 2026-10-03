@@ -2,6 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (101 address-identity)
+# Purpose: Check address equality/offset identity agrees across native and managed
+#   execution.
+# Produces/consumed result: CBDs, oracle.txt and pre/post audits.
+# Cost and overlap: Retain boundary identity cases in native-address coverage. Clearing
+#   the whole output tree and maintaining another producer are unjustified; quarantined.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 101.
+
 set -eu
 cd "$(dirname "$0")/.."
 root=$(pwd)

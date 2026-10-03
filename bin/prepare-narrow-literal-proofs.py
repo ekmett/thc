@@ -2,6 +2,18 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (001 narrow-literal-proofs)
+# Purpose: Check signed and high-bit narrow literals survive real Core export and runtime
+#   lowering.
+# Produces/consumed result: Pre/post CBDs and native oracle.tsv; tests also consume
+#   projected/mutated Core.
+# Cost and overlap: Keep the boundary behavior; compare with signed-narrow and array
+#   literal cases before retaining a separate native build. Metadata-only proof ceremony
+#   is not a benefit.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 001.
+
 """Freeze genuine direct-write literals before testing metadata-only projections."""
 import argparse
 import copy

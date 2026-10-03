@@ -2,6 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (090 simd-doublex2)
+# Purpose: Check DoubleX2 arithmetic and floating lane behavior.
+# Produces/consumed result: CBDs, expected.tsv and optional native oracle.tsv.
+# Cost and overlap: Merge covered operations into SIMD smoke and keep distinct double edge
+#   cases. Separate model/receipt machinery is not itself valuable.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 090.
+
 """Pinned real DoubleX2 Core, exact integer binary64 model, and optional native oracle."""
 import argparse
 import hashlib

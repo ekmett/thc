@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (100 original-handle-readiness)
+-- Purpose: Check handle readiness across guest buffers and a live PTY.
+-- Produces/consumed result: CBDs, oracle data and native/oracle --hold-pty executed at
+--   test time.
+-- Cost and overlap: Retain buffered-handle distinctions not covered by raw fd readiness.
+--   Share PTY controls and acquisition; do not duplicate system readiness testing.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 100.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

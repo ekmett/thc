@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (027 simd-address-families)
+-- Purpose: Check vector-address lane ordering, offsets and scalar/vector memory agreement.
+-- Produces/consumed result: Stage CBDs and scalar/vector native oracle TSVs.
+-- Cost and overlap: Memory semantics are distinct from arithmetic smoke. Generated-source
+--   directory scans admit leftovers; quarantine and consolidate overlapping vector-memory
+--   producers.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 027.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

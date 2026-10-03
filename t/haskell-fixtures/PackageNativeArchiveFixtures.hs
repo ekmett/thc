@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (096 package-native-gc-carriers)
+-- Purpose: Check boxed/primitive GC carriers cross package foreign boundaries safely.
+-- Produces/consumed result: Externally supplied package CBDs, generated carrier CBD and
+--   oracle.txt.
+-- Cost and overlap: Keep the actual carrier boundary only with declared package inputs.
+--   Current environment-selected CBDs and assumption-based absence are not self-contained
+--   acquisition; no admission until those inputs have owners.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 096.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

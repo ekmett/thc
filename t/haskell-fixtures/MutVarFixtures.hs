@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (081 mutvar)
+-- Purpose: Check mutable references preserve read/write order, identity and lazy contents.
+-- Produces/consumed result: CBD pairs and oracle.tsv.
+-- Cost and overlap: Keep state/sharing semantics. Exact output-directory membership is
+--   unrelated and blocks incremental use; quarantined, then consolidate with mutable-
+--   reference coverage.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 081.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

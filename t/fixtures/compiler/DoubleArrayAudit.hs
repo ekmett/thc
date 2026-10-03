@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (011 double-arrays)
+-- Purpose: Check Double array storage preserves numeric and bit-level results.
+-- Produces/consumed result: Array CBDs and native oracle.tsv.
+-- Cost and overlap: Floating storage differs from integer storage, so retain cases. Share
+--   setup; do not infer signaling-NaN coverage from a corpus that excludes it.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 011.
+
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 
 -- |

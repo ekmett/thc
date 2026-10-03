@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (098 original-stack)
+-- Purpose: Check supported stack consumer behavior and decoder boundary handling.
+-- Produces/consumed result: Attempt-named CBDs, native stack observations and frozen proof
+--   inputs.
+-- Cost and overlap: Stack depth/layout/root counts cannot fossilize the compiler.
+--   Quarantine run archives; replace useful API behavior with a bounded semantic test and
+--   retire historical proof comparison.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 098.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

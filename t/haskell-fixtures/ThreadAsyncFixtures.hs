@@ -1,6 +1,18 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (110 thread-async)
+-- Purpose: Check asynchronous exceptions and saved continuations preserve masking and
+--   state.
+-- Produces/consumed result: CBDs plus ordinary/lazy/saved native observation files;
+--   thread-scheduling inputs.
+-- Cost and overlap: Keep async semantics, including Loom paths. Multiple scenarios should
+--   share declared producers and use deterministic synchronization; do not rebuild
+--   scheduling fixtures per consumer.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 110.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

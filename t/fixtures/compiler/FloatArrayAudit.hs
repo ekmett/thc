@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (012 float-word-arrays)
+-- Purpose: Check Float/Word element transport and storage boundaries.
+-- Produces/consumed result: Array CBDs and native oracle.tsv.
+-- Cost and overlap: Retain representation-crossing cases; consolidate native preparation
+--   with scalar arrays and bitcasts where their paths coincide.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 012.
+
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 
 -- |

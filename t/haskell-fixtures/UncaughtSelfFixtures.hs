@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (111 uncaught-self)
+-- Purpose: Check an uncaught self-directed exception produces the right process outcome.
+-- Produces/consumed result: CBDs and native executable run by JUnit.
+-- Cost and overlap: Child-process isolation is justified to observe termination safely.
+--   Explicitly declare the executable as a runtime test input instead of treating
+--   preparation as execution evidence.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 111.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (024 float-decode)
+-- Purpose: Check floating decomposition agrees with GHC on signs, exponents and mantissas.
+-- Produces/consumed result: CBDs, oracle.tsv and decoded original implementation facts.
+-- Cost and overlap: Keep arithmetic observations and relevant negative controls.
+--   Installed-Core acquisition is justified only where the original implementation is
+--   actually exercised.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 024.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

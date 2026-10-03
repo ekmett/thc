@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (014 cbv-coercion)
+# Purpose: Check call demands and erased coercion arguments preserve laziness and argument
+#   positions.
+# Produces/consumed result: CBV/demand CBDs plus a tuple-arithmetic CBD consumed by
+#   lexical tests.
+# Cost and overlap: Keep semantic demand/erasure controls. The recipe currently writes
+#   other groups' outputs and exports an apparently unconsumed explicit64 CBD; no build
+#   admission in this form.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 014.
+
 """Audit real GHC CBV entry obligations without upgrading WHNF evidence."""
 import argparse
 import json

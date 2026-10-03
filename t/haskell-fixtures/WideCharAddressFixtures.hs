@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (051 wide-char-address)
+-- Purpose: Check wide-character address reads/writes use the correct representation and
+--   offsets.
+-- Produces/consumed result: CBD pair and native observations.
+-- Cost and overlap: Retain a targeted character-width case in scalar memory coverage. A
+--   separate receipt pipeline is not justified by one element kind.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 051.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (008 int8-arrays)
+-- Purpose: Check byte-array sign extension, truncation and byte indexing.
+-- Produces/consumed result: Pre/post array CBDs and native oracle.tsv.
+-- Cost and overlap: Retain byte boundaries in a shared scalar-array corpus. Rebuilding
+--   tools or launching a separate harness per width adds no coverage.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 008.
+
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 
 -- |

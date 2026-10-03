@@ -2,6 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (128 state-tuple)
+# Purpose: Check State#-containing tuple results preserve effects and live value
+#   positions.
+# Produces/consumed result: StateTupleAudit CBDs and oracle.tsv.
+# Cost and overlap: Keep effect/value transport within the aggregate corpus. Recursive
+#   output receipts and a separate setup pipeline are unjustified; quarantined.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 128.
+
 """Native State# tuple oracle and exact pre/post-Tidy proof checks."""
 import argparse
 from datetime import datetime, timezone

@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (060 hint-trace)
+-- Purpose: Check hint/trace/event/marker primops preserve program results and observable
+--   trace behavior.
+-- Produces/consumed result: CBDs, oracle.tsv and native eventlog used as evidence.
+-- Cost and overlap: Keep a small behavior/control check. Nondeterministic eventlog bytes
+--   and exact native trace implementation are not reusable fixture identities; JFR wiring
+--   needs separate tests.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 060.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -4,8 +4,8 @@
 """Prepare only native fixtures needed by selected JUnit classes.
 
 The persistent stamps are local acceleration hints. Every reuse checks both the
-declared source bytes and every output byte; an unrecognised class runs the
-complete preparation script instead of assuming it has no native inputs.
+declared source bytes and every output byte; quarantined or unrecognised selections stop before running any producer.
+The directory-dependent blanket preparation path is retired.
 """
 
 import argparse
@@ -24,7 +24,6 @@ import fast_inputs
 
 MANIFEST = Path(".github/scripts/fast-fixtures.json")
 STAMP_DIR = Path("build/fast/fixtures")
-FULL_STAMP = STAMP_DIR / "full.json"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.cbd", "post.cbd", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -34,260 +33,8 @@ PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name
 PROCESS_SIGNAL_OUTPUTS = frozenset('build/process-signals/' + name for name in (
     'manifest.json', 'oracle.txt', 'native-controls.txt',
 ))
-FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
-    "build/backend-annotations", "build/process-signals",
-    "build/process-lifecycle/core",
-    "build/vector-api", "build/truffle-strings",
-    "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars",
-    "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
-    "build/floating-byte-offset", "build/unaligned-scalar-memory",
-    "build/explicit64-arrays", "build/mask-functions", "build/scalar-exception-results", "build/exception-result-layouts", "build/deep-evaluation", "build/interface-core",
-    "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields", "build/selector-proof",
-})
-FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
-    "build/backend-annotations/pre/BackendAnnotations.cbd", "build/backend-annotations/post/BackendAnnotations.cbd", "build/backend-annotations/interface.cbd",
-    "build/thc-fixtures.path",
-    *(PROCESS_SIGNAL_OUTPUTS if (platform.system(), platform.machine()) == ("Linux", "x86_64")
-      else ("build/process-signals/manifest.json",)),
-    *(PROCESS_CORE_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else ()),
-    *fast_inputs.RUBBISH_OUTPUTS,
-    "build/vector-api/core/THC.Prim.cbd", "build/vector-api/core/VectorLoops.cbd",
-    "build/vector-api/oracle.tsv",
-    "build/truffle-strings/core/THC.Prim.cbd", "build/truffle-strings/core/StringPrimitives.cbd",
-    "build/truffle-strings/core/IntrinsicOperands.cbd",
-    "build/truffle-strings/core/TruffleStringExceptions.cbd", "build/truffle-strings/core/THC.Exception.cbd",
-    "build/truffle-strings/core/THC.Internal.Exception.cbd",
-    "build/truffle-strings/oracle.json",
-    "build/truffle-strings/manifest.json", "build/truffle-strings/native/oracle",
-    "build/selector-proof/manifest.json", "build/selector-proof/api/predicate",
-    *[f"build/selector-proof/{stage}/{name}.cbd" for stage in ("pre", "post")
-      for name in ("core/SelectorProofAudit", "SelectorProofAudit.roundtrip")],
-    *[f"build/selector-proof/commands/{command}.{suffix}"
-      for command in ("pre-export", "post-export", "predicate-build", "libdir", "predicate-run")
-      for suffix in ("stdout", "stderr", "command.json")],
-    "build/sum-join/manifest.json", "build/sum-join/oracle.tsv", "build/sum-join/native/oracle",
-    *[f"build/sum-join/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/SumJoinAudit.cbd", "audit.json")],
-    *[f"build/sum-join/commands/{command}.{suffix}"
-      for command in ("ghc-version", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
-      for suffix in ("stdout", "stderr", "command.json")],
-    "build/record-fields/manifest.json", "build/record-fields/pre/oracle", "build/record-fields/post/oracle",
-    *[f"build/record-fields/{stage}/{name}.cbd" for stage in ("pre", "post", "installed")
-      for name in ("RecordFieldLibrary", "RecordFieldClient")],
-    *[f"build/record-fields/{stage}/{name}.json" for stage in ("pre", "post", "installed")
-      for name in ("fieldAlias-audit", "duplicateFields-audit")],
-    *[f"build/record-fields/logs/{command}.{suffix}"
-      for command in ("plugin-build", "helper-location", "libdir", "pre-compile", "pre-native", "post-compile", "post-native",
-                      "installed-RecordFieldLibrary", "installed-RecordFieldClient",
-                      *[f"{stage}-audit-{entry}" for stage in ("pre", "post", "installed")
-                        for entry in ("fieldAlias", "duplicateFields")])
-      for suffix in ("stdout", "stderr", "command.json")],
-    *fast_inputs.CLOSURE_INSPECTION_OUTPUTS,
-    *fast_inputs.STABLE_NAME_OUTPUTS,
-    *fast_inputs.DELIMITED_OUTPUTS,
-    *fast_inputs.BCO_OUTPUTS,
-    *fast_inputs.THREAD_INVENTORY_OUTPUTS,
-    *fast_inputs.THREAD_SCHEDULING_OUTPUTS,
-    "build/aligned-scalar-memory/manifest.json", "build/aligned-scalar-memory/oracle.tsv",
-    *[f"build/aligned-scalar-memory/{stage}/{file}" for stage in ("pre", "post")
-      for file in ("audit.json", "core/AlignedScalarMemoryAudit.cbd")],
-    "build/hint-trace/oracle.tsv", "build/hint-trace/native/oracle", "build/hint-trace/native/oracle.eventlog",
-    *[f"build/hint-trace/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/HintTraceAudit.cbd", "hints.audit.json", "traces.audit.json",
-                     "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json")],
-    *fast_inputs.SCALAR_MEMORY_OUTPUTS,
-    *fast_inputs.SIMD_ADDRESS_OUTPUTS,
-    "build/native-malloc/oracle.txt",
-    "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.cbd",
-    "build/simd-calls/pre-audit.json",
-    "build/simd-floatx4-fma/manifest.json", "build/simd-floatx4-fma/pre-core/SimdFloatFma.cbd",
-    "build/simd-floatx4-fma/pre-audit.json", "build/simd-floatx4-fma/pre-double-audit.json",
-    *fast_inputs.SIMD_WIDE_FMA_OUTPUTS,
-    *([] if platform.machine().lower() in ("arm64", "aarch64") else
-      ["build/simd-calls/oracle.tsv", "build/simd-calls/post-core/SimdCallAudit.cbd",
-       "build/simd-calls/post-audit.json", "build/simd-floatx4-fma/oracle.txt",
-       "build/simd-floatx4-fma/post-core/SimdFloatFma.cbd", "build/simd-floatx4-fma/post-audit.json",
-       "build/simd-floatx4-fma/post-double-audit.json"]),
-    "build/interface-core/manifest.json", "build/interface-core/InterfaceLibrary.cbd",
-    "build/interface-core/logs/native-oracle.stdout", "build/interface-core/native/oracle",
-    "build/interface-core/full/InterfaceLibrary.hi", "build/interface-core/thin/InterfaceLibrary.hi",
-    "build/interface-core/full/InterfaceLibrary.dyn_hi", "build/interface-core/full/InterfaceForeign.hi",
-    "build/interface-core/source/InterfaceLibrary.saved",
-    "build/interface-core/opaqueEntry-audit.json", "build/interface-core/inlineEntry-audit.json",
-    "build/interface-core/recursiveEntry-audit.json",
-    "build/interface-core/wrapperEntry-audit.json", "build/interface-core/installed-wrapper-facts.json",
-    "build/interface-core/CBVCoercionAudit.cbd", "build/interface-core/direct/CBVCoercionAudit.cbd",
-    "build/interface-core/full/CBVCoercionAudit.hi", "build/interface-core/thin/CBVCoercionAudit.hi",
-    "build/interface-core/source/CBVCoercionAudit.saved", "build/interface-core/coercionEntry-audit.json",
-    "build/interface-core/logs/helper-thin.stdout", "build/interface-core/logs/helper-thin.command.json",
-    "build/interface-core/wired-unit.json", "build/interface-core/logs/helper-wired-unit.stdout",
-    "build/interface-core/logs/helper-wired-unit.command.json",
-    "build/interface-core/packages.json", "build/interface-core/driver-controls.json",
-    "build/interface-core/cache-controls/facts.json", "build/interface-core/cache-controls/helper-calls",
-    "build/interface-core/InterfaceForeign.cbd", "build/interface-core/foreign-packages.json",
-    "build/interface-core/foreign-association.json", "build/interface-core/installed-bound-facts.json",
-    "build/interface-core/foreign-alias/a.cbd", "build/interface-core/foreign-alias/b.cbd",
-    "build/interface-core/source/InterfaceForeignAlias.hs.saved",
-    *[f"build/interface-core/import-stubs/{variant}.cbd" for variant in ("plain", "labels", "labels-header", "capi-labels", "capi-labels-header", "finalizer-label", "extra-file", "wrapper", "instrumented")],
-    *[f"build/interface-core/typed-foreign-exports/{variant}.cbd" for variant in ("a", "b", "signatures", "static-signatures", "foreign-file", "instrumented", "managed", "registration")],
-    "build/interface-core/source/ForeignImportStubs.hs.saved",
-    "build/interface-core/import-stubs/plain/ForeignImportStubs.hi",
-    "build/interface-core/logs/import-stubs-native-oracle.stdout",
-    "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
-    "build/core-continuation/core/CoreContinuationAudit.cbd", "build/core-continuation/audit.json",
-    "build/core-continuation/application-audit.json",
-    "build/core-continuation/nested-audit.json",
-    "build/core-continuation/native-output.txt",
-    "build/core-continuation/core/LazyIOCallbackAudit.cbd",
-    "build/core-continuation/lazy-native-output.txt",
-    "build/core-continuation/keep-alive-scalar-audit.json",
-    "build/core-continuation/keep-alive-tuple-audit.json",
-    "build/core-continuation/lazy-action-audit.json", "build/core-continuation/lazy-handler-audit.json",
-    "build/live-async/manifest.json", "build/live-async/oracle.txt", "build/live-async/strict-oracle.txt",
-    "build/live-async/pre/core/LiveAsyncAudit.cbd", "build/live-async/post/core/LiveAsyncAudit.cbd",
-    "build/live-async/pre/forceShared-audit.json", "build/live-async/post/forceShared-audit.json",
-    "build/live-async/pre/strictWorker-audit.json", "build/live-async/post/strictWorker-audit.json",
-    "build/live-async/pre/strictCall-audit.json", "build/live-async/post/strictCall-audit.json",
-    "build/live-async/pre/strictEntry-audit.json", "build/live-async/post/strictEntry-audit.json",
-    "build/live-async/pre/takeReady-audit.json", "build/live-async/post/takeReady-audit.json",
-    "build/live-async/pre/takeRunning-audit.json", "build/live-async/post/takeRunning-audit.json",
-    "build/live-async/pre/releaseGate-audit.json", "build/live-async/post/releaseGate-audit.json",
-    "build/live-async/pre/prefixCount-audit.json", "build/live-async/post/prefixCount-audit.json",
-    "build/live-async/pre/warmLoop-audit.json", "build/live-async/post/warmLoop-audit.json",
-    "build/live-async/pre/asyncPayload-audit.json", "build/live-async/post/asyncPayload-audit.json",
-    "build/thread-label/manifest.json", "build/thread-label/oracle.txt",
-    *[f"build/thread-label/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/ThreadLabelAudit.cbd", "selfLabel-audit.json", "overwriteLabel-audit.json",
-                     "emptyLabel-audit.json", "deadLabel-audit.json", "deadOverwrite-audit.json")],
-    "build/thread-status/manifest.json", "build/thread-status/oracle.txt",
-    *[f"build/thread-status/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/ThreadStatusAudit.cbd", "selfStatus-audit.json", "maskedStatus-audit.json",
-                     "finishedStatus-audit.json", "diedStatus-audit.json", "blockedStatus-audit.json")],
-    "build/thread-async/manifest.json", "build/thread-async/oracle.txt", "build/thread-async/extra-oracle.txt",
-    "build/thread-async/lazy-oracle.txt", "build/thread-async/saved-oracle.txt",
-    "build/thread-async/external-saved-oracle.txt",
-    "build/thread-async/scheduled-saved-oracle.txt",
-    "build/thread-async/pre/scheduledSaved-audit.json", "build/thread-async/post/scheduledSaved-audit.json",
-    "build/thread-async/pre/externalSaved-audit.json", "build/thread-async/post/externalSaved-audit.json",
-    "build/thread-async/pre/core/ThreadAsyncAudit.cbd", "build/thread-async/post/core/ThreadAsyncAudit.cbd",
-    "build/thread-async/pre/core/LazyForkAudit.cbd", "build/thread-async/post/core/LazyForkAudit.cbd",
-    "build/thread-async/pre/lazyFork-audit.json", "build/thread-async/post/lazyFork-audit.json",
-    "build/thread-async/pre/forkAndThrow-audit.json", "build/thread-async/post/forkAndThrow-audit.json",
-    "build/thread-async/pre/killUncaught-audit.json", "build/thread-async/post/killUncaught-audit.json",
-    "build/thread-async/pre/selfThrow-audit.json", "build/thread-async/post/selfThrow-audit.json",
-    "build/thread-async/pre/maskedUnmaskSelf-audit.json", "build/thread-async/post/maskedUnmaskSelf-audit.json",
-    "build/thread-async/pre/promptSelfThrow-audit.json", "build/thread-async/post/promptSelfThrow-audit.json",
-    "build/thread-async/pre/promptMaskedUnmaskSelf-audit.json", "build/thread-async/post/promptMaskedUnmaskSelf-audit.json",
-    *[f"build/thread-async/{stage}/{entry}-audit.json" for stage in ("pre", "post")
-      for entry in ("savedSelfThrow", "savedMaskedSelf", "savedSuffixSelf", "savedMaskCatchSelf")],
-    "build/uncaught-self/manifest.json", "build/uncaught-self/native/oracle",
-    "build/uncaught-self/pre/core/UncaughtSelfAudit.cbd", "build/uncaught-self/post/core/UncaughtSelfAudit.cbd",
-    "build/uncaught-self/pre/audit.json", "build/uncaught-self/post/audit.json",
-    "build/uncaught-self/pre/io-audit.json", "build/uncaught-self/post/io-audit.json",
-    "build/mask-functions/manifest.json",
-    "build/mask-functions/pre/core/MaskFunctionAudit.cbd",
-    "build/mask-functions/post/core/MaskFunctionAudit.cbd",
-    "build/mask-functions/logs/native-oracle.stdout",
-    "build/scalar-exception-results/manifest.json", "build/scalar-exception-results/native/oracle",
-    "build/exception-result-layouts/manifest.json", "build/exception-result-layouts/native/oracle",
-    "build/exception-result-layouts/oracle.tsv",
-    *[f"build/exception-result-layouts/{stage}/{name}"
-      for stage in (("pre",) if platform.machine().lower() in ("arm64", "aarch64") else ("pre", "post"))
-      for name in ("core/ExceptionResultLayoutsAudit.cbd",
-                   *[f"{family}Result-audit.json" for family in ("int8", "word8", "int16", "word16", "int32", "word32",
-                       "int64", "word64", "float", "double", "empty", "nested", "sum", "vector", "unlifted", "unliftedPayload")])],
-    "build/scalar-exception-results/logs/native-oracle.stdout",
-    *[f"build/scalar-exception-results/{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/ScalarExceptionResultsAudit.cbd",
-                   *[f"{prefix}{suffix}-audit.json" for prefix in ("normal", "throw", "interrupt")
-                     for suffix in ("Int", "Word", "Addr")])],
-    "build/deep-evaluation/manifest.json", "build/deep-evaluation/native/oracle",
-    *[f"build/deep-evaluation/{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/DeepEvaluation.cbd", "core/THC.InterfaceClosure.cbd", "audit.json")],
-    *[f"build/deep-evaluation/logs/{command}.{suffix}"
-      for command in ("ghc-version", "native-compile", "native-oracle", "pre-export", "pre-audit", "post-export", "post-audit")
-      for suffix in ("stdout", "stderr", "command.json")],
-    "build/addr-identity/pre-core/AddressIdentityAudit.cbd", "build/addr-identity/post-core/AddressIdentityAudit.cbd",
-    "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json",
-    "build/pinned-addresses/manifest.json",
-    *fast_inputs.INTEGER_COMPLETION_OUTPUTS,
-    "build/pinned-pointer-cells/manifest.json",
-    "build/pinned-pointer-cells/oracle.tsv", "build/pinned-pointer-cells/pre/audit.json",
-    "build/pinned-pointer-cells/post/audit.json",
-    "build/pinned-pointer-cells/pre/core/PinnedPointerCellsAudit.cbd",
-    "build/pinned-pointer-cells/post/core/PinnedPointerCellsAudit.cbd",
-    "build/floating-address/manifest.json", "build/floating-address/oracle.tsv",
-    "build/atomic-address/manifest.json", "build/atomic-address/oracle.tsv",
-    "build/atomic-address/pre/audit.json", "build/atomic-address/post/audit.json",
-    "build/atomic-address/pre/core/AtomicAddressAudit.cbd",
-    "build/atomic-address/post/core/AtomicAddressAudit.cbd",
-    "build/floating-address/pre/audit.json", "build/floating-address/post/audit.json",
-    "build/floating-address/pre/core/FloatingAddressAudit.cbd",
-    "build/floating-address/post/core/FloatingAddressAudit.cbd",
-    "build/floating-byte-offset/manifest.json", "build/floating-byte-offset/oracle.tsv",
-    "build/floating-byte-offset/pre/audit.json", "build/floating-byte-offset/post/audit.json",
-    "build/floating-byte-offset/pre/core/FloatingByteOffsetAudit.cbd",
-    "build/floating-byte-offset/post/core/FloatingByteOffsetAudit.cbd",
-    "build/unaligned-scalar-memory/manifest.json", "build/unaligned-scalar-memory/oracle.tsv",
-    "build/unaligned-scalar-memory/inputs.txt",
-    "build/unaligned-scalar-memory/logs/ghc-inventory.stdout",
-    "build/unaligned-scalar-memory/pre/audit.json", "build/unaligned-scalar-memory/post/audit.json",
-    "build/unaligned-scalar-memory/pre/core/UnalignedScalarMemoryAudit.cbd",
-    "build/unaligned-scalar-memory/post/core/UnalignedScalarMemoryAudit.cbd",
-    "build/explicit64-arrays/manifest.json", "build/explicit64-arrays/oracle.tsv",
-    "build/shrink-bytearrays/manifest.json", "build/shrink-bytearrays/oracle.tsv",
-    "build/shrink-bytearrays/pre/core/ShrinkMutableByteArrayAudit.cbd",
-    "build/shrink-bytearrays/post/core/ShrinkMutableByteArrayAudit.cbd",
-    "build/shrink-bytearrays/pre/core/THC.InterfaceClosure.cbd",
-    "build/shrink-bytearrays/post/core/THC.InterfaceClosure.cbd",
-    "build/fetch-add-int-array/manifest.json", "build/fetch-add-int-array/oracle.tsv",
-    "build/atomic-int-arrays/manifest.json", "build/atomic-int-arrays/oracle.tsv",
-    "build/atomic-int-arrays/pre/core/AtomicIntArrayAudit.cbd",
-    "build/atomic-int-arrays/post/core/AtomicIntArrayAudit.cbd",
-    "build/atomic-int-arrays/pre/core/THC.InterfaceClosure.cbd",
-    "build/atomic-int-arrays/post/core/THC.InterfaceClosure.cbd",
-    "build/fetch-add-int-array/pre/core/FetchAddIntArrayAudit.cbd",
-    "build/fetch-add-int-array/post/core/FetchAddIntArrayAudit.cbd",
-    "build/fetch-add-int-array/pre/core/THC.InterfaceClosure.cbd",
-    "build/fetch-add-int-array/post/core/THC.InterfaceClosure.cbd",
-    "build/explicit64-arrays/pre/audit.json", "build/explicit64-arrays/post/audit.json",
-    "build/explicit64-arrays/pre/core/Explicit64ArrayAudit.cbd",
-    "build/explicit64-arrays/post/core/Explicit64ArrayAudit.cbd",
-    "build/managed-address-reads/manifest.json",
-    "build/original-stdio/manifest.json",
-    "build/original-stdio-read/manifest.json", "build/original-stdio-read/oracle.json",
-    "build/original-stdio-close/manifest.json", "build/original-stdio-close/oracle.json",
-    "build/original-posix-dup/manifest.json", "build/original-posix-dup/oracle.json",
-    "build/original-stdio-seek/manifest.json", "build/original-stdio-seek/oracle.json",
-    "build/original-stdio-truncate/manifest.json", "build/original-stdio-truncate/oracle.json",
-    *fast_inputs.ORIGINAL_FD_READY_OUTPUTS,
-    *fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS,
-    *fast_inputs.RTS_DIAGNOSTIC_OUTPUTS,
-    *fast_inputs.RTS_SHUTDOWN_OUTPUTS,
-    *(fast_inputs.ORIGINAL_OPEN_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-open/manifest.json"}),
-    *(fast_inputs.ORIGINAL_FCNTL_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-fcntl/manifest.json"}),
-    *(fast_inputs.ORIGINAL_ERRNO_OUTPUTS if fast_inputs.ERRNO_NATIVE_HOST else {"build/original-errno/manifest.json"}),
-    *(fast_inputs.ORIGINAL_PROCESS_IDENTITY_OUTPUTS if fast_inputs.ERRNO_NATIVE_HOST else {"build/original-process-identity/manifest.json"}),
-    *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-termios/manifest.json"}),
-    *(fast_inputs.ORIGINAL_TCSETATTR_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-tcsetattr/manifest.json"}),
-    *(fast_inputs.ORIGINAL_TCGETATTR_OUTPUTS if fast_inputs.LINUX_X86_64_HOST else {"build/original-tcgetattr/manifest.json"}),
-    "build/original-handle-readiness/manifest.json",
-    "build/small-arrays/manifest.json",
-    "build/simd-capability-smoke/manifest.json",
-    # Smoke manifests hash generated Haskell inputs, independently of JVM codegen.
-    *fast_inputs.SIMD_SMOKE_SOURCES,
-})
-# Compiler interfaces/objects and Gradle products are not consumed by JUnit;
-# full receipt reuse checks the final Core/native fixture data instead.
+# Compiler interface links are not consumed fixture payloads.
 INTERMEDIATE_SUFFIXES = frozenset({".o", ".hi", ".dyn_o", ".dyn_hi"})
-# The reviewed preparation plan emits no fixture under build/generated; Gradle
-# writes JVM products there. A future fixture there requires a plan/output review.
-NON_FIXTURE_BUILD_ROOTS = frozenset({
-    "aggregate-ghc", "aggregate-post-ghc", "cbv-post-ghc", "classes", "compiler",
-    "fast", "float-decode-originals", "generated", "ghc", "libs", "reports", "resources",
-    "snapshot", "source-ghc", "test-results", "tmp",
-})
 COMMON_SOURCES = (
     "src/driver/**/*.hs",
     "thc.cabal",
@@ -627,106 +374,15 @@ def _write_stamp(path, stamp):
     temporary.replace(path)
 
 
-def _preparation_plan(root):
-    lines = [line.rstrip() for index, line in enumerate(
-        (root / "bin/prepare-tests.sh").read_text().splitlines())
-        if line.strip() and (index == 0 or not line.lstrip().startswith("#"))]
-    return hashlib.sha256(("\n".join(lines) + "\n").encode()).hexdigest()
-
-
-def _full_key(root):
-    plan = _preparation_plan(root)
-    extra = ("build.gradle", "thc.cabal", "cabal.project", "Setup.hs",
-             ".github/scripts/fast-fixtures.json",
-             ".github/scripts/fast_fixtures.py")
-    value = {"schema": 1, "identity": fast_inputs.identity(root),
-             "declaration": {"plan": plan,
-                             "roots": sorted(FULL_OUTPUT_ROOTS),
-                             "required": sorted(FULL_REQUIRED)},
-             "extraSources": {name: _digest(root / name) for name in extra}}
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-
-def _full_output_hashes(root):
-    build = root / "build"
-    allowed = {Path(name).name for name in FULL_OUTPUT_ROOTS} | NON_FIXTURE_BUILD_ROOTS
-    top_files = {Path(name).name for name in FULL_REQUIRED if Path(name).parent == Path("build")}
-    for path in build.iterdir():
-        if path.is_symlink() or path.name not in (allowed if path.is_dir() else top_files):
-            raise RuntimeError(f"Unreviewed generated output: {path.relative_to(root)}")
-    files = set(FULL_REQUIRED)
-    for name in FULL_OUTPUT_ROOTS:
-        path = root / name
-        if not path.exists():
-            continue
-        if path.is_symlink() or not path.is_dir():
-            raise RuntimeError(f"Unexpected full fixture root: {name}")
-        if name == "build/process-signals":
-            files.update(_output_hashes(root, {"outputs": [name]}))
-            continue
-        if name == "build/package-native-gc-carriers":
-            files.update(_output_hashes(root, {"outputs": [name]}))
-            continue
-        if name == "build/process-lifecycle/core":
-            files.update(_output_hashes(root, {"outputs": [name]}))
-            continue
-        if name in ("build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams"):
-            files.update(_output_hashes(root, {"outputs": [name]}))
-            continue
-        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-fd-ready", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr"):
-            files.update(_output_hashes(root, {"outputs": [name]}))
-            continue
-        for member in path.rglob("*"):
-            # GHC's output directories can contain links to installed package
-            # interfaces. They are not fixture inputs and are never followed.
-            if member.is_symlink() and member.suffix in INTERMEDIATE_SUFFIXES:
-                continue
-            if member.is_symlink() or not (member.is_file() or member.is_dir()):
-                raise RuntimeError(f"Unexpected full fixture output: {member}")
-            if member.is_file() and member.suffix not in INTERMEDIATE_SUFFIXES:
-                files.add(member.relative_to(root).as_posix())
-    if len(files) > fast_inputs.MAX_FILES:
-        raise RuntimeError("Too many full fixture outputs")
-    result, total = {}, 0
-    for name in sorted(files):
-        path = fast_inputs.file_path(root, name)
-        if not path.is_file():
-            raise FileNotFoundError(f"Missing full fixture output: {name}")
-        if name == "build/thc-fixtures.path":
-            _require_prepared_encoder(root)
-        details = path.stat()
-        if details.st_size > fast_inputs.MAX_FILE_BYTES:
-            raise RuntimeError(f"Oversized full fixture output: {name}")
-        total += details.st_size
-        if total > fast_inputs.MAX_TOTAL_BYTES:
-            raise RuntimeError("Full fixture outputs exceed the reviewed bound")
-        result[name] = {"sha256": _digest(path), "mode": stat.S_IMODE(details.st_mode)}
-    return result
-
-
-def _prepare_full(root, run):
-    stamp_path = root / FULL_STAMP
-    try:
-        key = _full_key(root)
-        stamp = json.loads(stamp_path.read_text())
-        if isinstance(stamp, dict) and stamp.get("schema") == 1 and stamp.get("key") == key \
-                and stamp.get("outputs") == _full_output_hashes(root):
-            return {"mode": "full", "rebuilt": [], "reused": ["full"]}
-    except (OSError, ValueError, RuntimeError):
-        pass
-    stamp_path.unlink(missing_ok=True)
-    run("fixtures-full", ["bin/prepare-tests.sh"])
-    # Preparation may update a generated source. Bind the receipt to the final
-    # source identity and publish it only after every declared output is hashed.
-    try:
-        key = _full_key(root)
-        outputs = _full_output_hashes(root)
-        _write_stamp(stamp_path, {"schema": 1, "key": key, "outputs": outputs})
-    except (OSError, ValueError, RuntimeError) as error:
-        # Full preparation still ran. An unreviewed/missing output simply makes
-        # the next full selection prepare again instead of trusting this run.
-        print(f"Full fixture receipt unavailable: {error}", file=sys.stderr)
-    return {"mode": "full", "rebuilt": ["full"], "reused": []}
+def quarantined_classes(root):
+    """Classes withheld from execution, not reported as passing or deferred."""
+    path = Path(root) / MANIFEST
+    if not path.is_file():
+        return set()  # The standalone selector also supports non-THC test repos.
+    manifest, owners = _manifest(Path(root))
+    blocked = {name for name, group in manifest["groups"].items() if group.get("quarantined")}
+    return {name for name, owner in owners.items() if owner is not None
+            and blocked.intersection(_group_order(manifest, [owner]))}
 
 
 def prepare(root, selection, run, toolchain):
@@ -741,14 +397,16 @@ def prepare(root, selection, run, toolchain):
     classes = selection["junit"]["classes"]
     if not isinstance(classes, list) or not classes or not all(isinstance(name, str) for name in classes):
         raise ValueError("Invalid selected JUnit classes")
-    # Complete selections still have declared owners and can reuse each group's
-    # verified products. Only unknown classes or wildcards need the fallback.
     if any(name not in owners for name in classes):
-        return _prepare_full(root, run)
+        raise ValueError("Blanket fixture preparation is quarantined; select an exact nonquarantined test class")
     if selection.get("mode") not in ("narrow", "full"):
         raise ValueError("Invalid selected test mode")
 
     groups = _group_order(manifest, {owners[name] for name in classes if owners[name] is not None})
+    blocked = [name for name in groups if manifest["groups"][name].get("quarantined")]
+    if blocked:
+        raise ValueError("Quarantined fixtures cannot run: " + ", ".join(blocked)
+                         + "; see docs/fixture-quarantine.log")
     def classify():
         state = []
         for group_id in groups:
@@ -822,6 +480,12 @@ def main():
     root = Path(__file__).resolve().parents[2]
     _, owners = _manifest(root)
     selection = local_selection(args.tests, owners)
+    if selection["mode"] == "full":
+        parser.error("Blanket fixture preparation is quarantined; select an exact nonquarantined test class")
+    blocked = set(selection["junit"]["classes"]) & quarantined_classes(root)
+    if blocked:
+        parser.error("Quarantined tests cannot run: " + ", ".join(sorted(blocked))
+                     + "; see docs/fixture-quarantine.log")
     if selection["mode"] == "narrow" and all(owners[name] is None for name in selection["junit"]["classes"]):
         print("Selected tests need no generated fixtures.")
         return

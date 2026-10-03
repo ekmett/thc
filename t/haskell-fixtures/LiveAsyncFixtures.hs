@@ -1,6 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (115 live-async)
+-- Purpose: Check async delivery during live/strict execution preserves sharing and
+--   continuation state.
+-- Produces/consumed result: CBDs, oracle.txt and strict-oracle.txt.
+-- Cost and overlap: Keep synchronized live-delivery regressions distinct from static
+--   exception tests. One shared thread/native setup is enough; no timing-dependent success
+--   criteria.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 115.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

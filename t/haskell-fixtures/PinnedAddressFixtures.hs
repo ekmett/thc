@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (087 pinned-addresses)
+-- Purpose: Check pinning and address lifetime preserve native-visible storage.
+-- Produces/consumed result: CBDs and oracle.tsv.
+-- Cost and overlap: Keep pinning/lifetime behavior; ordinary unpinned array tests are
+--   insufficient. Share memory setup and avoid duplicate audit work.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 087.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

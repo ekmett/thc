@@ -2,6 +2,16 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (002 empty-join-input)
+# Purpose: Check empty-tuple arguments do not shift live join arguments or change results.
+# Produces/consumed result: Pre/post CBDs and native oracle.tsv.
+# Cost and overlap: Distinct argument-erasure regression, including first compiled
+#   execution. Two exports and one native reference are defensible; exact join shapes are
+#   not the contract.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 002.
+
 """Build a native empty-join oracle and verify exact GHC joins before/after Tidy."""
 import argparse
 import hashlib

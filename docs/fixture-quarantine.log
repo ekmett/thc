@@ -1,0 +1,78 @@
+Fixture quarantine: excluded from build/test execution and the new CMake/Ninja build
+
+These are not deferred tests that run anyway. The existing fixture selector refuses
+them, CI selection withholds them, and Gradle excludes their consumer classes in
+all modes. The existing selection manifest carries quarantined=true on each named
+group. The blanket preparation entry point now stops without running producers.
+Do not register these producers or consumers in the new CMake/Ninja graph.
+Direct producer commands remain source material for isolated repair, not build
+entry points. No fixture generation is being run during this inventory.
+
+Readmission requires useful semantic coverage, named file inputs, one producer
+per output file, and successful incremental regeneration without clearing a
+published output directory or reading a previous attempt. Keep private scratch
+files separate. A producer may have several declared outputs; an output may not
+have several producers. Exact compiler counts and historical receipts do not
+justify preserving a fixture.
+
+Previous attempts affect output names or are prerequisites:
+  simd-int32x4-bytearray (030), simd-word32x4-bytearray (031),
+  simd-floatx4-bytearray (032), simd-doublex2-bytearray (033): copy every old
+    receipt artifact before generation; missing old files block replacement;
+    random attempt directories become published inputs.
+  boxed-cas (044), boxed-array-extensions (049), original-stack (098): select
+    run-N using existing directories; move/archive previous manifests.
+
+Unrelated directory members change consumed inputs or make generation fail:
+  bytearray (018), mutable-bytearrays (019), resize-bytearrays (020),
+  mutable-bytearray-size (021), compare-byte-arrays (022): consume every stage CBD.
+  simd-address-families (027): manifest collects generated source/*.hs leftovers.
+  data-to-tag (039), proxy-void (042): consume all CBDs found in the output tree.
+  fetch-add-int-array (045), atomic-int-arrays (046), shrink-bytearrays (047),
+    mutvar (081): exact output-directory inventories reject unrelated CBDs.
+  floating-tuples (086), sum-results (088), tuple-input (114),
+    empty-tuple-input (126), show-word-list (127), state-tuple (128),
+    short-bytes-slices (129), tuple-return (130), unsafe-equality (134),
+    tag-to-enum (135): recursively discovered products enter receipts consumed
+    by tests. sum-results includes aggregate-layout, sum-layout and sum-result.
+  compiled-thunk-retention (097): boxed-array producer consumes every stage CBD;
+    its grouped consumers include the floating fixture. Split useful independent
+    coverage before admitting it separately.
+  array-slices (123): consumes every stage CBD and also rewrites shared coverage.
+
+Published directories are cleared as part of the recipe:
+  sqrt (026): removes build/sqrt.
+  address-identity (101): removes build/addr-identity.
+  synchronous-exceptions (103): selection/default script removes its output tree;
+    producer also enumerates stage CBDs.
+  corpus (119): removes group output directories before export.
+  managed-mvars (133): selected --refresh deletes the output tree.
+
+Joint output ownership:
+  cbv-coercion (014): independently produces tuple-arithmetic's pre CBD and an
+    explicit64-primops CBD. The owning arithmetic producers must be the sole
+    writers; a consumer needing those files must depend on their producers.
+  mutable-bytearrays (019), resize-bytearrays (020), mutable-bytearray-size (021),
+    array-slices (123): regenerate build/primop-coverage.json from inside recipes.
+    Shared coverage must have one separate owning rule.
+  backend-annotations (040): independently publishes build/thc-fixtures.path,
+    also published by compact-model and common/default setup. The backend fixture
+    must consume the encoder from one shared owner instead.
+  simd-capability-smoke (116): invokes the generator that also writes application
+    Java/fixture sources through Gradle. The generator needs one owner and the
+    fixture must consume the generated sources, not regenerate them.
+
+Shared infrastructure also excluded from translation as fixture rules:
+  fast_fixtures.py full receipt: recursive output inventory and top-level build/
+    allowlist make unrelated outputs affect reuse. Do not port this behavior.
+  prepare-tests.sh: blanket ordered preparation, cleanup commands, repeated shared
+    publication and metadata checks with undeclared outputs. Do not wrap this in
+    one CMake preparation target. Replace it with admitted file-producing rules.
+
+Not quarantined merely for this reason:
+  Test-private filesystem state used to check unlink/rename/directory semantics.
+  A shared tool called by several rules, provided its products have ONE owning
+    rule and callers only consume those products.
+  The application runtime's native providers are Gradle-owned application products,
+    not fixture admission decisions. Their incrementality defects are recorded in
+    fixture-inputs.log's shared appendix and still need repair at their owner.

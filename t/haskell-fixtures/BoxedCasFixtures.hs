@@ -1,6 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (044 boxed-cas)
+-- Purpose: Check boxed compare-and-swap success/failure and pointer identity.
+-- Produces/consumed result: Stage CBDs and native observations in command stdout.
+-- Cost and overlap: Keep CAS semantics and sharing controls. Run-number directories and
+--   previous-manifest archives are unrelated to them; quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 044.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

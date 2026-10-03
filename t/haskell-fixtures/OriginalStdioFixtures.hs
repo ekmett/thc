@@ -1,6 +1,57 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (064 original-fcntl)
+-- Purpose: Check descriptor flags and fcntl argument transport through installed package
+--   Core.
+-- Produces/consumed result: CBD pair and oracle.json, with runtime ABI resources.
+-- Cost and overlap: A small unix-package integration case can cover this. Twelve package-
+--   constant checks and a standalone native harness are not independently justified.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 064.
+--
+-- Fixture rationale (065 original-errno)
+-- Purpose: Check errno is read/written in the correct native context across foreign calls.
+-- Produces/consumed result: CBDs and oracle.json derived from native observations.
+-- Cost and overlap: Keep the FFI errno boundary, especially thread/context isolation.
+--   Consolidate into package FFI integration; do not test the system errno constants
+--   themselves.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 065.
+--
+-- Fixture rationale (066 original-process-identity)
+-- Purpose: Check process identity calls execute through ordinary package linkage.
+-- Produces/consumed result: CBDs, oracle.json and installed package/runtime modules reused
+--   by other groups.
+-- Cost and overlap: No standalone libc identity harness is justified. Keep package-call
+--   smoke only; move shared package acquisition to its own owner and never cache live
+--   PID/UID observations as stable results.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 066.
+--
+-- Fixture rationale (080 original-stdio-read)
+-- Purpose: Check reads preserve buffer contents, lengths, EOF and file-position behavior.
+-- Produces/consumed result: CBDs, input.bin and oracle.json from forty native cases.
+-- Cost and overlap: Keep guest buffer/EOF behavior in package I/O integration. A new
+--   process per input is unnecessary; seekable stdin must remain an explicit input where
+--   needed.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 080.
+--
+-- Fixture rationale (099 original-stdio)
+-- Purpose: Check public writes preserve bytes/counts and descriptor behavior.
+-- Produces/consumed result: Installed/Core fixtures and oracle.json for write operations.
+-- Cost and overlap: One package I/O integration test can cover this. 144 native process
+--   starts for four write operations are unjustified; batch cases and retire the separate
+--   conformance harness.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 099.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (131 process-signals)
+-- Purpose: Check guest signals and child-process host failures respect JVM/guest
+--   isolation.
+-- Produces/consumed result: oracle.txt, native-controls.txt and the Gradle-built thc
+--   launcher.
+-- Cost and overlap: Separate processes are necessary for signal isolation. Keep bounded
+--   THC boundary cases; reuse the application launcher and do not rebuild it inside
+--   fixture production.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 131.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

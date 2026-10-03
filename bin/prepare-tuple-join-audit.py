@@ -2,6 +2,18 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (124 tuple-join)
+# Purpose: Check joins transporting tuple results preserve values across branches and
+#   recursion.
+# Produces/consumed result: TupleJoinAudit CBDs and oracle.tsv; generated receipt/audits
+#   are not consumer inputs.
+# Cost and overlap: Keep distinct join-result execution in the aggregate corpus. Drop
+#   unused receipt work and exact join/state-lambda counts; do not retain a whole pipeline
+#   for metadata ceremony.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 124.
+
 """Build a native tuple-join oracle and verify exact GHC joins before/after Tidy."""
 import argparse
 import hashlib

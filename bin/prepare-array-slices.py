@@ -2,6 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (123 array-slices)
+# Purpose: Check slices, offsets and lazy array contents remain correct.
+# Produces/consumed result: ArraySliceAudit/closure CBDs and oracle.tsv.
+# Cost and overlap: Compare with small/boxed-array copy and slice cases; retain only
+#   distinct laziness/offset behavior there. Directory scans and shared coverage writes
+#   keep this quarantined.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 123.
+
 """Fresh shallow Array# slice semantics with an explicit public-copy frontier."""
 from pathlib import Path
 import hashlib, importlib.util, json, os, subprocess

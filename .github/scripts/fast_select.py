@@ -819,6 +819,12 @@ def select(repo, base_ref, head_ref, *, cadence=None):
     if not selected_junit or not selected_python:
         widen("empty-selection")
         mode = "full"
+    quarantined = set()
+    if (repo / ".github/scripts/fast-fixtures.json").is_file():
+        import fast_fixtures
+        quarantined = fast_fixtures.quarantined_classes(repo)
+    withheld = sorted(selected_junit & quarantined)
+    selected_junit.difference_update(quarantined)
     # Validate current files too: a missing/symlinked test must never produce a
     # runnable success plan, even when the committed object still exists.
     selected_paths = set(selected_python) | {classes[name] for name in selected_junit}
@@ -829,7 +835,7 @@ def select(repo, base_ref, head_ref, *, cadence=None):
     if not existing:
         widen("selected-test-file-missing-or-symlinked")
         mode = "full"
-    result = dict(schema=1, mode=mode,
+    result = dict(schema=1, mode=mode, quarantined=withheld,
                 runnable=bool(selected_junit and selected_python and existing
                               and (not polyglot_required or (polyglot_classes and polyglot_inventory_complete))),
                 base=base, head=head, requestedBase=base_ref, requestedHead=head_ref,
@@ -908,8 +914,9 @@ def groups(repo, *, system=None, cadence=None):
         raise SelectionError("Cannot apply cadence to an invalid inventory")
     manifest, owners = fast_fixtures._manifest(Path(repo))
     classes = set(inventory["junit"]["classes"])
-    if classes != set(owners):
-        raise SelectionError(f"Fixture ownership mismatch: unmapped={sorted(classes-set(owners))}, stale={sorted(set(owners)-classes)}")
+    expected = set(owners) - fast_fixtures.quarantined_classes(repo)
+    if classes != expected:
+        raise SelectionError(f"Fixture ownership mismatch: unmapped={sorted(classes-expected)}, stale={sorted(expected-classes)}")
     # A shared expensive provider is acquired once for its connected consumers.
     components = fixture_components(manifest)
     if cadence is not None and cadence not in ("commit", "hourly", "nightly"):

@@ -2,6 +2,16 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (114 tuple-input)
+# Purpose: Check aggregate arguments preserve component values and calling convention
+#   layout.
+# Produces/consumed result: TupleInputAudit CBDs and oracle TSVs.
+# Cost and overlap: Keep aggregate transport cases, sharing the aggregate corpus.
+#   Recursive output receipts make this recipe quarantined; no need to archive compiler
+#   intermediates.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 114.
+
 """Export typed unboxed-tuple input boundaries and verify native wraparound results."""
 import argparse
 from datetime import datetime, timezone

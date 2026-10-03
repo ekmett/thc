@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (088 sum-results)
+# Purpose: Check sum alternatives and aggregate result layouts carry the right values
+#   through execution.
+# Produces/consumed result: Aggregate-frontier, aggregate-layout, sum-layout and sum-
+#   result CBDs/oracles.
+# Cost and overlap: Retain semantic layout cases in one aggregate corpus. Four producer
+#   flows, recursive receipts and shape proofs are not justified; quarantined pending
+#   consolidation.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 088.
+
 """Pinned GHC sum layouts, native fixtures and exact runtime capability boundaries."""
 import argparse
 import hashlib

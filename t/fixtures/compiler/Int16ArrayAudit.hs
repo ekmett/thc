@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (009 int16-arrays)
+-- Purpose: Check 16-bit loads/stores and boundary literals through compiled execution.
+-- Produces/consumed result: Array CBDs, oracle.tsv and literal-oracle.tsv.
+-- Cost and overlap: Boundary compiled-call coverage is useful. Share acquisition with
+--   other scalar widths; preserve the execution check, not source-shape counts.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 009.
+
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 
 -- |

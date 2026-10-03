@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+# Fixture rationale (133 managed-mvars)
+# Purpose: Check MVar blocking, wakeup and cross-context isolation preserve runtime
+#   semantics.
+# Produces/consumed result: CBDs, oracle.tsv and context-oracle.tsv; native concurrency
+#   controls.
+# Cost and overlap: Keep the concurrency/context contracts. Refresh deleting the output
+#   tree is not acceptable acquisition; quarantine until named outputs can be regenerated
+#   incrementally.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 133.
 """Genuine GHC MVar Core/contracts and deterministic native-only oracle evidence."""
 
 import argparse

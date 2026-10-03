@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (076 original-stdio-truncate)
+-- Purpose: Check truncation updates length and position through the guest I/O boundary.
+-- Produces/consumed result: CBDs and oracle.json from result files.
+-- Cost and overlap: Fold essential length/position behavior into one file-lifecycle test.
+--   Fourteen per-case native executions and a standalone harness need no preservation.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 076.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

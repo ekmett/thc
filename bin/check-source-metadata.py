@@ -2,6 +2,18 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (118 source-core)
+# Purpose: Check real source notes survive export and remain available to runtime
+#   diagnostics.
+# Produces/consumed result: SourceNotes and RepresentationAudit CBDs plus metadata check
+#   results.
+# Cost and overlap: Keep user-visible source mapping and essential join behavior. Share
+#   the exports; exact compiler representation structure needs its own contract or
+#   removal.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 118.
+
 """Validate source tables independently of the runtime's section resolver."""
 import argparse
 import json

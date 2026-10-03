@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (017 tuple-arithmetic)
+-- Purpose: Check carry, wide multiply and quotient/remainder return all result components
+--   correctly.
+-- Produces/consumed result: CBDs, oracle.tsv and call-oracle.tsv.
+-- Cost and overlap: Keep multi-result arithmetic and cross-call cases. One native
+--   executable already serves both; this producer must solely own its CBDs.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 017.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

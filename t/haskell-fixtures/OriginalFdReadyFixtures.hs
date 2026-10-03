@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (074 original-fd-ready)
+-- Purpose: Check descriptor readiness integrates with blocking/cancellation semantics.
+-- Produces/consumed result: Declaration/Core fixtures, oracle.json and ABI controls.
+-- Cost and overlap: Keep the runtime waiting boundary. Avoid duplicating readiness in fd-
+--   ready, handle-readiness and process scheduling; share controls and acquisition.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 074.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

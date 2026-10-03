@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (005 integer-primops)
+-- Purpose: Check fixed-width Int#/Word# arithmetic, comparisons and overflow behavior.
+-- Produces/consumed result: Primitive CBDs and native oracle.tsv.
+-- Cost and overlap: Keep the math and independent model. This is not arbitrary-precision
+--   Integer package coverage; consolidate overlapping arithmetic cases rather than add
+--   proof artifacts.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 005.
+
 {-# LANGUAGE MagicHash #-}
 
 -- |

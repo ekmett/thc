@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (042 proxy-void)
+-- Purpose: Check zero-width proxy arguments do not consume runtime value slots.
+-- Produces/consumed result: Pre/post CBDs and native oracle.tsv.
+-- Cost and overlap: Distinct erasure behavior may belong in the empty-tuple argument
+--   corpus. Directory-dependent CBD discovery and duplicate predicate setup keep this
+--   quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 042.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

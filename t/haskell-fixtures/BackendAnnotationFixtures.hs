@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (040 backend-annotations)
+-- Purpose: Check declared backend policy is exported, honored and rejects invalid
+--   declarations.
+-- Produces/consumed result: Pre/post/interface BackendAnnotations CBDs and compiler
+--   diagnostics.
+-- Cost and overlap: Backend selection is a public compiler contract. Duplicated encoder-
+--   path publication is not; quarantine this recipe until it consumes one shared encoder
+--   owner.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 040.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

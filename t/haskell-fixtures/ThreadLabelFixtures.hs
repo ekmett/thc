@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (061 thread-label)
+-- Purpose: Check label assignment, replacement and dead-thread label behavior.
+-- Produces/consumed result: CBDs and native oracle.txt.
+-- Cost and overlap: Keep observable labeling semantics. Share thread setup; repeated per-
+--   entry evidence files are not a reason for a separate suite.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 061.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (122 truffle-strings)
+-- Purpose: Check the public string intrinsics and suspended operand evaluation preserve
+--   results.
+-- Produces/consumed result: THC.Prim/string/exception CBDs and oracle.json.
+-- Cost and overlap: Keep THC-owned intrinsic/continuation semantics. Share runtime-module
+--   production; ordinary text operations should reuse package integration rather than
+--   duplicate native internals.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 122.
 {-# LANGUAGE OverloadedStrings #-}
 module TruffleStringFixtures (prepareTruffleStrings) where
 

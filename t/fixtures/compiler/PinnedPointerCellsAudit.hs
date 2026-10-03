@@ -1,6 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (013 pinned-pointer-cells)
+-- Purpose: Check stored pointers survive cell reads/writes with the intended identity and
+--   lifetime.
+-- Produces/consumed result: CBDs, oracle.tsv and cell audit reports.
+-- Cost and overlap: Real pointer lifetime/transport coverage can justify native
+--   comparison. Exact receipt-directory membership is ceremony and must not define
+--   correctness.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 013.
+
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 
 -- |

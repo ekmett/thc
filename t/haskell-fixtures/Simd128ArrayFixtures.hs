@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (028 simd128-arrays)
+-- Purpose: Check 128-bit integer vector array loads/stores across element widths.
+-- Produces/consumed result: CBDs, input cases and native/model oracle rows.
+-- Cost and overlap: Keep width/lane memory cases, sharing setup with the broader vector-
+--   memory corpus. ARM model-only coverage must not be described as native verification.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 028.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -2,6 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (086 floating-tuples)
+# Purpose: Check mixed floating aggregate results survive calls and joins.
+# Produces/consumed result: Pre/post CBDs, oracle.tsv and bits.tsv.
+# Cost and overlap: Aggregate floating transport is useful; combine with general tuple
+#   result coverage. Recursive receipts and frozen CPR/tuple/join shapes keep this recipe
+#   quarantined.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 086.
+
 """Native Data.Complex/IEEE oracle and strict floating tuple result evidence."""
 import argparse
 from datetime import datetime, timezone

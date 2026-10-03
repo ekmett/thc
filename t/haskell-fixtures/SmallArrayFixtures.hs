@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (048 small-arrays)
+-- Purpose: Check small boxed-array operations and safe slices preserve values and
+--   laziness.
+-- Produces/consumed result: Pre/post CBDs and oracle.tsv.
+-- Cost and overlap: Keep the distinct small-array representation cases. Share setup with
+--   boxed arrays; stale completion receipts are a repair item, not a test contract.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 048.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

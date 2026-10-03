@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (134 unsafe-equality)
+-- Purpose: Check unsafe equality/coercion boundaries erase proofs without moving live
+--   values or effects.
+-- Produces/consumed result: CBDs, oracle.tsv and predicate/control evidence.
+-- Cost and overlap: Keep essential soundness/rejection cases, not exact lowering counts.
+--   Recursive output receipts keep this recipe quarantined; combine erasure cases with
+--   proxy/empty-tuple coverage.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 134.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

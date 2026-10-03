@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (117 unix-libc)
+-- Purpose: Check unix package foreign declarations resolve through the expected
+--   ABI/linkage boundary.
+-- Produces/consumed result: Exported/declaration Core facts derived from installed unix
+--   interfaces.
+-- Cost and overlap: No separate libc implementation audit is justified. Retain only THC
+--   ABI/transport negative controls; successful package integration should cover ordinary
+--   library behavior.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 117.
 {-# LANGUAGE CPP, OverloadedStrings #-}
 
 -- |

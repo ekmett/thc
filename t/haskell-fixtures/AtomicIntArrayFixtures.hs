@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (046 atomic-int-arrays)
+-- Purpose: Check fetch operations, compare-and-swap widths and atomic load/store results.
+-- Produces/consumed result: CBD pairs, requests.tsv and oracle.tsv.
+-- Cost and overlap: Keep one consolidated atomic-array corpus; 24 per-entry audit reports
+--   need a specific failure contract. Directory inventory preconditions keep it
+--   quarantined.
+-- Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 046.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

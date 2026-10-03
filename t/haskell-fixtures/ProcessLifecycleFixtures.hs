@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (054 process-lifecycle)
+-- Purpose: Check process launch/wait/status and signal policy across the THC host
+--   boundary.
+-- Produces/consumed result: Core fixtures and native process-oracle/sigchld-policy
+--   executables.
+-- Cost and overlap: Real child-process lifecycle needs integration coverage. Preparing
+--   these controls for every unrelated Gradle Test is unjustified; depend on them only for
+--   their consumers.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 054.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

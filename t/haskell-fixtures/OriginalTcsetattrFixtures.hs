@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (062 original-tcsetattr)
+-- Purpose: Check termios writes cross the managed/native boundary without corrupting the
+--   image.
+-- Produces/consumed result: Core CBDs, oracle.json and a native PTY server executed by the
+--   test.
+-- Cost and overlap: PTY transport can justify an integration test. Merge get/set setup; do
+--   not maintain a separate libc conformance suite or duplicate ABI probes.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 062.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

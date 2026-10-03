@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (132 record-fields)
+-- Purpose: Check record-field selection works through direct and installed-interface Core.
+-- Produces/consumed result: RecordFieldLibrary/Client CBDs and pre/post native
+--   observations.
+-- Cost and overlap: Retain an installed-interface record case if it exercises a distinct
+--   path. Share interface acquisition; three repeated exports/audits for ordinary
+--   selectors need reduction.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 132.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

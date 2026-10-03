@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (104 deep-evaluation)
+-- Purpose: Check deep guest evaluation remains stack-safe and matches native results.
+-- Produces/consumed result: CBDs and native observations consumed by AstStackNativeTest.
+-- Cost and overlap: Retain bounded stack-safety behavior; shallow smoke cannot replace it.
+--   Depth is a regression workload, not permission for unbounded or slow preparation.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 104.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

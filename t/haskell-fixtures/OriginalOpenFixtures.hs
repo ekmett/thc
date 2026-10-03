@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (069 original-open)
+-- Purpose: Check open requests preserve resource ownership and blocking/async behavior.
+-- Produces/consumed result: Core CBDs, oracle.json and the runtime native-open provider.
+-- Cost and overlap: Retain open/cancel/resource-leak behavior. Exact internal root counts
+--   must go; native provider testing is justified only by THC-owned request state.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 069.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

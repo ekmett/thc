@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (038 simd-arithmetic)
+-- Purpose: Check vector shuffle results and lane selection.
+-- Produces/consumed result: CBD, input TSV and scalar-lane native oracle.tsv.
+-- Cost and overlap: The distinctive behavior is shuffling, not a second all-arithmetic
+--   suite. Merge ordinary lane arithmetic with generated SIMD smoke.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 038.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

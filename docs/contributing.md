@@ -17,7 +17,9 @@ PowerShell setup.
 | `make lint-haskell` | Lint tracked Haskell sources |
 | `make docs`, `make docs-check` | Build and check the documentation site |
 
-Omit `TESTS` for the complete JVM test suite. `make clean` removes Gradle and
+During fixture triage, select an exact nonquarantined class with `TESTS`. Blanket
+preparation is disabled; [quarantined fixtures](fixture-quarantine.log) are excluded
+from local and CI selections and from direct Gradle execution. `make clean` removes Gradle and
 Cabal build products; `make distclean` also removes the checkout's `.gradle` and
 `.gradle-user-home`. Neither removes an external cache. Use
 `GRADLE_FLAGS=--offline` or `CABAL_FLAGS=--offline` for an offline build.
@@ -25,7 +27,7 @@ Cabal build products; `make distclean` also removes the checkout's `.gradle` and
 With `TESTS`, fixture preparation uses the same dependency map as CI and reuses
 unchanged inputs. Exact class and method selectors prepare only their dependencies;
 fixture-free classes do not run the Haskell producers. Wildcards and unrecognized
-selectors conservatively prepare the full corpus. Local preparation disables ambient GHC package environments;
+selectors stop before preparation; they cannot fall back to the quarantined corpus. Local preparation disables ambient GHC package environments;
 fixture dependencies must be declared by their producers. `GHC` selects the
 compiler and its companion package manager (`GHC_PKG` can override the latter).
 

@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (106 scalar-exception-results)
+-- Purpose: Check catch/mask/continuation paths preserve scalar result values.
+-- Produces/consumed result: CBDs and native oracle observations.
+-- Cost and overlap: Fold scalar rows into the general exception-result corpus unless a
+--   separate compiled path is demonstrated. Separate compiler/native preparation is not
+--   justified by scalar names.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 106.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

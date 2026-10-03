@@ -2,6 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (039 data-to-tag)
+# Purpose: Check constructor tags survive evaluation and accepted/rejected representation
+#   cases.
+# Produces/consumed result: Stage CBDs and oracle.tsv.
+# Cost and overlap: Retain observable tag behavior and essential rejection cases. Exact
+#   application counts and output-directory discovery are unjustified; quarantined.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 039.
+
 """Pinned GHC family proofs and saturated constructor-to-tag native/model checks."""
 import core_package_manifest
 import hashlib

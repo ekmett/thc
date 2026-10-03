@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (085 interface-core)
+-- Purpose: Check installed interfaces export executable Core and correct
+--   foreign/import/export linkage.
+-- Produces/consumed result: Interface CBDs, package manifests and native observations for
+--   the consumer scenarios.
+-- Cost and overlap: Core-bearing versus thin interfaces and linkage need integration
+--   tests. Split independent scenarios: cache-corruption experiments, repeated audits and
+--   every negative variant must not run whenever any consumer needs one CBD.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 085.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

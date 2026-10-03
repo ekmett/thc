@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (041 compact-model)
+-- Purpose: Encode small caller-supplied Core models for runtime and codec tests.
+-- Produces/consumed result: Exactly the requested temporary CBD from input JSON; shared
+--   executable location.
+-- Cost and overlap: Useful shared tool, not an oracle fixture. Build it once; do not
+--   create per-test archives or let several recipes publish its location file.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 041.
 -- |
 -- Copyright   : (C) 2026 Edward Kmett
 -- License     : UPL-1.0 AND BSD-3-Clause

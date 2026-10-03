@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (120 strict-fields)
+-- Purpose: Check strict constructor fields force values at the correct time.
+-- Produces/consumed result: StrictFields.cbd consumed directly by StrictFieldsTest.
+-- Cost and overlap: Keep laziness/exception-sensitive constructor semantics. One Core
+--   export is proportionate; no native harness or extra receipt is needed for its checked
+--   model.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 120.
+
 {-# LANGUAGE MagicHash, NoImplicitPrelude #-}
 
 -- |

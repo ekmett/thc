@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (043 rubbish-literals)
+-- Purpose: Check authentic GHC rubbish literals are handled with their representation
+--   semantics.
+-- Produces/consumed result: Installed literal inventory, CBDs and native oracle.json.
+-- Cost and overlap: Keep a small original-Core boundary check if synthetic models miss it.
+--   Native object/disassembly acquisition must serve this contract, not a frozen lowering
+--   shape.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 043.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (077 original-stdio-seek)
+-- Purpose: Check guest seek results, errors and file-position state.
+-- Produces/consumed result: CBDs/oracle.json plus shared installed modules.
+-- Cost and overlap: Retain a small seek/read/write lifecycle case. Twenty-four native
+--   cases, constant discovery and separate acquisition are excessive for ordinary package
+--   behavior.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 077.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

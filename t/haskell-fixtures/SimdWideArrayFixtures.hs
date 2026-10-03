@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (029 simd-wide-arrays)
+-- Purpose: Check wide vector array storage and lane extraction.
+-- Produces/consumed result: Pre CBD and scalar-lane native oracle.tsv.
+-- Cost and overlap: Wide layouts need coverage beyond 128-bit cases. Reuse the vector-
+--   memory pipeline; separate historical audit inventories add no value.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 029.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

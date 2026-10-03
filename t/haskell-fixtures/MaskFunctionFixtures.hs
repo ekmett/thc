@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (107 mask-functions)
+-- Purpose: Check masking/unmasking functions preserve mask state, laziness and exception
+--   delivery.
+-- Produces/consumed result: MaskFunctionAudit CBDs and oracle.tsv.
+-- Cost and overlap: Keep: masking is a runtime contract that arithmetic tests do not
+--   cover. Use a bounded shared exception/thread corpus and avoid scheduling assumptions.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 107.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

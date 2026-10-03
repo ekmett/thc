@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (102 address-array-copy)
+-- Purpose: Check copying pointer/address arrays preserves aliases and values.
+-- Produces/consumed result: CBDs/oracle plus temporary synthetic CBDs/audits written by
+--   the test.
+-- Cost and overlap: Keep address transport/lifetime cases beyond ordinary byte copies.
+--   Share memory setup and make the test-time encoder/auditor explicit rather than
+--   assuming preparation built them.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 102.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

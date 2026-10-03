@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (095 unaligned-scalar-memory)
+-- Purpose: Check unaligned scalar accesses preserve bytes across widths.
+-- Produces/consumed result: CBDs and oracle.tsv.
+-- Cost and overlap: Distinct from aligned memory and worth retaining. Use shared scalar-
+--   memory preparation; one independent native reference per target is sufficient.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 095.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

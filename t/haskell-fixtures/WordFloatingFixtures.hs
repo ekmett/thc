@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (016 word-floating)
+-- Purpose: Check unsigned integer-to-floating conversion at rounding and high-bit
+--   boundaries.
+-- Produces/consumed result: WordFloatingAudit CBDs and oracle.tsv of float/double bits.
+-- Cost and overlap: Keep the unsigned conversion cases: signed numeric tests are not
+--   substitutes. Batch them with other numeric oracles.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 016.
+
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

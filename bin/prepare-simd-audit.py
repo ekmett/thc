@@ -2,6 +2,25 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (138 simd-int64x2)
+# Purpose: Check Int64x2 lane arithmetic and signed wraparound.
+# Produces/consumed result: Pre/post CBDs and optional native oracle.tsv.
+# Cost and overlap: Likely overlap with general SIMD smoke: retain uncovered 64-bit edge
+#   cases there. Separate arithmetic preparation needs demonstrated distinct coverage, not
+#   a vector name.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 138.
+#
+# Fixture rationale (139 simd-int32x4)
+# Purpose: Check Int32x4 lane arithmetic and signed wraparound.
+# Produces/consumed result: Pre/post CBDs and optional native oracle.tsv.
+# Cost and overlap: Likely overlap with general SIMD smoke: migrate missing 32-bit cases.
+#   Another compiler/native pipeline is not justified merely by a different lane count.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 139.
+
 """Real GHC vector export and optional native oracle; no JVM support claim."""
 import argparse
 import hashlib

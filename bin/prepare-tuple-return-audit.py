@@ -2,6 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (130 tuple-return)
+# Purpose: Check tuple-valued returns preserve components through callers and aggregate
+#   paths.
+# Produces/consumed result: TupleReturnAudit CBDs/oracle.tsv and aggregate-frontier
+#   CBDs/oracle.
+# Cost and overlap: Keep result transport in the general aggregate corpus. This is not
+#   independent of sum-results; recursive receipts and undeclared-looking setup complexity
+#   justify quarantine.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 130.
+
 """Native tuple-return oracle and genuine pre/post-Tidy exports, without THC claims."""
 import argparse
 from datetime import datetime, timezone

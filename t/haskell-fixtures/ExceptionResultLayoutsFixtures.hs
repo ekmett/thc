@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (105 exception-result-layouts)
+-- Purpose: Check exception continuations preserve each result representation and aggregate
+--   layout.
+-- Produces/consumed result: CBDs and oracle.tsv across result layouts.
+-- Cost and overlap: Keep distinct continuation layouts but consolidate with scalar-
+--   exception-results. Forty-seven native process starts for 141 rows are avoidable; one
+--   batched oracle can supply them.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 105.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

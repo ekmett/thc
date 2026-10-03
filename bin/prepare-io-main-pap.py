@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+# Fixture rationale (112 io-main-pap)
+# Purpose: Check an IO main supplied through a partial application executes correctly.
+# Produces/consumed result: IoMainPapAudit CBDs and native oracle.
+# Cost and overlap: Keep this small application-entry regression; general arithmetic calls
+#   do not necessarily exercise main/PAP startup. Setup should remain a single
+#   source/oracle flow.
+# Build status: Value review only; admission still requires explicit inputs and single-
+#   owner outputs.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 112.
 """Genuine optimized IO () PAPs, checked native effects, and strict IO audits."""
 import argparse
 from datetime import datetime, timezone

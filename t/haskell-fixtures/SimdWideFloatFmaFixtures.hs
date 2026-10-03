@@ -1,5 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (036 simd-wide-floating-fma)
+-- Purpose: Check 512-bit fused operations and wide result layouts.
+-- Produces/consumed result: Wide CBDs and scalar-lane oracle.txt.
+-- Cost and overlap: Keep only distinct wide-layout execution cases; reuse the narrower FMA
+--   producer/data rather than a second harness.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 036.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,6 +1,18 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- Fixture rationale (108 core-continuation)
+-- Purpose: Check continuation resumption, lazy I/O callbacks and large-literal cases
+--   preserve results.
+-- Produces/consumed result: Three Core modules and native-output files from three native
+--   programs.
+-- Cost and overlap: Continuation behavior is essential; large-literal selection is a
+--   separate concern. Split ownership without compiling three native programs or launching
+--   many audits for every consumer.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 108.
+
 -- |
 -- Module      : ContinuationFixtures
 -- Copyright   : (C) 2026 Edward Kmett

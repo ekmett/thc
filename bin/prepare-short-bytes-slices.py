@@ -2,6 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+# Fixture rationale (129 short-bytes-slices)
+# Purpose: Check public ShortByteString slicing preserves bounds and byte contents.
+# Produces/consumed result: Fixture/boot CBDs, requests.tsv and oracle.tsv.
+# Cost and overlap: Package behavior is useful, duplicating bytestring/C internals is not.
+#   Merge representative slicing into package smoke after removing recursive inventory;
+#   quarantined.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 129.
+
 """Fresh native values and complete original-source closure for public byte slices."""
 import argparse
 import ast

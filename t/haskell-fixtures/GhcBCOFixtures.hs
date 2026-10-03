@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (055 ghc-bco)
+-- Purpose: Check the runtime contract for GHC bytecode-object primops and unsupported
+--   cases.
+-- Produces/consumed result: Two CBDs consumed by GhcBCOTest.
+-- Cost and overlap: A small behavior/rejection test can be useful. Seventy auditor
+--   subprocesses for two CBDs are not justified; collapse duplicate reports before
+--   admission.
+-- Build status: Value review only; admission still requires explicit inputs and single-
+--   owner outputs.
+-- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 055.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

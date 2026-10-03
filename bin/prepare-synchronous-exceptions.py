@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+# Fixture rationale (103 synchronous-exceptions)
+# Purpose: Check synchronous throw/catch preserves state, evaluation order and exception
+#   contracts.
+# Produces/consumed result: Stage CBDs, contracts.json and native observations.
+# Cost and overlap: Keep semantics and negative controls. Requiring output-tree deletion
+#   and auditing a directory glob is unacceptable; quarantined until outputs are closed.
+# Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
+# Detailed file inputs/outputs: docs/fixture-inputs.log, entry 103.
 """Export and check native synchronous catch, raise and masking-state behavior."""
 
 import argparse
