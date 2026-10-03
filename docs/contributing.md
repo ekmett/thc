@@ -135,7 +135,9 @@ method-size limit. THC's [build normalizers](../src/build/java/thc/buildlogic/By
 split that metadata before compilation and reject unrecognized generated source.
 Review them when upgrading Truffle. The [runtime protocol artifacts](../tools/truffle-protocol/README.md)
 are separate from upstream Maven artifacts; that reference describes their APIs
-and the limitations of `-Pthc.stockTruffle=true`.
+and their implementation. The [patch inventory](truffle-patches.md) describes
+effects on other languages sharing the runtime and the limitations of
+`-Pthc.stockTruffle=true`. Update it whenever a patch changes.
 
 ## Continuous integration
 

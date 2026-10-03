@@ -24,6 +24,11 @@ directory. The Gradle wrapper downloads its dependencies on the first build.
 Linux x86_64 setup includes clang and GMP development headers and libraries
 (for example, `libgmp-dev` on Debian/Ubuntu) for native package dependencies.
 
+The JDK is stock, but THC's default distribution includes **patched Truffle API,
+runtime and Sulong JARs**. Their [patch inventory and shared-host effects](docs/truffle-patches.md)
+are part of the embedding contract: some changes affect other languages using
+the same runtime, including across separate contexts and engines.
+
 From the repository root:
 
 ```sh

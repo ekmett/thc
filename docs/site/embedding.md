@@ -11,6 +11,12 @@ version-stable embedding SDK yet. Public classes in `thc.runtime` exist for
 Truffle specialization and generated nodes;
 their visibility does not make them supported host APIs.
 
+**The default distribution patches shared Truffle and Sulong classes.** Review
+the [patch inventory and host-wide effects](../truffle-patches.md) before adding
+THC to a host running other languages. AOT exception profiling, OSR scheduling
+and Sulong behavior can change for those languages too. Separate contexts or
+engines do not isolate the loaded runtime implementation.
+
 ## Call a declared Haskell export
 
 A `foreign export ccall` declaration supplies the external name and scalar

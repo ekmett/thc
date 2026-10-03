@@ -4,7 +4,7 @@ By default, THC builds distinct Truffle artifacts from the published 25.3.4.1 so
 archives. It never replaces shared Maven cache files. The build checks pinned
 source and binary hashes and preserves the upstream notices.
 `-Pthc.stockTruffle=true` selects the upstream API, runtime and Sulong instead;
-see the [stock-mode limits](../../docs/contributing.md#generated-instruction-metadata).
+see the [patch inventory, shared-host effects and stock-mode limits](../../docs/truffle-patches.md).
 
 ## Bytecode generation
 

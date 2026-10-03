@@ -11,6 +11,7 @@ the representation and runtime references for the behavior your program relies o
 | Prepare installed library dependencies | [Complete GHC Core](ghc-core.md) |
 | Call native libraries or expose Haskell functions | [Foreign code](interface-foreign.md), [JVM embedding](site/embedding.md), [JavaScript and polyglot calls](polyglot.md) |
 | Use context permissions, tracing or JVM observations | [Runtime services](runtime-services.md), [CPU affinity API](cpu-affinity-api.md) |
+| Select a runtime for a shared host | [Truffle patches and their scope](truffle-patches.md) |
 | Build on Windows | [Windows](windows.md) |
 | Package pure code as a native executable | [Native Image](native-image-feasibility.md), [compiled code cache](native-code-cache.md) |
 | Investigate a rejected program | [Core audit](../bin/core-audit.md), [primop behavior](primop-behavior.md), [debug locations](debug-locations.md) |

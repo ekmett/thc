@@ -36,6 +36,7 @@ guides =
   [ Guide "docs/driver.md" "driver" "Build and run"
   , Guide "docs/cabal.md" "cabal" "Cabal integration"
   , Guide "docs/site/embedding.md" "embedding" "Embed on the JVM"
+  , Guide "docs/truffle-patches.md" "truffle-patches" "Truffle patches and shared hosts"
   , Guide "docs/site/jvm.md" "jvm" "JVM implementation"
   , Guide "docs/ghc-core.md" "ghc-core" "GHC library Core"
   , Guide "docs/core-package-manifest.md" "core-packages" "Core packages"
