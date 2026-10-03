@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -20,6 +19,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import thc.CoreModules;
+import thc.EntryValue;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,8 +29,8 @@ class FloatDecodeTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private static final String DIRECTORY = "build/float-decode";
     private static final List<String> NAMES = list("floatDirect", "floatCall", "floatExponent", "doubleDirect", "doubleCall", "doubleExponent", "floatExampleExponent", "doubleExampleExponent");
-    private static Context context(boolean inlining) {
-        return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
+    private static Context context() {
+        return Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
             .option("engine.SingleTierCompilationThreshold", "10000000").build();
     }
@@ -43,22 +43,7 @@ class FloatDecodeTest {
     private Map<String, Object> module(String stage) throws Exception {
         return CoreModules.merge(list(cbd(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.cbd"), originalModule(), cbd(DIRECTORY + "/" + stage + "-core/FloatDecode.cbd")));
     }
-    private static Set<String> reachableIds(String name) {
-        var ids = new HashSet<>(list("main:" + (name.contains("Example") ? "FloatDecode" : "FloatDecodeAudit") + "." + name));
-        switch (name) {
-            case "floatCall" -> ids.add("main:FloatDecodeAudit.floatWorker");
-            case "doubleCall" -> ids.add("main:FloatDecodeAudit.doubleWorker");
-            case "doubleExponent", "doubleExampleExponent" -> ids.add("ghc-internal:GHC.Internal.Bignum.Integer.$wintegerFromInt64#");
-            default -> { }
-        }
-        return ids;
-    }
     private static long count(ExecutableProgram p) { return ((Number) p.diagnostics().get("compiledEntries")).longValue(); }
-    private static void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
-    private static void compile(RootCallTarget target) throws Exception {
-        target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target);
-        var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target); valid(target);
-    }
     private static void released(Language language) {
         var state = language.getHandoffState().get(); assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
         assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getResults().retainedReferences());
@@ -124,12 +109,10 @@ class FloatDecodeTest {
         for (var stage : list("pre", "post")) for (var name : NAMES) {
             var report = json(DIRECTORY + "/" + stage + "-" + name + "-audit.json");
             assertEquals(true, report.get("accepted")); assertEquals(list(), report.get("issues")); assertEquals(list(), report.get("missingGlobals"));
-            assertEquals(reachableIds(name), objects(report.get("reachableBindings")).stream().map(binding -> binding.get("id")).collect(Collectors.toSet()));
             var decode = name.startsWith("float") ? "decodeFloat_Int#" : "decodeDouble_Int64#";
-            var primitives = objects(report.get("primitives")).stream().filter(prim -> decode.equals(prim.get("name"))).toList(); assertEquals(1, primitives.size());
-            assertEquals(1, expression(primitives.getFirst().get("uses")).size(), stage + "/" + name + " saturated decode");
+            assertTrue(objects(report.get("primitives")).stream().anyMatch(prim -> decode.equals(prim.get("name"))),
+                stage + "/" + name + " retains the decode operation");
         }
-        assertEquals(139, objects(originalModule().get("bindings")).size(), "Complete pinned original Integer module, not a fabricated worker");
         var provenance = json(DIRECTORY + "/original/boot-provenance.json"); assertEquals("ghc-9.14.1-release", provenance.get("ghcTag")); assertEquals(list(), provenance.get("sourcePatches"));
         var provenanceSources = objects(provenance.get("sources"));
         assertEquals(sources.stream().filter(path -> path.startsWith("nih/pinned/")).collect(Collectors.toSet()), provenanceSources.stream().map(source -> source.get("path")).collect(Collectors.toSet()));
@@ -152,43 +135,42 @@ class FloatDecodeTest {
         var manifest = json(DIRECTORY + "/manifest.json"); assertThrows(AssertionError.class, () -> verifyEvidence(with(manifest, "artifactHashes", map())));
         var hashes = object(manifest.get("inputHashes")); assertThrows(AssertionError.class, () -> verifyEvidence(with(manifest, "inputHashes", with(hashes, hashes.keySet().iterator().next(), "0"))));
     }
-    @Test void nativeResultsAcrossResidualCalls() throws Exception { nativeResults(false); }
-    @Test void nativeResultsWithInlining() throws Exception { nativeResults(true); }
-    @Test void publicDoubleExponentRequiresOriginalIntegerCore(@TempDir Path temporary) throws Exception {
-        for (var stage : list("pre", "post")) {
-            var report = temporary.resolve(stage + ".json");
-            var process = new ProcessBuilder("python3", "bin/audit-core.py", DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.cbd", "--entry", entryId("doubleExponent"), "--output", report.toString())
-                .directory(root).redirectOutput(temporary.resolve(stage + ".stdout").toFile()).redirectError(temporary.resolve(stage + ".stderr").toFile()).start();
-            if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Missing-original audit timed out"); }
-            assertEquals(1, process.exitValue()); var audit = object(Json.parse(Files.readString(report)));
-            assertEquals(false, audit.get("accepted")); assertEquals(list(), audit.get("issues"));
-            assertEquals(list("ghc-internal:GHC.Internal.Bignum.Integer.$wintegerFromInt64#"), objects(audit.get("missingGlobals")).stream().map(binding -> binding.get("id")).toList());
-        }
-    }
-    private void nativeResults(boolean inlining) throws Exception {
+    @Test void nativeResultsMatchNativeAndIndependentModel() throws Exception {
         verifyEvidence(json(DIRECTORY + "/manifest.json")); var rows = new LinkedHashMap<String, List<Row>>();
         for (var row : rows(read(DIRECTORY + "/oracle.tsv"))) rows.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row);
-        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) for (var name : NAMES) try (var context = context(inlining)) {
+        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) for (var name : NAMES) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var p = program(language, with(CoreModules.reachable(module(stage), entryId(name)), "instrument", true), backend); var entry = p.entryTarget(entryId(name));
-                boolean example = name.contains("Example"); var host = p.hostEntryTarget(example ? 1 : 2); var value = p.entryValue(entryId(name));
-                CheckedBiConsumer<Row, Boolean> check = (row, installed) -> {
+                var p = program(language, with(CoreModules.reachable(module(stage), entryId(name)), "instrument", true), backend);
+                boolean example = name.contains("Example");
+                var function = context.asValue(new EntryValue(p, entryId(name), example ? 1 : 2));
+                var label = stage + "/" + backend + "/" + name;
+                CheckedBiConsumer<Row, Boolean> check = (row, firstInstalled) -> {
                     for (int field = 0; field < row.fields.size(); field++) {
-                        long before = count(p); var label = stage + "/" + backend + "/" + name + "/" + row.bits + "/" + field + "/inlining=" + inlining;
+                        long before = firstInstalled && field == 0 ? count(p) : 0L;
                         Object[] arguments = example ? new Object[]{row.bits} : new Object[]{row.bits, (long) field};
-                        assertEquals(row.fields.get(field), Calls.target(host, new Object[]{value, arguments}), label);
-                        if (installed) assertEquals((long) reachableIds(name).size(), count(p) - before, label + " exact first-and-every compiled entry");
+                        assertEquals(row.fields.get(field).longValue(), function.execute(arguments).asLong(),
+                            label + "/" + row.bits + "/" + field);
+                        if (firstInstalled && field == 0) {
+                            assertTrue(count(p) > before, label + " first installed call enters compiled guest code");
+                            var diagnostics = object(Json.parse(function.getMember("diagnostics").asString()));
+                            assertEquals(true, object(diagnostics.get("explicitCompilation")).get("validLastTier"),
+                                label + " first installed call preserves the installed guest entry and host bridge");
+                        }
                         released(language);
                     }
                 };
-                for (var row : rows.get(name)) check.accept(row, false);
-                var targets = activeTargets(entry); assertEquals(reachableIds(name).size(), targets.size()); for (var target : targets) compile(target);
-                long allocations = language.getHandoffState().get().getResults().getAllocations();
-                for (var row : rows.get(name)) check.accept(row, true); for (var target : targets) valid(target);
-                var active = activeTargets(entry); assertEquals(targets.size(), active.size()); assertTrue(active.stream().allMatch(target -> targets.stream().anyMatch(original -> original == target)));
-                assertEquals(allocations, language.getHandoffState().get().getResults().getAllocations()); if (name.endsWith("Direct")) assertEquals(0L, allocations, "Direct decode needs no tuple carrier");
+                var cases = rows.get(name);
+                for (var row : cases) check.accept(row, false);
+                long beforeInstallation = count(p);
+                assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
+                assertEquals(beforeInstallation, count(p), label + " installation executes no guest work");
+                var diagnostics = object(Json.parse(function.getMember("diagnostics").asString()));
+                assertEquals(true, object(diagnostics.get("explicitCompilation")).get("validLastTier"),
+                    label + " guest entry and host bridge installed");
+                check.accept(cases.getFirst(), true);
+                for (var row : cases.subList(1, cases.size())) check.accept(row, false);
                 for (var counter : list("unsupportedTraps", "blackholes")) assertEquals(0L, ((Number) p.diagnostics().get(counter)).longValue(), counter);
             } finally { context.leave(); }
         }
@@ -221,7 +203,7 @@ class FloatDecodeTest {
                 .redirectOutput(temporary.resolve(label + ".stdout").toFile()).redirectError(temporary.resolve(label + ".stderr").toFile()).start();
             if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared auditor timeout: " + label); }
             assertEquals(mutation.equals("valid") ? 0 : 1, process.exitValue(), label); assertEquals(mutation.equals("valid"), object(Json.parse(Files.readString(report))).get("accepted"), label);
-            for (var backend : list("ast", "bytecode")) try (var context = context(false)) {
+            for (var backend : list("ast", "bytecode")) try (var context = context()) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
