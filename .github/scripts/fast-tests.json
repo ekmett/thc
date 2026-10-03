@@ -2035,7 +2035,6 @@
         "thc.runtime.ArrayCoreEvidenceTest",
         "thc.runtime.SumResultTest",
         "thc.runtime.TupleInputNativeTest",
-        "thc.runtime.IntArrayNativeTest",
         "thc.runtime.Int8ArrayNativeTest",
         "thc.runtime.Int16ArrayNativeTest",
         "thc.runtime.Int16BoundaryCompilationTest",
