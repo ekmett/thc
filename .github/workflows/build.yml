@@ -15,8 +15,24 @@ permissions:
   contents: read
   actions: read
 jobs:
-  checks:
+  automation:
     uses: ./.github/workflows/checks.yml
     with:
       cadence: commit
       expected_sha: ${{ inputs.expected_sha || github.sha }}
+  jvm-linux:
+    needs: automation
+    name: Linux ordinary tests
+    uses: ./.github/workflows/test-common.yml
+    with:
+      os: ubuntu-latest
+      expected_sha: ${{ inputs.expected_sha || github.sha }}
+      cadence: commit
+  jvm-macos:
+    needs: automation
+    name: macOS ordinary tests
+    uses: ./.github/workflows/test-common.yml
+    with:
+      os: macos-latest
+      expected_sha: ${{ inputs.expected_sha || github.sha }}
+      cadence: commit

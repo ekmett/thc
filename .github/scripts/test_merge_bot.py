@@ -134,11 +134,11 @@ class MergeBotTest(unittest.TestCase):
         self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"})])
         self.assertEqual(api.statuses[0]["state"], "success")
 
-    def test_required_names_cover_commit_checks_and_both_platform_compilations(self):
+    def test_required_names_cover_commit_checks_and_both_platform_tests(self):
         self.assertEqual(CHECKS, {
-            "checks / automation",
-            "checks / Linux ordinary tests / Common compilation (ubuntu-latest)",
-            "checks / macOS ordinary tests / Common compilation (macos-latest)",
+            "automation / automation",
+            "Linux ordinary tests / Build and test (ubuntu-latest)",
+            "macOS ordinary tests / Build and test (macos-latest)",
         })
 
     def test_every_required_mode_is_mandatory_and_must_appear_exactly_once(self):
@@ -160,30 +160,15 @@ class MergeBotTest(unittest.TestCase):
                     for name in ("automation", "build (ubuntu-latest)", "build (macos-latest)")]
         self.assertEqual(build_result(api, "head")[0], "failure")
 
-    def test_skipped_scheduled_jobs_do_not_block_a_complete_commit_build(self):
-        api = FakeAPI()
-        for name in ("checks / build", "checks / foreign-exceptions", "checks / library", "checks / Windows tests",
-                     "checks / library (macos-latest, bytecode, handoff=true)",
-                     "checks / Linux ordinary tests / group", "checks / macOS ordinary tests / group"):
-            with self.subTest(name=name):
-                api.jobs = jobs() + [{"name": name, "status": "completed", "conclusion": "skipped"}]
-                self.assertEqual(build_result(api, "head")[0], "success")
-                for status, conclusion in (("completed", "failure"), ("completed", "cancelled"),
-                                           ("completed", "timed_out"), ("in_progress", None)):
-                    api.jobs[-1].update(status=status, conclusion=conclusion)
-                    self.assertEqual(build_result(api, "head")[0], "failure")
-
-    def test_skipped_ordinary_or_unknown_jobs_still_fail_build(self):
-        for name in ("checks / Linux ordinary tests / batch-1 (ubuntu-latest)",
-                     "checks / unexpected", "checks / library (unknown)",
-                     "checks / build (ubuntu-latest)", "checks / build (macos-latest)",
-                     "checks / Linux ordinary tests / group (batch-01)",
-                     "checks / macOS ordinary tests / group (batch-01)",
-                     "checks / unknown ordinary tests / group"):
-            with self.subTest(name=name):
+    def test_extra_jobs_must_finish_successfully(self):
+        for status, conclusion in (("completed", "success"), ("completed", "skipped"),
+                                   ("completed", "failure"), ("completed", "cancelled"),
+                                   ("completed", "timed_out"), ("in_progress", None)):
+            with self.subTest(status=status, conclusion=conclusion):
                 api = FakeAPI()
-                api.jobs.append({"name": name, "status": "completed", "conclusion": "skipped"})
-                self.assertEqual(build_result(api, "head")[0], "failure")
+                api.jobs.append({"name": "extra check", "status": status, "conclusion": conclusion})
+                self.assertEqual(build_result(api, "head")[0],
+                                 "success" if conclusion == "success" else "failure")
 
     def test_required_commit_jobs_cannot_be_skipped_pending_or_failed(self):
         for name in sorted(CHECKS):
@@ -205,7 +190,7 @@ class MergeBotTest(unittest.TestCase):
             reads += 1
             if reads == 3:
                 next(job for job in api.jobs if job["name"] ==
-                     "checks / macOS ordinary tests / Common compilation (macos-latest)")["conclusion"] = "failure"
+                     "macOS ordinary tests / Build and test (macos-latest)")["conclusion"] = "failure"
 
         api.before_jobs_read = changed
         messages = self.run_bot(api)

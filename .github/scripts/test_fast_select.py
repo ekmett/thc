@@ -1581,7 +1581,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      ".github/scripts/fast-fixtures.json", ".github/scripts/fast-tests.json",
                      ".github/scripts/test_fast_ci.py", ".github/scripts/test_fast_inputs.py",
                      ".github/scripts/test_fast_fixtures.py", ".github/scripts/test_fast_select.py",
-                     ".github/workflows/fast.yml", ".github/workflows/test-groups.yml"):
+                     ".github/workflows/fast.yml", ".github/workflows/test-common.yml",
+                     ".github/workflows/test-groups.yml"):
             with self.subTest(path=path):
                 self.assertIn(path, automation)
                 self.assertIn(".github/scripts/test_fast_select.py", automation[path]["python"])

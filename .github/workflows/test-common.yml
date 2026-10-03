@@ -1,0 +1,219 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: Platform build and tests
+on:
+  workflow_call:
+    inputs:
+      os:
+        type: string
+        required: true
+      expected_sha:
+        type: string
+        required: true
+      cadence:
+        type: string
+        required: true
+    outputs:
+      matrix:
+        description: Scheduled test groups for this platform
+        value: ${{ jobs.compile.outputs.matrix }}
+permissions:
+  contents: read
+jobs:
+  compile:
+    name: ${{ inputs.cadence == 'commit' && 'Build and test' || 'Compile shared tools' }} (${{ inputs.os }})
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 60
+    outputs:
+      matrix: ${{ steps.inventory.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          submodules: true
+          persist-credentials: false
+      - name: Verify source and complete fixture ownership
+        id: inventory
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CI_CADENCE: ${{ inputs.cadence }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          matrix=$(python3 .github/scripts/fast_select.py --matrix --cadence "$CI_CADENCE")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Identify macOS compiler cache
+        if: runner.os == 'macOS'
+        id: ghc-cache-host
+        run: |
+          os_version=$(sw_vers -productVersion)
+          echo "identity=${os_version%%.*}-$HOME" >> "$GITHUB_OUTPUT"
+      - name: Reuse installed macOS GHC
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ghcup/ghc/9.14.1
+            ~/.ghcup/db/ghc/9.14.1
+            ~/.ghcup/db/ghc/9.14.1.spec
+          key: installed-ghc-${{ runner.os }}-${{ runner.arch }}-${{ steps.ghc-cache-host.outputs.identity }}-9.14.1-setup0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d
+      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-version: '3.16.0.0'
+          cabal-update: true
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: common-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-java25.3.4.1-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
+          restore-keys: common-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-java25.3.4.1-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
+      - name: Install Linux LLVM and native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev cmake ninja-build
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+      - name: Install macOS LLVM
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@18 cmake ninja
+          echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
+      - name: Verify pinned toolchain
+        if: inputs.cadence == 'commit'
+        shell: bash
+        run: |
+          test "$(ghc --numeric-version)" = 9.14.1
+          test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
+          case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          release = dict(line.split('=', 1) for line in (Path(os.environ['JAVA_HOME']) / 'release').read_text().splitlines() if '=' in line)
+          assert release['GRAALVM_VERSION'].strip('"') == '25.3.4.1', release.get('GRAALVM_VERSION')
+          assert release['JAVA_VERSION'].strip('"').split('.')[0] == '25', release.get('JAVA_VERSION')
+          PY
+          java --version
+      - name: Reuse Cabal's incremental project outputs
+        uses: actions/cache@v4
+        with:
+          path: dist-newstyle
+          key: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
+          restore-keys: cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
+      - name: Compile common tools and test classes without acquiring fixtures or running tests
+        run: |
+          python3 .github/scripts/fast_ci.py start --report-dir build/ci/common-results
+          python3 .github/scripts/fast_ci.py compile-common --report-dir build/ci/common-results
+      - name: Pack common compilation for scheduled groups
+        if: inputs.cadence != 'commit'
+        run: python3 .github/scripts/fast_ci.py pack-common --archive build/ci/common.tar.gz
+      - name: Check the primop checklist
+        if: inputs.cadence == 'commit'
+        run: |
+          cabal run exe:thc-primops -- coverage --check
+          # Cabal's pre-test setup resolves sibling libraries from the combined plan.
+          # Register them before any suite starts, including on a clean build.
+          cabal build test:primop-tools test:compact-core-tests -fdevelopment
+          cabal test primop-tools compact-core-tests -fdevelopment --test-show-details=direct
+      - name: Check pinned guest protocol artifacts
+        if: inputs.cadence == 'commit'
+        run: ./gradlew --no-daemon --max-workers=2 --continue testMaterializableApi testReturnPolicy testReturnContinuations
+      - name: Check driver units and CPU affinity API
+        if: inputs.cadence == 'commit'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cabal run thc --offline -fdevelopment -- --help
+          cabal test driver-tests -fdevelopment --test-options=--unit-only --test-show-details=direct
+          cabal test cpu-affinity-api -fdevelopment --test-show-details=direct
+      - name: Check exact dependency auditor and library frontier
+        if: inputs.cadence == 'commit'
+        run: |
+          python3 bin/test-audit-core.py
+          python3 bin/test-plugin.py
+          python3 bin/test-core-enums.py
+          python3 bin/test-sum-layout.py
+          python3 bin/test-core-sums.py
+          python3 bin/test-tuple-inputs.py
+          python3 bin/test-empty-join-inputs.py
+          python3 bin/test-library-frontier.py
+          python3 bin/test-sequence-model.py
+          python3 bin/test-core-vectors.py
+          python3 bin/test-simd-families.py
+          python3 bin/test-floatx4-model.py
+          python3 bin/test-doublex2-model.py
+          python3 bin/test-core-vector-memory.py
+          python3 bin/test-core-word32-vector-memory.py
+          python3 bin/test-core-float-vector-memory.py
+          python3 bin/test-core-double-vector-memory.py
+          python3 bin/test-core-bytearrays.py
+          python3 bin/test-core-arrays.py
+          python3 bin/test-address-fields.py
+          python3 bin/test-core-data-tags.py
+          python3 bin/test-show-word-list-model.py
+          python3 bin/test-short-bytes-slices-model.py
+          python3 bin/test-array-slice-model.py
+      - name: Check merged fixture and runtime recipes with and without assertions
+        if: inputs.cadence == 'commit'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in \
+            bin/test-build-cbits.py \
+            bin/test-core-managed-memory.py \
+            bin/test-core-managed-files.py \
+            bin/test-core-package-manifest.py \
+            bin/test-managed-mvar-fixtures.py \
+            bin/test-managed-mvars.py \
+            bin/test-synchronous-exception-fixtures.py; do
+            python3 "$test"
+            python3 -O "$test"
+          done
+      - name: Check benchmark power provenance
+        if: inputs.cadence == 'commit'
+        run: python3 tools/test-compare-map-runtimes.py
+      - name: Run commit group with existing compilation and both handoff modes
+        if: inputs.cadence == 'commit'
+        run: |
+          ./gradlew --stop
+          trap './gradlew --stop' EXIT
+          python3 .github/scripts/fast_ci.py group --group commit --cadence commit --reuse-daemon --report-dir build/ci/group-results/commit
+      - name: Preserve common compilation and commit test output
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: common-build-logs-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/ci/common-results/
+            build/ci/group-results/
+            build/test-results/testDefault/
+            build/test-results/testDense/
+            build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd
+            build/empty-join-input/post-core/EmptyJoinInputAudit.cbd
+            build/empty-join-input/provenance.json
+            build/empty-join-input/oracle.tsv
+            build/reports/tests/testDefault/
+            build/reports/tests/testDense/
+          retention-days: 7
+      - name: Share only this platform's common compile outputs
+        if: inputs.cadence != 'commit'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: common-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/ci/common.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7

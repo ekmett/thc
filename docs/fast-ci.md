@@ -9,6 +9,10 @@ select the full inventory before the explicit cadence policy is applied.
 minute 31; an hourly failure blocks further development until fixed. `Intensive`
 runs daily at 07:17 UTC for expensive fixtures and public package integration.
 These scheduled workflows use the same CMake fixture graph and test runner as Build.
+Build compiles and runs its tests in one job per platform. Hourly and Intensive
+compile once per platform, then share those outputs with their test groups.
+Each entry workflow declares only its own jobs: Windows Runtime belongs to
+Hourly, and package integration and the library matrix belong to Intensive.
 Hosted jobs install CMake and Ninja; persistent runners must provision CMake 3.24+
 and Ninja alongside the pinned compiler. Quarantined producers are absent from
 scheduled generation as well as test selection. The separate package integration

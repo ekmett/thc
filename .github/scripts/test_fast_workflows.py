@@ -28,6 +28,21 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
+    def test_commit_plan_contains_no_scheduled_jobs_or_skipped_matrix(self):
+        pending = ["build.yml"]
+        visited = set()
+        while pending:
+            filename = pending.pop()
+            if filename in visited:
+                continue
+            visited.add(filename)
+            workflow = (WORKFLOW.parent / filename).read_text()
+            self.assertNotRegex(workflow, r"(?m)^    if: inputs\.cadence", filename)
+            self.assertNotIn("    strategy:", workflow, filename)
+            pending.extend(re.findall(r"uses: \./\.github/workflows/([^\s]+)", workflow))
+        self.assertNotIn("test-groups.yml", visited)
+        self.assertNotIn("windows.yml", visited)
+
     def test_cadence_wrappers_select_one_immutable_revision_without_commit_batching(self):
         for filename, name, cadence, trigger in (
             ("build.yml", "Build", "commit", "  push:\n    branches: [main]"),
@@ -43,15 +58,20 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 self.assertIn("expected_sha: ${{ inputs.expected_sha || github.sha }}", workflow)
                 if cadence != "hourly":
                     self.assertNotIn("concurrency:", workflow)
-                self.assertNotIn("runs-on:", workflow)
-        for filename in ("checks.yml", "test-groups.yml"):
+                if cadence != "nightly":
+                    self.assertNotIn("runs-on:", workflow)
+        for filename in ("checks.yml", "test-common.yml", "test-groups.yml"):
             workflow = (WORKFLOW.parent / filename).read_text()
             self.assertIn("  workflow_call:", workflow)
             self.assertIn("      cadence:\n        type: string\n        required: true", workflow)
             self.assertEqual(workflow.count("uses: actions/checkout@"),
                              workflow.count("ref: ${{ github.sha }}"))
-            self.assertIn('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"', workflow)
-            self.assertIn('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"', workflow)
+            if filename == "test-groups.yml":
+                self.assertIn("expected_sha: ${{ inputs.expected_sha }}", workflow)
+                self.assertIn("fast_ci.py restore-common", workflow)
+            else:
+                self.assertIn('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"', workflow)
+                self.assertIn('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"', workflow)
             self.assertNotIn("concurrency:", workflow)
 
     def test_cadence_validation_and_hourly_health_precede_all_builds(self):
@@ -69,12 +89,19 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("run: python3 .github/scripts/hourly_health.py", gate)
         self.assertIn("  actions: read", workflow)
         self.assertNotIn("continue-on-error", gate)
-        for job in ("jvm-linux", "jvm-macos", "windows", "build"):
-            self.assertIn("  " + job + ":\n    needs: automation\n", workflow)
-        self.assertIn("    needs: build\n", workflow.split("  library:\n", 1)[1])
+        for filename, jobs in (
+            ("build.yml", ("jvm-linux", "jvm-macos")),
+            ("hourly.yml", ("jvm-linux", "jvm-macos", "windows")),
+            ("intensive.yml", ("jvm-linux", "jvm-macos", "build")),
+        ):
+            entry = (WORKFLOW.parent / filename).read_text()
+            for job in jobs:
+                self.assertIn("  " + job + ":\n    needs: automation\n", entry)
+        intensive = (WORKFLOW.parent / "intensive.yml").read_text()
+        self.assertIn("    needs: build\n", intensive.split("  library:\n", 1)[1])
 
     def test_intensive_work_has_explicit_cadence_and_quarantined_work_is_absent(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
+        workflow = (WORKFLOW.parent / "intensive.yml").read_text()
         for name in (
                 "Check Haskell calls into JavaScript",
                 "Compare public packages with native GHC on both backends and handoff modes",
@@ -85,30 +112,35 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 "Prepare fresh Map source and native oracle",
                 "Check diagnostic Map on both backends and handoff modes"):
             with self.subTest(name=name):
-                self.assertIn("      - name: " + name + "\n        if: inputs.cadence == 'nightly'\n", workflow)
+                self.assertIn("      - name: " + name + "\n", workflow)
+                for filename in ("build.yml", "hourly.yml", "checks.yml", "test-common.yml", "test-groups.yml"):
+                    self.assertNotIn("name: " + name, (WORKFLOW.parent / filename).read_text())
         for producer in ("aggregate-heap", "fourway-aggregate", "generic-sum-transport",
                          "narrow-integer-transport", "tuple-join", "sum-input",
                          "sum-join-input", "tuple-capture"):
             self.assertNotIn("--offline -- " + producer, workflow)
         self.assertNotIn("  foreign-exceptions:", workflow)
-        library = workflow.split("  library:\n", 1)[1].split("    steps:", 1)[0]
-        self.assertIn("if: inputs.cadence == 'nightly'", library)
-        grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
-        commands = [line.strip() for line in (workflow + grouped).splitlines() if "cabal test driver-tests" in line]
+        self.assertNotIn("inputs.cadence", workflow)
+        common = (WORKFLOW.parent / "test-common.yml").read_text()
+        commands = [line.strip() for line in (workflow + common).splitlines() if "cabal test driver-tests" in line]
         self.assertEqual(3, len(commands))
         for option in ("--unit-only", "--public-packages-only", "--acquire-project-only"):
             self.assertEqual(1, sum("--test-options=" + option in command for command in commands))
-        self.assertIn("name: Build JVM distribution from source\n        if: inputs.cadence != 'commit'", workflow)
+        self.assertIn("name: Build JVM distribution from source\n", workflow)
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
-        self.assertIn('fast_select.py --matrix --cadence "$CI_CADENCE"', grouped)
+        self.assertIn('fast_select.py --matrix --cadence "$CI_CADENCE"', common)
         self.assertIn('fast_ci.py group --group "$group" --cadence "$CI_CADENCE"', grouped)
 
     def test_commit_checks_reuse_common_compilation_and_scheduled_workers_stay_separate(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
-        build = workflow.split("  build:\n", 1)[1].split("    steps:", 1)[0]
-        self.assertIn("if: inputs.cadence == 'nightly'", build)
+        workflow = (WORKFLOW.parent / "build.yml").read_text()
+        self.assertEqual(2, workflow.count("uses: ./.github/workflows/test-common.yml"))
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
-        common = grouped.split("  compile:\n", 1)[1].split("  group:\n", 1)[0]
+        self.assertIn("uses: ./.github/workflows/test-common.yml", grouped)
+        self.assertIn("matrix: ${{ fromJSON(needs.compile.outputs.matrix) }}", grouped)
+        self.assertNotIn("    if: inputs.cadence", grouped)
+        common = (WORKFLOW.parent / "test-common.yml").read_text()
+        self.assertIn("value: ${{ jobs.compile.outputs.matrix }}", common)
+        self.assertIn("matrix: ${{ steps.inventory.outputs.matrix }}", common)
         for name in (
             "Check the primop checklist",
             "Check pinned guest protocol artifacts",
@@ -132,7 +164,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("testMaterializableApi testReturnPolicy testReturnContinuations", common)
 
     def test_build_runs_driver_units_without_selecting_package_integration(self):
-        workflow = (WORKFLOW.parent / "test-groups.yml").read_text()
+        workflow = (WORKFLOW.parent / "test-common.yml").read_text()
         block = workflow.split("name: Check driver units and CPU affinity API", 1)[1].split("\n      - ", 1)[0]
         commands = [line.strip() for line in block.splitlines() if line.strip().startswith("cabal test ")]
         self.assertEqual(commands, [
@@ -142,7 +174,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("continue-on-error", block)
 
     def test_library_and_map_launchers_resolve_the_required_vector_module(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
+        workflow = (WORKFLOW.parent / "intensive.yml").read_text()
         for label, entry in (
             ("Run the complete strict and compiled library checks", "thc.LibraryCheck build/libraries/cases.json"),
             ("Check diagnostic Map on both backends and handoff modes", "thc.MapCheck build/map/modules.txt build/map/oracle.tsv"),
@@ -154,24 +186,27 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 self.assertNotIn("continue-on-error", block)
 
     def test_full_build_reports_independent_groups_and_never_prepares_every_fixture(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
-        self.assertEqual(2, workflow.count("uses: ./.github/workflows/test-groups.yml"))
-        self.assertNotIn("bin/try.sh --handoff-modes", workflow)
-        self.assertNotIn("bin/prepare-tests.sh", workflow)
+        for filename in ("hourly.yml", "intensive.yml"):
+            workflow = (WORKFLOW.parent / filename).read_text()
+            self.assertEqual(2, workflow.count("uses: ./.github/workflows/test-groups.yml"))
+            self.assertNotIn("bin/try.sh --handoff-modes", workflow)
+            self.assertNotIn("bin/prepare-tests.sh", workflow)
         self.assertIn("fail-fast: false", grouped)
         self.assertIn('fast_ci.py group --group "$group"', grouped)
-        self.assertIn("fast_ci.py compile-common", grouped)
+        self.assertIn("fast_ci.py compile-common", (WORKFLOW.parent / "test-common.yml").read_text())
         self.assertIn("digest-mismatch: error", grouped)
         self.assertIn("cabal-update: false", grouped)
         self.assertNotIn("continue-on-error", grouped)
         self.assertNotIn("needs: build", grouped)
 
     def test_scheduled_windows_checks_run_only_admitted_runtime_hourly(self):
-        workflow = (WORKFLOW.parent / "checks.yml").read_text()
-        caller = workflow.split("  windows:\n", 1)[1].split("  build:\n", 1)[0]
+        workflow = (WORKFLOW.parent / "hourly.yml").read_text()
+        caller = workflow.split("  windows:\n", 1)[1]
         self.assertIn("needs: automation", caller)
-        self.assertIn("if: inputs.cadence == 'hourly'", caller)
+        self.assertNotIn("    if:", caller)
+        for filename in ("build.yml", "intensive.yml", "checks.yml"):
+            self.assertNotIn("workflows/windows.yml", (WORKFLOW.parent / filename).read_text())
         self.assertIn("uses: ./.github/workflows/windows.yml", caller)
         self.assertIn("testGroup: Runtime", caller)
         windows = (WORKFLOW.parent / "windows.yml").read_text()
@@ -213,7 +248,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn('lookupEnv "GHC_PKG"', codepages)
 
     def test_stdio_checks_use_haskell_and_java_not_a_python_test_family(self):
-        workflow = (WORKFLOW.parent / "test-groups.yml").read_text()
+        workflow = (WORKFLOW.parent / "test-common.yml").read_text()
         block = workflow.split("name: Check merged fixture and runtime recipes with and without assertions", 1)[1].split("      - name:", 1)[0]
         for name in ("test-core-original-stdio.py", "test-original-stdio-fixtures.py", "test-generate-stdio-abi.py"):
             self.assertNotIn("bin/" + name, block)

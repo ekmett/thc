@@ -568,9 +568,10 @@ class FastRunnerTest(unittest.TestCase):
         self.assertNotIn('cabal', guard)
         self.assertNotIn('-- foreign-exceptions', makefile)
         self.assertIn('--continue foreignExceptionTest foreignExceptionDenseTest', makefile)
-        workflow = (root / ".github/workflows/checks.yml").read_text()
-        self.assertNotIn('  foreign-exceptions:', workflow)
-        self.assertNotIn('make foreign-exception-test-modes', workflow)
+        for path in (root / ".github/workflows").glob('*.yml'):
+            workflow = path.read_text()
+            self.assertNotIn('  foreign-exceptions:', workflow, path)
+            self.assertNotIn('make foreign-exception-test-modes', workflow, path)
 
     def test_descriptor_flags_keep_native_regressions_in_affected_fast_tests(self):
         root = Path(__file__).parents[2]

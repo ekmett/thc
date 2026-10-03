@@ -18,8 +18,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  checks:
+  automation:
     uses: ./.github/workflows/checks.yml
     with:
       cadence: hourly
       expected_sha: ${{ inputs.expected_sha || github.sha }}
+  jvm-linux:
+    needs: automation
+    name: Linux ordinary tests
+    uses: ./.github/workflows/test-groups.yml
+    with:
+      os: ubuntu-latest
+      expected_sha: ${{ inputs.expected_sha || github.sha }}
+      cadence: hourly
+  jvm-macos:
+    needs: automation
+    name: macOS ordinary tests
+    uses: ./.github/workflows/test-groups.yml
+    with:
+      os: macos-latest
+      expected_sha: ${{ inputs.expected_sha || github.sha }}
+      cadence: hourly
+  windows:
+    needs: automation
+    name: Windows tests
+    uses: ./.github/workflows/windows.yml
+    with:
+      testGroup: Runtime
