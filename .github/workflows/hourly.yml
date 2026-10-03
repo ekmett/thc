@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
   actions: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   checks:
     uses: ./.github/workflows/checks.yml

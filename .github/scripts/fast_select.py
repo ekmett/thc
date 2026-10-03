@@ -936,7 +936,7 @@ def groups(repo, *, system=None, cadence=None):
 def group_matrix(repo, *, cadence=None):
     """Share worker setup while keeping each original group independently runnable."""
     names = list(groups(repo, system=platform.system(), cadence=cadence))
-    count = min(20, len(names))
+    count = min(10 if cadence == "hourly" and platform.system() == "Darwin" else 20, len(names))
     return {"include": [{"batch": f"batch-{index+1:02d}", "groups": names[index::count]}
                         for index in range(count)]}
 

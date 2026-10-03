@@ -41,7 +41,8 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 self.assertIn("uses: ./.github/workflows/checks.yml", workflow)
                 self.assertIn("cadence: " + cadence, workflow)
                 self.assertIn("expected_sha: ${{ inputs.expected_sha || github.sha }}", workflow)
-                self.assertNotIn("concurrency:", workflow)
+                if cadence != "hourly":
+                    self.assertNotIn("concurrency:", workflow)
                 self.assertNotIn("runs-on:", workflow)
         for filename in ("checks.yml", "test-groups.yml"):
             workflow = (WORKFLOW.parent / filename).read_text()
