@@ -3531,12 +3531,13 @@ Consumer reads receipt/hash files/oracle stdout/stage CBD pairs/audits.
 Fixture rationale (105 exception-result-layouts)
 Purpose: Check exception continuations preserve each result representation and aggregate
   layout.
-Produces/consumed result: CBDs and oracle.tsv across result layouts.
-Cost and overlap: Keep distinct continuation layouts but consolidate with scalar-
-  exception-results. Forty-seven native process starts for 141 rows are avoidable; one
-  batched oracle can supply them.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Produces/consumed result: Native executable, 141 oracle rows, CBD/audit per supported
+  export stage, logs and manifest.
+Cost and overlap: One native run and one audit per stage. Narrow, FP, vector, sum,
+  nested and unlifted result transport need a boxed native model because GHC cannot
+  safely execute these continuation return layouts. The scalar fixture observes
+  native Int#/Word#/Addr# continuation returns and nested mask restoration directly.
+Build status: Admitted as fixture-exception-result-layouts in cmake/AuditedFixtures.cmake.
 
 Producer: t/haskell-fixtures/ExceptionResultLayoutsFixtures.hs.
 Consumer: thc.runtime.ExceptionResultLayoutsNativeTest.
@@ -3544,27 +3545,28 @@ IN t/fixtures/compiler/ExceptionResultLayoutsAudit.hs, ExceptionResultLayoutsNat
   shared tools/data/native GHC and host architecture.
 Under build/exception-result-layouts/:
   native/oracle and intermediates: IN native driver/GHC (boxed effects/model).
-  logs/native-<entry>-<mode>.stdout and oracle.tsv: IN binary per entry/mode;
-    TSV concatenates 47 invocations, 141 rows.
+  logs/native-oracle.stdout and oracle.tsv: IN binary; one invocation, 141 rows.
   <stage>/core/ExceptionResultLayoutsAudit.cbd and stage/ghc/: IN audit source/exporter;
     stages pre/post except aarch64: pre only with -fno-code/-fwrite-if-simplified-core.
-  stage/<entry>-audit.json: IN stage CBD/auditor; entries <int8,word8,int16,word16,
+  stage/audit.json: IN stage CBD/auditor; entries <int8,word8,int16,word16,
     int32,word32,int64,word64,float,double,empty,nested,sum,vector,unlifted,
     unliftedPayload>Result. Modes 0,1,2 except unliftedPayload uses 0,1.
   logs/: OUT all native/export/audit/version command triplets.
   manifest.json: IN source/product/log hashes/architecture-derived stage set;
     no old receipt invalidation.
-Consumer reads receipt/hash files/oracle/CBDs/audits. Flag per-entry process overhead.
+Consumer reads receipt/hash files/oracle/CBDs/audits. Native Main.hi/o and exported
+  module .hi/.o have one writer; AArch64 pre-export produces .hi only.
 
 106 scalar-exception-results
 Fixture rationale (106 scalar-exception-results)
 Purpose: Check catch/mask/continuation paths preserve scalar result values.
-Produces/consumed result: CBDs and native oracle observations.
-Cost and overlap: Fold scalar rows into the general exception-result corpus unless a
-  separate compiled path is demonstrated. Separate compiler/native preparation is not
-  justified by scalar names.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Produces/consumed result: Native executable, 36 observations, pre/post CBDs, two
+  batched audits, logs and manifest.
+Cost and overlap: One native run and two audits. Int#/Word#/Addr# continuation results
+  are observed directly on native GHC, including nested mask restoration. General
+  exception-result-layouts uses a boxed model for wider layouts that GHC cannot
+  return safely; it does not replace these native one-word reference observations.
+Build status: Admitted as fixture-scalar-exception-results in cmake/AuditedFixtures.cmake.
 
 Producer: t/haskell-fixtures/ScalarExceptionResultsFixtures.hs.
 Consumer: thc.runtime.ScalarExceptionResultsNativeTest.
@@ -3574,10 +3576,11 @@ Under build/scalar-exception-results/:
   native/oracle and intermediates: IN native/audit sources/GHC.
   logs/native-oracle.stdout: IN binary; OUT 36 observations.
   <pre|post>/core/ScalarExceptionResultsAudit.cbd and stage/ghc/: IN source/exporter.
-  stage/<entry>-audit.json: IN CBD/auditor; entries <normal|throw|interrupt><Int|Word|Addr>.
-  logs/: OUT version/native-compile/oracle/stage-export/entry-audit triplets.
+  stage/audit.json: IN CBD/auditor; entries <normal|throw|interrupt><Int|Word|Addr>.
+  logs/: OUT version/native-compile/oracle/stage-export/stage-audit triplets.
   manifest.json: IN source/product/log hashes; no old receipt invalidation.
-Consumer reads receipt/hash files/oracle stdout/CBDs/audits. Review overlap with 105.
+Consumer reads receipt/hash files/oracle stdout/CBDs/audits. Native Main and audit
+  module .hi/.o, plus exported audit .hi/.o, have one declared writer each.
 
 107 mask-functions
 Fixture rationale (107 mask-functions)

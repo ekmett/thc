@@ -4,12 +4,13 @@
 -- Fixture rationale (105 exception-result-layouts)
 -- Purpose: Check exception continuations preserve each result representation and aggregate
 --   layout.
--- Produces/consumed result: CBDs and oracle.tsv across result layouts.
--- Cost and overlap: Keep distinct continuation layouts but consolidate with scalar-
---   exception-results. Forty-seven native process starts for 141 rows are avoidable; one
---   batched oracle can supply them.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Inputs: ExceptionResultLayoutsAudit.hs, ExceptionResultLayoutsNative.hs, selected
+--   GHC/toolchain, exporter and auditor.
+-- Produces: Native executable, 141 oracle rows, CBD/audit per supported export
+--   stage, logs and manifest; CMake declares every persistent product.
+-- Cost and overlap: One native run and one audit per stage. This exercises narrow,
+--   FP, vector, sum, nested and unlifted result transport; scalar-exception-results
+--   covers Int#/Word#/Addr# with a direct native oracle and nested mask observation.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 105.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -42,7 +43,6 @@ prepareExceptionResultLayouts root = do
       driver = "t/fixtures/compiler/ExceptionResultLayoutsNative.hs"
       entries = [name ++ "Result" | name <- ["int8", "word8", "int16", "word16", "int32", "word32",
         "int64", "word64", "float", "double", "empty", "nested", "sum", "vector", "unlifted", "unliftedPayload"]]
-      modes entry = if entry == "unliftedPayloadResult" then [0, 1 :: Int] else [0, 1, 2]
       run label env program args = runLogged 180 root (directory </> "logs") label env program args
       native = directory </> "native"
       binary = native </> "oracle"
@@ -54,11 +54,9 @@ prepareExceptionResultLayouts root = do
   compiled <- run "native-compile" [] ghc
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
      "-i./t/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", binary]
-  observed <- fmap concat $ forM entries $ \entry -> forM (modes entry) $ \mode -> do
-    result <- run ("native-" ++ entry ++ "-" ++ show mode) [] (root </> binary) [entry, show mode]
-    unless (length (BS.lines (commandStdout result)) == 3) (die "Exception layout oracle row count changed")
-    pure result
-  BS.writeFile (root </> directory </> "oracle.tsv") (BS.concat (map commandStdout observed))
+  observed <- run "native-oracle" [] (root </> binary) []
+  unless (length (BS.lines (commandStdout observed)) == 141) (die "Exception layout oracle row count changed")
+  BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout observed)
   -- As in the SIMD fixtures, AArch64 NCG cannot emit vector instructions.
   -- The model above needs no SIMD codegen. Its genuine Core is pre-Tidy only
   -- there; -fno-code does not execute GHC's post-Tidy latePlugin hook.
@@ -71,10 +69,10 @@ prepareExceptionResultLayouts root = do
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "bin/export-core.sh" (options ++ [source])
-    audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
-      ["bin/audit-core.py", "--entry", "main:ExceptionResultLayoutsAudit." ++ entry, "--output", directory </> stage </> entry ++ "-audit.json",
-       core </> "ExceptionResultLayoutsAudit.cbd"]
-    pure (exported : audits)
+    audit <- run (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py", "--output", directory </> stage </> "audit.json", core </> "ExceptionResultLayoutsAudit.cbd"] ++
+       concat [["--entry", "main:ExceptionResultLayoutsAudit." ++ entry] | entry <- entries])
+    pure [exported, audit]
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, driver, "t/haskell-fixtures/ExceptionResultLayoutsFixtures.hs",
@@ -83,10 +81,10 @@ prepareExceptionResultLayouts root = do
         "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
         ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
-      commands = [version, compiled] ++ observed ++ concat stages
+      commands = [version, compiled, observed] ++ concat stages
       artifacts = [binary, directory </> "oracle.tsv"] ++ concatMap commandArtifacts commands ++
         [directory </> stage </> "core/ExceptionResultLayoutsAudit.cbd" | stage <- stagesToExport] ++
-        [directory </> stage </> entry ++ "-audit.json" | stage <- stagesToExport, entry <- entries]
+        [directory </> stage </> "audit.json" | stage <- stagesToExport]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object

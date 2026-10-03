@@ -348,6 +348,45 @@ audited_fixture(deep-evaluation DeepEvaluation
   OUTPUTS manifest.json native/oracle pre/core/DeepEvaluation.cbd pre/core/THC.InterfaceClosure.cbd
     post/core/DeepEvaluation.cbd post/core/THC.InterfaceClosure.cbd pre/audit.json post/audit.json ${deep_logs})
 
+# 105/106: keep native one-word continuation observations separate from the
+# boxed native model required for wider layouts. Both batch observations/audits.
+foreach(group exception-result-layouts scalar-exception-results)
+  set(exception_stages pre post)
+  set(exception_outputs manifest.json native/oracle)
+  set(exception_labels ghc-version native-compile native-oracle)
+  set(exception_objects)
+  if(group STREQUAL "exception-result-layouts")
+    set(exception_module ExceptionResultLayoutsAudit)
+    set(exception_driver ExceptionResultLayoutsNative)
+    list(APPEND exception_outputs oracle.tsv)
+    # GHC's AArch64 NCG cannot emit this vector result. The native model needs
+    # no vector codegen; the pre-Tidy export uses -fno-code and writes only .hi.
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$")
+      set(exception_stages pre)
+    endif()
+  else()
+    set(exception_module ScalarExceptionResultsAudit)
+    set(exception_driver ScalarExceptionResultsNative)
+    list(APPEND exception_objects "native/${exception_module}.hi" "native/${exception_module}.o")
+  endif()
+  foreach(stage IN LISTS exception_stages)
+    list(APPEND exception_outputs "${stage}/core/${exception_module}.cbd" "${stage}/audit.json")
+    list(APPEND exception_labels "${stage}-export" "${stage}-audit")
+    list(APPEND exception_objects "${stage}/ghc/${exception_module}.hi")
+    if(NOT (group STREQUAL "exception-result-layouts" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$"))
+      list(APPEND exception_objects "${stage}/ghc/${exception_module}.o")
+    endif()
+  endforeach()
+  foreach(label IN LISTS exception_labels)
+    foreach(suffix stdout stderr command.json)
+      list(APPEND exception_outputs "logs/${label}.${suffix}")
+    endforeach()
+  endforeach()
+  audited_fixture("${group}" ""
+    SOURCES "t/fixtures/compiler/${exception_module}.hs" "t/fixtures/compiler/${exception_driver}.hs"
+    OUTPUTS ${exception_outputs} BYPRODUCTS ${exception_objects})
+endforeach()
+
 # 107: masking state, laziness and exception delivery are observable contracts.
 set(mask_reports)
 set(mask_labels ghc-version native-compile native-oracle)

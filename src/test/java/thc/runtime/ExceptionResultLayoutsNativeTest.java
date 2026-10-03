@@ -119,7 +119,7 @@ public class ExceptionResultLayoutsNativeTest {
                     CoreSynchronousExceptions.validate(name, arguments, flags, components(result, fields));
                 });
             }
-            var audit = (Map<?, ?>) Json.parse(Files.readString(new File(directory, stage + "/" + entry + "-audit.json").toPath()));
+            var audit = (Map<?, ?>) Json.parse(Files.readString(new File(directory, stage + "/audit.json").toPath()));
             assertEquals(true, audit.get("accepted"), stage + "/" + entry); assertEquals(List.of(), audit.get("issues"));
         }
     }

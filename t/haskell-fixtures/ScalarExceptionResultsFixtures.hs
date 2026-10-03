@@ -3,12 +3,13 @@
 
 -- Fixture rationale (106 scalar-exception-results)
 -- Purpose: Check catch/mask/continuation paths preserve scalar result values.
--- Produces/consumed result: CBDs and native oracle observations.
--- Cost and overlap: Fold scalar rows into the general exception-result corpus unless a
---   separate compiled path is demonstrated. Separate compiler/native preparation is not
---   justified by scalar names.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Inputs: ScalarExceptionResultsAudit.hs, ScalarExceptionResultsNative.hs, selected
+--   GHC/toolchain, exporter and auditor.
+-- Produces: Native executable, 36 observations, pre/post CBDs, two batched audits,
+--   logs and manifest; CMake owns every persistent product.
+-- Cost and overlap: One native run and two audits. Int#/Word#/Addr# use native GHC
+--   continuation results directly and observe nested mask restoration. The general
+--   layout fixture uses a boxed model for layouts native GHC cannot return safely.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 106.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -59,10 +60,10 @@ prepareScalarExceptionResults root = do
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "bin/export-core.sh" (options ++ [source])
-    audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
-      ["bin/audit-core.py", "--entry", "main:ScalarExceptionResultsAudit." ++ entry, "--output", directory </> stage </> entry ++ "-audit.json",
-       core </> "ScalarExceptionResultsAudit.cbd"]
-    pure (exported : audits)
+    audit <- run (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py", "--output", directory </> stage </> "audit.json", core </> "ScalarExceptionResultsAudit.cbd"] ++
+       concat [["--entry", "main:ScalarExceptionResultsAudit." ++ entry] | entry <- entries])
+    pure [exported, audit]
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, driver, "t/haskell-fixtures/ScalarExceptionResultsFixtures.hs",
@@ -74,7 +75,7 @@ prepareScalarExceptionResults root = do
       commands = [version, compiled, observed] ++ concat stages
       artifacts = [binary] ++ concatMap commandArtifacts commands ++
         [directory </> stage </> "core/ScalarExceptionResultsAudit.cbd" | stage <- ["pre", "post"]] ++
-        [directory </> stage </> entry ++ "-audit.json" | stage <- ["pre", "post"], entry <- entries]
+        [directory </> stage </> "audit.json" | stage <- ["pre", "post"]]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object

@@ -28,7 +28,8 @@ The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `thread-inventory`, `process-lifecycle-native`, `delimited-continuations`, `hint-trace`,
 `core-continuation`, `large-literal-cases`, `original-termios`, `original-rts-locks`,
 `rubbish-literals`, `original-tcgetattr`, `original-tcsetattr`, `float-decode`
-and `process-signals`, `unix-libc`. Each has a `fixture-<group>`
+and `process-signals`, `unix-libc`, `exception-result-layouts`,
+`scalar-exception-results`. Each has a `fixture-<group>`
 target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
@@ -67,8 +68,8 @@ installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
-There are 77 graph targets covering 118 mapped JUnit classes, 46 quarantined
-groups and 15 groups still awaiting file rules. The native process target is
+There are 79 graph targets covering 120 mapped JUnit classes, 46 quarantined
+groups and 13 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
 
@@ -115,6 +116,13 @@ the unchanged Ninja repeat did no work. Eight audits became two, and compiler
 root/lambda/count assertions were removed while retaining ABI rejection, context
 ownership and first compiled-call checks. The 49 fixture-selection and 98 cache
 checks passed, as did manifest ownership validation.
+
+Exception-result fixtures passed all 198 executions across both handoff modes in
+1m48s. All 58 declared products existed and 45 consumed artifacts had matching
+hashes and graph writers; the repeat did no work. The general native model now
+starts once instead of 47 times, retaining all 141 observations. Audits run once
+per export stage: three on AArch64, four on x86_64, instead of 34/50. AArch64 keeps
+its existing pre-Tidy-only wide-layout export; scalar Core covers both stages.
 
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread
@@ -165,7 +173,7 @@ checks passed, as did manifest ownership validation.
 - Pinned-address rejection controls passed without leaving scratch catalogues.
   Removed 48 unreferenced catalogues (9.8 MiB), retaining named reports and logs.
 
-The focused JVM results do not establish that all 118 mapped classes pass.
+The focused JVM results do not establish that all 120 mapped classes pass.
 Linux generation/execution of the newly migrated rules, native Windows graph
 support and migration of the CI entry point remain open. Successful local
 fixture generation is not a claim that CI is green.

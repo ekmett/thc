@@ -20,7 +20,6 @@ import Control.Exception
 import Data.Int
 import Data.Word
 import Data.IORef
-import System.Environment (getArgs)
 
 data ExceptionPayload = ExceptionPayload Int deriving Show
 instance Exception ExceptionPayload
@@ -84,10 +83,10 @@ main = do
   incrementPrefix repeated
   repetitions <- readIORef repeated
   if repetitions /= 2 then error "native repeated prefix did not count twice" else pure ()
-  args <- getArgs
-  case args of
-    [name, modeText] -> mapM_ (emit name (read modeText)) [-17, 0, 23]
-    _ -> error "usage: oracle NAME MODE"
+  mapM_ (\name -> mapM_ (\mode -> mapM_ (emit name mode) [-17, 0, 23])
+    (if name == "unliftedPayloadResult" then [0, 1] else [0, 1, 2]))
+    [name ++ "Result" | name <- ["int8", "word8", "int16", "word16", "int32", "word32",
+      "int64", "word64", "float", "double", "empty", "nested", "sum", "vector", "unlifted", "unliftedPayload"]]
   where
     row name mode n value = name ++ "\t" ++ show (mode :: Int) ++ "\t" ++ show n ++ "\t" ++ show value
     emit name mode n = do

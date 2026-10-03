@@ -1140,6 +1140,7 @@
       ]
     },
     "exception-result-layouts": {
+      "cmakeTarget": "fixture-exception-result-layouts",
       "junit": ["thc.runtime.ExceptionResultLayoutsNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "exception-result-layouts"]}],
       "outputs": ["build/exception-result-layouts"],
@@ -1153,6 +1154,7 @@
       ]
     },
     "scalar-exception-results": {
+      "cmakeTarget": "fixture-scalar-exception-results",
       "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-exception-results"]}],
       "outputs": ["build/scalar-exception-results"],

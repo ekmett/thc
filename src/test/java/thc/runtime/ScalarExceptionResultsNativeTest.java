@@ -97,7 +97,7 @@ class ScalarExceptionResultsNativeTest {
                 var badFlags = new ArrayList<>(flags.subList(0, flags.size() - 1)); badFlags.add(true);
                 assertThrows(RuntimeFault.class, () -> CoreSynchronousExceptions.validate(name, arguments, badFlags, result));
             }
-            var audit = object(Json.parse(Files.readString(directory.resolve(stage + "/" + entry + "-audit.json"))));
+            var audit = object(Json.parse(Files.readString(directory.resolve(stage + "/audit.json"))));
             assertEquals(true, audit.get("accepted"), stage + "/" + entry); assertEquals(list(), audit.get("issues"));
         }
     }
