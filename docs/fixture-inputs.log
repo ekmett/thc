@@ -5203,3 +5203,389 @@ Verification checkpoint after entry 152 (base a4b375785, local changes):
     (61 ordinary plus 13 custom). git diff --check passed. No fixture builds,
     runtime tests, pushes or CI dispatches were performed. Earlier selector tests
     remain valid; exclusions are missing coverage, not passing behavior.
+
+153 graph-bfs (custom fixture)
+Fixture rationale (153 graph-bfs)
+Purpose: Exercise a real containers graph workload, including traversal and bounds.
+Consumes: GraphWorkload/LibraryOracle and imported workloads, pinned containers
+  archive, complete Classes/List interfaces, boot exporter, plugin and auditor.
+Produces/consumed result: Post-Core module list, native oracle.tsv and manifest.
+Cost and overlap: Useful package-level integration, suitable for an intensive run;
+  shared package acquisition should replace this fixture's downloader/helper build.
+Build status: QUARANTINED. Published output paths contain a new wall-clock run ID;
+  sources/native/interfaces remain in each attempt instead of stable owned outputs.
+Consumer: thc.GraphWorkloadTest; producer uses build/graph-bfs/.
+  vendor/archives/containers-0.8.tar.gz <- curl if absent, pinned SHA256 verified;
+    this repository-wide cache needs a single acquisition owner.
+  run-<timestamp>/containers-0.8/** <- verified archive/tar; enumerated source hashes.
+  inputs.tsv <- producer request table; run-*/native/library-oracle <- LibraryOracle,
+    graph and other imported workloads + extracted containers sources/GHC9.14.1.
+  oracle.tsv <- native --batch consuming inputs.tsv.
+  boot/{core/{GHC.Internal.CString,GHC.Internal.Err,GHC.InterfaceClosure}.cbd,
+    boot-provenance.json,...} <- export-boot.py shared acquisition.
+  Cabal dist-newstyle helper products <- cabal build exe:thc-interface (shared tool).
+  run-*/interfaces/{GHC.Internal.Classes,GHC.Internal.List}.{cbd,dyn_hi},
+    provenance.json <- installed registration/interfaces and interface helper.
+  run-*/post/core/{GraphWorkload,sourceModules...,THC.InterfaceClosure}.cbd
+    <- graph source/containers/plugin; post/ghc intermediates.
+  post-modules.txt <- closure sourceModules, original interfaces and boot CBDs.
+  post-<five entries>-audit.json <- module list/auditor. Strict rejection is retained
+    as a failed producer, not reclassified as success.
+  logs/*.{stdout,stderr,command.json} <- all above commands.
+  manifest.json <- source/archive/extraction/helper/interface/Core/oracle/audit/log
+    hashes and accepted summary; old receipt removed. Module list is explicit at
+    consumption, but its timestamped producers are not a stable build graph.
+
+154 original-iconv (custom fixture)
+Fixture rationale (154 original-iconv)
+Purpose: Check encoding state, partial buffers, reset, errors and native linkage.
+Consumes: OriginalIconvAudit{,Native}.hs, full Iconv.hi, native iconv/locale,
+  GHC API/interface serializer and auditor.
+Produces/consumed result: PreIconvAudit.cbd, OriginalIconvAudit.cbd, oracle.json.
+Cost and overlap: Keep encoding behavior in public package coverage; eight audits
+  and private FCallId substitution do not justify a standalone libc harness.
+Build status: QUARANTINED. Installed interfaces are explicitly unhashed, locale is
+  ambient, and generation fixes original/private foreign-call counts and identity.
+Consumer: OriginalIconvNativeTest. Under build/original-iconv/:
+  native/oracle, native/OriginalIconvAudit.hi and compiler intermediates <- source/
+    driver, GHC9.14.1 -O2 -fwrite-if-simplified-core -package ghc-internal.
+  oracle.json <- native executable; locale, missing-converter control, ten rows of
+    conversion/continuation/reset/close results and errors.
+  OriginalIconvAudit.cbd <- generated template interface plus installed
+    GHC/Internal/IO/Encoding/Iconv.hi; typed substitution of four original FCallIds.
+  PreIconvAudit.cbd <- parsed/typechecked/optimized source with same substitution;
+    pre-ghc/ compiler intermediates.
+  declarations.json <- original foreign applications, flags indicating original
+    installed artifacts are NOT hashed and module is not complete.
+  {pre-,}<four entries>.audit.json <- matching CBD/auditor (eight invocations).
+  logs/* triplets <- version/libdir/imports/native/auditor commands.
+  manifest.json <- selected source and CBD/oracle/declarations/audit hashes plus
+    command records. Native binary, installed interface and ambient locale are
+    outside artifact hashes; no old-manifest invalidation before generation.
+Consumer reads exact CBDs, receipt and oracle, then tests state/error behavior.
+Package encoding coverage should own those observations with normal native linkage.
+
+155 file-wait (custom fixture)
+Fixture rationale (155 file-wait)
+Purpose: Check descriptor readiness and lazy bad-FD exception payloads at THC's
+  waitRead#/waitWrite# runtime boundary.
+Consumes: FileWaitAudit.hs/FileWaitNative.hs, Linux x86_64 non-threaded GHC,
+  complete installed Core/packages, exporter and auditor.
+Produces/consumed result: Named pre/post CBDs, oracle.txt, package closure/manifest.
+Cost and overlap: Keep readiness/error semantics with shared acquisition. Ordinary
+  descriptor operations overlap package smoke; payload laziness is a THC contract.
+Build status: QUARANTINED. Consumer requires exactly one compiled entry per call;
+  preserve first-compiled evidence without fixing internal call counts.
+Consumer: FileWaitFullCoreTest. Under build/file-wait/:
+  installed/{packages.json,bundles/*,...} <- shared complete-Core acquisition (066).
+  native/oracle + intermediates <- audit/native driver/GHC, -O2 -dynamic,
+    ghc-internal/unix, explicitly non-threaded select I/O manager.
+  oracle.txt <- native executable, read-ready/write-ready/original-bad-fd lines.
+  <pre|post>/core/{FileWaitAudit,THC.InterfaceClosure}.cbd <- source/two roots/exporter;
+    stage/ghc intermediates.
+  stage/<two entries>-audit.json <- named CBD + package manifest/auditor.
+  logs/* triplets <- installed/native/plugin/export/audit commands.
+  manifest.json <- input closure, installed artifacts, oracle, CBDs/audits/logs;
+    old receipt removed. Native binary is an output but absent from artifactHashes.
+Consumer reads receipt, exact CBDs and package archives; temporary test files are
+  legitimate private runtime state. Its compiledEntries==before+1 is incidental;
+  original lazy exception identity and bad/closed descriptor behavior are useful.
+
+156 original-stack-decoder (custom fixture)
+Fixture rationale (156 original-stack-decoder)
+Purpose: Check real stack decoding/formatting, source provenance and detached
+  snapshot lifetime across interpreted and compiled execution.
+Consumes: OriginalStackDecoder{,Native}.hs, complete installed Core, GHC debug
+  info/table-map support, exporter and auditor.
+Produces/consumed result: Named pre/post CBDs, native invariant output and manifest.
+Cost and overlap: Valuable integration beyond synthetic stack-frame tests. Share
+  acquisition; do not force exact native/JVM frame counts or formatter strings.
+Build status: Review candidate; named outputs and relational frame checks found.
+  No runtime success or graph admission is claimed by this inventory.
+Consumer: OriginalStackDecoderTest. Under build/original-stack-decoder/:
+  installed package products <- shared prepareInstalledCore (066).
+  <pre|post>/core/OriginalStackDecoder.cbd <- source, captureNamed/observeSnapshot
+    roots, -g -finfo-table-map exporter; stage/ghc intermediates.
+  stage/<two entries>-audit.json <- CBD + installed packages/auditor (four calls).
+  native/oracle + intermediates <- driver/source/GHC -O2 -dynamic -g
+    -finfo-table-map -package ghc-internal.
+  logs/native-invariants.stdout <- executable's six native observations;
+    logs/* triplets cover acquisition/plugin/export/audits/native.
+  manifest.json <- source/tool and installed/binary/Core/audit/log hashes;
+    old receipt and four old audit files removed first.
+Consumer loads exact named artifacts/package modules, checks positive frame count,
+  per-frame provenance, repeatable retained snapshots and no handoff leaks. Native
+  and guest frame counts are not required to match. >=before+2 follows two explicit
+  compiled calls, not an exact whole-program root inventory.
+
+157 arithmetic-exceptions (custom fixture)
+Fixture rationale (157 arithmetic-exceptions)
+Purpose: Check divide-by-zero, overflow and underflow exception behavior through
+  scalar and tuple results using original exception values.
+Consumes: ArithmeticExceptionsAudit.hs/ArithmeticExceptionsNative.hs, complete
+  installed Core, optional configured GHC sources, exporter and auditor.
+Produces/consumed result: Pre/post CBDs, twelve audits, 42-row native output/manifest.
+Cost and overlap: Fold these six semantic cases into arithmetic/exception coverage;
+  twelve audits and repeated package acquisition are excessive as standalone setup.
+Build status: Review candidate. Split Core and native outputs into single-owner
+  rules; full/core-only commands currently both rewrite the same Core products.
+Consumer: ArithmeticExceptionsNativeTest. Under build/arithmetic-exceptions/:
+  installed package/native products <- shared acquisition; THC_INSTALLED_CORE_GHC_SOURCE
+    selects optional foreign-source acquisition and must be a declared input.
+  <pre|post>/core/{ArithmeticExceptionsAudit,THC.InterfaceClosure}.cbd <- source,
+    six roots/exporter; stage/ghc intermediates.
+  stage/<six entries>-audit.json <- CBD + packages/auditor; twelve reports.
+  core-manifest.json <- source/installed/Core/audit/command hashes, runtimeVerified=false.
+  native/oracle + intermediates <- driver/source/GHC -O2 -dynamic.
+  logs/native-oracle.stdout <- binary, 42 observations; native compile/run triplets.
+  native/receipt.json <- two source hashes, selected compiler/registration/arguments
+    and native artifact hashes. Full mode reuses only if all named files/hashes match.
+  manifest.json <- Core receipt plus native receipt and native artifact hashes.
+Both modes invalidate old Core/full receipts and audits, then regenerate Core.
+  --core-only stops before native work and publishes no full receipt. This does not
+  require an old native attempt; nevertheless these must not be two graph producers
+  for the same Core outputs. Native/core should be independent owned rules.
+
+158 compact-regions and compact-serialization (custom fixture)
+Fixture rationale (158 compact-regions and compact-serialization)
+Purpose: Check compact region sharing/cycles/rejection/interruption and serialized
+  round trips including cyclic, empty and multi-block regions.
+Consumes: CompactRegionsAudit/Native or CompactSerializedAudit/Native sources,
+  complete ghc-compact dependency Core, GHC, exporter and auditor.
+Produces/consumed result: Each family owns pre/post CBDs, originals, oracle.tsv and
+  manifest under build/compact-regions or build/compact-serialization.
+Cost and overlap: THC-managed compact semantics justify these cases. Share package
+  acquisition and native batching; fixture-free compact tests cover local mechanics.
+Build status: QUARANTINED. Both producers require dependency discovery to fail
+  with one exact unrelated Conc.Bound error. Fixing that error breaks generation.
+Consumers: CompactRegionsNativeTest and CompactSerializedNativeTest.
+Each distinct output directory contains:
+  installed packages/bundles <- prepareInstalledCoreUnits [ghc-compact] (066).
+  <pre|post>/core/<audit module>.cbd <- source, seven region or four serialization
+    roots/exporter; stage/ghc intermediates.
+  stage/dependency-discovery.json <- CBD/full package manifest/auditor; exit1 and
+    exactly one Conc.Bound module-format issue required, with no missing globals.
+  stage/originals/<index>.cbd, original-selection.json <- reached archive members,
+    sorted and copied from validated installed bundles after discovery.
+  stage/<entry>-audit.json <- consumer and selected original CBDs/auditor;
+    fourteen region or eight serialization audits.
+  native/oracle + intermediates <- source/driver/GHC -O2.
+  oracle.tsv <- native binary. commands/* triplets <- acquisition/export/audits/native.
+  manifest.json <- sources, installed products, binary/oracle/modules/audits;
+    old receipt removed. Output originals are data-dependent numbered filenames;
+    declare module ownership instead of carrying this discovery procedure forward.
+
+159 stm (custom fixture)
+Fixture rationale (159 stm)
+Purpose: Check transaction commit/rollback, retry/orElse, lazy/newtype values,
+  concurrent wakeup, interruption and stack-safe resumption.
+Consumes: STMAudit.hs/STMNative.hs, complete installed Core, GHC threaded RTS,
+  exporter and auditor.
+Produces/consumed result: Pre/post consumer/original CBDs, oracle.tsv and manifest.
+Cost and overlap: STM owns state and scheduling; these are valuable semantics.
+  Share acquisition and consolidate with managed STM coverage, keeping concurrency.
+Build status: QUARANTINED. Discovery requires exactly one unrelated Conc.Bound
+  failure before selecting originals; a corrected auditor would break this setup.
+Consumer: STMFullCoreTest. Under build/stm/:
+  installed package products <- shared acquisition (066).
+  <pre|post>/core/STMAudit.cbd <- source, nine entries/seventeen context entries,
+    exporter; stage/ghc intermediates.
+  stage/dependency-discovery.json <- whole packages/consumer/auditor, requires exit1
+    and one Conc.Bound issue; no missing globals or reached failing module allowed.
+  stage/originals/<index>.cbd, original-selection.json <- reached archive members.
+  stage/<26 entries>.audit.json <- consumer + selected originals (52 audits).
+  native/stm-oracle + intermediates <- source/driver/GHC -O2 -threaded.
+  oracle.tsv <- binary +RTS -N2; complete unique requests checked: nine entries x
+    seven values, three stack cases x three depths, concurrent/either and twelve
+    interruption observations (87 rows). Runtime timeout 60 seconds.
+  logs/* <- acquisition/discovery; several export/audit/native calls use run without
+    logged triplets. manifest.json hashes source closure, installed/oracle/modules/
+    discovery/selection/audits, but not native binary; old receipt removed first.
+Keep named semantic expectations; repair package discovery rather than preserving
+  its current error. Independent direct STM tests need not acquire whole packages.
+
+160 signal-dispatch (custom fixture)
+Fixture rationale (160 signal-dispatch)
+Purpose: Check original signal handlers reach THC scheduling with correct masking,
+  callback results, resource restoration and no leaked handoff references.
+Consumes: SignalDispatchAudit.hs/SignalDispatchNative.hs, GHC threaded RTS,
+  installed Core/native package closure, optional GHC sources, exporter and auditor.
+Produces/consumed result: Pre/post CBDs, four native signal results, audits/manifest.
+Cost and overlap: Runtime scheduling/restoration is a real boundary beyond libc;
+  share package acquisition and retain this focused integration coverage.
+Build status: Review candidate; no incidental root count or output glob found.
+  Inventory does not establish execution or graph admission.
+Consumer: SignalDispatchFullCoreTest. Under build/signal-dispatch/:
+  native/oracle and intermediates <- source/driver/GHC9.14.1 -O2 -dynamic -threaded.
+  oracle.txt <- executable +RTS -N2, four signal/result pairs; 30-second bound.
+  installed package products <- shared acquisition (066), optionally with foreign
+    products using THC_INSTALLED_CORE_GHC_SOURCE; shared plugin build also invoked.
+  <pre|post>/core/SignalDispatchAudit.cbd <- auditMain root/source/exporter;
+    stage/ghc intermediates.
+  stage/audit.json <- CBD/full installed package manifest/auditor --io-main.
+  manifest.json <- source closure, installed products, oracle/Core/audits;
+    native executable and unlogged run calls not included in artifact hashes;
+    old receipt removed. Package preparation must become a consumed shared product.
+Consumer uses exact manifest paths and native oracle; exact once-only restoration
+  is resource ownership, not an arbitrary compiler count.
+
+161 stableptr-ffi (custom fixture)
+Fixture rationale (161 stableptr-ffi)
+Purpose: Check ordinary Foreign.StablePtr identity/lifetime through real ccall/capi
+  native imports using production package acquisition and execution.
+Consumes: run-stableptr-ffi Haskell/C sources, selected GHC/Cabal/Clang, complete
+  installed Core, optional configured GHC source and an already-built THC runtime.
+Produces/consumed result: Copied project, package Core/native products, audit,
+  twelve matching native/THC observations and manifest.
+Cost and overlap: This is valuable ownership/ABI integration, not a C-library
+  conformance test. Keep in intensive integration with shared application products.
+Build status: QUARANTINED. Preparation runs an ambient/prebuilt THC_TEST_RUNTIME
+  (default installDist path) without an owning build dependency.
+Consumer: StablePtrFfiFullCoreTest. Under build/stableptr-ffi/:
+  project/{src/StableForeign.hs,app/Main.hs,cbits/stable.{c,h}} <- copied tracked
+    t/fixtures/run-stableptr-ffi sources.
+  project/{stableptr-ffi.cabal,cabal.project} <- producer templates/selected Clang.
+  Shared Cabal exe:thc products <- driver build/list-bin using selected compiler.
+  native/cache/plan.json, native executable, Core archives, native/bridge libraries,
+    packages.json, audit.json <- production thc run --verify-artifacts with project,
+    installed-core required, optional GHC source and supplied runtime path.
+  logs/thc-run.stdout <- guest execution during preparation; logs/native-run.stdout
+    <- native executable selected from plan; twelve rows required to match.
+  logs/{driver-build,driver-location,thc-run,native-run} triplets <- commands.
+  manifest.json <- selected tracked inputs, copied project/packages/audit/log hashes
+    and parsed observations. Referenced package artifacts separately hash-validated.
+Runtime JVM/JAR/native closure and all driver/tool sources are not receipt inputs.
+  Consumer later uses package manifest/observations across backends and checks an
+  increase in compiled entries. Separate build, oracle production and guest test
+  execution; do not hide runtime work inside the fixture-producing rule.
+
+162 dynamic-callback and static-export (custom fixture)
+Fixture rationale (162 dynamic-callback and static-export)
+Purpose: Check wrapper/dynamic callbacks and static exports preserve pointer
+  lifetime, native retention/release and guest context ownership.
+Consumes: DynamicCallback{,Native}.hs/dynamic-callback.c, run-static-exports sources,
+  GHC/native toolchain, interface helper/plugin and THC_PACKAGE_NATIVE_SUPPORT.
+Produces/consumed result: DynamicCallback/NativeExport CBDs, package-native products,
+  oracle texts, two audits and manifest under build/dynamic-callback.
+Cost and overlap: Real THC callback/ABI boundaries justify integration. Share tools
+  and support packages; keep fixture-free callback rejection tests independent.
+Build status: Review candidate. Runtime-support manifest and referenced artifacts
+  need explicit graph edges; build-directory selection is not a dependency rule.
+Consumer: thc.NativeCallbacksTest. Under build/dynamic-callback/:
+  runtime-support.json <- externally supplied genuine package support manifest;
+    its referenced Core/native closure remains an external input, not just this copy.
+  plugin.json <- plugin.py registry; shared Cabal lib:thc/exe:thc-interface built.
+  objects/{DynamicCallback.o,DynamicCallback.hi,stubs...} and
+    core/units/u-callback-fixture/DynamicCallback.cbd <- source/GHC/plugin.
+  interface-response.cbd <- interface helper/generated .hi; same captured CBD path
+    is then overwritten with hydrated bytes before staging DynamicCallback.cbd.
+  objects/callback.o <- GHC C compilation. pieces/, native metadata/bridges/libraries
+    <- captureNativeObject/capturePackageNative/finishPackageNative, selected objects.
+  native-oracle/oracle + intermediates <- source/native driver/C; oracle.txt <- run,
+    expected two rows (12,13,2,24) and (16,1,4).
+  audit.json <- DynamicCallback.cbd/runtime-support/auditor, six roots.
+  static/{objects,core,pieces,native products} <- NativeExport.hs/callbacks.c,h,
+    analogous package-native pipeline. NativeExport.cbd staged in parent directory.
+  static/oracle/main <- Main.hs/NativeExport/C; static-oracle.txt <- result43.
+  static-audit.json <- NativeExport.cbd/runtime-support/auditor probe root.
+  logs/* triplets, manifest.json <- selected source hashes, eight named CBD/support/
+    oracle/audit hashes and command records; native product closure not in this
+    artifactHashes set. Both package manifests must own their referenced products.
+No old-manifest invalidation is performed; producer should publish receipt last
+  and revoke stale success on failure. Native-oracle stages have separate paths.
+
+163 foreign-exceptions (custom fixture)
+Fixture rationale (163 foreign-exceptions)
+Purpose: Check foreign exception boxing/rethrow/cleanup and Safe Haskell API
+  boundaries, plus host metadata and polyglot storage/interop behavior.
+Consumes: ForeignExceptionAudit/Native/Safe/UnsafeImport sources, THC runtime API
+  modules/exception.c, storage/interop sources, installed Core/native support.
+Produces/consumed result: Runtime/pre/post CBDs, audits, native/API controls, manifest.
+Cost and overlap: THC-owned exception and lifetime contracts are valuable. Separate
+  compile-only Safe controls and interop/storage tests; share acquired dependencies.
+Build status: QUARANTINED. runtime-core/*.cbd is enumerated and consumed, so leftovers
+  change inputs. The ordered Make lane and dependent full-Core tag are excluded.
+Consumers: foreign-exceptions-full-core-tagged runtime/polyglot tests, including
+  ForeignExceptionTest, PreparedForeignExceptionTest, RawInteropTest/BoundaryTest,
+  PolyglotFFITest/StorageTest and tagged methods in ordinary test classes.
+Under build/foreign-exceptions/:
+  installed/{packages.json,bundles/*,native products...} <- configured source via
+    THC_FOREIGN_EXCEPTION_GHC_SOURCE and installed bytestring/text dependencies;
+    alternatively THC_FOREIGN_EXCEPTION_INSTALLED copied, bundle hashes checked and
+    paths rewritten; other native references still point outside this directory.
+  runtime-core/*.cbd <- Exception/Polyglot/Interop API + PolyglotStorage/InteropPrimitives
+    sources/exporter; runtime-ghc intermediates. Every non-closure CBD found is input.
+  storage-audit.json, interop-audit.json <- discovered runtime CBDs/packages/auditor.
+  <pre|post>/core/ForeignExceptionAudit.cbd, THC.InterfaceClosure.cbd <- source/twelve
+    roots/exporter; stage/ghc intermediates; audit.json <- named audit CBD plus
+    discovered runtime support. Stage listing filters exact audit module name.
+  native/oracle <- ForeignExceptionNative.hs/API/exception.c/GHC; logs/native-oracle.stdout
+    <- expected (42,77,99,1), a compatibility control, not native polyglot exceptions.
+  native/ intermediate interfaces <- same GHC -fno-code Safe-client and Unsafe-import
+    rejection commands; negative control requires unsafe-import diagnostic.
+  logs/* triplets, manifest.json <- source and installed/discovered Core/audits/native/
+    log hashes; old receipt removed. Split independent controls into explicit rules.
+Make's current ordered recipe also prepares interface-core/fcntl/java-arrays/native-demand;
+  it is quarantined rather than retained as a blanket preparation dependency.
+
+164 java-arrays (custom fixture)
+Fixture rationale (164 java-arrays)
+Purpose: Check Haskell loops access Java primitive arrays with correct scalar/
+  vector transport through the production lazy Core loader.
+Consumes: JavaArrays.hs, THC.Exception and imported example/runtime modules,
+  exporter, existing THC_FOREIGN_EXCEPTION_INSTALLED or foreign-exception packages.
+Produces/consumed result: core/ CBDs, cache/ published Core units and packages.json.
+Cost and overlap: Public array/interop semantics justify coverage; fixture-free
+  JavaArrayTest methods should stay independent of complete package acquisition.
+Build status: QUARANTINED dependency: default package input is another fixture's
+  installed output. Tagged full-Core methods excluded until a shared owner exists.
+Consumer: tagged methods of thc.runtime.JavaArrayTest (untagged direct tests kept).
+Under build/java-arrays/:
+  core/<JavaArrays,THC.Exception,imported modules>.cbd, ghc/ intermediates <- export-core.sh
+    -isrc/examples -it/fixtures/compiler plus explicit Exception and JavaArrays sources.
+  cache/ immutable Core units/indexes <- publishCoreUnit over units in selected
+    package manifest; all manifest-referenced bundle/native inputs must be declared.
+  packages.json <- original package fields with indexed units and foreignExceptionBridgeUnit=main.
+No native oracle, per-fixture receipt or audits are produced here. It assumes the
+  external/default installed manifest exists; Make currently establishes this by
+  procedural ordering. Replace that with a shared package-product dependency.
+
+165 package-native-demand and package-scalar-cbits (custom fixture)
+Fixture rationale (165 package-native-demand and package-scalar-cbits)
+Purpose: Check package-native state is shared on demand and scalar C ABI transport
+  stays isolated between two separately built packages with different C constants.
+Consumes: run-scalar-cbits Haskell/C files, selected GHC/Cabal/Clang, complete
+  installed Core, optional GHC sources and a prebuilt THC_TEST_RUNTIME/installDist.
+Produces/consumed result: Copied Cabal projects, Core/native package products,
+  native/THC observations, audits and per-family manifest.
+Cost and overlap: ABI, canonical native state and package isolation are worthwhile.
+  Consolidate into one small driver integration fixture using shared dependencies.
+Build status: QUARANTINED. Preparation runs an undeclared prebuilt runtime; the
+  scalar case performs two package acquisitions before later JVM tests run again.
+Consumers: PackageNativeDemandTest (tagged) and PackageScalarCbitsTest.
+Demand owns build/package-native-demand/:
+  project/{src/Demand.hs,app/DemandMain.hs,cbits/demand.c} <- tracked sources;
+    native-demand.cabal/cabal.project <- producer template + selected Clang.
+  acquired/{native/cache/plan.json,packages.json,audit.json,Core/native products}
+    <- thc run --installed-core required --verify-artifacts using prebuilt runtime.
+  library/ retained artifacts <- acquired lib unit via retainUnitArtifacts.
+  logs/{driver-build,driver-location,thc-run,native-run} triplets; guest/native
+    stdout must match 41/42/43. manifest.json <- source/project/products/log hashes.
+Scalar owns build/package-scalar-cbits/:
+  <first|second>/project/{Scalar.hs,ScalarAgain.hs,Main.hs,scalar.c,h in source dirs}
+    <- tracked sources; package/cabal project files <- template with SCALAR_DELTA=1/2.
+  each native/cache plan, Core/native products, packages.json, audit.json <- thc run;
+    library/ retained package artifacts <- acquired unit.
+  logs/<name>-{thc-run,native-run} triplets; native path from plan, 30 rows per package.
+  manifest.json <- 60 observations, input/copied-project/retained-artifact/log hashes.
+Both build shared exe:thc, invalidate old manifest, and compare guest/native during
+  production. Separate runtime execution from artifact generation; explicit runtime
+  product dependencies are needed before any graph admission.
+
+Verification checkpoint after entry 165 (base a697900e6, local changes):
+  13 Haskell header edits compared after removing comments/blank lines: code unchanged.
+  Gradle quarantine expression evaluated with bundled Groovy: 43 indexed groups,
+    82 classes and foreign-exceptions-full-core tag excluded. Mixed classes retain
+    untagged fixture-free methods. make foreign-exception-test-modes exited2 in its
+    prerequisite, before Gradle/runtime/generation. git diff --check passed.
+  No fixture generation, runtime suite, push or CI dispatch performed.

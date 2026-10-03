@@ -99,19 +99,9 @@ test-modes: fixtures
 
 # This lane needs complete installed Core plus matching configured GHC sources.
 # Missing prerequisites are errors; run it alongside the portable test targets.
-foreign-exception-fixtures: runtime
-	@test -n "$${THC_FOREIGN_EXCEPTION_GHC_SOURCE:-}" && test -d "$$THC_FOREIGN_EXCEPTION_GHC_SOURCE" || { \
-		printf '%s\n' 'Set THC_FOREIGN_EXCEPTION_GHC_SOURCE to the matching configured GHC 9.14.1 source tree.' >&2; exit 1; \
-	}
-	GHC='$(GHC)' GHC_PKG='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)' CABAL='$(CABAL)' \
-	  $(CABAL) run exe:thc-fixtures $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)' -- foreign-exceptions
-	@set -eu; GHC='$(GHC)'; GHC_PKG='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)'; CABAL='$(CABAL)'; \
-	  THC_INSTALLED_CORE_GHC_SOURCE="$$THC_FOREIGN_EXCEPTION_GHC_SOURCE"; export GHC GHC_PKG CABAL THC_INSTALLED_CORE_GHC_SOURCE; \
-	  fixture_bin=$$($(CABAL) list-bin exe:thc-fixtures $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)'); \
-	  for family in interface-core original-fcntl java-arrays; do \
-	    "$$fixture_bin" "$$family"; \
-	  done; \
-	  case "$$(uname -s)-$$(uname -m)" in Linux-x86_64) "$$fixture_bin" package-native-demand ;; esac
+foreign-exception-fixtures:
+	@printf '%s\n' 'Foreign-exception preparation is quarantined: see docs/fixture-quarantine.log.' >&2
+	@exit 2
 
 foreign-exception-test-modes: foreign-exception-fixtures
 	./gradlew $(GRADLE_FLAGS) --continue foreignExceptionTest foreignExceptionDenseTest

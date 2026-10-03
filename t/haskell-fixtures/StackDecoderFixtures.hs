@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (156 original-stack-decoder)
+-- Purpose: Check real stack decoding/formatting, source provenance and detached
+--   snapshot lifetime across interpreted and compiled execution.
+-- Consumes: OriginalStackDecoder{,Native}.hs, complete installed Core, GHC debug
+--   info/table-map support, exporter and auditor.
+-- Produces/consumed result: Named pre/post CBDs, native invariant output and manifest.
+-- Cost and overlap: Valuable integration beyond synthetic stack-frame tests. Share
+--   acquisition; do not force exact native/JVM frame counts or formatter strings.
+-- Build status: Review candidate; named outputs and relational frame checks found.
+--   No runtime success or graph admission is claimed by this inventory.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 156.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

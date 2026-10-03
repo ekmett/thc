@@ -128,3 +128,39 @@ Compiler-structure assertions (also excluded):
   sum-join-input (152): producer requires >=7 sum joins and consumer pins exact wrapper/loop let
     shapes and join-transfer counts. SumJoinInputNativeTest excluded; retain
     behavioral values and lifetime cleanup in the aggregate suite.
+
+  graph-bfs (153): publishes wall-clock run directories and shares archive/tool acquisition.
+    GraphWorkloadTest excluded. Retain useful package workload in intensive coverage
+    after stable outputs/shared acquisition replace the bespoke preparation.
+
+  original-iconv (154): uses unhashed installed Core/ambient locale and demands exact private
+    foreign-call identity/counts. OriginalIconvNativeTest excluded; public encoding
+    package behavior should replace this bespoke iconv harness.
+
+  file-wait (155): consumer requires compiledEntries==before+1. FileWaitFullCoreTest excluded;
+    retain readiness, bad-FD payload laziness and actual compiled execution with
+    shared package acquisition.
+
+  compact-regions and compact-serialization (158): both require auditor exit1 with exactly one Conc.Bound module-format issue
+    before selecting originals. Both native consumers excluded; successful package
+    discovery must be allowed, and original modules need explicit ownership.
+
+  stm (159): discovery requires auditor failure with one exact Conc.Bound issue.
+    STMFullCoreTest excluded. Preserve transaction/concurrency/resumption semantics;
+    remove error-dependent acquisition and share package products.
+
+  stableptr-ffi (161): preparation executes a preexisting installDist/THC_TEST_RUNTIME without a
+    producer edge. StablePtrFfiFullCoreTest excluded until runtime/package products
+    are explicit dependencies and execution is separated from preparation.
+
+  foreign-exceptions (163): runtime-core output-directory members become consumed inputs. Full-Core
+    foreign-exception tag and ordered Make producer lane excluded, including dependent
+    interop/array methods. Preserve exception, Safe API and host-lifetime contracts.
+
+  java-arrays (164): reads foreign-exception installed products by default without its own graph
+    dependency. Full-Core tagged methods excluded; direct fixture-free Java array
+    tests remain active.
+
+  package-native-demand and package-scalar-cbits (165): both execute THC_TEST_RUNTIME/default installDist during preparation with
+    no build edge. Scalar custom consumer and demand full-Core tag excluded; retain
+    canonical state/ABI/isolation in one lean package integration case.

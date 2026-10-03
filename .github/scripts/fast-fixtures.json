@@ -1,6 +1,7 @@
 {
   "schema": 1,
-  "quarantinedFullCoreJunit": ["thc.runtime.OriginalTimeClockTest", "thc.runtime.RtsEventNativeTest", "thc.runtime.GcStatsNativeTest", "thc.runtime.AggregateHeapNativeTest", "thc.runtime.FourWayAggregateNativeTest", "thc.runtime.FourWayAggregateStorageTest", "thc.runtime.FourWayAggregateProtocolTest", "thc.runtime.NarrowIntegerTransportTest", "thc.runtime.GenericSumTransportTest", "thc.runtime.TupleJoinNativeTest", "thc.runtime.SumInputNativeTest", "thc.runtime.TupleCaptureNativeTest", "thc.runtime.SumJoinInputNativeTest"],
+  "quarantinedJunitTags": ["foreign-exceptions-full-core"],
+  "quarantinedFullCoreJunit": ["thc.runtime.OriginalTimeClockTest", "thc.runtime.RtsEventNativeTest", "thc.runtime.GcStatsNativeTest", "thc.runtime.AggregateHeapNativeTest", "thc.runtime.FourWayAggregateNativeTest", "thc.runtime.FourWayAggregateStorageTest", "thc.runtime.FourWayAggregateProtocolTest", "thc.runtime.NarrowIntegerTransportTest", "thc.runtime.GenericSumTransportTest", "thc.runtime.TupleJoinNativeTest", "thc.runtime.SumInputNativeTest", "thc.runtime.TupleCaptureNativeTest", "thc.runtime.SumJoinInputNativeTest", "thc.GraphWorkloadTest", "thc.runtime.OriginalIconvNativeTest", "thc.runtime.FileWaitFullCoreTest", "thc.runtime.CompactRegionsNativeTest", "thc.runtime.CompactSerializedNativeTest", "thc.runtime.STMFullCoreTest", "thc.runtime.StablePtrFfiFullCoreTest", "thc.runtime.PackageScalarCbitsTest"],
   "fixtureFreeJunit": [
     "thc.runtime.BigNatLiteralTest",
     "thc.runtime.Int32ByteOffsetTest",

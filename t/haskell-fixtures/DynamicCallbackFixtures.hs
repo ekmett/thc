@@ -1,5 +1,18 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (162 dynamic-callback and static-export)
+-- Purpose: Check wrapper/dynamic callbacks and static exports preserve pointer
+--   lifetime, native retention/release and guest context ownership.
+-- Consumes: DynamicCallback{,Native}.hs/dynamic-callback.c, run-static-exports sources,
+--   GHC/native toolchain, interface helper/plugin and THC_PACKAGE_NATIVE_SUPPORT.
+-- Produces/consumed result: DynamicCallback/NativeExport CBDs, package-native products,
+--   oracle texts, two audits and manifest under build/dynamic-callback.
+-- Cost and overlap: Real THC callback/ABI boundaries justify integration. Share tools
+--   and support packages; keep fixture-free callback rejection tests independent.
+-- Build status: Review candidate. Runtime-support manifest and referenced artifacts
+--   need explicit graph edges; build-directory selection is not a dependency rule.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 162.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Original wrapper/dynamic imports through the existing native package producer.

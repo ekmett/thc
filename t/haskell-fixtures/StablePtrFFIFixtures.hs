@@ -1,5 +1,18 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (161 stableptr-ffi)
+-- Purpose: Check ordinary Foreign.StablePtr identity/lifetime through real ccall/capi
+--   native imports using production package acquisition and execution.
+-- Consumes: run-stableptr-ffi Haskell/C sources, selected GHC/Cabal/Clang, complete
+--   installed Core, optional configured GHC source and an already-built THC runtime.
+-- Produces/consumed result: Copied project, package Core/native products, audit,
+--   twelve matching native/THC observations and manifest.
+-- Cost and overlap: This is valuable ownership/ABI integration, not a C-library
+--   conformance test. Keep in intensive integration with shared application products.
+-- Build status: QUARANTINED. Preparation runs an ambient/prebuilt THC_TEST_RUNTIME
+--   (default installDist path) without an owning build dependency.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 161.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

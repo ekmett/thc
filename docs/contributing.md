@@ -69,9 +69,9 @@ require complete installed Core; `THC_INSTALLED_CORE_GHC`,
 package tool and configured GHC sources when needed.
 
 `bin/try.sh --handoff-modes` compares the Core corpus against native GHC;
-`bin/try-libraries.sh` checks library examples. Foreign-call changes can also
-need `make foreign-exception-test-modes`, which requires complete installed
-Core and matching configured GHC sources. See [Core compatibility checks](coverage.md)
+`bin/try-libraries.sh` checks library examples. The full-Core foreign-exception lane is quarantined during dependency repair;
+`make foreign-exception-test-modes` stops before preparation. Its intended inputs
+include complete installed Core and matching configured GHC sources. See [Core compatibility checks](coverage.md)
 and [foreign code](interface-foreign.md) for setup and limits.
 
 ## Find and change the implementation

@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (154 original-iconv)
+-- Purpose: Check encoding state, partial buffers, reset, errors and native linkage.
+-- Consumes: OriginalIconvAudit{,Native}.hs, full Iconv.hi, native iconv/locale,
+--   GHC API/interface serializer and auditor.
+-- Produces/consumed result: PreIconvAudit.cbd, OriginalIconvAudit.cbd, oracle.json.
+-- Cost and overlap: Keep encoding behavior in public package coverage; eight audits
+--   and private FCallId substitution do not justify a standalone libc harness.
+-- Build status: QUARANTINED. Installed interfaces are explicitly unhashed, locale is
+--   ambient, and generation fixes original/private foreign-call counts and identity.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 154.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

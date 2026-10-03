@@ -1,5 +1,18 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (165 package-native-demand and package-scalar-cbits)
+-- Purpose: Check package-native state is shared on demand and scalar C ABI transport
+--   stays isolated between two separately built packages with different C constants.
+-- Consumes: run-scalar-cbits Haskell/C files, selected GHC/Cabal/Clang, complete
+--   installed Core, optional GHC sources and a prebuilt THC_TEST_RUNTIME/installDist.
+-- Produces/consumed result: Copied Cabal projects, Core/native package products,
+--   native/THC observations, audits and per-family manifest.
+-- Cost and overlap: ABI, canonical native state and package isolation are worthwhile.
+--   Consolidate into one small driver integration fixture using shared dependencies.
+-- Build status: QUARANTINED. Preparation runs an undeclared prebuilt runtime; the
+--   scalar case performs two package acquisitions before later JVM tests run again.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 165.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

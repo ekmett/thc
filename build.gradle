@@ -234,7 +234,7 @@ while (quarantineChanged) {
 def quarantinedFixtureTests = quarantinedFixtureGroups.collectMany { fixtureGroups[it].junit } +
     (fixtureInventory.quarantinedFullCoreJunit ?: [])
 tasks.withType(Test).configureEach {
-    useJUnitPlatform()
+    useJUnitPlatform { excludeTags(*(fixtureInventory.quarantinedJunitTags ?: [])) }
     filter { quarantinedFixtureTests.each { excludeTestsMatching(it) } }
     // JUnit may inspect compiler-typed helpers before Truffle installs its exports.
     jvmArgs("--add-exports=org.graalvm.truffle.compiler/com.oracle.truffle.compiler=ALL-UNNAMED")

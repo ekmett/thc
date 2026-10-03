@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (160 signal-dispatch)
+-- Purpose: Check original signal handlers reach THC scheduling with correct masking,
+--   callback results, resource restoration and no leaked handoff references.
+-- Consumes: SignalDispatchAudit.hs/SignalDispatchNative.hs, GHC threaded RTS,
+--   installed Core/native package closure, optional GHC sources, exporter and auditor.
+-- Produces/consumed result: Pre/post CBDs, four native signal results, audits/manifest.
+-- Cost and overlap: Runtime scheduling/restoration is a real boundary beyond libc;
+--   share package acquisition and retain this focused integration coverage.
+-- Build status: Review candidate; no incidental root count or output glob found.
+--   Inventory does not establish execution or graph admission.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 160.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (163 foreign-exceptions)
+-- Purpose: Check foreign exception boxing/rethrow/cleanup and Safe Haskell API
+--   boundaries, plus host metadata and polyglot storage/interop behavior.
+-- Consumes: ForeignExceptionAudit/Native/Safe/UnsafeImport sources, THC runtime API
+--   modules/exception.c, storage/interop sources, installed Core/native support.
+-- Produces/consumed result: Runtime/pre/post CBDs, audits, native/API controls, manifest.
+-- Cost and overlap: THC-owned exception and lifetime contracts are valuable. Separate
+--   compile-only Safe controls and interop/storage tests; share acquired dependencies.
+-- Build status: QUARANTINED. runtime-core/*.cbd is enumerated and consumed, so leftovers
+--   change inputs. The ordered Make lane and dependent full-Core tag are excluded.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 163.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

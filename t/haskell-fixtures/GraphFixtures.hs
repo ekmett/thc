@@ -1,5 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (153 graph-bfs)
+-- Purpose: Exercise a real containers graph workload, including traversal and bounds.
+-- Consumes: GraphWorkload/LibraryOracle and imported workloads, pinned containers
+--   archive, complete Classes/List interfaces, boot exporter, plugin and auditor.
+-- Produces/consumed result: Post-Core module list, native oracle.tsv and manifest.
+-- Cost and overlap: Useful package-level integration, suitable for an intensive run;
+--   shared package acquisition should replace this fixture's downloader/helper build.
+-- Build status: QUARANTINED. Published output paths contain a new wall-clock run ID;
+--   sources/native/interfaces remain in each attempt instead of stable owned outputs.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 153.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

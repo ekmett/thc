@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (155 file-wait)
+-- Purpose: Check descriptor readiness and lazy bad-FD exception payloads at THC's
+--   waitRead#/waitWrite# runtime boundary.
+-- Consumes: FileWaitAudit.hs/FileWaitNative.hs, Linux x86_64 non-threaded GHC,
+--   complete installed Core/packages, exporter and auditor.
+-- Produces/consumed result: Named pre/post CBDs, oracle.txt, package closure/manifest.
+-- Cost and overlap: Keep readiness/error semantics with shared acquisition. Ordinary
+--   descriptor operations overlap package smoke; payload laziness is a THC contract.
+-- Build status: QUARANTINED. Consumer requires exactly one compiled entry per call;
+--   preserve first-compiled evidence without fixing internal call counts.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 155.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

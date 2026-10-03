@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (159 stm)
+-- Purpose: Check transaction commit/rollback, retry/orElse, lazy/newtype values,
+--   concurrent wakeup, interruption and stack-safe resumption.
+-- Consumes: STMAudit.hs/STMNative.hs, complete installed Core, GHC threaded RTS,
+--   exporter and auditor.
+-- Produces/consumed result: Pre/post consumer/original CBDs, oracle.tsv and manifest.
+-- Cost and overlap: STM owns state and scheduling; these are valuable semantics.
+--   Share acquisition and consolidate with managed STM coverage, keeping concurrency.
+-- Build status: QUARANTINED. Discovery requires exactly one unrelated Conc.Bound
+--   failure before selecting originals; a corrected auditor would break this setup.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 159.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

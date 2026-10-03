@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (164 java-arrays)
+-- Purpose: Check Haskell loops access Java primitive arrays with correct scalar/
+--   vector transport through the production lazy Core loader.
+-- Consumes: JavaArrays.hs, THC.Exception and imported example/runtime modules,
+--   exporter, existing THC_FOREIGN_EXCEPTION_INSTALLED or foreign-exception packages.
+-- Produces/consumed result: core/ CBDs, cache/ published Core units and packages.json.
+-- Cost and overlap: Public array/interop semantics justify coverage; fixture-free
+--   JavaArrayTest methods should stay independent of complete package acquisition.
+-- Build status: QUARANTINED dependency: default package input is another fixture's
+--   installed output. Tagged full-Core methods excluded until a shared owner exists.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 164.
 -- |
 -- Module      : JavaArrayFixtures
 -- Copyright   : (C) 2026 Edward Kmett

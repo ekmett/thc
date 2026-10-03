@@ -1,5 +1,18 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (158 compact-regions and compact-serialization)
+-- Purpose: Check compact region sharing/cycles/rejection/interruption and serialized
+--   round trips including cyclic, empty and multi-block regions.
+-- Consumes: CompactRegionsAudit/Native or CompactSerializedAudit/Native sources,
+--   complete ghc-compact dependency Core, GHC, exporter and auditor.
+-- Produces/consumed result: Each family owns pre/post CBDs, originals, oracle.tsv and
+--   manifest under build/compact-regions or build/compact-serialization.
+-- Cost and overlap: THC-managed compact semantics justify these cases. Share package
+--   acquisition and native batching; fixture-free compact tests cover local mechanics.
+-- Build status: QUARANTINED. Both producers require dependency discovery to fail
+--   with one exact unrelated Conc.Bound error. Fixing that error breaks generation.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 158.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |

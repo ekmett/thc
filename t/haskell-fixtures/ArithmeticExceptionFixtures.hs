@@ -1,5 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- Fixture rationale (157 arithmetic-exceptions)
+-- Purpose: Check divide-by-zero, overflow and underflow exception behavior through
+--   scalar and tuple results using original exception values.
+-- Consumes: ArithmeticExceptionsAudit.hs/ArithmeticExceptionsNative.hs, complete
+--   installed Core, optional configured GHC sources, exporter and auditor.
+-- Produces/consumed result: Pre/post CBDs, twelve audits, 42-row native output/manifest.
+-- Cost and overlap: Fold these six semantic cases into arithmetic/exception coverage;
+--   twelve audits and repeated package acquisition are excessive as standalone setup.
+-- Build status: Review candidate. Split Core and native outputs into single-owner
+--   rules; full/core-only commands currently both rewrite the same Core products.
+-- Detailed inputs/outputs: docs/fixture-inputs.log, entry 157.
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
