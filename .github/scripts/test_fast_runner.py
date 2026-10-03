@@ -70,7 +70,7 @@ class FastRunnerTest(unittest.TestCase):
     def test_runtime_or_preparer_change_keeps_persistent_runner(self):
         merge, event = self.merge({"src/main/java/thc/Language.java": "changed\n"})
         self.assertFalse(runner.hosted_ci_only(self.root, event, merge, REPO))
-        self.assertFalse(runner.ci_only_paths(b"M\0bin/prepare-tests.sh\0"))
+        self.assertFalse(runner.ci_only_paths(b"M\0CMakeLists.txt\0"))
         self.assertFalse(runner.ci_only_paths(b"M\0docs/pinned-memory.md\0"))
 
     def test_deletion_and_rename_fail_closed(self):

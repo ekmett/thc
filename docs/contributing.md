@@ -17,8 +17,8 @@ PowerShell setup.
 | `make lint-haskell` | Lint tracked Haskell sources |
 | `make docs`, `make docs-check` | Build and check the documentation site |
 
-During fixture triage, select an exact nonquarantined class with `TESTS`. Blanket
-preparation is disabled; [quarantined fixtures](fixture-quarantine.log) are excluded
+Select an exact nonquarantined class with `TESTS` for focused development.
+`make fixtures` builds all admitted fixture files; [quarantined fixtures](fixture-quarantine.log) are excluded
 from local and CI selections and from direct Gradle execution. Make and direct Gradle
 use Gradle's standard shared dependency cache; an explicit `GRADLE_USER_HOME`
 is honored. `make clean` removes Gradle and
@@ -26,9 +26,9 @@ Cabal build products; `make distclean` also removes the checkout's `.gradle` and
 `.gradle-user-home`. Neither removes an external cache. Use
 `GRADLE_FLAGS=--offline` or `CABAL_FLAGS=--offline` for an offline build.
 
-With `TESTS`, local fixture preparation selects the explicit [CMake/Ninja file
-graph](fixture-build.md). Only the groups listed there are admitted; unmigrated
-groups stop before generation. Ninja reuses unchanged inputs. Exact class and method selectors prepare only their dependencies;
+Make and CI select the same explicit [CMake/Ninja file graph](fixture-build.md).
+Every admitted group has a file rule. Ninja reuses unchanged inputs.
+Exact class and method selectors prepare only their dependencies;
 fixture-free classes do not run the Haskell producers. Wildcards and unrecognized
 selectors stop before preparation; they cannot fall back to the quarantined corpus. Local preparation disables ambient GHC package environments;
 fixture dependencies must be declared by their producers. `GHC` selects the

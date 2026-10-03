@@ -45,7 +45,7 @@ class FastRunnerTest(unittest.TestCase):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]) as command, \
-                patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                patch.object(ci.fixtures, "prepare_cmake", return_value={"mode": "selected"}), \
                 patch.object(ci, "run_modes", return_value=({}, [])) as modes:
             ci.execute(recorder, "HEAD", "HEAD", identity)
         self.assertEqual(command.call_args_list[0].args[1][-2:], ["--cadence", "commit"])
@@ -60,7 +60,7 @@ class FastRunnerTest(unittest.TestCase):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.object(recorder, "command", return_value=(0, json.dumps(selection))), \
-                patch.object(ci.fixtures, "prepare") as prepare, self.assertRaisesRegex(RuntimeError, "commit-cadence"):
+                patch.object(ci.fixtures, "prepare_cmake") as prepare, self.assertRaisesRegex(RuntimeError, "commit-cadence"):
             ci.execute(recorder, "HEAD", "HEAD", self.root / "missing-identity.json")
         prepare.assert_not_called()
 
@@ -617,16 +617,16 @@ class FastRunnerTest(unittest.TestCase):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]) as run:
             with patch.object(ci, "run_modes", return_value=({}, [])), \
-                    patch.object(ci.fixtures, "prepare", return_value={"mode": "selected", "reused": ["smoke"]}) as prepare:
+                    patch.object(ci.fixtures, "prepare_cmake", return_value={"mode": "cmake", "targets": ["fixture-smoke"]}) as prepare:
                 ci.execute(recorder, "b" * 40, "HEAD", identity_path)
-                prepare.assert_called_once_with(self.root, selection, run, identity)
+                prepare.assert_called_once_with(self.root, selection, run)
         self.assertEqual(run.call_args_list[0].args[1][2:4], ["--base", "b" * 40])
         self.assertEqual(run.call_args_list[1].args[0], "primop-checklist")
         self.assertEqual(run.call_args_list[1].args[1],
                          ["cabal", "run", "exe:thc-primops", "--", "coverage", "--check", "--output",
                           str(recorder.directory / "primop-coverage.json")])
         self.assertEqual(run.call_count, 2)
-        self.assertEqual(recorder.data["nativeInputs"]["reused"], ["smoke"])
+        self.assertEqual(recorder.data["nativeInputs"]["targets"], ["fixture-smoke"])
         self.assertEqual((recorder.data["requestedBase"], recorder.data["selectionBase"]), ("b" * 40, "b" * 40))
         self.assertTrue(recorder.data["passed"])
 
@@ -641,7 +641,7 @@ class FastRunnerTest(unittest.TestCase):
                 outputs = [(0, json.dumps(selection)), (0, ""),
                            RuntimeError("units failed") if failed else (0, "")]
                 with patch.object(recorder, "command", side_effect=outputs) as commands, \
-                        patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                        patch.object(ci.fixtures, "prepare_cmake", return_value={"mode": "selected"}), \
                         patch.object(ci, "run_modes", return_value=({}, [])) as modes:
                     if failed:
                         with self.assertRaisesRegex(RuntimeError, "driver-tests"):
@@ -666,7 +666,7 @@ class FastRunnerTest(unittest.TestCase):
                     outputs = [(0, json.dumps(selection)), (0, ""),
                                RuntimeError("suite failed") if failed else (0, "")]
                     with patch.object(recorder, "command", side_effect=outputs) as commands, \
-                            patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                            patch.object(ci.fixtures, "prepare_cmake", return_value={"mode": "selected"}), \
                             patch.object(ci, "run_modes", return_value=({}, [])) as smoke:
                         if failed:
                             with self.assertRaisesRegex(RuntimeError, suite):
@@ -690,7 +690,7 @@ class FastRunnerTest(unittest.TestCase):
                 outputs = [(0, json.dumps(selection)), (0, ""),
                            RuntimeError("compile failed") if failed else (0, "")]
                 with patch.object(recorder, "command", side_effect=outputs) as commands, \
-                        patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                        patch.object(ci.fixtures, "prepare_cmake", return_value={"mode": "selected"}), \
                         patch.object(ci, "run_modes", return_value=({}, [])) as smoke:
                     if failed:
                         with self.assertRaisesRegex(RuntimeError, "haskell-compile"):
@@ -728,7 +728,7 @@ class FastRunnerTest(unittest.TestCase):
                 self.assertTrue((self.root / "build" / demo / "packages.json").is_file(), demo)
             return {"classes": ["example.PolyglotTest"]}
         with patch.object(recorder, "command", side_effect=command), \
-                patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                patch.object(ci.fixtures, "prepare_cmake", return_value={"mode": "selected"}), \
                 patch.object(ci, "run_modes", return_value=({}, [])), \
                 patch.object(ci, "run_polyglot", side_effect=run_polyglot) as optional:
             ci.execute(recorder, "HEAD", "HEAD", identity_path)
@@ -750,7 +750,7 @@ class FastRunnerTest(unittest.TestCase):
                 raise RuntimeError("javascript acquisition failed")
             return 0, ""
         with patch.object(recorder, "command", side_effect=command), \
-                patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                patch.object(ci.fixtures, "prepare_cmake", return_value={"mode": "selected"}), \
                 patch.object(ci, "run_modes", return_value=({}, [])), \
                 patch.object(ci, "run_polyglot", return_value={"classes": ["example.PolyglotTest"]}) as optional:
             with self.assertRaisesRegex(RuntimeError, "javascript acquisition failed"):
@@ -775,7 +775,7 @@ class FastRunnerTest(unittest.TestCase):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]), \
-                patch.object(ci.fixtures, "prepare", side_effect=RuntimeError("native failed")), \
+                patch.object(ci.fixtures, "prepare_cmake", side_effect=RuntimeError("native failed")), \
                 patch.object(ci, "run_modes") as junit:
             with self.assertRaisesRegex(RuntimeError, "native failed"):
                 ci.execute(recorder, "HEAD", "HEAD", identity_path)
@@ -790,7 +790,7 @@ class FastRunnerTest(unittest.TestCase):
         for checked, expected in (("a" * 40, 2), ("b" * 40, 4), ("", 4)):
             with self.subTest(checked=checked), patch.object(ci, "git", return_value="a" * 40), \
                     patch.dict(os.environ, {"FAST_AUTOMATION_SHA": checked}), \
-                    patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                    patch.object(ci.fixtures, "prepare_cmake", return_value={"mode": "selected"}), \
                     patch.object(ci, "run_modes", return_value=({}, [])):
                 recorder = ci.Recorder(self.root, self.root / ("run-" + (checked or "none")))
                 with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection))] + [(0, "")] * 3) as run:

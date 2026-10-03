@@ -85,9 +85,9 @@ jar: check-java
 
 fixtures:
 ifneq ($(strip $(TESTS)),)
-	GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' CABAL='$(CABAL)' python3 .github/scripts/fast_fixtures.py --cmake --tests '$(TESTS)'
+	GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' CABAL='$(CABAL)' python3 .github/scripts/fast_fixtures.py --tests '$(TESTS)'
 else
-	bin/prepare-tests.sh
+	GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' CABAL='$(CABAL)' python3 .github/scripts/fast_fixtures.py --all
 endif
 
 test: fixtures

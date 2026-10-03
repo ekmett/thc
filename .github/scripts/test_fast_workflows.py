@@ -95,9 +95,10 @@ class FastWorkflowGuardsTest(unittest.TestCase):
             for name in names:
                 with self.subTest(name=name):
                     self.assertIn("      - name: " + name + "\n        if: inputs.cadence == '" + cadence + "'\n", workflow)
-        for job in ("foreign-exceptions", "library"):
+        for job, condition in (("foreign-exceptions", "if: ${{ false }}"),
+                               ("library", "if: inputs.cadence == 'nightly'")):
             block = workflow.split("  " + job + ":\n", 1)[1].split("    steps:", 1)[0]
-            self.assertIn("if: inputs.cadence == 'nightly'", block)
+            self.assertIn(condition, block)
         grouped = (WORKFLOW.parent / "test-groups.yml").read_text()
         commands = [line.strip() for line in (workflow + grouped).splitlines() if "cabal test driver-tests" in line]
         self.assertEqual(3, len(commands))

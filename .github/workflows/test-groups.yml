@@ -81,12 +81,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev cmake ninja-build
           echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
       - name: Install macOS LLVM
         if: runner.os == 'macOS'
         run: |
-          brew install llvm@18
+          brew install llvm@18 cmake ninja
           echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
       - name: Verify pinned toolchain
         if: inputs.cadence == 'commit'
@@ -269,12 +269,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev cmake ninja-build
           echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
       - name: Install macOS LLVM
         if: runner.os == 'macOS'
         run: |
-          brew install llvm@18
+          brew install llvm@18 cmake ninja
           echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
       - name: Download only this source platform and workflow attempt
         uses: actions/download-artifact@v8

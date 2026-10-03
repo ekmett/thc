@@ -6,7 +6,7 @@ set -eu
 THC_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$THC_ROOT"
 make --no-print-directory -s -C "$THC_ROOT" check-java
-bin/prepare-tests.sh
+make --no-print-directory -s -C "$THC_ROOT" fixtures
 # Normal dependency downloads are enabled. Pass --offline explicitly if desired.
 if [ "${1:-}" = "--handoff-modes" ]; then
   shift

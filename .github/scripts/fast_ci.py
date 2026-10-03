@@ -333,9 +333,7 @@ def execute(recorder, base, head, identity_path):
     # as well as misses. Keep this fresh report separate from cached provenance.
     recorder.command("primop-checklist", ["cabal", "run", "exe:thc-primops", "--", "coverage",
                      "--check", "--output", str(recorder.directory / "primop-coverage.json")])
-    identity = json.loads(identity_path.read_text())
-    inputs = fixtures.prepare(recorder.root, selection, recorder.command,
-                              {"platform": identity["platform"], "toolchain": identity["toolchain"]})
+    inputs = fixtures.prepare_cmake(recorder.root, selection, recorder.command)
     recorder.data["nativeInputs"] = inputs
     recorder.save()
     failures = []
@@ -429,15 +427,15 @@ def finish(recorder):
 COMMON_OUTPUTS = ("dist-newstyle", ".gradle", "src/build/build", "src/build/.gradle",
                   "build/classes", "build/generated", "build/resources", "build/install",
                   "build/diagnostics", "build/libs", "build/scripts", "build/plugin",
-                  "build/native", "build/compiler", "build/thc-fixtures.path")
+                  "build/native", "build/compiler", "build/thc-fixtures.path", "build/fixtures")
 
 
 def compile_common(recorder):
     recorder.data["selection"] = {"mode": "compile-only", "reasons": []}
-    recorder.command("common-cabal", ["cabal", "build", "exe:thc", "exe:thc-fixtures", "exe:thc-compact", "exe:thc-primops"])
+    recorder.command("common-cabal", ["cabal", "build", "exe:thc", "exe:thc-primops"])
     recorder.command("common-scalars", ["cabal", "run", "exe:thc-primops", "--", "scalars"])
-    recorder.command("common-plugin", ["bin/build-compiler.sh"])
-    recorder.command("common-encoder", ["cabal", "list-bin", "exe:thc-fixtures", "--offline"], stdout="build/thc-fixtures.path")
+    recorder.command("common-fixture-configure", ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"])
+    recorder.command("common-fixture-tools", ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", "fixture-tools"])
     recorder.command("common-gradle", ["./gradlew", "--no-daemon", "--max-workers=2", "--build-cache",
                                       "testClasses", "installDist", "toolsJar"])
     recorder.data.update(passed=True, nativeInputs="not acquired")
@@ -485,10 +483,8 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None):
     manifest, owners = fixtures._manifest(recorder.root)
     require(all(c in owners for c in selection["junit"]["classes"]), "Unowned selected class")
     recorder.data["selection"] = {"mode": "group", "group": name, "cadence": cadence, "reasons": []}
-    toolchain = {"platform": {"system": platform.system(), "machine": platform.machine()},
-                 "toolchain": fixtures.fast_inputs.toolchain(recorder.root)}
     # Unknown ownership fails above; a group job must never widen to all fixtures.
-    recorder.data["nativeInputs"] = fixtures.prepare(recorder.root, selection, recorder.command, toolchain)
+    recorder.data["nativeInputs"] = fixtures.prepare_cmake(recorder.root, selection, recorder.command)
     for group in fixtures._group_order(manifest, {owners[c] for c in selection["junit"]["classes"] if owners[c]}):
         for index, check in enumerate(manifest["groups"][group].get("ciChecks", [])):
             if check["platform"] == platform.system():

@@ -150,8 +150,8 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(result["deferred"]["nightly"]["junit"],
                          ["example.LeafTest", "example.NewTest", "example.OtherTest"])
         run = mock.Mock(side_effect=AssertionError("Commit smoke cannot acquire a nightly provider"))
-        self.assertEqual(fast_fixtures.prepare(self.repo, result, run, {}),
-                         {"mode": "selected", "rebuilt": [], "reused": []})
+        self.assertEqual(fast_fixtures.prepare_cmake(self.repo, result, run),
+                         {"mode": "cmake", "targets": []})
         run.assert_not_called()
 
     def test_changed_hourly_test_is_honestly_deferred_but_python_remains(self):
@@ -208,18 +208,6 @@ class FastSelectionTest(unittest.TestCase):
         with self.assertRaisesRegex(select.SelectionError, "smoke must remain"):
             select.groups(self.repo, cadence="commit")
 
-    def test_cadence_edits_do_not_invalidate_fixture_identity(self):
-        import fast_fixtures
-        manifest = self.cadence_fixture()
-        group = manifest["groups"]["provider"]
-        with mock.patch.object(fast_fixtures, "COMMON_SOURCES", ()):
-            before = fast_fixtures.cache_key(self.repo, "provider", group, {})
-            self.policy["cadence"]["hourlyJunit"] = ["example.OtherTest"]
-            self.write(select.POLICY, json.dumps(self.policy))
-            self.assertEqual(before, fast_fixtures.cache_key(self.repo, "provider", group, {}))
-            self.write("README.md", "changed producer input\n")
-            self.assertNotEqual(before, fast_fixtures.cache_key(self.repo, "provider", group, {}))
-
     def test_grouped_jobs_cover_every_class_and_share_required_providers(self):
         import fast_fixtures
         free = ["example.SmokeTest"]
@@ -244,9 +232,9 @@ class FastSelectionTest(unittest.TestCase):
         self.assertCountEqual(free, [name for classes in batches.values() for name in classes])
         run = mock.Mock(side_effect=AssertionError("Fixture-free batches must not prepare fixtures"))
         for classes in batches.values():
-            prepared = fast_fixtures.prepare(self.repo,
-                {"mode": "narrow", "junit": {"classes": classes}}, run, {})
-            self.assertEqual({"mode": "selected", "rebuilt": [], "reused": []}, prepared)
+            prepared = fast_fixtures.prepare_cmake(self.repo,
+                {"mode": "narrow", "junit": {"classes": classes}}, run)
+            self.assertEqual({"mode": "cmake", "targets": []}, prepared)
         run.assert_not_called()
         collision = copy.deepcopy(manifest)
         collision["groups"][next(iter(batches))] = collision["groups"].pop("consumer")

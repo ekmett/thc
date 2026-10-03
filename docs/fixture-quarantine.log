@@ -84,11 +84,6 @@ Shared infrastructure also excluded from translation as fixture rules:
     Separate retained/thin interface products and native linkage artifacts from
     cache-correctness tests; run the latter as tests with private scratch state.
     Both pinned-source and complete retained-Core provider paths remain required.
-  fast_fixtures.py full receipt: recursive output inventory and top-level build/
-    allowlist make unrelated outputs affect reuse. Do not port this behavior.
-  prepare-tests.sh: blanket ordered preparation, cleanup commands, repeated shared
-    publication and metadata checks with undeclared outputs. Do not wrap this in
-    one CMake preparation target. Replace it with admitted file-producing rules.
 
 Not quarantined merely for this reason:
   Test-private filesystem state used to check unlink/rename/directory semantics.

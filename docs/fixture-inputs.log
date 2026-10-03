@@ -1574,27 +1574,21 @@ Produces/consumed result: Exactly the requested temporary CBD from input JSON; s
   executable location.
 Cost and overlap: Useful shared tool, not an oracle fixture. Build it once; do not
   create per-test archives or let several recipes publish its location file.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: Admitted as fixture-compact-model in cmake/FixtureTools.cmake.
 
-Producer: .github/scripts/fast-fixtures.json:compact-model builds exe:thc-fixtures
-  with Cabal --offline and selected GHC/GHC_PKG; then cabal list-bin writes
-  build/thc-fixtures.path. Backend-annotations duplicates that write; additional
-  writers are bin/prepare-tests.sh and .github/scripts/fast_ci.py common-encoder.
+Producer: The shared CMake tool rule builds exe:thc-fixtures through Cabal.
+  A separate rule writes build/thc-fixtures.path from that executable's planned
+  location. CI common compilation and every model consumer use these same rules.
 IN for executable: Cabal component graph rooted at t/haskell-fixtures/Main.hs,
-  CompactModelFixtures.hs and all imported fixture modules, thc.cabal/cabal.project,
-  linked src/cbd/THC/Compact/{Module,JSON,Encode}.hs closure and package dependencies.
-OUT: Cabal-built thc-fixtures executable plus object/interface products;
-  build/thc-fixtures.path contains its location, not its contents.
+  CompactModelFixtures.hs and imported fixture modules, thc.cabal/cabal.project,
+  src/cbd, compiler/core-symbol/driver sources, selected GHC and package files.
+OUT: Cabal-built thc-fixtures executable plus declared library/registration products;
+  build/thc-fixtures.path contains its location. Each has one writer.
 Actual compact-model INPUT_JSON OUTPUT_CBD operation:
   IN: explicit caller JSON, built executable/linked Aeson/CBD writer;
   OUT: exact caller CBD. No fixture archive, oracle or previous CBD required.
-Java CoreCbdTestSupport resolution/temporary files recorded after 012. Indexed
-  consumer classes are the compact-model group's junit list (28 classes); other
-  direct callers can exist outside that group and need matching encoder edges.
-  Sidecar has known writers now, but several separate owners and weak toolchain
-  fallback remain. CMake should own the executable dependency, not infer readiness
-  from an old path file. No complete Cabal source closure is claimed in this entry.
+Java CoreCbdTestSupport consumes the sidecar; it does not run Cabal as a fallback.
+  Consumer groups declare their compact-model dependency in the selection inventory.
 
 042  proxy-void
 Fixture rationale (042 proxy-void)
@@ -4410,35 +4404,29 @@ Application native resources (Gradle-owned products used by fixture consumers)
       the selected GNU toolchain. These are distinct tool/target inputs.
     Currently always runs and removes the owned thc/cbits directory first.
     Windows processResources excludes the malloc probe and stale POSIX artifacts.
-  prepareProcessLifecycleOracle (also 054):
-    IN t/fixtures/process-lifecycle/Main.hs + GHC process/unix package closure ->
-      build/process-lifecycle/native/process-oracle and GHC intermediates.
+  fixture-process-lifecycle-native (also 054):
+    Owner cmake/ProcessFixtures.cmake; selected only by its two direct consumers.
+    IN t/fixtures/process-lifecycle/Main.hs + selected GHC process/unix packages ->
+      build/process-lifecycle/native/process-oracle and named GHC intermediates.
     IN t/fixtures/process-lifecycle/sigchld-policy.c + src/main/c/native-process-api.c
-      + clang/headers/-Wl,--wrap=posix_spawn -> same native/sigchld-policy.
-    Linux x86_64 only, but every Gradle Test task depends on this preparation,
-      including unrelated selected tests. This edge is too broad.
+      + C compiler/headers/-Wl,--wrap=posix_spawn -> same native/sigchld-policy.
+    Linux x86_64 only. Unrelated Gradle tests do not build these controls.
   generateSimdFamilies writes generated Java and fixture sources even with --check;
     see 116 for the shared generator/spec and overlapping fixture invocation.
   startScripts -> build/scripts/thc, executed by ProcessSignalsTest (131).
 
-Fixture entry points and their extra products
-  Makefile fixtures with TESTS selects .github/scripts/fast_fixtures.py; without
-  TESTS it runs bin/prepare-tests.sh. Gradle file-tree input declarations observe
-  files; they do not create these fixture producers.
-  Selected dispatch reads .github/scripts/fast-fixtures.json and fast_inputs.py,
-  expands group dependencies, then hashes source patterns/toolchain/group commands.
-  A miss triggers shared scalar generation and build-compiler.sh before the group
-  commands. Group stamps are build/fast/fixtures/<group>.json, containing source
-  identity and output hashes. The source key deliberately does not hash GHC itself.
-  Unknown classes/wildcards fall back to the full shell preparation. Full stamp is
-  build/fast/fixtures/full.json: IN fast_inputs.identity, script plan, build.gradle,
-  Cabal configuration, fixture index/dispatcher, and recursively inspected outputs.
-  The full receipt rejects unreviewed top-level build/ entries; unrelated build
-  contents can therefore prevent cache reuse. A missing/invalid full receipt is
-  reported after preparation and causes preparation again next time.
-  These receipts document current behavior; they are not proof of complete edges.
+Fixture entry points
+  Makefile fixtures selects .github/scripts/fast_fixtures.py. With TESTS it resolves
+  the exact class/method owner; without TESTS it selects all admitted targets.
+  CI uses the same selector and CMake graph. Unknown, unmapped and quarantined
+  selections fail before producer invocation. No shell preparation fallback exists.
+  CMakeLists.txt plus cmake/*.cmake declare source/tool inputs and named outputs;
+  Ninja owns freshness and rebuilds missing products. Gradle file-tree declarations
+  observe the prepared files; they do not create a second fixture producer.
+  The graph source files, selection inventory and dispatcher enter source identity.
+  Shared Cabal compilation, plugin publication and encoder path each have one owner.
 
-  Additional default-script metadata products:
+  Quarantined legacy metadata producers (excluded from the graph):
     t/fixtures/compiler/{SpeculationAudit,RepresentationAudit,SourceNotes,CBVAudit,
       CBVJoinAudit,CBVCoercionAudit,ConstructorFieldAudit,DemandAudit}.hs and
       t/fixtures/core/Fixtures.hs + StrictFields.hs + shared exporter/plugin/GHC ->
@@ -4456,8 +4444,8 @@ Fixture entry points and their extra products
     source-core/source-ghc and source metadata checks: already 118.
     default boot export: already 121; native/oracle.tsv: 113; corpus: 119.
 
-  Additional default producer: selector-proof
-    Owner t/haskell-fixtures/SelectorProofFixtures.hs; invoked by prepare-tests.sh.
+  Quarantined legacy producer: selector-proof
+    Owner t/haskell-fixtures/SelectorProofFixtures.hs; no build target.
     IN t/fixtures/compiler/{SelectorProofAudit,SelectorProofPredicate}.hs, shared
       exporter/compact codec, GHC ghc API and imported src/compiler modules.
     Under build/selector-proof/:

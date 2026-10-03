@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 make --no-print-directory -s -C "$ROOT" check-java
-bin/prepare-tests.sh
+make --no-print-directory -s -C "$ROOT" fixtures
 bin/prepare-map.sh
 DIAGNOSTIC="${THC_DIAGNOSTIC_UNSUPPORTED:-false}"
 ./gradlew --no-daemon test installDist toolsJar "$@"

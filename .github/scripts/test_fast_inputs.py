@@ -1214,7 +1214,8 @@ class FastInputTests(unittest.TestCase):
         self.put("bin/export-boot.py", "exception_sources = " + repr({
             "GHC/Internal/CString.hs": cache.sha(self.pinned_source)}) + "\n")
         for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS,
-                     "bin/prepare-tests.sh", "t/fixtures/core/coverage.json",
+                     "CMakeLists.txt", ".github/scripts/fast_fixtures.py", ".github/scripts/fast-fixtures.json",
+                     "cmake/CoreFixtures.cmake", "t/fixtures/core/coverage.json",
                      "src/test/resources/core/original-unix-libc-descriptors.json",
                      "src/main/resources/thc/scalar-primop-signatures.json", "src/tools/primops/PrimopTools.hs"):
             self.put(name, "source: " + name)
@@ -1230,7 +1231,7 @@ class FastInputTests(unittest.TestCase):
         self.current = cache.identity(self.root)
         self.put("build/data-to-tag/oracle.tsv", "0\t17\n")
         self.put("build/core/Fixtures.cbd", json.dumps({"module": "Fixture", "bindings": []}))
-        self.manifest = {"inputHashes": {"bin/prepare-tests.sh": self.current["sources"]["bin/prepare-tests.sh"],
+        self.manifest = {"inputHashes": {"CMakeLists.txt": self.current["sources"]["CMakeLists.txt"],
                                          self.pinned_name: cache.sha(self.pinned_source)},
                          "artifactHashes": {"build/data-to-tag/oracle.tsv": cache.digest(self.root / "build/data-to-tag/oracle.tsv")}}
         self.write_manifest()
@@ -1358,7 +1359,7 @@ class FastInputTests(unittest.TestCase):
         self.assertNotEqual(cache.cache_key(self.current), cache.cache_key(cache.identity(self.root)))
 
     def test_original_source_and_artifact_hash_mismatch_rejected(self):
-        for section, name in (("inputHashes", "bin/prepare-tests.sh"),
+        for section, name in (("inputHashes", "CMakeLists.txt"),
                               ("artifactHashes", "build/data-to-tag/oracle.tsv"),
                               ("inputHashes", self.pinned_name)):
             with self.subTest(name=name):
@@ -1415,8 +1416,8 @@ class FastInputTests(unittest.TestCase):
         interface = Path(self.tc["ghcLibdir"]) / "pkg/Foo.dyn_hi"
         interface.parent.mkdir(parents=True); interface.write_bytes(b"actual interface")
         self.manifest["installedShortInterface"] = {"path": str(interface), "sha256": cache.digest(interface)}
-        self.manifest["sources"] = [{"path": str(self.root / "bin/prepare-tests.sh"),
-            "sha256": self.current["sources"]["bin/prepare-tests.sh"], "url": "original/source"}]
+        self.manifest["sources"] = [{"path": str(self.root / "CMakeLists.txt"),
+            "sha256": self.current["sources"]["CMakeLists.txt"], "url": "original/source"}]
         self.write_manifest(); manifest = self.pack(); self.remove_payload(manifest)
         interface.write_bytes(b"modified same package/version")
         digest = cache.digest
@@ -1427,7 +1428,7 @@ class FastInputTests(unittest.TestCase):
             cache.restore(self.root, self.current, self.bundle)
 
     def test_conflicting_original_records_and_external_escape(self):
-        self.manifest["sources"] = [{"path": "bin/prepare-tests.sh", "sha256": "f" * 64}]
+        self.manifest["sources"] = [{"path": "CMakeLists.txt", "sha256": "f" * 64}]
         self.write_manifest()
         with self.assertRaises(cache.CacheMiss): self.pack()
         self.manifest["sources"] = [{"path": "/etc/passwd", "sha256": "f" * 64}]
@@ -1460,7 +1461,7 @@ class FastInputTests(unittest.TestCase):
     def test_self_consistent_unknown_or_tracked_payload_is_not_accepted(self):
         manifest = self.pack(); self.remove_payload(manifest)
         for name in ("build/fast/pass.json", "build/test-results/test/pass.xml", "build/classes/Evil.class",
-                     "build/data-to-tag/evil.sh", "bin/prepare-tests.sh", "vendor/ghc-9.14.1/unknown.hs"):
+                     "build/data-to-tag/evil.sh", "CMakeLists.txt", "vendor/ghc-9.14.1/unknown.hs"):
             def mutate(es):
                 doc = json.loads(es[0][1]); doc["payload"][name] = cache.sha(b"evil")
                 return [(es[0][0], cache.canonical(doc)), *es[1:], (tarfile.TarInfo("files/"+name), b"evil")]
@@ -1535,7 +1536,7 @@ class FastInputTests(unittest.TestCase):
         with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()) as stderr:
             self.assertEqual(0, cache.main(command), stderr.getvalue())
             identify.assert_called_once_with(self.root)
-        self.put("bin/prepare-tests.sh", "changed after the key step")
+        self.put("CMakeLists.txt", "changed after the key step")
         with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()) as stderr:
             self.assertEqual(1, cache.main(command), stderr.getvalue())
             identify.assert_called_once_with(self.root)
@@ -1815,7 +1816,9 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/main/java/thc/runtime/VectorMemory.java"), cache.RUNTIME_INPUTS)
         with patch.object(cache, "toolchain", return_value={}):
             sources = cache.identity(root)["sources"]
-        for name in (*cache.RUNTIME_INPUTS, "src/core-symbols/THC/CoreSymbols.hs", *("src/compiler/THC/" + name + ".hs" for name in
+        for name in (*cache.RUNTIME_INPUTS, "CMakeLists.txt", "cmake/FixtureTools.cmake",
+                     ".github/scripts/fast_fixtures.py", ".github/scripts/fast-fixtures.json",
+                     "src/core-symbols/THC/CoreSymbols.hs", *("src/compiler/THC/" + name + ".hs" for name in
                                              ("CBV", "Demands", "Plugin", "Sources", "Wired"))):
             self.assertIn(name, sources)
             self.assertEqual(cache.digest(root / name), sources[name])

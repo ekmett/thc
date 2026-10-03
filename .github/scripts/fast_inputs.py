@@ -43,8 +43,8 @@ def wired_source_path(name):
         "src/" if name.startswith("GHC/") else "") + name
 
 
-# These are the runtime files actually fingerprinted by prepare-tests.sh's
-# preparers. An additional recorded runtime source fails closed until reviewed.
+# Runtime sources fingerprinted by fixture producers. An additional recorded
+# runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/c/native-process-signal-api.c",
                   "src/test/c/native-process-signals-test.c",
@@ -1242,12 +1242,14 @@ def toolchain(root):
 def identity(root):
     tracked = tracked_files(root)
     sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/core/", "t/fixtures/retained-core/", "t/fixtures/package-roots/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
+    sources.update(name for name in tracked if name.startswith("cmake/"))
     sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS,
+                    "CMakeLists.txt", ".github/scripts/fast_fixtures.py", ".github/scripts/fast-fixtures.json",
                     "src/test/resources/core/original-unix-libc-descriptors.json"))
     if ".gitmodules" in tracked:
         sources.add(".gitmodules")
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
-    require("bin/prepare-tests.sh" in sources and "bin/export-boot.py" in sources
+    require("CMakeLists.txt" in sources and "bin/export-boot.py" in sources
             and "t/fixtures/core/coverage.json" in sources, "Incomplete authoritative source set")
     hashes = {name: digest(file_path(root, name)) for name in sorted(sources)}
     for name, expected in ghc_source_pins(root).items():

@@ -61,8 +61,9 @@ retained Core with `thc run TARGET --installed-core required`.
 contain the needed Core. The [GHC build guide](docs/ghc-core.md) shows how to
 apply the flag when building GHC 9.14.1, the version THC currently supports.
 
-Fixture tests also require CMake 3.24+ and Ninja. During fixture triage, use an
-exact admitted class, for example `make test TESTS=thc.RuntimeTest`.
+Fixture tests also require CMake 3.24+ and Ninja. `make fixtures` builds all
+admitted fixture files. For routine development, select an exact class, for
+example `make test TESTS=thc.RuntimeTest`.
 `make test-modes TESTS=thc.RuntimeTest` runs both handoff modes from shared fixture
 files; see the [fixture graph and current limits](docs/fixture-build.md).
 `make clean` removes build products.
