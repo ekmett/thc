@@ -1627,24 +1627,22 @@ Under build/proxy-void/:
 
 043  rubbish-literals
 Fixture rationale (043 rubbish-literals)
-Purpose: Check authentic GHC rubbish literals are handled with their representation
-  semantics.
-Produces/consumed result: Installed literal inventory, CBDs and native oracle.json.
-Cost and overlap: Keep a small original-Core boundary check if synthetic models miss it.
-  Native object/disassembly acquisition must serve this contract, not a frozen lowering
-  shape.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Purpose: Check typed don't-care literals preserve continuations and aggregate returns,
+  first compiled execution and context ownership without prescribing filler bits.
+Produces/consumed result: Pre/post CBDs, native object/assembly, oracle.json and audits.
+Cost and overlap: GHC creates the typed scalar/aggregate/vector matrix and executes
+  native continuations. No dependence on an installed module's incidental literals.
+Build status: cmake/InterfaceFixtures.cmake owns the platform-specific product set.
 
 Producer: t/haskell-fixtures/RubbishLiteralFixtures.hs:prepareRubbishLiterals.
 Consumer: thc.runtime.RubbishLiteralTest.
 IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures with linked GHC/THC.Plugin/
   CBD modules; t/fixtures/compiler/RubbishLiteralAudit.hs; native 64-bit GHC9.14.1,
-  GHC libdir, ghc-pkg registration and installed GHC/Internal/Event/Manager.hi.
-  Interface imports are loaded by GHC as well; only that one installed .hi is hashed.
+  GHC libdir, selected package registrations/interfaces/libraries, configured compiler
+  and assembler; AArch64 also consumes the selected LLVM opt/llc executables.
 Under build/rubbish-literals/:
-  pre.cbd, post.cbd: IN parsed/optimized source templates, installed literal
-    unfoldings and producer's GHC-API transformations; OUT direct serializer CBDs.
+  pre.cbd, post.cbd: IN parsed/optimized source templates and GHC mkLitRubbish at
+    the fixture's closed types; OUT direct serializer CBDs.
   native.ll (AArch64): IN transformed Core/GHC LLVM backend; OUT LLVM IR.
   native.s: IN native Core backend, or native.ll through GHC/LLVM on AArch64;
     OUT assembly. Host dynamic/static/profile ways are consumed.
@@ -1652,14 +1650,12 @@ Under build/rubbish-literals/:
   native-codegen.json: IN emitted files/hashes/binder names; OUT codegen metadata.
   oracle.json: IN loaded native object, installed runtime/package symbols, embedded
     seed cases; OUT continuation observations. No standalone native executable.
-  originals.json: IN observed installed interface literal occurrences; OUT inventory.
   pre.audit.json, post.audit.json: IN corresponding CBD, entry list, Python auditor/
     thc-compact/data closure; OUT reports.
   logs/<label>.{stdout,stderr,command.json}: version, info, libdir,
-    imports-ghc-internal, native-llvm when used, native-assemble, pre/post-audit.
-  manifest.json: IN artifacts/logs, source receipt, installed interface bytes;
-    OUT hashes and inventories. ghc/ compiler scratch is also produced.
-Java reads receipts/installed interface, logs/info.stdout, CBDs/oracle/reports;
+    native-llvm when used, native-assemble, pre/post-audit.
+  manifest.json: IN artifacts/logs and source receipt; OUT hashes and case names.
+Java reads receipts, logs/info.stdout, CBDs/oracle/reports;
   its malformed-Core audit control additionally writes/reads temporary CBD/report
   files and invokes python3 auditor. Encoder dependency follows its writing helper.
 

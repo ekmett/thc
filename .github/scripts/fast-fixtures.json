@@ -545,6 +545,7 @@
       "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/haskell-fixtures/RtsShutdownFixtures.hs", "t/fixtures/compiler/RtsShutdownNative.hs"]
     },
     "rubbish-literals": {
+      "cmakeTarget": "fixture-rubbish-literals",
       "requires": ["compact-model"],
       "junit": ["thc.runtime.RubbishLiteralTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rubbish-literals"]}],

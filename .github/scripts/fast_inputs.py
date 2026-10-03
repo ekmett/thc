@@ -161,9 +161,9 @@ MASK_FUNCTION_OUTPUTS = frozenset("build/mask-functions/" + name for name in (
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in MASK_FUNCTION_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 RUBBISH_OUTPUTS = frozenset("build/rubbish-literals/" + name for name in (
-    "manifest.json", "pre.cbd", "post.cbd", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "native.s", "native.o", "native-codegen.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json", "pre.audit.json", "post.audit.json", "native.s", "native.o", "native-codegen.json",
     *(f"logs/{command}.{suffix}" for command in
-      ("version", "info", "libdir", "imports-ghc-internal", "native-assemble", "pre-audit", "post-audit")
+      ("version", "info", "libdir", "native-assemble", "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json"))))
 BCO_ENTRIES = ('bcoConstant', 'bcoApply', 'bcoApplyTwo', 'bcoFunction', 'bcoArithmetic', 'bcoBranch', 'bcoLargeOperand', 'bcoSharing', 'bcoCase', 'bcoCaseNested', 'bcoCasePointer', 'bcoCaseFloat', 'bcoCaseDouble', 'bcoCaseLong', 'bcoCaseVoid', 'bcoPacked8', 'bcoPacked16', 'bcoPacked32', 'bcoCaseTuple', 'bcoCaseTupleCall', 'bcoCaseTupleOverapply', 'bcoCapturedPap', 'bcoCapturedAp', 'bcoCapturedNoUpd', 'bcoCapturedApChain', 'bcoCapturedRecursive', 'bcoCapturedFloat', 'bcoCapturedDouble', 'bcoCapturedLong', 'bcoCapturedNoUpdEscape', 'bcoApplyIntCore', 'bcoApplyFloatCore', 'bcoApplyDoubleCore', 'bcoApplyLongCore', 'bcoApplyVoidCore')
 BCO_COMMANDS = ("ghc-version", "native-build", "native-run",

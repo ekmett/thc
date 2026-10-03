@@ -69,3 +69,31 @@ add_custom_command(OUTPUT ${lock_outputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate original RTS lock Core and native state observations")
 add_custom_target(fixture-original-rts-locks DEPENDS ${lock_outputs})
+
+# 043: GHC constructs typed rubbish for scalar, aggregate and vector carriers.
+# Native code observes the continuation, never unspecified filler bits. AArch64
+# uses GHC's LLVM pipeline because its NCG cannot materialize these vectors.
+set(rubbish_out "${PROJECT_SOURCE_DIR}/build/rubbish-literals")
+set(rubbish_outputs)
+foreach(name manifest.json pre.cbd post.cbd oracle.json pre.audit.json post.audit.json
+    native.s native.o native-codegen.json)
+  list(APPEND rubbish_outputs "${rubbish_out}/${name}")
+endforeach()
+set(rubbish_labels version info libdir native-assemble pre-audit post-audit)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$")
+  list(APPEND rubbish_outputs "${rubbish_out}/native.ll")
+  list(APPEND rubbish_labels native-llvm)
+endif()
+foreach(label IN LISTS rubbish_labels)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND rubbish_outputs "${rubbish_out}/logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+add_custom_command(OUTPUT ${rubbish_outputs}
+  COMMAND ${fixture_env} "${fixtures_exe}" rubbish-literals
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RubbishLiteralAudit.hs"
+    ${tool_sources} ${cabal_inputs} ${audit_inputs} ${toolchain_inputs}
+    "${fixtures_exe}" "${compact_exe}"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Generate typed rubbish Core and native continuation observations")
+add_custom_target(fixture-rubbish-literals DEPENDS ${rubbish_outputs})
