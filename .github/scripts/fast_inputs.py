@@ -63,7 +63,7 @@ MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-li
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stdio original-stdio-read original-open original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-open original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
@@ -569,7 +569,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/simd-address-families/scalar/oracle", "build/simd-address-families/vector128/oracle",
     "build/scalar-memory-utilities/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
-    "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
     "build/original-stdio-seek/native/oracle",
     "build/original-open/native/oracle",
@@ -584,23 +583,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/original-posix-stat/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
-# The original stdio manifest fingerprints its commands, raw streams and numeric
-# results as well as the semantic Core/oracle data. Admit only the reviewed 144
-# cases and two export stages, not a general log/text/executable suffix rule.
-ORIGINAL_STDIO_OUTPUTS = frozenset("build/original-stdio/" + name for name in (
-    "manifest.json", "oracle.json", "native/original-stdio-oracle",
-    *(f"results/{index}.txt" for index in range(144)),
-    *(f"logs/{label}.{suffix}"
-      for label in ("ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
-                    *(f"native-{index:03}" for index in range(144)),
-                    *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in
-                      ("originalWrite", "originalSafeWrite", "originalWriteErrno", "originalSafeWriteErrno")))
-      for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/OriginalStdioAudit.cbd", "core/THC.InterfaceClosure.cbd",
-                   "originalWrite.audit.json", "originalSafeWrite.audit.json",
-                   "originalWriteErrno.audit.json", "originalSafeWriteErrno.audit.json")),
-))
 ORIGINAL_STDIO_READ_OUTPUTS = frozenset("build/original-stdio-read/" + name for name in (
     "manifest.json", "oracle.json", "input.bin", "native/original-stdio-read-oracle",
     *(f"results/{index}.txt" for index in range(40)),
@@ -1593,8 +1575,6 @@ def allowed_payload(name):
     if parts[1] == "compiler":
         return len(parts) == 3 and (parts[2] == "plugin.json" or
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
-    if parts[1] == "original-stdio":
-        return name in ORIGINAL_STDIO_OUTPUTS
     if name in {f"build/thread-label/{stage}/core/ThreadLabelAudit.cbd" for stage in ("pre", "post")}:
         return True
     if parts[1] == "thread-inventory":

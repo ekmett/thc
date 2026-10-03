@@ -969,20 +969,6 @@
         "thc.cabal"
       ]
     },
-    "original-stdio": {
-      "junit": ["thc.runtime.OriginalStdioNativeTest"],
-      "commands": [{"argv": ["bin/prepare-original-stdio.sh", "--require-supported"]}],
-      "outputs": ["build/original-stdio"],
-      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
-        "t/fixtures/compiler/OriginalStdioAudit.hs",
-        "t/fixtures/compiler/OriginalStdioAuditNative.hs",
-        "bin/prepare-original-stdio.sh",
-        "t/haskell-fixtures/Main.hs",
-        "t/haskell-fixtures/FixtureSupport.hs",
-        "t/haskell-fixtures/OriginalStdioFixtures.hs",
-        "thc.cabal"
-      ]
-    },
     "original-handle-readiness": {
       "cmakeTarget": "fixture-original-handle-readiness",
       "ciPlatforms": ["Linux"],

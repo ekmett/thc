@@ -696,11 +696,11 @@ class FixturePreparationTest(unittest.TestCase):
                 path.write_bytes(original)
 
 
-    def test_original_stdio_selected_receipt_covers_haskell_producer_and_all_outputs(self):
+    def test_original_read_selected_receipt_covers_haskell_producer_and_all_outputs(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)
-        group = manifest["groups"]["original-stdio"]
-        self.manifest["groups"]["original-stdio"] = group
+        group = manifest["groups"]["original-stdio-read"]
+        self.manifest["groups"]["original-stdio-read"] = group
         (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
         for name in group["sources"]:
             path = self.root / name
@@ -709,23 +709,23 @@ class FixturePreparationTest(unittest.TestCase):
         prepared = []
         def run(name, argv, stdout=None):
             self.fake_run(name, argv, stdout)
-            if argv == group["commands"][0]["argv"]:
+            if argv[-1] == "original-stdio-read":
                 prepared.append(name)
-                directory = self.root / "build/original-stdio"
+                directory = self.root / "build/original-stdio-read"
                 directory.mkdir(parents=True, exist_ok=True)
                 (directory / "manifest.json").write_text("{}\n")
                 (directory / "oracle.json").write_text("[]\n")
         def prepare():
-            return fast_fixtures.prepare(self.root, self.selection("thc.runtime.OriginalStdioNativeTest"), run, self.toolchain)
-        self.assertEqual(["original-stdio"], prepare()["rebuilt"])
-        self.assertEqual(["original-stdio"], prepare()["reused"])
+            return fast_fixtures.prepare(self.root, self.selection("thc.runtime.OriginalStdioReadTest"), run, self.toolchain)
+        self.assertEqual(["original-stdio-read"], prepare()["rebuilt"])
+        self.assertEqual(["original-stdio-read"], prepare()["reused"])
         for name in group["sources"]:
             (self.root / name).write_text("changed fixture source\n")
-            self.assertEqual(["original-stdio"], prepare()["rebuilt"], name)
-        (self.root / "build/original-stdio/oracle.json").write_text("tampered output\n")
-        self.assertEqual(["original-stdio"], prepare()["rebuilt"])
-        (self.root / "build/original-stdio/manifest.json").unlink()
-        self.assertEqual(["original-stdio"], prepare()["rebuilt"])
+            self.assertEqual(["original-stdio-read"], prepare()["rebuilt"], name)
+        (self.root / "build/original-stdio-read/oracle.json").write_text("tampered output\n")
+        self.assertEqual(["original-stdio-read"], prepare()["rebuilt"])
+        (self.root / "build/original-stdio-read/manifest.json").unlink()
+        self.assertEqual(["original-stdio-read"], prepare()["rebuilt"])
         self.assertEqual(len(group["sources"]) + 3, len(prepared))
         self.assertNotIn("fixtures-full", [name for name, _, _ in self.calls])
 

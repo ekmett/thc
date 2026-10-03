@@ -1664,27 +1664,10 @@ class FastInputTests(unittest.TestCase):
                 self.assertFalse(cache.allowed_payload(f"build/{family}/{stage}/core/Other.cbd"))
             self.assertFalse(cache.allowed_payload(f"build/{family}/unreviewed/core/{module}.cbd"))
 
-    def test_original_stdio_inventory_is_exact_and_manifest_is_required(self):
-        # setUp replaces REQUIRED for the small archive tests.
-        self.assertIn("build/original-stdio/manifest.json", DECLARED_REQUIRED)
-        self.assertIn("original-stdio", cache.MANIFEST_DIRS)
-        self.assertIn("original-stdio", cache.BUILD_DIRS)
-        self.assertEqual(630, len(cache.ORIGINAL_STDIO_OUTPUTS))
-        for name in cache.ORIGINAL_STDIO_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name), name)
-        self.assertIn("build/original-stdio/native/original-stdio-oracle", cache.NATIVE_EXECUTABLES)
-        for name in ("other.json", "unknown.stdout", "logs/extra.stdout", "logs/native-144.stdout",
-                     "logs/native-000.sh", "logs/pre-export.stdout.extra", "results/144.txt", "results/00.txt",
-                     "native/other-oracle", "pre/ghc/OriginalStdioAudit.o", "post/core/Unreviewed.json",
-                     "test-results/pass.json", "reports/pass.json", "previous-manifests/stale.json",
-                     "expected.json", "pre/proofs.json", "logs/pre-audit-unknown.stdout"):
-            self.assertFalse(cache.allowed_payload("build/original-stdio/" + name), name)
-        self.assertFalse(cache.allowed_payload("build/data-to-tag/logs/pre-export.stdout"))
-
-    def test_original_stdio_archive_round_trip_preserves_complete_artifact_inventory(self):
-        manifest_path = "build/original-stdio/manifest.json"
-        binary = "build/original-stdio/native/original-stdio-oracle"
-        artifacts = cache.ORIGINAL_STDIO_OUTPUTS - {manifest_path}
+    def test_original_read_archive_round_trip_preserves_complete_artifact_inventory(self):
+        manifest_path = "build/original-stdio-read/manifest.json"
+        binary = "build/original-stdio-read/native/original-stdio-read-oracle"
+        artifacts = cache.ORIGINAL_STDIO_READ_OUTPUTS - {manifest_path}
         for name in artifacts:
             self.put(name, b"{}\n" if name.endswith(".json") else b"\x00\x80\xff\n")
         (self.root / binary).chmod(0o755)
@@ -1694,16 +1677,16 @@ class FastInputTests(unittest.TestCase):
         self.put(manifest_path, original)
         with patch.object(cache, "REQUIRED", (*cache.REQUIRED, manifest_path)):
             manifest = self.pack()
-            self.assertTrue(cache.ORIGINAL_STDIO_OUTPUTS <= manifest["payload"].keys())
+            self.assertTrue(cache.ORIGINAL_STDIO_READ_OUTPUTS <= manifest["payload"].keys())
             self.remove_payload(manifest)
             cache.restore(self.root, self.current, self.bundle)
             self.assertEqual(original, (self.root / manifest_path).read_text())
             self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
-            for name in cache.ORIGINAL_STDIO_OUTPUTS:
+            for name in cache.ORIGINAL_STDIO_READ_OUTPUTS:
                 self.assertEqual(manifest["payload"][name], cache.digest(self.root / name), name)
             self.remove_payload(manifest)
             changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
-                                                    if member.name != "files/build/original-stdio/logs/native-000.stdout"])
+                                                    if member.name != "files/build/original-stdio-read/logs/native-observations.stdout"])
             self.rejected_without_writes(changed)
 
     def test_original_stack_attempt_round_trip_keeps_logs_and_native_mode(self):
@@ -1732,8 +1715,8 @@ class FastInputTests(unittest.TestCase):
                 if member.name != "files/" + attempt + "logs/native-invariants.stdout"])
             self.rejected_without_writes(changed)
 
-    def test_original_stdio_forged_unreviewed_artifact_is_rejected(self):
-        unknown = "build/original-stdio/logs/unreviewed.stdout"
+    def test_original_read_forged_unreviewed_artifact_is_rejected(self):
+        unknown = "build/original-stdio-read/logs/unreviewed.stdout"
         self.put(unknown, "not part of the reviewed preparation plan")
         self.manifest["artifactHashes"][unknown] = cache.digest(self.root / unknown)
         self.write_manifest()

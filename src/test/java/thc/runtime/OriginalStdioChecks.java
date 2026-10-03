@@ -97,13 +97,6 @@ public final class OriginalStdioChecks {
     public static Object invoke(ExecutableProgram program, String entry, Object... arguments) {
         return Calls.target(program.hostEntryTarget(arguments.length), new Object[]{program.entryValue(entry), arguments});
     }
-    public static final List<String> names = List.of("originalWrite", "originalSafeWrite", "originalWriteErrno", "originalSafeWriteErrno");
-    public static final byte[] payload = new byte[256];
-    static { for (int i = 0; i < payload.length; i++) payload[i] = (byte) i; }
-    private record Slice(int offset, int count) {}
-    private static final List<Slice> slices = List.of(new Slice(0, 0), new Slice(256, 0), new Slice(0, 1),
-        new Slice(1, 8), new Slice(10, 1), new Slice(127, 3), new Slice(128, 128), new Slice(255, 1), new Slice(0, 256));
-
     // Ordered nullable documents keep the fixture builders and negative mutations readable.
     public static Map<String, Object> map(Object... fields) {
         var result = new LinkedHashMap<String, Object>();
@@ -120,27 +113,6 @@ public final class OriginalStdioChecks {
     }
     public static List<Object> list(Object... values) { return Arrays.asList(values); }
     public static String hex(byte[] value) { return HexFormat.of().formatHex(value); }
-    public static List<Map<String, Object>> expectedRows() throws IOException {
-        long badDescriptor = StdioHostAbi.load().error(4);
-        var result = new ArrayList<Map<String, Object>>();
-        for (String name : names) for (long fd : new long[] {Integer.MIN_VALUE, -1, 1, 2}) for (var slice : slices) {
-            boolean failed = fd < 0;
-            long value = name.endsWith("Errno") ? (failed ? badDescriptor : -(long) slice.count - 2) :
-                (failed ? -1L : slice.count);
-            var bytes = hex(Arrays.copyOfRange(payload, slice.offset, slice.offset + slice.count));
-            result.add(map("entry", name, "arguments", List.of(fd, (long) slice.offset, (long) slice.count), "result", value,
-                "stdoutHex", fd == 1 ? bytes : "", "stderrHex", fd == 2 ? bytes : ""));
-        }
-        return result;
-    }
-    public static List<Map<String, Object>> rows(Object actual) throws IOException {
-        var expected = expectedRows();
-        assertTrue(actual instanceof List<?>, "native rows must be a list");
-        var rows = (List<?>) actual;
-        assertEquals(expected.size(), rows.size(), "missing/duplicate native rows");
-        for (int i = 0; i < expected.size(); i++) assertEquals(expected.get(i), rows.get(i), "native row " + i + " differs from Java model");
-        return expected;
-    }
     public static void hashes(File root, Object value, Set<String> required) throws Exception { hashes(root, value, required, null); }
     public static void hashes(File root, Object value, Set<String> required, String prefix) throws Exception {
         var base = root.getCanonicalFile();
@@ -166,7 +138,6 @@ public final class OriginalStdioChecks {
         }
         return result;
     }
-    private static Object rep(Object expression) { return ((Map<?, ?>) ((List<?>) expression).getLast()).get("rep"); }
     public static List<List<Object>> foreignCalls(Object value) {
         var result = new ArrayList<List<Object>>();
         for (var node : nodes(value)) if (!node.isEmpty() && Objects.equals(node.getFirst(), "app") &&
@@ -211,59 +182,6 @@ public final class OriginalStdioChecks {
             "expr", list("lam", formals, body, map("rep", OriginalStdioFixtures.closure(), "resultRep", result))));
         return with(source, "instrument", true, "constructors", constructors, "bindings", bindings);
     }
-    private static void binders(Object value, Set<Object> bound) {
-        if (value instanceof Map<?, ?> map) {
-            if (map.containsKey("id")) bound.add(map.get("id"));
-            for (var child : map.values()) binders(child, bound);
-        } else if (value instanceof List<?> list) for (var child : list) binders(child, bound);
-    }
-    /** Check the real exported consumer, including the immediate runRW State lambda. */
-    public static Map<String, List<String>> module(Map<String, Object> module) {
-        var bindings = (List<Map<String, Object>>) module.get("bindings");
-        var roots = new ArrayList<Map<String, Object>>(); var rootNames = new LinkedHashSet<Object>();
-        for (var binding : bindings) for (var name : names) if (Objects.equals(binding.get("id"), "main:OriginalStdioAudit." + name)) { roots.add(binding); rootNames.add(name); }
-        assertEquals(new HashSet<>(names), rootNames); assertEquals(4, roots.size());
-        var bound = new HashSet<Object>(); binders(module, bound);
-        var result = new LinkedHashMap<String, List<String>>();
-        for (var binding : roots) {
-            var name = (String) binding.get("id"); var body = (List<?>) binding.get("expr");
-            assertEquals(4L, binding.get("arity")); assertEquals(OriginalStdioFixtures.closure(), binding.get("rep"));
-            assertEquals("lam", body.get(0), name);
-            assertEquals(OriginalStdioFixtures.scalar("IntRep", false), ((Map<?, ?>) body.getLast()).get("resultRep"));
-            var formals = (List<Map<String, Object>>) body.get(1);
-            assertEquals(4, formals.size()); var primitives = List.of("IntRep", "AddrRep", "IntRep", "WordRep");
-            for (int i = 0; i < Math.min(formals.size(), primitives.size()); i++) {
-                var formal = formals.get(i);
-                assertEquals(OriginalStdioFixtures.scalar(primitives.get(i)), formal.get("rep"), name);
-                assertEquals(false, formal.get("lifted")); assertEquals(false, formal.get("coercion"));
-            }
-            int lambdas = 0;
-            for (var node : nodes(body)) if (!node.isEmpty() && Objects.equals(node.getFirst(), "lam")) lambdas++;
-            assertEquals(2, lambdas, name);
-            var run = (List<?>) body.get(2);
-            assertEquals("app", run.get(0)); assertEquals(List.of(false), run.get(3));
-            assertEquals(OriginalStdioFixtures.scalar("IntRep", false), rep(run));
-            var lambda = (List<?>) run.get(1); assertEquals("lam", lambda.get(0));
-            var states = (List<Map<String, Object>>) lambda.get(1); assertEquals(1, states.size()); var state = states.getFirst();
-            assertEquals("State# RealWorld", state.get("type")); assertEquals(OriginalStdioFixtures.scalar(null), state.get("rep"));
-            assertEquals(false, state.get("lifted")); assertEquals(false, state.get("coercion"));
-            var arguments = (List<?>) run.get(2); assertEquals(1, arguments.size()); var argument = (List<?>) arguments.getFirst();
-            assertEquals("void", argument.get(0)); assertEquals(OriginalStdioFixtures.scalar(null), rep(argument));
-            var expected = new ArrayList<String>(); expected.add(name.contains("Safe") ? "safe_write" : "unsafe_write");
-            if (name.endsWith("Errno")) expected.add("errno");
-            var symbols = new ArrayList<String>();
-            for (var app : foreignCalls(body)) {
-                assertEquals(7, app.size()); var head = (List<Object>) app.get(1);
-                CoreOriginalStdio.validateHead(head, bound.contains(head.get(1)));
-                var argumentReps = new ArrayList<Object>(); for (var arg : (List<?>) app.get(2)) argumentReps.add(rep(arg));
-                var operation = CoreOriginalStdio.validate(app.get(6), argumentReps, (List<?>) app.get(3), rep(app));
-                assertNotNull(operation, "unsupported original foreign call in " + name); symbols.add(operation.getSymbol());
-            }
-            var expectedSymbols = new ArrayList<String>(); for (var expectedName : expected) expectedSymbols.add(Objects.requireNonNull(OriginalStdioFixtures.symbols.get(expectedName)));
-            assertEquals(expectedSymbols, symbols, name); result.put((String) binding.get("id"), symbols);
-        }
-        assertEquals(6, foreignCalls(module).size(), "extra/missing FCall copies outside the four consumers"); return result;
-    }
     public static void audit(Map<String, Object> report, String owner, List<String> symbols) {
         assertEquals(true, report.get("accepted")); assertEquals(List.of(owner), report.get("roots"));
         var reachable = new ArrayList<Object>();
@@ -286,7 +204,7 @@ public final class OriginalStdioChecks {
         if (!found) throw new NoSuchElementException("Collection contains no element matching the predicate.");
         return result;
     }
-    /** Discover direct guest callees before their parent, for exact installed-root assertions. */
+    /** Discover direct guest callees before their parent, to request compilation of discovered callees. */
     public static List<com.oracle.truffle.api.RootCallTarget> targets(com.oracle.truffle.api.RootCallTarget entry) {
         var seen = Collections.newSetFromMap(new IdentityHashMap<com.oracle.truffle.api.RootCallTarget, Boolean>());
         var found = new ArrayList<com.oracle.truffle.api.RootCallTarget>(); visitTarget(entry, seen, found); return found;

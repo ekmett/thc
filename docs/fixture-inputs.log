@@ -3325,38 +3325,6 @@ OriginalStackDecoderCallTest also reads tracked classpath core/original-stack-de
 Tests write build/reports/original-stack/proof.json and temporary containment files.
 Review frozen proof/archive comparison and run-N accumulation before graph conversion.
 
-099 original-stdio
-Fixture rationale (099 original-stdio)
-Purpose: Check public writes preserve bytes/counts and descriptor behavior.
-Produces/consumed result: Installed/Core fixtures and oracle.json for write operations.
-Cost and overlap: One package I/O integration test can cover this. 144 native process
-  starts for four write operations are unjustified; batch cases and retire the separate
-  conformance harness.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
-Producer: bin/prepare-original-stdio.sh --require-supported ->
-  t/haskell-fixtures/OriginalStdioFixtures.hs prepareOriginalStdio.
-Consumer: thc.runtime.OriginalStdioNativeTest.
-IN t/fixtures/compiler/OriginalStdioAudit.hs, OriginalStdioAuditNative.hs,
-  producer request domain, shared tools/data, Linux/macOS LP64 GHC/ghc-internal.
-Under build/original-stdio/:
-  native/original-stdio-oracle and intermediates: IN native/audit sources/GHC.
-  results/<0..143>.txt and logs/native-<000..143>.*:
-    IN binary/entry/fd/offset/count; each invocation writes numeric result file
-    and standard command triplet carrying actual stdout/stderr bytes.
-  oracle.json: IN result files and captured output; OUT 144 observations.
-  <pre|post>/core/{OriginalStdioAudit,THC.InterfaceClosure}.cbd, stage/ghc/:
-    IN audit source/four closure roots/exporter.
-  stage/<entry>.audit.json: IN CBD pair/auditor; entries originalWrite,
-    originalSafeWrite,originalWriteErrno,originalSafeWriteErrno.
-  logs/<ghc-version|ghc-info|native-build|stage-export|stage-audit-entry>.*:
-    OUT standard triplets.
-  manifest.json: IN source hashes/selected outputs/logs; old receipt removed.
---native-only/--export-only omit opposite branch; audits require --require-supported.
-Consumer reads receipt/hash files, oracle, result files/stdout/stderr, CBD pairs/audits.
-144 process starts for four write operations: flag cost/value for later triage.
-
 100 original-handle-readiness
 Fixture rationale (100 original-handle-readiness)
 Purpose: Check an original GHC c_isatty call through a live THC-owned PTY descriptor,
