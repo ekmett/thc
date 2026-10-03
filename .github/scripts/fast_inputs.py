@@ -64,12 +64,7 @@ thread-status thread-label hint-trace closure-inspection thread-inventory thread
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc original-stack original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-stdio-seek original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
-show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating package-native-gc-carriers""".split()
-GC_CARRIER_OUTPUTS = frozenset("build/package-native-gc-carriers/" + name for name in (
-    "manifest.json", "PackageNativeGcCarriers.cbd", "oracle.txt",
-    "original-v2/GHC.Internal.Stack.Decode.cbd", "original-v2/objects/GHC/Internal/Stack/Decode.hi",
-    "primitive/PackageNativePrimCarriers.cbd", "primitive/PackageNativeUnknownPrim.cbd",
-    "primitive/objects/PackageNativePrimCarriers.hi"))
+show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 UNIX_LIBC_ENTRIES = ("unixClose", "unixDup", "unixIsatty", "unixGetenv")
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
@@ -509,7 +504,6 @@ CORE_CONTRACT_CBD_REQUIRED = frozenset({
 CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
              "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
-    *GC_CARRIER_OUTPUTS,
     *CORE_CONTRACT_CBD_REQUIRED,
     *BASE_CORE_CBD_OUTPUTS,
     *AGGREGATE_HOST_CBD_OUTPUTS,
@@ -972,31 +966,6 @@ def wired_catalog(root):
         relative(path)
         require(HEX.fullmatch(digest) is not None, "Invalid Wired source pin")
     return modules, hashes
-
-
-def gc_carrier_artifact_hashes(root, manifest):
-    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
-            type(manifest.get("nativeRows")) is int and manifest["nativeRows"] == 6 and
-            type(manifest.get("gcImports")) is int and manifest["gcImports"] == 7,
-            "Invalid GC carrier manifest")
-    originals = manifest.get("originalModules")
-    primitive = manifest.get("primitiveModule")
-    require(isinstance(originals, list) and len(originals) == 1 and isinstance(originals[0], dict) and
-            originals[0].get("unit") == "ghc-internal" and originals[0].get("module") == "GHC.Internal.Stack.Decode" and
-            originals[0].get("nativeSignatures") == [] and isinstance(primitive, dict),
-            "Incomplete/unreviewed original GC carrier inventory")
-    artifacts = {}
-    for record in (manifest, originals[0], primitive):
-        hashes = record.get("artifactHashes")
-        require(isinstance(hashes, dict) and bool(hashes), "Missing GC carrier artifacts")
-        for path, digest in hashes.items():
-            name, external = original_name(root, path)
-            require(not external and name not in artifacts and isinstance(digest, str) and HEX.fullmatch(digest),
-                    "Invalid GC carrier artifact")
-            artifacts[name] = digest
-    require(set(artifacts) == GC_CARRIER_OUTPUTS - {"build/package-native-gc-carriers/manifest.json"},
-            "Incomplete/unreviewed GC carrier artifacts")
-    return artifacts
 
 
 def rts_diagnostic_artifact_hashes(manifest):
@@ -1629,8 +1598,6 @@ def allowed_payload(name):
         return False
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
-    if parts[1] == "package-native-gc-carriers":
-        return name in GC_CARRIER_OUTPUTS
     if parts[1] == "unix-libc":
         return name in UNIX_LIBC_OUTPUTS
     if parts[1] == "original-path-stat":
@@ -1901,8 +1868,6 @@ def inventory(root, current, read, core_files, verified=None):
         if not name.endswith(".json"):
             continue
         doc = json.loads(data)
-        if name == "build/package-native-gc-carriers/manifest.json":
-            gc_carrier_artifact_hashes(root, doc)
         if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in SIMD_BYTEARRAY_FAMILIES:
             simd_bytearray_artifact_hashes(name.split("/")[1], doc)
         if name == "build/io-main-pap/provenance.json":

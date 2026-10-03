@@ -3302,56 +3302,6 @@ Under build/unaligned-scalar-memory/:
 Consumer reads receipt/all hashes, oracle.tsv, stage CBDs/audits. Review overlap with
   explicit64/floating-byte-offset/aligned scalar suites using behavior coverage.
 
-096 package-native-gc-carriers
-Fixture rationale (096 package-native-gc-carriers)
-Purpose: Check boxed/primitive GC carriers cross package foreign boundaries safely.
-Produces/consumed result: Externally supplied package CBDs, generated carrier CBD and
-  oracle.txt.
-Cost and overlap: Keep the actual carrier boundary only with declared package inputs.
-  Current environment-selected CBDs and assumption-based absence are not self-contained
-  acquisition; no admission until those inputs have owners.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
-Producer: preparePackageNativeGcCarriers in
-  t/haskell-fixtures/PackageNativeArchiveFixtures.hs.
-Consumers: thc.BoxedForeignProvenanceTest, PrimForeignProvenanceTest.
-IN t/fixtures/compiler/{PackageNativeGcCarriers,PackageNativePrimCarriers,
-  PackageNativeUnknownPrim}.hs, shared exporter, exe:thc-interface (Cabal build and
-  list-bin --offline), THC.Driver.PackageNative/compact libraries,
-  bin/core_package_manifest.py/decoder closure, native GHC/ghc-internal.
-Under build/package-native-gc-carriers/:
-  source-core/PackageNativeGcCarriers.cbd, ghc/*.{hi,o,...}:
-    IN source/exporter with retained Core and foreign-import-provenance.
-  PackageNativeGcCarriers.cbd: IN ghc/PackageNativeGcCarriers.hi, interface helper,
-    libdir/home interfaces; then rewritten by archiveNativeModule/finalize metadata.
-  oracle, native/*.{hi,o,...}: IN same source/GHC -main-is PackageNativeGcCarriers.main.
-  oracle.txt: IN oracle executable; six relational observations.
-  primitive/source-core/PackageNativePrimCarriers.cbd, primitive/objects/*:
-    IN corresponding source/exporter.
-  primitive/PackageNativePrimCarriers.cbd: IN retained interface/helper then archive rewrite.
-  primitive/unknown-source-core/PackageNativeUnknownPrim.cbd, primitive/objects/*:
-    IN unknown source/exporter.
-  primitive/PackageNativeUnknownPrim.cbd: IN unknown interface/helper/archive rewrite.
-  original-v2/objects/GHC/**/*.{hi,hi-boot}: IN recursively copied installed
-    ghc-internal .dyn_hi/.dyn_hi-boot files, renamed in private tree.
-  original-v2/source-core/*, original-v2/objects/GHC/Internal/Stack/Decode.{hi,o,...}:
-    IN nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs,
-    copied interfaces, installed include/ headers, published plugin/DB, dynamic GHC.
-  original-v2/GHC.Internal.Stack.Decode.cbd: IN new interface/helper/archive rewrite.
-  If THC_GC_CARRIER_GHC_SOURCE and THC_GC_CARRIER_HOME_INTERFACES are both supplied,
-    source/interface roots change and Conc.Sync/TopHandler are compiled too, producing
-    analogous interfaces/source Core and original-v2/GHC.Internal.{Conc.Sync,TopHandler}.cbd.
-  logs/, primitive/logs/, original-v2/logs/: OUT command triplets for all calls;
-    validation reads each archived CBD through Python decoder.
-  manifest.json: IN selected sources/products/copied interface hashes/command records;
-    OUT receipt. Old receipt not explicitly invalidated. Header/import closure remains
-    unresolved; source receipt is much narrower than actual tool/source dependencies.
-Consumers require THC_TEST_GC_CARRIERS_CBD, THC_TEST_STACK_PRIM_CBD,
-  THC_TEST_PRIM_CARRIERS_CBD plus matching *_SHA256 environment; missing variables
-  cause assumptions/skips. Boxed test also reads oracle.txt next to its CBD.
-UnknownPrim is validated during production but not read by these two test classes.
-
 097 compiled-thunk-retention (two producers)
 Fixture rationale (097 compiled-thunk-retention)
 Purpose: Check compiled code retains shared thunks and lazy boxed-array elements
@@ -5680,7 +5630,7 @@ Cost and overlap: Real linker/ABI/rejection boundaries justify a compact integra
   case. Consolidate with package scalar coverage and retain direct rejection tests.
 Build status: QUARANTINED. Recursive captured-CBD listing determines consumed
   modules; replace it with named owned outputs before graph admission.
-Consumer: PackageNativeArchiveFullCoreTest. Separate from GC-carrier producer096.
+Consumer: PackageNativeArchiveFullCoreTest.
 Under build/native-archive/:
   runtime-support.json <- transitive bridge/ghc-internal units selected from external
     support manifest; referenced artifacts remain external dependencies.

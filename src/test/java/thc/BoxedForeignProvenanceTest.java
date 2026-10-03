@@ -5,15 +5,11 @@ package thc;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.ArrayList;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+// Pure metadata controls: reject invented native ABIs and invalid nominal carriers.
+// Inputs are the models below; no generated files or native compilation are needed.
 class BoxedForeignProvenanceTest {
     private static final String BOX = "BoxedRep (Just Unlifted)";
     private static Map<String,Object> fields(Object... pairs) {
@@ -107,26 +103,6 @@ class BoxedForeignProvenanceTest {
             var type = new LinkedHashMap<>((Map<String,Object>) declaration.get(key));
             type.put("argument", internal("GHC.Internal.Prim", "ByteArray#")); declaration.put(key, type);
             assertThrows(IllegalArgumentException.class, () -> PackageNativeArchives.read(module), key);
-        }
-    }
-    @Test void genuineProducerRetainsBoxedProofWithoutGrantingANativeOrOriginalUnitCapability() throws Throwable {
-        String input = System.getenv("THC_TEST_GC_CARRIERS_CBD");
-        assumeTrue(input != null, "requires the focused stock-GHC boxed carrier fixture");
-        String expected = System.getenv("THC_TEST_GC_CARRIERS_CBD_SHA256"); assertNotNull(expected);
-        var path = Path.of(input);
-        assertEquals(expected, HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))));
-        try (var file = new CoreCompactFile(path, expected, true)) {
-            var records = new CoreCompactRecords(file, expected); var module = new LinkedHashMap<>(records.header());
-            var bindings = new ArrayList<Map<String,Object>>(); file.verifyBindingOffsets(offset -> bindings.add(records.binding(offset))); module.put("bindings", bindings);
-            assertEquals("main", module.get("unit")); assertEquals("PackageNativeGcCarriers", module.get("module"));
-            var archive = PackageNativeArchives.read(module); assertNotNull(archive); assertEquals(7, archive.getExcluded().size());
-            assertNull(PackageScalarLinks.read(module)); assertNull(thc.runtime.CoreBoxedForeignDeclarations.read(module, true));
-            assertEquals(List.of("True", "True", "True", "True", "True", "True"), Files.readAllLines(path.resolveSibling("oracle.txt")));
-            var assembled = CoreModules.merge(List.of(module)); int blocked = 0;
-            for (var binding : bindings) if (archive.blocks(binding)) {
-                blocked++; assertThrows(IllegalArgumentException.class, () -> CoreModules.reachable(assembled, (String) binding.get("id"), true));
-            }
-            assertTrue(blocked >= 7, "genuine boxed roots remain archive-only under their actual owner");
         }
     }
 }

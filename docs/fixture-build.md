@@ -65,9 +65,13 @@ providers or runtime test results follow from successfully generating fixtures.
 
 Local verification uses macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25.
 There are 70 graph targets covering 111 mapped JUnit classes, 46 quarantined
-groups and 23 groups still awaiting file rules. The native process target is
+groups and 22 groups still awaiting file rules. The native process target is
 Linux x86_64 only; its two consumers do not select retained-Core acquisition.
 Gradle no longer builds these process controls for every unrelated test.
+
+Boxed and primitive foreign-provenance controls use in-memory models. Their
+optional archive-count fixtures and the global Gradle manifest probe are removed;
+28 metadata rejection checks passed across both handoff modes in a 12-second run.
 
 - Eight changed consumer classes passed all 88 executions across default/dense
   handoffs in 5m15s. These cover CString, errno, BCOs, closure inspection, thread

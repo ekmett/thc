@@ -114,7 +114,7 @@ import RtsDiagnosticFixtures (prepareRtsDiagnostics)
 import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar, preparePackageNativeDemand)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
-import PackageNativeArchiveFixtures (preparePackageNativeArchives, preparePackageNativeGcCarriers)
+import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import DynamicCallbackFixtures (prepareDynamicCallbacks)
 import GetEntropyFixtures (prepareGetEntropy)
 import LibyamlNativeFixtures (prepareLibyamlNative)
@@ -1057,7 +1057,6 @@ main = do
     ["package-native-originals"] -> preparePackageNativeOriginals root
     ["libyaml-native"] -> prepareLibyamlNative root
     ["package-native-archives"] -> preparePackageNativeArchives root
-    ["package-native-gc-carriers"] -> preparePackageNativeGcCarriers root
     ["dynamic-callback"] -> prepareDynamicCallbacks root
     ["getentropy"] -> prepareGetEntropy root
     ["wcwidth"] -> prepareWcwidth root

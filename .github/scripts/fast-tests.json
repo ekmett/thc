@@ -1533,7 +1533,7 @@
     "t/fixtures/compiler/RtsShutdownNative.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
     "src/main/java/thc/ManagedImportAdmission.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
     "src/test/java/thc/ManagedImportStubsNativeTest.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
-    "src/compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest", "thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest"], "python": ["bin/test-audit-core.py"]},
+    "src/compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/ForeignImportStubs.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/ImportStubsNative.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/OriginalTcsetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
@@ -2587,7 +2587,6 @@
     },
     "t/haskell-fixtures/Main.hs": {
       "junit": [
-        "thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest",
         "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest",
         "thc.CoreBackendPolicyTest",
         "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest",

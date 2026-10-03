@@ -188,10 +188,6 @@ def _output_hashes(root, group):
             raise ValueError("Unsupported process signal capture must not claim native artifacts")
         outputs = PROCESS_SIGNAL_OUTPUTS if native else {name}
         return _output_hashes(root, {"outputs": sorted(outputs)})
-    if group["outputs"] == ["build/package-native-gc-carriers"]:
-        name = "build/package-native-gc-carriers/manifest.json"
-        expected = fast_inputs.gc_carrier_artifact_hashes(root, json.loads(fast_inputs.file_path(root, name).read_text()))
-        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/process-lifecycle/core"]:
         if not fast_inputs.LINUX_X86_64_HOST:
             return {}

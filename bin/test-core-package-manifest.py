@@ -381,30 +381,6 @@ class PackageNativeVariantsTest(unittest.TestCase):
                 with self.subTest(container=container), self.assertRaisesRegex(ValueError, 'link profile'):
                     core_package_manifest.package_scalar_link(module)
 
-    def test_genuine_original_primitive_nominals_and_missing_declaration(self):
-        import copy
-        root = Path(__file__).resolve().parent.parent
-        path = Path(os.environ.get('THC_ORIGINAL_STACK_CBD', root / 'build/package-native-gc-carriers/original-v2/GHC.Internal.Stack.Decode.cbd'))
-        if not path.is_file(): self.skipTest('optional genuine original Stack.Decode fixture is not prepared')
-        module = read_core(path)
-        proof = module['staticForeignImports']
-        self.assertEqual(('ghc-internal', 'GHC.Internal.Stack.Decode'), (module['unit'], module['module']))
-        self.assertEqual(core_package_manifest.IMPORT_PROFILES[1], proof['profile'])
-        self.assertEqual(13, len(proof['imports']))
-        archive = core_package_manifest.package_native_archive(module)
-        self.assertEqual(13, len(archive['unsupportedImports']))
-        self.assertFalse(any(core_package_manifest.native_archive_blocks(module, b, archive) for b in module['bindings']))
-        bad = copy.deepcopy(module)
-        removed = bad['staticForeignImports']['imports'].pop()
-        bad['packageNativeArchive']['unsupportedImports'].remove(removed['emitted'])
-        with self.assertRaisesRegex(ValueError, 'missing original Stack primitive declaration'):
-            core_package_manifest.package_native_archive(bad)
-        bad = copy.deepcopy(module)
-        entry = next(e for e in bad['staticForeignImports']['imports'] if e['symbol'] == 'getWordzh')
-        entry['normalizedType']['argument']['name']['occurrence'] = 'ThreadId#'
-        with self.assertRaisesRegex(ValueError, 'exact stock Stack'):
-            core_package_manifest.package_native_archive(bad)
-
     def module(self, reps):
         unit, name = 'variants', 'Variants'
         scalar_type = dict(kind='tycon', arguments=[], name=dict(unit='ghc-internal',

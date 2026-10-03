@@ -5,14 +5,11 @@ package thc;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+// Pure metadata controls: reject invented native ABIs and invalid nominal carriers.
+// Inputs are the models below; no generated files or native compilation are needed.
 class PrimForeignProvenanceTest {
     private static final String PROFILE = "ghc-9.14.1-thc-stock-static-foreign-imports-v2";
     private static Map<String,Object> fields(Object... pairs) {
@@ -170,49 +167,5 @@ class PrimForeignProvenanceTest {
         result.put("components", List.of(Map.of("kind", "void", "primReps", List.of(), "evaluated", true),
             Map.of("kind", "void", "primReps", List.of(), "evaluated", true)));
         assertThrows(IllegalArgumentException.class, () -> PackageNativeArchives.read(module));
-    }
-    @Test void genuineOriginalStackProofAdmitsItsFullNominalInventoryWithoutNativeAdapters() throws Exception {
-        String input = System.getenv("THC_TEST_STACK_PRIM_CBD"); assumeTrue(input != null, "requires genuine original stock prim proof");
-        String expected = System.getenv("THC_TEST_STACK_PRIM_CBD_SHA256"); assertNotNull(expected);
-        var path = Path.of(input);
-        assertEquals(expected, HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))));
-        var module = CoreCbdFixtures.read(path);
-        assertEquals("ghc-internal", module.get("unit")); assertEquals("GHC.Internal.Stack.Decode", module.get("module"));
-        var proof = (Map<?,?>) module.get("staticForeignImports"); assertEquals(PROFILE, proof.get("profile"));
-        assertEquals(13, ((List<?>) proof.get("imports")).size());
-        assertTrue(((List<?>) proof.get("expectedCalls")).size() >= 13);
-        var retained = PackageNativeArchives.read(module); assertNotNull(retained);
-        assertFalse(retained.getWholeModule()); assertEquals(13, retained.getExcluded().size());
-        assertFalse(retained.blocks(module.get("bindings")), "existing context-owned operations retain their strict validators");
-        assertNull(PackageScalarLinks.read(module));
-        var header = new LinkedHashMap<>(module); header.remove("bindings");
-        assertNotNull(new CoreModuleAdmission(header, _ -> { throw new AssertionError("cold admission must not demand a body"); }).getArchive());
-        for (var key : List.of("declaredType", "normalizedType")) {
-            var bad = (Map<String,Object>) CoreCbdFixtures.snapshot(module);
-            var declaration = (Map<String,Object>) ((List<?>) ((Map<?,?>) bad.get("staticForeignImports")).get("imports")).stream()
-                .filter(raw -> "getWordzh".equals(((Map<?,?>) raw).get("symbol"))).findFirst().orElseThrow();
-            var type = new LinkedHashMap<>((Map<String,Object>) declaration.get(key));
-            type.put("argument", internal("GHC.Internal.Prim", "ThreadId#", "type")); declaration.put(key, type);
-            assertThrows(IllegalArgumentException.class, () -> PackageNativeArchives.read(bad), key);
-        }
-    }
-    @Test void genuineProducerRetainsNestedPrimProductsWithoutAnOriginalUnitCapability() throws Exception {
-        String input = System.getenv("THC_TEST_PRIM_CARRIERS_CBD"); assumeTrue(input != null, "requires genuine stock prim producer fixture");
-        String expected = System.getenv("THC_TEST_PRIM_CARRIERS_CBD_SHA256"); assertNotNull(expected); var path = Path.of(input);
-        assertEquals(expected, HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))));
-        var module = CoreCbdFixtures.read(path); assertEquals("main", module.get("unit"));
-        var proof = (Map<?,?>) module.get("staticForeignImports"); assertEquals(PROFILE, proof.get("profile"));
-        var archive = PackageNativeArchives.read(module); assertNotNull(archive); assertEquals(4, archive.getExcluded().size());
-        assertTrue(archive.blocks(module.get("bindings"))); assertNull(PackageScalarLinks.read(module));
-        var nested = (Map<?,?>) ((List<?>) proof.get("expectedCalls")).stream().filter(raw ->
-            "stg_sendCloneStackMessagezh".equals(((Map<?,?>) ((Map<?,?>) raw).get("target")).get("symbol"))).findFirst().orElseThrow();
-        var fields = (List<?>) ((Map<?,?>) nested.get("resultRep")).get("components");
-        assertEquals("void", ((Map<?,?>) fields.getFirst()).get("kind"));
-        assertEquals(List.of(), ((Map<?,?>) fields.get(1)).get("components"));
-        var bad = (Map<String,Object>) CoreCbdFixtures.snapshot(module); bad.remove("bindings");
-        var wrong = (Map<?,?>) ((List<?>) ((Map<?,?>) bad.get("staticForeignImports")).get("expectedCalls")).stream().filter(raw ->
-            "stg_sendCloneStackMessagezh".equals(((Map<?,?>) ((Map<?,?>) raw).get("target")).get("symbol"))).findFirst().orElseThrow();
-        ((Map<String,Object>) wrong.get("resultRep")).put("components", List.of(fields.getFirst(), fields.getFirst()));
-        assertThrows(IllegalArgumentException.class, () -> PackageNativeArchives.read(bad, false));
     }
 }

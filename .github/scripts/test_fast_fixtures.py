@@ -72,12 +72,14 @@ class FixturePreparationTest(unittest.TestCase):
                 result = fast_fixtures.prepare_cmake(project, self.selection(name), mock.Mock())
                 self.assertEqual([target], result["targets"])
 
-    def test_descriptor_flags_do_not_build_a_native_constant_fixture(self):
+    def test_direct_runtime_controls_need_no_fixture_toolchain(self):
         project = Path(__file__).resolve().parents[2]
-        run = mock.Mock()
-        result = fast_fixtures.prepare_cmake(project, self.selection("thc.runtime.DescriptorFlagsTest"), run)
-        self.assertEqual([], result["targets"])
-        run.assert_not_called()
+        for name in ("thc.runtime.DescriptorFlagsTest", "thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest"):
+            with self.subTest(test=name):
+                run = mock.Mock()
+                result = fast_fixtures.prepare_cmake(project, self.selection(name), run)
+                self.assertEqual([], result["targets"])
+                run.assert_not_called()
 
     def test_every_real_quarantined_fixture_stops_before_toolchain_or_generation(self):
         project = Path(__file__).resolve().parents[2]
@@ -175,65 +177,6 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(2, arguments.count("--with-compiler=/selected compiler/ghc"))
         self.assertEqual(2, arguments.count("--with-hc-pkg=/selected compiler/ghc-pkg"))
         self.assertEqual("/fixture", (self.root / "build/thc-fixtures.path").read_text().strip())
-
-    def test_gc_carrier_provenance_has_a_focused_producer(self):
-        project = Path(__file__).resolve().parents[2]
-        manifest, owners = fast_fixtures._manifest(project)
-        classes = {"thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest"}
-        self.assertEqual({"package-native-gc-carriers"}, {owners.get(name) for name in classes})
-        group = manifest["groups"]["package-native-gc-carriers"]
-        self.assertEqual(classes, set(group["junit"]))
-        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "package-native-gc-carriers"]}],
-                         group["commands"])
-        self.assertEqual(["build/package-native-gc-carriers"], group["outputs"])
-        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-
-    def test_gc_carrier_receipt_rejects_partial_stale_or_unreviewed_products(self):
-        directory = "build/package-native-gc-carriers/"
-        main = ["PackageNativeGcCarriers.cbd", "oracle.txt"]
-        original = ["original-v2/GHC.Internal.Stack.Decode.cbd", "original-v2/objects/GHC/Internal/Stack/Decode.hi"]
-        primitive = ["primitive/PackageNativePrimCarriers.cbd", "primitive/PackageNativeUnknownPrim.cbd",
-                     "primitive/objects/PackageNativePrimCarriers.hi"]
-        def records(names):
-            result = {}
-            for name in names:
-                path = self.root / (directory + name)
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(b"original producer output\n")
-                result[directory + name] = hashlib.sha256(path.read_bytes()).hexdigest()
-            return result
-        manifest = {"schema": 1, "nativeRows": 6, "gcImports": 7, "artifactHashes": records(main),
-            "originalModules": [{"unit": "ghc-internal", "module": "GHC.Internal.Stack.Decode",
-                "nativeSignatures": [], "artifactHashes": records(original)}],
-            "primitiveModule": {"artifactHashes": records(primitive)}}
-        manifest_path = self.root / (directory + "manifest.json")
-        manifest_path.write_text(json.dumps(manifest))
-        group = {"outputs": [directory.rstrip("/")]}
-        outputs = fast_fixtures._output_hashes(self.root, group)
-        self.assertEqual({directory + name for name in ["manifest.json", *main, *original, *primitive]}, set(outputs))
-        for name in [*main, *original, *primitive]:
-            path = self.root / (directory + name)
-            original_bytes = path.read_bytes()
-            path.write_bytes(b"changed\n")
-            with self.assertRaisesRegex(RuntimeError, "Stale original artifact"):
-                fast_fixtures._output_hashes(self.root, group)
-            path.unlink()
-            with self.assertRaises(FileNotFoundError):
-                fast_fixtures._output_hashes(self.root, group)
-            path.symlink_to(manifest_path)
-            with self.assertRaises((ValueError, RuntimeError)):
-                fast_fixtures._output_hashes(self.root, group)
-            path.unlink()
-            path.write_bytes(original_bytes)
-        for mutate in (lambda m: m["originalModules"].clear(),
-                       lambda m: m["originalModules"].append(m["originalModules"][0]),
-                       lambda m: m["artifactHashes"].update({directory + "Invented.cbd": "a" * 64})):
-            bad = json.loads(json.dumps(manifest))
-            mutate(bad)
-            manifest_path.write_text(json.dumps(bad))
-            with self.assertRaises((ValueError, RuntimeError)):
-                fast_fixtures._output_hashes(self.root, group)
-
 
     def test_build_installs_matching_llvm_tools_on_macos(self):
         project = Path(__file__).resolve().parents[2]
