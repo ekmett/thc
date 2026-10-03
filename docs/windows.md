@@ -53,24 +53,20 @@ installation can be selected directly with JAVA_HOME, GHC, GHC_PKG, CABAL,
 THC_CLANG, and THC_PYTHON; bootstrap is optional. CABAL_DIR and GRADLE_USER_HOME
 can point to task-local caches.
 
-`Test` defaults to `-TestGroup All`. Hosted Windows runs independent `Driver`
-and `Runtime` groups with separate evidence and the same 45-minute job budget:
+`Test` defaults to `-TestGroup All`, which currently runs the admitted Runtime
+checks. Hosted Windows runs Runtime hourly, with a 45-minute cold-build job
+budget. The quarantined Driver group is neither scheduled nor offered for manual
+workflow dispatch; an explicit local Driver request fails before building.
 
 ~~~powershell
-./bin/windows.ps1 -Action Test -TestGroup Driver -Jobs 4
 ./bin/windows.ps1 -Action Test -TestGroup Runtime -Jobs 4
 ~~~
 
-Each group builds its own prerequisites. Driver prepares `windows-driver` and
-`windows-codepages`, then checks code pages and the public driver, Haskell host
-entry and exact runtime publication in both handoff modes. Code pages use the
-selected, validated `GHC_PKG`, reusing Driver's pinned-Core acquisition. Runtime
-prepares `windows-smoke`, runs the package-native and lock suites, and retains
-the remaining smoke, tuple, bit-primop, signed-narrow, array, allocation, directory
-and ABI checks. Signed-narrow uses its existing native/model suite in both
-backends and handoff modes without pinned-Core acquisition. Smoke tasks do not
-require a driver fixture or acquire pinned Core. All runs
-both groups and retains their separate smoke and combined focused reports.
+Runtime builds its prerequisites, runs the package-native and lock suites, and
+checks tuple arithmetic, bit primops, signed-narrow arithmetic, arrays, allocation
+and the native ABI. Signed-narrow uses its existing native/model suite in both
+backends and handoff modes without pinned-Core acquisition. A shared Gradle
+invocation retains the focused test reports for both handoff modes.
 
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.

@@ -167,18 +167,20 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("continue-on-error", grouped)
         self.assertNotIn("needs: build", grouped)
 
-    def test_scheduled_windows_checks_select_runtime_hourly_and_driver_nightly(self):
+    def test_scheduled_windows_checks_run_only_admitted_runtime_hourly(self):
         workflow = (WORKFLOW.parent / "checks.yml").read_text()
         caller = workflow.split("  windows:\n", 1)[1].split("  build:\n", 1)[0]
         self.assertIn("needs: automation", caller)
-        self.assertIn("if: inputs.cadence != 'commit'", caller)
+        self.assertIn("if: inputs.cadence == 'hourly'", caller)
         self.assertIn("uses: ./.github/workflows/windows.yml", caller)
-        self.assertIn("testGroup: ${{ inputs.cadence == 'hourly' && 'Runtime' || 'Driver' }}", caller)
+        self.assertIn("testGroup: Runtime", caller)
         windows = (WORKFLOW.parent / "windows.yml").read_text()
         self.assertIn("  workflow_call:", windows)
         self.assertIn("      testGroup:\n", windows)
         self.assertIn("        required: true", windows)
         self.assertIn("  workflow_dispatch:", windows)
+        self.assertIn("options: [Runtime]", windows)
+        self.assertIn("if ($env:THC_WINDOWS_TEST_GROUP -ne 'Runtime')", windows)
         self.assertNotIn("  push:", windows)
         self.assertNotIn("  pull_request:", windows)
         self.assertNotIn("pull_request_target:", windows)
@@ -190,7 +192,8 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("bin/windows.ps1 -Action Test -Jobs 4", windows)
         self.assertIn("Tee-Object build/windows-ci.log", windows)
         self.assertIn("if: always()", windows)
-        self.assertIn("build/test-results/windows*SmokeTest/", windows)
+        self.assertIn("build/test-results/testDefault/", windows)
+        self.assertIn("build/test-results/testDense/", windows)
         self.assertNotIn("continue-on-error:", windows)
 
     def test_windows_runtime_smoke_does_not_require_driver_provenance(self):

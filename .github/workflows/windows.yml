@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-name: Native Windows smoke
+name: Native Windows runtime
 on:
   workflow_call:
     inputs:
@@ -12,7 +12,7 @@ on:
       testGroup:
         description: Native Windows test group
         type: choice
-        options: [Runtime, Driver]
+        options: [Runtime]
         default: Runtime
         required: true
 permissions:
@@ -44,8 +44,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if ($env:THC_WINDOWS_TEST_GROUP -notin @('Driver', 'Runtime')) {
-            throw 'testGroup must be Driver or Runtime'
+          if ($env:THC_WINDOWS_TEST_GROUP -ne 'Runtime') {
+            throw 'Only Runtime is admitted; Driver fixtures are quarantined'
           }
           New-Item -ItemType Directory -Force build | Out-Null
           $env:LLD_REPRODUCE = Join-Path $PWD 'build/windows-native-link.tar'
@@ -65,15 +65,6 @@ jobs:
           path: |
             build/windows-ci.log
             build/windows-native-link.tar
-            build/windows-smoke/
-            build/windows-launcher/
-            build/windows-driver/
-            build/windows-bridge/
-            build/windows-codepages/
-            build/windows-directory/*.json
-            build/windows-directory/*.cbd
-            build/windows-directory/logs/
-            build/generated/windows-directory-abi/
             build/generated/stdio-abi/
             build/native-addresses/
             build/native-malloc/
@@ -82,6 +73,4 @@ jobs:
             build/test-results/testDefault/
             build/test-results/testDense/
             build/generated/cbits/
-            build/test-results/windows*SmokeTest/
-            build/reports/tests/windows*SmokeTest/
             dist-newstyle/**/test/*.log

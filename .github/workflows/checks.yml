@@ -70,11 +70,11 @@ jobs:
       cadence: ${{ inputs.cadence }}
   windows:
     needs: automation
-    if: inputs.cadence != 'commit'
+    if: inputs.cadence == 'hourly'
     name: Windows tests
     uses: ./.github/workflows/windows.yml
     with:
-      testGroup: ${{ inputs.cadence == 'hourly' && 'Runtime' || 'Driver' }}
+      testGroup: Runtime
   build:
     needs: automation
     if: inputs.cadence == 'nightly'

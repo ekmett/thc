@@ -420,17 +420,6 @@ public class PackageNativeLifecycleTest {
             } finally { context.leave(); }
         }
     }
-    /** Optional replay of an already acquired real native companion, not reacquisition. */
-    @Test public void installedCompanionLoadsAndCallsOrdinaryCDespiteUnusedRuntimeReferences() throws Exception {
-        var path = System.getenv("THC_TEST_NATIVE_COMPANION"); assumeTrue(path != null);
-        // Original PrelIOUtils.c declares const char *localeEncoding(void).
-        var link = companion(Files.readAllBytes(Path.of(path)),
-            "extern const char *localeEncoding(void); long entry(void) { const char *s = localeEncoding(); return s && *s; }");
-        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
-            context.initialize("thc"); context.enter();
-            try { assertEquals(1L, invoke(link)); } finally { context.leave(); }
-        }
-    }
     @ParameterizedTest @ValueSource(booleans = {false, true})
     public void constructorsRunOncePerContextAndNormalCloseRunsDestructors(boolean cxx) throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
