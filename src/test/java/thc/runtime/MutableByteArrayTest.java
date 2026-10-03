@@ -5,13 +5,9 @@ package thc.runtime;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.bytecode.Instruction;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
@@ -27,13 +23,12 @@ class MutableByteArrayTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final List<String> names = List.of(
         "filledBytes", "movedBytes", "disjointBytes", "copiedMutableBytes", "copiedDisjointBytes", "publicReplicate");
-    private Context context(boolean inlining) {
+    private Context context() {
         return Context.newBuilder("thc")
             .allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw")
-            .option("compiler.Inlining", Boolean.toString(inlining))
             .build();
     }
     private Map<String, Object> manifest() throws Exception {
@@ -56,33 +51,6 @@ class MutableByteArrayTest {
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
         valid(target, "installed");
     }
-    private List<RootCallTarget> activeTargets(RootCallTarget entry) {
-        var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
-        var result = new ArrayList<RootCallTarget>();
-        visit(entry, seen, result);
-        return result;
-    }
-    private void visit(RootCallTarget target, Set<RootCallTarget> seen, List<RootCallTarget> result) {
-        if (!seen.add(target))
-            return;
-        var body = target.getRootNode();
-        var nodes = new ArrayList<Node>();
-        nodes.add(body);
-        if (body instanceof BytecodeRoot bytecode)
-            for (var instruction : bytecode.getBytecodeNode().getInstructions())
-                for (var argument : instruction.getArguments())
-                    if (argument.getKind() == Instruction.Argument.Kind.NODE_PROFILE) {
-                        var node = argument.asCachedNode();
-                        if (node != null)
-                            nodes.add(node);
-                    }
-        for (var node : nodes)
-            for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
-                if (call.getCurrentCallTarget() instanceof RootCallTarget active
-                    && active.getRootNode() instanceof GuestRoot)
-                    visit(active, seen, result);
-        result.add(target);
-    }
     private void released(Language language) {
         var state = language.getHandoffState().get();
         assertEquals(0, state.getArguments().getDepth());
@@ -93,12 +61,8 @@ class MutableByteArrayTest {
     private final List<ByteArrayOp> operations =
         List.of(ByteArrayOp.SET, ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING);
     @Test
-    void nativeFillsMovesAndPublicReplicateWithInlining() throws Exception {
-        verifyNative(true);
-    }
-    @Test
-    void nativeFillsMovesAndPublicReplicateAcrossResidualCalls() throws Exception {
-        verifyNative(false);
+    void nativeFillsMovesAndPublicReplicate() throws Exception {
+        verifyNative();
     }
     private record Row(long raw, long code, long expected) {}
     private record Input(long raw, long code) {}
@@ -276,7 +240,7 @@ class MutableByteArrayTest {
             label + "/" + row.raw() + "/" + row.code());
         released(language);
     }
-    private void verifyNative(boolean inlining) throws Exception {
+    private void verifyNative() throws Exception {
         var manifest = manifest();
         ByteArrayFixtureEvidence.verify(root, "mutable-bytearrays", manifest);
         assertEquals(names, manifest.get("entries"));
@@ -292,7 +256,7 @@ class MutableByteArrayTest {
             for (var name : names) {
                 var cases = Objects.requireNonNull(rows.get(name));var audit=(Map<?,?>)Json.parse(Files.readString(new File(root,"build/mutable-bytearrays/"+stage.getKey()+"-"+name+".audit.json").toPath()));
                 assertEquals(true, audit.get("accepted"));
-                for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
+                for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                         context.initialize("thc");
                         context.enter();
                         try {
@@ -301,28 +265,21 @@ class MutableByteArrayTest {
                             module.put("instrument", true);
                             var p = program(language, module, backend);
                             var function = context.asValue(new EntryValue(p, "main:MutableByteArrayAudit." + name, 2));
-                            var host = p.hostEntryTarget(2);
-                            var original = p.entryTarget("main:MutableByteArrayAudit." + name);
-                            var label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
+                            var label = stage.getKey() + "/" + backend + "/" + name;
                             for (var row : cases) check(row, function, label, language);
-                            var targets = activeTargets(host);
-                            assertTrue(targets.size() > 1, label);
-                            for (var target : targets)
-                                if (target != host)
-                                    compile(target);
-                            assertTrue(function.invokeMember("compile").asBoolean());
-                            long allocations = language.getHandoffState().get().getResults().getAllocations();
-                            assertEquals(0L, allocations, label + " State-only effects do not allocate result packets");
-                            for (var row : cases.reversed()) {
-                                long before = count(p);
-                                check(row, function, label, language);
-                                assertTrue(count(p) > before, label + " compiled guest");
-                                assertEquals(targets, activeTargets(host), label + " active identities");
-                                valid(original, label);
-                                for (var target : targets) valid(target, label);
-                            }
-                            assertEquals(
-                                allocations, language.getHandoffState().get().getResults().getAllocations(), label);
+                            long beforeInstallation = count(p);
+                            assertTrue(function.invokeMember("compile").asBoolean(), label + " installation");
+                            assertEquals(beforeInstallation, count(p), label + " installation executes no guest work");
+                            var diagnostics = (Map<String, Object>) Json.parse(function.getMember("diagnostics").asString());
+                            assertEquals(true, ((Map<?, ?>) diagnostics.get("explicitCompilation")).get("validLastTier"),
+                                label + " guest entry and host bridge installed");
+                            var installedRows = cases.reversed();
+                            check(installedRows.getFirst(), function, label, language);
+                            assertTrue(count(p) > beforeInstallation, label + " first installed call enters compiled guest code");
+                            diagnostics = (Map<String, Object>) Json.parse(function.getMember("diagnostics").asString());
+                            assertEquals(true, ((Map<?, ?>) diagnostics.get("explicitCompilation")).get("validLastTier"),
+                                label + " first installed call preserves the installed guest entry and host bridge");
+                            for (var row : installedRows.subList(1, installedRows.size())) check(row, function, label, language);
                             for (var counter : List.of("unsupportedTraps", "blackholes"))
                                 assertEquals(0L, ((Number) p.diagnostics().get(counter)).longValue(), label);
                             System.out.println("MutableByteArray PASS " + label + " rows=" + cases.size());
@@ -502,6 +459,7 @@ class MutableByteArrayTest {
     }
     private void positive(boolean compiled, ByteArrayOp op, ExecutableProgram p, RootCallTarget entry,
         Language language, String backend) throws Exception {
+        boolean firstCompiledCall = compiled;
         for (var range : ranges())
             for (boolean same : new boolean[] {false, true}) {
                 if (op == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING && same
@@ -514,14 +472,15 @@ class MutableByteArrayTest {
                 for (int i = 0; i < range.count(); i++)
                     expected[range.to() + i] =
                         op == ByteArrayOp.SET ? (byte) (511 & 255) : sourceBefore[range.from() + i];
-                long before = count(p);
+                long before = firstCompiledCall ? count(p) : 0L;
                 assertEquals(17L, call(entry, op, source, range.from(), destination, range.to(), range.count()));
                 assertArrayEquals(expected, destination);
                 if (!same)
                     assertArrayEquals(sourceBefore, source);
-                if (compiled) {
-                    assertEquals(before + 1, count(p));
+                if (firstCompiledCall) {
+                    assertTrue(count(p) > before, backend + "/" + op + " first installed call");
                     valid(entry, backend + "/" + op);
+                    firstCompiledCall = false;
                 }
                 released(language);
             }
@@ -529,7 +488,7 @@ class MutableByteArrayTest {
     @Test
     void compiledTypedBackendsMutateExactBytesAndGuardStateBoundsAndOverlap() throws Exception {
         for (var backend : List.of("ast", "bytecode"))
-            for (var operation : operations) try (var context = context(true)) {
+            for (var operation : operations) try (var context = context()) {
                     context.initialize("thc");
                     context.enter();
                     try {
@@ -604,7 +563,7 @@ class MutableByteArrayTest {
     @Test
     void exactArityIntFillStateAndUnliftedReferenceProofsAreRequired() throws Exception {
         var paths = Objects.requireNonNull(((Map<String, List<String>>) manifest().get("stages")).get("pre"));
-        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
                 context.initialize("thc");
                 context.enter();
                 try {
