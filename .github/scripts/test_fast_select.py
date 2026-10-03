@@ -124,6 +124,9 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(scopes["commit"], {"example.SmokeTest", "example.OtherTest", "example.NewTest"})
         self.assertEqual(scopes["hourly"], {"example.LeafTest"})
         self.assertEqual(scopes["nightly"], set())
+        self.assertEqual(select.groups(self.repo, cadence="commit"), {"commit": sorted(scopes["commit"])})
+        committed = select.group_selection(self.repo, "commit", cadence="commit")
+        self.assertEqual(set(committed["junit"]["classes"]), scopes["commit"] | {"thc.runtime.HandoffTest"})
         complete = [c for tests in select.groups(self.repo).values() for c in tests]
         self.assertCountEqual(complete, [c for classes in scopes.values() for c in classes])
         selected = select.group_selection(self.repo, "consumer", cadence="hourly")
@@ -270,8 +273,15 @@ class FastSelectionTest(unittest.TestCase):
         for system in ("Linux", "Darwin"):
             with mock.patch.object(select.platform, "system", return_value=system):
                 matrix = select.group_matrix(self.repo)["include"]
-            selected = [name for batch in matrix for name in batch["groups"]]
-            self.assertCountEqual(set(complete) - ({"provider"} if system == "Darwin" else set()), selected)
+                expected = set(complete) - ({"provider"} if system == "Darwin" else set())
+                selected = [name for batch in matrix for name in batch["groups"]]
+                self.assertCountEqual(expected, selected)
+                committed = select.group_matrix(self.repo, cadence="commit")["include"]
+                self.assertEqual(committed, [{"batch": "batch-01", "groups": ["commit"]}])
+                classes = [name for group in expected for name in complete[group]]
+                self.assertCountEqual(classes, select.groups(self.repo, system=system, cadence="commit")["commit"])
+                selection = select.group_selection(self.repo, "commit", cadence="commit")
+                self.assertEqual(set(classes) | {"thc.runtime.HandoffTest"}, set(selection["junit"]["classes"]))
         # Explicit selection remains available; matrix filtering changes no owner.
         self.assertIn("example.LeafTest", select.group_selection(self.repo, "provider")["junit"]["classes"])
         # A portable consumer still needs its provider even when that provider's

@@ -928,6 +928,8 @@ def groups(repo, *, system=None, cadence=None):
         if name in result:
             raise SelectionError("Duplicate CI group: " + name)
         result[name] = free[offset:offset+50]
+    if cadence == "commit" and result:
+        return {"commit": sorted({name for tests in result.values() for name in tests})}
     return result
 
 
@@ -940,7 +942,7 @@ def group_matrix(repo, *, cadence=None):
 
 
 def group_selection(repo, name, *, cadence=None):
-    selected = groups(repo, cadence=cadence)
+    selected = groups(repo, system=platform.system() if cadence == "commit" else None, cadence=cadence)
     if name not in selected:
         raise SelectionError("Unknown CI group: " + name)
     # Repeat the process-mode proof, but run the full transport suite only in
