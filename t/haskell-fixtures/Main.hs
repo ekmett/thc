@@ -158,7 +158,7 @@ import Data.Aeson (Value (..), object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR)
 import qualified Data.ByteString as BS
-import Data.List (isPrefixOf, isSuffixOf, sort)
+import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.String (fromString)
@@ -167,7 +167,7 @@ import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (Ptr, castPtr)
 import Foreign.Storable (peek, poke)
 import FixtureSupport (run, runWithTimeout, writeJson, hashes, splitTab, readInteger)
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, getCurrentDirectory, listDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist, findExecutable, getCurrentDirectory, listDirectory, removeFile)
 import System.Environment (getArgs, lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
@@ -786,7 +786,10 @@ nativeByteOrder = alloca $ \ptr -> do
   pure (if byte == 1 then "little" else "big")
 
 prepareArray :: FilePath -> ArraySpec -> IO ()
-prepareArray root spec = do
+prepareArray = prepareArrayUsing []
+
+prepareArrayUsing :: [String] -> FilePath -> ArraySpec -> IO ()
+prepareArrayUsing pluginArguments root spec = do
   let directory = "build" </> arrayName spec
       output = root </> directory
       manifest = output </> "manifest.json"
@@ -801,15 +804,6 @@ prepareArray root spec = do
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
-  staleExpected <- doesFileExist (output </> "expected.tsv")
-  when staleExpected (removeFile (output </> "expected.tsv"))
-  forM_ ["pre", "post"] $ \stage -> do
-    let stageDir = output </> stage
-    stagePresent <- doesDirectoryExist stageDir
-    when stagePresent $ do
-      oldReports <- listDirectory stageDir
-      forM_ (filter (isSuffixOf ".audit.json") oldReports) $ \file ->
-        removeFile (stageDir </> file)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   version <- run root [] ghc ["--numeric-version"] ""
@@ -836,7 +830,7 @@ prepareArray root spec = do
           -- GHC's response format keeps PowerShell from rebinding compiler flags.
           writeFile response (escapeArgs arguments)
           run root environment powershell ["-NoProfile", "-File", root </> "bin/export-core.ps1", "@" ++ response] ""
-        else run root environment "bin/export-core.sh" arguments ""
+        else run root environment "bin/export-core.sh" (pluginArguments ++ arguments) ""
       content <- BS.readFile (root </> modulePath)
       exported <- either die pure (readModuleValue content)
       let exportedBoundary = case exported of
@@ -998,6 +992,8 @@ main = do
     [name] -> prepareAggregate root name
     _ -> pure False
   unless handled $ case args of
+    ["array", family, pluginManifest] | Just spec <- arraySpec family ->
+      prepareArrayUsing ["--plugin-manifest", pluginManifest] root spec
     ["scalar", family, step] -> case family of
       "bit" -> prepareScalarStep root Bit step
       "integer" -> prepareScalarStep root IntegerWord step

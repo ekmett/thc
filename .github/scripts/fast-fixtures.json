@@ -1340,36 +1340,42 @@
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot"]
     },
     "int8-arrays": {
+      "cmakeTarget": "fixture-int8-arrays",
       "junit": ["thc.runtime.Int8ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int8-arrays"]}],
       "outputs": ["build/int8-arrays"],
       "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/Int8ArrayAudit.hs", "t/fixtures/core/Unboxed8Arrays.hs"]
     },
     "int16-arrays": {
+      "cmakeTarget": "fixture-int16-arrays",
       "junit": ["thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int16-arrays"]}],
       "outputs": ["build/int16-arrays"],
       "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/Int16ArrayAudit.hs", "t/fixtures/core/Unboxed16Arrays.hs"]
     },
     "int32-arrays": {
+      "cmakeTarget": "fixture-int32-arrays",
       "junit": ["thc.runtime.Int32ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int32-arrays"]}],
       "outputs": ["build/int32-arrays"],
       "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/Int32ArrayAudit.hs", "t/fixtures/core/Unboxed32Arrays.hs"]
     },
     "int-arrays": {
+      "cmakeTarget": "fixture-int-arrays",
       "junit": ["thc.runtime.IntArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int-arrays"]}],
       "outputs": ["build/int-arrays"],
       "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/IntArrayAudit.hs", "t/fixtures/core/UnboxedArrays.hs"]
     },
     "double-arrays": {
+      "cmakeTarget": "fixture-double-arrays",
       "junit": ["thc.runtime.DoubleArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "double-arrays"]}],
       "outputs": ["build/double-arrays"],
       "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/DoubleArrayAudit.hs", "t/fixtures/core/UnboxedDoubleArrays.hs"]
     },
     "float-word-arrays": {
+      "cmakeTarget": "fixture-float-word-arrays",
       "junit": ["thc.runtime.FloatWordArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-word-arrays"]}],
       "outputs": ["build/float-word-arrays"],

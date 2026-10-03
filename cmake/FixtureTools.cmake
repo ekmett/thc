@@ -57,8 +57,9 @@ foreach(i RANGE ${last})
         string(APPEND library_dir "/${CMAKE_MATCH_1}")
       endif()
       set(shared "${library_dir}/libHS${unit}-ghc9.14.1.${shared_suffix}")
-      list(APPEND tool_outputs "${shared}"
+      set(unit_products_${unit} "${shared}"
         "${PROJECT_SOURCE_DIR}/dist-newstyle/packagedb/ghc-9.14.1/${unit}.conf")
+      list(APPEND tool_outputs ${unit_products_${unit}})
       if(component STREQUAL "lib")
         set(plugin_unit "${unit}")
         set(plugin_shared "${shared}")
@@ -85,6 +86,7 @@ while(pending)
     continue()
   endif()
   list(APPEND visited "${unit}")
+  list(APPEND plugin_build_inputs ${unit_products_${unit}})
   set(i "${unit_index_${unit}}")
   string(JSON type GET "${plan}" install-plan ${i} type)
   if(NOT type STREQUAL "pre-existing")
@@ -103,7 +105,7 @@ set(plugin_outputs "${plugin_manifest}" "${plugin_copy}" "${plugin_db}/package.c
 add_custom_command(OUTPUT ${plugin_outputs}
   COMMAND ${fixture_env} "${Python3_EXECUTABLE}" bin/plugin.py --publish --ghc-pkg "${GHC_PKG}" --package-db "${plugin_db}" --depfile "${CMAKE_CURRENT_BINARY_DIR}/plugin.d"
   DEPFILE "${CMAKE_CURRENT_BINARY_DIR}/plugin.d"
-  DEPENDS ${tool_outputs} ${toolchain_inputs} "${PROJECT_SOURCE_DIR}/bin/plugin.py" "${plan_path}"
+  DEPENDS ${plugin_build_inputs} ${toolchain_inputs} "${PROJECT_SOURCE_DIR}/bin/plugin.py" "${plan_path}"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Publish the Core plugin and its declared package registrations")
 # Java's synthetic CBD tests consume this path; this is its sole graph writer.

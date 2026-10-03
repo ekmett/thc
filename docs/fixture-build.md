@@ -12,14 +12,17 @@ make fixtures TESTS=thc.IntegerPrimopsTest
 
 The admitted groups are `compact-model`, `signed-narrow-primops`, `bit-primops`,
 `integer-primops`, `explicit64-primops`, `runtime-core-native`, `source-core` and
-`strict-fields`. Each has a `fixture-<group>` target. `make fixtures` requires an
+`strict-fields`, `int-arrays`, `int8-arrays`, `int16-arrays`, `int32-arrays`,
+`double-arrays` and `float-word-arrays`. Each has a `fixture-<group>` target. `make fixtures` requires an
 exact test selector; an unmigrated or quarantined selection fails before running
 any producer. The older CI preparation path has not yet been migrated.
 
 `CMakeLists.txt` includes the file rules in `cmake/`. Arithmetic exports declare
 both the fixture CBD and interface-closure CBD as outputs of the same invocation.
-The native executable, generated driver, oracle TSV and manifest have their own
-edges. The shared runtime oracle compiles without unused simplifier dumps. Each
+For the arithmetic families, the native executable, generated driver, oracle TSV
+and manifest have their own edges. Each scalar-array family currently uses one
+command with all its named outputs; its native compilation and pre/post exports
+share the already-built tools. The shared runtime oracle compiles without unused simplifier dumps. Each
 Core compilation has its own object directory. No rule consumes an output-directory
 listing or needs an empty directory. Ninja's file and command dependencies own
 freshness; these rules do not use the old directory-hash receipts as a cache.
@@ -36,3 +39,20 @@ installed-Core/native-package producers still need their acquisition products
 represented before admission; neither the pinned-source provider nor complete
 installed Core is replaced or disabled by these rules. No claims about those
 providers or runtime test results follow from successfully generating fixtures.
+
+Local graph verification (macOS arm64, GHC 9.14.1)
+
+- All fourteen admitted targets generated successfully, then Ninja reported no
+  work. The six array families together took 20.6 seconds including their shared
+  tool rebuild (Ninja command log); native comparisons contained 19,175 rows.
+- Removing the Integer/Word interface-closure CBD rebuilt both CBD outputs and
+  their manifest without rebuilding tools or the native oracle.
+- Removing `int16-arrays/literal-oracle.tsv` rebuilt that family's outputs.
+  Touching `IntArrayAudit.hs` rebuilt only `int-arrays`; an unrelated file did
+  not trigger a build. Quarantined target names were rejected.
+- `python3 bin/test-plugin.py`: 23 checks passed.
+  `python3 .github/scripts/test_fast_fixtures.py`: 48 checks passed.
+
+These checks establish local generation and dependency behavior. They do not
+establish JVM execution or Linux/Windows results. Native Windows graph support
+and migration of the CI entry point remain open.
