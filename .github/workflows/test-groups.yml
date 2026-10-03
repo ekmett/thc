@@ -34,57 +34,15 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.sha }}
-          submodules: true
+          submodules: false
           persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-      - name: Identify macOS compiler cache
-        if: runner.os == 'macOS'
-        id: ghc-cache-host
+      - name: Check dispatched revision before setup
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
-          os_version=$(sw_vers -productVersion)
-          echo "identity=${os_version%%.*}-$HOME" >> "$GITHUB_OUTPUT"
-      - name: Reuse installed macOS GHC
-        if: runner.os == 'macOS'
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.ghcup/ghc/9.14.1
-            ~/.ghcup/db/ghc/9.14.1
-            ~/.ghcup/db/ghc/9.14.1.spec
-          key: installed-ghc-${{ runner.os }}-${{ runner.arch }}-${{ steps.ghc-cache-host.outputs.identity }}-9.14.1-setup0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d
-      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
-        with:
-          ghc-version: '9.14.1'
-          cabal-version: '3.16.0.0'
-          cabal-update: false
-      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
-        with:
-          version: '25.3.4.1'
-          java-version: '25'
-          distribution: 'graalvm-community'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          check-for-updates: false
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cabal
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: common-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-java25.3.4.1-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-      - name: Install Linux LLVM and native dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev cmake ninja-build
-          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
-      - name: Install macOS LLVM
-        if: runner.os == 'macOS'
-        run: |
-          brew install llvm@18 cmake ninja
-          echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: ./.github/actions/setup
       - name: Download only this source platform and workflow attempt
         uses: actions/download-artifact@v8
         with:
@@ -119,6 +77,7 @@ jobs:
         with:
           name: tests-${{ runner.os }}-${{ matrix.batch }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            build/ci/setup-results/
             build/ci/group-results/
             build/test-results/testDefault/
             build/test-results/testDense/

@@ -196,9 +196,26 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn('fast_ci.py group --group "$group"', grouped)
         self.assertIn("fast_ci.py compile-common", (WORKFLOW.parent / "test-common.yml").read_text())
         self.assertIn("digest-mismatch: error", grouped)
-        self.assertIn("cabal-update: false", grouped)
+        self.assertIn("uses: ./.github/actions/setup", grouped)
         self.assertNotIn("continue-on-error", grouped)
         self.assertNotIn("needs: build", grouped)
+
+    def test_tool_and_index_caches_survive_project_changes(self):
+        setup = (WORKFLOW.parents[1] / "actions/setup/action.yml").read_text()
+        immutable = setup.split("    - name: Reuse Cabal dependency store", 1)[0]
+        self.assertNotIn("hashFiles", immutable)
+        self.assertNotIn("github.sha", immutable)
+        self.assertIn("steps.identity.outputs.index", immutable)
+        self.assertIn("if: steps.index.outputs.cache-hit != 'true'", immutable)
+        self.assertEqual(1, setup.count("run: cabal update"))
+        self.assertIn('run: cabal update "hackage.haskell.org,$INDEX_STATE"', setup)
+        self.assertIn("cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-\n", setup)
+        self.assertIn("gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-\n", setup)
+        for filename in ("test-common.yml", "test-groups.yml", "intensive.yml"):
+            workflow = (WORKFLOW.parent / filename).read_text()
+            self.assertIn("uses: ./.github/actions/setup", workflow)
+            self.assertIn("submodules: false", workflow)
+            self.assertNotIn("cabal-update: true", workflow)
 
     def test_scheduled_windows_checks_run_only_admitted_runtime_hourly(self):
         workflow = (WORKFLOW.parent / "hourly.yml").read_text()

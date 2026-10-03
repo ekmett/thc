@@ -19,6 +19,67 @@ SPEC.loader.exec_module(ci)
 
 
 class FastRunnerTest(unittest.TestCase):
+    def test_setup_processes_start_together_and_join(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        commands = []
+        for own, peer in (("first", "second"), ("second", "first")):
+            script = textwrap.dedent(f'''
+                from pathlib import Path
+                import time
+                Path({own!r}).touch()
+                deadline = time.monotonic() + 5
+                while not Path({peer!r}).exists():
+                    if time.monotonic() >= deadline:
+                        raise SystemExit('peer did not start concurrently')
+                    time.sleep(0.01)
+            ''')
+            commands.append((own, [sys.executable, "-c", script]))
+        recorder.parallel(commands)
+        self.assertEqual({"first", "second"}, {p["name"] for p in recorder.data["phases"]})
+        self.assertTrue(all(p["exitCode"] == 0 for p in recorder.data["phases"]))
+
+    def test_setup_failure_terminates_and_joins_other_processes(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        waiting = "import os,time; from pathlib import Path; Path('pid').write_text(str(os.getpid())); time.sleep(60)"
+        failing = "from pathlib import Path; import time\nwhile not Path('pid').exists(): time.sleep(0.01)\nraise SystemExit(7)"
+        with self.assertRaisesRegex(RuntimeError, "broken failed: exit 7"):
+            recorder.parallel([("waiting", [sys.executable, "-c", waiting]),
+                               ("broken", [sys.executable, "-c", failing])])
+        with self.assertRaises(ProcessLookupError):
+            os.kill(int((self.root / "pid").read_text()), 0)
+        self.assertEqual(2, len(recorder.data["phases"]))
+
+    def test_cached_haskell_and_java_setup_needs_no_download(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        tools = self.root / "tools"
+        ghcup = self.root / ".ghcup"
+        java = tools / "graalvm-community-25.3.4.1+1.1"
+        for path, value in ((ghcup / "ghc/9.14.1/bin/ghc", "9.14.1"),
+                            (ghcup / "ghc/9.14.1/bin/ghc-pkg", "GHC package manager version 9.14.1"),
+                            (ghcup / "cabal/3.16.0.0/cabal", "3.16.0.0"),
+                            (java / "bin/java", "GraalVM 25.3.4.1"),
+                            (self.root / "bin/curl", "unexpected download")):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("#!/bin/sh\necho '" + value + "'\n" + ("exit 99\n" if path.name == "curl" else ""))
+            path.chmod(0o755)
+        (java / "release").write_text('GRAALVM_VERSION="25.3.4.1"\nJAVA_VERSION="25.0.4.1"\n')
+        def installed_commands(commands):
+            for name, argv in commands:
+                if name in ("haskell-toolchain", "graalvm-toolchain"):
+                    recorder.command(name, argv)
+        env = {"GITHUB_ACTIONS": "true", "THC_TOOLS": str(tools), "THC_GHCUP_ROOT": str(ghcup),
+               "GITHUB_ENV": str(self.root / "env"), "GITHUB_PATH": str(self.root / "path"),
+               "PATH": str(self.root / "bin") + os.pathsep + os.environ["PATH"]}
+        with patch.dict(os.environ, env), patch.object(ci.platform, "system", return_value="Linux"), \
+                patch.object(ci.platform, "machine", return_value="x86_64"), \
+                patch.object(recorder, "parallel", side_effect=installed_commands):
+            ci.setup_toolchain(recorder)
+        self.assertIn("JAVA_HOME=" + str(java), (self.root / "env").read_text())
+        self.assertIn(str(ghcup / "ghc/9.14.1/bin"), (self.root / "path").read_text())
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

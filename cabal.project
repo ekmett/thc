@@ -3,6 +3,8 @@
 
 packages: .
 shared: True
+-- Bump deliberately when updating the Hackage snapshot and its CI cache.
+index-state: 2026-10-02T22:18:55Z
 
 package thc
   flags: +development

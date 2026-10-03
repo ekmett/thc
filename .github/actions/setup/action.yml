@@ -1,0 +1,135 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: Pinned toolchains and dependency caches
+description: Restore independent cache layers and join concurrent tool installation and submodule checkout.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.13'
+    - name: Identify platform and frozen package index
+      id: identity
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = macOS ]; then
+          os_version=$(sw_vers -productVersion)
+          ghcup_root="$HOME/.ghcup"
+        else
+          . /etc/os-release
+          os_version=$VERSION_ID
+          ghcup_root=/usr/local/.ghcup
+        fi
+        echo "host=${os_version%%.*}-$HOME" >> "$GITHUB_OUTPUT"
+        echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+        echo "THC_GHCUP_ROOT=$ghcup_root" >> "$GITHUB_ENV"
+        echo "THC_TOOLS=$HOME/.cache/thc-toolchains" >> "$GITHUB_ENV"
+        echo "THC_CACHE_HOME=$HOME/.cache/thc-core" >> "$GITHUB_ENV"
+        echo "CABAL_DIR=$HOME/.cabal" >> "$GITHUB_ENV"
+        python3 - <<'PY'
+        import os, re
+        from pathlib import Path
+        states = re.findall(r'^index-state: (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)$', Path('cabal.project').read_text(), re.M)
+        if len(states) != 1:
+            raise SystemExit('cabal.project must declare one frozen index-state')
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+            out.write('index=' + states[0] + '\n')
+        PY
+    # Immutable tools have version/platform keys, never a project hash or SHA.
+    - name: Restore installed GHC
+      if: runner.os == 'macOS'
+      id: ghc
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.ghcup/ghc/9.14.1
+          ~/.ghcup/db/ghc/9.14.1
+          ~/.ghcup/db/ghc/9.14.1.spec
+        key: installed-ghc-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.host }}-9.14.1
+    - name: Restore installed Cabal
+      id: cabal
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ env.THC_GHCUP_ROOT }}/cabal/3.16.0.0
+        key: installed-cabal-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.host }}-3.16.0.0
+    - name: Restore installed GraalVM
+      id: graalvm
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ env.THC_TOOLS }}/graalvm-community-25.3.4.1+1.1
+        key: installed-graalvm-${{ runner.os }}-${{ runner.arch }}-25.3.4.1
+    - name: Restore installed LLVM
+      if: runner.os == 'macOS'
+      id: llvm
+      uses: actions/cache/restore@v4
+      with:
+        # Homebrew dylibs must match the runner image supplying LLVM's dependencies.
+        path: /opt/homebrew/Cellar/llvm@18/18.1.8
+        key: installed-llvm-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.image }}-18.1.8
+    - name: Install missing tools and check out submodules concurrently
+      shell: bash
+      run: python3 .github/scripts/fast_ci.py setup-toolchain --report-dir build/ci/setup-results
+    # Save verified tools now, even if a later source compilation or test fails.
+    - name: Save installed GHC
+      if: runner.os == 'macOS' && steps.ghc.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ~/.ghcup/ghc/9.14.1
+          ~/.ghcup/db/ghc/9.14.1
+          ~/.ghcup/db/ghc/9.14.1.spec
+        key: ${{ steps.ghc.outputs.cache-primary-key }}
+    - name: Save installed Cabal
+      if: steps.cabal.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ env.THC_GHCUP_ROOT }}/cabal/3.16.0.0
+        key: ${{ steps.cabal.outputs.cache-primary-key }}
+    - name: Save installed GraalVM
+      if: steps.graalvm.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ env.THC_TOOLS }}/graalvm-community-25.3.4.1+1.1
+        key: ${{ steps.graalvm.outputs.cache-primary-key }}
+    - name: Save installed LLVM
+      if: runner.os == 'macOS' && steps.llvm.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /opt/homebrew/Cellar/llvm@18/18.1.8
+        key: ${{ steps.llvm.outputs.cache-primary-key }}
+    - name: Restore frozen Hackage index
+      id: index
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cabal/packages
+        key: hackage-${{ runner.os }}-${{ runner.arch }}-cabal3.16.0.0-${{ steps.identity.outputs.index }}
+    - name: Acquire frozen Hackage index on cache miss
+      if: steps.index.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        INDEX_STATE: ${{ steps.identity.outputs.index }}
+      run: cabal update "hackage.haskell.org,$INDEX_STATE"
+    - name: Save frozen Hackage index
+      if: steps.index.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.cabal/packages
+        key: ${{ steps.index.outputs.cache-primary-key }}
+    - name: Reuse Cabal dependency store
+      uses: actions/cache@v4
+      with:
+        path: ~/.cabal/store
+        key: cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
+        restore-keys: |
+          cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
+          cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-
+    - name: Reuse Gradle dependency and task caches
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-${{ github.sha }}
+        restore-keys: |
+          gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-
+          gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-

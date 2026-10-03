@@ -26,6 +26,26 @@ each handoff mode. Cached compilation and verified fixture inputs avoid repeated
 setup; selected tests still execute on every run. The generated primop checklist
 is checked against the pinned GHC API.
 
+Hosted Build and scheduled jobs restore installed tools independently of source
+changes. Missing GHC/Cabal, GraalVM and LLVM installations run concurrently with
+submodule checkout on the same runner. Setup joins every process before building
+and terminates the other processes on failure; timings and logs are retained in
+`build/ci/setup-results`. Verified tools are saved before compilation starts.
+
+`cabal.project` pins the Hackage `index-state`. CI updates the index only when that
+snapshot is absent from its cache. To update dependencies deliberately, change
+that timestamp and run `cabal update`; editing `thc.cabal` does not refresh it.
+Cabal and Gradle dependency caches fall back across project edits, while Cabal's
+checkout outputs retain their project-specific key. Cabal and Gradle validate
+the restored build inputs normally.
+
+Intensive also caches the driver's content-addressed Core bundles, replay
+interfaces and native companions under `THC_CACHE_HOME`. Their existing input
+identities determine reuse; the archive cache key identifies the set of stored
+objects, not a source commit. This large cache is restored only for its nightly
+consumers. The cold acquisition check uses a separate empty cache, and runtime
+checks still execute after restoration.
+
 ## Maintain test selection
 
 [fast-tests.json](../.github/scripts/fast-tests.json) maps source changes to

@@ -20,6 +20,7 @@ import tarfile
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -96,6 +97,149 @@ class Recorder:
             self.save()
         require(phase["exitCode"] in allowed, f"{name} failed: exit {phase['exitCode']}; see {logfile}")
         return phase["exitCode"], "".join(output)
+
+    def parallel(self, commands):
+        """Join independent setup processes; terminate their groups on failure."""
+        self.directory.mkdir(parents=True, exist_ok=True)
+        children = []
+        try:
+            with ExitStack() as stack:
+                for name, argv in commands:
+                    logfile = self.directory / (name + ".log")
+                    log = stack.enter_context(logfile.open("w"))
+                    phase = {"name": name, "command": argv, "started": utc(),
+                             "log": str(logfile.relative_to(self.root))}
+                    print("Starting " + name + ": " + str(logfile), flush=True)
+                    child = subprocess.Popen(argv, cwd=self.root, stdout=log, stderr=subprocess.STDOUT,
+                                             start_new_session=True)
+                    children.append((child, phase, time.monotonic(), logfile))
+                pending = list(children)
+                while pending:
+                    for item in list(pending):
+                        child, phase, begin, logfile = item
+                        code = child.poll()
+                        if code is None:
+                            continue
+                        pending.remove(item)
+                        phase.update(exitCode=code, seconds=round(time.monotonic() - begin, 6), finished=utc())
+                        self.data["phases"].append(phase)
+                        self.save()
+                        print("::group::" + phase["name"], flush=True)
+                        print(logfile.read_text(), end="", flush=True)
+                        print("::endgroup::", flush=True)
+                        require(code == 0, f"{phase['name']} failed: exit {code}; see {logfile}")
+                    if pending:
+                        time.sleep(0.1)
+        finally:
+            for child, _, _, _ in children:
+                if child.poll() is None:
+                    try:
+                        os.killpg(child.pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+            for child, phase, begin, _ in children:
+                try:
+                    child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.wait()
+                if "exitCode" not in phase:
+                    phase.update(exitCode=child.returncode, seconds=round(time.monotonic() - begin, 6), finished=utc())
+                    self.data["phases"].append(phase)
+            self.save()
+
+
+def setup_toolchain(recorder):
+    """Install only missing pinned tools, concurrently with submodule checkout."""
+    host = (platform.system(), platform.machine())
+    releases = {
+        ("Darwin", "arm64"): ("aarch64-apple-darwin", "4e521e008fe0813db6db4b91cfeebd0c44c80c68afb458ea32a1c94cf5c7cc1d",
+                               "macos-aarch64", "ebfab1d74420f355a459076162012d6835fa6068bd9d2f230f1fcaf7ee0dd923"),
+        ("Linux", "x86_64"): ("x86_64-linux", "9ed5da5449b48043a0d17e767c05d2ef585e25a639bb934329496c6d2fad9cf8",
+                               "linux-x64", "b2bc38d0c4141426eb44d0eefa3cc172c96faf92727d703b61541699128b6fc7"),
+    }
+    require(os.environ.get("GITHUB_ACTIONS") == "true" and host in releases,
+            "Toolchain setup requires a hosted Linux x64 or macOS ARM64 Actions runner")
+    ghcup_arch, ghcup_sha, java_arch, java_sha = releases[host]
+    # Upstream release SHA256SUMS / asset digests. Installed tools are a separate
+    # cache layer; source and dependency edits never change their cache keys.
+    download = r'''
+set -euo pipefail
+download() {
+  curl --fail --location --silent --show-error --retry 3 "$1" --output "$2"
+  printf '%s  %s\n' "$3" "$2" | shasum -a 256 --check
+}
+mkdir -p "$THC_TOOLS"
+'''
+    haskell = download + r'''
+ghc_bin="$THC_GHCUP_ROOT/ghc/9.14.1/bin"
+cabal_bin="$THC_GHCUP_ROOT/cabal/3.16.0.0"
+export GHCUP_INSTALL_BASE_PREFIX="$(dirname "$THC_GHCUP_ROOT")"
+if [ ! -x "$ghc_bin/ghc" ] || [ ! -x "$cabal_bin/cabal" ]; then
+  ghcup="$THC_TOOLS/ghcup-0.2.6.2"
+  if [ ! -x "$ghcup" ]; then
+    download "https://downloads.haskell.org/ghcup/0.2.6.2/GHCUP_ARCH-ghcup-0.2.6.2" "$ghcup" GHCUP_SHA
+    chmod +x "$ghcup"
+  fi
+  export GHCUP_SKIP_UPDATE_CHECK=1
+  if [ ! -x "$ghc_bin/ghc" ]; then "$ghcup" install ghc 9.14.1; fi
+  if [ ! -x "$cabal_bin/cabal" ]; then "$ghcup" install cabal 3.16.0.0 --isolate "$cabal_bin"; fi
+fi
+test "$("$ghc_bin/ghc" --numeric-version)" = 9.14.1
+test "$("$ghc_bin/ghc-pkg" --version)" = 'GHC package manager version 9.14.1'
+test "$("$cabal_bin/cabal" --numeric-version)" = 3.16.0.0
+'''
+    haskell = haskell.replace("GHCUP_ARCH", ghcup_arch).replace("GHCUP_SHA", ghcup_sha)
+    java = download + r'''
+java_root="$THC_TOOLS/graalvm-community-25.3.4.1+1.1"
+if [ ! -d "$java_root" ]; then
+  archive="$RUNNER_TEMP/thc-graalvm.tar.gz"
+  download "https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.3.4.1/graalvm-community-jdk-25i3-25.0.4.1_JAVA_ARCH_bin.tar.gz" "$archive" JAVA_SHA
+  tar -xzf "$archive" -C "$THC_TOOLS"
+  rm "$archive"
+fi
+'''
+    java = java.replace("JAVA_ARCH", java_arch).replace("JAVA_SHA", java_sha)
+    if host[0] == "Darwin":
+        native = r'''
+set -euo pipefail
+if [ ! -x /opt/homebrew/Cellar/llvm@18/18.1.8/bin/clang ]; then
+  brew install llvm@18
+fi
+ln -sfn /opt/homebrew/Cellar/llvm@18/18.1.8 /opt/homebrew/opt/llvm@18
+command -v cmake && command -v ninja || brew install cmake ninja
+/opt/homebrew/opt/llvm@18/bin/clang --version
+'''
+        java_home = Path(os.environ["THC_TOOLS"]) / "graalvm-community-25.3.4.1+1.1/Contents/Home"
+        llvm_bin = "/opt/homebrew/opt/llvm@18/bin"
+    else:
+        native = r'''
+set -euo pipefail
+if ! dpkg-query -W -f='${Status}\n' clang-18 llvm-18 libgmp-dev cmake ninja-build 2>/dev/null | awk '$0 != "install ok installed" {bad=1} END {exit bad}'; then
+  sudo apt-get update
+  sudo apt-get install --yes clang-18 llvm-18 libgmp-dev cmake ninja-build
+fi
+/usr/lib/llvm-18/bin/clang --version
+'''
+        java_home = Path(os.environ["THC_TOOLS"]) / "graalvm-community-25.3.4.1+1.1"
+        llvm_bin = "/usr/lib/llvm-18/bin"
+    recorder.parallel([
+        ("source-submodules", ["git", "-c", "core.autocrlf=false", "submodule", "update", "--init", "--depth", "1", "--jobs", "4"]),
+        ("haskell-toolchain", ["bash", "-c", haskell]),
+        ("graalvm-toolchain", ["bash", "-c", java]),
+        ("native-toolchain", ["bash", "-c", native]),
+    ])
+    release = dict(line.split("=", 1) for line in (java_home / "release").read_text().splitlines() if "=" in line)
+    require(release["GRAALVM_VERSION"].strip('"') == "25.3.4.1"
+            and release["JAVA_VERSION"].strip('"').split(".")[0] == "25", "Unexpected cached GraalVM")
+    recorder.command("verify-graalvm", [str(java_home / "bin/java"), "--version"])
+    with open(os.environ["GITHUB_ENV"], "a") as stream:
+        stream.write(f"JAVA_HOME={java_home}\nGRAALVM_HOME={java_home}\n")
+    with open(os.environ["GITHUB_PATH"], "a") as stream:
+        stream.write(f"{java_home}/bin\n{os.environ['THC_GHCUP_ROOT']}/ghc/9.14.1/bin\n"
+                     f"{os.environ['THC_GHCUP_ROOT']}/cabal/3.16.0.0\n{llvm_bin}\n")
+    recorder.data["passed"] = True
+    recorder.save()
 
 
 def validate_xml(directory, expected):
@@ -517,7 +661,7 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common"))
+    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "setup-toolchain"))
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
@@ -536,6 +680,8 @@ def main(argv=None):
             expected = os.environ.get("EXPECTED_SHA", "")
             require(not expected or expected == git(ROOT, "rev-parse", "HEAD"), "Dispatched revision mismatch")
             recorder.save()
+        elif args.command == "setup-toolchain":
+            setup_toolchain(recorder)
         elif args.command == "compile-common":
             compile_common(recorder)
         elif args.command == "group":

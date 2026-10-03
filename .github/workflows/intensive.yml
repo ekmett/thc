@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.sha }}
-          submodules: true
+          submodules: false
           persist-credentials: false
       - name: Check dispatched revision
         env:
@@ -57,21 +57,20 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-      - uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup
+      - name: Restore published Core and native dependency objects
+        uses: actions/cache/restore@v4
         with:
-          python-version: '3.13'
-      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
-        with:
-          ghc-version: '9.14.1'
-          cabal-version: '3.16.0.0'
-          cabal-update: true
-      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
-        with:
-          version: '25.3.4.1'
-          java-version: '25'
-          distribution: 'graalvm-community'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          check-for-updates: false
+          path: |
+            ~/.cache/thc-core/core-bundles
+            ~/.cache/thc-core/unit-core
+            ~/.cache/thc-core/pinned-libraries
+            ~/.cache/thc-core/pinned-sources
+            ~/.cache/thc-core/installed-foreign
+            !~/.cache/thc-core/**/*.lock
+            !~/.cache/thc-core/**/*.failed-*
+          key: cbd-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-lookup
+          restore-keys: cbd-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-
       - name: Verify pinned toolchain
         shell: bash
         run: |
@@ -88,17 +87,6 @@ jobs:
           java --version
       - name: Resolve Cabal driver dependencies
         run: cabal build exe:thc
-      - name: Install Linux native and LLVM build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
-          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
-      - name: Install macOS LLVM build dependencies
-        if: runner.os == 'macOS'
-        run: |
-          brew install llvm@18
-          echo "$(brew --prefix llvm@18)/bin" >> "$GITHUB_PATH"
       - name: Check LLVM backend tools
         run: |
           for tool in clang llc opt llvm-nm llvm-link llvm-objcopy; do
@@ -121,6 +109,8 @@ jobs:
       - name: Compare public packages with native GHC on both backends and handoff modes
         run: cabal test driver-tests -fdevelopment --test-options=--public-packages-only --test-show-details=direct
       - name: Check cold project dependency acquisition
+        env:
+          THC_CACHE_HOME: ${{ runner.temp }}/thc-cold-acquisition
         run: cabal test driver-tests -fdevelopment --test-options=--acquire-project-only --test-show-details=direct
       - name: Prepare fresh library source and native oracles
         run: python3 bin/prepare-library-tests.py
@@ -153,11 +143,45 @@ jobs:
             done
           done
           exit "$matrix_status"
+      - name: Identify the set of cached Core objects
+        if: always() && env.THC_CACHE_HOME != ''
+        id: core-cache
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          root = Path(os.environ['THC_CACHE_HOME'])
+          # Driver receipts validate restored objects. Include file sizes so an
+          # interrupted object's completion also creates a new archive key.
+          names = sorted(str(path.relative_to(root))
+              + ':' + str(path.stat().st_size)
+              for tree in ('core-bundles', 'unit-core', 'pinned-libraries', 'pinned-sources', 'installed-foreign')
+              for path in (root / tree).rglob('*') if path.is_file()
+              and not any(part.endswith('.lock') or '.failed-' in part for part in path.parts))
+          if names:
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                  output.write('key=' + hashlib.sha256('\n'.join(names).encode()).hexdigest() + '\n')
+          PY
+      - name: Save acquired Core objects independently of test results
+        if: always() && steps.core-cache.outputs.key != ''
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cache/thc-core/core-bundles
+            ~/.cache/thc-core/unit-core
+            ~/.cache/thc-core/pinned-libraries
+            ~/.cache/thc-core/pinned-sources
+            ~/.cache/thc-core/installed-foreign
+            !~/.cache/thc-core/**/*.lock
+            !~/.cache/thc-core/**/*.failed-*
+          key: cbd-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-${{ steps.core-cache.outputs.key }}
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: test-results-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            build/ci/setup-results/
             build/reports/tests/
             build/test-results/
             build/libraries/cases.json

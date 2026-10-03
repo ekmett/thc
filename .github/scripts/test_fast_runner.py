@@ -58,6 +58,7 @@ class FastRunnerTest(unittest.TestCase):
     def test_exact_ci_automation_merge_uses_hosted_capacity(self):
         merge, event = self.merge({".github/scripts/merge_bot.py": "updated\n",
                                    ".github/workflows/fast.yml": "name: Fast\n",
+                                   ".github/actions/setup/action.yml": "name: Setup\n",
                                    "docs/contributing.md": "CI queue\n",
                                    "docs/fast-ci.md": "Fixture reuse\n"})
         self.assertTrue(runner.hosted_ci_only(self.root, event, merge, REPO))
