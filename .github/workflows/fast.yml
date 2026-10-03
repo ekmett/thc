@@ -230,25 +230,26 @@ jobs:
           dpkg-query --show --showformat='${Status}\n' libgmp-dev | grep -Fx 'install ok installed'
       - name: Identify toolchain and fixture dependencies
         run: python3 .github/scripts/fast_ci.py identify
-      - name: Run fresh smoke plus affected tests
-        run: python3 .github/scripts/fast_ci.py run
+      # Temporary diagnostic branch only: recover the failed run without rerunning tests.
+      - name: Recover existing evidence instead of Run fresh smoke plus affected tests
+        run: |
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" != refs/heads/main
+          test "$RUNNER_NAME" = castlemeadow-thc-fast
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test -d build/empty-join-diagnostics/37091640730-1
+          test -d build/fast/results/37091640730-1
+          tar -czf "$RUNNER_TEMP/empty-join-37091640730-1.tar.gz" -C build \
+            empty-join-diagnostics/37091640730-1 fast/results/37091640730-1
       - name: Report complete timings
         if: always()
         run: python3 .github/scripts/fast_ci.py finish
-      - name: Retain commands, selected tests, fresh XML and failure output
-        if: always()
+      - name: Upload the prior failed run's graphs and reports
+        if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: fast-checks-${{ github.run_id }}-${{ github.run_attempt }}
-          # Cancellation can interrupt the runner before it moves completed reports.
-          path: |
-            ${{ env.FAST_REPORT_DIR }}
-            build/test-results/testDefault/
-            build/test-results/testDense/
-            build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd
-            build/empty-join-input/post-core/EmptyJoinInputAudit.cbd
-            build/empty-join-input/provenance.json
-            build/empty-join-input/oracle.tsv
-            build/empty-join-diagnostics/${{ github.run_id }}-${{ github.run_attempt }}/
-          if-no-files-found: warn
+          name: empty-join-37091640730-1
+          path: ${{ runner.temp }}/empty-join-37091640730-1.tar.gz
+          if-no-files-found: error
           retention-days: 14
