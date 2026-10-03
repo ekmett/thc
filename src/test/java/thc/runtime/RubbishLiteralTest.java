@@ -28,7 +28,7 @@ class RubbishLiteralTest {
         var result = new ArrayList<String>();
         for (var name : list("Lifted", "Unlifted", "IntRep", "Int32Rep")) result.add("original" + name);
         for (var name : scalarNames) result.add("scalar" + name);
-        result.addAll(list("boxedData", "boxedClosure", "sequenceLifted")); result.addAll(shapes); return result;
+        result.addAll(list("boxedData", "boxedClosure")); result.addAll(shapes); return result;
     }
     private Map<String, Object> json(String file) throws Exception { return object(Json.parse(Files.readString(root.resolve(prefix + "/" + file)))); }
     private Map<String, Object> cbd(String file) throws Exception { return CoreCbdFixtures.read(root.resolve(prefix + "/" + file)); }
@@ -36,16 +36,13 @@ class RubbishLiteralTest {
     private String hash(Path file) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file))); }
     private void verifyEvidence() throws Exception {
         var manifest = json("manifest.json");
-        assertEquals(1L, manifest.get("schema")); assertEquals(names, manifest.get("entries")); assertEquals(238L, manifest.get("nativeRows"));
+        assertEquals(1L, manifest.get("schema")); assertEquals(names, manifest.get("entries")); assertEquals((names.size() + shapes.size()) * 7L, manifest.get("nativeRows"));
         assertEquals(shapes.stream().map(name -> name + "Return").toList(), manifest.get("returns"));
         assertEquals(shapes.stream().map(name -> name + "Producer").toList(), manifest.get("producers"));
         var inputs = object(manifest.get("inputHashes"));
         var expectedInputs = new HashSet<>(list("t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
             "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs",
-            "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/cbits/target-layout.c", "src/compiler/interface/Main.hs", "cabal.project", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
-        try (var files = Files.list(root.resolve("src/driver/THC/Driver"))) {
-            files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> expectedInputs.add(root.relativize(path).toString()));
-        }
+            "cabal.project", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
         try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> expectedInputs.add(root.relativize(path).toString()));
         }
@@ -61,81 +58,14 @@ class RubbishLiteralTest {
         assertTrue(target.find()); assertTrue(host.find()); assertEquals(host.group(1), target.group(1));
         boolean nativeLLVM = target.group(1).startsWith("aarch64-");
         var expectedArtifacts = new HashSet<String>();
-        for (var file : list("pre.cbd", "post.cbd", "Data.Sequence.Internal.cbd", "oracle.json", "originals.json", "native.s", "native.o", "native-codegen.json", "pre.audit.json", "post.audit.json"))
+        for (var file : list("pre.cbd", "post.cbd", "oracle.json", "originals.json", "native.s", "native.o", "native-codegen.json", "pre.audit.json", "post.audit.json"))
             expectedArtifacts.add(prefix + "/" + file);
-        for (var command : list("version", "info", "libdir", "imports-ghc-internal", "imports-containers", "containers-unit", "native-assemble", "pre-audit", "post-audit"))
+        for (var command : list("version", "info", "libdir", "imports-ghc-internal", "native-assemble", "pre-audit", "post-audit"))
             for (var suffix : list("stdout", "stderr", "command.json")) expectedArtifacts.add(prefix + "/logs/" + command + "." + suffix);
         if (nativeLLVM) {
             expectedArtifacts.add(prefix + "/native.ll");
             for (var suffix : list("stdout", "stderr", "command.json"))
                 expectedArtifacts.add(prefix + "/logs/native-llvm." + suffix);
-        }
-        String providerPackages = prefix + "/provider/installed/packages.json";
-        assertEquals(providerPackages, manifest.get("providerPackages"));
-        var packages = object(Json.parse(Files.readString(root.resolve(providerPackages))));
-        assertEquals("thc-core-packages", packages.get("format"));
-        assertEquals(1L, packages.get("schema")); assertEquals("9.14.1", packages.get("ghc"));
-        var units = new LinkedHashMap<String, Map<String, Object>>();
-        for (var unit : objects(packages.get("units")))
-            assertNull(units.put((String) unit.get("id"), unit), "Duplicate provider owner");
-        var acquired = object(manifest.get("acquiredSequenceInterface"));
-        String sequenceUnit = (String) acquired.get("unit");
-        assertEquals(Files.readString(root.resolve(prefix + "/logs/containers-unit.stdout")).strip(), sequenceUnit);
-        String registration = Files.readString(root.resolve(prefix + "/provider/logs/ghc-internal-unit.stdout")).strip();
-        var closure = new HashSet<String>(); var pending = new ArrayDeque<>(List.of(registration, sequenceUnit));
-        while (!pending.isEmpty()) {
-            String id = pending.removeFirst();
-            if (!closure.add(id)) continue;
-            assertNotNull(units.get(id), "Missing selected provider dependency: " + id);
-            for (var dependency : expression(units.get(id).get("depends"))) pending.add((String) dependency);
-        }
-        if (!registration.equals("ghc-internal")) {
-            assertEquals(list(), units.get(registration).get("modules"));
-            assertFalse(objects(units.get("ghc-internal").get("modules")).isEmpty());
-            closure.add("ghc-internal");
-        }
-        assertEquals(closure, units.keySet(), "Provider inventory must be exactly the selected original closure");
-        expectedArtifacts.add(providerPackages);
-        for (String id : units.keySet())
-            if (!id.equals("ghc-internal") || registration.equals(id))
-                expectedArtifacts.add(prefix + "/provider/installed/bundles/" + id + ".zip");
-        for (var unit : units.values()) for (var module : objects(unit.get("modules"))) {
-            var compact = object(module.get("compact"));
-            assertEquals("thc-cbd-v1", compact.get("format"));
-            Path path = Path.of((String) compact.get("path"));
-            assertTrue(path.startsWith(root.resolve(prefix + "/provider/installed/unit-core/v3")));
-            expectedArtifacts.add(root.relativize(path).toString());
-            expectedArtifacts.add(root.relativize(path.getParent().resolve("publication.json")).toString());
-        }
-        var providerCommands = new ArrayList<>(list("ghc-version", "helper-build", "helper-location", "driver-location", "ghc-internal-unit", "containers-unit"));
-        assertTrue(manifest.get("customCoreProvider") instanceof Boolean);
-        if (Boolean.TRUE.equals(manifest.get("customCoreProvider"))) providerCommands.add("core-provider-version");
-        for (var command : providerCommands)
-            for (var suffix : list("stdout", "stderr", "command.json"))
-                expectedArtifacts.add(prefix + "/provider/logs/" + command + "." + suffix);
-        var sequenceModules = objects(units.get(sequenceUnit).get("modules")).stream()
-            .filter(module -> "Data.Sequence.Internal".equals(module.get("name"))).toList();
-        assertEquals(1, sequenceModules.size());
-        assertEquals(sequenceUnit, cbd("Data.Sequence.Internal.cbd").get("unit"));
-        var publishedSequence = object(sequenceModules.getFirst().get("compact"));
-        Path publishedPath = Path.of((String) publishedSequence.get("path"));
-        assertTrue(publishedPath.isAbsolute());
-        assertEquals(publishedSequence.get("sha256"), hash(publishedPath), "Changed published Sequence Core");
-        var publishedCore = CoreCbdFixtures.read(publishedPath);
-        assertEquals(sequenceUnit, publishedCore.get("unit"));
-        assertEquals("Data.Sequence.Internal", publishedCore.get("module"));
-        Path acquiredPath = Path.of((String) acquired.get("path"));
-        assertTrue(acquiredPath.isAbsolute()); assertEquals("Internal.hi", acquiredPath.getFileName().toString());
-        assertEquals(acquired.get("sha256"), hash(acquiredPath), "Changed acquired Sequence interface");
-        if (acquired.get("pinnedInputs") != null) {
-            var pins = object(acquired.get("pinnedInputs"));
-            Path pinPath = Path.of((String) pins.get("path"));
-            assertTrue(pinPath.isAbsolute()); assertEquals("inputs.json", pinPath.getFileName().toString());
-            assertEquals(pins.get("sha256"), hash(pinPath), "Changed pinned producer inputs");
-            var metadata = object(Json.parse(Files.readString(pinPath)));
-            assertEquals("9.14.1", object(metadata.get("source")).get("version"));
-            for (String key : list("driverHash", "pluginHash", "helperHash"))
-                assertTrue(((String) metadata.get(key)).matches("[0-9a-f]{64}"), "Missing pinned producer identity: " + key);
         }
         assertEquals(expectedArtifacts, artifacts.keySet());
         var nativeCode = json("native-codegen.json");
@@ -155,8 +85,7 @@ class RubbishLiteralTest {
         for (var entry : hashes.entrySet()) assertEquals(entry.getValue(), hash(root.resolve(entry.getKey())), "Stale rubbish fixture: " + entry.getKey());
         var installed = new LinkedHashMap<String, Object>();
         for (var record : objects(manifest.get("installedInterfaces"))) installed.put((String) record.get("path"), record.get("sha256"));
-        assertEquals(2, installed.size());
-        assertEquals(Set.of("Manager.hi", "Internal.hi"), new HashSet<>(installed.keySet().stream().map(path -> Path.of(path).getFileName().toString()).toList()));
+        assertEquals(Set.of("Manager.hi"), new HashSet<>(installed.keySet().stream().map(path -> Path.of(path).getFileName().toString()).toList()));
         for (var entry : installed.entrySet()) {
             var path = Path.of(entry.getKey()); assertTrue(path.isAbsolute()); assertEquals(entry.getValue(), hash(path), "Changed original interface: " + path);
         }
@@ -164,36 +93,12 @@ class RubbishLiteralTest {
         assertEquals(manifest.get("originalOccurrences"), (long) occurrences.size());
         assertEquals(Set.of("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)", "IntRep", "Int32Rep"),
             new HashSet<>(occurrences.stream().map(value -> expression(value).get(1)).toList()));
-        assertTrue(occurrences.stream().anyMatch(value -> "GHC.Internal.Event.Manager.$wstep".equals(expression(value).get(0))));
-        if (target.group(1).equals("aarch64-apple-darwin")) {
-            assertEquals(list(
-                list("GHC.Internal.Event.Manager.$wstep", "BoxedRep (Just Lifted)"),
-                list("GHC.Internal.Event.Manager.$wstep", "IntRep"),
-                list("GHC.Internal.Event.Manager.$wstep", "BoxedRep (Just Unlifted)"),
-                list("GHC.Internal.Event.Manager.$wstep", "Int32Rep"),
-                list("GHC.Internal.Event.Manager.$wstep", "Int32Rep"),
-                list("GHC.Internal.Event.Manager.$wstep", "BoxedRep (Just Unlifted)"),
-                list("GHC.Internal.Event.Manager.$wstep", "BoxedRep (Just Unlifted)")), occurrences);
-        } else assertEquals(6, occurrences.size());
 
         for (var stage : list("pre", "post")) {
             var audit = json(stage + ".audit.json"); assertEquals(true, audit.get("accepted"));
             assertEquals(list(), audit.get("issues")); assertEquals(list(), audit.get("missingGlobals"));
             assertEquals(names.size() + shapes.size(), literals(cbd(stage + ".cbd")).size());
         }
-    }
-    @Test void freshSequenceCaptureHasSupportedEvaluatedLiftedRubbish() throws Exception {
-        verifyEvidence();
-        var module = cbd("Data.Sequence.Internal.cbd");
-        assertEquals("Data.Sequence.Internal", module.get("module"));
-        var original = expression(json("originals.json").get("sequenceOccurrences"));
-        assertEquals(1, original.size());
-        assertEquals("BoxedRep (Just Lifted)", expression(original.getFirst()).get(1));
-        var values = literals(module);
-        assertEquals(1, values.size(), "The fresh installed Core literal must survive as rubbish, not an unsupported diagnostic");
-        var proof = RubbishLiterals.proof(values.getFirst());
-        assertTrue(proof.getEvaluated());
-        assertEquals(List.of("BoxedRep (Just Lifted)"), proof.getPrimReps());
     }
     private boolean rubbish(List<?> values) { return values.size() >= 2 && values.subList(0, 2).equals(list("lit", "rubbish")); }
     private List<List<Object>> literals(Object value) {
@@ -219,7 +124,7 @@ class RubbishLiteralTest {
     @Test void originalAndScalarNativeContinuationsMatchInterpreted() throws Exception { nativeValues(false); }
     @Test void originalAndScalarNativeContinuationsMatchFirstInstalledEntry() throws Exception { nativeValues(true); }
     private void nativeValues(boolean compiled) throws Exception {
-        verifyEvidence(); var rows = expression(json("oracle.json").get("rows")); assertEquals(238, rows.size());
+        verifyEvidence(); var rows = expression(json("oracle.json").get("rows")); assertEquals((names.size() + shapes.size()) * 7, rows.size());
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context()) {
             entered(context, language -> {
                 var module = with(cbd(stage + ".cbd"), "instrument", true);

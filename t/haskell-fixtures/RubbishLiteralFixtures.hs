@@ -22,8 +22,6 @@ import qualified Data.Text.Encoding as Text
 import Data.IORef (newIORef, writeIORef)
 import Data.List (isPrefixOf, nub, sort, sortOn)
 import FixtureSupport
-import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCoreUnits)
-import qualified THC.Driver.Installed as Installed
 import GHC hiding (exprType)
 import GHC.Plugins hiding (line)
 import GHC.Builtin.Types.Prim (intPrimTy)
@@ -44,14 +42,13 @@ import GHC.Types.RepType (primRepToType, runtimeRepPrimRep_maybe)
 import GHC.Types.TypeEnv (emptyTypeEnv, typeEnvIds)
 import GHC.Unit.Module.ModDetails (md_types)
 import GHC.Unit.Module.WholeCoreBindings (emptyIfaceForeign)
-import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory)
+import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..), die)
-import System.FilePath ((</>), replaceExtension, takeDirectory, takeExtension)
+import System.FilePath ((</>), takeExtension)
 import System.Process (proc, readCreateProcessWithExitCode, cwd)
 import System.Timeout (timeout)
 import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
-import THC.Interface (loadInterfaceCore, interfaceBindings, interfaceCoreCBD)
 import THC.Compact.Module (readModuleValue)
 import Text.Read (readMaybe)
 import Unsafe.Coerce (unsafeCoerce)
@@ -96,26 +93,18 @@ prepareRubbishLiterals root = do
                   lookup "target word size" fields == Just "8" -> pure ()
     _ -> die "Rubbish literal native oracle requires native64 GHC"
   libdir <- execute "libdir" [] ghc ["--print-libdir"]
-  locations <- forM [("ghc-internal","GHC/Internal/Event/Manager.hi"),("containers","Data/Sequence/Internal.hi")] $ \(package,path) -> do
-    result <- execute ("imports-" ++ package) [] pkg ["field",package,"import-dirs","--simple-output"]
-    pure (oneLine result </> path, result)
-  sequenceUnit <- execute "containers-unit" [] pkg ["field","containers","id","--simple-output"]
-  installed <- prepareInstalledCoreUnits root (directory </> "provider") ["containers"]
-  let context = fixtureContext installed
-  sequenceRegistration <- Installed.discoverInstalled context (oneLine sequenceUnit)
-  sequenceInterface <- case lookup "Data.Sequence.Internal" (Installed.installedInterfaces sequenceRegistration) of
-    Just path -> pure (replaceExtension path "hi")
-    Nothing -> die "Selected complete-Core provider lost Data.Sequence.Internal"
-  (entries, producers, returns, originals, sequenceOriginals, rows, nativeCommands, nativeLLVM) <- runGhc (Just (Installed.installedLibdir context)) $ do
+  imports <- execute "imports-ghc-internal" [] pkg ["field","ghc-internal","import-dirs","--simple-output"]
+  let installedPath = oneLine imports </> "GHC/Internal/Event/Manager.hi"
+  (entries, producers, returns, originals, rows, nativeCommands, nativeLLVM) <- runGhc (Just (oneLine libdir)) $ do
     initial <- getSessionDynFlags
     env0 <- getSession
     (configured, _, _) <- parseDynamicFlags (hsc_logger env0) initial (map noLoc
-      ["-O2", "-package", "ghc", "-package", "ghc-internal", "-package", "containers", "-fno-external-interpreter", "-dcore-lint",
+      ["-O2", "-package", "ghc", "-package", "ghc-internal", "-fno-external-interpreter", "-dcore-lint",
        "-odir", root </> directory </> "ghc", "-hidir", root </> directory </> "ghc"])
     _ <- setSessionDynFlags (gopt_unset configured Opt_IgnoreInterfacePragmas)
     flags <- getSessionDynFlags
     env <- getSession
-    original <- liftIO $ fmap concat $ forM (take 1 (map fst locations)) $ \installedPath -> do
+    original <- liftIO $ do
       raw <- readBinIface (targetProfile flags) (hsc_NC env) CheckHiWay QuietBinIFace installedPath
       let owner = mi_module raw
           expected = [("GHC.Internal.Event.Manager","ghc-internal")]
@@ -134,14 +123,6 @@ prepareRubbishLiterals root = do
     liftIO $ unless (sort (nub (map (show . representation . snd) original)) ==
       sort ["BoxedRep (Just Lifted)","BoxedRep (Just Unlifted)","IntRep","Int32Rep"])
       (die ("Original rubbish representation inventory changed: " ++ show (map (show . representation . snd) original)))
-    sequenceCore <- liftIO $ loadInterfaceCore env
-      (mkModule (stringToUnit (oneLine sequenceUnit)) (mkModuleName "Data.Sequence.Internal")) sequenceInterface >>=
-        maybe (die "Data.Sequence.Internal has no complete shared-provider Core") pure
-    let sequenceRubbish = [(getOccString v,l) | (v,body) <- flattenBinds (interfaceBindings sequenceCore), l <- rubbish body]
-    liftIO $ unless (map (representation . snd) sequenceRubbish == [BoxedRep (Just Lifted)])
-      (die "Data.Sequence.Internal rubbish inventory changed")
-    liftIO $ interfaceCoreCBD ["unit-qualified","source-notes"] sequenceCore >>=
-      BS.writeFile (root </> directory </> "Data.Sequence.Internal.cbd")
     file <- guessTarget (root </> source) Nothing Nothing
     setTargets [file]
     graph <- depanal [] False
@@ -173,8 +154,7 @@ prepareRubbishLiterals root = do
           fromGhc "shapeNestedTuple" nestedTuple, fromGhc "shapeNestedSum" nestedSum]
         samples = [("original" ++ label (representation l), App (Lit l) (Type (primRepToType (representation l)))) | (_,l) <- selected] ++
           [fromGhc ("scalar" ++ label r) (primRepToType r) | r <- scalars] ++
-          [fromGhc "boxedData" intTy, fromGhc "boxedClosure" (mkVisFunTyMany intTy intTy)] ++
-          [("sequenceLifted",App (Lit l) (Type intTy)) | (_,l) <- sequenceRubbish] ++ shapes
+          [fromGhc "boxedData" intTy, fromGhc "boxedClosure" (mkVisFunTyMany intTy intTy)] ++ shapes
         wrap value expression = let (args,body) = collectBinders expression in
           mkLams args (Case value (mkWildValBinder ManyTy (exprType value)) (exprType body) [Alt DEFAULT [] body])
         seeds = [-1000,-17,-1,0,1,42,1000] :: [Int]
@@ -286,48 +266,31 @@ prepareRubbishLiterals root = do
         unless (result == seed + 17) (die "GHC rubbish unexpectedly changed the continuation")
         pure (name,seed,result)
     pure (map fst samples,map (getOccString . fst) shapeProducers,map (getOccString . fst) shapeReturns,
-      [(owner,show (representation l)) | (owner,l) <- original],
-      [(owner,show (representation l)) | (owner,l) <- sequenceRubbish],observations,llvmCommands ++ [assembled],llvm)
+      [(owner,show (representation l)) | (owner,l) <- original],observations,llvmCommands ++ [assembled],llvm)
   writeJson (root </> directory </> "oracle.json") $ object ["rows" .= rows]
   writeJson (root </> directory </> "originals.json") $ object ["occurrences" .= originals,
-    "sequenceOccurrences" .= sequenceOriginals,
     "scope" .= ("Original installed rubbish literals; native observations execute their unchanged fillers in closed continuations" :: String)]
   audits <- forM ["pre","post"] $ \stage -> do
     let output = directory </> stage ++ ".audit.json"
     result <- auditCBD root 0 (stage ++ "-audit") (directory </> stage ++ ".cbd") output (entries ++ returns)
     pure (output,result)
-  driverFiles <- listDirectory (root </> "src/driver/THC/Driver")
-  customCoreProvider <- maybe False (const True) <$> lookupEnv "THC_INSTALLED_CORE_GHC"
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
   scriptFiles <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source,"t/haskell-fixtures/RubbishLiteralFixtures.hs",
-    "t/haskell-fixtures/InstalledCoreFixtures.hs", "src/driver/cbits/target-layout.c", "src/compiler/interface/Main.hs", "cabal.project",
+    "cabal.project",
     "t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/Main.hs","thc.cabal",
     "bin/audit-core.py","bin/core-capabilities.json"] ++
-    ["src/driver/THC/Driver" </> name | name <- driverFiles, takeExtension name == ".hs"] ++
     ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
     ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
-  let providerInputs = takeDirectory (takeDirectory (Installed.installedLibdir context)) </> "inputs.json"
-  pinnedInputsExist <- doesFileExist providerInputs
-  pinnedInputs <- if pinnedInputsExist then do
-      digest <- hashFile providerInputs
-      pure (object ["path" .= providerInputs, "sha256" .= digest])
-    else pure Null
-  acquiredSequenceHash <- hashFile sequenceInterface
-  let acquiredSequence = object ["path" .= sequenceInterface, "sha256" .= acquiredSequenceHash,
-        "unit" .= oneLine sequenceUnit, "pinnedInputs" .= pinnedInputs]
-  installedInterfaces <- forM (map fst locations) $ \path -> do
-    digest <- hashFile path
-    pure (object ["path" .= path, "sha256" .= digest])
-  let commands = [version,info,libdir,sequenceUnit] ++ map snd locations ++ fixtureCommands installed ++ nativeCommands ++ map snd audits
-  artifactHashes <- hashes root $ map (directory </>) (["pre.cbd","post.cbd","Data.Sequence.Internal.cbd","oracle.json","originals.json","native.s","native.o","native-codegen.json"] ++ ["native.ll" | nativeLLVM]) ++
-    fixtureArtifacts installed ++ map fst audits ++ concatMap commandArtifacts commands
+  installedHash <- hashFile installedPath
+  let installedInterfaces = [object ["path" .= installedPath, "sha256" .= installedHash]]
+      commands = [version,info,libdir,imports] ++ nativeCommands ++ map snd audits
+  artifactHashes <- hashes root $ map (directory </>) (["pre.cbd","post.cbd","oracle.json","originals.json","native.s","native.o","native-codegen.json"] ++ ["native.ll" | nativeLLVM]) ++
+    map fst audits ++ concatMap commandArtifacts commands
   writeJson (root </> directory </> "manifest.json") $ object ["schema" .= (1::Int), "entries" .= entries,
     "producers" .= producers, "returns" .= returns, "literalOccurrences" .= (length entries + length producers),
     "nativeRows" .= length rows, "originalOccurrences" .= length originals, "inputHashes" .= inputHashes,
-    "installedInterfaces" .= installedInterfaces, "acquiredSequenceInterface" .= acquiredSequence,
-    "providerPackages" .= fixturePackages installed,
-    "customCoreProvider" .= customCoreProvider, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
+    "installedInterfaces" .= installedInterfaces, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
   putStrLn "rubbish-literals: original installed literals and closed typed GHC-native continuation and return matrix prepared"
 
 -- Inspection supplies the entry prefix; the auditor reads the executable CBD.

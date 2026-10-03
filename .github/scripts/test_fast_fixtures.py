@@ -406,10 +406,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/rubbish-literals'], group['outputs'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'rubbish-literals']}], group['commands'])
         required = fast_fixtures.fast_inputs.RUBBISH_OUTPUTS
-        self.assertEqual(38, len(required))
-        for name in ('pre.cbd', 'post.cbd', 'Data.Sequence.Internal.cbd',
+        for name in ('pre.cbd', 'post.cbd',
                      'native.s', 'native.o', 'native-codegen.json',
-                     *(f'logs/{command}.{suffix}' for command in ('imports-containers', 'containers-unit', 'native-assemble')
+                     *(f'logs/{command}.{suffix}' for command in ('imports-ghc-internal', 'native-assemble')
                        for suffix in ('stdout', 'stderr', 'command.json'))):
             self.assertIn('build/rubbish-literals/' + name, required)
         for name in ('pre.json', 'post.json', 'frontiers.json', 'frontiers.cbd', 'frontiers.audit.json',

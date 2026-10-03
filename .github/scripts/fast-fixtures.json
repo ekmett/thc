@@ -482,8 +482,7 @@
       "junit": ["thc.runtime.RubbishLiteralTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rubbish-literals"]}],
       "outputs": ["build/rubbish-literals"],
-      "sources": ["t/haskell-fixtures/InstalledCoreFixtures.hs",
-        "t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
+      "sources": ["t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-rts-locks": {
