@@ -9,6 +9,13 @@ Boxed `Either`, ordinary boxed tuples and unlifted boxed references keep their
 ordinary one-reference representation; none becomes an unboxed sum by name,
 arity or liftedness.
 
+Fixture-free controls in `UnknownBoxedSumTest` cover mixed lazy-reference and
+integer results through zero-arity and recursive local joins, inactive-reference
+clearing in a reused destination, released loans and the first installed call in
+both backends. Conflicting join/lambda result proofs reject before execution.
+Genuine GHC-exported sum-result joins and transfers from `runRW#` continuations
+remain unqualified.
+
 Supported leaves include machine and fixed-width integral representations,
 `FloatRep`, `DoubleRep`, evaluated managed `AddrRep`, supported exact vector
 species, boxed references with known or unknown levity, and scalar void tokens

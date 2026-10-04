@@ -120,7 +120,6 @@ import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareW
 import StablePointerFixtures (prepareStablePointers)
 import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
-import SumJoinFixtures (prepareSumJoins)
 import TupleJoinFixtures (prepareTupleJoins)
 import SumInputFixtures (prepareSumInputs)
 import TupleCaptureFixtures (prepareTupleCaptures)
@@ -1062,7 +1061,6 @@ main = do
     ["record-fields-demand"] -> prepareRecordFieldsDemand root
     ["record-fields-demand-inventory", mode, destination] -> recordFieldsDemandInventory root mode destination
     ["stable-names"] -> prepareStableNames root
-    ["sum-join"] -> prepareSumJoins root
     ["tuple-join"] -> prepareTupleJoins True root
     ["tuple-join", "--local"] -> prepareTupleJoins False root
     ["sum-input"] -> prepareSumInputs root

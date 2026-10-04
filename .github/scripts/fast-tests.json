@@ -3623,7 +3623,6 @@
       "thc.runtime.StockGraphRecoveryTest",
       "thc.runtime.SulongCbitsTest",
       "thc.runtime.SumInputLayoutTest",
-      "thc.runtime.SumJoinResultTest",
       "thc.runtime.SumProtocolTest",
       "thc.runtime.SumResultTest",
       "thc.runtime.SynchronousExceptionsNativeTest",

@@ -3987,30 +3987,6 @@ Consumer reads receipt/all hashes/advertised CBDs/oracle. Producer no longer pre
   rejection and first compiled calls without requiring a particular DirectCallNode
   arrangement. Native Main/AddressFieldAudit and pre/post .hi/.o are CMake byproducts.
 
-137 sum-join
-Fixture rationale (137 sum-join)
-Purpose: Check sum alternatives and payloads survive joins and recursion.
-Produces/consumed result: SumJoinAudit CBDs and oracle.tsv; manifest/audits are not
-  consumed by the test.
-Cost and overlap: Keep distinct join/sum execution cases within one aggregate corpus.
-  Drop unused receipts and exact join/state-lambda/case counts rather than fossilize
-  lowering.
-Build status: QUARANTINED; compiler-structure assertions must be removed.
-  Excluded from build/test entry points; see docs/fixture-quarantine.log.
-
-Producer: t/haskell-fixtures/SumJoinFixtures.hs; consumer: thc.runtime.SumJoinResultTest.
-IN t/fixtures/compiler/SumJoinAudit.hs, SumJoinAuditNative.hs, shared tools/data/GHC.
-Under build/sum-join/:
-  native/oracle and intermediates: IN native/audit sources/GHC.
-  oracle.tsv: IN binary (42 observations).
-  <pre|post>/core/SumJoinAudit.cbd and stage/ghc/: IN source/exporter.
-  stage/audit.json: IN CBD/auditor; forwardCase,recursiveCase,nestedCase,
-    stateForwardCase,stateRecursiveCase,tupleForwardCase,sumForwardCase.
-  commands/: OUT ghc-version,native-build/run,stage-export/audit triplets.
-  manifest.json: IN sources/TSV/Core/audits/logs; no old receipt invalidation.
-Consumer reads Core/oracle directly. Producer enforces join/state-lambda counts and
-  exact case shapes. Review unused receipt work and overlap with 088/124/130.
-
 138 simd-int64x2
 Fixture rationale (138 simd-int64x2)
 Purpose: Check Int64x2 lane arithmetic and signed wraparound.

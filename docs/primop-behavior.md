@@ -29,11 +29,16 @@ narrow certification. Real exported 16-bit and 32-bit literals have dedicated
 array-suite controls. A genuine GHC 8-bit literal with erased argument proof remains
 unqualified; synthetic loader controls do not establish that compiler behavior.
 
-## Tuple-result local joins
+## Aggregate-result local joins
 
 Fixture-free controls cover tuple-result ownership and local tuple capture.
 Genuine GHC-exported tuple-result join capture remains unqualified; see
 [tuple joins](tuple-joins.md) for the owning controls and scope.
+
+Fixture-free mixed sum-result joins retain lazy identity and clear inactive
+references through zero-arity and recursive returns in both backends. Genuine
+GHC-exported sum-result joins and `runRW#` transfers remain unqualified; see
+[sum results](sum-results.md) for the owning controls.
 
 ## Original working-directory foreign calls
 

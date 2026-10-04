@@ -1305,7 +1305,6 @@ executable thc-fixtures
     WindowsSmokeFixtures
     StablePointerFixtures
     StableNameFixtures
-    SumJoinFixtures
     TupleJoinFixtures
     SumInputFixtures
     TupleCaptureFixtures

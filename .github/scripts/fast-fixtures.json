@@ -1575,14 +1575,6 @@
       "outputs": ["build/address-fields"],
       "sources": ["t/fixtures/compiler/AddressFieldAudit.hs", "bin/prepare-address-fields.py"]
     },
-    "sum-join": {
-      "quarantined": true,
-      "junit": ["thc.runtime.SumJoinResultTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "sum-join"]}],
-      "outputs": ["build/sum-join"],
-      "sources": ["t/haskell-fixtures/SumJoinFixtures.hs",
-        "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
     "simd-int64x2": {
       "cmakeTarget": "fixture-simd-int64x2",
       "junit": ["thc.runtime.SimdVectorTest"],
