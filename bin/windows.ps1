@@ -76,7 +76,9 @@ try {
             'thc.runtime.EmptyArgumentRuntimeTest.exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples',
             'thc.CoreUnitLoadTest.coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding',
             'thc.CoreUnitLoadTest.missingOrBadColdUnitFailsOnlyAtDemandAndDoesNotTouchThirdUnit',
-            'thc.NarrowPublicEntryTest.partialApplicationUsesRemainingNotOriginalInputProofs')
+            'thc.NarrowPublicEntryTest.partialApplicationUsesRemainingNotOriginalInputProofs',
+            'thc.runtime.NativeByteArrayPolicyTest.nativeStorageRequiresNativeAuthorityAtContextCreation',
+            'thc.runtime.NativeByteArrayPolicyTest.nativeOwnerOutlivesContextWhileRegistriesAndPointerCellBoundariesStayChecked')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava

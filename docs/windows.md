@@ -111,6 +111,13 @@ exact method runs on AST and bytecode through loose CBD and indexed manifests
 in both handoff modes. This check does not qualify explicit compilation or the
 retained-GHC interface provider, which is currently Linux/macOS only.
 
+Two native-byte-array checks cover native-access permission at context
+initialization and an AST allocation retained after context close. Retained
+storage stays readable; the closed address registry rejects recovery and
+pointer-bearing storage rejects raw-segment exposure. Both handoff modes run
+without generated fixtures. This ownership check does not cover bytecode or
+explicit compilation.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:
