@@ -96,6 +96,11 @@ lazy tuple leaves and loan recovery on AST and bytecode, including the existing
 first compiled entry check. Public `EntryValue.compile` and native GHC empty-join
 fixtures are not qualified by these checks.
 
+An ignored scalar `State#` tuple-field check preserves producer order on AST and
+bytecode, including the first installed wide call, guest-throw suppression,
+recovery, loan release and rejection of a proofless non-`Unit` carrier.
+This synthetic check does not qualify GHC export.
+
 A direct AST local-join check clears private tuple-result scratch references
 after copying and preserves an aliased destination in both handoff modes.
 It does not qualify bytecode or compiled execution.
