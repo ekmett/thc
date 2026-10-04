@@ -394,7 +394,6 @@
         "thc.runtime.SimdWideFloatFmaTest",
         "thc.runtime.SumProtocolTest",
         "thc.runtime.SumResultTest",
-        "thc.runtime.TupleInputNativeTest",
         "thc.runtime.TypedInputScalarSourceTest"
       ],
       "python": [
@@ -436,7 +435,6 @@
         "thc.runtime.SimdWideFloatFmaTest",
         "thc.runtime.SumProtocolTest",
         "thc.runtime.SumResultTest",
-        "thc.runtime.TupleInputNativeTest",
         "thc.runtime.TypedInputScalarSourceTest"
       ],
       "python": [
@@ -2008,7 +2006,6 @@
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
         "thc.runtime.SumResultTest",
-        "thc.runtime.TupleInputNativeTest",
         "thc.runtime.Int8ArrayNativeTest",
         "thc.runtime.Int16ArrayNativeTest",
         "thc.runtime.Int16BoundaryCompilationTest",
@@ -2201,18 +2198,6 @@
       ],
       "python": []
     },
-    "t/fixtures/compiler/TupleInputAudit.hs": {
-      "junit": [
-        "thc.runtime.TupleInputNativeTest"
-      ],
-      "python": []
-    },
-    "t/fixtures/compiler/TupleInputAuditNative.hs": {
-      "junit": [
-        "thc.runtime.TupleInputNativeTest"
-      ],
-      "python": []
-    },
     "t/fixtures/core/NativeTiming.hs": {
       "junit": [
         "thc.FastSmokeTest",
@@ -2344,12 +2329,6 @@
       "python": [
         "bin/test-simd-families.py"
       ]
-    },
-    "bin/prepare-tuple-input-audit.py": {
-      "junit": [
-        "thc.runtime.TupleInputNativeTest"
-      ],
-      "python": []
     },
     "bin/simd-families.json": {
       "junit": [
@@ -3635,7 +3614,6 @@
       "thc.runtime.TruffleStringExceptionTest",
       "thc.runtime.TruffleStringTest",
       "thc.runtime.TupleCompletionTest",
-      "thc.runtime.TupleInputNativeTest",
       "thc.runtime.TupleJoinLoweringTest",
       "thc.runtime.TupleRepresentationTest",
       "thc.runtime.TypedCaseTest",

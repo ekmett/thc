@@ -1199,19 +1199,6 @@
         "t/fixtures/compiler/Explicit64PrimopsAudit.hs"
       ]
     },
-    "tuple-input": {
-      "quarantined": true,
-      "junit": ["thc.runtime.TupleInputNativeTest"],
-      "commands": [
-        {"argv": ["python3", "bin/prepare-tuple-input-audit.py"]}
-      ],
-      "outputs": ["build/tuple-input"],
-      "sources": [
-        "bin/prepare-tuple-input-audit.py",
-        "t/fixtures/compiler/TupleInputAudit.hs",
-        "t/fixtures/compiler/TupleInputAuditNative.hs"
-      ]
-    },
     "integer-primops": {
       "nativeOracle": "independent-ghc",
       "requires": ["compact-model"],

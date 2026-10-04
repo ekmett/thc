@@ -1569,11 +1569,6 @@ class FastInputTests(unittest.TestCase):
                      "dist-newstyle/packagedb/ghc-9.14.1/package.cache", ".gradle/cache.bin"):
             self.assertFalse(cache.allowed_payload(name), name)
 
-    def test_original_native_executable_names_and_cstring_are_in_scope(self):
-        for name in ("tuple-input",):
-            self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}"))
-        self.assertIn("build/map/boot-core", cache.CORE_DIRS)
-
     def test_word_floating_manifest_and_semantic_payload_are_cache_inputs(self):
         self.assertIn("build/word-floating/manifest.json", DECLARED_REQUIRED)
         for name in ("oracle.tsv", "pre-audit.json", "post-audit.json",

@@ -3405,30 +3405,6 @@ RuntimeTest checks the actual exported IntRep signatures and native identity
 results in both backends, including the first installed call without warmup.
 This shared owner exports pre-Tidy Core; no post-Tidy qualification is implied.
 
-114 tuple-input
-Fixture rationale (114 tuple-input)
-Purpose: Check aggregate arguments preserve component values and calling convention
-  layout.
-Produces/consumed result: TupleInputAudit CBDs and oracle TSVs.
-Cost and overlap: Keep aggregate transport cases, sharing the aggregate corpus.
-  Recursive output receipts make this recipe quarantined; no need to archive compiler
-  intermediates.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-tuple-input-audit.py; consumer: thc.runtime.TupleInputNativeTest.
-IN t/fixtures/compiler/TupleInputAudit.hs, TupleInputAuditNative.hs, producer model,
-  shared tools/data/GHC and ghc-pkg executables.
-Under build/tuple-input/:
-  native/tuple-input and intermediates: IN native/audit sources/GHC.
-  oracle.tsv, oracle-pairs.tsv: IN binary default/--pairs.
-  <pre|post>-core/TupleInputAudit.cbd and stage-ghc/: IN audit source/exporter.
-  stage-audit.json: IN stage CBD/auditor/all model entries and pairInputs.
-  provenance.json: IN recursively all non-JSON native/core files, TSVs/audits,
-    source hashes/GHC/ghc-pkg binaries/toolchain facts.
-  checks.json: IN receipt/hash files/CBD inspection/independent model/oracles.
---check-only still writes checks.json. No old receipt invalidation; recursive input set.
-Consumer reads receipts/all hashes/checks/oracles/audits/CBDs. Exact shape checks merit review.
-
 115 live-async
 Fixture rationale (115 live-async)
 Purpose: Check async delivery during live/strict execution preserves sharing and

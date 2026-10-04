@@ -1563,7 +1563,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         for family in ("FloatingAddress", "FloatingByteOffset"):
             self.assertIn(f"thc.runtime.{family}Test", consumers)
         self.assertIn("thc.runtime.SumResultTest", consumers)
-        self.assertIn("thc.runtime.TupleInputNativeTest", consumers)
         self.assertIn("thc.runtime.Explicit64ArrayTest", consumers)
         self.assertIn("thc.runtime.OriginalPathStatTest", consumers)
         self.assertIn("thc.runtime.OriginalPathModeTest", consumers)
@@ -1662,7 +1661,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
             "FloatingRemainderTest", "FloatingPrimitiveTest", "FloatingTupleTest", "FusedFloatingTest", "WordFloatingTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
             "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "CoreFloatingLiteralTest",
-            "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
+            "SumProtocolTest", "SumResultTest", "TypedInputScalarSourceTest")}},
                          set(floating["junit"]))
         self.assertLessEqual({"bin/test-core-sums.py",
                              "bin/test-sum-layout.py", "bin/test-tuple-inputs.py",

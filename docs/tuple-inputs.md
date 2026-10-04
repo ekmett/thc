@@ -7,6 +7,10 @@ Nested tuple boundaries remain part of the proof. State#/Proxy# components and
 empty tuples contribute no payload slots, but their argument expressions still
 execute in source order before a call or partial application is published.
 
+Genuine GHC pre/post export of ordinary tuple inputs, tuple PAP prefixes and
+overapplication remains unqualified. Synthetic fixture-free controls cover the
+runtime transport contracts.
+
 Boxed tuples remain DataValue references. An unlifted boxed datatype remains one
 reference. Neither is flattened. A lifted leaf inside an unboxed tuple stays lazy,
 including when the tuple parameter is strict or unused. `BoxedRep Nothing` also
