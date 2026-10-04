@@ -18,8 +18,8 @@ cmake --build build/fixtures --parallel 2
 cmake --build build/fixtures --parallel 2 --target fixture-integer-primops
 ```
 
-[CMakeLists.txt](../CMakeLists.txt) includes the rules in `cmake/`. All 86 admitted
-groups have a `fixture-<group>` target, covering 127 mapped JUnit classes.
+[CMakeLists.txt](../CMakeLists.txt) includes the rules in `cmake/`. Every admitted
+group has a `fixture-<group>` target and names its consuming tests.
 The `fixtures` aggregate is the default build target. The selection inventory is
 [fast-fixtures.json](../.github/scripts/fast-fixtures.json); configure rejects an
 admitted group without a rule or a quarantined group with one. Make and CI use
