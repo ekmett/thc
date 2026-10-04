@@ -96,6 +96,10 @@ lazy tuple leaves and loan recovery on AST and bytecode, including the existing
 first compiled entry check. Public `EntryValue.compile` and native GHC empty-join
 fixtures are not qualified by these checks.
 
+A direct AST local-join check clears private tuple-result scratch references
+after copying and preserves an aliased destination in both handoff modes.
+It does not qualify bytecode or compiled execution.
+
 Two public-manifest loader checks use model CBDs from the selected Haskell
 encoder. Cold references leave other units unopened; first demand decodes the
 binding once and subsequent calls reuse it. A bad demanded unit fails without
