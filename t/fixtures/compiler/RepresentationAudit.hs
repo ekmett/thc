@@ -3,7 +3,8 @@
 
 {-# LANGUAGE MagicHash, NoImplicitPrelude, RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, AllowAmbiguousTypes, UnboxedTuples #-}
 -- Keep the polymorphic entry boundaries visible instead of specializing them.
-{-# OPTIONS_GHC -fno-worker-wrapper -fno-specialise -fno-spec-constr -fno-do-lambda-eta-expansion #-}
+-- Keep closed recursive joins local instead of floating them into functions.
+{-# OPTIONS_GHC -fno-full-laziness -fno-worker-wrapper -fno-specialise -fno-spec-constr -fno-do-lambda-eta-expansion #-}
 
 -- |
 -- Module      : RepresentationAudit
