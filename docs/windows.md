@@ -105,6 +105,11 @@ A direct AST local-join check clears private tuple-result scratch references
 after copying and preserves an aliased destination in both handoff modes.
 It does not qualify bytecode or compiled execution.
 
+A fixture-free sum check with unknown levity preserves an unforced pointer's
+identity through results, arguments, PAPs, captures, case and constructor fields
+on AST and bytecode in both handoff modes, including first installed calls and
+released loans. It does not qualify genuine GHC Core or export.
+
 Two public-manifest loader checks use model CBDs from the selected Haskell
 encoder. Cold references leave other units unopened; first demand decodes the
 binding once and subsequent calls reuse it. A bad demanded unit fails without
