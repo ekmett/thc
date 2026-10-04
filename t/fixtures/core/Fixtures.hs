@@ -11,7 +11,7 @@
 --   owner outputs.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 113.
 
-{-# LANGUAGE MagicHash, NoImplicitPrelude #-}
+{-# LANGUAGE MagicHash, NoImplicitPrelude, UnliftedNewtypes #-}
 
 -- |
 -- Module      : Fixtures
@@ -27,10 +27,26 @@ module Fixtures
   , lazyArgument, lazyField, recursiveCaf, caseList, multiModule
   , cacheSaturation, mutualTail, selfMutualTail, blackhole, fibonacciBox
   , capturedChangingEnv, localMutualClosures, nestedCaptureThunk
+  , wrapRaw, unwrapRaw, scalarCastEntry
   ) where
 
 import GHC.Exts (Int#, (+#), (-#), (*#), (<=#))
 import THC.Prim.Test
+
+-- Genuine erased newtype casts retain the full Int# carrier at each boundary.
+newtype RawInt = RawInt Int#
+
+{-# OPAQUE wrapRaw #-}
+wrapRaw :: Int# -> RawInt
+wrapRaw x = RawInt x
+
+{-# OPAQUE unwrapRaw #-}
+unwrapRaw :: RawInt -> Int#
+unwrapRaw (RawInt x) = x
+
+{-# OPAQUE scalarCastEntry #-}
+scalarCastEntry :: Int# -> Int#
+scalarCastEntry x = unwrapRaw (wrapRaw x)
 
 sumLoop :: Int# -> Int#
 sumLoop n = go n 0# where

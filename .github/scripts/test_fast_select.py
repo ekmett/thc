@@ -1285,14 +1285,14 @@ private String text = "class FakeString { @Test }";
         self.assertEqual("narrow", result["mode"], result["reasons"])
         self.assertEqual([], result["reasons"])
         self.assertEqual(sorted(changed), result["changedPaths"])
-        expected = {"thc.RealCoreEntryContractTest", "thc.runtime.ScalarLexicalProofTest",
+        expected = {"thc.RealCoreEntryContractTest",
                     "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest",
                     "thc.runtime.DataToTagTest", "thc.runtime.MutableByteArraySizeTest",
                     "thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest",
                     "thc.runtime.Int16BoundaryCompilationTest",
                     "thc.runtime.Int32ArrayNativeTest", "thc.runtime.InterfaceCoreNativeTest"}
         self.assertEqual(sorted(expected), result["affected"]["junit"])
-        self.assertEqual(14, result["junit"]["count"])  # Eleven affected + three smoke.
+        self.assertEqual(13, result["junit"]["count"])  # Ten affected + three smoke.
         self.assertEqual(sorted({"bin/test-core-data-tags.py", "bin/test-core-bytearrays.py"}), result["affected"]["python"])
 
 

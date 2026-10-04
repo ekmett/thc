@@ -14,7 +14,9 @@
 -- Native GHC observer and timing driver for the example entry points.
 module Main (main) where
 
-import GHC.Exts (Int#)
+import Control.Monad (forM_, when)
+import GHC.Exts (Int(I#), Int#)
+import System.Environment (getArgs)
 import NativeTiming (mainFor)
 import qualified Fixtures as T
 import qualified MapWorkload as M
@@ -32,8 +34,15 @@ entries =
   , ("capturedChangingEnv", T.capturedChangingEnv)
   , ("localMutualClosures", T.localMutualClosures)
   , ("nestedCaptureThunk", T.nestedCaptureThunk)
+  , ("scalarCastEntry", T.scalarCastEntry)
   , ("mapAggregate", M.mapAggregate)
   ]
 
 main :: IO ()
-main = mainFor entries
+main = do
+  args <- getArgs
+  mainFor entries
+  -- Only identity receives machine-width boundaries; recursive corpus entries
+  -- keep their existing bounded inputs.
+  when (null args) $ forM_ [minBound, -4294967311, -4097, 4097, 4294967311, maxBound] $ \input@(I# n) ->
+    putStrLn ("scalarCastEntry\t" ++ show input ++ "\t" ++ show (I# (T.scalarCastEntry n)))

@@ -2157,7 +2157,6 @@
       "junit": [
         "thc.runtime.InterfaceCoreNativeTest",
         "thc.RealCoreEntryContractTest",
-        "thc.runtime.ScalarLexicalProofTest",
         "thc.runtime.BoxedLexicalProofTest",
         "thc.runtime.ScalarPrimitiveSignatureTest"
       ],

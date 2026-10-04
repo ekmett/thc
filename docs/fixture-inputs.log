@@ -598,6 +598,12 @@ Cost and overlap: Keep semantic demand/erasure controls. The recipe currently wr
   admission in this form.
 Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
 
+Scalar newtype identity is owned by 113 runtime-core-native: Fixtures.hs,
+NativeOracle.hs and RuntimeTest replace this family's scalarCastEntry helpers
+and ScalarLexicalProofTest identity method. RawInt remains here for the separate
+primitive arithmetic/conversion controls. This consolidation covers the shared
+pre-Tidy export only; it does not qualify this family's post-Tidy paths.
+
 Producer sequence currently in .github/scripts/fast-fixtures.json:cbv-coercion.
 Consumers: thc.RealCoreCallDemandTest, thc.RealCoreEntryContractTest,
   thc.runtime.BoxedLexicalProofTest, BoxedValueCacheTest, ScalarLexicalProofTest,
@@ -3586,6 +3592,11 @@ Consumers: thc.BytecodeBackendTest, FastSmokeTest, RuntimeTest, SelfTailProfileT
     command runner, NOT by native-oracle.sh. Standalone script prints to caller stdout.
 Consumers read the two CBDs/oracle TSV. Script always recompiles/dumps before executing;
   ordinary runtime test input does not need the simplifier dumps.
+
+NativeOracle also observes scalarCastEntry at full machine-width boundaries.
+RuntimeTest checks the actual exported IntRep signatures and native identity
+results in both backends, including the first installed call without warmup.
+This shared owner exports pre-Tidy Core; no post-Tidy qualification is implied.
 
 114 tuple-input
 Fixture rationale (114 tuple-input)

@@ -9,7 +9,6 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
 import thc.Json;
-import thc.CoreCbdFixtures;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.RepresentationTestSupport.*;
@@ -92,24 +91,6 @@ class ScalarLexicalProofTest {
             List<Object> body = list("let", false, list(binding), list("var", "x", map("rep", word)), map("rep", word));
             var program = program(language, module(proof("IntRep"), null, body), backend);
             assertEquals(-1L, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("entry"), new Object[]{1L}}));
-        });
-    }
-    @Test void genuineUnliftedNewtypeCastsKeepTheirScalarRepresentation() throws Exception {
-        visit((language, backend) -> {
-            var module = CoreCbdFixtures.read(root.resolve("build/core/CBVCoercionAudit.cbd"));
-            for (var name : list("wrapRaw", "unwrapRaw")) {
-                var matches = objects(module.get("bindings")).stream().filter(b -> ("main:CBVCoercionAudit." + name).equals(b.get("id"))).toList();
-                assertEquals(1, matches.size());
-                var lambda = expression(matches.getFirst().get("expr")); var binders = objects(lambda.get(1));
-                assertEquals(1, binders.size());
-                assertEquals(list("IntRep"), object(binders.getFirst().get("rep")).get("primReps"));
-                var body = expression(lambda.get(2));
-                assertEquals("var", body.getFirst(), "The genuine newtype cast must erase to a variable");
-                assertEquals(list("IntRep"), CoreRepresentations.expression(body).getPrimReps());
-            }
-            var program = program(language, CoreModules.reachable(module, "main:CBVCoercionAudit.scalarCastEntry", false), backend);
-            for (long x : new long[]{Long.MIN_VALUE, -4097L, -1L, 0L, 1L, 4097L, Long.MAX_VALUE})
-                assertEquals(x, Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:CBVCoercionAudit.scalarCastEntry"), new Object[]{x}}));
         });
     }
 }
