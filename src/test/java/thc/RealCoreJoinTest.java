@@ -90,13 +90,15 @@ class RealCoreJoinTest {
                 var function = context.eval("thc", CoreModules.request(list(root.resolve("build/source-core/RepresentationAudit.cbd").toString(), artifact.toString()), "driver", true, false, backend));
                 checkJoin(function, backend, name, 7L);
                 assertTrue(function.invokeMember("compile").asBoolean()); long before = count(function, "compiledEntries");
-                checkJoin(function, backend, name, Long.MIN_VALUE);
+                // Twice MIN_VALUE wraps to zero, so use a wide non-wrapping
+                // suffix result to expose first-call truncation in functionJoin.
+                checkJoin(function, backend, name, name.equals("functionJoin") ? 3_000_000_000L : Long.MIN_VALUE);
                 assertTrue(count(function, "compiledEntries") > before, backend + "/" + name + " first installed call");
                 var installed = object(object(Json.parse(function.getMember("diagnostics").asString())).get("explicitCompilation"));
                 assertEquals(true, installed.get("sameTargets"), backend + "/" + name);
                 assertEquals(true, installed.get("validLastTier"), backend + "/" + name);
                 // Cold alternatives retain their results even if profiling invalidates code.
-                for (long n : new long[]{0L, 1L, -1L, 3_000_000_000L, Long.MAX_VALUE}) checkJoin(function, backend, name, n);
+                for (long n : new long[]{0L, 1L, -1L, 3_000_000_000L, Long.MIN_VALUE, Long.MAX_VALUE}) checkJoin(function, backend, name, n);
                 assertTrue(count(function, "localJoinTransfers") > 0); assertEquals(0L, count(function, "unsupportedTraps"));
             }
         }
