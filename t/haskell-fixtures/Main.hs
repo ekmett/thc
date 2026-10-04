@@ -121,7 +121,6 @@ import StablePointerFixtures (prepareStablePointers)
 import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
 import TupleJoinFixtures (prepareTupleJoins)
-import SumInputFixtures (prepareSumInputs)
 import SumJoinInputFixtures (prepareSumJoinInputs)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
@@ -1062,7 +1061,6 @@ main = do
     ["stable-names"] -> prepareStableNames root
     ["tuple-join"] -> prepareTupleJoins True root
     ["tuple-join", "--local"] -> prepareTupleJoins False root
-    ["sum-input"] -> prepareSumInputs root
     ["sum-join-input"] -> prepareSumJoinInputs root
     ["aggregate-heap"] -> prepareAggregateHeap root False
     ["fourway-aggregate"] -> prepareFourWayAggregate root
