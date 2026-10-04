@@ -85,7 +85,7 @@ or reconfiguring recordings. See [the tracing contract](../docs/hints-and-tracin
 - [ ] Inspect compiler graphs and measure the disabled path's cost before claiming
   that compiled tracing overhead has disappeared. Keep graph capture separate
   from timing and compare the same workload with tracing enabled and disabled.
-  Track this remaining qualification in [#1061](https://github.com/ekmett/thc/issues/1061).
+  Track this performance qualification in [#1058](https://github.com/ekmett/thc/issues/1058).
 
 ## Native Image beyond pure interpretation
 
