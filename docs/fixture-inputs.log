@@ -4472,36 +4472,6 @@ Structural-assertion quarantine follow-up
   are now excluded too. Their previously recorded exact Core/root/join/state-lambda
   assumptions are not admission requirements for the future compiler.
 
-144 float-foreign (custom full-Core suite)
-Fixture rationale (144 float-foreign)
-Purpose: Check floating classification and rounding across actual foreign-call
-  transport, including signed zero, subnormals, NaNs/payloads and halfway values.
-Produces/consumed result: pre/post CBDs and oracle.tsv; source/interface/log hashes.
-Cost and overlap: Classification/rounding cases are not established as covered by
-  the already-scanned bitcast/remainder tests. Keep those semantic cases, but move
-  them into shared public floating behavior coverage. Two complete interface reads,
-  typed FCallId rewriting and twenty-four audits are not necessary merely to check
-  math. First-compiled verification uses an increase, not an exact root count.
-Build status: Value review only; no separate expensive producer admitted yet.
-Producer: t/haskell-fixtures/FloatForeignFixtures.hs; consumer FloatForeignNativeTest
-  in src/fullCoreTest, custom floatForeignTest/floatForeignDenseTest tasks.
-IN t/fixtures/compiler/FloatForeignAudit.hs, GHC API/plugin/interface/auditor closure,
-  selected GHC 9.14.1 and complete ghc-internal GHC/Internal/Float.hi and
-  GHC/Internal/Float/RealFracMethods.hi; native libraries used by those FCallIds.
-Under build/float-foreign/:
-  pre.cbd, post.cbd <- twelve original classification/rint FCallIds specialized into
-    typed audit-source consumers and simplified/tidied through GHC API.
-  ghc/ <- GHC API/native interpreter intermediate files.
-  oracle.tsv <- twelve hscCompileCoreExpr/native functions x 32 bit-pattern inputs
-    (384 rows); no separate native executable. Native environment/rounding behavior
-    remains a real input, not merely the logged compiler version.
-  <pre|post>-<entry>.audit.json <- matching stage CBD and auditor (24 subprocesses).
-  logs/{version,libdir,imports,<stage>-audit-<entry>}.* <- command triplets.
-  manifest.json <- source/interface hashes and CBD/oracle/command log hashes;
-    audit JSON files themselves are not in artifactHashes. Old receipt is removed.
-Consumer reads receipt paths, CBDs and oracle.tsv; performs in-memory declaration
-  mutation controls. Gradle requires a preexisting manifest, not a producer edge.
-
 145 aggregate-heap (custom full-Core suite)
 Fixture rationale (145 aggregate-heap)
 Purpose: Check nested/empty tuple and sum fields in heap constructors preserve

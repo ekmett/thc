@@ -1289,7 +1289,6 @@ executable thc-fixtures
     FileWaitFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
-    FloatForeignFixtures
     GhcApiFixtures
     GhcApiAudit
     RtsDiagnosticFixtures

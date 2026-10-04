@@ -178,11 +178,6 @@ OPERATIONS = {
     **WINDOWS_ENCODING_OPERATIONS,
     **TEXT_OPERATIONS,
     **WAIT_STATUS_OPERATIONS,
-    **{'is' + precision + predicate: ('ccall', 'unsafe', (rep, None), (None, 'IntRep'))
-       for precision, rep in (('Float', 'FloatRep'), ('Double', 'DoubleRep'))
-       for predicate in ('NaN', 'Infinite', 'Finite', 'Denormalized', 'NegativeZero')},
-    'rintFloat': ('ccall', 'unsafe', ('FloatRep', None), (None, 'FloatRep')),
-    'rintDouble': ('ccall', 'unsafe', ('DoubleRep', None), (None, 'DoubleRep')),
     'getProgArgv': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None,)),
     'setProgArgv': ('ccall', 'unsafe', ('Int32Rep', 'AddrRep', None), (None,)),
     'stg_sig_install': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),

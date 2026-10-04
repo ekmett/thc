@@ -96,6 +96,13 @@ operations described in [managed thread status](thread-status.md) use exact
 nominal declaration and call-inventory admission plus context/lifetime checks.
 Ordinary library imports still use their declared Sulong linkage.
 
+GHC's floating classification helpers and `rintFloat`/`rintDouble` use ordinary
+package-declared native linkage; THC supplies no replacement arithmetic.
+[PackageNativeForeignTest](../src/test/java/thc/runtime/PackageNativeForeignTest.java)
+checks representative IEEE bits through the shared Float/Double import boundary.
+This component test does not qualify full Core lowering with the exception runtime
+or the installed GHC floating/math package, including its rounding behavior.
+
 ## Pass buffers and pointers
 
 A managed Haskell buffer is not a native machine address. Choose storage that

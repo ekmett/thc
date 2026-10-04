@@ -559,21 +559,6 @@ def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInter
 }
 compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
 
-[["floatForeignFullCoreTest", false],[ "floatForeignFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original GHC Float/Double C declarations against native raw-bit controls."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.FloatForeignNativeTest") }
-        inputs.files(fileTree("build/float-foreign") { include("*.cbd", "*.json", "*.tsv") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Original floating FFI native/first-entry checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/float-foreign/manifest.json").isFile()) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
-    }
-}
 [["aggregateHeapFullCoreTest", false],[ "aggregateHeapFullCoreDenseTest", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"
