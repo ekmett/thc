@@ -67,11 +67,14 @@ class OriginalStdioCallTest {
                         | stdio.flagConstant(OriginalStdioOp.O_EXCL));
                     // Word32# uses a negative JVM int; signed widening would reject this mode before creation.
                     int mode = 0x8000_0180;
+                    var observedDirectory = Files.createDirectories(directory.resolve(backend).resolve("native/child")).getParent();
+                    Files.createSymbolicLink(observedDirectory.getParent().resolve("link"), observedDirectory.resolve("child"));
+                    // Kernel link/.. resolution must reach native/, rather than a lexically normalized parent.
+                    var prefix = (observedDirectory.getParent() + "/link/../n").getBytes(StandardCharsets.UTF_8);
                     for (boolean compiled : new boolean[] {false, true}) {
-                        var file = directory.resolve(backend + "-" + compiled);
-                        var bytes = file.toString().getBytes(StandardCharsets.UTF_8);
-                        var terminated = Arrays.copyOf(bytes, bytes.length + 2); terminated[terminated.length - 1] = -1;
-                        // NUL ends the raw pathname; the invalid trailing byte must never be decoded.
+                        var terminated = Arrays.copyOf(prefix, prefix.length + 3);
+                        terminated[prefix.length] = (byte) (compiled ? 0xff : 0xfe); terminated[terminated.length - 1] = -1;
+                        // Distinct invalid byte names must survive; NUL must hide the trailing invalid byte.
                         var address = ManagedAddress.fromByteArray(terminated);
                         var active = targets(entry);
                         if (compiled) for (var target : active) {
@@ -88,10 +91,15 @@ class OriginalStdioCallTest {
                             }
                             byte[] content = {37, (byte) (compiled ? 2 : 1)};
                             assertEquals(content.length, stdio.write(fd, ManagedAddress.fromByteArray(content), content.length));
-                            assertArrayEquals(content, Files.readAllBytes(file));
                         } finally { assertEquals(0L, stdio.close(fd)); }
                         released(language);
                     }
+                    // Unix directory-stream Paths retain raw bytes; never reconstruct these names from String.
+                    List<Path> names;
+                    try (var entries = Files.list(observedDirectory)) { names = entries.filter(Files::isRegularFile).toList(); }
+                    assertEquals(2, names.size()); assertNotEquals(names.get(0), names.get(1));
+                    var contents = new HashSet<String>(); for (var name : names) contents.add(hex(Files.readAllBytes(name)));
+                    assertEquals(Set.of("2501", "2502"), contents, "Both raw names must denote independent native files");
                     var absent = directory.resolve(backend + "-bad-state");
                     var address = ManagedAddress.fromByteArray((absent + "\0").getBytes(StandardCharsets.UTF_8));
                     assertEquals(-1L, stdio.close(-1)); long errno = stdio.errno();
