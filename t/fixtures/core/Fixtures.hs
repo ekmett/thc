@@ -7,8 +7,8 @@
 -- Produces/consumed result: Fixtures/THC.Prim.Test CBDs and build/native/oracle.tsv.
 -- Cost and overlap: This is the natural shared semantic smoke corpus. Extend it for
 --   ordinary behavior instead of adding a new exporter/native harness for each primop.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build: cmake/CoreFixtures.cmake declares the shared runtime CBD and native oracle
+--   inputs/outputs; fixture-runtime-core-native builds their owning rules.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 113.
 
 {-# LANGUAGE MagicHash, NoImplicitPrelude, UnliftedNewtypes #-}
