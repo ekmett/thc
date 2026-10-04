@@ -7436,7 +7436,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (name.equals("spark#")) storeTupleResult(e, destination.get(0), () -> operands.get(0).emit(e));
                 b.beginDiscardVoid(); operands.getLast().emit(e); b.endDiscardVoid();
                 if (name.equals("spark#")) {
-                    b.beginParSpark(); b.emitLoadLocal(destination.get(0)); b.endParSpark();
+                    b.beginParSpark(); loadSavedInput(e, destination.get(0)); b.endParSpark();
                 } else if (name.equals("numSparks#")) {
                     b.emitSparkCount(destination.get(0));
                 } else if (empty != null) {
