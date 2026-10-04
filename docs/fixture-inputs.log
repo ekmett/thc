@@ -3769,32 +3769,6 @@ Under build/short-bytes-slices/:
 --check-only also calls ghc-pkg and inventory (rewrites audits). Consumer reads
   manifest/advertised CBDs/oracle/audits. Check whether exceptions export is overbroad.
 
-130 tuple-return
-Fixture rationale (130 tuple-return)
-Purpose: Check tuple-valued returns preserve components through callers and aggregate
-  paths.
-Produces/consumed result: TupleReturnAudit CBDs/oracle.tsv and aggregate-frontier
-  CBDs/oracle.
-Cost and overlap: Keep result transport in the general aggregate corpus. This is not
-  independent of sum-results; recursive receipts and undeclared-looking setup complexity
-  justify quarantine.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-tuple-return-audit.py; consumer: thc.runtime.TupleResultTest.
-IN t/fixtures/compiler/TupleReturnAudit.hs, TupleReturnAuditNative.hs, producer model,
-  shared exporter/decoder/GHC/ghc-pkg, plugin manifest/shared library.
-Under build/tuple-return/:
-  native/tuple-return and intermediates: IN native/audit sources/GHC.
-  oracle.tsv: IN binary.
-  <pre|post>-core/TupleReturnAudit.cbd and stage-ghc/: IN audit source/exporter.
-  provenance.json: IN recursively native/core/ghc files except JSON, oracle, source
-    hashes, plugin manifest/library, GHC/ghc-pkg binaries/package descriptions/environment.
-  checks.json: IN receipt/hashes/CBD shape/oracle/model; --check-only also writes.
-No old receipt invalidation. No standalone audit report from this producer.
-Consumer reads tuple-return CBDs/oracle AND build/aggregate-core/AggregateFrontier.cbd,
-  build/aggregate-post-core/AggregateFrontier.cbd, build/aggregate-native/oracle.tsv
-  from 088. This is an explicit cross-group dependency, even when selecting this class alone.
-
 131 process-signals
 Fixture rationale (131 process-signals)
 Purpose: Check guest signals and child-process host failures respect JVM/guest

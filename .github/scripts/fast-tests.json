@@ -3639,7 +3639,6 @@
       "thc.runtime.TupleInputNativeTest",
       "thc.runtime.TupleJoinLoweringTest",
       "thc.runtime.TupleRepresentationTest",
-      "thc.runtime.TupleResultTest",
       "thc.runtime.TypedCaseTest",
       "thc.runtime.TypedExecutionTest",
       "thc.runtime.TypedInputOwnershipTest",

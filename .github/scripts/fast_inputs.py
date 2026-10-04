@@ -463,18 +463,17 @@ SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke
     "manifest.json", "pre-core/GeneratedSimdSmoke.cbd", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
 PROVENANCE_DIRS = """io-main-pap aggregate-layout
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
-tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
+unsafe-equality simd simd-int32x4 simd-floatx4
 simd-doublex2 simd-int32x4-bytearray simd-word32x4-bytearray
 simd-floatx4-bytearray simd-doublex2-bytearray""".split()
 CHECK_DIRS = """aggregate-layout floating-tuple
 state-tuple sum-layout sum-result tag-to-enum tuple-input
-tuple-return unsafe-equality""".split()
+unsafe-equality""".split()
 AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
     "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
     "build/floating/core/FloatingAudit.cbd",
     *(f"build/{family}/{stage}-core/{module}.cbd" for family, module in (
         ("tuple-input", "TupleInputAudit"),
-        ("tuple-return", "TupleReturnAudit"),
         ("state-tuple", "StateTupleAudit"),
         ("floating-tuple", "FloatingTupleAudit"), ("aggregate-layout", "AggregateLayoutAudit"),
         ("sum-layout", "SumLayoutAudit"), ("sum-result", "SumResultAudit"))
@@ -578,7 +577,7 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/original-handle-readiness/native/oracle",
     "build/original-posix-stat/native/oracle",
     *(f"build/{name}/native/{name}" for name in
-      ("state-tuple", "tuple-input", "tuple-return"))})
+      ("state-tuple", "tuple-input"))})
 ORIGINAL_STDIO_READ_OUTPUTS = frozenset("build/original-stdio-read/" + name for name in (
     "manifest.json", "oracle.json", "input.bin", "native/original-stdio-read-oracle",
     *(f"results/{index}.txt" for index in range(40)),

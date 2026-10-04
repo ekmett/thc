@@ -1504,14 +1504,6 @@
       "outputs": ["build/short-bytes-slices"],
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
-    "tuple-return": {
-      "quarantined": true,
-      "junit": ["thc.runtime.TupleResultTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-tuple-return-audit.py"]}],
-      "outputs": ["build/tuple-return"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
-      "requires": ["sum-results"]
-    },
     "process-signals": {
       "cmakeTarget": "fixture-process-signals",
       "requires": ["compact-model"],

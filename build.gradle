@@ -284,7 +284,6 @@ tasks.withType(Test).configureEach {
             "aggregate-core/**/*.cbd", "aggregate-post-core/**/*.cbd", "map/boot-core/**/*.cbd", "cstring/boot-core/GHC.Internal.CString.cbd", "aggregate-layout/pre-core/**/*.cbd", "aggregate-layout/post-core/**/*.cbd",
             "sum-layout/**/*.json", "sum-layout/**/*.cbd", "sum-layout/*.tsv", "sum-layout/native/**",
             "sum-result/**/*.json", "sum-result/**/*.cbd", "sum-result/*.tsv", "sum-result/native/**",
-            "tuple-return/pre-core/**/*.cbd", "tuple-return/post-core/**/*.cbd", "tuple-return/oracle.tsv",
             "state-tuple/pre-core/**/*.cbd", "state-tuple/post-core/**/*.cbd", "state-tuple/oracle.tsv",
             "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
             "tuple-arithmetic/pre-core/**/*.cbd", "tuple-arithmetic/post-core/**/*.cbd",

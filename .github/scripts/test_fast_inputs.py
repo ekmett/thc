@@ -1574,7 +1574,7 @@ class FastInputTests(unittest.TestCase):
             self.assertFalse(cache.allowed_payload(name), name)
 
     def test_original_native_executable_names_and_cstring_are_in_scope(self):
-        for name in ("state-tuple", "tuple-input", "tuple-return"):
+        for name in ("state-tuple", "tuple-input"):
             self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}"))
         self.assertIn("build/map/boot-core", cache.CORE_DIRS)
 

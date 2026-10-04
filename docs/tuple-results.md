@@ -9,6 +9,10 @@ field, with carrier checks on construction, copy and consumption. Native pointer
 Saturated [tuple arithmetic primitives](tuple-arithmetic.md) write directly to
 typed local destinations without using the function-return carrier.
 
+Fixture-free owning tests cover tuple transport and result ownership. Genuine GHC
+pre/post-Tidy qualification of ordinary tuple-result calls, tails, PAPs and
+overapplication remains incomplete.
+
 Ordinary boxed tuples, boxed unit and unlifted boxed products continue to use
 `DataValue` references. An empty unboxed tuple remains logically distinct from
 `State#` and `Proxy#`. These zero-width scalar fields retain logical tuple positions
