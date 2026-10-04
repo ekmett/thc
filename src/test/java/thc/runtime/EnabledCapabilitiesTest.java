@@ -83,7 +83,7 @@ class EnabledCapabilitiesTest {
                 var root = (GuestRoot) target.getRootNode();
                 var destination = Truffle.getRuntime().createVirtualFrame(new Object[0], root.getFrameDescriptor());
                 java.util.function.IntConsumer set = count -> root.getTupleResult().consume(destination,
-                    Calls.target(target, new Object[]{0L, count}), new int[0], 0);
+                    ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, count}), new int[0], 0);
                 var cell = CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.parse(address));
                 long processors = threads.getCpuAffinity().getCount();
                 threads.enterCurrent(null, false, true, null);
