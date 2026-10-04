@@ -19,8 +19,8 @@ WORKFLOW = Path(__file__).resolve().parents[1] / "workflows/fast.yml"
 REPO = "ekmett/thc"
 
 
-def embedded_python(delimiter):
-    text = WORKFLOW.read_text()
+def embedded_python(delimiter, workflow=WORKFLOW):
+    text = workflow.read_text()
     match = re.search(r"python3 - <<'" + delimiter + r"'\n(.*?)\n          " + delimiter,
                       text, re.DOTALL)
     if match is None:
@@ -29,6 +29,74 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
+    def test_qualification_is_one_manual_job_and_does_not_change_hourly_health(self):
+        workflow = (WORKFLOW.parent / 'hourly-qualification.yml').read_text()
+        self.assertIn('name: Hourly qualification\n', workflow)
+        self.assertIn('  workflow_dispatch:\n', workflow)
+        self.assertNotIn('  schedule:', workflow)
+        self.assertNotIn('    uses: ./.github/workflows/', workflow)
+        self.assertEqual(['bounded'], re.findall(r'^  ([\w-]+):\n    name:', workflow, re.M))
+        self.assertIn('    timeout-minutes: 10\n', workflow)
+        self.assertNotIn('    strategy:', workflow)
+        self.assertIn("inputs.platform == 'macos-latest' && 'macos-latest' || 'ubuntu-latest'", workflow)
+        self.assertIn('default: scalar-memory-utilities', workflow)
+        self.assertIn('default: ubuntu-latest', workflow)
+        self.assertIn('ref: ${{ github.sha }}', workflow)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"', workflow)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"', workflow)
+        self.assertLess(workflow.index('name: Validate bounded revision'), workflow.index('uses: ./.github/actions/setup'))
+        self.assertIn("cache-cabal-project: 'true'", workflow)
+        for command in ('start', 'compile-common', 'compile-test-support', 'group'):
+            self.assertIn('fast_ci.py ' + command + ' ', workflow)
+        self.assertIn('group --group "$CI_GROUP" --cadence hourly', workflow)
+        self.assertNotIn('--matrix', workflow)
+        run = workflow.split('name: Compile existing shared tools', 1)[1].split('\n      - ', 1)[0]
+        self.assertNotIn('${{', run)
+        self.assertIn('timeout-minutes: 7', run)
+        for name in ('Stop the qualification', 'Preserve bounded selection'):
+            self.assertIn('if: always()', workflow.split('name: ' + name, 1)[1].split('\n      - ', 1)[0])
+        for directory in ('setup-results', 'common-results', 'group-results'):
+            self.assertIn('build/ci/' + directory + '/', workflow)
+        health = (WORKFLOW.parent.parent / 'scripts/hourly_health.py').read_text()
+        self.assertIn('item["path"] == ".github/workflows/hourly.yml"', health)
+        self.assertNotIn('hourly-qualification.yml', health)
+
+    def test_qualification_validates_exact_nonempty_group_on_selected_platform(self):
+        import fast_select
+        script = embedded_python('BOUNDED', WORKFLOW.parent / 'hourly-qualification.yml')
+        for system, requested, group, valid in (
+                ('Linux', 'ubuntu-latest', 'selected', True),
+                ('Darwin', 'macos-latest', 'selected', True),
+                ('Linux', 'macos-latest', 'selected', False),
+                ('Linux', 'self-hosted', 'selected', False),
+                ('Linux', '', 'selected', False),
+                ('Linux', 'ubuntu-latest', '', False),
+                ('Linux', 'ubuntu-latest', 'empty', False),
+                ('Linux', 'ubuntu-latest', 'nightly-only', False),
+                ('Linux', 'ubuntu-latest', 'selected; touch injected', False)):
+            with self.subTest(system=system, requested=requested, group=group), \
+                 tempfile.TemporaryDirectory() as directory, \
+                 patch('platform.system', return_value=system), \
+                 patch.dict(os.environ, CI_PLATFORM=requested, CI_GROUP=group), \
+                 patch.object(fast_select, 'groups', return_value={'selected': ['example.Test'], 'empty': []}) as groups, \
+                 patch.object(fast_select, 'group_selection', return_value={'junit': {'classes': ['example.Test']}}) as select:
+                previous = Path.cwd()
+                try:
+                    os.chdir(directory)
+                    if valid:
+                        exec(script, {})
+                        groups.assert_called_once_with(Path.cwd(), system=system, cadence='hourly')
+                        select.assert_called_once_with(Path.cwd(), group, cadence='hourly')
+                        self.assertTrue(Path('build/ci/bounded-selection.json').is_file())
+                    else:
+                        with self.assertRaises(SystemExit):
+                            exec(script, {})
+                        select.assert_not_called()
+                        self.assertFalse(Path('build').exists())
+                    self.assertFalse(Path('injected').exists())
+                finally:
+                    os.chdir(previous)
+
     def test_persistent_index_refreshes_only_for_missing_or_changed_snapshot(self):
         script = embedded_python("HACKAGE")
         with tempfile.TemporaryDirectory() as directory:

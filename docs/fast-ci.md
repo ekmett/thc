@@ -8,6 +8,19 @@ select the full inventory before the explicit cadence policy is applied.
 `Build` runs per-commit coverage. `Hourly` runs established passing coverage at
 minute 31; an hourly failure blocks further development until fixed. `Intensive`
 runs daily at 07:17 UTC for expensive fixtures and public package integration.
+
+For a bounded manual qualification, dispatch **Hourly qualification** with an
+exact existing Hourly `group` and `platform=ubuntu-latest` or `macos-latest`.
+The defaults select `scalar-memory-utilities` on Ubuntu. This runs setup, shared
+compilation, the selected fixture prerequisites and both handoff modes in one
+job with a ten-minute total limit. Compilation and execution have a seven-minute
+step limit to leave time for cleanup and evidence upload. A timeout is failed
+qualification evidence; it does not increase the preparation budget. Selection
+and platform validation happen before setup. Normal command failures retain
+logs/traces; hard job cancellation can interrupt artifact collection. This manual-only
+workflow does not clear the full Hourly failure gate or qualify other groups.
+Scheduled coverage is unchanged.
+
 These scheduled workflows use the same CMake fixture graph and test runner as Build.
 Build compiles and runs its tests in one job per platform. Hourly and Intensive
 compile once per platform, then share those outputs with their test groups.
