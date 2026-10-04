@@ -3648,11 +3648,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class ParSpark {
         @Specialization public static void hint(Object payload, @Bind Node node) { SparkPool.current(node).hint(node, payload); }
     }
-    @Operation public static final class SparkHint {
-        @Specialization public static Object hint(Object payload, @Bind Node node) {
-            SparkPool.current(node).hint(node, payload); return payload;
-        }
-    }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class SparkCount {
