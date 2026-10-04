@@ -221,6 +221,47 @@ class ThreadedThunkTest {
                 "expr", list("lam", args, call, map("rep", closure, "resultRep", integer)))));
         return backend.equals("ast") ? new Program(language, source, true, false) : new BytecodeProgram(language, source, null, true);
     }
+    private ExecutableProgram sparkQueries(Language language, String backend) {
+        var lazy = sparkRep("object", "BoxedRep (Just Lifted)", false);
+        var boxed = sparkRep("data", "BoxedRep (Just Lifted)", true);
+        var state = sparkRep("void", null, true); var integer = sparkRep("long", "IntRep", true);
+        var closure = sparkRep("closure", "BoxedRep (Just Lifted)", true);
+        var definitions = new ArrayList<Object>();
+        for (var name : list("spark", "count", "poll", "failSpark")) {
+            boolean payload = name.equals("spark") || name.equals("failSpark");
+            var components = payload ? list(state, lazy) : name.equals("count") ? list(state, integer) : list(state, integer, lazy);
+            var tuple = map("kind", "unknown", "aggregate", "unboxed-tuple", "primReps",
+                payload ? list("BoxedRep (Just Lifted)") : name.equals("count") ? list("IntRep") : list("IntRep", "BoxedRep (Just Lifted)"),
+                "evaluated", true, "components", components);
+            Object token = list("var", "s", map("rep", state));
+            if (name.equals("failSpark")) token = list("app", list("prim", "raise#"),
+                list(list("var", "payload", map("rep", lazy))), list(true), false, false, map("rep", state));
+            var call = list("app", list("prim", payload ? "spark#" : name.equals("count") ? "numSparks#" : "getSpark#"),
+                payload ? list(list("var", "payload", map("rep", lazy)), token) : list(token),
+                payload ? list(true, false) : list(false), false, false, map("rep", tuple));
+            var ids = payload ? list("s2", "value") : name.equals("count") ? list("s2", "n") : list("s2", "n", "value");
+            var binders = new ArrayList<Object>();
+            for (int i = 0; i < ids.size(); i++) binders.add(map("id", ids.get(i), "lifted", i != 0 && (payload || i == 2), "rep", components.get(i)));
+            Object result = name.equals("count") ? list("var", "n", map("rep", integer)) :
+                list("app", list("con", payload ? "Envelope" : "Poll", payload ? 1 : 2, map("rep", closure)),
+                    payload ? list(list("var", "value", map("rep", lazy))) : list(list("var", "n", map("rep", integer)), list("var", "value", map("rep", lazy))),
+                    payload ? list(true) : list(false, true), false, false, map("rep", boxed));
+            var resultRep = name.equals("count") ? integer : boxed;
+            var body = list("case", call, "tuple", list(list("data", ids.size() == 2 ? "tuple2" : "tuple3", ids, result, map("binders", binders))),
+                map("rep", resultRep, "binder", map("id", "tuple", "lifted", false, "rep", tuple)));
+            var args = new ArrayList<Object>();
+            if (payload) args.add(map("id", "payload", "lifted", true, "rep", lazy));
+            args.add(map("id", "s", "lifted", false, "rep", state));
+            definitions.add(map("id", name, "name", name, "arity", args.size(), "lifted", true, "rep", closure,
+                "expr", list("lam", args, body, map("rep", closure, "resultRep", resultRep))));
+        }
+        var source = map("schema", 1, "ghc", "9.14.1", "instrument", true, "constructors", list(sparkEnvelope(),
+            map("id", "Poll", "name", "Poll", "arity", 2, "tag", 1, "kind", "boxed", "fieldReps", list(list("IntRep"), list("BoxedRep (Just Lifted)")),
+                "fieldLifted", list(false, true), "strictFields", list(false, false)),
+            map("id", "tuple2", "name", "(#,#)", "arity", 2, "tag", 1, "kind", "unboxed-tuple"),
+            map("id", "tuple3", "name", "(#,,#)", "arity", 3, "tag", 1, "kind", "unboxed-tuple")), "bindings", definitions);
+        return backend.equals("ast") ? new Program(language, source, true, false) : new BytecodeProgram(language, source, null, true);
+    }
     private static final class SparkWorkRoot extends GuestRoot {
         private final java.util.function.Supplier<Object> body;
         SparkWorkRoot(Language language, java.util.function.Supplier<Object> body) {
@@ -368,9 +409,47 @@ class ThreadedThunkTest {
             worker.join(5000); assertFalse(worker.isAlive(), backend + " cooperative worker cancellation completes");
             assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
             assertTrue(gate.tryPut(marker)); var driver = entered(context, () -> new Driver(new Metrics(false)));
-            assertSame(marker, entered(context, () -> driver.force(thunk)), backend + " demand resumes the original thunk");
+            var resumed = entered(context, () -> driver.force(thunk));
+            assertEquals(marker.toString(), resumed.toString(), backend + " demand resumes to Done");
             assertFalse(ready.tryTake().getPresent(), "The pre-suspension ready effect must not repeat");
-            assertSame(marker, entered(context, () -> driver.force(thunk)));
+            assertSame(resumed, entered(context, () -> driver.force(thunk)));
+        }
+    }
+    @Test void boundedSparkQueuePreservesIdentityRejectsOverflowAndCompletesStateBeforeEnqueue() throws Exception {
+        for (var backend : list("ast", "bytecode")) try (var context = sparkContext(1); var other = sparkContext(1)) {
+            context.initialize("thc"); other.initialize("thc");
+            var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
+            var caller = entered(context, () -> sparkCaller(language, backend)); var queries = entered(context, () -> sparkQueries(language, backend));
+            var foreignLanguage = entered(other, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
+            var foreign = sparkWork(other, foreignLanguage, backend, () -> { throw new AssertionError("Cross-context hint entered"); });
+            var started = new CountDownLatch(1); var release = new CountDownLatch(1);
+            var blocker = sparkWork(context, language, backend, () -> { started.countDown(); await(release); return Unit.INSTANCE; });
+            var effects = new AtomicInteger(); var queued = sparkWork(context, language, backend, () -> { effects.incrementAndGet(); return Unit.INSTANCE; });
+            var overflow = sparkWork(context, language, backend, () -> { effects.incrementAndGet(); return Unit.INSTANCE; });
+            try {
+                entered(context, () -> { ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, blocker}); return null; });
+                assertTrue(started.await(5, TimeUnit.SECONDS));
+                for (var name : list("spark", "count", "poll", "failSpark")) {
+                    var target = (com.oracle.truffle.runtime.OptimizedCallTarget) queries.entryTarget(name);
+                    target.compile(true); assertTrue(target.isValid(), backend + " " + name);
+                }
+                entered(context, () -> {
+                    assertThrows(GuestException.class, () -> ScalarTestCalls.callScalarTestTarget(queries.entryTarget("failSpark"), new Object[]{0L, queued, Unit.INSTANCE}));
+                    assertEquals(0L, ScalarTestCalls.callScalarTestTarget(queries.entryTarget("count"), new Object[]{0L, Unit.INSTANCE}));
+                    ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, foreign});
+                    assertEquals(0L, ScalarTestCalls.callScalarTestTarget(queries.entryTarget("count"), new Object[]{0L, Unit.INSTANCE}));
+                    var retained = (DataValue) ScalarTestCalls.callScalarTestTarget(queries.entryTarget("spark"), new Object[]{0L, queued, Unit.INSTANCE});
+                    assertSame(queued, retained.getLayout().read(retained, 0));
+                    ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, overflow});
+                    assertEquals(1L, ScalarTestCalls.callScalarTestTarget(queries.entryTarget("count"), new Object[]{0L, Unit.INSTANCE}));
+                    var polled = (DataValue) ScalarTestCalls.callScalarTestTarget(queries.entryTarget("poll"), new Object[]{0L, Unit.INSTANCE});
+                    assertEquals(1L, polled.getLayout().read(polled, 0)); assertSame(queued, polled.getLayout().read(polled, 1));
+                    var empty = (DataValue) ScalarTestCalls.callScalarTestTarget(queries.entryTarget("poll"), new Object[]{0L, Unit.INSTANCE});
+                    assertEquals(0L, empty.getLayout().read(empty, 0)); assertEquals("False", empty.getLayout().read(empty, 1).toString());
+                    return null;
+                });
+                assertEquals(0, effects.get(), "Neither overflow nor dequeued work is forced by hint/query transport");
+            } finally { release.countDown(); }
         }
     }
     @Test void disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker() throws Exception {
