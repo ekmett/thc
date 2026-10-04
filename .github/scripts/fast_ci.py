@@ -857,6 +857,10 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=Fals
         suites = [ET.parse(path).getroot() for path in sorted(xml.glob("TEST-*.xml"))]
         require(suites and not any(suite.findall(".//failure") or suite.findall(".//error") for suite in suites),
                 "Missing or failed fresh grouped JUnit results")
+        observed = {suite.attrib.get("name") for suite in suites}
+        expected = set(selection["junit"]["classes"])
+        require(observed == expected,
+                f"Grouped JUnit class mismatch: missing={sorted(expected-observed)}, extra={sorted(observed-expected)}")
         proof = ET.parse(xml / "TEST-thc.runtime.HandoffTest.xml").getroot()
         markers = [line for out in proof.findall("system-out") for line in (out.text or "").splitlines()
                    if line.startswith("THC_HANDOFF_MODE=")]

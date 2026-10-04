@@ -640,6 +640,37 @@ class FastRunnerTest(unittest.TestCase):
             + ('<failure/>' if failed else '') + '</testcase>'
             f'<system-out>THC_HANDOFF_MODE={marker}\n</system-out></testsuite>')
 
+    def test_group_requires_full_selected_classes_but_accepts_skips(self):
+        import fast_select
+        selection = self.batch_selection()
+        selection['junit']['classes'].append('example.SelectedTest')
+        selection['junit']['patterns'] = list(selection['junit']['classes'])
+        for present in (False, True):
+            with self.subTest(present=present), patch.object(ci, 'git', return_value='a' * 40):
+                recorder = ci.Recorder(self.root, self.root / str(present))
+
+                def fresh(*args, **kwargs):
+                    for dense, task in ((False, 'testDefault'), (True, 'testDense')):
+                        self.mode_xml(task, dense)
+                        if present:
+                            (self.root / 'build/test-results' / task / 'TEST-example.SelectedTest.xml').write_text(
+                                '<testsuite name="example.SelectedTest" tests="1" failures="0" errors="0" skipped="1">'
+                                '<testcase name="platformExcluded" classname="example.SelectedTest"><skipped/></testcase></testsuite>')
+                    return 0, ''
+
+                with patch.object(fast_select, 'group_selection', return_value=selection), \
+                     patch.object(ci.fixtures, '_manifest', return_value=({'groups': {}},
+                         {name: None for name in selection['junit']['classes']})), \
+                     patch.object(recorder, 'command', side_effect=fresh):
+                    if present:
+                        ci.run_group(recorder, 'selected', cadence='hourly', prepared=True)
+                        self.assertTrue(recorder.data['passed'])
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, 'Grouped JUnit class mismatch'):
+                            ci.run_group(recorder, 'selected', cadence='hourly', prepared=True)
+                    for mode in ('default', 'dense'):
+                        self.assertTrue((recorder.directory / mode / 'xml/TEST-thc.runtime.HandoffTest.xml').exists())
+
     def test_batch_runs_once_and_preserves_both_actual_mode_outputs(self):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
