@@ -3642,6 +3642,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class SparkEnabled {
+        @Specialization public static boolean enabled(@Bind Node node) { return SparkPool.current(node).isEnabled(); }
+    }
+    @Operation public static final class ParSpark {
+        @Specialization public static void hint(Object payload, @Bind Node node) { SparkPool.current(node).hint(node, payload); }
+    }
+    @Operation public static final class SparkHint {
+        @Specialization public static Object hint(Object payload, @Bind Node node) {
+            SparkPool.current(node).hint(node, payload); return payload;
+        }
+    }
+    @Operation public static final class SparkCount {
+        @Specialization public static long count(@Bind Node node) { return SparkPool.current(node).count(); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flag")
+    @ConstantOperand(type = LocalAccessor.class, name = "payload")
+    public static final class GetSpark {
+        @Specialization public static void get(VirtualFrame frame, LocalAccessor flag, LocalAccessor payload,
+                Object empty, @Bind Node node) {
+            var thunk = SparkPool.current(node).poll();
+            var bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flag.setLong(bytecode, frame, thunk == null ? 0L : 1L);
+            payload.setObject(bytecode, frame, thunk == null ? empty : thunk);
+        }
+    }
     @Operation public static final class PrepareThreadDelay {
         @Specialization public static ThreadDelayToken prepare(long microseconds, Object state, @Bind Node node) {
             TupleResults.requireVoidCarrier(state);

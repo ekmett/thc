@@ -2334,7 +2334,7 @@ public final class Program implements ExecutableProgram {
             CoreThreadScheduling.validate(name, argumentProofs(args), flags, tupleProof);
             Expr[] operands = argumentOperands(args, scope, flags);
             CoreThreadScheduling.validate(name, loweredProofs(operands), flags, tupleProof);
-            if (name.equals("par#")) return new Literal(1L).proven(evaluated(tupleProof, true));
+            if (name.equals("par#")) return new SparkResult(name, null, operands[0], null, tupleProof);
             if (name.equals("delay#")) return new DelayThread(operands[0], operands[1], enableAsync, tupleProof);
             if (name.equals("setThreadAllocationCounter#")) return new SetThreadAllocationCounter(operands[0], null, operands[1], tupleProof);
             if (name.equals("setOtherThreadAllocationCounter#")) return new SetThreadAllocationCounter(operands[0], operands[1], operands[2], tupleProof);

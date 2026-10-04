@@ -29,6 +29,8 @@ public final class Language extends TruffleLanguage<Language.State> {
     static final OptionKey<String> THREAD_HOSTING = new OptionKey<>("platform");
     @Option(name = "ByteArrayStorage", help = "Ordinary guest byte-array backing: heap (default) or native (requires native access).", category = OptionCategory.USER)
     static final OptionKey<String> BYTE_ARRAY_STORAGE = new OptionKey<>("heap");
+    @Option(name = "SparkQueueCapacity", help = "Bounded async-capable thunk queue for one speculative worker; zero disables sparks (default), maximum 65536.", category = OptionCategory.USER)
+    static final OptionKey<Integer> SPARK_QUEUE_CAPACITY = new OptionKey<>(0);
     @Override protected OptionDescriptors getOptionDescriptors() { return new LanguageOptionDescriptors(); }
     // Layout interning belongs to a context even when the language instance is shared.
     public HandoffLayouts getHandoffLayouts() { return currentState(null).handoffLayouts; }
@@ -56,6 +58,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final CarrierLocal<MaskingState> maskingState;
         private final CarrierLocal<StackAnnotationState> stackAnnotations;
         private final GuestThreads threads;
+        private final SparkPool sparks;
         private final ContextThreadLocal<GuestThreads.PollState> threadPollState;
         private final ContextThreadLocal<CarrierLocal.Cell<MaskingState>> threadMaskingState;
         private final ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> threadAnnotations;
@@ -119,6 +122,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             maskingState = new CarrierLocal<>(MaskingState.UNMASKED);
             stackAnnotations = new CarrierLocal<>(StackAnnotationState.EMPTY);
             threads = new GuestThreads(env, maskingState, env.getOptions().get(THREAD_HOSTING));
+            sparks = new SparkPool(this, language, env.getOptions().get(SPARK_QUEUE_CAPACITY));
             threadPollState = language.threadPollState;
             threadMaskingState = language.threadMaskingState;
             threadAnnotations = language.threadAnnotations;
@@ -177,6 +181,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         public CarrierLocal<MaskingState> getMaskingState() { return maskingState; }
         public CarrierLocal<StackAnnotationState> getStackAnnotations() { return stackAnnotations; }
         public GuestThreads getThreads() { return threads; }
+        public SparkPool getSparks() { return sparks; }
         public ContextThreadLocal<GuestThreads.PollState> getThreadPollState() { return threadPollState; }
         public ContextThreadLocal<CarrierLocal.Cell<MaskingState>> getThreadMaskingState() { return threadMaskingState; }
         public ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> getThreadAnnotations() { return threadAnnotations; }
@@ -264,6 +269,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         }
     }
     @Override protected void finalizeContext(State context) {
+        context.sparks.stop();
         try { context.files.shutdownEventManagers(); }
         finally {
             try { context.signals.requestStop(); }

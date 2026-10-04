@@ -226,7 +226,6 @@ class ThreadedThunkTest {
         SparkWorkRoot(Language language, java.util.function.Supplier<Object> body) {
             super(language, new FrameLayout().build()); this.body = body;
         }
-        @Override public boolean getAsynchronousExceptions() { return true; }
         @Override public Object execute(VirtualFrame frame) { return body.get(); }
     }
     private Context sparkContext(int capacity) {
@@ -235,8 +234,24 @@ class ThreadedThunkTest {
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build();
     }
-    private Thunk sparkWork(Context context, Language language, java.util.function.Supplier<Object> body) throws Exception {
-        return entered(context, () -> new Thunk(new SparkWorkRoot(language, body).getCallTarget(), null));
+    private Thunk sparkWork(Context context, Language language, String backend, java.util.function.Supplier<Object> body) throws Exception {
+        // The hinted thunk has real backend capture machinery. The controlled hook
+        // supplies bounded synchronization/effects, not a claimed capture capability.
+        return entered(context, () -> {
+            var closure = sparkRep("closure", "BoxedRep (Just Lifted)", true);
+            var lifted = sparkRep("object", "BoxedRep (Just Lifted)", false);
+            var integer = sparkRep("long", "IntRep", true);
+            var call = list("app", list("var", "hook", map("rep", closure)),
+                list(list("lit", "int", "0", map("rep", integer))), list(false), false, false, map("rep", sparkRep("object", "BoxedRep (Just Lifted)", true)));
+            var expr = list("let", false, list(map("id", "work", "name", "work", "arity", 0, "lifted", true, "rep", lifted, "expr", call)),
+                list("var", "work", map("rep", lifted)), map("rep", lifted));
+            var source = map("schema", 1, "ghc", "9.14.1", "constructors", list(), "bindings", list(
+                map("id", "make", "name", "make", "arity", 1, "lifted", true, "rep", closure, "expr",
+                    list("lam", list(map("id", "hook", "lifted", true, "rep", closure)), expr, map("rep", closure, "resultRep", lifted)))));
+            ExecutableProgram program = backend.equals("ast") ? new Program(language, source, true, false) : new BytecodeProgram(language, source, null, true);
+            var hook = new Closure(null, 1, new SparkWorkRoot(language, body).getCallTarget());
+            return (Thunk) ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"), new Object[]{0L, hook});
+        });
     }
     @Test void sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk() throws Exception {
         for (var backend : list("ast", "bytecode")) try (var context = sparkContext(2)) {
@@ -245,20 +260,30 @@ class ThreadedThunkTest {
             var caller = entered(context, () -> sparkCaller(language, backend));
             var target = caller.entryTarget("hint");
             for (boolean installed : list(false, true)) {
-                if (installed) entered(context, () -> { target.getClass().getMethod("compile", boolean.class).invoke(target, true); return null; });
+                if (installed) entered(context, () -> {
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); return null;
+                });
                 var started = new CountDownLatch(1); var release = new CountDownLatch(1); var evaluations = new AtomicInteger(); var answer = new Object();
-                var thunk = sparkWork(context, language, () -> { evaluations.incrementAndGet(); started.countDown(); await(release); return answer; });
+                var thunk = sparkWork(context, language, backend, () -> { evaluations.incrementAndGet(); started.countDown(); await(release); return answer; });
                 var driver = new Driver(new Metrics(false));
                 try (var pool = Executors.newSingleThreadExecutor()) {
                     long before = ((Number) caller.diagnostics().get("compiledEntries")).longValue();
                     entered(context, () -> assertEquals(1L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, thunk})));
                     assertTrue(started.await(5, TimeUnit.SECONDS), backend + " starts speculative evaluation before demand");
-                    if (installed) assertTrue(((Number) caller.diagnostics().get("compiledEntries")).longValue() > before);
+                    if (installed) {
+                        assertTrue(((Number) caller.diagnostics().get("compiledEntries")).longValue() > before);
+                        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    }
                     var demanding = new CountDownLatch(1);
-                    var demand = pool.submit(() -> entered(context, () -> { demanding.countDown(); return driver.force(thunk); }));
-                    assertTrue(demanding.await(5, TimeUnit.SECONDS)); release.countDown();
-                    assertSame(answer, demand.get(5, TimeUnit.SECONDS)); assertEquals(1, evaluations.get());
-                    assertSame(answer, entered(context, () -> driver.force(thunk)));
+                    try {
+                        var demand = pool.submit(() -> entered(context, () -> { demanding.countDown(); return driver.force(thunk); }));
+                        assertTrue(demanding.await(5, TimeUnit.SECONDS));
+                        assertThrows(TimeoutException.class, () -> demand.get(50, TimeUnit.MILLISECONDS), "Demand waits for the worker's owned thunk");
+                        release.countDown();
+                        assertSame(answer, demand.get(5, TimeUnit.SECONDS)); assertEquals(1, evaluations.get());
+                        assertSame(answer, entered(context, () -> driver.force(thunk)));
+                    } finally { release.countDown(); }
                 } finally { release.countDown(); }
             }
         }
@@ -267,9 +292,9 @@ class ThreadedThunkTest {
         for (var backend : list("ast", "bytecode")) try (var context = sparkContext(2)) {
             context.initialize("thc"); var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
             var caller = entered(context, () -> sparkCaller(language, backend)); var failed = new CountDownLatch(1); var payload = new Object();
-            var bad = sparkWork(context, language, () -> { failed.countDown(); throw new GuestException(payload, null); });
+            var bad = sparkWork(context, language, backend, () -> { failed.countDown(); throw new GuestException(payload, null); });
             var completed = new CountDownLatch(1); var answer = new Object();
-            var good = sparkWork(context, language, () -> { completed.countDown(); return answer; });
+            var good = sparkWork(context, language, backend, () -> { completed.countDown(); return answer; });
             entered(context, () -> { assertEquals(1L, ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, bad})); return null; });
             assertTrue(failed.await(5, TimeUnit.SECONDS));
             entered(context, () -> { assertEquals(1L, ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, good})); return null; });

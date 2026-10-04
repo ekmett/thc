@@ -4,7 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 
-/** THC discards speculative hints; it never evaluates or queues their payloads. */
+/** Lazy spark transport and context-owned queue queries. */
 public final class SparkResult extends Expr {
     private final String name;
     @Child private Expr state, payload;
@@ -13,14 +13,24 @@ public final class SparkResult extends Expr {
         this.name = name; this.state = state; this.payload = payload; this.empty = empty;
         setRepresentation(proof.withEvaluated(true));
     }
-    @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("Spark result requires a tuple destination"); }
+    @Override public Object execute(VirtualFrame frame) {
+        if (!name.equals("par#")) throw RuntimeFault.fault("Spark result requires a tuple destination");
+        var pool = SparkPool.current(this);
+        if (pool.isEnabled()) pool.hint(this, payload.execute(frame));
+        return 1L;
+    }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object value = payload == null ? null : payload.execute(frame); // Retain a thunk, never enter it.
         TupleResults.requireVoidCarrier(state.execute(frame));
-        if (name.equals("spark#")) FrameAccess.write(frame, slots[offset], value);
+        var pool = SparkPool.current(this);
+        if (name.equals("spark#")) {
+            pool.hint(this, value);
+            FrameAccess.write(frame, slots[offset], value);
+        } else if (name.equals("numSparks#")) FrameAccess.writeLong(frame, slots[offset], pool.count());
         else {
-            FrameAccess.writeLong(frame, slots[offset], 0L);
-            if (name.equals("getSpark#")) FrameAccess.write(frame, slots[offset + 1], empty);
+            var thunk = pool.poll();
+            FrameAccess.writeLong(frame, slots[offset], thunk == null ? 0L : 1L);
+            FrameAccess.write(frame, slots[offset + 1], thunk == null ? empty : thunk);
         }
         return null;
     }
