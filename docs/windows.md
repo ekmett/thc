@@ -82,6 +82,13 @@ The disabled queue (the default zero capacity) leaves work unforced without
 admitting guest concurrency. These bounded checks do not qualify the whole
 concurrency suite or GHC-derived programs.
 
+Two fixture-free weak checks require actual identity-key collection while live
+keys preserve identity, including first compiled make and dead dereference calls.
+Callbacks promote identity registrations to explicit lifetime; dependent values
+and actions stay retained until explicit finalization, with newest-first callbacks
+running once. Both backends and handoff modes are covered. These checks do not
+qualify general ephemeron handling, GC-triggered finalizers or the native weak corpus.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:

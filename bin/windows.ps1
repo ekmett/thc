@@ -67,7 +67,9 @@ try {
             'thc.runtime.ScalarBitCastTest.directTypedCallsPreserveBitsOnFirstCompiledCallAndRejectWrongCarriers',
             'thc.runtime.ScalarBitCastTest.typedNodesKeepRawBitsAndNeverUseBoxedOperandExecution',
             'thc.ThreadedThunkTest.sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk',
-            'thc.ThreadedThunkTest.disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker')
+            'thc.ThreadedThunkTest.disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker',
+            'thc.runtime.ManagedWeakTest.identityOnlyGuestWeaksCollectWhileLiveKeysAndFirstCompiledCallsPreserveIdentity',
+            'thc.runtime.ManagedWeakTest.callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava
