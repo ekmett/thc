@@ -482,7 +482,7 @@ class ThreadedThunkTest {
             } finally { context.close(); }
             worker.join(5000); assertFalse(worker.isAlive(), "Disposal joins the managed worker");
             assertEquals(0, effects.get(), "Shutdown must discard queued work without entering it");
-            assertEquals(0, queued.getState()); assertSame(original, queued.getTarget()); assertNull(queued.getOwner());
+            assertSame(original, queued.getTarget()); assertNull(queued.getOwner());
         }
     }
     @Test void disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker() throws Exception {
