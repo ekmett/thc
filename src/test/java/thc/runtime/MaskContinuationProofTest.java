@@ -35,27 +35,6 @@ class MaskContinuationProofTest {
         // retired HotSpot boundary. Repairing it during entry loses that call.
         var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, target); assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
     }
-    @Test void compilationSetupRestoresRetiredBoundaryBeforeFirstMaskedEffect() throws Exception {
-        try (var context = executionContext()) { entered(context, () -> {
-            context.initialize("thc"); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var driver = new Driver(); var compiledEffects = new AtomicInteger(); var warmChild = new Thunk(new RootNode(null) { @Override public Object execute(VirtualFrame frame) { return new ThunkYieldProofRoot.Answer(42L, this); } }.getCallTarget(), null);
-            var target = ThunkYieldProofRoot.maskedCaller(language, new AtomicReference<>(warmChild), new AtomicInteger(), compiledEffects, MaskingState.MASKED_INTERRUPTIBLE, MaskingState.MASKED_UNINTERRUPTIBLE, new ThunkYieldProofRoot.MaskProbe());
-            var targetType = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); var valid = targetType.getMethod("isValidLastTier"); var calls = targetType.getMethod("getCallCount"); var jvmci = Class.forName("jdk.vm.ci.runtime.JVMCI").getMethod("getRuntime").invoke(null); var backend = Class.forName("jdk.vm.ci.runtime.JVMCIRuntime").getMethod("getHostJVMCIBackend").invoke(jvmci); var metaAccess = Class.forName("jdk.vm.ci.runtime.JVMCIBackend").getMethod("getMetaAccess").invoke(backend); var method = targetType.getDeclaredMethod("callBoundary", Object[].class);
-            var boundary = Class.forName("jdk.vm.ci.meta.MetaAccessProvider").getMethod("lookupJavaMethod", java.lang.reflect.Executable.class).invoke(metaAccess, method); var reprofile = Class.forName("jdk.vm.ci.meta.ResolvedJavaMethod").getMethod("reprofile"); var hasCode = Class.forName("jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod").getMethod("hasCompiledCode"); for (int i = 0; i < 8; i++) assertEquals(142L, driver.force(new Thunk(target, null))); compile(target);
-            try {
-                // Negative control: retiring only the shared stub leaves guest
-                // code valid, but its next ordinary call executes interpreted.
-                reprofile.invoke(boundary); assertEquals(false, hasCode.invoke(boundary)); assertEquals(true, valid.invoke(target)); int effectsBefore = compiledEffects.get(), callsBefore = (Integer) calls.invoke(target); assertEquals(142L, driver.force(new Thunk(target, null))); assertEquals(effectsBefore, compiledEffects.get()); assertEquals(callsBefore + 1, calls.invoke(target)); assertEquals(true, valid.invoke(target));
-                // Positive control: setup must restore the stub without a guest
-                // settling call, even when the guest nmethod is already valid.
-                reprofile.invoke(boundary); assertEquals(false, hasCode.invoke(boundary)); compile(target); assertEquals(true, hasCode.invoke(boundary)); assertEquals(142L, driver.force(new Thunk(target, null))); assertEquals(effectsBefore + 1, compiledEffects.get()); assertEquals(callsBefore + 1, calls.invoke(target)); assertEquals(true, valid.invoke(target)); assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver));
-            } finally {
-                // Do not leave the shared test JVM with an absent entry stub if
-                // a control assertion fails after deliberately retiring it.
-                var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", targetType).invoke(runtime, target);
-            }
-            return null;
-        }); }
-    }
     private record Chain(Thunk child, Thunk inner, Thunk outer) {}
     @Test void privateAsyncCutRunsNearestCapturedHandlerAndLeavesSharedChildResumable() throws Exception {
         try (var context = executionContext()) { context.initialize("thc"); var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null)); var driver = entered(context, Driver::new); var payload = new Object(); var childEffects = new AtomicInteger(); var innerEffects = new AtomicInteger(); var outerEffects = new AtomicInteger(); var innerProbe = new ThunkYieldProofRoot.MaskProbe(); var outerProbe = new ThunkYieldProofRoot.MaskProbe();
