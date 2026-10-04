@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -10,10 +11,11 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.concurrent.atomic.AtomicLong;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/** Context-owned structured diagnostics, independent of GHC's trace primops.
+/** Context-owned tracing shared by THC.Trace and the original GHC trace primops.
  *
  * Sink 0 is disabled, 1 is the embedding context's stderr, 2 is JFR, and 3 is
  * both. Selecting JFR neither creates a recording nor enables an event in an
@@ -26,11 +28,14 @@ import static thc.runtime.RuntimeServiceStatus.fault;
  * context. Ends consume the token even when diagnostics were disabled meanwhile.
  * Each emission uses the current sink; changing it can leave unmatched records
  * in an individual sink. Close discards open spans without emitting fake ends.
- * Names are exact UTF-8, including embedded NUL, limited to 1 MiB per input.
+ * Structured names are exact UTF-8, including embedded NUL, limited to 1 MiB per input.
+ * Original GHC primops instead retain their CString/exact-count byte contracts;
+ * their void result cannot report sink availability or emission status.
  * Live span names are additionally bounded to 16 MiB / 4096 spans per context.
  */
 public final class RuntimeTraceServices implements AutoCloseable {
     public static final long MAX_INPUT_BYTES = 1024L * 1024;
+    private static final String HEX = "0123456789abcdef";
     private static final AtomicLong contextIds = new AtomicLong();
     private static final AtomicLong spanIds = new AtomicLong();
     private record Span(String name, long byteLength, long started) {}
@@ -42,7 +47,8 @@ public final class RuntimeTraceServices implements AutoCloseable {
     private final long contextId = nextPositive(contextIds, "trace context");
     private final HashMap<Long, Span> spans = new HashMap<>();
     private long retainedNameBytes;
-    private int sink;
+    private final Assumption initiallyDisabled = Assumption.create("THC original tracing initially disabled");
+    private volatile int sink;
     private boolean closed;
 
     public RuntimeTraceServices(OutputStream output) { this(output, JvmRuntimeTraceJfr.INSTANCE); }
@@ -75,7 +81,48 @@ public final class RuntimeTraceServices implements AutoCloseable {
             if (support != 0L) return support;
         }
         sink = (int) setting;
+        if (sink != 0) initiallyDisabled.invalidate();
         return 0L;
+    }
+
+    /** Initial off can specialize; after enabling, sink changes remain observable. */
+    public boolean isPrimopDisabled() { return initiallyDisabled.isValid() || sink == 0; }
+
+    @TruffleBoundary
+    public synchronized void emitPrimop(TraceOp operation, ManagedAddress address, long count) {
+        if (closed || sink == 0) return;
+        byte[] bytes;
+        if (operation == TraceOp.BINARY) {
+            if (count < 0 || count > Integer.MAX_VALUE) throw fault("Invalid binary trace length");
+            bytes = count == 0 ? new byte[0] : address.withNativeBorrow(() -> {
+                address.requireByteRegion(count, false);
+                byte[] result = new byte[(int) count];
+                address.copyToByteArray(result, 0L, count);
+                return result;
+            });
+        } else bytes = address.withNativeBorrow(() -> RtsDiagnostics.cstring(address));
+        if ((sink & 1) != 0) {
+            synchronized (output) {
+                try {
+                    output.write(("[thc trace " + operation.getLabel() + "] ").getBytes(StandardCharsets.US_ASCII));
+                    for (byte item : bytes) {
+                        int value = item & 255;
+                        if (operation == TraceOp.BINARY) { output.write(HEX.charAt(value >>> 4)); output.write(HEX.charAt(value & 15)); }
+                        else if (value == 92) { output.write(92); output.write(92); }
+                        else if (value < 32 || value == 127) {
+                            output.write(92); output.write(120); output.write(HEX.charAt(value >>> 4)); output.write(HEX.charAt(value & 15));
+                        } else output.write(value);
+                    }
+                    output.write(10);
+                } catch (IOException ignored) { /* Original void RTS hooks do not raise guest IO errors. */ }
+                try { output.flush(); } catch (IOException ignored) { /* Same void hook contract. */ }
+            }
+        }
+        if ((sink & 2) != 0) {
+            String payload = HexFormat.of().formatHex(bytes);
+            String message = operation == TraceOp.BINARY ? payload : new String(bytes, StandardCharsets.UTF_8);
+            jfr.emit(contextId, operation.getLabel(), 0L, message, 0L, payload);
+        }
     }
 
     @TruffleBoundary
@@ -126,7 +173,7 @@ public final class RuntimeTraceServices implements AutoCloseable {
             catch (SecurityException ignored) { return RuntimeServiceStatus.DENIED; }
         }
         if ((sink & 2) != 0) {
-            long result = jfr.emit(contextId, phase, token, name, elapsedNanos);
+            long result = jfr.emit(contextId, phase, token, name, elapsedNanos, "");
             if (result != 0L && !(result == RuntimeServiceStatus.DISABLED && (sink & 1) != 0)) return result;
         }
         return 0L;

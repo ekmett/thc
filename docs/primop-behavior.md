@@ -297,16 +297,15 @@ semantics. Native instruction bit parity is not guaranteed for NaNs or signed ze
 | `prefetchMutableByteArray0#`, `prefetchMutableByteArray1#`, `prefetchMutableByteArray2#`, `prefetchMutableByteArray3#` | Same no-op policy. |
 | `prefetchAddr0#`, `prefetchAddr1#`, `prefetchAddr2#`, `prefetchAddr3#` | Same no-op policy; opaque addresses are not dereferenced. |
 | `prefetchValue0#`, `prefetchValue1#`, `prefetchValue2#`, `prefetchValue3#` | Same no-op policy; lifted payloads are not forced. |
-| `traceEvent#` | Emits escaped NUL-terminated text to context stderr, not a GHC eventlog. No event-selection flags, timestamps or eventlog-tool integration. |
-| `traceBinaryEvent#` | Emits exactly the supplied payload as lowercase hex to context stderr. Length must fit `0..Int.MAX_VALUE`; zero length does not read the address. Same eventlog limitations. |
-| `traceMarker#` | Emits escaped text with a marker label to context stderr, with the same eventlog limitations. |
+| `traceEvent#` | Ignored by default. The context-local `THC.Trace` sink enables escaped NUL-terminated text on stderr or `thc.RuntimeTrace` JFR events. |
+| `traceBinaryEvent#` | Same sink selection. When enabled, preserves exactly the supplied bytes as lowercase hex. Length must fit `0..Int.MAX_VALUE`; zero length does not read the address. |
+| `traceMarker#` | Same sink selection. Enabled markers preserve NUL-terminated text with a marker label/phase. |
 
 Details: [hints and tracing](hints-and-tracing.md).
 
 The selected GHC 9.14.1 `RtsFlags.TraceFlags.user` getter with header-derived
-schema-2 RTS layout metadata reports true for
-THC's always-enabled context stderr trace sink, independently of diagnostic
-counters. This single read-only CBool mapping does not implement a native RTS
+schema-2 RTS layout metadata reports whether the context's `THC.Trace` sink
+is selected, independently of diagnostic counters and active JFR recordings. This single read-only CBool mapping does not implement a native RTS
 image or GHC event-selection flags; unknown fields/widths and writes reject.
 The supported producing layout and native-default difference are documented
 in the tracing guide above.

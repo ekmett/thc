@@ -27,7 +27,8 @@ import Foreign.Ptr (nullPtr)
 import THC.Internal.RuntimeABI
 
 -- | Destination for context-local trace events. JFR selection does not start
--- a recording; the host controls recording independently.
+-- a recording; the host controls recording independently. In THC this sink
+-- also selects the original GHC event, marker and binary trace primops.
 data TraceSink = TraceOff | TraceStderr | TraceJFR | TraceStderrAndJFR
   deriving (Eq, Ord, Show)
 
@@ -42,7 +43,9 @@ supportedTraceSinks = queryEnum 501
    (3, [TraceOff, TraceStderr, TraceJFR, TraceStderrAndJFR])]
 
 -- | Select the context's sink. The returned status distinguishes an accepted
--- change from an unsupported or unavailable control.
+-- change from an unsupported or unavailable control. The initial sink is
+-- 'TraceOff'; changing it also applies to GHC's original event primops, including
+-- already compiled guest code.
 setTraceSink :: TraceSink -> IO (Available ())
 setTraceSink sink = control 500 $ case sink of
   TraceOff -> 0

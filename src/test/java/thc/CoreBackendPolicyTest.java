@@ -58,6 +58,7 @@ class CoreBackendPolicyTest {
                 var entry = context.eval("thc", request(List.of(file.toString()), "unit:M.entry", backend, false, false, false));
                 context.enter();
                 try {
+                    Language.currentState().getRuntimeTrace().control(500, 1);
                     var program = Language.currentState(null).getCoreUnitPrograms().getFirst();
                     var target = program.entryValue("unit:M.read");
                     var alias = (Thunk) program.entryValue("unit:M.alias");

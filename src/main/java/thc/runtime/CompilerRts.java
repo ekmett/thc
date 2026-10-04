@@ -62,8 +62,8 @@ public final class CompilerRts {
             CompilerDirectives.transferToInterpreter();
             throw RuntimeFault.fault("Unsupported RtsFlags byte field at offset " + byteOffset);
         }
-        // User trace always emits to context stderr; this is not native eventlog status.
-        return 1L;
+        // Selected context sink, independent of process-wide JFR recording state.
+        return Language.currentState(null).getRuntimeTrace().isPrimopDisabled() ? 0L : 1L;
     }
 
     public void close() { closed = true; }

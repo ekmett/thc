@@ -96,6 +96,7 @@ class CoreUnitCafLifetimeTest {
                 var entry = context.eval("thc", request(List.of("@" + manifest), "uA:A.entry", backend, false, async, false));
                 assertEquals(7L, entry.execute(0).asLong()); context.enter();
                 try {
+                    Language.currentState().getRuntimeTrace().control(500, 1);
                     var programs = Language.currentState(null).getCoreUnitPrograms(); assertEquals(1, programs.size()); var program = programs.getFirst();
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var prior = evaluateAndDropHandles(program, language, async);
                     assertEquals(3L, count(program, "coreCompactDecodedBindings"), "A plus two CAFs; C is still cold"); assertEquals(2L, count(program, "coreCompactModuleOpens"));
