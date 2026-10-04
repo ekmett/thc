@@ -26,6 +26,27 @@ class TupleJoinLoweringTest {
         var reps = new ArrayList<String>(); for (var component : components) reps.addAll(Objects.requireNonNull(component.getPrimReps()));
         return new CoreRepresentation(CoreKind.UNKNOWN, true, true, reps, Arrays.asList(components), null, null, null, null);
     }
+    @Test void tupleResultScratchIsClearedAfterCopyingUnlessTheDestinationAliasesIt() {
+        try (var context = Context.newBuilder("thc").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var proof = tuple(reference); var shape = new TupleShape(proof, language);
+                var layout = new FrameLayout(); int source = layout.bind("private tuple result"), destination = layout.bind("caller result");
+                int selector = layout.bind("selector"), unused = layout.bind("scalar result");
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build());
+                var marker = new Object(); int[] slots = {source};
+                var value = new Expr() { @Override public Object execute(VirtualFrame frame) { return marker; } };
+                var region = new LocalJoinRegion(new Object(), selector, unused,
+                    new Expr[]{new TupleConstruct(shape, new Expr[]{value})}, proof, false, shape, slots);
+                region.executeTuple(frame, new int[]{destination}, 0);
+                assertSame(marker, frame.getObject(destination));
+                assertFalse(frame.isObject(source), "Private reference result slot must be cleared");
+                region.executeTuple(frame, slots, 0);
+                assertSame(marker, frame.getObject(source), "An aliased destination must survive cleanup");
+            } finally { context.leave(); }
+        }
+    }
     @Test void tupleOperandsMoveInParallelAndReleaseScratchReferencesWithoutForcing() throws ReflectiveOperationException {
         try (var context = Context.newBuilder("thc").build()) {
             context.initialize("thc"); context.enter();

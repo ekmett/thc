@@ -1474,13 +1474,6 @@
       "sources": ["t/haskell-fixtures/AggregateFixtures.hs",
         "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
-    "tuple-join": {
-      "quarantined": true,
-      "junit": ["thc.runtime.TupleJoinResultTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-tuple-join-audit.py"]}],
-      "outputs": ["build/tuple-join"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
     "vector-api": {
       "cmakeTarget": "fixture-vector-api",
       "junit": ["thc.runtime.VectorApiTest"],

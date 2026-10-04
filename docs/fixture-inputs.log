@@ -3674,30 +3674,6 @@ Under build/array-slices/:
 Consumer reads receipt/all hashes/advertised CBDs/oracle. Exact missing-global and
   recursive-bottom shape checks need review alongside boxed-arrays coverage.
 
-124 tuple-join
-Fixture rationale (124 tuple-join)
-Purpose: Check joins transporting tuple results preserve values across branches and
-  recursion.
-Produces/consumed result: TupleJoinAudit CBDs and oracle.tsv; generated receipt/audits
-  are not consumer inputs.
-Cost and overlap: Keep distinct join-result execution in the aggregate corpus. Drop
-  unused receipt work and exact join/state-lambda counts; do not retain a whole pipeline
-  for metadata ceremony.
-Build status: QUARANTINED; compiler-structure assertions must be removed.
-  Excluded from build/test entry points; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-tuple-join-audit.py; consumer: thc.runtime.TupleJoinResultTest.
-IN t/fixtures/compiler/TupleJoinAudit.hs, TupleJoinAuditNative.hs, producer model,
-  shared exporter/auditor/decoder/data/native GHC.
-Under build/tuple-join/:
-  <pre|post>-core/TupleJoinAudit.cbd and stage-ghc/: IN audit source/exporter.
-  native/oracle and intermediates: IN driver/audit source/GHC.
-  oracle.tsv: IN binary.
-  provenance.json: IN source/tool/CBD/binary/oracle hashes/toolchain facts.
-  checks.json: IN CBDs/in-process auditor/model/oracle; written even by --check-only.
-Receipt omits producer itself and much shared tool closure; no old receipt invalidation.
-Consumer directly reads stage CBDs/oracle, not provenance/checks. Review unused receipt work.
-
 125 vector-api
 Fixture rationale (125 vector-api)
 Purpose: Check the public THC vector API and example loops execute with native-

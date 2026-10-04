@@ -248,6 +248,43 @@ class EmptyArgumentRuntimeTest {
             }
         });
     }
+    @Test void tupleResultJoinsCaptureEvaluatedAliasesAndRespectRecursiveShadowing() throws Exception {
+        withLanguage(language -> {
+            var pair = with(empty, "components", list(integer, reference), "primReps", list("IntRep", "BoxedRep (Just Lifted)"));
+            var packed = app(list("con", "T", 2), list(prim("+#", v("x"), n(11)), v("ref", reference)), pair, list(false, true));
+            var poison = new Thunk(new com.oracle.truffle.api.nodes.RootNode(language) {
+                @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Tuple join forced its lazy leaf"); }
+            }.getCallTarget(), null);
+            for (var backend : list("ast", "bytecode")) for (boolean capture : new boolean[]{true, false}) {
+                var returned = app(list("con", "T", 2), list(v("value"), v("ref", reference)), pair, list(false, true));
+                var recursive = list("case", prim("<=#", v("remaining"), n(0)), "done", list(
+                    list("lit", list("int", "1"), list(), returned, map("binders", list())),
+                    list("default", null, list(), call("held", list(prim("-#", v("remaining"), n(1)),
+                        prim("+#", v("value"), n(3))), pair), map("binders", list()))), map("rep", pair, "binder", arg("done")));
+                var join = capture
+                    ? with(arg("finish", pair), "expr", v("held", pair), "joinValueArity", 0, "joinResultRep", pair)
+                    : with(bind("held", lam(list(arg("remaining"), arg("value")), recursive, pair)),
+                        "joinValueArity", 2, "joinResultRep", pair);
+                var region = list("let", !capture, list(join), capture ? v("finish", pair) : call("held", list(n(3), v("x")), pair), map("rep", pair));
+                // The zero-arity join reads the evaluated outer alias. The recursive
+                // join has the same source name as that alias and must resolve locally.
+                var result = list("case", packed, "held", list(list("default", null, list(), region, map("binders", list()))),
+                    map("rep", pair, "binder", arg("held", pair)));
+                var body = list("case", result, "answer", list(list("data", "T", list("number", "pointer"), v("number"),
+                    map("binders", list(arg("number"), arg("pointer", reference))))), map("rep", integer, "binder", arg("answer", pair)));
+                var data = module(bind("entry", lam(list(arg("x"), arg("ref", reference)), body)));
+                var p = program(language, backend, data);
+                assertEquals(capture ? 18L : 16L, run(p, "entry", 7L, poison)); released(language);
+                compile(p.entryTarget("entry")); long before = (Long) p.diagnostics().get("compiledEntries");
+                assertEquals(capture ? 3_000_000_011L : 3_000_000_009L, run(p, "entry", 3_000_000_000L, poison));
+                assertTrue((Long) p.diagnostics().get("compiledEntries") > before, backend + " first installed tuple-result join");
+                valid(p.entryTarget("entry")); released(language); assertEquals(0, poison.getState());
+                // Equal register width cannot replace one scalar component with a nested tuple.
+                join.put("joinResultRep", with(pair, "components", list(with(empty, "components", list(integer), "primReps", list("IntRep")), reference)));
+                assertThrows(RuntimeFault.class, () -> program(language, backend, data)); released(language);
+            }
+        });
+    }
     @Test void emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow() throws Exception {
         withLanguage(language -> {
             var pair = with(empty, "components", list(integer, reference), "primReps", list("IntRep", "BoxedRep (Just Lifted)"));

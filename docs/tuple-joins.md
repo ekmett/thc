@@ -14,6 +14,13 @@ no function-call packet or tuple result carrier and borrow no handoff slab.
 Actual logical shape, arity, levity and carrier checks remain in place; matching
 register counts alone do not establish matching tuples.
 
+Fixture-free controls in `TupleJoinLoweringTest` and `EmptyArgumentRuntimeTest`
+cover result scratch cleanup, an aliased destination, evaluated nonempty tuple
+capture through a zero-arity join, and recursive lexical shadowing. They preserve
+lazy lifted leaves through the first installed call in both backends. Genuine
+GHC-exported tuple-result join capture remains unqualified; the existing
+`RealCoreJoinTest` source controls return scalars.
+
 An empty tuple `case` still evaluates its scrutinee. Original Tasty code contains
 `case retry# state of {}` and equivalent bottoming tuple calls. Exceptions and
 STM retry propagate normally. If malformed Core returns from that scrutinee,
