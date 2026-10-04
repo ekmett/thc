@@ -4351,34 +4351,6 @@ Producer checks >=4 sum formals, a consume partial call, overArities==[2] and
   verifies values plus zero remaining handoff depth/references. Those cleanup and
   semantic observations justify tests; the producer's internal inventory does not.
 
-151 tuple-capture (custom fixture)
-Fixture rationale (151 tuple-capture)
-Purpose: Check escaped tuple captures, thunk sharing, independent closures,
-  PAP reuse, empty/state captures and unforced lazy fields.
-Consumes: TupleCaptureAudit{,Native}.hs, selected GHC, exporter and auditor.
-Produces/consumed result: Named pre/post CBDs, 296 native rows, audits and manifest.
-Cost and overlap: Retain capture lifetime/sharing in shared aggregate coverage;
-  direct representation controls should not require a separate native pipeline.
-Build status: QUARANTINED. Producer requires at least eight capture occurrences;
-  consumer also fixes capture storage/image sizes that optimization can change.
-Producer: TupleCaptureFixtures.hs; consumer TupleCaptureNativeTest.
-Under build/tuple-capture/:
-  native/oracle and intermediates <- audit/native driver, GHC 9.14.1 --make -O2
-    -dynamic -fforce-recomp -dcore-lint -dstg-lint.
-  oracle.tsv <- native binary, eight entries x 37 inputs (296 rows).
-  <pre|post>/core/TupleCaptureAudit.cbd <- source, eight closure roots and exporter;
-    stage/ghc/ intermediates.
-  stage/audit.json <- exact CBD and entries/auditor; accepted checked.
-  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
-    <- command triplets.
-  manifest.json <- source/tool closure and native binary/oracle/CBD/audit/log hashes;
-    old manifest removed first.
-No output CBD glob. Producer counts free tuple variables inside lambdas (>=8).
-Consumer hashes receipt inputs, reads exact paths, verifies values and no retained
-  handoff references. Direct checks fix six storage fields and 56-byte closure image.
-  Keep identity, unforced ignored fields and exactly-once thunk evaluation: those
-  assert sharing semantics rather than the incidental number of compiler roots.
-
 152 sum-join-input (custom fixture)
 Fixture rationale (152 sum-join-input)
 Purpose: Check sum join arguments through recursion, swaps, captures, empty

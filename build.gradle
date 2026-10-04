@@ -644,21 +644,6 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         doFirst { checkBuild(file("build/sum-input/manifest.json").isFile()) { "Run thc-fixtures sum-input" } }
     }
 }
-[["tupleCaptureFullCoreTest", false],[ "tupleCaptureFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original tuple closure/thunk captures against native GHC."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.TupleCaptureNativeTest") }
-        inputs.files(fileTree("build/tuple-capture") { include("**/*.json", "*.tsv") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Native and first-compiled tuple capture checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/tuple-capture/manifest.json").isFile()) { "Run thc-fixtures tuple-capture" } }
-    }
-}
 [["sumJoinInputFullCoreTest", false],[ "sumJoinInputFullCoreDenseTest", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"

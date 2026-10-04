@@ -10,7 +10,6 @@
     "thc.runtime.GenericSumTransportTest",
     "thc.runtime.TupleJoinNativeTest",
     "thc.runtime.SumInputNativeTest",
-    "thc.runtime.TupleCaptureNativeTest",
     "thc.runtime.SumJoinInputNativeTest",
     "thc.GraphWorkloadTest",
     "thc.runtime.OriginalIconvNativeTest",

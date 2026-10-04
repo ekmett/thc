@@ -258,7 +258,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                     self.assertNotIn("name: " + name, (WORKFLOW.parent / filename).read_text())
         for producer in ("aggregate-heap", "fourway-aggregate", "generic-sum-transport",
                          "narrow-integer-transport", "tuple-join", "sum-input",
-                         "sum-join-input", "tuple-capture"):
+                         "sum-join-input"):
             self.assertNotIn("--offline -- " + producer, workflow)
         self.assertNotIn("  foreign-exceptions:", workflow)
         self.assertNotIn("inputs.cadence", workflow)

@@ -116,10 +116,6 @@ Not quarantined merely for this reason:
     worker arity. SumInputNativeTest excluded; retain values and handoff cleanup
     observations in shared aggregate tests.
 
-  tuple-capture (151): requires >=8 exported capture occurrences and exact closure storage/image
-    size. TupleCaptureNativeTest excluded; preserve identity, laziness and thunk
-    sharing checks in aggregate runtime coverage.
-
   sum-join-input (152): producer requires >=7 sum joins and consumer pins exact wrapper/loop let
     shapes and join-transfer counts. SumJoinInputNativeTest excluded; retain
     behavioral values and lifetime cleanup in the aggregate suite.
