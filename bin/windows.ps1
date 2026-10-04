@@ -80,7 +80,8 @@ try {
             'thc.runtime.NativeByteArrayPolicyTest.nativeStorageRequiresNativeAuthorityAtContextCreation',
             'thc.runtime.NativeByteArrayPolicyTest.nativeOwnerOutlivesContextWhileRegistriesAndPointerCellBoundariesStayChecked',
             'thc.runtime.NativeByteArrayPolicyTest.launcherDefaultsToNativeButHonorsHeapWithoutChangingEmbeddings',
-            'thc.runtime.NativeByteArrayPolicyTest.guestCreationQueriesResizeAndAliasesRespectContextPolicyOnBothBackends')
+            'thc.runtime.NativeByteArrayPolicyTest.guestCreationQueriesResizeAndAliasesRespectContextPolicyOnBothBackends',
+            'thc.runtime.PinnedPointerCellsTest.orderedAddressesRequireOneAllocationAndPreserveCheckedOffsets')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava

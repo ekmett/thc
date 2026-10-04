@@ -127,6 +127,10 @@ copying under heap/native policy on both backends and handoff modes, including
 first AST compiled-call evidence without qualifying bytecode compiled-body
 execution.
 
+One shared memory-model check covers ordering within an allocation, aliases and
+checked offsets, rejecting comparisons across owners; it does not qualify
+backend or compiled execution.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:
