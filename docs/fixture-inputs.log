@@ -2240,40 +2240,29 @@ Both old manifests removed. Neither receipt hashes native binary/logs. Windows
   uses .exe and omits -dynamic. Tests consume oracle/receipts and descriptor JSON;
   these producers do not export any Core or require the Core auditor.
 
-069  original-open
-Fixture rationale (069 original-open)
-Purpose: Check open requests preserve resource ownership and blocking/async behavior.
-Produces/consumed result: Core CBDs, oracle.json and the runtime native-open provider.
-Cost and overlap: Retain open/cancel/resource-leak behavior. Exact internal root counts
-  must go; native provider testing is justified only by THC-owned request state.
-Build status: QUARANTINED; compiler-structure assertions must be removed.
-  Excluded from build/test entry points; see docs/fixture-quarantine.log.
-
-Producer: t/haskell-fixtures/OriginalOpenFixtures.hs.
-Consumers: thc.runtime.OriginalOpenTest, LoomOriginalOpenTest.
-IN: t/fixtures/compiler/OriginalOpenAudit.hs, OriginalOpenNative.hs,
-  OriginalOpenRequestNative.hs; src/main/c/native-open-request.c;
-  shared exporter/auditor/GHC9.14.1/ghc-internal/unix and Driver.NativeCache's
-  SDK compiler/linker flags, system headers/pthread.
-Under build/original-open/:
-  native/oracle: IN native driver/request module/C implementation/native packages,
-    -threaded, THC_OPEN_REQUEST_TEST, C11 warnings and SDK flags;
-    OUT executable/intermediates.
-  native/cases/: IN executable's generated cases; OUT scratch filesystem tree,
-    removed before each native run. oracle.json: IN oracle stdout; OUT 13 cases.
-  <pre|post>/core/OriginalOpenAudit.cbd, THC.InterfaceClosure.cbd
-    IN audit source/exporter/unsafe,safe,interruptible closure roots/stage;
-    OUT CBD pair and stage/ghc/.
-  <stage>/<originalOpen|originalOpenSafe|originalOpenInterruptible>.audit.json
-    IN CBD pair/auditor; OUT six reports.
-  logs/: ghc-version/info,native-build/run,stage-export/audit-entry;
-    OUT log triplets. manifest.json reads all published artifacts/source receipt.
-Linux x86_64 and macOS x86_64/arm64 supported; other hosts only negative manifest.
-Tests read receipts/Core/audits/oracle and generated StdioHostAbi/native open
-  transport resources. They create FIFOs using mkfifo, temporary files/symlinks;
-  read /proc on Linux, run /bin/sh for umask on macOS. Loom class reuses same
-  artifacts/behavior with different thread hosting. Exact binding/lambda counts
-  in OriginalOpenTest are another compiler-shape review candidate.
+069  native-open-request
+Purpose: Check THC-owned native request cancellation, publication, descriptor and
+  worker retirement, caller signal masks, and existing/later signal ownership.
+Producer: cmake/ProcessFixtures.cmake, fixture-native-open-request.
+Consumer: NativeFileProviderTest.nativeRequestControlsRunInFreshProcess; the test
+  executes one fresh subprocess because signal disposition is process-global.
+IN: t/fixtures/compiler/OriginalOpenRequestNative.hs; src/main/c/native-open-request.c;
+  selected native 64-bit GHC 9.14.1/ghc-pkg, installed global package registrations,
+  interfaces, archives and headers, GHC settings and configured compiler/linker;
+  on Darwin, SDKROOT or xcrun-selected SDK and SDK settings. CMake owns the C object
+  and its compiler-discovered source/system header dependencies.
+OUT: build/native-open-request/native/oracle;
+  build/native-open-request/native/OriginalOpenRequestNative.hi and .o;
+  build/fixtures/CMakeFiles/fixture-native-open-request-c.dir/src/main/c/native-open-request.c.o.
+  GHC uses --make -main-is OriginalOpenRequestNative.main, -O2 -threaded;
+  the C object uses C11, THC_OPEN_REQUEST_TEST and warnings; GHC links pthread.
+No Core export, audit, fixture-tool executable or descriptor hash manifest is
+  required. NativeFileProviderTest's scratch and stdout/stderr are test-private,
+  not cached fixture products. The child brackets its named FIFO; rerunning with
+  unrelated scratch files does not consume or remove them.
+Platform guards: Linux x86_64 and Darwin x86_64/arm64 only. Darwin graph/child and
+  same nonempty scratch reruns are qualified at 0f21bf171; Linux execution awaits CI.
+This native control does not qualify installed GHC wrappers or Loom-hosted open.
 
 070  rts-diagnostics
 Fixture rationale (070 rts-diagnostics)
@@ -4386,11 +4375,6 @@ Quarantine enforcement checkpoint
   CI selection contains 103 groups / 419 classes and no quarantined consumers.
   Direct quarantined/wildcard CLI requests exit 2 with PATH=/nonexistent, before
   toolchain discovery. No Gradle application build or runtime suite was executed.
-
-Structural-assertion quarantine follow-up
-  069 original-open, 124 tuple-join and 137 sum-join
-  are now excluded too. Their previously recorded exact Core/root/join/state-lambda
-  assumptions are not admission requirements for the future compiler.
 
 145 aggregate-heap (custom full-Core suite)
 Fixture rationale (145 aggregate-heap)

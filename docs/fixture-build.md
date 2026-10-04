@@ -25,7 +25,7 @@ The `fixtures` aggregate is the default build target. The selection inventory is
 admitted group without a rule or a quarantined group with one. Make and CI use
 this same graph. Exact class and method selectors build only their dependencies;
 fixture-free classes invoke no fixture tools. Unknown selectors and wildcards
-fail before generation. The 49 [quarantined groups](fixture-quarantine.log) have
+fail before generation. The [quarantined groups](fixture-quarantine.log) have
 no targets and are excluded from test execution, including direct Gradle runs.
 
 Each file has one producer. Commands that generate related CBDs, interfaces,

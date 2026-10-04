@@ -447,8 +447,7 @@ extra-source-files:
   t/fixtures/process-lifecycle/Main.hs
   t/fixtures/process-lifecycle/sigchld-policy.c
   t/fixtures/compiler/OriginalProcessIdentityNative.hs
-  t/fixtures/compiler/OriginalOpenAudit.hs
-  t/fixtures/compiler/OriginalOpenNative.hs
+  t/fixtures/compiler/OriginalOpenRequestNative.hs
   t/fixtures/compiler/OriginalSavedTermiosAudit.hs
   t/fixtures/compiler/OriginalSavedTermiosNative.hs
   t/fixtures/compiler/OriginalTcsetattrAudit.hs
@@ -1288,7 +1287,6 @@ executable thc-fixtures
     GhcApiFixtures
     GhcApiAudit
     RtsDiagnosticFixtures
-    OriginalOpenFixtures
     PackageScalarFixtures
     StablePtrFFIFixtures
     PackageNativeOriginalsFixtures

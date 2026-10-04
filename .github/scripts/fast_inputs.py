@@ -28,8 +28,6 @@ import zlib
 
 SCHEMA = 1
 LINUX_X86_64_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
-ORIGINAL_OPEN_HOST = (platform.system(), platform.machine()) in {
-    ("Linux", "x86_64"), ("Darwin", "x86_64"), ("Darwin", "arm64"), ("Darwin", "aarch64")}
 ERRNO_NATIVE_HOST = platform.system() in ("Linux", "Darwin") and sys.maxsize > 2**32
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 ORIGINAL_UNIX_UNIT = re.compile(r"unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)\Z")
@@ -64,7 +62,7 @@ MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-li
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-open original-errno original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices
+narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-errno original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
@@ -571,7 +569,6 @@ NATIVE_EXECUTABLES = frozenset({"build/simd/native/simd", "build/simd-int32x4/na
     "build/scalar-memory-utilities/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
-    "build/original-open/native/oracle",
     "build/original-errno/native/oracle",
     "build/original-tcsetattr/native/oracle",
     "build/original-tcgetattr/native/oracle",
@@ -625,15 +622,6 @@ RTS_SHUTDOWN_OUTPUTS = frozenset("build/rts-shutdown/" + name for name in (
 ))
 
 ORIGINAL_RTS_LOCK_ENTRIES = ("originalLock", "originalUnlock")
-ORIGINAL_OPEN_ENTRIES = ("originalOpen", "originalOpenSafe", "originalOpenInterruptible")
-ORIGINAL_OPEN_OUTPUTS = frozenset("build/original-open/" + name for name in (
-    "manifest.json", "oracle.json", "native/oracle",
-    *(f"logs/{label}.{suffix}" for label in ("ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
-        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_OPEN_ENTRIES))
-      for suffix in ("stdout", "stderr", "command.json")),
-    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalOpenAudit.cbd", "core/THC.InterfaceClosure.cbd", *(f"{entry}.audit.json" for entry in ORIGINAL_OPEN_ENTRIES))),
-))
 ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for name in (
     "manifest.json", "oracle.json", "declarations.json", "declarations.cbd",
     "pre.cbd", "post.cbd",
@@ -935,25 +923,6 @@ def fd_ready_artifact_hashes(manifest):
             "Incomplete/unreviewed original fdReady artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
             "Invalid original fdReady artifact hash")
-    return artifacts
-
-
-def original_open_artifact_hashes(manifest):
-    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
-            "Invalid original open manifest")
-    if not ORIGINAL_OPEN_HOST:
-        require(manifest.get("supported") is False, "Unsupported original open host")
-        return {}
-    require(manifest.get("supported") is True and manifest.get("strictAccepted") is True and
-            manifest.get("runtimeVerified") is False and manifest.get("installedArtifactsHashed") is False and
-            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 13 and
-            manifest.get("nativeVariants") == ["unsafe", "safe", "interruptible"] and
-            manifest.get("ownedRequestControls") is True,
-            "Invalid original open proof")
-    artifacts = manifest.get("artifactHashes")
-    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_OPEN_OUTPUTS - {"build/original-open/manifest.json"},
-            "Incomplete/unreviewed original open artifacts")
-    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid original open hash")
     return artifacts
 
 
@@ -1611,8 +1580,6 @@ def allowed_payload(name):
         return name in RTS_SHUTDOWN_OUTPUTS
     if parts[1] == "original-rts-locks":
         return name in ORIGINAL_RTS_LOCK_OUTPUTS
-    if parts[1] == "original-open":
-        return name in ORIGINAL_OPEN_OUTPUTS
     if parts[1] == "original-errno":
         return name in ORIGINAL_ERRNO_OUTPUTS
     if parts[1] == "original-termios":
@@ -1797,8 +1764,6 @@ def inventory(root, current, read, core_files, verified=None):
             rts_shutdown_artifact_hashes(doc)
         if name == "build/original-rts-locks/manifest.json":
             rts_lock_artifact_hashes(doc)
-        if name == "build/original-open/manifest.json":
-            original_open_artifact_hashes(doc)
         if name == "build/original-errno/manifest.json":
             errno_artifact_hashes(doc)
         if name == "build/original-termios/manifest.json":

@@ -102,7 +102,6 @@ import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import GhcApiFixtures (prepareGhcApi, prepareRecordFields, prepareRecordFieldsDemand, recordFieldsDemandInventory)
 import RtsDiagnosticFixtures (prepareRtsDiagnostics)
-import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar, preparePackageNativeDemand)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import PackageNativeArchiveFixtures (preparePackageNativeArchives)
@@ -1031,7 +1030,6 @@ main = do
     ["original-directory-paths"] -> prepareOriginalDirectoryPaths root
     ["original-directory-streams"] -> prepareOriginalDirectoryStreams root
     ["windows-directory"] -> prepareWindowsDirectory root
-    ["original-open"] -> prepareOriginalOpen root
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["package-native-demand"] -> preparePackageNativeDemand root
     ["stableptr-ffi"] -> prepareStablePtrFFI root
