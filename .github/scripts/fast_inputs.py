@@ -62,7 +62,7 @@ MANIFEST_DIRS = """mask-functions pinned-pointer-cells wide-char-address unix-li
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-mvars managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc original-stack original-stdio-read original-errno original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices
+native-addresses native-malloc original-stack original-stdio-read original-errno original-termios original-tcsetattr original-tcgetattr original-stdio-truncate original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices
 show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
@@ -1413,7 +1413,6 @@ CBV_CONTRACT_CBD_OUTPUTS = frozenset({
     *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
     *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
     "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
-    *(f"build/narrow-literal-proofs/{stage}-core/NarrowLiteralProofAudit.cbd" for stage in ("pre", "post")),
 })
 
 HEAP_CORPUS_CBD_OUTPUTS = frozenset(

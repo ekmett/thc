@@ -3529,7 +3529,6 @@
       "thc.runtime.MutVarNativeTest",
       "thc.runtime.MutableByteArrayNativeTest",
       "thc.runtime.MutableByteArraySizeTest",
-      "thc.runtime.NarrowLiteralProofTest",
       "thc.runtime.NativeAddressTest",
       "thc.runtime.NativeMallocTest",
       "thc.runtime.OriginalCurrentDirectoryTest",

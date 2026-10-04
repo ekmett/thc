@@ -8,100 +8,18 @@ from the new graph pending repair; inventory is not admission.
 No fixture generation or runtime test execution is part of this scan. Shared tool inputs
 are called out separately from fixture outputs; unresolved closure is explicit.
 
-001  narrow-literal-proofs
-Fixture rationale (001 narrow-literal-proofs)
-Purpose: Check signed and high-bit narrow literals survive real Core export and runtime
-  lowering.
-Produces/consumed result: Pre/post CBDs and native oracle.tsv; tests also consume
-  projected/mutated Core.
-Cost and overlap: Keep the boundary behavior; compare with signed-narrow and array
-  literal cases before retaining a separate native build. Metadata-only proof ceremony
-  is not a benefit.
-Build status: QUARANTINED: exact24 direct writes/metadata projection shape must not constrain optimization.
-
-Producer: bin/prepare-narrow-literal-proofs.py:main
-Consumers: thc.runtime.NarrowLiteralProofTest; producer --check-only.
-The deleted test-narrow-literal-proofs.py is not a current consumer.
-
-Apparent direct inputs:
-  t/fixtures/compiler/NarrowLiteralProofAudit.hs
-  t/fixtures/compiler/NarrowLiteralProofAuditNative.hs (imports the first module)
-  bin/prepare-narrow-literal-proofs.py (generation, projections and checked model)
-  bin/build-compiler.sh, bin/export-core.sh, bin/toolchain.sh, bin/plugin.py
-  bin/core_package_manifest.py and bin/core_original_foreign.py (CBD inspection)
-  bin/audit-core.py and its imported core_* modules
-  bin/core-capabilities.json
-  src/main/resources/thc/scalar-primop-signatures.json
-  src/test/resources/thc/polyglot-abi.json (audit-core import-time read)
-  bin/simd-families.json (core_vectors import-time read)
-  Tools: selected GHC 9.14.1, matching ghc-pkg, Cabal, Python, shell;
-    THC Core plugin/shared library and package registration; thc-compact executable.
-  Native Haskell inputs include GHC.Exts and its selected compiler package closure.
-  The plugin/tool build reads thc.cabal, cabal.project, Setup.hs, relevant Haskell
-    component sources and Cabal's resolved plan/package databases. That shared
-    build closure is not yet individually enumerated here.
-
-Selection/configuration consumed:
-  GHC, GHC_PKG, CABAL, THC_COMPACT; PATH for unresolved tool names.
-  THC_SOURCE_NOTES defaults to true in export-core.sh.
-  GHC_ENVIRONMENT and Cabal configuration are inherited, not cleared by this script.
-  Producer supplies THC_CORE_OUT and THC_GHC_OUT per stage.
-  Export flags: -O2 -dynamic -fforce-recomp -dcore-lint; post stage adds post-tidy.
-  Native flags: --make -O2 -fforce-recomp; target platform/word size/native ABI apply.
-
-Published outputs, relative to build/narrow-literal-proofs/:
-  pre-core/NarrowLiteralProofAudit.cbd
-  post-core/NarrowLiteralProofAudit.cbd
-  pre-audit.json, post-audit.json
-  oracle.tsv
-  native/narrow-literal-oracle
-  manifest.json (sources/artifacts with hashes, commands and model inventory)
-Intermediate outputs:
-  pre-ghc/, post-ghc/, native/ object/interface files; compiler/plugin publication;
-  Cabal build products; temporary CBD inspection files. Exporter may emit further
-  diagnostic products: inspect the exporter/plugin closure before declaring these.
-
-Actual test reads:
-  manifest.json; every path in its sources and artifacts sections;
-  pre/post CBD and oracle.tsv. Native executable/audit files are also read as bytes
-  by manifest verification, even when the test does not execute/read their contents.
-  Runtime/test classpath and test implementation are separate test inputs.
-
-Artifact-by-artifact file flow (paths below use this fixture directory):
-  native/narrow-literal-oracle
-    IN: NarrowLiteralProofAuditNative.hs, NarrowLiteralProofAudit.hs, selected
-        GHC package interfaces/libraries and native linker/compiler tools.
-    OUT: native/narrow-literal-oracle; native object/interface intermediates.
-  pre-core/NarrowLiteralProofAudit.cbd
-    IN: NarrowLiteralProofAudit.hs, published THC plugin/package DB, GHC package
-        interfaces, export-core.sh/toolchain.sh/plugin.py and export flags.
-    OUT: that CBD; pre-ghc/ intermediates. Further plugin side outputs unresolved.
-  post-core/NarrowLiteralProofAudit.cbd
-    IN: same as pre, plus the post-tidy plugin option.
-    OUT: that CBD; post-ghc/ intermediates. Further plugin side outputs unresolved.
-  oracle.tsv
-    IN: native/narrow-literal-oracle (executed with its embedded input cases).
-    OUT: captured stdout as oracle.tsv.
-  pre-audit.json / post-audit.json (two separate files)
-    IN: the corresponding stage CBD, oracle.tsv, checked model in the producer,
-        thc-compact, auditor Python import closure and JSON tables listed above.
-    OUT: corresponding audit JSON; temporary decoded Core JSON is not published.
-  manifest.json
-    IN: all six artifact files above (both CBDs, both audits, oracle TSV and
-        native executable); the exact source paths assembled in main(); commands.
-    OUT: manifest.json. This happens after all generation/checks succeed.
-
-Missing edges / caveats:
-  The producer builds the plugin itself, and each export builds it again. Those are
-  procedural calls rather than shared producer edges.
-  Decoder availability is reached indirectly through build-compiler.sh, which
-  currently builds exe:thc-compact; inspection otherwise only locates the executable.
-  The fixture's source receipt omits bin/plugin.py and polyglot-abi.json despite
-  consuming them; bin/simd-families.json is also an imported data input. Its src/compiler/THC/**/*.hs and core_*.py lists also hash files
-  more broadly than their proven consumption.
-  --check-only rewrites pre/post audit JSON; it is not a read-only verification step.
-  Current Gradle input globs do not create a producer dependency. The former Python
-  test exposed this by reading oracle.tsv before any producer had run.
+Shared exporter/auditor inputs (where consumed):
+  bin/build-compiler.sh, bin/export-core.sh, bin/toolchain.sh, bin/plugin.py;
+  selected GHC9.14.1/ghc-pkg/Cabal, THC plugin/shared library, registrations and
+  package interfaces/libraries. Component builds also consume thc.cabal,
+  cabal.project, Setup.hs, component sources and resolved plans/package databases;
+  that closure is not individually enumerated in this scan.
+  CBD inspection uses thc-compact, bin/core_package_manifest.py and
+  bin/core_original_foreign.py. Audits consume bin/audit-core.py, imported core_*
+  modules, bin/core-capabilities.json, scalar-primop-signatures.json,
+  src/test/resources/thc/polyglot-abi.json and bin/simd-families.json.
+  GHC/GHC_PKG/CABAL/THC_COMPACT and inherited tool/configuration environments select
+  these tools. Export flags and pre/post stage options are separate inputs.
 
 002  empty join semantics (fixture-free)
 Owners: thc.runtime.TupleJoinLoweringTest and thc.runtime.EmptyArgumentRuntimeTest.
@@ -118,8 +36,8 @@ Core and consumes no generated fixture products.
 Fixture rationale (003 signed-narrow-primops)
 Purpose: Check sign extension, narrowing and signed boundary arithmetic against GHC.
 Produces/consumed result: Exported primitive CBDs and native oracle.tsv.
-Cost and overlap: Keep one bounded signed-width corpus. Fold duplicate literal cases
-  from narrow-literal-proofs into it where the same execution path is exercised.
+Cost and overlap: Keep one bounded signed-width corpus; array fixtures own exported
+  literal transport, and fixture-free narrow carrier controls own loader behavior.
 Build status: Value review only; admission still requires explicit inputs and single-
   owner outputs.
 
@@ -132,7 +50,7 @@ Files/tools in:
   t/haskell-fixtures/Main.hs (entry list, operand cases, generated native driver)
   t/haskell-fixtures/FixtureSupport.hs (subprocesses, platform adapter, hashing)
   Built exe:thc-fixtures and its Cabal component/package closure.
-  Shared exporter/plugin/GHC package inputs from 001. No Python auditor stage.
+  Shared exporter/plugin/GHC package inputs. No Python auditor stage.
   Windows: bin/export-core.ps1 and bin/windows-common.ps1; PowerShell, generated
     GHC response file; native executable has .exe suffix.
   GHC selects native compiler; exporter additionally selects GHC_PKG/CABAL and
@@ -495,7 +413,7 @@ Producer: t/haskell-fixtures/Main.hs:preparePinnedPointers.
 Consumer: src/test/java/thc/runtime/PinnedPointerCellsTest.java.
 Inputs: t/fixtures/compiler/PinnedPointerCellsAudit.hs and
   PinnedPointerCellsNative.hs; Main.hs, FixtureSupport.hs, built thc-fixtures;
-  shared exporter/plugin/native GHC closure and Python auditor closure from 001.
+  shared exporter/plugin/native GHC closure and Python auditor closure from the shared inputs above.
   Native source imports audit source, GHC.Exts and Data.List. GHC=9.14.1 enforced.
 Under build/pinned-pointer-cells/:
   native/oracle
@@ -598,7 +516,7 @@ Producer: t/haskell-fixtures/IntegerCompletionFixtures.hs:prepareIntegerCompleti
 Consumer: src/test/java/thc/runtime/IntegerCompletionTest.java.
 IN common: producer, Main.hs/FixtureSupport.hs and built thc-fixtures;
   t/fixtures/compiler/IntegerCompletionAudit.hs; native 64-bit GHC 9.14.1;
-  exporter/plugin plus auditor/decoder/data closure from 001.
+  exporter/plugin plus auditor/decoder/data closure from the shared inputs above.
 Under build/integer-completion/:
   pre-core/IntegerCompletionAudit.cbd, post-core/IntegerCompletionAudit.cbd
     IN: audit source and exporter/plugin (post adds post-tidy). OUT: stage CBDs,
@@ -636,7 +554,7 @@ Producer: t/haskell-fixtures/WordFloatingFixtures.hs:prepareWordFloating.
 Consumer: src/test/java/thc/runtime/WordFloatingTest.java.
 IN common: producer, Main.hs/FixtureSupport.hs and built thc-fixtures;
   t/fixtures/compiler/WordFloatingAudit.hs and WordFloatingNative.hs;
-  native 64-bit GHC 9.14.1 (host must equal target); exporter and auditor as in 001.
+  native 64-bit GHC 9.14.1 (host must equal target); exporter and auditor as listed above.
 Under build/word-floating/:
   pre-core/WordFloatingAudit.cbd, post-core/WordFloatingAudit.cbd
     IN: audit source, exporter/plugin/GHC interfaces and stage option.
@@ -710,7 +628,7 @@ Shared command-log artifacts (used by 015 and later runLogged producers)
 Shared byte-array producer observed for 018-022
   t/haskell-fixtures/ByteArrayFixtures.hs:prepareByteArrayFamily plus Main.hs,
   FixtureSupport.hs and built thc-fixtures. Reads native 64-bit GHC 9.14.1 and
-  bytestring-0.12.2.0 registration; uses exporter/plugin and auditor closure (001).
+  bytestring-0.12.2.0 registration; uses exporter/plugin and auditor closure listed above.
   Every stage exports named roots then lists ALL *.cbd in the destination and
   passes that list to each entry audit. Old CBDs are not removed first: directory
   contents are an undeclared, open-ended input. Exact closure outputs need fixing.
@@ -1384,7 +1302,7 @@ Under build/simd-calls/:
     OUT native TSV, non-ARM only.
   manifest.json: IN CBDs/reports/optional TSV, short source receipt; OUT hashes.
 Consumer reads manifest/receipt paths, stage CBDs/reports, optional TSV. Native
-  executable not hashed; short source receipt omits shared inputs listed in 001.
+  executable not hashed; short source receipt omits shared inputs listed above.
 
 038  simd-arithmetic (shuffle)
 Fixture rationale (038 simd-arithmetic)
@@ -1429,7 +1347,7 @@ Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture
 
 Producer: bin/prepare-data-to-tag.py:main; consumer thc.runtime.DataToTagTest.
 IN: producer, t/fixtures/compiler/DataToTagAudit.hs, exporter/plugin and full
-  auditor/decoder closure (001). GHC9.14.1 also runs a ghc-package -e signature query.
+  auditor/decoder closure listed above. GHC9.14.1 also runs a ghc-package -e signature query.
 Under build/data-to-tag/:
   pre/core/DataToTagAudit.cbd and post/core/DataToTagAudit.cbd
     IN source/exporter/stage option; OUT CBDs, stage/ghc/ scratch. Every CBD in
@@ -4231,7 +4149,7 @@ Shared Haskell component builds
   bin/build-compiler.sh publishes build/compiler/plugin.json, plugin-package-dbs
     and a shared-library copy through bin/plugin.py, which reads the Cabal plan
     and local/store/global registrations. Building lib:thc alone does not publish
-    this separate plugin description. See 001/066 for actual consumer paths.
+    this separate plugin description. See entry 066 for installed-Core consumer paths.
   build/thc-fixtures.path:
     IN resolved executable path. OUT plain path sidecar, written by several entry
     points (including prepare-tests.sh and fast CI common-encoder setup).
@@ -5224,7 +5142,7 @@ Native Windows execution is unverified here. Replace shared outputs and hidden
   tool/runtime prerequisites; keep cheap timeout and portable direct tests separate.
 
 Inventory/header checkpoint after entry 174 (base 16c7b9355, local changes):
-  Every inventory entry001-174 has a value rationale at its producer or input header;
+  Each recorded inventory entry has a value rationale at its producer or input header;
     common Main/InstalledCore helpers identify shared ownership separately. Eleven
     new Haskell header edits compared with HEAD: noncomment code unchanged.
   python3 -B .github/scripts/test_fast_fixtures.py: 47 passed in1.204s.
@@ -5238,7 +5156,3 @@ Inventory/header checkpoint after entry 174 (base 16c7b9355, local changes):
     classes. Mixed-class tagged methods add further excluded coverage, not a class count.
   git diff --check passed. PowerShell unavailable locally; native Windows script
     execution is unverified. No fixture/runtime builds, pushes or CI dispatches.
-
-Narrow-literal-proofs (001) remains quarantined: its consumer requires exactly24
-matching direct writes. Preserve semantic signed/high-bit checks when consolidating
-that family; compiler structure is not the contract.

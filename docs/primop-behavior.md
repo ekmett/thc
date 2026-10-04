@@ -20,6 +20,15 @@ The tables distinguish unsupported behavior from intentional target choices
 and performance-only hints. Linked implementation guides supply detail and
 test commands.
 
+## Narrow Core literals
+
+Narrow literal tags preserve their signed or unsigned values when representation
+metadata is absent or unconstrained. Both loaders reject malformed present proofs
+and noncanonical or out-of-range values; ordinary machine literals do not acquire
+narrow certification. Real exported 16-bit and 32-bit literals have dedicated
+array-suite controls. A genuine GHC 8-bit literal with erased argument proof remains
+unqualified; synthetic loader controls do not establish that compiler behavior.
+
 ## Original working-directory foreign calls
 
 | Original declaration | Current behavior and consequence |

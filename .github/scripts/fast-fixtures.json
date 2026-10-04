@@ -1590,13 +1590,6 @@
       "sources": ["t/haskell-fixtures/SumJoinFixtures.hs",
         "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
-    "narrow-literal-proofs": {
-      "quarantined": true,
-      "junit": ["thc.runtime.NarrowLiteralProofTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-narrow-literal-proofs.py"]}],
-      "outputs": ["build/narrow-literal-proofs"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
     "simd-int64x2": {
       "cmakeTarget": "fixture-simd-int64x2",
       "junit": ["thc.runtime.SimdVectorTest"],

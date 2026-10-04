@@ -1629,7 +1629,7 @@ class FastInputTests(unittest.TestCase):
         for name in cache.CBV_CONTRACT_CBD_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
         for name in ("build/core/Other.cbd", "build/cbv-post-core/DemandAudit.cbd",
-                     "build/source-core/StrictFields.cbd", "build/narrow-literal-proofs/other-core/NarrowLiteralProofAudit.cbd"):
+                     "build/source-core/StrictFields.cbd"):
             self.assertFalse(cache.allowed_payload(name), name)
 
     def test_scalar_cbd_payloads_admit_only_the_exported_modules_and_stages(self):
