@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.ThreadLocalAction;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.polyglot.Context;
@@ -23,6 +24,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import static thc.Main.executionContext;
 import static thc.runtime.ManagedFileFixtures.*;
@@ -116,6 +118,72 @@ class NativeFileProviderTest {
         } finally {
             try { context.close(true); }
             finally { pool.shutdownNow(); assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS)); }
+        }
+    }
+    @Test void guestCancellationDefersSafeOpenAndHonorsInterruptibleMasks() throws Exception {
+        record Case(OriginalStdioOp operation, MaskingState mask, boolean cancels) {}
+        for (var test : List.of(new Case(OriginalStdioOp.OPEN_SAFE, MaskingState.UNMASKED, false),
+                new Case(OriginalStdioOp.OPEN_INTERRUPTIBLE, MaskingState.MASKED_INTERRUPTIBLE, true),
+                new Case(OriginalStdioOp.OPEN_INTERRUPTIBLE, MaskingState.MASKED_UNINTERRUPTIBLE, false))) {
+            var fifo = directory.resolve(test.operation() + "-" + test.mask());
+            var create = new ProcessBuilder("mkfifo", fifo.toString()).start();
+            assertTrue(create.waitFor(10, TimeUnit.SECONDS)); assertEquals(0, create.exitValue());
+            var pool = Executors.newSingleThreadExecutor();
+            try (var context = nativeContext()) {
+                var state = entered(context, () -> Language.currentState(null)); var id = new AtomicLong(-1);
+                var target = entered(context, () -> {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    return new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            var threads = state.getThreads(); id.set(threads.enterCurrent(test.mask()));
+                            try {
+                                // ManagedStdio/ManagedFiles owns the foreign activation; openRaw alone bypasses it.
+                                var stdio = state.getStdio(); long result = stdio.open(path(fifo), 0, 0, test.operation(), this);
+                                assertEquals(test.mask(), state.getMaskingState().get(), "Foreign extent must preserve the guest mask");
+                                if (result < 0) assertEquals(4L, stdio.errno(), "Cancelled native open must return EINTR");
+                                else assertEquals(0L, stdio.close(result));
+                                if (test.mask() != MaskingState.UNMASKED)
+                                    assertNull(threads.poll(this, false), "Ordinary delivery must respect the restored mask");
+                                state.getMaskingState().set(MaskingState.UNMASKED);
+                                var pending = threads.poll(this, false);
+                                assertNotNull(pending, "Native cancellation must leave the guest exception for the next guest cut");
+                                assertEquals("cancel open", pending.getPayload()); pending.acknowledge();
+                                return result < 0;
+                            } finally { threads.leaveCurrent(); }
+                        }
+                    }.getCallTarget();
+                });
+                var future = pool.submit(() -> entered(context, target::call));
+                try {
+                    awaitNativeOpen(); assertFalse(future.isDone());
+                    var request = entered(context, () -> state.getThreads().send(id.get(), "cancel open"));
+                    if (test.cancels()) assertEquals(true, future.get(10, TimeUnit.SECONDS));
+                    else {
+                        // Observe the live mailbox on the target's foreign safepoint before releasing the FIFO.
+                        entered(context, () -> state.getEnv().submitThreadLocal(new Thread[] {request.getTarget()},
+                            new ThreadLocalAction(true, false) {
+                                @Override protected void perform(Access access) {
+                                    assertEquals(test.mask(), state.getMaskingState().get());
+                                    assertEquals(AsyncRequestState.PENDING, request.getState());
+                                    assertNull(state.getThreads().poll(null, true), "Foreign execution must not claim guest delivery");
+                                }
+                            })).get(10, TimeUnit.SECONDS);
+                        awaitNativeOpen(); assertEquals(AsyncRequestState.PENDING, request.getState());
+                        assertFalse(future.isDone(), "Safe and uninterruptibly masked opens must defer delivery");
+                        try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                            assertEquals(false, future.get(10, TimeUnit.SECONDS));
+                        }
+                    }
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                    assertEquals(0L, nativeOpenWorkerCount(), "Completed request must join its native worker");
+                    assertEquals(0L, nativeDescriptors(fifo), "Cancellation and successful release must close acquired descriptors");
+                } finally {
+                    // Release a failed test's FIFO before waiting for its host executor.
+                    if (!future.isDone()) try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                        try { future.get(10, TimeUnit.SECONDS); } catch (ExecutionException ignored) { }
+                    }
+                }
+            } finally { pool.shutdownNow(); assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS)); }
         }
     }
     @Test void nativeAndCommandLineContextsPermitGuestThreads() throws Exception {
