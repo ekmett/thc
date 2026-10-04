@@ -37,7 +37,7 @@ test commands.
 | --- | --- |
 | `par#` | Returns `1`; discards hints by default. With opt-in `thc.SparkQueueCapacity`, submits suitable original thunks for speculative WHNF evaluation without forcing on the caller. |
 | `spark#` | Returns the identical, unforced payload; completes its state operand before optional queue submission. |
-| `numSparks#` | Returns pending entries in the context-owned opt-in queue, excluding claimed work; defaults to `0`. |
+| `numSparks#` | Returns queued entries in the context-owned opt-in queue; defaults to `0`. |
 | `getSpark#` | Dequeues an unclaimed thunk with flag `1`, or returns flag `0` and the pinned GHC boxed `False` filler when the queue is empty or disabled. |
 | `fork#` | Creates a Truffle-managed platform thread by default, or one virtual thread per guest thread with opt-in `thc.ThreadHosting=loom`. Thread creation must be allowed by the embedding. Platform mode clears inherited CPU affinity; Loom routes unmounted work between exclusive logical HEC workers. Fork admission enables ordinary asynchronous polling before child publication on both backends, including with `asyncExceptions: false`; see `killThread#` below. |
 | `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
