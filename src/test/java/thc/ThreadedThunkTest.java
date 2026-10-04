@@ -452,6 +452,30 @@ class ThreadedThunkTest {
             } finally { release.countDown(); }
         }
     }
+    @Test void disposingSparkContextStopsClaimedWorkAndDiscardsUnstartedHints() throws Exception {
+        for (var backend : list("ast", "bytecode")) {
+            var context = sparkContext(1); Thread worker = null; Thunk queued = null; com.oracle.truffle.api.CallTarget original = null;
+            var effects = new AtomicInteger();
+            try {
+                context.initialize("thc"); var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
+                var caller = entered(context, () -> sparkCaller(language, backend)); var ready = new ManagedMVar(); var gate = new ManagedMVar();
+                var claimed = blockingSpark(context, language, backend, ready, gate);
+                entered(context, () -> { ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, claimed}); return null; });
+                try (var reader = Executors.newSingleThreadExecutor()) {
+                    var reading = reader.submit(() -> entered(context, () -> ready.take(null)));
+                    try { reading.get(5, TimeUnit.SECONDS); }
+                    finally { if (!reading.isDone()) ready.tryPut(Unit.INSTANCE); }
+                }
+                worker = claimed.getOwner(); assertNotNull(worker);
+                queued = sparkWork(context, language, backend, () -> { effects.incrementAndGet(); return Unit.INSTANCE; }); original = queued.getTarget();
+                var unstarted = queued;
+                entered(context, () -> { ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, unstarted}); return null; });
+            } finally { context.close(); }
+            worker.join(5000); assertFalse(worker.isAlive(), "Disposal joins the managed worker");
+            assertEquals(0, effects.get(), "Shutdown must discard queued work without entering it");
+            assertEquals(0, queued.getState()); assertSame(original, queued.getTarget()); assertNull(queued.getOwner());
+        }
+    }
     @Test void disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker() throws Exception {
         for (var backend : list("ast", "bytecode")) try (var context = sparkContext(0)) {
             context.initialize("thc"); var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));

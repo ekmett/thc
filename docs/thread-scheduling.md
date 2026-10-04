@@ -38,10 +38,31 @@ Existing async delivery, masking and saved-continuation rules apply in both mode
 
 ## Hints, affinity and accounting
 
-Spark hints are discarded without evaluating their lifted arguments. `par#`
-returns one, `spark#` returns the identical argument, and the empty pool queries
-return zero; `getSpark#` carries the pinned RTS's boxed `False` filler. There is
-no speculative worker pool or parallel-speedup claim.
+Spark hints are discarded by default without evaluating their lifted arguments.
+`par#` returns one and `spark#` returns the identical argument. Set
+`thc.SparkQueueCapacity` to a value from 1 to 65536 to enable one managed guest
+worker and a bounded context-owned queue; zero disables it. The embedding must
+allow thread creation. The worker uses the selected platform or Loom hosting.
+It evaluates original shared thunks to WHNF through ordinary `Force`; demand
+shares the same publication rather than starting a copied computation.
+
+This first slice admits only unevaluated original thunks from this context's
+AST or bytecode roots with asynchronous continuation capture enabled. Other
+values, unsupported roots, duplicate pending hints and overflow are discarded
+without forcing. Thus enabling the queue does not promise evaluation of every
+hint. `numSparks#` counts pending queue entries, excluding claimed work;
+`getSpark#` removes an unclaimed thunk with success flag one, or returns zero
+with the pinned RTS's boxed `False` filler when empty. A failed or suspended
+state operand completes before `spark#` can enqueue its payload.
+
+Ordinary speculative guest failures stay on their originating thunk and are
+observed by later demand; unrelated guest work continues. Cooperative async
+cancellation acknowledges the worker request and retains the claimed thunk's
+saved continuation for demand without replaying effects. Cancelling the worker
+stops this context's pool and discards unstarted hints. Context disposal clears
+queued references before managed worker shutdown; it never resets or replays
+claimed thunks. Unexpected worker infrastructure failures use the existing
+context failure path. No parallel speedup is claimed without workload evidence.
 
 `forkOn#` uses the existing real managed-thread implementation, lazy child action
 and inherited masking state. It records a locked context-local logical capability,

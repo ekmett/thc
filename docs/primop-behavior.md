@@ -35,10 +35,10 @@ test commands.
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `par#` | Discards the speculative evaluation hint without forcing its argument; returns `1`. No parallel evaluation is started. |
-| `spark#` | Discards the hint and returns the identical, unforced payload. |
-| `numSparks#` | Always returns `0`; there is no spark queue. |
-| `getSpark#` | Always returns failure flag `0` and the pinned GHC boxed `False` filler; no work is dequeued. |
+| `par#` | Returns `1`; discards hints by default. With opt-in `thc.SparkQueueCapacity`, submits suitable original thunks for speculative WHNF evaluation without forcing on the caller. |
+| `spark#` | Returns the identical, unforced payload; completes its state operand before optional queue submission. |
+| `numSparks#` | Returns pending entries in the context-owned opt-in queue, excluding claimed work; defaults to `0`. |
+| `getSpark#` | Dequeues an unclaimed thunk with flag `1`, or returns flag `0` and the pinned GHC boxed `False` filler when the queue is empty or disabled. |
 | `fork#` | Creates a Truffle-managed platform thread by default, or one virtual thread per guest thread with opt-in `thc.ThreadHosting=loom`. Thread creation must be allowed by the embedding. Platform mode clears inherited CPU affinity; Loom routes unmounted work between exclusive logical HEC workers. Fork admission enables ordinary asynchronous polling before child publication on both backends, including with `asyncExceptions: false`; see `killThread#` below. |
 | `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
@@ -47,8 +47,12 @@ test commands.
 | `setThreadAllocationCounter#` | Accounts JVM heap bytes during outer guest-entry extents, including runtime bookkeeping and excluding native/Sulong allocations and host work between entries. Requires JVM thread-allocation accounting support; Loom reads/resets reject. Does **not** enforce allocation limits. |
 | `setOtherThreadAllocationCounter#` | Same accounting and missing allocation-limit enforcement, for the selected context-owned thread. |
 
-Discarding sparks is a deliberate hint policy, not a claim of parallel speedup.
-Real forks are independent of that policy. CPU pins can be inherited by native
+Spark queues are bounded, default disabled, and use one managed worker. Only
+this context's original AST/bytecode thunks with async continuation capture are
+admitted; unsupported hints and overflow are discarded. Failures remain on the
+shared thunk; cooperative worker cancellation preserves its saved continuation
+for demand and stops further speculative work. See [thread scheduling](thread-scheduling.md).
+No parallel speedup is claimed. Real forks are independent of the hint policy. CPU pins can be inherited by native
 or JVM helper threads. The version-pinned Graal compiler-worker listener resets
 recognized workers before compilation, including replacement workers; helpers
 created earlier during initialization and unrecognized workers are not covered.
