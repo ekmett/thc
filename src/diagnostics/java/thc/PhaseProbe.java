@@ -88,12 +88,12 @@ public final class PhaseProbe {
     }
 
     /** Loading experiment only: no training, compilation or throughput claim.
-     * Uses authenticated lazy JSON loading without a sidecar index.
+     * Uses the public compact/package request path without a sidecar index.
      * The compiled-call probe below remains a separate strict control.
      */
-    private static void jsonLoadProbe(String[] args) throws Throwable {
+    private static void jsonLoadProbe(String[] args, boolean interfaceHelper) throws Throwable {
         if (args.length != 5 && args.length != 7) throw new IllegalArgumentException(
-            "Usage: phase-probe --load-json MODULE ENTRY INPUT EXPECTED [NEXT_INPUT NEXT_EXPECTED]");
+            "Usage: phase-probe [--allow-interface-helper] --load-json MODULE ENTRY INPUT EXPECTED [NEXT_INPUT NEXT_EXPECTED]");
         var phases = new PhaseMeasurements();
         String backend = System.getProperty("thc.backend", "bytecode");
         boolean async = strictBoolean(System.getProperty("thc.asyncExceptions", "true"));
@@ -104,8 +104,9 @@ public final class PhaseProbe {
         header.put("backend", backend);
         header.put("asyncExceptions", async);
         header.put("sourceNotesEnabled", notes);
+        header.put("interfaceHelperAllowed", interfaceHelper);
         System.out.println(Json.INSTANCE.stringify(header));
-        var context = phases.measure("context", () -> Main.executionContext(false));
+        var context = phases.measure("context", () -> Main.executionContext(false, interfaceHelper));
         try {
             phases.memoryCheckpoint("preLoad");
             var request = phases.measure("request", () -> CoreModules.request(List.of(args[1]), args[2],
@@ -141,7 +142,10 @@ public final class PhaseProbe {
      * Allocation counts cover this calling thread only, not Graal compiler workers.
      */
     public static void main(String[] args) throws Throwable {
-        if (args.length != 0 && args[0].equals("--load-json")) { jsonLoadProbe(args); return; }
+        if (args.length >= 2 && args[0].equals("--allow-interface-helper") && args[1].equals("--load-json")) {
+            jsonLoadProbe(Arrays.copyOfRange(args, 1, args.length), true); return;
+        }
+        if (args.length != 0 && args[0].equals("--load-json")) { jsonLoadProbe(args, false); return; }
         if (args.length != 4) throw new IllegalArgumentException("Usage: phase-probe MODULES ENTRY INPUT NATIVE_EXPECTED");
         var modules = Arrays.asList(args[0].split(",", -1));
         String entry = args[1];

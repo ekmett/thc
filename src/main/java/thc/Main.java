@@ -49,7 +49,7 @@ public final class Main {
     /** Values and native resources must not outlive or cross this owning context. */
     public static Context executionContext() { return executionContext(false); }
     public static Context executionContext(boolean fileIO) { return executionContext(fileIO, false); }
-    private static Context executionContext(boolean fileIO, boolean interfaceHelper) {
+    static Context executionContext(boolean fileIO, boolean interfaceHelper) {
         if (fileIO && interfaceHelper && System.getProperty("os.name").startsWith("Windows"))
             throw new IllegalArgumentException("Interface-demand IO launching currently requires macOS or Linux");
         if (fileIO && NativeIO.supportedHost())

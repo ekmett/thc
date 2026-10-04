@@ -99,6 +99,9 @@ final class CoreInterfaceSource {
         environment.remove("GHC_PACKAGE_PATH"); environment.remove("GHC_ENVIRONMENT");
         try (var out = Files.newOutputStream(output); var err = Files.newOutputStream(diagnostic)) {
         var builder = env.newProcessBuilder(arguments.toArray(String[]::new)).clearEnvironment(true).environment(environment);
+        // Every input is absolute; use our private output directory instead of
+        // consulting the context's ambient working directory or IO permissions.
+        builder.directory(env.getPublicTruffleFile(directory.toAbsolutePath().toString()));
         builder.redirectOutput(builder.createRedirectToStream(out)).redirectError(builder.createRedirectToStream(err));
         Process child = builder.start();
         try {

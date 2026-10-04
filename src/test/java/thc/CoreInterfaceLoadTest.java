@@ -6,7 +6,6 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import org.graalvm.polyglot.*;
-import org.graalvm.polyglot.io.IOAccess;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,8 +18,7 @@ class CoreInterfaceLoadTest {
     @TempDir Path directory;
     @AfterEach void releaseIdleMappings() { CoreFileMappings.shared.evictIdleBelow(directory); }
     private Context context(boolean processes) {
-        return Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
-            .allowIO(IOAccess.ALL).allowCreateProcess(processes), ContextProfile.LAUNCHER).build();
+        return Main.executionContext(false, processes);
     }
     private String request(Path manifest, String module, String entry, String backend) {
         return CoreModules.request(List.of("@" + manifest.toAbsolutePath()), UNIT + ":" + module + "." + entry,
