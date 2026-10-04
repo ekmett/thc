@@ -2541,7 +2541,7 @@ class OriginalByteStringUtf8DeclarationTest(unittest.TestCase):
 
 
 class OriginalGcStatsDeclarationTest(unittest.TestCase):
-    """Synthetic ABI negatives; JVM GC/clock boundaries execute in CompilerHeapHintTest."""
+    """Synthetic ABI negatives; JVM GC boundaries execute in CompilerHeapHintTest."""
     def test_closed_original_gc_stats_and_clock_abis(self):
         fixture = OriginalForeignAuditFixture()
         def scalar(rep, evaluated=False):

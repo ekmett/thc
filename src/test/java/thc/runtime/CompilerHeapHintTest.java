@@ -133,7 +133,7 @@ public class CompilerHeapHintTest {
             "convention", "ccall", "safety", call[2], "arity", arguments.size(), "suppliedArity", arguments.size(),
             "argumentReps", arguments, "resultRep", gcTuple(call[1], false));
     }
-    @Test public void gcRequireTheOriginalUnitSafetyAndStateResultAbi() {
+    @Test public void gcCallsRequireTheOriginalUnitSafetyAndStateResultAbi() {
         for (var call : gcCalls) {
             var declaration = gcDeclaration(call); var result = gcTuple(call[1], true);
             var arguments = call[0].equals("getRTSStats") ? List.of(scalar("AddrRep", true), state) : List.of(state);
@@ -169,7 +169,7 @@ public class CompilerHeapHintTest {
                 "expr", List.of("lam", List.of(parameter, Map.of("id", "state", "lifted", false, "rep", state)),
                     body, Map.of("rep", closure, "resultRep", result)))));
     }
-    @Test public void gcReturnHonestResultsFromTheFirstCompiledCall() throws ReflectiveOperationException {
+    @Test public void gcCallsReturnHonestResultsFromTheFirstCompiledCall() throws ReflectiveOperationException {
         for (var backend : List.of("ast", "bytecode")) for (var call : gcCalls) {
             if (call[0].equals("getRTSStats")) continue;
             try (var context = context()) {
