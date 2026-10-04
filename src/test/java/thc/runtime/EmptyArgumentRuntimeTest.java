@@ -159,6 +159,50 @@ class EmptyArgumentRuntimeTest {
             }
         });
     }
+    @Test void ignoredScalarStateTupleFieldExecutesBeforeLaterWorkAndRejectsInvalidCarrier() throws Exception {
+        withLanguage(language -> {
+            var state = map("kind", "void", "primReps", list(), "evaluated", true);
+            var pair = with(empty, "components", list(state, integer), "primReps", list("IntRep"));
+            var parameters = list(arg("effect", closure), arg("later", closure), arg("x"));
+            // An ignored scalar State# field still executes its ordinary producer before later fields.
+            // This synthetic module does not qualify GHC export of arbitrary State# producers.
+            var produceState = bind("produceState", lam(list(arg("effect", closure), arg("x")), call("effect", list(v("x")), state), state));
+            var laterField = call("later", list(v("x")));
+            var producePair = bind("producePair", lam(parameters, app(list("con", "T", 2), list(
+                call("produceState", list(v("effect", closure), v("x")), state, list(true, false)), laterField), pair), pair));
+            var body = list("case", call("producePair", list(v("effect", closure), v("later", closure), v("x")), pair, list(true, true, false)),
+                "answer", list(list("data", "T", list("ignored", "value"), v("value"), map("binders", list(arg("ignored", state), arg("value"))))),
+                map("rep", integer, "binder", arg("answer", pair)));
+            var entry = bind("entry", lam(parameters, body));
+            for (var backend : list("ast", "bytecode")) {
+                var p = program(language, backend, module(produceState, producePair, entry)); var events = new ArrayList<Long>();
+                var effect = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false}, false); }
+                    @Override public long bloom(VirtualFrame frame) { return 0L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        long x = (Long) frame.getArguments()[1]; events.add(x);
+                        if (x < 0) throw new GuestException(x, this);
+                        return Unit.INSTANCE;
+                    }
+                }.getCallTarget());
+                var later = new Closure(null, 1, new EffectRoot(language, events, null).getCallTarget());
+                assertEquals(7L, run(p, "entry", effect, later, 7L)); assertEquals(list(7L, 107L), events); released(language);
+                compile(p.entryTarget("entry")); events.clear(); long before = (Long) p.diagnostics().get("compiledEntries");
+                assertEquals(3_000_000_000L, run(p, "entry", effect, later, 3_000_000_000L));
+                assertEquals(list(3_000_000_000L, 3_000_000_100L), events);
+                assertTrue((Long) p.diagnostics().get("compiledEntries") > before); valid(p.entryTarget("entry")); released(language);
+                events.clear(); var failure = assertThrows(GuestException.class, () -> run(p, "entry", effect, later, -7L));
+                assertEquals(-7L, failure.getPayload()); assertEquals(list(-7L), events); released(language);
+                events.clear(); assertEquals(19L, run(p, "entry", effect, later, 19L)); assertEquals(list(19L, 119L), events); released(language);
+                // A legacy operand without representation metadata still has to return the scalar Unit carrier.
+                var invalid = bind("producePair", lam(parameters, app(list("con", "T", 2), list(list("lit", "int", "123"), laterField), pair), pair));
+                var bad = program(language, backend, module(invalid, entry)); events.clear();
+                var wrongCarrier = assertThrows(RuntimeFault.class, () -> run(bad, "entry", effect, later, 23L));
+                assertTrue(Objects.toString(wrongCarrier.getMessage(), "").contains("zero-width scalar carrier"), wrongCarrier.getMessage());
+                assertEquals(list(), events); released(language);
+            }
+        });
+    }
     @Test void dynamicMasksRejectScalarStateAndBoxedUnitWithoutInventingEmptyProofs() throws Exception {
         withLanguage(language -> {
             var state = map("kind", "void", "primReps", list(), "evaluated", true);
