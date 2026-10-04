@@ -52,6 +52,7 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86
     message(FATAL_ERROR "Native open request controls require native 64-bit GHC")
   endif()
   set(open_sdk_flags)
+  set(open_c_flags)
   set(open_sdk_inputs)
   if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(open_sdk "$ENV{SDKROOT}")
@@ -64,7 +65,8 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86
       message(FATAL_ERROR "Native open request controls require an absolute SDKROOT")
     endif()
     # Match nativeCompilerFlags: the selected SDK applies to C and linkage.
-    list(APPEND open_sdk_flags "-optc--sysroot=${open_sdk}" "-optl--sysroot=${open_sdk}")
+    list(APPEND open_sdk_flags "-optl--sysroot=${open_sdk}")
+    list(APPEND open_c_flags "--sysroot=${open_sdk}")
     foreach(settings SDKSettings.json SDKSettings.plist)
       if(EXISTS "${open_sdk}/${settings}")
         list(APPEND open_sdk_inputs "${open_sdk}/${settings}")
@@ -72,19 +74,25 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86
     endforeach()
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${open_sdk_inputs})
   endif()
+  # CMake owns the C object and its compiler-generated system-header dependencies.
+  enable_language(C)
+  add_library(fixture-native-open-request-c OBJECT EXCLUDE_FROM_ALL
+    "${PROJECT_SOURCE_DIR}/src/main/c/native-open-request.c")
+  set_target_properties(fixture-native-open-request-c PROPERTIES
+    C_STANDARD 11 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+  target_compile_definitions(fixture-native-open-request-c PRIVATE THC_OPEN_REQUEST_TEST)
+  target_compile_options(fixture-native-open-request-c PRIVATE -O2 -Wall -Wextra -Werror ${open_c_flags})
   set(open_native "${PROJECT_SOURCE_DIR}/build/native-open-request/native")
   add_custom_command(OUTPUT "${open_native}/oracle"
     BYPRODUCTS "${open_native}/OriginalOpenRequestNative.hi" "${open_native}/OriginalOpenRequestNative.o"
-      "${open_native}/native-open-request.o"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${open_native}"
     COMMAND ${fixture_env} "${GHC}" --make -main-is OriginalOpenRequestNative.main
       -O2 -threaded -fforce-recomp -package unix -package ghc-internal
-      ${open_sdk_flags} -optc-DTHC_OPEN_REQUEST_TEST -optc-std=c11
-      -optc-Wall -optc-Wextra -optc-Werror -optl-pthread -outputdir "${open_native}"
+      ${open_sdk_flags} -optl-pthread -outputdir "${open_native}"
       "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalOpenRequestNative.hs"
-      "${PROJECT_SOURCE_DIR}/src/main/c/native-open-request.c" -o "${open_native}/oracle"
+      $<TARGET_OBJECTS:fixture-native-open-request-c> -o "${open_native}/oracle"
     DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/OriginalOpenRequestNative.hs"
-      "${PROJECT_SOURCE_DIR}/src/main/c/native-open-request.c"
+      fixture-native-open-request-c $<TARGET_OBJECTS:fixture-native-open-request-c>
       "${PROJECT_SOURCE_DIR}/cmake/ProcessFixtures.cmake" ${toolchain_inputs} ${open_sdk_inputs}
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
     COMMENT "Build the isolated native open request controls")
