@@ -3615,7 +3615,6 @@
       "thc.runtime.StablePointerTest",
       "thc.runtime.StackAnnotationsTest",
       "thc.runtime.StateLambdaJoinTest",
-      "thc.runtime.StateTupleTest",
       "thc.runtime.StaticShapeSafetyTest",
       "thc.runtime.StdioHostAbiFailureTest",
       "thc.runtime.StdioHostAbiTest",

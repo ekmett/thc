@@ -555,10 +555,6 @@ class FastInputTests(unittest.TestCase):
                 self.assertTrue(cache.allowed_payload(path), path)
             for suffix in ("extra.cbd", "pre/core/Extra.cbd", "unreviewed/core/MaskFunctionAudit.cbd", "logs/extra.stdout"):
                 self.assertFalse(cache.allowed_payload(f"build/{family}/{suffix}"))
-        for stage in ("pre", "post"):
-            self.assertTrue(cache.allowed_payload(f"build/state-tuple/{stage}-core/StateTupleAudit.cbd"))
-            self.assertFalse(cache.allowed_payload(f"build/state-tuple/{stage}-core/Extra.cbd"))
-        self.assertFalse(cache.allowed_payload("build/state-tuple/other-core/StateTupleAudit.cbd"))
 
     def test_delimited_continuation_closed_outputs_exclude_native_binaries_and_extras(self):
         self.assertEqual(168, len(cache.DELIMITED_OUTPUTS))
@@ -1574,7 +1570,7 @@ class FastInputTests(unittest.TestCase):
             self.assertFalse(cache.allowed_payload(name), name)
 
     def test_original_native_executable_names_and_cstring_are_in_scope(self):
-        for name in ("state-tuple", "tuple-input"):
+        for name in ("tuple-input",):
             self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}"))
         self.assertIn("build/map/boot-core", cache.CORE_DIRS)
 

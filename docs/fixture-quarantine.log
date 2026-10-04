@@ -42,8 +42,7 @@ Unrelated directory members change consumed inputs or make generation fail:
   fetch-add-int-array (045), atomic-int-arrays (046), shrink-bytearrays (047),
     mutvar (081): exact output-directory inventories reject unrelated CBDs.
   floating-tuples (086), sum-results (088), tuple-input (114),
-    show-word-list (127), state-tuple (128),
-    short-bytes-slices (129), unsafe-equality (134),
+    show-word-list (127), short-bytes-slices (129), unsafe-equality (134),
     tag-to-enum (135): recursively discovered products enter receipts consumed
     by tests. sum-results includes aggregate-layout, sum-layout and sum-result.
   stable-pointers (084): both original and shared-CAF exports require exact

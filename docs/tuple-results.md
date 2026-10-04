@@ -22,6 +22,12 @@ field is a canonical Unit alias; nested closures need no capture field for that
 alias. Existing scalar State# formals and call packets retain their ordinary ABI.
 `ByteArray#` is one unlifted boxed reference, independent of State# erasure.
 
+Fixture-free controls execute ordinary scalar State# producers in ignored fields
+and suppress later field work on a guest exception, with released loans after
+failure and recovery. Genuine GHC/export preservation of arbitrary State-producing
+ordinary calls remains unqualified. Proofless State operands reject non-Unit
+scalar carriers and release loans; validation may follow operand materialization.
+
 The public Truffle boundary remains `Object[] -> Object`. Tuple results use a
 mandatory private protocol, independent of `thc.handoffSlabs`:
 

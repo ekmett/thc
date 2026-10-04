@@ -3718,28 +3718,6 @@ Under build/show-word-list/:
 --check-only runs inventory again and REWRITES audits, in addition to reading hashes/oracle.
 Consumer reads manifest/CBDs/oracle/audits. PrimopTools.hs is hashed without being executed.
 
-128 state-tuple
-Fixture rationale (128 state-tuple)
-Purpose: Check State#-containing tuple results preserve effects and live value
-  positions.
-Produces/consumed result: StateTupleAudit CBDs and oracle.tsv.
-Cost and overlap: Keep effect/value transport within the aggregate corpus. Recursive
-  output receipts and a separate setup pipeline are unjustified; quarantined.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-state-tuple-audit.py; consumer: thc.runtime.StateTupleTest.
-IN t/fixtures/compiler/StateTupleAudit.hs, StateTupleAuditNative.hs, producer model,
-  shared exporter/auditor/decoder/data/native GHC.
-Under build/state-tuple/:
-  native/state-tuple and intermediates: IN driver/audit sources/GHC.
-  oracle.tsv: IN binary.
-  <pre|post>-core/StateTupleAudit.cbd and stage-ghc/: IN source/exporter.
-  stage-audit.json: IN CBD/auditor/declared entries.
-  provenance.json: IN recursive native/core files/TSV/audits/source hashes.
-  checks.json: IN receipt/hashes/oracle/model/CBD shape; --check-only also writes.
-No old receipt invalidation. Unused PrimopTools.hs included when present.
-Consumer reads receipt/hashes/oracle/CBDs/audits; review shape ceremony and tuple-suite overlap.
-
 129 short-bytes-slices
 Fixture rationale (129 short-bytes-slices)
 Purpose: Check public ShortByteString slicing preserves bounds and byte contents.
