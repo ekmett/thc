@@ -187,23 +187,36 @@ class Recorder:
         require(phase["exitCode"] in allowed, f"{name} failed: exit {phase['exitCode']}; see {logfile}")
         return phase["exitCode"], "".join(output)
 
-    def parallel(self, commands):
-        """Join independent setup processes; terminate their groups on failure."""
+    def parallel(self, commands, *, dependencies=None, environments=None, workers=4):
+        """Run ready setup processes; terminate their groups on failure."""
+        dependencies, environments = dependencies or {}, environments or {}
+        queued, completed = dict(commands), set()
+        require(len(queued) == len(commands), "Duplicate setup command")
+        require(all(set(needs) <= queued.keys() for needs in dependencies.values()),
+                "Unknown setup dependency")
         self.directory.mkdir(parents=True, exist_ok=True)
         children = []
         try:
             with ExitStack() as stack:
-                for name, argv in commands:
-                    logfile = self.directory / (name + ".log")
-                    log = stack.enter_context(logfile.open("w"))
-                    phase = {"name": name, "command": argv, "started": utc(),
-                             "log": str(logfile.relative_to(self.root))}
-                    print("Starting " + name + ": " + str(logfile), flush=True)
-                    child = subprocess.Popen(argv, cwd=self.root, stdout=log, stderr=subprocess.STDOUT,
-                                             start_new_session=True)
-                    children.append((child, phase, time.monotonic(), logfile))
-                pending = list(children)
-                while pending:
+                pending = []
+                while queued or pending:
+                    for name, argv in list(queued.items()):
+                        if len(pending) == workers:
+                            break
+                        if not set(dependencies.get(name, ())) <= completed:
+                            continue
+                        del queued[name]
+                        logfile = self.directory / (name + ".log")
+                        log = stack.enter_context(logfile.open("w"))
+                        phase = {"name": name, "command": argv, "started": utc(),
+                                 "startedEpoch": time.time(), "log": str(logfile.relative_to(self.root))}
+                        print("Starting " + name + ": " + str(logfile), flush=True)
+                        child = subprocess.Popen(argv, cwd=self.root, stdout=log, stderr=subprocess.STDOUT,
+                                                 env=environments.get(name), start_new_session=True)
+                        item = (child, phase, time.monotonic(), logfile)
+                        children.append(item)
+                        pending.append(item)
+                    require(bool(pending), "Cyclic setup dependencies")
                     for item in list(pending):
                         child, phase, begin, logfile = item
                         code = child.poll()
@@ -217,6 +230,7 @@ class Recorder:
                         print(logfile.read_text(), end="", flush=True)
                         print("::endgroup::", flush=True)
                         require(code == 0, f"{phase['name']} failed: exit {code}; see {logfile}")
+                        completed.add(phase["name"])
                     if pending:
                         time.sleep(0.1)
         finally:
@@ -236,10 +250,65 @@ class Recorder:
                     phase.update(exitCode=child.returncode, seconds=round(time.monotonic() - begin, 6), finished=utc())
                     self.data["phases"].append(phase)
             self.save()
+            events = [{"name": phase["name"], "cat": "Setup", "ph": "X", "pid": 1,
+                       "ts": round(phase["startedEpoch"] * 1000000),
+                       "dur": round(phase["seconds"] * 1000000),
+                       "args": {"exitCode": phase["exitCode"]}}
+                      for _, phase, _, _ in children]
+            write_trace(self.trace_directory / f"setup-{time.time_ns()}.events.json", events)
+
+
+def action_outputs(path):
+    """Read the runner's single-line and multiline output command format."""
+    lines = iter(path.read_text().splitlines())
+    values = {}
+    for line in lines:
+        if "<<" in line:
+            name, delimiter = line.split("<<", 1)
+            value = []
+            for part in lines:
+                if part == delimiter:
+                    break
+                value.append(part)
+            else:
+                raise RuntimeError(f"Unterminated action output: {name}")
+            values[name] = "\n".join(value)
+        elif "=" in line:
+            name, value = line.split("=", 1)
+            values[name] = value
+    return values
+
+
+def cache_restores(recorder, layers):
+    """Invoke the runner-downloaded official action, with isolated output files.
+
+    setup/action.yml declares actions/cache@v4 as a dependency. The runner
+    downloads it before executing the composite; github-script supplies the
+    same Node runtime and cache-service credentials as a normal cache action.
+    """
+    action = Path(os.environ["THC_CACHE_ACTION"]) / "dist/restore-only/index.js"
+    require(action.is_file(), f"Declared actions/cache@v4 restore entry point missing: {action}")
+    commands, environments, outputs = [], {}, {}
+    recorder.directory.mkdir(parents=True, exist_ok=True)
+    for name, layer in layers.items():
+        if not layer.get("enabled", True):
+            continue
+        output = recorder.directory / ("cache-" + name + ".outputs")
+        output.write_text("")
+        env = {key: value for key, value in os.environ.items() if not key.startswith("INPUT_")}
+        env.update({"INPUT_PATH": layer["path"], "INPUT_KEY": layer["key"],
+                    "INPUT_RESTORE-KEYS": layer.get("restore-keys", ""),
+                    "INPUT_ENABLECROSSOSARCHIVE": "false", "INPUT_LOOKUP-ONLY": "false",
+                    "INPUT_FAIL-ON-CACHE-MISS": "false", "GITHUB_OUTPUT": str(output)})
+        job = "restore-" + name
+        commands.append((job, [os.environ["THC_NODE"], str(action)]))
+        environments[job] = env
+        outputs[name] = output
+    return commands, environments, outputs
 
 
 def setup_toolchain(recorder):
-    """Install only missing pinned tools, concurrently with submodule checkout."""
+    """Restore independent caches and check out sources, then install misses."""
     host = (platform.system(), platform.machine())
     releases = {
         ("Darwin", "arm64"): ("aarch64-apple-darwin", "4e521e008fe0813db6db4b91cfeebd0c44c80c68afb458ea32a1c94cf5c7cc1d",
@@ -312,12 +381,27 @@ fi
 '''
         java_home = Path(os.environ["THC_TOOLS"]) / "graalvm-community-25.3.4.1+1.1"
         llvm_bin = "/usr/lib/llvm-18/bin"
-    recorder.parallel([
+    commands = [
         ("source-submodules", ["git", "-c", "core.autocrlf=false", "submodule", "update", "--init", "--depth", "1", "--jobs", "4"]),
         ("haskell-toolchain", ["bash", "-c", haskell]),
         ("graalvm-toolchain", ["bash", "-c", java]),
         ("native-toolchain", ["bash", "-c", native]),
-    ])
+    ]
+    layers = json.loads(os.environ.get("THC_CACHE_LAYERS", "{}"))
+    if layers:
+        restores, environments, outputs = cache_restores(recorder, layers)
+        dependencies = {"haskell-toolchain": ["restore-cabal"],
+                        "graalvm-toolchain": ["restore-graalvm"]}
+        if host[0] == "Darwin":
+            dependencies["haskell-toolchain"].append("restore-ghc")
+            dependencies["native-toolchain"] = ["restore-llvm"]
+        recorder.parallel(commands + restores, dependencies=dependencies, environments=environments)
+        with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+            for name, output in outputs.items():
+                hit = action_outputs(output).get("cache-hit", "")
+                stream.write(f"{name}-cache-hit={hit}\n")
+    else:
+        recorder.parallel(commands)
     release = dict(line.split("=", 1) for line in (java_home / "release").read_text().splitlines() if "=" in line)
     require(release["GRAALVM_VERSION"].strip('"') == "25.3.4.1"
             and release["JAVA_VERSION"].strip('"').split(".")[0] == "25", "Unexpected cached GraalVM")
@@ -915,7 +999,7 @@ def main(argv=None):
     finally:
         # Nested check-command/jvm-group processes own fragments only. Their
         # coordinator merges after all children exit, including failed builds.
-        if args.command in ("commit-checks", "run", "group", "compile-common", "compile-test-support"):
+        if args.command in ("setup-toolchain", "commit-checks", "run", "group", "compile-common", "compile-test-support"):
             merge_traces(recorder.trace_directory, recorder.directory / "build-trace.json")
     return 0
 

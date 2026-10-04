@@ -26,11 +26,21 @@ each handoff mode. Cached compilation and verified fixture inputs avoid repeated
 setup; selected tests still execute on every run. The generated primop checklist
 is checked against the pinned GHC API.
 
-Hosted Build and scheduled jobs restore installed tools independently of source
-changes. Missing GHC/Cabal, GraalVM and LLVM installations run concurrently with
-submodule checkout on the same runner. Setup joins every process before building
-and terminates the other processes on failure; timings and logs are retained in
-`build/ci/setup-results`. Verified tools are saved before compilation starts.
+Hosted Build and scheduled jobs restore independent cache layers alongside
+submodule checkout, with up to four setup processes on the same runner. Each
+tool installer waits only for its own caches. GHC and LLVM installations remain
+independent of project changes; Cabal project outputs participate in the same
+restore queue for compilation jobs. Setup terminates the other processes on
+failure. Timings, logs and a Perfetto trace are retained in
+`build/ci/setup-results`. Verified tools are saved before compilation starts;
+mutable dependency caches are saved at job completion.
+
+The coordinator invokes the official `actions/cache@v4` restore entry point
+from the runner's action directory. The composite declares that action so the
+runner downloads it first; `actions/github-script` supplies its Node runtime
+and cache-service environment. Cache keys, paths and fallback prefixes are
+declared once in the composite. Lookup-only cache steps register post-job saves
+without downloading the archives again.
 
 Commit builds run `ci-commit` in the CMake/Ninja graph with four workers.
 Linux, macOS and automation jobs start independently. Each platform checks
@@ -52,6 +62,11 @@ entries in both backends. General arithmetic, memory and loader suites own their
 negative controls; scalar fixtures do not repeat pre/post/inlining matrices or
 assert compiler-internal target counts. Mixed-backend continuation coverage uses
 five cases for strict inputs, typed PAPs, tuple transport, masking and async delivery.
+Tuple arithmetic checks native results and a BigInteger model at signed
+endpoints, multiply overflow and representative carry boundaries. It uses one
+Core stage and checks first compiled calls in both backends. Cross-call carry
+transport stays in WordCarryTest; annotation and malformed-shape checks use
+representative two-field and three-field operations.
 
 `HandoffTest`, `AstStackTest`, `CoreUnitLoadTest` and `ManagedStackSnapshotTest`
 run five of their 46 behavioral test methods on commits, plus the handoff-mode
@@ -81,7 +96,8 @@ only; a failed command retains its outer span and log. Multi-output edges appear
 once, and an incremental run excludes old Ninja log entries. Lanes display
 overlap, not operating-system thread identities. Ninja timestamps are aligned
 to the launching CMake command, so they include a small process-start offset.
-Setup downloads are recorded separately in `setup-results/timings.json`.
+Setup cache restores, checkout and installers are recorded separately in
+`setup-results/timings.json` and `setup-results/build-trace.json`.
 
 For a direct Gradle build, use
 `./gradlew -Pthc.buildTrace=/absolute/path/build-trace.json installDist`.

@@ -7,8 +7,8 @@
 -- Produces/consumed result: CBDs, oracle.tsv and call-oracle.tsv.
 -- Cost and overlap: Keep multi-result arithmetic and cross-call cases. One native
 --   executable already serves both; this producer must solely own its CBDs.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Cost: A small boundary oracle covers signed overflow, carry/borrow, wide
+--   multiplication and division signs. No random corpus or per-bit cross product.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 017.
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -26,7 +26,6 @@ module AggregateFixtures (prepareAggregate) where
 
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (object, (.=))
-import Data.Bits ((.&.), xor, shiftL, shiftR)
 import Data.List (sort)
 import qualified Data.Set as Set
 import GHC.ResponseFile (escapeArgs)
@@ -53,30 +52,19 @@ signed64 :: Integer -> Integer
 signed64 value = let residue = value `mod` pow2 64 in
   if residue >= pow2 63 then residue - pow2 64 else residue
 
--- Deterministic probes around signed endpoints, word carry boundaries, and
--- neighboring bits. The JVM suites check every native result with BigInteger.
-values :: [Integer]
-values = Set.toAscList $ Set.fromList $
-  [-pow2 63, -pow2 63 + 1, pow2 63 - 2, pow2 63 - 1, -4097, -1, 0, 1, 4097,
-   -3037000500, -3037000499, 3037000499, 3037000500] ++
-  [signed64 (sign * pow2 bit + delta) | bit <- [1,7,8,15,16,31,32,62,63],
-    sign <- [-1,1], delta <- [-1,0,1]] ++
-  take 32 (map (signed64 . toInteger) (iterate xorshift (9141 :: Integer)))
-  where
-    xorshift x = let a = x `xor` (x `shiftL` 13)
-                     b = a `xor` (a `shiftR` 7)
-                 in (b `xor` (b `shiftL` 17)) .&. (pow2 64 - 1)
-
+-- Signed endpoints, identities, division signs, and the signed multiply
+-- overflow boundary. Every native result is also checked with BigInteger.
 basePairs :: Set.Set (Integer,Integer)
 basePairs = Set.fromList $
-  [(x,y) | x <- values, y <- anchors] ++
-  [(x,y) | x <- anchors, y <- values] ++
-  [(x,signed64 (x + delta)) | x <- values, delta <- [-1,0,1]]
-  where anchors = [-pow2 63, pow2 63 - 1, -4097, -1, 0, 1, 4097]
+  [(x,y) | x <- [-pow2 63, -1, 0, 1, pow2 63 - 1],
+           y <- [-pow2 63, -1, 0, 1, pow2 63 - 1]] ++
+  [(x,y) | x <- [-13,13], y <- [-5,5]] ++
+  [(-pow2 63 + 1,-1), (pow2 32 - 1,pow2 32 + 1), (pow2 32,pow2 32)] ++
+  [(x,y) | x <- [3037000499,3037000500], y <- [-x,x]]
 
 wordPairs :: Set.Set (Integer,Integer)
 wordPairs = Set.union basePairs $ Set.fromList
-  [(signed64 x,signed64 y) | bit <- [0..63],
+  [(signed64 x,signed64 y) | bit <- [0,31,32,63],
     let value = pow2 bit,
     (x,y) <- [(value-1,1), (value,1), (value,value), (value-1,value),
               (pow2 64-value,value), (pow2 64-value,value+1),

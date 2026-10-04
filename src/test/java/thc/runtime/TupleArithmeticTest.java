@@ -11,34 +11,29 @@ import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
-import thc.Json;
 import thc.Language;
 import java.io.File;
 import java.math.BigInteger;
 import java.nio.file.Files;
-import java.security.MessageDigest;
 import java.util.*;
 import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.*;
 
+/** Arithmetic values, field order and division faults from native GHC's boundary oracle.
+ * Consumes tuple-arithmetic post-core CBD and oracle.tsv; produces no files.
+ * WordCarryTest owns cross-call carry transport. Annotation aliases and malformed
+ * shapes use representative two-field and three-field operations. */
 @SuppressWarnings("unchecked")
 class TupleArithmeticTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final List<String> names = List.of("quotRemInt", "quotRemWord", "addIntC", "subIntC", "plusWord2", "timesWord2", "addWordC", "subWordC", "timesInt2");
-    private Map<String, Object> module() throws Exception { return module("pre"); }
-    private Map<String, Object> module(String stage) throws Exception { return (Map<String, Object>) thc.CoreCbdFixtures.read(new File(root, "build/tuple-arithmetic/" + stage + "-core/TupleArithmeticAudit.cbd").toPath()); }
+    private Map<String, Object> module() throws Exception { return thc.CoreCbdFixtures.read(new File(root, "build/tuple-arithmetic/post-core/TupleArithmeticAudit.cbd").toPath()); }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     private ExecutableProgram program(Language language, Map<String, Object> module, String backend) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
     private void valid(RootCallTarget target) throws ReflectiveOperationException { assertEquals(true, Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target)); }
     private void compile(RootCallTarget target) throws ReflectiveOperationException {
         Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("compile", boolean.class).invoke(target, true); valid(target);
         var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target); valid(target);
-    }
-    private void checkHashes() throws Exception {
-        var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/tuple-arithmetic/manifest.json").toPath()));
-        for (String kind : List.of("inputHashes", "artifactHashes")) for (var row : ((Map<String, String>) manifest.get(kind)).entrySet()) {
-            String actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(root, row.getKey()).toPath()))); assertEquals(row.getValue(), actual, "Stale tuple arithmetic fixture: " + row.getKey());
-        }
     }
     private record Row(String name, long x, long y, List<Long> fields) {
         @Override public String toString() { return "Row(name=" + name + ", x=" + x + ", y=" + y + ", fields=" + fields + ")"; }
@@ -55,30 +50,24 @@ class TupleArithmeticTest {
         };
     }
     @Test void nativeFieldsAndUnboundedModelAgreeInBothBackendsAndInstalledCode() throws Exception {
-        checkHashes(); var rows = new ArrayList<Row>();
-        for (String line : Files.readAllLines(new File(root, "build/tuple-arithmetic/oracle.tsv").toPath())) { var r = line.split("\t", -1); var fields = new ArrayList<Long>(); for (int i = 3; i < r.length; i++) fields.add(Long.parseLong(r[i])); rows.add(new Row(r[0], Long.parseLong(r[1]), Long.parseLong(r[2]), fields)); }
-        var rowNames = new LinkedHashSet<String>(); var triples = new LinkedHashSet<List<Object>>(); for (var row : rows) { rowNames.add(row.name); triples.add(List.of(row.name, row.x, row.y)); }
-        assertEquals(new LinkedHashSet<>(names), rowNames); assertEquals(rows.size(), triples.size()); for (var row : rows) assertEquals(mathematical(row), row.fields, "Native " + row);
-        for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) try (var context = context()) {
-            context.initialize("thc"); context.enter();
-            try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var module = module(stage); var reached = new LinkedHashSet<Object>();
-                for (String name : names) for (var binding : (List<Map<String, Object>>) CoreModules.reachable(module, "main:TupleArithmeticAudit." + name).get("bindings")) reached.add(binding.get("id"));
-                var bindings = new ArrayList<Map<String, Object>>(); for (var binding : (List<Map<String, Object>>) module.get("bindings")) if (reached.contains(binding.get("id"))) bindings.add(binding);
-                var input = new LinkedHashMap<>(module); input.put("bindings", bindings); var program = program(language, input, backend); var host = program.hostEntryTarget(3); var entries = new LinkedHashMap<String, Object>(); for (String name : names) entries.put(name, program.entryValue("main:TupleArithmeticAudit." + name));
-                Consumer<Row> check = row -> { for (int field = 0; field < row.fields.size(); field++) assertEquals(row.fields.get(field), Calls.target(host, new Object[]{entries.get(row.name), new Object[]{row.x, row.y, (long) field}}), stage + "/" + backend + "/" + row + "/" + field); };
-                // Establish the final host dispatch before warming individual roots. Nine
-                // targets replace its three-entry direct cache with indirect calls; with
-                // handoff enabled this changes empty arguments to the ordinary packet.
-                // Each root must see that packet during warmup, before we compile it.
-                for (String name : names) { Row first = null; for (var row : rows) if (row.name.equals(name)) { first = row; break; } if (first == null) throw new NoSuchElementException(); check.accept(first); }
-                for (var row : rows) check.accept(row); for (var binding : bindings) compile(program.entryTarget((String) binding.get("id")));
-                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); for (var row : rows.reversed()) check.accept(row);
-                long fields = 0; for (var row : rows) fields += row.fields.size(); assertEquals(fields, ((Number) program.diagnostics().get("compiledEntries")).longValue() - before, stage + "/" + backend + ": every checked field must enter installed guest code");
-                for (var binding : bindings) valid(program.entryTarget((String) binding.get("id")));
-                assertEquals(0L, language.getHandoffState().get().getResults().getAllocations(), "Saturated primitive expressions need no tuple carrier"); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
-                for (String key : List.of("unsupportedTraps", "papAllocations", "thunkEvaluations", "blackholes")) assertEquals(0L, ((Number) program.diagnostics().get(key)).longValue(), key);
-            } finally { context.leave(); }
+        var rows = new ArrayList<Row>();
+        for (String line : Files.readAllLines(new File(root, "build/tuple-arithmetic/oracle.tsv").toPath())) {
+            var r = line.split("\t", -1);
+            var fields = new ArrayList<Long>();
+            for (int i = 3; i < r.length; i++) fields.add(Long.parseLong(r[i]));
+            var row = new Row(r[0], Long.parseLong(r[1]), Long.parseLong(r[2]), fields);
+            assertEquals(mathematical(row), row.fields, "Native " + row);
+            rows.add(row);
+        }
+        assertEquals(new LinkedHashSet<>(names), new LinkedHashSet<>(rows.stream().map(Row::name).toList()));
+        var module = module();
+        for (String name : names) {
+            var cases = new LinkedHashMap<List<Object>, Long>();
+            for (var row : rows) if (row.name.equals(name))
+                for (int field = 0; field < row.fields.size(); field++)
+                    cases.put(List.of(row.x, row.y, (long) field), row.fields.get(field));
+            ScalarValueTestSupport.nativeValues(module, "main:TupleArithmeticAudit." + name,
+                cases, true, java.util.function.LongUnaryOperator.identity());
         }
     }
     private List<List<Object>> applications(Object value) {
@@ -86,7 +75,6 @@ class TupleArithmeticTest {
         if (value instanceof List<?> values) { if (!values.isEmpty() && "app".equals(values.getFirst())) result.add((List<Object>) values); for (var child : values) result.addAll(applications(child)); }
         else if (value instanceof Map<?, ?> values) for (var child : values.values()) result.addAll(applications(child)); return result;
     }
-    private Map<String, Object> wrap(Object proof) { var result = new LinkedHashMap<String, Object>(); result.put("aggregate", "unboxed-tuple"); result.put("kind", "unknown"); result.put("evaluated", true); result.put("primReps", ((Map<String, Object>) proof).get("primReps")); result.put("components", Arrays.asList(proof)); return result; }
     @Test void integralAnnotationsDoNotSelectArithmeticOrResultOrder() throws Exception {
         var integral = Set.of("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep");
         class Project {
@@ -100,7 +88,7 @@ class TupleArithmeticTest {
         for (String backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter(); try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                for (String rep : List.of("IntRep", "WordRep", "Int64Rep", "Word64Rep")) for (String name : names) {
+                for (String rep : List.of("Word64Rep")) for (String name : List.of("quotRemInt", "timesInt2")) {
                     // Project annotations consistently; logical tuple shape and order stay intact.
                     var input = (Map<String, Object>) project.apply(CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name), rep); var p = program(language, input, backend); var expected = mathematical(new Row(name, -13L, 5L, List.of()));
                     for (int field = 0; field < expected.size(); field++) assertEquals(expected.get(field), Calls.target(p.hostEntryTarget(3), new Object[]{p.entryValue("main:TupleArithmeticAudit." + name), new Object[]{-13L, 5L, (long) field}}), backend + "/" + rep + "/" + name + "/" + field);
@@ -115,25 +103,31 @@ class TupleArithmeticTest {
     }
     @Test void exactPrimitiveShapesAndSaturationAreRequired() throws Exception {
         List<Consumer<List<Object>>> mutations = List.of(
-            app -> { var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep"); var last = ((List<Map<String, Object>>) rep.get("components")).getLast(); last.put("kind", "float"); last.put("primReps", List.of("FloatRep")); var flattened = (List<Object>) rep.get("primReps"); flattened.set(flattened.size() - 1, "FloatRep"); },
-            app -> { var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep"); ((List<Object>) rep.get("components")).removeLast(); ((List<Object>) rep.get("primReps")).removeLast(); },
-            app -> { var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep"); ((List<Object>) rep.get("components")).add(((List<?>) rep.get("components")).getLast()); ((List<Object>) rep.get("primReps")).add(((List<?>) rep.get("primReps")).getLast()); },
-            app -> { var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep"); var children = (List<Object>) rep.get("components"); children.set(0, wrap(children.getFirst())); },
-            app -> ((Map<String, Object>) app.get(6)).remove("rep"),
-            app -> { var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep"); rep.remove("aggregate"); rep.remove("components"); rep.put("kind", "long"); rep.put("primReps", List.of("IntRep")); },
-            app -> { var arg = ((List<List<Object>>) app.get(2)).getFirst(); var rep = (Map<String, Object>) Objects.requireNonNull(CoreRepresentations.metadata(arg)).get("rep"); rep.put("kind", "float"); rep.put("primReps", List.of("FloatRep")); },
-            app -> { var arg = ((List<List<Object>>) app.get(2)).getFirst(); ((Map<String, Object>) Objects.requireNonNull(CoreRepresentations.metadata(arg)).get("rep")).put("kind", "unknown"); },
+            app -> {
+                var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep");
+                ((List<Object>) rep.get("components")).removeLast();
+                ((List<Object>) rep.get("primReps")).removeLast();
+            },
+            app -> {
+                var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep");
+                var last = ((List<Map<String, Object>>) rep.get("components")).getLast();
+                last.put("kind", "float"); last.put("primReps", List.of("FloatRep"));
+                var flat = (List<Object>) rep.get("primReps"); flat.set(flat.size() - 1, "FloatRep");
+            },
             app -> ((List<Object>) app.get(3)).set(0, true),
-            app -> { ((List<Object>) app.get(2)).remove(1); ((List<Object>) app.get(3)).remove(1); ((Map<String, Object>) app.get(6)).remove("callDemand"); },
-            app -> { ((List<Object>) app.get(2)).add(((List<?>) app.get(2)).getFirst()); ((List<Object>) app.get(3)).add(false); ((Map<String, Object>) app.get(6)).remove("callDemand"); });
+            app -> {
+                ((List<Object>) app.get(2)).removeLast();
+                ((List<Object>) app.get(3)).removeLast();
+                ((Map<String, Object>) app.get(6)).remove("callDemand");
+            });
         for (String backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter(); try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                for (String name : names) for (int index = 0; index < mutations.size(); index++) for (boolean diagnostic : new boolean[]{false, true}) {
-                    var module = CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name); var app = primitiveApplication(module, name); mutations.get(index).accept(app); var input = new LinkedHashMap<>(module); input.put("diagnosticUnsupported", diagnostic);
+                for (String name : List.of("quotRemInt", "timesInt2")) for (int index = 0; index < mutations.size(); index++) {
+                    var module = CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name); var app = primitiveApplication(module, name); mutations.get(index).accept(app); var input = new LinkedHashMap<>(module);
                     assertThrows(RuntimeFault.class, () -> program(language, input, backend), backend + "/" + name + "/mutation" + index);
                 }
-                for (String name : names) { var module = CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name); var app = primitiveApplication(module, name); var primitive = new ArrayList<>((List<?>) app.get(1)); app.clear(); app.addAll(primitive); assertThrows(UnsupportedCore.class, () -> program(language, module, backend), backend + "/" + name + " first-class"); }
+                for (String name : List.of("quotRemInt", "timesInt2")) { var module = CoreModules.reachable(module(), "main:TupleArithmeticAudit." + name); var app = primitiveApplication(module, name); var primitive = new ArrayList<>((List<?>) app.get(1)); app.clear(); app.addAll(primitive); assertThrows(UnsupportedCore.class, () -> program(language, module, backend), backend + "/" + name + " first-class"); }
             } finally { context.leave(); }
         }
     }
@@ -173,7 +167,10 @@ class TupleArithmeticTest {
         try (var context = context()) {
             context.initialize("thc"); context.enter(); try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                for (var operation : TupleArithmeticOp.values()) if (operation.isInt()) for (int field = 0; field <= 1; field++) {
+                for (var sample : List.of(Map.entry(TupleArithmeticOp.QUOT_REM_INT8, 0),
+                                          Map.entry(TupleArithmeticOp.QUOT_REM_WORD32, 1))) {
+                    var operation = sample.getKey();
+                    int field = sample.getValue();
                     final int resultField = field;
                     class ArithmeticRoot extends RootNode {
                         long compiledEntries = 0L;

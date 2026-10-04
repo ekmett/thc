@@ -232,15 +232,26 @@ class FastWorkflowGuardsTest(unittest.TestCase):
 
     def test_tool_and_index_caches_survive_project_changes(self):
         setup = (WORKFLOW.parents[1] / "actions/setup/action.yml").read_text()
-        immutable = setup.split("    - name: Reuse independent native GHC oracles", 1)[0]
+        plan = setup.split('        THC_CACHE_LAYERS: |\n', 1)[1].split('      with:\n', 1)[0]
+        # Replace expression booleans so the declared cache plan is valid JSON.
+        plan = re.sub(r'("enabled": )\$\{\{.*?\}\}', r'\1true', plan)
+        layers = json.loads(textwrap.dedent(plan))
+        immutable = json.dumps({name: layers[name] for name in ('ghc', 'cabal', 'graalvm', 'llvm', 'index')})
         self.assertNotIn("hashFiles", immutable)
         self.assertNotIn("github.sha", immutable)
         self.assertIn("steps.identity.outputs.index", immutable)
-        self.assertIn("if: steps.index.outputs.cache-hit != 'true'", immutable)
+        self.assertIn("if: steps.setup.outputs.index-cache-hit != 'true'", setup)
         self.assertEqual(1, setup.count("run: cabal update"))
         self.assertIn('run: cabal update "hackage.haskell.org,$INDEX_STATE"', setup)
-        self.assertIn("cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-\n", setup)
-        self.assertIn("gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-\n", setup)
+        self.assertIn("cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-", layers['store']['restore-keys'].splitlines())
+        self.assertIn("gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-", layers['gradle']['restore-keys'].splitlines())
+        self.assertEqual(4, setup.count('lookup-only: true'))
+        self.assertIn('process.env.THC_NODE = process.execPath', setup)
+        self.assertIn("'_actions/actions/cache/v4'", setup)
+        self.assertIn('uses: actions/cache@v4', setup)
+        common = (WORKFLOW.parent / 'test-common.yml').read_text()
+        self.assertIn("cache-cabal-project: 'true'", common)
+        self.assertNotIn('uses: actions/cache@', common)
         for filename in ("test-common.yml", "test-groups.yml", "intensive.yml"):
             workflow = (WORKFLOW.parent / filename).read_text()
             self.assertIn("uses: ./.github/actions/setup", workflow)

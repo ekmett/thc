@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 name: Pinned toolchains and dependency caches
 description: Restore independent cache layers and join concurrent tool installation and submodule checkout.
+inputs:
+  cache-cabal-project:
+    description: Restore incremental Cabal outputs for compilation jobs
+    default: 'false'
 runs:
   using: composite
   steps:
@@ -35,107 +39,131 @@ runs:
         with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
             out.write('index=' + states[0] + '\n')
         PY
-    # Immutable tools have version/platform keys, never a project hash or SHA.
-    - name: Restore installed GHC
-      if: runner.os == 'macOS'
-      id: ghc
-      uses: actions/cache/restore@v4
+    # The cache action remains an explicit dependency below. The runner fetches
+    # its bundle before this composite starts. github-script passes its Node
+    # runtime and cache-service environment to our existing setup coordinator.
+    - name: Restore caches and check out submodules concurrently
+      id: setup
+      uses: actions/github-script@v8
+      env:
+        THC_CACHE_LAYERS: |
+          {
+            "ghc": {
+              "path": "~/.ghcup/ghc/9.14.1\n~/.ghcup/db/ghc/9.14.1\n~/.ghcup/db/ghc/9.14.1.spec",
+              "key": "installed-ghc-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.host }}-9.14.1",
+              "enabled": ${{ runner.os == 'macOS' }}
+            },
+            "graalvm": {
+              "path": "${{ env.THC_TOOLS }}/graalvm-community-25.3.4.1+1.1",
+              "key": "installed-graalvm-${{ runner.os }}-${{ runner.arch }}-25.3.4.1"
+            },
+            "llvm": {
+              "path": "/opt/homebrew/Cellar/llvm@18/18.1.8",
+              "key": "installed-llvm-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.image }}-18.1.8",
+              "enabled": ${{ runner.os == 'macOS' }}
+            },
+            "cabal": {
+              "path": "${{ env.THC_GHCUP_ROOT }}/cabal/3.16.0.0",
+              "key": "installed-cabal-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.host }}-3.16.0.0"
+            },
+            "index": {
+              "path": "~/.cabal/packages",
+              "key": "hackage-${{ runner.os }}-${{ runner.arch }}-cabal3.16.0.0-${{ steps.identity.outputs.index }}"
+            },
+            "oracles": {
+              "path": "~/.cache/thc-native-oracles",
+              "key": "native-oracles-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-${{ hashFiles('t/fixtures/compiler/*PrimopsAudit.hs', 't/fixtures/compiler/Explicit64PrimopsAudit.hs', 't/haskell-fixtures/Main.hs', 't/haskell-fixtures/FixtureSupport.hs', 'cmake/ScalarFixtures.cmake', '.github/scripts/fast_inputs.py') }}",
+              "restore-keys": "native-oracles-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-"
+            },
+            "store": {
+              "path": "~/.cabal/store",
+              "key": "cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}",
+              "restore-keys": "cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-\ncabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-"
+            },
+            "gradle": {
+              "path": "~/.gradle/caches\n~/.gradle/wrapper",
+              "key": "gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-${{ github.sha }}",
+              "restore-keys": "gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-\ngradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-"
+            },
+            "project": {
+              "path": "dist-newstyle",
+              "key": "cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}",
+              "restore-keys": "cabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-\ncabal-project-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ github.workspace }}-",
+              "enabled": ${{ inputs.cache-cabal-project == 'true' }}
+            }
+          }
       with:
-        path: |
-          ~/.ghcup/ghc/9.14.1
-          ~/.ghcup/db/ghc/9.14.1
-          ~/.ghcup/db/ghc/9.14.1.spec
-        key: installed-ghc-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.host }}-9.14.1
-    - name: Restore installed Cabal
-      id: cabal
-      uses: actions/cache/restore@v4
-      with:
-        path: ${{ env.THC_GHCUP_ROOT }}/cabal/3.16.0.0
-        key: installed-cabal-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.host }}-3.16.0.0
-    - name: Restore installed GraalVM
-      id: graalvm
-      uses: actions/cache/restore@v4
-      with:
-        path: ${{ env.THC_TOOLS }}/graalvm-community-25.3.4.1+1.1
-        key: installed-graalvm-${{ runner.os }}-${{ runner.arch }}-25.3.4.1
-    - name: Restore installed LLVM
-      if: runner.os == 'macOS'
-      id: llvm
-      uses: actions/cache/restore@v4
-      with:
-        # Homebrew dylibs must match the runner image supplying LLVM's dependencies.
-        path: /opt/homebrew/Cellar/llvm@18/18.1.8
-        key: installed-llvm-${{ runner.os }}-${{ runner.arch }}-${{ steps.identity.outputs.image }}-18.1.8
-    - name: Install missing tools and check out submodules concurrently
-      shell: bash
-      run: python3 .github/scripts/fast_ci.py setup-toolchain --report-dir build/ci/setup-results
-    # Save verified tools now, even if a later source compilation or test fails.
+        script: |
+          const path = require('node:path');
+          core.setOutput('layers', JSON.parse(process.env.THC_CACHE_LAYERS));
+          process.env.THC_NODE = process.execPath;
+          process.env.THC_CACHE_ACTION = path.resolve(process.env.RUNNER_WORKSPACE, '..', '_actions/actions/cache/v4');
+          await exec.exec('python3', ['.github/scripts/fast_ci.py', 'setup-toolchain', '--report-dir', 'build/ci/setup-results']);
+    # Save verified immutable tools before later compilation or tests can fail.
     - name: Save installed GHC
-      if: runner.os == 'macOS' && steps.ghc.outputs.cache-hit != 'true'
+      if: runner.os == 'macOS' && steps.setup.outputs.ghc-cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: |
-          ~/.ghcup/ghc/9.14.1
-          ~/.ghcup/db/ghc/9.14.1
-          ~/.ghcup/db/ghc/9.14.1.spec
-        key: ${{ steps.ghc.outputs.cache-primary-key }}
+        path: ${{ fromJSON(steps.setup.outputs.layers).ghc.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).ghc.key }}
     - name: Save installed Cabal
-      if: steps.cabal.outputs.cache-hit != 'true'
+      if: steps.setup.outputs.cabal-cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: ${{ env.THC_GHCUP_ROOT }}/cabal/3.16.0.0
-        key: ${{ steps.cabal.outputs.cache-primary-key }}
+        path: ${{ fromJSON(steps.setup.outputs.layers).cabal.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).cabal.key }}
     - name: Save installed GraalVM
-      if: steps.graalvm.outputs.cache-hit != 'true'
+      if: steps.setup.outputs.graalvm-cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: ${{ env.THC_TOOLS }}/graalvm-community-25.3.4.1+1.1
-        key: ${{ steps.graalvm.outputs.cache-primary-key }}
+        path: ${{ fromJSON(steps.setup.outputs.layers).graalvm.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).graalvm.key }}
     - name: Save installed LLVM
-      if: runner.os == 'macOS' && steps.llvm.outputs.cache-hit != 'true'
+      if: runner.os == 'macOS' && steps.setup.outputs.llvm-cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: /opt/homebrew/Cellar/llvm@18/18.1.8
-        key: ${{ steps.llvm.outputs.cache-primary-key }}
-    - name: Restore frozen Hackage index
-      id: index
-      uses: actions/cache/restore@v4
-      with:
-        path: ~/.cabal/packages
-        key: hackage-${{ runner.os }}-${{ runner.arch }}-cabal3.16.0.0-${{ steps.identity.outputs.index }}
+        path: ${{ fromJSON(steps.setup.outputs.layers).llvm.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).llvm.key }}
     - name: Acquire frozen Hackage index on cache miss
-      if: steps.index.outputs.cache-hit != 'true'
+      if: steps.setup.outputs.index-cache-hit != 'true'
       shell: bash
       env:
         INDEX_STATE: ${{ steps.identity.outputs.index }}
       run: cabal update "hackage.haskell.org,$INDEX_STATE"
     - name: Save frozen Hackage index
-      if: steps.index.outputs.cache-hit != 'true'
+      if: steps.setup.outputs.index-cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: ~/.cabal/packages
-        key: ${{ steps.index.outputs.cache-primary-key }}
-    - name: Reuse independent native GHC oracles
+        path: ${{ fromJSON(steps.setup.outputs.layers).index.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).index.key }}
+    # Downloads already finished. Lookup-only registers the official post-job
+    # saves for mutable caches, after Gradle has stopped and Cabal has finished.
+    - name: Register cache save for native GHC oracles
       uses: actions/cache@v4
       with:
-        path: ~/.cache/thc-native-oracles
-        key: native-oracles-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-${{ hashFiles('t/fixtures/compiler/*PrimopsAudit.hs', 't/fixtures/compiler/Explicit64PrimopsAudit.hs', 't/haskell-fixtures/Main.hs', 't/haskell-fixtures/FixtureSupport.hs', 'cmake/ScalarFixtures.cmake', '.github/scripts/fast_inputs.py') }}
-        restore-keys: native-oracles-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-
-    - name: Reuse Cabal dependency store
+        lookup-only: true
+        path: ${{ fromJSON(steps.setup.outputs.layers).oracles.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).oracles.key }}
+        restore-keys: ${{ fromJSON(steps.setup.outputs.layers).oracles.restore-keys }}
+    - name: Register cache save for Cabal dependencies
       uses: actions/cache@v4
       with:
-        path: ~/.cabal/store
-        key: cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-${{ github.sha }}
-        restore-keys: |
-          cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-${{ hashFiles('thc.cabal', 'cabal.project', 'Setup.hs') }}-
-          cabal-store-${{ runner.os }}-${{ runner.arch }}-ghc9.14.1-cabal3.16.0.0-
-    - name: Reuse Gradle dependency and task caches
+        lookup-only: true
+        path: ${{ fromJSON(steps.setup.outputs.layers).store.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).store.key }}
+        restore-keys: ${{ fromJSON(steps.setup.outputs.layers).store.restore-keys }}
+    - name: Register cache save for Gradle dependencies and task outputs
       uses: actions/cache@v4
       with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-${{ github.sha }}
-        restore-keys: |
-          gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-${{ hashFiles('build.gradle', 'settings.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-
-          gradle-${{ runner.os }}-${{ runner.arch }}-java25.3.4.1-
+        lookup-only: true
+        path: ${{ fromJSON(steps.setup.outputs.layers).gradle.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).gradle.key }}
+        restore-keys: ${{ fromJSON(steps.setup.outputs.layers).gradle.restore-keys }}
+    - name: Register cache save for Cabal project outputs
+      if: inputs.cache-cabal-project == 'true'
+      uses: actions/cache@v4
+      with:
+        lookup-only: true
+        path: ${{ fromJSON(steps.setup.outputs.layers).project.path }}
+        key: ${{ fromJSON(steps.setup.outputs.layers).project.key }}
+        restore-keys: ${{ fromJSON(steps.setup.outputs.layers).project.restore-keys }}

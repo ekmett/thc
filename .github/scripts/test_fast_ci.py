@@ -128,6 +128,56 @@ class FastRunnerTest(unittest.TestCase):
             os.kill(int((self.root / "pid").read_text()), 0)
         self.assertEqual(2, len(recorder.data["phases"]))
 
+    def test_cache_restores_overlap_checkout_and_gate_only_their_consumers(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        action = self.root / "cache-action/dist/restore-only/index.js"
+        action.parent.mkdir(parents=True)
+        action.write_text(textwrap.dedent('''
+            import os, time
+            from pathlib import Path
+            name = os.environ['INPUT_KEY']
+            assert 'INPUT_SCRIPT' not in os.environ
+            assert os.environ['INPUT_LOOKUP-ONLY'] == 'false'
+            Path(name).touch()
+            deadline = time.monotonic() + 5
+            while not all(Path(peer).exists() for peer in ('ghc', 'java', 'index', 'source')):
+                if time.monotonic() > deadline: raise SystemExit('restores did not overlap checkout')
+                time.sleep(0.01)
+            Path(name + '-done').touch()
+            hit = {'ghc': 'true', 'java': 'false', 'index': ''}[name]
+            Path(os.environ['GITHUB_OUTPUT']).write_text('cache-hit<<end\\n' + hit + '\\nend\\n')
+        '''))
+        layers = {name: {'path': 'cache/' + name, 'key': name} for name in ('ghc', 'java', 'index')}
+        layers['disabled'] = {'enabled': False}
+        with patch.dict(os.environ, THC_CACHE_ACTION=str(action.parents[2]), THC_NODE=sys.executable,
+                        INPUT_SCRIPT='must not leak'):
+            restores, environments, outputs = ci.cache_restores(recorder, layers)
+        source = [sys.executable, '-c', "from pathlib import Path; Path('source').touch()"]
+        consumer = [sys.executable, '-c', "from pathlib import Path; assert Path('ghc-done').exists()"]
+        recorder.parallel([('source', source), ('haskell', consumer)] + restores,
+                          dependencies={'haskell': ['restore-ghc']}, environments=environments)
+        self.assertEqual({'ghc': 'true', 'java': 'false', 'index': ''},
+                         {name: ci.action_outputs(path)['cache-hit'] for name, path in outputs.items()})
+        phases = {phase['name']: phase for phase in recorder.data['phases']}
+        self.assertGreaterEqual(phases['haskell']['started'], phases['restore-ghc']['finished'])
+        events = json.loads(next(recorder.trace_directory.glob('setup-*.events.json')).read_text())['traceEvents']
+        self.assertEqual(5, sum(event['ph'] == 'X' for event in events))
+
+    def test_setup_worker_limit_and_dependencies(self):
+        with patch.object(ci, 'git', return_value='a' * 40):
+            recorder = ci.Recorder(self.root, self.root / 'setup')
+        command = [sys.executable, '-c', 'pass']
+        recorder.parallel([(str(i), command) for i in range(5)], workers=2)
+        phases = recorder.data['phases']
+        for phase in phases:
+            active = sum(other['started'] <= phase['started'] < other['finished'] for other in phases)
+            self.assertLessEqual(active, 2)
+        with self.assertRaisesRegex(RuntimeError, 'Unknown setup dependency'):
+            recorder.parallel([('a', command)], dependencies={'a': ['missing']})
+        with self.assertRaisesRegex(RuntimeError, 'Cyclic setup dependencies'):
+            recorder.parallel([('a', command)], dependencies={'a': ['a']})
+
     def test_cached_haskell_and_java_setup_needs_no_download(self):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "setup")
