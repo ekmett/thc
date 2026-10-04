@@ -175,10 +175,6 @@ Compiler-structure assertions (also excluded):
     that attempt's native pieces. LibyamlNativeProductsTest excluded; ordinary YAML
     package smoke should replace this retained-Cabal-stage fixture.
 
-  wcwidth (168): requires an exact output-directory inventory and literal upstream source
-    lines. WcwidthTest excluded; ordinary package-level coverage should replace this
-    standalone locale/libc harness.
-
   getentropy (169): fresh copied-source directory required after deletions and captured Core
     inventory is exact. GetEntropyTest excluded; replace per-libc entropy machinery
     with ordinary splitmix initialization coverage.

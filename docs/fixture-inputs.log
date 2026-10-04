@@ -5136,31 +5136,6 @@ External registration search enumerates store partitions and candidate library d
   None of these inputs has a producer rule here. Do not port retained attempt state
   or fresh-output rejection into the build graph.
 
-168 wcwidth (custom fixture)
-Fixture rationale (168 wcwidth)
-Purpose: Check locale-sensitive character widths through a safe CAPI call.
-Consumes: run-wcwidth package sources, external Tasty1.5.4 source/license,
-  C/C.UTF-8 locale data, GHC/Cabal/native tools and driver/plugin.
-Produces/consumed result: Width.cbd/native linkage, two native TSVs, audits/manifest.
-Cost and overlap: Public Tasty/package behavior is enough. Source-line matching,
-  copied upstream source and a dedicated wcwidth acquisition are unnecessary.
-Build status: QUARANTINED. Captured CBD directory must contain exactly Width.cbd;
-  generation additionally pins verbatim upstream declaration/fallback lines.
-Consumer: WcwidthTest. Under build/wcwidth/:
-  ConsoleReporter.hs, TASTY-LICENSE <- THC_TASTY_SOURCE; exact declaration and fallback
-    text required even though a separate run-wcwidth package is compiled.
-  ghc-proxy-<driver hash>.sh <- proxy template; native-<hash>/ plan/package products,
-    capture-<hash>/, pieces-<hash>/ <- Cabal exe:oracle via GHC proxy/plugin/helper.
-  C.tsv, C.UTF-8.tsv <- native executable from plan with LC_ALL explicitly set;
-    twelve rows each. Presence/version of those locales is still a platform input.
-  Width.cbd/native products <- recursive captured-CBD listing, exact singleton
-    requirement, staged copy and finishPackageNative.
-  rawWidth.json, displayWidth.json <- staged CBD/auditor.
-  logs/* triplets, manifest.json <- source/copied upstream/Core/oracle/audit/log
-    hashes; driver hash names work directories. Old manifest is not invalidated.
-Replace bespoke package/source-shape proof with normal package acquisition plus
-  representative public width/encoding behavior where that package needs coverage.
-
 169 getentropy (custom fixture)
 Fixture rationale (169 getentropy)
 Purpose: Check splitmix initialization reaches native entropy and respects buffer

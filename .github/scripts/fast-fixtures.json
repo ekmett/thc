@@ -22,7 +22,6 @@
     "thc.runtime.PackageScalarCbitsTest",
     "thc.runtime.PackageNativeOriginalsTest",
     "thc.runtime.LibyamlNativeProductsTest",
-    "thc.runtime.WcwidthTest",
     "thc.runtime.GetEntropyTest",
     "thc.runtime.HashableFfiFullCoreTest",
     "thc.runtime.PackageNativeArchiveFullCoreTest",

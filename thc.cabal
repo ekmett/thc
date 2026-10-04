@@ -330,10 +330,6 @@ extra-source-files:
   nih/pinned/openbsd-memchr-1.8.c
   nih/pinned/text-2.1.3/cbits/utils.c
   nih/pinned/text-2.1.3/cbits/measure_off.c
-  t/fixtures/run-wcwidth/cabal.project
-  t/fixtures/run-wcwidth/wcwidth-ffi.cabal
-  t/fixtures/run-wcwidth/src/Width.hs
-  t/fixtures/run-wcwidth/app/Main.hs
   docs/rts-event-capabilities.md
   docs/gc-stats-clock.md
   t/fixtures/compiler/RubbishLiteralAudit.hs
@@ -1300,7 +1296,6 @@ executable thc-fixtures
     DynamicCallbackFixtures
     GetEntropyFixtures
     LibyamlNativeFixtures
-    WcwidthFixtures
     UnixLibcFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures

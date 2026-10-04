@@ -109,7 +109,6 @@ import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import DynamicCallbackFixtures (prepareDynamicCallbacks)
 import GetEntropyFixtures (prepareGetEntropy)
 import LibyamlNativeFixtures (prepareLibyamlNative)
-import WcwidthFixtures (prepareWcwidth)
 import UnixLibcFixtures (prepareUnixLibc)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
@@ -1044,7 +1043,6 @@ main = do
     ["package-native-archives"] -> preparePackageNativeArchives root
     ["dynamic-callback"] -> prepareDynamicCallbacks root
     ["getentropy"] -> prepareGetEntropy root
-    ["wcwidth"] -> prepareWcwidth root
     ["unix-libc"] -> prepareUnixLibc root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["original-termios"] -> prepareOriginalTermios root
