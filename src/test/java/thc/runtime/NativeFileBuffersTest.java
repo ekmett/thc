@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 import java.io.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
@@ -14,6 +19,8 @@ import org.junit.jupiter.api.condition.*;
 import org.junit.jupiter.api.io.TempDir;
 import thc.Language;
 import thc.NativeIO;
+import thc.PackageScalarLink;
+import thc.PackageScalarSignature;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Storage/lifetime extension only: no new foreign-call or descriptor admission. */
@@ -59,6 +66,52 @@ class NativeFileBuffersTest {
                     assertArrayEquals(new byte[] {2, 3, 4, 4, 5, 6}, Files.readAllBytes(path));
                     assertEquals(List.of(90, 90, 90, 1, 2, 3, 4, 5, 6, 90, 90, 90), bytes(base, 12));
                 } finally { release(base); assertEquals(0L, files.close(fd, ForeignSafety.UNSAFE)); }
+            }
+            return null;
+        }); }
+    }
+    // External C pointers have no allocation bound: file IO borrows only the
+    // requested window while the caller retains the native storage's lifetime.
+    @Test void externalReturnedBufferUsesRequestSizedNativeFileWindow() throws Exception {
+        try (var context = NativeIO.createContext(Set.of())) { entered(context, () -> {
+            var owner = Language.currentState(null); var files = owner.getFiles();
+            final byte[] helper;
+            try (var input = Objects.requireNonNull(getClass().getResourceAsStream("/thc/cbits/package-pointer.bc"))) { helper = input.readAllBytes(); }
+            var symbol = "thc_package_pointer_read_address";
+            var signature = new PackageScalarSignature(symbol, symbol, List.of("AddrRep", "Int64Rep"), "AddrRep");
+            var link = new PackageScalarLink("external-file-buffer-control", "unused", "external-file-buffer-control", "", helper, List.of(signature));
+            owner.getPackageCbits().link(link);
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            var target = new RootNode(language) {
+                @Child private PackageScalarAccess access = new PackageScalarAccess(new PackageScalarCall(link, signature));
+                @Override public Object execute(VirtualFrame frame) { return access.executeAddress(frame.getArguments(), Unit.INSTANCE); }
+            }.getCallTarget();
+            try (var arena = Arena.ofConfined()) {
+                var nativeMemory = arena.allocate(8, 8); var initial = new byte[] {90, 90, 1, 2, 3, 4, 90, 90};
+                for (int i = 0; i < initial.length; i++) nativeMemory.set(ValueLayout.JAVA_BYTE, i, initial[i]);
+                var slot = owner.getNativeAllocations().malloc(8); final ManagedAddress pointer;
+                try { slot.writeNativeScalar(0, 8, nativeMemory.address()); pointer = (ManagedAddress) target.call(slot, 0L); }
+                finally { owner.getNativeAllocations().free(slot); }
+                assertNotNull(pointer.returnedAddress()); assertNull(pointer.returnedAddress().getBacking()); assertNull(pointer.nativeAllocation());
+                assertThrows(RuntimeFault.class, pointer::availableBytes); assertTrue(pointer.hasNativeIOStorage());
+                var interior = pointer.plus(2);
+                interior.withNativeIOWindow(4, false, window -> {
+                    assertEquals(nativeMemory.address() + 2, window.address()); assertEquals(4L, window.byteSize());
+                    assertArrayEquals(new byte[] {1, 2, 3, 4}, window.toArray(ValueLayout.JAVA_BYTE)); return Unit.INSTANCE;
+                });
+                var path = directory.resolve("external-buffer"); Files.write(path, new byte[] {7, 8, 9, 10, 11, 12});
+                var name = ManagedAddress.fromByteArray((path + "\0").getBytes(StandardCharsets.UTF_8));
+                long fd = files.open(name, 3, ForeignSafety.UNSAFE); assertTrue(fd >= 3);
+                try {
+                    assertEquals(1L, files.seek(fd, 1, 0, ForeignSafety.UNSAFE));
+                    assertEquals(4L, files.write(fd, interior, 4, ForeignSafety.UNSAFE));
+                    assertArrayEquals(new byte[] {7, 1, 2, 3, 4, 12}, Files.readAllBytes(path));
+                    nativeMemory.asSlice(3, 3).fill((byte) 0);
+                    assertEquals(1L, files.seek(fd, 1, 0, ForeignSafety.UNSAFE));
+                    assertEquals(3L, files.read(fd, pointer.plus(3), 3, ForeignSafety.UNSAFE));
+                    assertArrayEquals(new byte[] {90, 90, 1, 1, 2, 3, 90, 90}, nativeMemory.toArray(ValueLayout.JAVA_BYTE));
+                    assertNull(pointer.nativeAllocation()); assertThrows(RuntimeFault.class, pointer::availableBytes);
+                } finally { assertEquals(0L, files.close(fd, ForeignSafety.UNSAFE)); }
             }
             return null;
         }); }
