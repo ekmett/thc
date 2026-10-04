@@ -257,8 +257,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
                 for filename in ("build.yml", "hourly.yml", "checks.yml", "test-common.yml", "test-groups.yml"):
                     self.assertNotIn("name: " + name, (WORKFLOW.parent / filename).read_text())
         for producer in ("aggregate-heap", "fourway-aggregate", "generic-sum-transport",
-                         "narrow-integer-transport", "tuple-join",
-                         "sum-join-input"):
+                         "narrow-integer-transport", "tuple-join"):
             self.assertNotIn("--offline -- " + producer, workflow)
         self.assertNotIn("  foreign-exceptions:", workflow)
         self.assertNotIn("inputs.cadence", workflow)

@@ -4323,41 +4323,6 @@ Producer requires at least three tuple joins/two empty cases and roundTo referen
   paths and optional package modules. First-compiled checks use increases, which
   are valid; arbitrary join/case counts are not a lasting compiler contract.
 
-152 sum-join-input (custom fixture)
-Fixture rationale (152 sum-join-input)
-Purpose: Check sum join arguments through recursion, swaps, captures, empty
-  payloads and changing tags, including released handoff references.
-Consumes: SumJoinInputAudit{,Native}.hs, GHC 9.14.1, exporter/plugin and auditor.
-Produces/consumed result: Named pre/post CBDs, 259 native rows, audits and manifest.
-Cost and overlap: Consolidate semantic join moves with tuple/generic aggregate
-  coverage; another native/export/audit framework is not independently justified.
-Build status: QUARANTINED. Producer counts joins; consumer fixes GHC let/wrapper
-  shapes and exact transfer counts. These prevent valid compiler optimization.
-Producer: SumJoinInputFixtures.hs; consumer SumJoinInputNativeTest.
-Under build/sum-join-input/:
-  native/oracle and intermediates <- audit/driver sources, GHC --make -O2 -dynamic
-    -fforce-recomp -dcore-lint -dstg-lint.
-  oracle.tsv <- native executable, seven entries x 37 inputs (259 rows).
-  <pre|post>/core/SumJoinInputAudit.cbd <- source, seven roots, stage/exporter;
-    stage/ghc/ intermediates. Exact named output, not a Core glob.
-  stage/audit.json <- named CBD + seven entries/auditor; accepted checked.
-  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
-    <- command triplets.
-  manifest.json <- source/tool closure, binary/oracle/Core/audit/log hashes;
-    old manifest removed first.
-Producer requires >=7 sum join inputs. Consumer traverses a specific wrapper/loop
-  let shape, asserts binding counts and transfer identities, then checks exact
-  execution transfer counts. Native results, first-compiled execution and zero
-  retained handoff references are useful; those incidental shape counts are not.
-
-Verification checkpoint after entry 152 (base a4b375785, local changes):
-  16 Haskell producer edits compared with HEAD after stripping line comments and
-    blank lines: code unchanged. Gradle quarantine expression evaluated standalone
-    with its bundled Groovy: 43 indexed groups / 74 consumer classes excluded
-    (61 ordinary plus 13 custom). git diff --check passed. No fixture builds,
-    runtime tests, pushes or CI dispatches were performed. Earlier selector tests
-    remain valid; exclusions are missing coverage, not passing behavior.
-
 153 graph-bfs (custom fixture)
 Fixture rationale (153 graph-bfs)
 Purpose: Exercise a real containers graph workload, including traversal and bounds.

@@ -112,10 +112,6 @@ Not quarantined merely for this reason:
     original-library reference even with that mode disabled. TupleJoinNativeTest
     excluded. Preserve first-compiled/empty-join semantic checks when consolidating.
 
-  sum-join-input (152): producer requires >=7 sum joins and consumer pins exact wrapper/loop let
-    shapes and join-transfer counts. SumJoinInputNativeTest excluded; retain
-    behavioral values and lifetime cleanup in the aggregate suite.
-
   graph-bfs (153): publishes wall-clock run directories and shares archive/tool acquisition.
     GraphWorkloadTest excluded. Retain useful package workload in intensive coverage
     after stable outputs/shared acquisition replace the bespoke preparation.
