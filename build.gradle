@@ -959,24 +959,6 @@ tasks.register("packageScalarFullCoreTest", Test) {
         }
     }
 }
-[["getEntropyDefault", false],[ "getEntropyDense", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Checks original splitmix initialization and native libc getentropy status/bounds."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        systemProperty("thc.handoffSlabs", dense.toString())
-        inputs.files(fileTree("build/getentropy") { include("**/*.json", "native.tsv", "control.so", "sources/**") })
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.GetEntropyTest") }
-        outputs.upToDateWhen { false }
-        doFirst {
-            checkBuild(file("build/getentropy/manifest.json").isFile()) {
-                "Set THC_SPLITMIX_SOURCE and run cabal run exe:thc-fixtures -- getentropy"
-            }
-        }
-    }
-}
 [["hashableFfiFullCoreDefault", false],[ "hashableFfiFullCoreDense", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"

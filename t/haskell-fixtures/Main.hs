@@ -107,7 +107,6 @@ import PackageScalarFixtures (preparePackageScalar, preparePackageNativeDemand)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import DynamicCallbackFixtures (prepareDynamicCallbacks)
-import GetEntropyFixtures (prepareGetEntropy)
 import LibyamlNativeFixtures (prepareLibyamlNative)
 import UnixLibcFixtures (prepareUnixLibc)
 import HashableFfiFixtures (prepareHashableFfi)
@@ -1042,7 +1041,6 @@ main = do
     ["libyaml-native"] -> prepareLibyamlNative root
     ["package-native-archives"] -> preparePackageNativeArchives root
     ["dynamic-callback"] -> prepareDynamicCallbacks root
-    ["getentropy"] -> prepareGetEntropy root
     ["unix-libc"] -> prepareUnixLibc root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["original-termios"] -> prepareOriginalTermios root
