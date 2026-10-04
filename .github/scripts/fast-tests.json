@@ -194,7 +194,7 @@
       "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedWeaks.java": {
-      "junit": ["thc.runtime.ManagedWeakTest"],
+      "junit": ["thc.runtime.ManagedWeakTest", "thc.runtime.PackageFinalizerTest"],
       "python": []
     },
     "src/main/java/thc/runtime/WeakResult.java": {

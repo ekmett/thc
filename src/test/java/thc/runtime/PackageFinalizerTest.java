@@ -125,9 +125,11 @@ class PackageFinalizerTest {
             try {
                 var state = Language.currentState(null); state.getPackageCbits().link(link);
                 var provider = state.cbits(); var function = provider.finalizerLabel("first");
-                var pointer = state.getNativeAllocations().malloc(8); var weak = state.getWeaks().make(new Object(), new Object(), null);
+                var pointer = state.getNativeAllocations().malloc(8);
+                var key = new Object(); var weak = state.getWeaks().make(key, key, null);
                 assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(function, pointer, 1, weak, provider));
                 assertEquals(1L, state.getWeaks().addCFinalizer(function, pointer, 0, weak, provider));
+                java.lang.ref.Reference.reachabilityFence(key);
                 state.getNativeAllocations().free(pointer);
                 assertThrows(RuntimeFault.class, () -> state.getWeaks().finalize(weak));
                 assertEquals(0L, state.getWeaks().dereference(weak).getFlag());

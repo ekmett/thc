@@ -126,16 +126,16 @@ and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 | Primop | Current behavior and consequence |
 | --- | --- |
 | `mkWeak#` | Strongly retains its lazy key, value and Haskell action until explicit finalization or context disposal. **No automatic weak-key/ephemeron collection**; otherwise unreachable resources can remain for the context lifetime. Dropping the `Weak#` does not remove its registration. |
-| `mkWeakNoFinalizer#` | Same retained key/value behavior, without a Haskell finalizer. |
-| `deRefWeak#` | Liveness changes through explicit finalization/disposal, not GC discovering a dead key. An unfinalized registration still returns its retained value. |
+| `mkWeakNoFinalizer#` | Identical key/value carriers without callbacks are weakly held and can be collected by the JVM. Distinct values remain strongly retained until explicit finalization/disposal; general ephemeron collection is absent. |
+| `deRefWeak#` | Returns flag 0 after explicit finalization or collection of an identity-only key. Otherwise returns the original lazy value without forcing it. |
 | `finalizeWeak#` | Explicit finalization marks the weak dead, invokes registered supported C callbacks, and returns the actual Haskell action to the caller. Returning rather than running that action is intentional GHC primop behavior. Automatic GC finalization is absent; context close discards outstanding callbacks instead of executing them. |
-| `addCFinalizerToWeak#` | Accepts source-certified one-address callbacks (`free` for owned allocation bases and typed package finalizers from completely linked native components), with zero environment flag. Package callbacks require the retained `FunPtr (Ptr a -> IO ())` declaration and an exact rooted `void(pointer)` entry. Unknown labels and the two-address/environment ABI are unsupported. Callbacks run through explicit finalization only. See [C finalizers](c-finalizers.md). |
+| `addCFinalizerToWeak#` | Accepts source-certified one-address callbacks (`free` for owned allocation bases and typed package finalizers from completely linked native components), with zero environment flag. Package callbacks require the retained `FunPtr (Ptr a -> IO ())` declaration and an exact rooted `void(pointer)` entry. Unknown labels and the two-address/environment ABI are unsupported. Attaching a callback to a live identity-only registration restores strong retention; a collected registration returns 0. Callbacks run through explicit finalization only. See [C finalizers](c-finalizers.md). |
 
 This limitation is not shared by stable names: `makeStableName#` really uses a
 weak identity map and does not retain its referent. Stable pointers intentionally
 root their referents; their separate native interoperability limits appear below.
 
-Details: [explicit weak finalization](weak-explicit.md), [C finalizers](c-finalizers.md),
+Details: [managed weak registrations](weak-explicit.md), [C finalizers](c-finalizers.md),
 [stable names](stable-names.md).
 
 ## Addresses, pinning and pointer-containing storage
