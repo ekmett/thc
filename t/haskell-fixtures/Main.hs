@@ -101,7 +101,6 @@ import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import CompilerRtsFixtures (prepareCompilerRts)
-import OriginalTimeClockFixtures (prepareOriginalTimeClock)
 import RtsEventFixtures (prepareRtsEvent)
 import FloatForeignFixtures (prepareFloatForeign)
 import GhcApiFixtures (prepareGhcApi, prepareRecordFields)
@@ -1071,7 +1070,6 @@ main = do
     ["closure-inspection"] -> prepareClosureInspection root
     ["stable-pointers"] -> prepareStablePointers root
     ["compiler-rts"] -> prepareCompilerRts root
-    ["original-time-clock"] -> prepareOriginalTimeClock root
     ["rts-event"] -> prepareRtsEvent root
     ["float-foreign"] -> prepareFloatForeign root
     "ghc-api" : probes -> prepareGhcApi root probes

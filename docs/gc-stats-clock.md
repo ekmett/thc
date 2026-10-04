@@ -27,35 +27,12 @@ The original `GHC.Internal.Stats.getRTSStats` first calls
 `getRTSStatsEnabled`. When false it raises its own `UnsupportedOperation`
 `IOError`, before allocating an `RTSStats` buffer. The direct foreign leaf is
 also explicitly unavailable, not a buffer full of plausible zero counters.
-The original monotonic clock requires its ordinary package-declared native linkage;
-its acquisition and execution are not qualified by the fixture-free GC tests. The
-original `clock_gettime` CPU-time route uses the separately linked base CAPI ABI.
 
-## Original time package clock module
-
-On native 64-bit Linux, installed acquisition links the three original CAPI
-wrappers in `time-1.15`'s `Data.Time.Clock.Internal.CTimespec`: the configured
-`HS_CLOCK_REALTIME` constant, `clock_getres`, and `clock_gettime`. Their clock
-argument and status use `CInt`; the existing base CPU-clock argument uses
-`Word64`. Both original libraries can coexist in one context. Linking retains
-the original stubs, exact unit-qualified wrapper indices and selected compiler
-`HsFFI.h`, `HsTime.h`, and `HsTimeConfig.h` hashes. Cache hits revalidate these
-native inputs. Native execution still requires the context's native permission.
-
-Time output uses a checked writable 16-byte timespec with 64-bit seconds and
-nanoseconds. THC holds allocation ownership through the native call and copies
-the staged image only after success. Failure captures errno from that library
-on the same thread; success preserves the guest's previous errno. A null
-`clock_getres` destination is valid. A null `clock_gettime` destination is rejected
-before invoking libc. Invalid destination capacity, lifetime, context, or opaque
-pointer cells are rejected before native observation.
-
-This route supports fixed nonnegative clock identifiers and the reserved
-invalid identifier `-1` for libc error behavior. Other negative identifiers
-encode native descriptors or process/thread CPU clocks on Linux. They are
-explicitly unsupported until guest-owned descriptors and guest CPU identities
-can be translated; THC does not pass those encodings to unrelated host objects.
-This is not general POSIX clock or timer support.
+Ordinary package clocks use package-declared native linkage through Sulong,
+as described in [foreign code](interface-foreign.md). The general package tests
+cover foreign ABI admission, pointer ownership and errno transport. They do not
+qualify acquisition or execution of the installed `time` package's Haskell clock
+wrappers.
 
 Admission preserves the original `ccall`, `ghc-internal` unit, saturated arity,
 State/result tuple and primitive ABI. The statistics and GC calls are `safe`.

@@ -559,23 +559,6 @@ def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInter
 }
 compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
 
-[["originalTimeClockDefault", false],[ "originalTimeClockDense", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests the original time CAPI clock module with native and first-compiled controls."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.OriginalTimeClockTest") }
-        inputs.files(fileTree("build/original-time-clock") { include("*.json") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Original clock native and first-entry checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/original-time-clock/manifest.json").isFile()) {
-            "Run thc-fixtures original-time-clock with complete installed GHC Core" } }
-    }
-}
-
 [["rtsEventFullCoreTest", false],[ "rtsEventFullCoreDenseTest", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"

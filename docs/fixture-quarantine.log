@@ -97,9 +97,6 @@ Compiler-structure assertions (also excluded):
   original-open (069): exact internal root counts.
   tuple-join (124), sum-join (137): exact join/state-lambda/case shapes; generated
     receipt/audit files are not consumed by their behavioral tests.
-  original-time-clock (140, custom full-Core): expects exactly one/two executed
-    roots and retains a dedicated time/base CAPI fixture harness. Its consumer
-    is listed in quarantinedJunit and excluded by every Gradle Test task.
 
   rts-event (141, custom full-Core): three recursive producer subprocesses rewrite
     the parent's GHC/log paths; exact compiled-entry counts and a broad native

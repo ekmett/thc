@@ -334,7 +334,6 @@ extra-source-files:
   t/fixtures/run-wcwidth/wcwidth-ffi.cabal
   t/fixtures/run-wcwidth/src/Width.hs
   t/fixtures/run-wcwidth/app/Main.hs
-  t/fixtures/compiler/OriginalTimeClockAudit.hs
   t/fixtures/compiler/RtsEventAudit.hs
   docs/rts-event-capabilities.md
   docs/gc-stats-clock.md
@@ -1293,7 +1292,6 @@ executable thc-fixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
-    OriginalTimeClockFixtures
     RtsEventFixtures
     FloatForeignFixtures
     GhcApiFixtures

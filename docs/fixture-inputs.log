@@ -4467,45 +4467,6 @@ Quarantine enforcement checkpoint
   Direct quarantined/wildcard CLI requests exit 2 with PATH=/nonexistent, before
   toolchain discovery. No Gradle application build or runtime suite was executed.
 
-140 original-time-clock (custom full-Core suite)
-Fixture rationale (140 original-time-clock)
-Purpose: Exercise clock CAPI buffer/errno transport and coexistence of base/time.
-Produces/consumed result: linked original/specialized CBDs and oracle.json;
-  OriginalTimeClockTest also hashes source/interface/audit receipts.
-Cost and overlap: Complete time/base interface Core, typed FCallId rewriting,
-  native interpreter calls and eight audits are excessive for ordinary package
-  calls. Keep a package-level time smoke and a small general FFI buffer/errno
-  boundary test if those cases are missing; do not preserve a clock-C conformance
-  harness. The test hard-codes one/two executed compiler roots.
-Build status: QUARANTINED; excluded from all Gradle Test tasks and from the new graph.
-Producer: t/haskell-fixtures/OriginalTimeClockFixtures.hs.
-Consumer: src/fullCoreTest/java/thc/runtime/OriginalTimeClockTest.java;
-  Gradle originalTimeClockDefault/originalTimeClockDense.
-Inputs: t/fixtures/compiler/OriginalTimeClockAudit.hs, built thc-fixtures with
-  GHC API/plugin/interface/Driver.ForeignBitcode modules, selected Linux64 GHC
-  9.14.1/ghc-pkg, native time/base/unix packages and headers resolved by
-  THC.Driver.ForeignBitcode.timeClockHeaders. Complete installed interfaces:
-  time Data/Time/Clock/Internal/CTimespec.hi and base System/CPUTime/Posix/ClockGetTime.hi.
-Under build/original-time-clock/:
-  original.cbd, base-original.cbd <- respective installed interfaces/Core loader.
-  linked.cbd, base-linked.cbd <- originals and linkClockGetTime; the helper compiles
-    temporary clock.c/clock.bc using selected headers and attaches foreign linkage.
-  specialized-closed.cbd <- fixture source and typed original FCallId substitutions.
-  pre.cbd, post.cbd <- specialized Core simplified/tidied by GHC API.
-  ghc/ <- compiler/interpreter and foreign-bitcode intermediate outputs.
-  oracle.json <- hscCompileCoreExpr native functions, current clock state, guarded
-    memory images and errno; nine observations. Time values are live observations,
-    not deterministic content derived solely from files.
-  <pre|post>-<originalId|originalConstant|originalResolution|originalTime>.audit.json
-    <- linked.cbd + stage CBD/auditor; originalId is an expected rejection.
-  logs/{version,libdir,info,imports,includes,unit,base-imports,<stage>-<entry>}.*
-    <- corresponding commands; stdout/stderr/command.json.
-  manifest.json <- source/header/interface hashes, named CBD/oracle/audit/log outputs.
-Consumer additionally reads generated runtime ABI resources, allocates test-private
-  buffers, links the embedded foreign bitcode and writes temporary controls.
-No ordinary index group or Make/workflow producer invocation found. The Gradle
-  tasks require a preexisting manifest; that is a missing producer edge, not setup.
-
 Structural-assertion quarantine follow-up
   052 aligned-scalar-memory, 069 original-open, 124 tuple-join and 137 sum-join
   are now excluded too. Their previously recorded exact Core/root/join/state-lambda
