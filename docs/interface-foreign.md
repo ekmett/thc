@@ -99,7 +99,8 @@ Ordinary library imports still use their declared Sulong linkage.
 GHC's floating classification helpers and `rintFloat`/`rintDouble` use ordinary
 package-declared native linkage; THC supplies no replacement arithmetic.
 [PackageNativeForeignTest](../src/test/java/thc/runtime/PackageNativeForeignTest.java)
-checks representative IEEE bits through the shared Float/Double import boundary.
+checks signed zeros, finite representations and special values through the shared
+Float/Double import boundary.
 This component test does not qualify full Core lowering with the exception runtime
 or the installed GHC floating/math package, including its rounding behavior.
 
