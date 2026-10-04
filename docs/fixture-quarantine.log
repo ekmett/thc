@@ -108,10 +108,6 @@ Not quarantined merely for this reason:
     CBDs. GenericSumTransportTest is excluded. Keep typed carrier/GC-lifetime
     boundaries and recover direct storage/rejection controls without native setup.
 
-  tuple-join-input (149): generation freezes minimum join/case counts and unconditionally requires an
-    original-library reference even with that mode disabled. TupleJoinNativeTest
-    excluded. Preserve first-compiled/empty-join semantic checks when consolidating.
-
   graph-bfs (153): publishes wall-clock run directories and shares archive/tool acquisition.
     GraphWorkloadTest excluded. Retain useful package workload in intensive coverage
     after stable outputs/shared acquisition replace the bespoke preparation.

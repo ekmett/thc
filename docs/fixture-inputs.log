@@ -4289,40 +4289,6 @@ Consumer reads receipt/oracle and lists stage CBDs. Independent direct tests cov
   carrier identity, inactive references, vector species and invalid payload levity;
   first-compiled checks use counter increases. Gradle has no producing task edge.
 
-149 tuple-join-input (custom fixture)
-Fixture rationale (149 tuple-join-input)
-Purpose: Check tuple/empty join arguments, recursive swaps, exceptions and retry.
-Consumes: TupleJoinInputAudit{,Native}.hs, exporter/auditor and GHC; optional
-  complete installed Core or THC_TUPLE_JOIN_PACKAGES and its referenced archives.
-Produces/consumed result: Named pre/post CBDs, oracle.tsv, audits and manifest.
-Cost and overlap: Keep join-move/empty/bottom cases in shared aggregate coverage.
-  Original roundTo acquisition should not be required for basic join transport.
-Build status: QUARANTINED. Generation demands minimum join/case counts and an
-  original roundTo reference even when original-library roots are not requested.
-Producer: t/haskell-fixtures/TupleJoinFixtures.hs; consumer TupleJoinNativeTest.
-Under build/tuple-join-input/:
-  native/oracle and native intermediates <- audit/driver sources, GHC --make -O2
-    -dynamic -fforce-recomp -dcore-lint -dstg-lint -package ghc-internal.
-  oracle.tsv <- native executable, 222 rows across six entries; native includes all
-    six even when originalLibrary=False exports only four guest entry roots.
-  installed/bundles/<unit>.zip, installed/packages.json <- prepareInstalledCore
-    (shared acquisition in entry 066), or THC_TUPLE_JOIN_PACKAGES. The latter selects
-    ghc-internal/rts units, checks/copies bundle hashes and rewrites bundle paths;
-    other referenced native/package paths still need explicit dependency closure.
-  <pre|post>/core/TupleJoinInputAudit.cbd <- source, selected roots, stage/exporter;
-    stage/ghc/ intermediates. Its directory filter accepts this EXACT filename;
-    this is not an output-glob defect.
-  stage/audit.json <- named CBD + optional installed/packages.json + auditor.
-  commands/{ghc-version,native-build,native-run,<stage>-export,<stage>-audit}.*
-    <- command/stdout/stderr triplets.
-  manifest.json <- source/native binary/oracle/package/Core/audit/log hashes;
-    records originalLibrary and packageManifest; old receipt removed first.
-Producer requires at least three tuple joins/two empty cases and roundTo reference
-  unconditionally. The false-mode root/reference mismatch needs review; it has not
-  been executed in this inventory pass. Consumer reads named CBDs, oracle, receipt
-  paths and optional package modules. First-compiled checks use increases, which
-  are valid; arbitrary join/case counts are not a lasting compiler contract.
-
 153 graph-bfs (custom fixture)
 Fixture rationale (153 graph-bfs)
 Purpose: Exercise a real containers graph workload, including traversal and bounds.

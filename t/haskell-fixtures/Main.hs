@@ -120,7 +120,6 @@ import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareW
 import StablePointerFixtures (prepareStablePointers)
 import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
-import TupleJoinFixtures (prepareTupleJoins)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
 import ByteArrayFixtures (prepareByteArrayFamily)
@@ -1058,8 +1057,6 @@ main = do
     ["record-fields-demand"] -> prepareRecordFieldsDemand root
     ["record-fields-demand-inventory", mode, destination] -> recordFieldsDemandInventory root mode destination
     ["stable-names"] -> prepareStableNames root
-    ["tuple-join"] -> prepareTupleJoins True root
-    ["tuple-join", "--local"] -> prepareTupleJoins False root
     ["aggregate-heap"] -> prepareAggregateHeap root False
     ["fourway-aggregate"] -> prepareFourWayAggregate root
     ["narrow-integer-transport"] -> prepareNarrowIntegerTransport root

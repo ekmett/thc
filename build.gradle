@@ -613,22 +613,6 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         doFirst { checkBuild(file("build/generic-sum-transport/manifest.json").isFile()) { "Run thc-fixtures generic-sum-transport" } }
     }
 }
-[["tupleJoinFullCoreTest", false],[ "tupleJoinFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original roundTo tuple joins and bottoming empty tuple cases against native GHC."
-        maxHeapSize = "6g"
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.TupleJoinNativeTest") }
-        inputs.files(fileTree("build/tuple-join-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Native and first-compiled tuple join checks require a fresh process") { true }
-        doFirst { checkBuild(file("build/tuple-join-input/manifest.json").isFile()) { "Run thc-fixtures tuple-join" } }
-    }
-}
 tasks.register("graphWorkloadTest", Test) {
     group = "verification"
     description = "Checks the real containers BFS example against native GHC and an independent shortest-distance model."
