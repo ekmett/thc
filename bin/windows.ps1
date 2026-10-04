@@ -76,6 +76,7 @@ try {
             'thc.runtime.EmptyArgumentRuntimeTest.emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow',
             'thc.runtime.EmptyArgumentRuntimeTest.exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples',
             'thc.runtime.EmptyArgumentRuntimeTest.ignoredScalarStateTupleFieldExecutesBeforeLaterWorkAndRejectsInvalidCarrier',
+            'thc.runtime.UnknownBoxedSumTest.poisonPointerSurvivesResultsArgumentsPapCaptureCaseAndConstructor',
             'thc.CoreUnitLoadTest.coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding',
             'thc.CoreUnitLoadTest.missingOrBadColdUnitFailsOnlyAtDemandAndDoesNotTouchThirdUnit',
             'thc.NarrowPublicEntryTest.partialApplicationUsesRemainingNotOriginalInputProofs',
