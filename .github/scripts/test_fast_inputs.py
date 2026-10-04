@@ -1636,7 +1636,8 @@ class FastInputTests(unittest.TestCase):
         for name in cache.AGGREGATE_HOST_CBD_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
         for name in ("build/aggregate-core/Other.cbd", "build/aggregate-post-core/SumLayoutAudit.cbd",
-                     "build/sum-layout/other-core/SumLayoutAudit.cbd", "build/sum-result/pre-core/Other.cbd"):
+                     "build/sum-layout/other-core/SumLayoutAudit.cbd", "build/sum-result/pre-core/Other.cbd",
+                     "build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd", "build/empty-join-input/provenance.json"):
             self.assertFalse(cache.allowed_payload(name), name)
 
     def test_cbv_contract_cbd_payloads_are_closed_to_exact_modules_and_stages(self):

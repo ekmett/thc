@@ -103,82 +103,16 @@ Missing edges / caveats:
   Current Gradle input globs do not create a producer dependency. The former Python
   test exposed this by reading oracle.tsv before any producer had run.
 
-002  empty-join-input
-Fixture rationale (002 empty-join-input)
-Purpose: Check empty-tuple arguments do not shift live join arguments or change results.
-Produces/consumed result: Pre/post CBDs and native oracle.tsv.
-Cost and overlap: Distinct argument-erasure regression, including first compiled
-  execution. Two exports and one native reference are defensible; exact join shapes are
-  not the contract.
-Build status: QUARANTINED: exact join-call and State-lambda shape must not constrain optimization.
-
-Producer: bin/prepare-empty-join-input.py:main / verify
-Consumers: thc.runtime.EmptyJoinInputTest; producer --check-only.
-bin/test-empty-join-inputs.py imports model definitions, not these generated outputs.
-
-Apparent direct inputs:
-  t/fixtures/compiler/EmptyJoinInputAudit.hs
-  t/fixtures/compiler/EmptyJoinInputAuditNative.hs (imports the first module)
-  bin/prepare-empty-join-input.py (generation and independent 64-bit formulas)
-  Same exporter/plugin, CBD inspector, auditor, capability tables and tool/package
-    dependencies as 001, including the polyglot-abi.json and simd-families.json import-time reads.
-  Haskell source supplies -fno-full-laziness -fno-worker-wrapper -fno-specialise
-    -fno-spec-constr; these are part of the producer code/input, not test setup.
-  GHC/GHC_PKG/CABAL/THC_COMPACT/PATH/THC_SOURCE_NOTES and inherited package
-    environment/configuration apply as in 001; GHC --info is recorded in output.
-
-Published outputs, relative to build/empty-join-input/:
-  pre-core/EmptyJoinInputAudit.cbd, post-core/EmptyJoinInputAudit.cbd
-  pre-audit.json, post-audit.json, checks.json
-  oracle.tsv, native/oracle, provenance.json
-Intermediate outputs:
-  pre-ghc/, post-ghc/, native/ object/interface files; shared plugin/Cabal products;
-  temporary CBD decode files. Native executable is compiled -O2 -fforce-recomp
-    -dcore-lint; pre/post exporters use the flags recorded under 001.
-
-Actual test reads:
-  provenance.json and every path named by inputs/artifacts, including native/oracle
-    and checks.json through byte hashing; both CBD files, pre/post audit JSON and
-    oracle.tsv directly. Runtime/test classpath and implementation are test inputs.
-
-Artifact-by-artifact file flow (paths below use this fixture directory):
-  native/oracle
-    IN: EmptyJoinInputAuditNative.hs, EmptyJoinInputAudit.hs, selected GHC package
-        interfaces/libraries and native linker/compiler tools.
-    OUT: native/oracle; native object/interface intermediates.
-  pre-core/EmptyJoinInputAudit.cbd
-    IN: EmptyJoinInputAudit.hs, published plugin/package DB, GHC package
-        interfaces, exporter/toolchain/plugin scripts and export flags.
-    OUT: that CBD; pre-ghc/ intermediates. Further plugin side outputs unresolved.
-  post-core/EmptyJoinInputAudit.cbd
-    IN: same as pre plus post-tidy plugin option.
-    OUT: that CBD; post-ghc/ intermediates. Further plugin side outputs unresolved.
-  oracle.tsv
-    IN: native/oracle (its source embeds cases and expected observation format).
-    OUT: captured stdout as oracle.tsv.
-  pre-audit.json / post-audit.json (two separate files)
-    IN: corresponding CBD, oracle.tsv, formulas/structural checks in verify(),
-        thc-compact and the auditor import/data closure.
-    OUT: corresponding audit JSON.
-  checks.json
-    IN: both decoded CBDs, oracle.tsv, formulas and checks in verify(), both
-        in-memory audit reports. Reads no previous checks.json while generating.
-    OUT: combined stage/row/join inventory in checks.json.
-  provenance.json
-    IN: the seven artifact files listed above, the source paths assembled in
-        main(), commands, selected GHC version and GHC --info output.
-    OUT: provenance.json, written after verify() succeeds.
-
-Missing edges / caveats:
-  Plugin construction is called at top level and again by each export.
-  Provenance hashes only src/compiler/THC/*.hs (nonrecursive); imported deeper
-    compiler modules are not covered by that list. It also omits plugin.py,
-    thc.cabal, polyglot-abi.json and simd-families.json, although invoked tools
-    consume them.
-  verify() writes both audit files and checks.json. --check-only first validates
-    old hashes, then calls this writer; it is not a read-only input check.
-  This producer has no dependency on another fixture's generated oracle/Core.
-    Its missing graph edges are the shared tools and its own consumers.
+002  empty join semantics (fixture-free)
+Owners: thc.runtime.TupleJoinLoweringTest and thc.runtime.EmptyArgumentRuntimeTest.
+Inputs are typed Core modules or local frames built in the test; outputs are
+observed values, ordered effects, failed-transfer state and released loans.
+No producer, generated oracle or pre/post CBD products are required.
+The source-core RepresentationAudit/RealCoreJoinTest owner (118) retains the real
+recursive empty-tuple/scalar swap. Linux issue1066 remains open; this consolidation
+does not establish a runtime fix or post-Tidy equivalence.
+bin/test-empty-join-inputs.py independently tests auditor policy using constructed
+Core and consumes no generated fixture products.
 
 003  signed-narrow-primops
 Fixture rationale (003 signed-narrow-primops)
@@ -3733,7 +3667,7 @@ The same admitted owner checks recursive scalar swaps across an empty-tuple join
 parameter against an independent checked model: input MAX masks to 31 swaps (18),
 MAX-1 to 30 (-18), including the immediate first installed call on both backends.
 This preserves the unique EmptyJoin regression contract without qualifying a
-current-main reproduction or the quarantined empty-join-input harness.
+current-main Linux reproduction or a runtime fix for issue1066.
 This admitted pre-Tidy export does not qualify retired join post-Tidy agreement.
 IN t/fixtures/compiler/{SourceNotes,RepresentationAudit}.hs/shared exporter;
   metadata checker/shared decoder.
@@ -5439,13 +5373,6 @@ Inventory/header checkpoint after entry 174 (base 16c7b9355, local changes):
   git diff --check passed. PowerShell unavailable locally; native Windows script
     execution is unverified. No fixture/runtime builds, pushes or CI dispatches.
 
-Graph-admission correction for001/002:
-  NarrowLiteralProofTest.project requires exactly24 matching direct writes.
-  prepare-empty-join-input.verify requires one particular join call and exactly one
-  State lambda/application. Both are now excluded pending removal/consolidation of
-  structural checks. Preserve the semantic signed/high-bit and empty-join cases; the
-  known Linux empty-join first-compiled failure remains unresolved, not erased.
-  Correction verification: both Python producer changes are comment-only by AST
-  comparison. All45 blocked indexed groups refuse preparation before commands
-  (focused check passed in0.110s); Gradle expression evaluated with45 groups/93
-  classes and the full-Core tag excluded. git diff --check passed.
+Narrow-literal-proofs (001) remains quarantined: its consumer requires exactly24
+matching direct writes. Preserve semantic signed/high-bit checks when consolidating
+that family; compiler structure is not the contract.

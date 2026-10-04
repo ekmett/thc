@@ -108,10 +108,6 @@ jobs:
             build/reports/profile/
             build/test-results/testDefault/
             build/test-results/testDense/
-            build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd
-            build/empty-join-input/post-core/EmptyJoinInputAudit.cbd
-            build/empty-join-input/provenance.json
-            build/empty-join-input/oracle.tsv
             build/reports/tests/testDefault/
             build/reports/tests/testDense/
           retention-days: 7

@@ -1462,13 +1462,6 @@
       "outputs": ["build/cstring/boot-core", "build/cstring/boot-provenance.json"],
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
-    "empty-join-input": {
-      "quarantined": true,
-      "junit": ["thc.runtime.EmptyJoinInputTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-empty-join-input.py"]}],
-      "outputs": ["build/empty-join-input"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
     "truffle-strings": {
       "cmakeTarget": "fixture-truffle-strings",
       "junit": ["thc.runtime.IntrinsicOperandContinuationTest", "thc.runtime.TruffleStringTest"],

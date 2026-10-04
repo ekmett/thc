@@ -463,12 +463,12 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
     "manifest.json", "pre-core/GeneratedSimdSmoke.cbd", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
-PROVENANCE_DIRS = """io-main-pap aggregate-layout empty-join-input empty-tuple-input
+PROVENANCE_DIRS = """io-main-pap aggregate-layout empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
 simd-doublex2 simd-int32x4-bytearray simd-word32x4-bytearray
 simd-floatx4-bytearray simd-doublex2-bytearray""".split()
-CHECK_DIRS = """aggregate-layout empty-join-input empty-tuple-input floating-tuple
+CHECK_DIRS = """aggregate-layout empty-tuple-input floating-tuple
 state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
 tuple-return unsafe-equality""".split()
 AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
@@ -477,7 +477,7 @@ AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
     *(f"build/{family}/{stage}-core/{module}.cbd" for family, module in (
         ("empty-tuple-input", "EmptyTupleInputAudit"), ("tuple-input", "TupleInputAudit"),
         ("tuple-join", "TupleJoinAudit"), ("tuple-return", "TupleReturnAudit"),
-        ("state-tuple", "StateTupleAudit"), ("empty-join-input", "EmptyJoinInputAudit"),
+        ("state-tuple", "StateTupleAudit"),
         ("floating-tuple", "FloatingTupleAudit"), ("aggregate-layout", "AggregateLayoutAudit"),
         ("sum-layout", "SumLayoutAudit"), ("sum-result", "SumResultAudit"))
       for stage in ("pre", "post")),

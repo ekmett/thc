@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.Main.executionContext;
 import static thc.runtime.ScalarValueTestSupport.*;
 
+/** Fixture-free typed Core tests for logical empty inputs and lazy tuple results.
+ * Inputs are constructed modules; outputs are values, effects and released loans. */
 class EmptyArgumentRuntimeTest {
     private final Map<String, Object> integer = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
     private final Map<String, Object> closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
@@ -231,6 +233,14 @@ class EmptyArgumentRuntimeTest {
                     assertThrows(RuntimeFault.class, () -> program(language, backend, module(stateWorker, bind("entry", lam(list(), app(fn, args))))));
                 }
                 assertThrows(RuntimeFault.class, () -> program(language, backend, module(bind("entry", lam(list(), prim("+#", zero(), n(1)))))));
+                // A join keeps the empty logical slot even though it has no payload.
+                var join = with(bind("finish", lam(list(arg("u", empty), arg("n")), v("n"))),
+                    "joinValueArity", 2, "joinResultRep", integer);
+                for (var invalid : list(call("finish", list(n(3))),
+                        call("finish", list(list("void", map("rep", state)), n(3))))) {
+                    var region = list("let", false, list(join), invalid, map("rep", integer));
+                    assertThrows(RuntimeFault.class, () -> program(language, backend, module(bind("entry", lam(list(), region)))).entryValue("entry"));
+                }
                 var boxed = v("payload", reference);
                 var newResult = with(empty, "components", list(state, map("kind", "object", "evaluated", true, "primReps", list("BoxedRep (Just Unlifted)"))), "primReps", list("BoxedRep (Just Unlifted)"));
                 var invalidNew = app(list("prim", "newMutVar#"), list(boxed, zero()), newResult, list(true, false));
@@ -241,22 +251,43 @@ class EmptyArgumentRuntimeTest {
     @Test void emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow() throws Exception {
         withLanguage(language -> {
             var pair = with(empty, "components", list(integer, reference), "primReps", list("IntRep", "BoxedRep (Just Lifted)"));
-            var producer = bind("producer", lam(list(arg("u", empty), arg("x"), arg("ref", reference)),
-                app(list("con", "T", 2), list(v("x"), v("ref", reference)), pair, list(false, true)), pair));
-            var result = call("producer", list(call("effect", list(v("x")), empty), v("x"), v("ref", reference)), pair, list(false, false, true));
-            List<Object> body = list("case", result, "tuple", list(list("data", "T", list("a", "b"), v("a"),
-                map("binders", list(arg("a"), arg("b", reference))))), map("rep", integer, "binder", arg("tuple", pair)));
-            var data = module(producer, bind("entry", lam(list(arg("effect", closure), arg("x"), arg("ref", reference)), body)));
-            for (var backend : list("ast", "bytecode")) {
-                var p = program(language, backend, data); var events = new ArrayList<Long>();
-                var effect = new Closure(null, 1, new EffectRoot(language, events, new TupleShape(CoreRepresentations.parse(empty), language)).getCallTarget());
-                var bottom = new Thunk(new EffectRoot(language, events, null).getCallTarget(), null);
-                assertEquals(17L, run(p, "entry", effect, 17L, bottom)); released(language);
-                assertTrue(language.getHandoffState().get().getResults().getAllocations() > 0);
-                assertEquals(0, bottom.getState(), "Copying a lifted tuple leaf must not force it");
-                assertThrows(GuestException.class, () -> run(p, "entry", effect, -7L, bottom)); released(language);
-                assertEquals(19L, run(p, "entry", effect, 19L, bottom)); released(language); assertEquals(0, bottom.getState());
+            var packed = app(list("con", "T", 2), list(v("x"), v("ref", reference)), pair, list(false, true));
+            for (boolean local : new boolean[]{false, true}) {
+                // The local variant captures an empty value from the same activation.
+                var returned = local ? list("case", v("held", empty), "forced", list(list("default", null, list(), packed)),
+                    map("rep", pair, "binder", arg("forced", empty))) : packed;
+                var producer = bind("producer", lam(list(arg("u", empty), arg("x"), arg("ref", reference)), returned, pair));
+                var result = call("producer", list(call("effect", list(v("x")), empty), call("later", list(v("x"))), v("ref", reference)), pair, list(false, false, true));
+                if (local) {
+                    producer = with(producer, "joinValueArity", 3, "joinResultRep", pair);
+                    result = list("case", zero(), "held", list(list("default", null, list(),
+                        list("let", false, list(producer), result, map("rep", pair)))), map("rep", pair, "binder", arg("held", empty)));
+                }
+                var body = list("case", result, "tuple", list(list("data", "T", list("a", "b"), v("a"),
+                    map("binders", list(arg("a"), arg("b", reference))))), map("rep", integer, "binder", arg("tuple", pair)));
+                var entry = bind("entry", lam(list(arg("effect", closure), arg("later", closure), arg("x"), arg("ref", reference)), body));
+                var data = local ? module(entry) : module(producer, entry);
+                for (var backend : list("ast", "bytecode")) {
+                    var p = program(language, backend, data); var events = new ArrayList<Long>();
+                    var effect = new Closure(null, 1, new EffectRoot(language, events, new TupleShape(CoreRepresentations.parse(empty), language)).getCallTarget());
+                    var later = new Closure(null, 1, new EffectRoot(language, events, null).getCallTarget());
+                    var bottom = new Thunk(new EffectRoot(language, events, null).getCallTarget(), null);
+                    assertEquals(17L, run(p, "entry", effect, later, 17L, bottom)); assertEquals(list(17L, 117L), events); released(language);
+                    if (!local) assertTrue(language.getHandoffState().get().getResults().getAllocations() > 0);
+                    assertEquals(0, bottom.getState(), "Copying a lifted tuple leaf must not force it");
+                    compile(p.entryTarget("entry")); events.clear(); long before = (Long) p.diagnostics().get("compiledEntries");
+                    assertEquals(3_000_000_000L, run(p, "entry", effect, later, 3_000_000_000L, bottom));
+                    assertEquals(list(3_000_000_000L, 3_000_000_100L), events);
+                    assertTrue((Long) p.diagnostics().get("compiledEntries") > before); valid(p.entryTarget("entry")); released(language);
+                    long transfers = (Long) p.diagnostics().get("localJoinTransfers");
+                    if (local) assertTrue(transfers > 0, backend + " must execute the local join");
+                    events.clear(); assertThrows(GuestException.class, () -> run(p, "entry", effect, later, -7L, bottom));
+                    assertEquals(list(-7L), events); assertEquals(transfers, p.diagnostics().get("localJoinTransfers")); released(language);
+                    events.clear(); assertEquals(19L, run(p, "entry", effect, later, 19L, bottom));
+                    assertEquals(list(19L, 119L), events); released(language); assertEquals(0, bottom.getState());
+                }
             }
         });
     }
+
 }
