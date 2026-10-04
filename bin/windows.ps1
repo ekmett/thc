@@ -64,7 +64,8 @@ try {
         Invoke-ThcTool $fixture @('signed-narrow')
         $focusedTests += @('thc.runtime.TupleArithmeticTest', 'thc.runtime.WordCarryTest',
             'thc.runtime.BitPrimopsTest', 'thc.SignedNarrowPrimopsTest',
-            'thc.runtime.ScalarBitCastTest.directTypedCallsPreserveBitsOnFirstCompiledCallAndRejectWrongCarriers')
+            'thc.runtime.ScalarBitCastTest.directTypedCallsPreserveBitsOnFirstCompiledCallAndRejectWrongCarriers',
+            'thc.runtime.ScalarBitCastTest.typedNodesKeepRawBitsAndNeverUseBoxedOperandExecution')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava

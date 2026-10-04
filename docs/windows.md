@@ -67,10 +67,12 @@ checks tuple arithmetic, bit primops, signed-narrow arithmetic, arrays, allocati
 and the native ABI. Signed-narrow uses its existing native/model suite in both
 backends and handoff modes without pinned-Core acquisition. A shared Gradle
 invocation retains the focused test reports for both handoff modes.
-Runtime also selects the direct typed scalar-bitcast method: raw Float/Double
+Runtime also selects two typed scalar-bitcast methods: raw Float/Double
 bits survive the first installed call in both backends, wrong carriers are
 rejected, and handoff storage is released. This model check needs no generated
-fixture and excludes the exhaustive NaN loop. The native-GHC bitcast corpus
+fixture and excludes the exhaustive NaN loop. A direct node check additionally
+rejects boxed operand execution while preserving signed NaN payload bits.
+The native-GHC bitcast corpus
 remains outside this selection; the CMake fixture graph does not support Windows.
 
 Registered plugin lookup accepts Cabal build directories reached through directory
