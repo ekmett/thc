@@ -206,6 +206,78 @@ class ThreadedThunkTest {
             assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > 0, backend);
         }
     }
+    private static Map<String, Object> sparkRep(String kind, String primitive, boolean evaluated) {
+        return map("kind", kind, "primReps", primitive == null ? list() : list(primitive), "evaluated", evaluated);
+    }
+    private ExecutableProgram sparkCaller(Language language, String backend) {
+        var lifted = sparkRep("object", "BoxedRep (Just Lifted)", false);
+        var state = sparkRep("void", null, true); var integer = sparkRep("long", "IntRep", true);
+        var closure = sparkRep("closure", "BoxedRep (Just Lifted)", true);
+        var args = list(map("id", "payload", "lifted", true, "rep", lifted));
+        var call = list("app", list("prim", "par#"), list(list("var", "payload", map("rep", lifted))),
+            list(true), false, false, map("rep", integer));
+        var source = map("schema", 1, "ghc", "9.14.1", "instrument", true, "constructors", list(),
+            "bindings", list(map("id", "hint", "name", "hint", "arity", 1, "lifted", true, "rep", closure,
+                "expr", list("lam", args, call, map("rep", closure, "resultRep", integer)))));
+        return backend.equals("ast") ? new Program(language, source, true, false) : new BytecodeProgram(language, source, null, true);
+    }
+    private static final class SparkWorkRoot extends GuestRoot {
+        private final java.util.function.Supplier<Object> body;
+        SparkWorkRoot(Language language, java.util.function.Supplier<Object> body) {
+            super(language, new FrameLayout().build()); this.body = body;
+        }
+        @Override public boolean getAsynchronousExceptions() { return true; }
+        @Override public Object execute(VirtualFrame frame) { return body.get(); }
+    }
+    private Context sparkContext(int capacity) {
+        return Context.newBuilder("thc").allowCreateThread(true).allowExperimentalOptions(true)
+            .option("thc.SparkQueueCapacity", Integer.toString(capacity))
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build();
+    }
+    private Thunk sparkWork(Context context, Language language, java.util.function.Supplier<Object> body) throws Exception {
+        return entered(context, () -> new Thunk(new SparkWorkRoot(language, body).getCallTarget(), null));
+    }
+    @Test void sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk() throws Exception {
+        for (var backend : list("ast", "bytecode")) try (var context = sparkContext(2)) {
+            context.initialize("thc");
+            var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
+            var caller = entered(context, () -> sparkCaller(language, backend));
+            var target = caller.entryTarget("hint");
+            for (boolean installed : list(false, true)) {
+                if (installed) entered(context, () -> { target.getClass().getMethod("compile", boolean.class).invoke(target, true); return null; });
+                var started = new CountDownLatch(1); var release = new CountDownLatch(1); var evaluations = new AtomicInteger(); var answer = new Object();
+                var thunk = sparkWork(context, language, () -> { evaluations.incrementAndGet(); started.countDown(); await(release); return answer; });
+                var driver = new Driver(new Metrics(false));
+                try (var pool = Executors.newSingleThreadExecutor()) {
+                    long before = ((Number) caller.diagnostics().get("compiledEntries")).longValue();
+                    entered(context, () -> assertEquals(1L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, thunk})));
+                    assertTrue(started.await(5, TimeUnit.SECONDS), backend + " starts speculative evaluation before demand");
+                    if (installed) assertTrue(((Number) caller.diagnostics().get("compiledEntries")).longValue() > before);
+                    var demanding = new CountDownLatch(1);
+                    var demand = pool.submit(() -> entered(context, () -> { demanding.countDown(); return driver.force(thunk); }));
+                    assertTrue(demanding.await(5, TimeUnit.SECONDS)); release.countDown();
+                    assertSame(answer, demand.get(5, TimeUnit.SECONDS)); assertEquals(1, evaluations.get());
+                    assertSame(answer, entered(context, () -> driver.force(thunk)));
+                } finally { release.countDown(); }
+            }
+        }
+    }
+    @Test void sparkedGuestFailureIsDeferredAndDoesNotStopUnrelatedWork() throws Exception {
+        for (var backend : list("ast", "bytecode")) try (var context = sparkContext(2)) {
+            context.initialize("thc"); var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
+            var caller = entered(context, () -> sparkCaller(language, backend)); var failed = new CountDownLatch(1); var payload = new Object();
+            var bad = sparkWork(context, language, () -> { failed.countDown(); throw new GuestException(payload, null); });
+            var completed = new CountDownLatch(1); var answer = new Object();
+            var good = sparkWork(context, language, () -> { completed.countDown(); return answer; });
+            entered(context, () -> { assertEquals(1L, ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, bad})); return null; });
+            assertTrue(failed.await(5, TimeUnit.SECONDS));
+            entered(context, () -> { assertEquals(1L, ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, good})); return null; });
+            assertTrue(completed.await(5, TimeUnit.SECONDS)); var driver = new Driver(new Metrics(false));
+            var failure = entered(context, () -> assertThrows(GuestException.class, () -> driver.force(bad)));
+            assertSame(payload, failure.getPayload()); assertSame(answer, entered(context, () -> driver.force(good)));
+        }
+    }
     @Test void asyncOwnerUnwindDoesNotMemoizeOrReplayAnEffectWithoutAContinuation() throws Exception {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); var state = entered(context, () -> TruffleLanguage.ContextReference.create(Language.class).get(null));
