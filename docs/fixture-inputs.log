@@ -2754,10 +2754,12 @@ Cost and overlap: Remaining frontier/result flows have recursive receipts and sh
   gates; keep them quarantined pending semantic consolidation.
 Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
 
-Quarantined consumers: thc.AggregateFrontierTest, SumLayoutMetadataTest;
-  thc.runtime.SumProtocolTest, SumResultTest, TupleRepresentationTest.
-  AggregateFrontierTest and SumProtocolTest also write
-  model CBDs, consuming shared compact-model encoder (041).
+Quarantined consumers: thc.runtime.SumProtocolTest and SumResultTest.
+  The old frontier producer remains only for SumResultTest originalFrontier methods.
+  AggregateFrontierTest now writes two public diagnostic/host ABI CBD models with
+    compact-model (041); TupleRepresentationTest is fixture-free. Both use commit
+    cadence; admission does not itself prove execution.
+  SumProtocolTest also writes model CBDs with the compact-model encoder.
 A. bin/prepare-aggregate-frontier.sh:
   IN bin/toolchain.sh, built thc-fixtures, t/fixtures/compiler/AggregateFrontier.hs,
     AggregateFrontierNative.hs, exporter/native GHC/shared package libraries.

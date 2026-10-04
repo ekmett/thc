@@ -3257,7 +3257,6 @@
       ]
     },
     "hourlyJunit": [
-      "thc.AggregateFrontierTest",
       "thc.BloomHeaderTest",
       "thc.BoxedForeignProvenanceTest",
       "thc.BytecodeBackendTest",
@@ -3613,7 +3612,6 @@
       "thc.runtime.TruffleStringTest",
       "thc.runtime.TupleCompletionTest",
       "thc.runtime.TupleJoinLoweringTest",
-      "thc.runtime.TupleRepresentationTest",
       "thc.runtime.TypedCaseTest",
       "thc.runtime.TypedExecutionTest",
       "thc.runtime.TypedInputOwnershipTest",

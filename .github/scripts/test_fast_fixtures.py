@@ -202,7 +202,22 @@ class FixtureGraphTest(unittest.TestCase):
         remaining = manifest["groups"]["sum-results"]
         self.assertTrue(remaining["quarantined"])
         self.assertIn("sum-layout", remaining["requires"])
-        self.assertEqual({"thc.AggregateFrontierTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest"}, set(remaining["junit"]))
+        self.assertEqual({"thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"}, set(remaining["junit"]))
+
+    def test_frontier_public_models_and_representation_controls_have_separate_owners(self):
+        import fast_select
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        public, component = "thc.AggregateFrontierTest", "thc.runtime.TupleRepresentationTest"
+        self.assertEqual("compact-model", owners[public])
+        self.assertIn(component, manifest["fixtureFreeJunit"])
+        self.assertIsNone(owners[component])
+        self.assertEqual(["fixture-compact-model"], fast_fixtures.prepare_cmake(project, self.selection(public, component), mock.Mock())["targets"])
+        policy = json.loads((project / fast_select.POLICY).read_text())
+        cadence = fast_select.cadence_assignments(manifest, owners, policy)
+        for name in (public, component):
+            self.assertEqual("commit", cadence[name], name)
+            self.assertNotIn(name, fast_fixtures.quarantined_classes(project))
 
     def test_selected_consumers_share_one_dependency_build(self):
         self.manifest["groups"]["alpha"].update(cmakeTarget="fixture-alpha", requires=["beta"])

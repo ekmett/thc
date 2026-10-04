@@ -44,9 +44,11 @@ Unrelated directory members change consumed inputs or make generation fail:
   floating-tuples (086), sum-results (088),
     show-word-list (127), short-bytes-slices (129), unsafe-equality (134),
     tag-to-enum (135): recursively discovered products enter receipts consumed
-    by tests. Remaining sum-results includes frontier and sum-result runtime owners.
+    by tests. Remaining sum-results includes only SumResultTest and SumProtocolTest.
     Aggregate-layout and sum-layout have independent named products and commit
-    consumers on Linux/macOS; the four remaining sum-results classes stay quarantined.
+    consumers on Linux/macOS. AggregateFrontierTest uses compact-model public CBD
+    controls; TupleRepresentationTest is fixture-free. Both use commit cadence.
+    The old frontier producer and remaining sum-result consumers stay quarantined.
     SumProtocolTest's actual post-return deoptimization control is preserved.
   stable-pointers (084): both original and shared-CAF exports require exact
     output-directory inventories. Unrelated CBDs must not prevent regeneration;

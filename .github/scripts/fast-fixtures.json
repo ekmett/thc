@@ -286,7 +286,8 @@
     "thc.runtime.WindowsSulongLibraryLookupTest",
     "thc.runtime.Word32VectorMemoryProofTest",
     "thc.runtime.Word32VectorStorageTest",
-    "thc.runtime.WordArrayTest"
+    "thc.runtime.WordArrayTest",
+    "thc.runtime.TupleRepresentationTest"
   ],
   "groups": {
     "backend-annotations": {
@@ -299,7 +300,7 @@
     },
     "compact-model": {
       "cmakeTarget": "fixture-compact-model",
-      "junit": ["thc.runtime.BigNatLiteralTest", "thc.StaticExportStartupTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnlinkTest"],
+      "junit": ["thc.AggregateFrontierTest", "thc.runtime.BigNatLiteralTest", "thc.StaticExportStartupTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnlinkTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; \"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
@@ -814,7 +815,7 @@
     "sum-results": {
       "requires": ["compact-model", "sum-layout"],
       "quarantined": true,
-      "junit": ["thc.AggregateFrontierTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest"],
+      "junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"],
       "commands": [{"argv": ["sh", "bin/prepare-aggregate-frontier.sh"]}, {"argv": ["python3", "bin/prepare-sum-result-audit.py"]}],
       "outputs": ["build/aggregate-core", "build/aggregate-post-core", "build/aggregate-native", "build/aggregate-frontier.json", "build/sum-result"],
       "sources": ["bin/prepare-aggregate-frontier.sh", "bin/check-aggregate-frontier.py", "bin/prepare-sum-result-audit.py", "t/fixtures/compiler/AggregateFrontier.hs", "t/fixtures/compiler/AggregateFrontierNative.hs", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs"]
