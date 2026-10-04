@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.IOAccess;
@@ -50,12 +53,70 @@ class NativeFileProviderTest {
     }
     // Test-only kernel observation; no fd integer enters production or Core.
     private long nativeDescriptors(Path path) throws IOException {
+        if ("Mac OS X".equals(System.getProperty("os.name"))) return NativeOpenOperation.observe(2, path.toString());
         long count = 0;
         try (var entries = Files.newDirectoryStream(Path.of("/proc/self/fd"))) {
             for (var entry : entries) try { if (Files.readSymbolicLink(entry).equals(path.toAbsolutePath())) count++; }
             catch (NoSuchFileException ignored) { }
         }
         return count;
+    }
+    private List<Path> nativeOpenWorkers() throws IOException {
+        var workers = new ArrayList<Path>();
+        try (var tasks = Files.newDirectoryStream(Path.of("/proc/self/task"))) {
+            for (var task : tasks) try {
+                if (Files.readString(task.resolve("comm")).equals("thc-open\n")) workers.add(task);
+            } catch (IOException ignored) { }
+        }
+        return workers;
+    }
+    private long nativeOpenWorkerCount() throws IOException {
+        return "Mac OS X".equals(System.getProperty("os.name")) ? NativeOpenOperation.observe(0, null) : nativeOpenWorkers().size();
+    }
+    private void awaitNativeOpen() throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if ("Mac OS X".equals(System.getProperty("os.name"))) {
+                if (NativeOpenOperation.observe(1, null) > 0) return;
+            } else for (var worker : nativeOpenWorkers()) try {
+                if (Files.readString(worker.resolve("syscall")).startsWith("257 ")) return;
+            } catch (IOException ignored) { }
+            Thread.sleep(1);
+        }
+        fail("Owned native worker did not enter blocking openat");
+    }
+    @Test void hardContextCancellationJoinsSafeOpenBeforeLeaseDisposal() throws Exception {
+        var fifo = directory.resolve("shutdown"); var create = new ProcessBuilder("mkfifo", fifo.toString()).start();
+        assertTrue(create.waitFor(10, TimeUnit.SECONDS)); assertEquals(0, create.exitValue());
+        var context = nativeContext(); var pool = Executors.newSingleThreadExecutor();
+        try {
+            var target = entered(context, () -> {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                return new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        var threads = Language.currentState(this).getThreads(); threads.enterCurrent();
+                        try { return provider().openRaw((fifo + "\0").getBytes(StandardCharsets.UTF_8), 0, 0, OriginalStdioOp.OPEN_SAFE, this); }
+                        finally { threads.leaveCurrent(); }
+                    }
+                }.getCallTarget();
+            });
+            var future = pool.submit(() -> entered(context, target::call));
+            try {
+                // Observe the kernel acquisition before cancellation, rather than a submitted task.
+                awaitNativeOpen(); assertFalse(future.isDone()); context.close(true);
+                assertThrows(ExecutionException.class, () -> future.get(10, TimeUnit.SECONDS));
+                assertEquals(0L, nativeOpenWorkerCount(), "Hard shutdown must join the native worker");
+                assertEquals(0L, nativeDescriptors(fifo), "No untransferred descriptor may survive lease disposal");
+            } finally {
+                // Release a failed test's FIFO before waiting for its host executor.
+                if (!future.isDone()) try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                    try { future.get(10, TimeUnit.SECONDS); } catch (ExecutionException ignored) { }
+                }
+            }
+        } finally {
+            try { context.close(true); }
+            finally { pool.shutdownNow(); assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS)); }
+        }
     }
     @Test void nativeAndCommandLineContextsPermitGuestThreads() throws Exception {
         for (var factory : List.<Supplier<Context>>of(this::nativeContext, () -> executionContext(true))) try (var context = factory.get()) { entered(context, () -> {
