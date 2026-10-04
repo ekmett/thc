@@ -7433,9 +7433,11 @@ public final class BytecodeProgram implements ExecutableProgram {
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginBlock();
-                if (name.equals("spark#")) { b.beginStoreLocal(destination.get(0)); b.beginSparkHint(); operands.get(0).emit(e); b.endSparkHint(); b.endStoreLocal(); }
+                if (name.equals("spark#")) { b.beginStoreLocal(destination.get(0)); operands.get(0).emit(e); b.endStoreLocal(); }
                 b.beginDiscardVoid(); operands.getLast().emit(e); b.endDiscardVoid();
-                if (name.equals("numSparks#")) {
+                if (name.equals("spark#")) {
+                    b.beginStoreLocal(destination.get(0)); b.beginSparkHint(); b.emitLoadLocal(destination.get(0)); b.endSparkHint(); b.endStoreLocal();
+                } else if (name.equals("numSparks#")) {
                     b.beginStoreLocal(destination.get(0)); b.emitSparkCount(); b.endStoreLocal();
                 } else if (empty != null) {
                     b.beginGetSpark(destination.get(0), destination.get(1)); b.emitLoadConstant(empty); b.endGetSpark();

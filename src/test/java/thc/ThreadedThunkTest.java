@@ -235,6 +235,10 @@ class ThreadedThunkTest {
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build();
     }
+    private Map<String, Object> sparkEnvelope() {
+        return map("id", "Envelope", "name", "Envelope", "arity", 1, "tag", 1, "kind", "boxed",
+            "fieldReps", list(list("BoxedRep (Just Lifted)")), "fieldLifted", list(true), "strictFields", list(false));
+    }
     private Thunk sparkWork(Context context, Language language, String backend, java.util.function.Supplier<Object> body) throws Exception {
         // The hinted thunk has real backend capture machinery. The controlled hook
         // supplies bounded synchronization/effects, not a claimed capture capability.
@@ -245,13 +249,16 @@ class ThreadedThunkTest {
             var call = list("app", list("var", "hook", map("rep", closure)),
                 list(list("lit", "int", "0", map("rep", integer))), list(false), false, false, map("rep", sparkRep("object", "BoxedRep (Just Lifted)", true)));
             var expr = list("let", false, list(map("id", "work", "name", "work", "arity", 0, "lifted", true, "rep", lifted, "expr", call)),
-                list("var", "work", map("rep", lifted)), map("rep", lifted));
-            var source = map("schema", 1, "ghc", "9.14.1", "constructors", list(), "bindings", list(
+                list("app", list("con", "Envelope", 1, map("rep", closure)), list(list("var", "work", map("rep", lifted))),
+                    list(true), false, false, map("rep", sparkRep("data", "BoxedRep (Just Lifted)", true))),
+                map("rep", sparkRep("data", "BoxedRep (Just Lifted)", true)));
+            var source = map("schema", 1, "ghc", "9.14.1", "constructors", list(sparkEnvelope()), "bindings", list(
                 map("id", "make", "name", "make", "arity", 1, "lifted", true, "rep", closure, "expr",
-                    list("lam", list(map("id", "hook", "lifted", true, "rep", closure)), expr, map("rep", closure, "resultRep", lifted)))));
+                    list("lam", list(map("id", "hook", "lifted", true, "rep", closure)), expr, map("rep", closure, "resultRep", sparkRep("data", "BoxedRep (Just Lifted)", true))))));
             ExecutableProgram program = backend.equals("ast") ? new Program(language, source, true, false) : new BytecodeProgram(language, source, null, true);
             var hook = new Closure(null, 1, new SparkWorkRoot(language, body).getCallTarget());
-            return (Thunk) ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"), new Object[]{0L, hook});
+            var envelope = (DataValue) ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"), new Object[]{0L, hook});
+            return (Thunk) envelope.getLayout().read(envelope, 0);
         });
     }
     @Test void sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk() throws Exception {

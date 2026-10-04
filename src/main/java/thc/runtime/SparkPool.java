@@ -87,16 +87,17 @@ public final class SparkPool {
             registered = true;
             while (true) {
                 var thunk = take(root);
-                if (thunk == null) return;
+                if (thunk == null) break;
                 try { root.getCallTarget().call(thunk); }
                 catch (ThunkSuspended suspended) {
                     var request = suspended.getAsyncRequest();
                     if (request == null) throw new RuntimeFault("Spark worker suspended without an async request");
-                    request.acknowledge(); outcome = GuestThreadStatus.DIED; return;
+                    request.acknowledge(); outcome = GuestThreadStatus.DIED; break;
                 } catch (AsyncBlocked blocked) {
-                    blocked.getRequest().acknowledge(); outcome = GuestThreadStatus.DIED; return;
+                    blocked.getRequest().acknowledge(); outcome = GuestThreadStatus.DIED; break;
                 } catch (GuestException | RuntimeFault deferred) {
                     // Force published this thunk's failure. No caller or other spark receives it.
+                    if (thunk.getState() != 3) throw deferred;
                 } finally { owner.getMaskingState().set(MaskingState.UNMASKED); }
             }
         } catch (AsyncDelivery delivery) {
