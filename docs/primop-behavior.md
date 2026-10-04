@@ -40,6 +40,10 @@ references through zero-arity and recursive returns in both backends. Genuine
 GHC-exported sum-result joins and `runRW#` transfers remain unqualified; see
 [sum results](sum-results.md) for the owning controls.
 
+Fixture-free empty-argument controls cover ordinary calls, PAPs, overapplication
+and tail transfers. Genuine GHC-exported ordinary empty-argument call boundaries
+remain unqualified; see [empty tuple inputs](empty-tuple-inputs.md).
+
 ## Original working-directory foreign calls
 
 | Original declaration | Current behavior and consequence |

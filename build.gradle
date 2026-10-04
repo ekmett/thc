@@ -264,7 +264,6 @@ tasks.withType(Test).configureEach {
             "tuple-input/**/*.cbd", "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
             "io-main-pap/**/*.cbd", "io-main-pap/**/*.json", "io-main-pap/*.tsv", "io-main-pap/native/**",
             "addr-identity/**/*.json", "addr-identity/**/*.cbd", "addr-identity/oracle.txt", "addr-identity/native",
-            "empty-tuple-input/**/*.cbd", "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
             "tag-to-enum/**/*.cbd", "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
             "show-word-list/**/*.cbd", "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
             "short-bytes-slices/**/*.cbd", "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
@@ -467,7 +466,7 @@ tasks.withType(Test).configureEach {
             "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-tag-to-enum-audit.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py",
             "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
-            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "test-empty-join-inputs.py", "core_*.py",
+            "prepare-state-tuple-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "test-empty-join-inputs.py", "core_*.py",
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
             "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",

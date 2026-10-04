@@ -3451,7 +3451,6 @@
       "thc.runtime.DoubleVectorMemoryProofTest",
       "thc.runtime.DoubleVectorStorageTest",
       "thc.runtime.EmptyArgumentRuntimeTest",
-      "thc.runtime.EmptyTupleInputNativeTest",
       "thc.runtime.EnabledCapabilitiesTest",
       "thc.runtime.EntryContractTest",
       "thc.runtime.EntrySelfCallTest",

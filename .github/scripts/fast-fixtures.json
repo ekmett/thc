@@ -1483,13 +1483,6 @@
         "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json",
         "src/examples/VectorLoops.hs", "src/runtime/THC/Prim.hs"]
     },
-    "empty-tuple-input": {
-      "quarantined": true,
-      "junit": ["thc.runtime.EmptyTupleInputNativeTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-empty-tuple-input-audit.py"]}],
-      "outputs": ["build/empty-tuple-input"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
     "show-word-list": {
       "quarantined": true,
       "junit": ["thc.runtime.ShowWordListTest"],

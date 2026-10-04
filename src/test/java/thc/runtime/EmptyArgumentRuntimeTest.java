@@ -131,19 +131,30 @@ class EmptyArgumentRuntimeTest {
             }
         });
     }
-    private Map<String, Object> tailWorker(String id, String next) {
-        return bind(id, lam(list(arg("u", empty), arg("n")), list("case", prim("<=#", v("n"), n(0)), "condition", list(
-            list("lit", list("int", "1"), list(), v("n")),
-            list("default", null, list(), call(next, list(v("u", empty), prim("-#", v("n"), n(1)))))), map("rep", integer, "binder", arg("condition")))));
+    private Map<String, Object> tailWorker(String id, String next, boolean middle, boolean nextMiddle, long increment) {
+        var parameters = middle ? list(arg("n"), arg("u", empty), arg("acc")) : list(arg("u", empty), arg("n"), arg("acc"));
+        var remaining = prim("-#", v("n"), n(1)); var accumulator = prim("+#", v("acc"), n(increment));
+        var arguments = nextMiddle ? list(remaining, v("u", empty), accumulator) : list(v("u", empty), remaining, accumulator);
+        return bind(id, lam(parameters, list("case", prim("<=#", v("n"), n(0)), "condition", list(
+            list("lit", list("int", "1"), list(), v("acc")),
+            list("default", null, list(), call(next, arguments))), map("rep", integer, "binder", arg("condition")))));
     }
     @Test void selfAndMutualTailCallsForwardUsedEmptyFormalsWithoutHostStackGrowth() throws Exception {
         withLanguage(language -> {
-            var data = module(tailWorker("self", "self"), tailWorker("a", "b"), tailWorker("b", "a"),
-                bind("entry", lam(list(arg("n")), prim("+#", call("self", list(zero(), v("n"))), call("a", list(zero(), v("n")))))));
+            // A and B move the empty logical argument while carrying two independent scalar payloads.
+            var data = module(tailWorker("self", "self", false, false, 3), tailWorker("a", "b", false, true, 2), tailWorker("b", "a", true, false, 5),
+                bind("entry", lam(list(arg("n"), arg("x")), prim("+#",
+                    call("self", list(zero(), v("n"), v("x"))), call("a", list(zero(), v("n"), v("x")))))));
             for (var backend : list("ast", "bytecode")) {
                 var p = program(language, backend, data);
-                for (long n : new long[]{0L, 1L, 32L, 20_000L}) assertEquals(0L, run(p, "entry", n), backend);
-                compile(p.entryTarget("entry")); assertEquals(0L, run(p, "entry", 20_000L)); valid(p.entryTarget("entry")); released(language);
+                for (long count : new long[]{0L, 1L, 32L, 20_000L}) {
+                    assertEquals(6_000_000_000L + 3 * count + 7 * (count / 2) + 2 * (count % 2), run(p, "entry", count, 3_000_000_000L), backend);
+                    released(language);
+                }
+                compile(p.entryTarget("entry")); long before = (Long) p.diagnostics().get("compiledEntries");
+                assertEquals(-6_000_000_000L + 3 * 20_001L + 7 * 10_000L + 2, run(p, "entry", 20_001L, -3_000_000_000L));
+                assertTrue((Long) p.diagnostics().get("compiledEntries") > before, "First installed call carries the independent accumulator");
+                valid(p.entryTarget("entry")); released(language);
                 assertTrue((Long) p.diagnostics().get("selfTailReentries") > 0);
             }
         });
