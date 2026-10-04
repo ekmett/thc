@@ -131,6 +131,10 @@ One shared memory-model check covers ordering within an allocation, aliases and
 checked offsets, rejecting comparisons across owners; it does not qualify
 backend or compiled execution.
 
+One bytecode continuation check resumes a caller after two child suspensions,
+memoizes the child's guest failure and preserves its payload on later demand
+without replaying either prefix. It does not qualify compiled execution.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:

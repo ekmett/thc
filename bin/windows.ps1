@@ -81,7 +81,8 @@ try {
             'thc.runtime.NativeByteArrayPolicyTest.nativeOwnerOutlivesContextWhileRegistriesAndPointerCellBoundariesStayChecked',
             'thc.runtime.NativeByteArrayPolicyTest.launcherDefaultsToNativeButHonorsHeapWithoutChangingEmbeddings',
             'thc.runtime.NativeByteArrayPolicyTest.guestCreationQueriesResizeAndAliasesRespectContextPolicyOnBothBackends',
-            'thc.runtime.PinnedPointerCellsTest.orderedAddressesRequireOneAllocationAndPreserveCheckedOffsets')
+            'thc.runtime.PinnedPointerCellsTest.orderedAddressesRequireOneAllocationAndPreserveCheckedOffsets',
+            'thc.runtime.CallerContinuationProofTest.childFailureAfterSuspensionReentersCallerAndMemoizesNormally')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava
