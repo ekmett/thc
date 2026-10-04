@@ -150,14 +150,16 @@ class ManagedWeakTest {
                 var dependent = registry.make(dependentKey, value, null); dependentKey = null;
                 var actionKey = new Object(); var actionReference = new WeakReference<>(actionKey);
                 Supplier<Object> action = actionKey::toString;
-                var actionWeak = registry.make(actionKey, actionKey, action); actionKey = null;
+                var actionWeak = registry.make(actionKey, actionKey, action); var retainedAction = new WeakReference<>(action);
+                actionKey = null; action = null;
                 var queue = new ReferenceQueue<Object>(); var witness = gcWitness(queue); collect(queue, witness);
                 assertNotNull(keyReference.get()); assertEquals(1L, observeIdentity(program, promoted)); assertTrue(calls.isEmpty());
                 assertNotNull(dependentReference.get()); assertSame(value, registry.dereference(dependent).getValue());
                 assertNotNull(actionReference.get()); assertEquals(1L, registry.dereference(actionWeak).getFlag());
                 assertEquals(0L, registry.finalize(promoted).getFlag()); assertEquals(List.of(2, 1), calls);
                 assertEquals(0L, registry.finalize(promoted).getFlag()); assertEquals(List.of(2, 1), calls);
-                registry.finalize(dependent); assertSame(action, registry.finalize(actionWeak).getValue());
+                registry.finalize(dependent); var returned = retainedAction.get(); assertNotNull(returned);
+                assertSame(returned, registry.finalize(actionWeak).getValue());
                 assertEquals(0, registry.retainedCount());
             } finally { context.leave(); }
         }
