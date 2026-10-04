@@ -96,6 +96,14 @@ lazy tuple leaves and loan recovery on AST and bytecode, including the existing
 first compiled entry check. Public `EntryValue.compile` and native GHC empty-join
 fixtures are not qualified by these checks.
 
+Two public-manifest loader checks use model CBDs from the selected Haskell
+encoder. Cold references leave other units unopened; first demand decodes the
+binding once and subsequent calls reuse it. A bad demanded unit fails without
+touching the missing third unit. Runtime passes its matching encoder through
+`THC_FIXTURES` and selects only these two methods on AST and bytecode in both
+handoff modes. They require no GHC Core acquisition or package native-library
+producer and do not qualify direct `.hi` loading or the Linux native-label tests.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:

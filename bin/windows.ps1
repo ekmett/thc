@@ -59,6 +59,7 @@ try {
     }
     $focusedTests = @()
     if ($testRuntime) {
+        $env:THC_FIXTURES = $fixture
         Invoke-ThcTool $fixture @('tuple-arithmetic')
         Invoke-ThcTool $fixture @('bit')
         Invoke-ThcTool $fixture @('signed-narrow')
@@ -72,7 +73,9 @@ try {
             'thc.runtime.ManagedWeakTest.callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit',
             'thc.runtime.TupleJoinLoweringTest.emptyOperandRunsInLogicalOrderBeforeParallelMovesAndFailureTransfersNothing',
             'thc.runtime.EmptyArgumentRuntimeTest.emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow',
-            'thc.runtime.EmptyArgumentRuntimeTest.exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples')
+            'thc.runtime.EmptyArgumentRuntimeTest.exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples',
+            'thc.CoreUnitLoadTest.coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding',
+            'thc.CoreUnitLoadTest.missingOrBadColdUnitFailsOnlyAtDemandAndDoesNotTouchThirdUnit')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava
