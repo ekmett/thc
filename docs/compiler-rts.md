@@ -51,3 +51,13 @@ remain unauthorized.
 Native object loading/GHCi, compiler RTS flags and other reachable foreign calls
 must be tested and implemented as they are encountered. These translations do
 not bypass strict Core admission.
+
+`CompilerRtsTest` checks these THC-owned compiler CAFs, `keepCAFsForGHCi` and
+unique cells without fixture acquisition. Typed synthetic Core exercises the live
+function declarations and data labels on both backends, including the first
+compiled call; direct ABI controls reject wrong owners, safety, arity and
+function/data target kinds. Existing controls cover context isolation, disposal, retained
+winners, aliasing, wraparound, alignment and concurrency. Expected results follow
+independently from install/query identity, true CAF retention, and counter delta
+three plus increment one. These tests do not qualify loading the original compiler
+package or recovering its foreign declarations from retained installed interfaces.

@@ -434,7 +434,6 @@ extra-source-files:
   t/fixtures/compiler/FileWaitNative.hs
   t/fixtures/compiler/OriginalFdReadyAudit.hs
   t/fixtures/compiler/OriginalRtsLocksAudit.hs
-  t/fixtures/compiler/CompilerRtsAudit.hs
   t/fixtures/compiler/RtsDiagnosticsNative.hs
   t/fixtures/compiler/OriginalPathLinkAudit.hs
   t/fixtures/compiler/OriginalDirectoryPathsAudit.hs
@@ -1290,7 +1289,6 @@ executable thc-fixtures
     FileWaitFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
-    CompilerRtsFixtures
     FloatForeignFixtures
     GhcApiFixtures
     GhcApiAudit

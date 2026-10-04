@@ -4472,44 +4472,6 @@ Structural-assertion quarantine follow-up
   are now excluded too. Their previously recorded exact Core/root/join/state-lambda
   assumptions are not admission requirements for the future compiler.
 
-143 compiler-rts (custom full-Core suite)
-Fixture rationale (143 compiler-rts)
-Purpose: Check compiler-package shared CAF slots/keepCAFs and unique address cells
-  cross the guest runtime boundary with the correct ownership and identity.
-Produces/consumed result: pre.cbd, post.cbd, oracle.tsv and unique-oracle with receipt.
-Cost and overlap: Compiler-owned global state is a legitimate boundary, unlike a
-  random libc function. Retain a narrow semantic/identity test. Three complete
-  interfaces, in-process native compilation, another native executable and twelve
-  declaration audits should not be replicated per consumer; share compiler package
-  acquisition and remove reports the test does not consume.
-Build status: Value review only; not yet admitted to the new graph. This consumer
-  checks compiledEntries increases, not an exact internal-root count.
-Producer: t/haskell-fixtures/CompilerRtsFixtures.hs; consumer CompilerRtsNativeTest
-  in src/fullCoreTest; custom compiler RTS default/dense Gradle tasks.
-IN t/fixtures/compiler/CompilerRtsAudit.hs, selected GHC 9.14.1/ghc-pkg and full
-  installed GHC.hi, GHC/Data/FastString.hi, GHC/Utils/GlobalVars.hi; shared linked
-  GHC API/plugin/interface and auditor closure. Unit owner is hard-coded to
-  ghc-9.14.1-inplace, which needs checking against supported complete-Core installs.
-Under build/compiler-rts/:
-  pre.cbd, post.cbd <- typed original FCallId substitution for keepCAFsForGHCi and
-    four get-or-set compiler globals, plus uniqueCells/counter/increment Core.
-  ghc/ <- GHC API/interpreter and standalone native compiler intermediates; both
-    native phases use this same directory, so phase ownership must be separated.
-  oracle.tsv <- native hscCompileCoreExpr calls (five operations x five inputs),
-    after explicitly initializing three native GHC global IORefs. It is written
-    provisionally, then replaced with thirty rows after the unique oracle runs.
-  UniqueOracle.hs <- producer template importing CompilerRtsAudit.
-  unique-oracle <- generated driver/audit source, GHC --make -O2 -dynamic -package ghc.
-  logs/unique-oracle.stdout <- executable; checked against input+4; contributes
-    five more rows to final oracle.tsv.
-  <pre|post>-<six entries>.audit.json <- stage CBD/auditor; twelve reports.
-  logs/{version,libdir,imports,unique-build,unique-oracle,<stage>-audit-<entry>}.*
-    <- stdout/stderr/command.json.
-  manifest.json <- source/interface hashes and CBD/oracle/generated driver/native
-    executable hashes. Audits/logs are not included in artifactHashes.
-Consumer hashes receipt paths and reads CBD/oracle; declaration controls mutate
-  in-memory Core. The task demands preexisting manifest rather than owning a rule.
-
 144 float-foreign (custom full-Core suite)
 Fixture rationale (144 float-foreign)
 Purpose: Check floating classification and rounding across actual foreign-call

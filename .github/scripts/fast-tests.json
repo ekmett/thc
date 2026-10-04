@@ -61,10 +61,10 @@
     "src/main/java/thc/runtime/MemcpyExpression.java": {"junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/MemmoveExpression.java": {"junit": ["thc.runtime.OriginalMemmoveTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreStringRtsForeign.java": {
-      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]
     },
-    "src/main/java/thc/runtime/StringRtsOp.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
-    "src/main/java/thc/runtime/StringRtsExpression.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/StringRtsOp.java": {"junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/StringRtsExpression.java": {"junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/GuestArguments.java": {
       "junit": ["thc.runtime.GuestArgumentsTest", "thc.runtime.GuestArgumentsEncodingTest"], "python": []
     },
@@ -190,7 +190,7 @@
       "python": []
     },
     "src/main/java/thc/runtime/CoreDataLabels.java": {
-      "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ByteStringDataLabelsTest"],
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ByteStringDataLabelsTest"],
       "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedWeaks.java": {
@@ -288,15 +288,15 @@
       "python": []
     },
     "src/main/java/thc/runtime/CoreSharedCAFStores.java": {
-      "junit": ["thc.runtime.StablePointerTest"],
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.StablePointerTest"],
       "python": []
     },
     "src/main/java/thc/runtime/SharedCAFStore.java": {
-      "junit": ["thc.runtime.StablePointerTest"],
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.StablePointerTest"],
       "python": []
     },
     "src/main/java/thc/runtime/SharedCAFStoreExpression.java": {
-      "junit": ["thc.runtime.StablePointerTest"],
+      "junit": ["thc.runtime.CompilerRtsTest", "thc.runtime.StablePointerTest"],
       "python": []
     },
     "src/main/java/thc/runtime/FloatingAddresses.java": {
@@ -1304,7 +1304,7 @@
     "src/test/java/thc/runtime/ExplicitInteropProbeRoot.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
     "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
     "src/test/java/thc/runtime/ScalarTestCalls.java": {
-      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.CompilerHeapHintTest","thc.runtime.EnabledCapabilitiesTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.DescriptorFlagsTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
+      "junit": ["thc.runtime.CompilerRtsTest","thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.CompilerHeapHintTest","thc.runtime.EnabledCapabilitiesTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.DescriptorFlagsTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
       "python": []
     },
     "src/test/java/thc/runtime/ScalarValueTestSupport.java": {

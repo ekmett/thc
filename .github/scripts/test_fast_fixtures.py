@@ -83,7 +83,8 @@ class FixtureGraphTest(unittest.TestCase):
     def test_direct_runtime_controls_need_no_fixture_toolchain(self):
         project = Path(__file__).resolve().parents[2]
         for name in ("thc.runtime.DescriptorFlagsTest", "thc.BoxedForeignProvenanceTest", "thc.PrimForeignProvenanceTest",
-                     "thc.runtime.ForkHostFailureTest", "thc.runtime.LoomSignalProcessTest", "thc.runtime.OriginalProcessIdentityTest"):
+                     "thc.runtime.ForkHostFailureTest", "thc.runtime.LoomSignalProcessTest", "thc.runtime.OriginalProcessIdentityTest",
+                     "thc.runtime.CompilerRtsTest"):
             with self.subTest(test=name):
                 run = mock.Mock()
                 result = fast_fixtures.prepare_cmake(project, self.selection(name), run)
