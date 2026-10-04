@@ -38,6 +38,27 @@ class NativeFileProviderTest {
             Set.of("amd64", "x86_64", "aarch64", "arm64").contains(System.getProperty("os.arch"));
     }
     @TempDir Path directory;
+    @Test void nativeRequestControlsRunInFreshProcess() throws Exception {
+        var oracle = Path.of(System.getProperty("thc.projectRoot"), "build/native-open-request/native/oracle");
+        var scratch = Files.createDirectory(directory.resolve("native-request"));
+        var stdout = directory.resolve("native-request.stdout"); var stderr = directory.resolve("native-request.stderr");
+        // The child owns test-only signal mutations; no oracle handler enters the JVM.
+        var process = new ProcessBuilder(oracle.toString(), scratch.toString())
+            .redirectOutput(stdout.toFile()).redirectError(stderr.toFile()).start();
+        try {
+            boolean completed = process.waitFor(30, TimeUnit.SECONDS);
+            if (!completed) { process.destroyForcibly(); assertTrue(process.waitFor(5, TimeUnit.SECONDS), "Oracle was not reaped"); }
+            var output = Files.readString(stdout); var errors = Files.readString(stderr);
+            var evidence = "Native request oracle: " + oracle + " " + scratch + "\nstdout:\n" + output + "stderr:\n" + errors;
+            assertTrue(completed, "Native request oracle timed out\n" + evidence);
+            assertEquals(0, process.exitValue(), evidence);
+            assertEquals("owned open: before-entry, after-syscall, blocked-FIFO, completed-abort, masks and ownership passed\n", output, evidence);
+            assertEquals("", errors, evidence);
+            assertFalse(Files.exists(scratch.resolve("request-fifo")), "Child must release its owned FIFO");
+        } finally {
+            if (process.isAlive()) { process.destroyForcibly(); assertTrue(process.waitFor(5, TimeUnit.SECONDS), "Oracle was not reaped"); }
+        }
+    }
     private Context nativeContext() { return nativeContext(Set.of()); }
     private Context nativeContext(Set<StandardEndpoint> endpoints) { return NativeIO.createContext(endpoints); }
     private <T> T entered(Context context, Callable<T> body) throws Exception {
@@ -199,6 +220,18 @@ class NativeFileProviderTest {
             });
             var workers = Executors.newFixedThreadPool(2); Future<Object> opening = null;
             try {
+                entered(context, () -> {
+                    var same = directory.resolve("raw-private"); var abi = StdioHostAbi.load();
+                    long flags = abi.flagConstant(OriginalStdioOp.O_RDWR) | abi.flagConstant(OriginalStdioOp.O_CREAT);
+                    long raw = files.openOriginal(path(same), flags, 384); assertTrue(raw >= 0);
+                    try {
+                        // Raw ownership must leave private same-file admission available.
+                        long admitted = files.open(path(same), 3, ForeignSafety.UNSAFE); assertTrue(admitted >= 0);
+                        try { assertNotEquals(raw, admitted); }
+                        finally { assertEquals(0L, files.close(admitted)); }
+                    } finally { assertEquals(0L, files.close(raw)); }
+                    return null;
+                });
                 // Learn a free hole through the public namespace instead of fixing a descriptor number.
                 long hole = entered(context, () -> {
                     var aliases = new ArrayList<Long>();

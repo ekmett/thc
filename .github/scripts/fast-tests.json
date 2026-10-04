@@ -1568,13 +1568,13 @@
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },
     "t/fixtures/compiler/OriginalOpenRequestNative.hs": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+      "junit": ["thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalOpenTest"], "python": []
     },
     "src/main/c/native-open-request.c": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+      "junit": ["thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalOpenTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeOpenOperation.java": {
-      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+      "junit": ["thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalOpenTest"], "python": []
     },
     "t/fixtures/compiler/OriginalOpenNative.hs": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []

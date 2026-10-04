@@ -68,7 +68,6 @@
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.PosixStatAbiTest",
     "thc.runtime.OriginalUnixBatchTest",
-    "thc.runtime.NativeFileProviderTest",
     "thc.runtime.NativeDirectoryFileSystemTest",
     "thc.runtime.NativeDirectoryStreamsTest",
     "thc.runtime.NativeFileBuffersTest",
@@ -308,6 +307,17 @@
       "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; \"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
+    },
+    "native-open-request": {
+      "cmakeTarget": "fixture-native-open-request",
+      "ciPlatforms": ["Linux", "Darwin"],
+      "junit": ["thc.runtime.NativeFileProviderTest"],
+      "commands": [
+        {"argv": ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"]},
+        {"argv": ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", "fixture-native-open-request"]}
+      ],
+      "outputs": ["build/native-open-request/native/oracle"],
+      "sources": ["cmake/ProcessFixtures.cmake", "t/fixtures/compiler/OriginalOpenRequestNative.hs", "src/main/c/native-open-request.c"]
     },
     "process-lifecycle-native": {
       "cmakeTarget": "fixture-process-lifecycle-native",
