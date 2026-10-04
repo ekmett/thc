@@ -75,6 +75,7 @@ try {
             'thc.runtime.TupleJoinLoweringTest.tupleResultScratchIsClearedAfterCopyingUnlessTheDestinationAliasesIt',
             'thc.runtime.EmptyArgumentRuntimeTest.emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow',
             'thc.runtime.EmptyArgumentRuntimeTest.exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples',
+            'thc.runtime.EmptyArgumentRuntimeTest.ignoredScalarStateTupleFieldExecutesBeforeLaterWorkAndRejectsInvalidCarrier',
             'thc.CoreUnitLoadTest.coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding',
             'thc.CoreUnitLoadTest.missingOrBadColdUnitFailsOnlyAtDemandAndDoesNotTouchThirdUnit',
             'thc.NarrowPublicEntryTest.partialApplicationUsesRemainingNotOriginalInputProofs',
