@@ -3729,6 +3729,11 @@ Consumers: thc.RealCoreJoinTest, thc.runtime.CoreSourceTest.
 Boxed join tests preserve erased type-slot alignment, entry obligations without
 manufactured WHNF, and a used boxed returned-function suffix outside the join
 prefix. Expected values remain n+7 and 2*n+5, with Java machine-Int wraparound.
+The same admitted owner checks recursive scalar swaps across an empty-tuple join
+parameter against an independent checked model: input MAX masks to 31 swaps (18),
+MAX-1 to 30 (-18), including the immediate first installed call on both backends.
+This preserves the unique EmptyJoin regression contract without qualifying a
+current-main reproduction or the quarantined empty-join-input harness.
 This admitted pre-Tidy export does not qualify retired join post-Tidy agreement.
 IN t/fixtures/compiler/{SourceNotes,RepresentationAudit}.hs/shared exporter;
   metadata checker/shared decoder.

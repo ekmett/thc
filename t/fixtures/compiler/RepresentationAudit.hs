@@ -15,9 +15,12 @@
 --
 -- Pre-Tidy representation/source evidence, consumed by source-core tests.
 -- Boxed joins also exercise erased type slots, strict entry obligations and
--- returned-function suffixes through both runtime backends; no post-Tidy claim.
+-- returned-function suffixes and scalar swaps across an empty-tuple join input
+-- through both runtime backends; no post-Tidy claim.
+-- Inputs: this source via the existing source-core exporter. Output: the existing
+-- build/source-core/RepresentationAudit.cbd, consumed by RealCoreJoinTest.
 module RepresentationAudit where
-import GHC.Exts (Int#, Addr#, (+#), (-#), (<=#))
+import GHC.Exts (Int#, Addr#, (+#), (-#), (<=#), int2Word#, word2Int#, and#)
 data Box = Box Int# Box | End
 newtype Wrapped = Wrapped (Int# -> Int#)
 type family Family a
@@ -77,3 +80,18 @@ polyJoinEntry n = polyJoin n (case n <=# 0# of 1# -> End; _ -> Box n End)
 {-# OPAQUE functionJoinEntry #-}
 functionJoinEntry :: Int# -> Int#
 functionJoinEntry n = functionJoin n (case n <=# 0# of 1# -> End; _ -> Box n End) (Box n End)
+
+-- | Swap 11 and 29 across an empty-tuple join parameter, then subtract.
+-- The low five input bits bound recursion; odd depths return 18, even -18.
+{-# OPAQUE emptyTupleSwap #-}
+emptyTupleSwap :: Int# -> Int#
+emptyTupleSwap x = emptyTupleSwapDepth (word2Int# (and# (int2Word# x) 31##))
+
+{-# OPAQUE emptyTupleSwapDepth #-}
+emptyTupleSwapDepth :: Int# -> Int#
+emptyTupleSwapDepth depth =
+  let {-# NOINLINE go #-}
+      go a u n b = case n <=# 0# of
+        1# -> case u of (# #) -> a -# b
+        _ -> go b u (n -# 1#) a
+  in go 11# (# #) depth 29#

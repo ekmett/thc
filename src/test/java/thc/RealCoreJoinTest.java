@@ -40,6 +40,35 @@ class RealCoreJoinTest {
             assertEquals(0L, count(function, "trampolineIterations"));
         }
     }
+    private long emptyTupleSwapExpected(long input) {
+        long left = 11, right = 29;
+        for (long remaining = input & 31L; remaining > 0; remaining--) {
+            long saved = left; left = right; right = saved;
+        }
+        return left - right;
+    }
+    /** Uses source-core's existing RepresentationAudit CBD; creates no products.
+     * An empty-tuple parameter between swapped scalars must not corrupt recursive
+     * join transfers. MAX masks to 31 swaps; the even-depth control masks to 30. */
+    @Test void recursiveJoinSwapsAcrossEmptyTupleOnFirstInstalledCall() throws Exception {
+        for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
+            var function = context.eval("thc", CoreModules.request(list(root.resolve("build/source-core/RepresentationAudit.cbd").toString()),
+                "main:RepresentationAudit.emptyTupleSwap", true, false, backend));
+            assertEquals(18L, emptyTupleSwapExpected(Long.MAX_VALUE));
+            assertEquals(-18L, emptyTupleSwapExpected(Long.MAX_VALUE - 1));
+            assertEquals(emptyTupleSwapExpected(Long.MAX_VALUE), function.execute(Long.MAX_VALUE).asLong(), backend + " interpreted odd depth");
+            assertTrue(function.invokeMember("compile").asBoolean(), backend);
+            long before = count(function, "compiledEntries");
+            assertEquals(emptyTupleSwapExpected(Long.MAX_VALUE), function.execute(Long.MAX_VALUE).asLong(), backend + " first installed odd depth");
+            assertTrue(count(function, "compiledEntries") > before, backend + " first installed call enters guest code");
+            var installed = object(object(Json.parse(function.getMember("diagnostics").asString())).get("explicitCompilation"));
+            assertEquals(true, installed.get("sameTargets"), backend);
+            assertEquals(true, installed.get("validLastTier"), backend);
+            assertEquals(emptyTupleSwapExpected(Long.MAX_VALUE - 1), function.execute(Long.MAX_VALUE - 1).asLong(), backend + " even depth");
+            assertTrue(count(function, "localJoinTransfers") > 0, backend);
+            assertEquals(0L, count(function, "unsupportedTraps"), backend);
+        }
+    }
     private List<Map<String, Object>> joinContracts(Object value) {
         var result = new ArrayList<Map<String, Object>>();
         if (value instanceof Map<?, ?> fields) {
