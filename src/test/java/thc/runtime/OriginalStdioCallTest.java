@@ -73,8 +73,10 @@ class OriginalStdioCallTest {
                     var prefix = (observedDirectory.getParent() + "/link/../n").getBytes(StandardCharsets.UTF_8);
                     for (boolean compiled : new boolean[] {false, true}) {
                         var terminated = Arrays.copyOf(prefix, prefix.length + 3);
-                        terminated[prefix.length] = (byte) (compiled ? 0xff : 0xfe); terminated[terminated.length - 1] = -1;
-                        // Distinct invalid byte names must survive; NUL must hide the trailing invalid byte.
+                        // Darwin filesystems reject invalid UTF-8 names; Linux also checks their raw identity.
+                        int suffix = "Linux".equals(System.getProperty("os.name")) ? 0xfe : 'a';
+                        terminated[prefix.length] = (byte) (suffix + (compiled ? 1 : 0)); terminated[terminated.length - 1] = -1;
+                        // NUL must hide the trailing invalid byte on both platforms.
                         var address = ManagedAddress.fromByteArray(terminated);
                         var active = targets(entry);
                         if (compiled) for (var target : active) {
