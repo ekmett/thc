@@ -429,20 +429,29 @@ class ThreadedThunkTest {
             try {
                 entered(context, () -> { ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, blocker}); return null; });
                 assertTrue(started.await(5, TimeUnit.SECONDS));
-                for (var name : list("spark", "count", "poll", "failSpark")) {
-                    var target = (com.oracle.truffle.runtime.OptimizedCallTarget) queries.entryTarget(name);
-                    target.compile(true); assertTrue(target.isValid(), backend + " " + name);
-                }
                 entered(context, () -> {
+                    for (var name : list("spark", "count", "poll", "failSpark")) {
+                        var target = (com.oracle.truffle.runtime.OptimizedCallTarget) queries.entryTarget(name);
+                        target.compile(true); assertTrue(target.isValid(), backend + " " + name);
+                    }
                     assertThrows(GuestException.class, () -> ScalarTestCalls.callScalarTestTarget(queries.entryTarget("failSpark"), new Object[]{0L, queued, Unit.INSTANCE}));
+                    long before = ((Number) queries.diagnostics().get("compiledEntries")).longValue();
                     assertEquals(0L, ScalarTestCalls.callScalarTestTarget(queries.entryTarget("count"), new Object[]{0L, Unit.INSTANCE}));
+                    assertTrue(((Number) queries.diagnostics().get("compiledEntries")).longValue() > before, backend + " first installed count call");
+                    assertTrue(((com.oracle.truffle.runtime.OptimizedCallTarget) queries.entryTarget("count")).isValid());
                     ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, foreign});
                     assertEquals(0L, ScalarTestCalls.callScalarTestTarget(queries.entryTarget("count"), new Object[]{0L, Unit.INSTANCE}));
+                    before = ((Number) queries.diagnostics().get("compiledEntries")).longValue();
                     var retained = (DataValue) ScalarTestCalls.callScalarTestTarget(queries.entryTarget("spark"), new Object[]{0L, queued, Unit.INSTANCE});
+                    assertTrue(((Number) queries.diagnostics().get("compiledEntries")).longValue() > before, backend + " first installed spark call");
+                    assertTrue(((com.oracle.truffle.runtime.OptimizedCallTarget) queries.entryTarget("spark")).isValid());
                     assertSame(queued, retained.getLayout().read(retained, 0));
                     ScalarTestCalls.callScalarTestTarget(caller.entryTarget("hint"), new Object[]{0L, overflow});
                     assertEquals(1L, ScalarTestCalls.callScalarTestTarget(queries.entryTarget("count"), new Object[]{0L, Unit.INSTANCE}));
+                    before = ((Number) queries.diagnostics().get("compiledEntries")).longValue();
                     var polled = (DataValue) ScalarTestCalls.callScalarTestTarget(queries.entryTarget("poll"), new Object[]{0L, Unit.INSTANCE});
+                    assertTrue(((Number) queries.diagnostics().get("compiledEntries")).longValue() > before, backend + " first installed poll call");
+                    assertTrue(((com.oracle.truffle.runtime.OptimizedCallTarget) queries.entryTarget("poll")).isValid());
                     assertEquals(1L, polled.getLayout().read(polled, 0)); assertSame(queued, polled.getLayout().read(polled, 1));
                     var empty = (DataValue) ScalarTestCalls.callScalarTestTarget(queries.entryTarget("poll"), new Object[]{0L, Unit.INSTANCE});
                     assertEquals(0L, empty.getLayout().read(empty, 0)); assertEquals("False", empty.getLayout().read(empty, 1).toString());

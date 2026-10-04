@@ -52,8 +52,8 @@ values, unsupported roots, duplicate pending hints and overflow are discarded
 without forcing. Thus enabling the queue does not promise evaluation of every
 hint. `numSparks#` counts pending queue entries, excluding claimed work;
 `getSpark#` removes an unclaimed thunk with success flag one, or returns zero
-with the pinned RTS's boxed `False` filler when empty. A failed or suspended
-state operand completes before `spark#` can enqueue its payload.
+with the pinned RTS's boxed `False` filler when empty. The state operand must complete before `spark#` can enqueue its payload;
+failure or suspension cannot launch the hinted work.
 
 Ordinary speculative guest failures stay on their originating thunk and are
 observed by later demand; unrelated guest work continues. Cooperative async
