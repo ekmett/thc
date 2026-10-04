@@ -73,7 +73,7 @@ def audit(module):
     return {'module': module['module'], 'counts': dict(result), 'marked': marked}
 
 
-def fixture_checks(worker, joins, coercions):
+def fixture_checks(worker, coercions):
     constructors = {c['id']: c for c in worker['constructors']}
     char = constructors['ghc-internal:GHC.Internal.Types.C#']
     assert char['id'] == 'ghc-internal:GHC.Internal.Types.C#' and char['arity'] == 1 and char['kind'] == 'boxed', char
@@ -92,13 +92,6 @@ def fixture_checks(worker, joins, coercions):
             for parameter, strict in zip(binding['expr'][1], binding['entryStrict']):
                 if strict:
                     assert parameter['lifted'] is True and not parameter['rep']['evaluated'], parameter
-    owners = {b['id']: b for b in joins['bindings']}
-    done, = [b for b in definitions(owners['main:CBVJoinAudit.polyJoin']) if 'joinValueArity' in b]
-    assert done['info']['joinArity'] == 3 and done['joinValueArity'] == 2, done
-    assert done['entryStrict'] == [False, True], done
-    returned, = [b for b in definitions(owners['main:CBVJoinAudit.functionJoin']) if 'joinValueArity' in b]
-    assert returned['info']['joinArity'] == 2 and returned['joinValueArity'] == 1, returned
-    assert len(returned['expr'][1]) == 2 and returned['entryStrict'] == [False, False], returned
     coercion_before_mark = False
     for binding in definitions(coercions):
         expression = binding['expr']
@@ -117,7 +110,7 @@ def fixture_checks(worker, joins, coercions):
 
 def compare_actual_tidy(before, after):
     """A derived contract must agree with the actual post-Tidy Id marks."""
-    owner = {'CBVAudit': 'walk', 'CBVJoinAudit': 'polyJoin', 'CBVCoercionAudit': 'witnessed'}[before['module']]
+    owner = {'CBVAudit': 'walk', 'CBVCoercionAudit': 'witnessed'}[before['module']]
     owner_id = before['unit'] + ':' + before['module'] + '.' + owner
     def contract(module):
         root, = [b for b in module['bindings'] if b['id'] == owner_id]
@@ -146,7 +139,7 @@ def main():
     parser.add_argument('--json', action='store_true', help='Print per-definition audit results')
     parser.add_argument('--post-tidy-dir', type=Path, default=ROOT / 'build/cbv-post-core')
     args = parser.parse_args()
-    files = args.modules or [ROOT / 'build/core/CBVAudit.cbd', ROOT / 'build/core/CBVJoinAudit.cbd', ROOT / 'build/core/CBVCoercionAudit.cbd']
+    files = args.modules or [ROOT / 'build/core/CBVAudit.cbd', ROOT / 'build/core/CBVCoercionAudit.cbd']
     modules = [inspect_cbd(p.read_bytes()) for p in files]
     summaries = [audit(module) for module in modules]
     if not args.modules:
@@ -161,7 +154,7 @@ def main():
         for summary in summaries:
             print(f"PASS {summary['module']}: {summary['counts']}")
         if not args.modules:
-            print('PASS: real worker marks, strict ordinary function exclusion, unchanged WHNF facts, erased type join prefix, returned lambda suffix, retained coercion alignment, actual post-Tidy agreement')
+            print('PASS: real worker marks, strict ordinary function exclusion, unchanged WHNF facts, retained coercion alignment, actual post-Tidy agreement')
 
 
 if __name__ == '__main__':

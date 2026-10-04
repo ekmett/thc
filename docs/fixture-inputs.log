@@ -603,6 +603,9 @@ NativeOracle.hs and RuntimeTest replace this family's scalarCastEntry helpers
 and ScalarLexicalProofTest identity method. RawInt remains here for the separate
 primitive arithmetic/conversion controls. This consolidation covers the shared
 pre-Tidy export only; it does not qualify this family's post-Tidy paths.
+Boxed polymorphic/returned-function join controls are owned by 118 source-core's
+RepresentationAudit and RealCoreJoinTest. The separate join producer and its
+pre/post outputs are retired; no join post-Tidy equivalence is claimed.
 
 Producer sequence currently in .github/scripts/fast-fixtures.json:cbv-coercion.
 Consumers: thc.RealCoreCallDemandTest, thc.RealCoreEntryContractTest,
@@ -619,12 +622,12 @@ Artifact flows (all paths repository-relative):
   build/explicit64-primops/core/Explicit64PrimopsAudit.cbd
     IN: t/fixtures/compiler/Explicit64PrimopsAudit.hs, shared exporter inputs.
     OUT: CBD plus build/explicit64-primops/ghc/ scratch outputs.
-  build/core/CBVAudit.cbd, CBVJoinAudit.cbd, CBVCoercionAudit.cbd, DemandAudit.cbd
+  build/core/CBVAudit.cbd, CBVCoercionAudit.cbd, DemandAudit.cbd
     IN: respective t/fixtures/compiler/<module>.hs files, shared exporter inputs.
-    OUT: these four CBDs; default build/ghc/ intermediates.
-  build/cbv-post-core/CBVAudit.cbd, CBVJoinAudit.cbd, CBVCoercionAudit.cbd
-    IN: same three CBV sources, exporter/plugin with post-tidy option.
-    OUT: three CBDs; build/cbv-post-ghc/ intermediates.
+    OUT: these three CBDs; default build/ghc/ intermediates.
+  build/cbv-post-core/CBVAudit.cbd, CBVCoercionAudit.cbd
+    IN: same two CBV sources, exporter/plugin with post-tidy option.
+    OUT: two CBDs; build/cbv-post-ghc/ intermediates.
   Temporary demand API Main.hs
     IN: API_CHECK string in bin/check-demand-metadata.py. OUT: temporary source.
   Temporary check-demand executable
@@ -3723,6 +3726,10 @@ Build status: Value review only; admission still requires explicit inputs and si
 
 Producers: bin/export-core.sh with THC_SOURCE_NOTES=true, then bin/check-source-metadata.py --fixture.
 Consumers: thc.RealCoreJoinTest, thc.runtime.CoreSourceTest.
+Boxed join tests preserve erased type-slot alignment, entry obligations without
+manufactured WHNF, and a used boxed returned-function suffix outside the join
+prefix. Expected values remain n+7 and 2*n+5, with Java machine-Int wraparound.
+This admitted pre-Tidy export does not qualify retired join post-Tidy agreement.
 IN t/fixtures/compiler/{SourceNotes,RepresentationAudit}.hs/shared exporter;
   metadata checker/shared decoder.
 OUT build/source-core/{SourceNotes,RepresentationAudit}.cbd and build/source-ghc/.
@@ -4416,10 +4423,10 @@ Fixture entry points
 
   Quarantined legacy metadata producers (excluded from the graph):
     t/fixtures/compiler/{SpeculationAudit,RepresentationAudit,SourceNotes,CBVAudit,
-      CBVJoinAudit,CBVCoercionAudit,ConstructorFieldAudit,DemandAudit}.hs and
+      CBVCoercionAudit,ConstructorFieldAudit,DemandAudit}.hs and
       t/fixtures/core/Fixtures.hs + StrictFields.hs + shared exporter/plugin/GHC ->
       build/core/<module>.cbd and build/ghc/ compiler intermediates.
-    CBVAudit/CBVJoinAudit/CBVCoercionAudit with post-tidy ->
+    CBVAudit/CBVCoercionAudit with post-tidy ->
       build/cbv-post-core/<module>.cbd and build/cbv-post-ghc/ intermediates.
     bin/check-{speculation,representation,cbv,constructor-field}-metadata.py consume
       the corresponding CBDs through the decoder and emit checks/stdout, no required

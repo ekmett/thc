@@ -2147,12 +2147,6 @@
       ],
       "python": []
     },
-    "t/fixtures/compiler/CBVJoinAudit.hs": {
-      "junit": [
-        "thc.RealCoreEntryContractTest"
-      ],
-      "python": []
-    },
     "t/fixtures/compiler/CBVCoercionAudit.hs": {
       "junit": [
         "thc.runtime.InterfaceCoreNativeTest",

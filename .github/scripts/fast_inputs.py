@@ -487,16 +487,16 @@ AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
 
 BASE_CORE_CBD_OUTPUTS = frozenset({
     *(f"build/core/{module}.cbd" for module in ("THC.Prim.Test", "Fixtures", "StrictFields", "SpeculationAudit",
-        "RepresentationAudit", "SourceNotes", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
-    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+        "RepresentationAudit", "SourceNotes", "CBVAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
     *(f"build/source-core/{module}.cbd" for module in ("SourceNotes", "RepresentationAudit")),
     *(f"build/map/{folder}/GHC.Internal.{module}.cbd" for folder in ("core", "boot-core") for module in ("CString", "Err")),
     "build/map/core/GHC.InterfaceClosure.cbd",
 })
 
 CORE_CONTRACT_CBD_REQUIRED = frozenset({
-    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
-    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
     "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
     "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
 })
@@ -1441,8 +1441,8 @@ SYNCHRONOUS_EXCEPTION_OUTPUTS = frozenset("build/synchronous-exceptions/" + name
       for suffix in (".stdout", ".stderr", ".command.json"))))
 
 CBV_CONTRACT_CBD_OUTPUTS = frozenset({
-    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
-    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+    *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
     "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
     *(f"build/narrow-literal-proofs/{stage}-core/NarrowLiteralProofAudit.cbd" for stage in ("pre", "post")),
 })

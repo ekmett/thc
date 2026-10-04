@@ -1603,8 +1603,8 @@ class FastInputTests(unittest.TestCase):
 
     def test_full_pack_restores_exact_executable_contract_siblings(self):
         expected = {
-            *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "DemandAudit")),
-            *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
+            *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
+            *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
             "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
             "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
         }
@@ -1867,10 +1867,10 @@ class RenamedInputContractTests(unittest.TestCase):
     def test_required_cbv_modules_match_renamed_genuine_fixture_declarations(self):
         root = Path(__file__).resolve().parents[2]
         expected = {f"build/{folder}/{module}.{suffix}" for folder in ("core", "cbv-post-core")
-                    for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit") for suffix in ("cbd",)}
+                    for module in ("CBVAudit", "CBVCoercionAudit") for suffix in ("cbd",)}
         self.assertEqual(expected, {name for name in cache.REQUIRED if "CBV" in name})
         self.assertFalse(any("Cbv" in name for name in cache.REQUIRED))
-        for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit"):
+        for module in ("CBVAudit", "CBVCoercionAudit"):
             source = (root / "t/fixtures/compiler" / (module + ".hs")).read_text()
             self.assertRegex(source, r"(?m)^module " + module + r"\b")
 

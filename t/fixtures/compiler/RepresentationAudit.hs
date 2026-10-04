@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash, NoImplicitPrelude, RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, AllowAmbiguousTypes, UnboxedTuples #-}
+-- Keep the polymorphic entry boundaries visible instead of specializing them.
 {-# OPTIONS_GHC -fno-worker-wrapper -fno-specialise -fno-spec-constr -fno-do-lambda-eta-expansion #-}
 
 -- |
@@ -12,7 +13,9 @@
 -- Stability   : experimental
 -- Portability : GHC-specific primitive types and operations
 --
--- Compiler-only representation evidence, including types THC does not execute.
+-- Pre-Tidy representation/source evidence, consumed by source-core tests.
+-- Boxed joins also exercise erased type slots, strict entry obligations and
+-- returned-function suffixes through both runtime backends; no post-Tidy claim.
 module RepresentationAudit where
 import GHC.Exts (Int#, Addr#, (+#), (-#), (<=#))
 data Box = Box Int# Box | End
@@ -51,19 +54,21 @@ joinLoop n = let go k acc = case k <=# 0# of
 polyJoin :: Int# -> Box -> Int#
 polyJoin n box =
   let {-# NOINLINE done #-}
-      done :: forall a. a -> Int#
-      done _ = consume n
-  in case box of End -> done @Box box; Box _ _ -> done @(Int# -> Int#) consume
+      -- Type arguments erase, but the used boxed value retains its entry slot.
+      done :: forall a. a -> Box -> Int#
+      done _ value = case value of End -> consume n; Box k _ -> consume k
+  in case box of End -> done @Box box box; Box _ _ -> done @(Int# -> Int#) consume box
 data Strict = Strict !Box
 {-# OPAQUE strictField #-}
 strictField :: Strict -> Int#
 strictField (Strict b) = firstField b
 {-# OPAQUE functionJoin #-}
-functionJoin :: Int# -> Box -> Int# -> Int#
+functionJoin :: Int# -> Box -> Box -> Int#
 functionJoin n box =
   let {-# NOINLINE doneFunction #-}
-      doneFunction :: forall a. a -> Int# -> Int#
-      doneFunction _ x = n +# x
+      -- The used boxed suffix belongs to the returned function, not the join.
+      doneFunction :: forall a. a -> Box -> Int#
+      doneFunction _ value = case value of End -> n; Box x _ -> n +# x
   in case box of End -> doneFunction @Box box; Box _ _ -> doneFunction @(Int# -> Int#) consume
 
 {-# OPAQUE polyJoinEntry #-}
@@ -71,4 +76,4 @@ polyJoinEntry :: Int# -> Int#
 polyJoinEntry n = polyJoin n (case n <=# 0# of 1# -> End; _ -> Box n End)
 {-# OPAQUE functionJoinEntry #-}
 functionJoinEntry :: Int# -> Int#
-functionJoinEntry n = functionJoin n (case n <=# 0# of 1# -> End; _ -> Box n End) n
+functionJoinEntry n = functionJoin n (case n <=# 0# of 1# -> End; _ -> Box n End) (Box n End)
