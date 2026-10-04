@@ -2021,7 +2021,7 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FloatingByteOffsetTest",
-        "thc.runtime.ManagedWeakTest","thc.runtime.AddressIdentityNativeTest",
+        "thc.runtime.AddressIdentityNativeTest",
         "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
