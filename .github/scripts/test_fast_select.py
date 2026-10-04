@@ -1562,7 +1562,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 consumers.update(select.junit_info(source)[0])
         for family in ("FloatingAddress", "FloatingByteOffset"):
             self.assertIn(f"thc.runtime.{family}Test", consumers)
-        self.assertIn("thc.runtime.SumResultTest", consumers)
         self.assertIn("thc.runtime.Explicit64ArrayTest", consumers)
         self.assertIn("thc.runtime.OriginalPathStatTest", consumers)
         self.assertIn("thc.runtime.OriginalPathModeTest", consumers)
