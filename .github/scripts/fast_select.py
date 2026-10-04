@@ -976,10 +976,20 @@ def group_matrix(repo, *, cadence=None):
                         for index in range(count)]}
 
 
-def group_selection(repo, name, *, cadence=None):
-    selected = groups(repo, system=platform.system() if cadence == "commit" else None, cadence=cadence)
+def group_selection(repo, name, *, cadence=None, exact_class=None):
+    system = platform.system()
+    selected = groups(repo, system=system if cadence == "commit" or exact_class is not None else None, cadence=cadence)
     if name not in selected:
         raise SelectionError("Unknown CI group: " + name)
+    if exact_class is not None:
+        if exact_class not in selected[name]:
+            raise SelectionError("Select one exact class admitted in the chosen group/cadence/platform")
+        import fast_fixtures
+        manifest, owners = fast_fixtures._manifest(Path(repo))
+        owner = owners[exact_class]
+        if owner and system not in manifest["groups"][owner].get("ciPlatforms", [system]):
+            raise SelectionError("Selected class is not admitted on this platform")
+        selected[name] = [exact_class]
     # Repeat the process-mode proof, but run the full transport suite only in
     # its owning group.
     handoff = "thc.runtime.HandoffTest"

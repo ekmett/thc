@@ -16,6 +16,10 @@ on:
         type: string
         default: scalar-memory-utilities
         required: true
+      exact_class:
+        description: Optional exact admitted class within the group (empty runs the group)
+        type: string
+        required: false
       expected_sha:
         description: Expected source commit (empty uses this run's commit)
         type: string
@@ -30,6 +34,7 @@ jobs:
     env:
       CI_PLATFORM: ${{ inputs.platform }}
       CI_GROUP: ${{ inputs.group }}
+      CI_EXACT_CLASS: ${{ inputs.exact_class }}
       EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
     steps:
       - uses: actions/checkout@v7.0.1
@@ -54,7 +59,8 @@ jobs:
           groups = fast_select.groups(Path.cwd(), system=system, cadence='hourly')
           if not groups.get(group):
               raise SystemExit('Select one nonempty Hourly group admitted on this platform')
-          selection = fast_select.group_selection(Path.cwd(), group, cadence='hourly')
+          selection = fast_select.group_selection(Path.cwd(), group, cadence='hourly',
+              exact_class=os.environ['CI_EXACT_CLASS'] or None)
           destination = Path('build/ci/bounded-selection.json')
           destination.parent.mkdir(parents=True, exist_ok=True)
           destination.write_text(json.dumps(selection, indent=2) + '\n')
@@ -63,14 +69,16 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           cache-cabal-project: 'true'
-      - name: Compile existing shared tools and run one Hourly group
+      - name: Compile existing shared tools and run bounded Hourly selection
         timeout-minutes: 7
         shell: bash
         run: |
           python3 .github/scripts/fast_ci.py start --report-dir build/ci/common-results
           python3 .github/scripts/fast_ci.py compile-common --reuse-daemon --report-dir build/ci/common-results
           python3 .github/scripts/fast_ci.py compile-test-support --reuse-daemon --report-dir build/ci/common-results
-          python3 .github/scripts/fast_ci.py group --group "$CI_GROUP" --cadence hourly --reuse-daemon --report-dir build/ci/group-results/bounded
+          exact_class=()
+          if test -n "$CI_EXACT_CLASS"; then exact_class=(--exact-class "$CI_EXACT_CLASS"); fi
+          python3 .github/scripts/fast_ci.py group "${exact_class[@]}" --group "$CI_GROUP" --cadence hourly --reuse-daemon --report-dir build/ci/group-results/bounded
       - name: Stop the qualification's Gradle worker
         if: always() && env.JAVA_HOME != ''
         run: ./gradlew --stop

@@ -830,13 +830,13 @@ def restore_common(root, archive):
         bundle.extractall(root, members=members, filter="data")
 
 
-def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=False):
+def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=False, exact_class=None):
     import fast_select
-    selection = fast_select.group_selection(recorder.root, name, cadence=cadence)
+    selection = fast_select.group_selection(recorder.root, name, cadence=cadence, exact_class=exact_class)
     manifest, owners = fixtures._manifest(recorder.root)
     require(all(c in owners for c in selection["junit"]["classes"]), "Unowned selected class")
     recorder.data["selection"] = {"mode": "group", "group": name, "cadence": cadence,
-                                  "junit": selection["junit"], "reasons": []}
+                                  "junit": selection["junit"], "exactClass": exact_class, "reasons": []}
     # Unknown ownership fails above; a group job must never widen to all fixtures.
     recorder.data["nativeInputs"] = ({"mode": "cmake-graph"} if prepared else
                                     fixtures.prepare_cmake(recorder.root, selection, recorder.command))
@@ -861,6 +861,8 @@ def run_group(recorder, name, *, reuse_daemon=False, cadence=None, prepared=Fals
         expected = set(selection["junit"]["classes"])
         require(observed == expected,
                 f"Grouped JUnit class mismatch: missing={sorted(expected-observed)}, extra={sorted(observed-expected)}")
+        require(all(int(suite.attrib.get("tests", "-1")) == len(suite.findall("testcase")) > 0
+                    for suite in suites), "Empty/inconsistent grouped JUnit suite")
         proof = ET.parse(xml / "TEST-thc.runtime.HandoffTest.xml").getroot()
         markers = [line for out in proof.findall("system-out") for line in (out.text or "").splitlines()
                    if line.startswith("THC_HANDOFF_MODE=")]
@@ -942,6 +944,7 @@ def main(argv=None):
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
+    parser.add_argument("--exact-class", help="One exact admitted class within the selected group")
     parser.add_argument("--cadence", choices=("commit", "hourly", "nightly"))
     parser.add_argument("--reuse-daemon", action="store_true",
                         help="Reuse the CI job's worker daemon for builds and grouped tests")
@@ -976,9 +979,9 @@ def main(argv=None):
             recorder.data["passed"] = True
             recorder.save()
         elif args.command == "jvm-group":
-            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence, prepared=True)
+            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence, prepared=True, exact_class=args.exact_class)
         elif args.command == "group":
-            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence)
+            run_group(recorder, args.group, reuse_daemon=args.reuse_daemon, cadence=args.cadence, exact_class=args.exact_class)
         elif args.command == "pack-common":
             pack_common(ROOT, args.archive)
         elif args.command == "restore-common":

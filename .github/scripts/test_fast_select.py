@@ -134,6 +134,34 @@ class FastSelectionTest(unittest.TestCase):
         with self.assertRaisesRegex(select.SelectionError, "Unknown CI group"):
             select.group_selection(self.repo, "consumer", cadence="nightly")
 
+    def test_exact_group_class_keeps_only_its_fixture_closure_and_mode_proof(self):
+        import fast_fixtures
+        manifest = self.cadence_fixture(hourly=["example.LeafTest", "example.OtherTest"])
+        manifest["groups"]["provider"]["ciPlatforms"] = ["Linux"]
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        with mock.patch.object(select.platform, "system", return_value="Linux"):
+            selected = select.group_selection(self.repo, "consumer", cadence="hourly",
+                                               exact_class="example.LeafTest")
+            self.assertEqual(selected["junit"]["classes"], ["example.LeafTest", "thc.runtime.HandoffTest"])
+            self.assertEqual(selected["junit"]["patterns"], ["example.LeafTest",
+                "thc.runtime.HandoffTest.requestedModeReachesTestProcessAndContext"])
+            _, owners = fast_fixtures._manifest(self.repo)
+            self.assertEqual(fast_fixtures._group_order(manifest,
+                {owners[c] for c in selected["junit"]["classes"] if c in owners and owners[c]}), ["provider"])
+            for invalid in ("", "example.MissingTest", "example.SmokeTest", "example.LeafTest.*",
+                            "example.LeafTest.works", "*", "example.LeafTest; echo injected"):
+                with self.subTest(invalid=invalid), self.assertRaises(select.SelectionError):
+                    select.group_selection(self.repo, "consumer", cadence="hourly", exact_class=invalid)
+        with mock.patch.object(select.platform, "system", return_value="Darwin"), self.assertRaises(select.SelectionError):
+            select.group_selection(self.repo, "consumer", cadence="hourly", exact_class="example.LeafTest")
+
+        manifest["quarantinedJunit"] = ["example.OtherTest"]
+        self.write(str(fast_fixtures.MANIFEST), json.dumps(manifest))
+        self.commit()
+        with mock.patch.object(select.platform, "system", return_value="Linux"), self.assertRaises(select.SelectionError):
+            select.group_selection(self.repo, "consumer", cadence="hourly", exact_class="example.OtherTest")
+
     def test_nightly_consumer_does_not_move_shared_tools_or_other_consumers(self):
         manifest = self.cadence_fixture(hourly=["example.LeafTest"], nightly=["consumer"])
         manifest["fixtureFreeJunit"].remove("example.SmokeTest")

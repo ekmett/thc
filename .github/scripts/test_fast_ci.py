@@ -645,7 +645,7 @@ class FastRunnerTest(unittest.TestCase):
         selection = self.batch_selection()
         selection['junit']['classes'].append('example.SelectedTest')
         selection['junit']['patterns'] = list(selection['junit']['classes'])
-        for present in (False, True):
+        for present in (False, True, "empty"):
             with self.subTest(present=present), patch.object(ci, 'git', return_value='a' * 40):
                 recorder = ci.Recorder(self.root, self.root / str(present))
 
@@ -654,20 +654,25 @@ class FastRunnerTest(unittest.TestCase):
                         self.mode_xml(task, dense)
                         if present:
                             (self.root / 'build/test-results' / task / 'TEST-example.SelectedTest.xml').write_text(
+                                '<testsuite name="example.SelectedTest" tests="0" failures="0" errors="0" skipped="0"/>'
+                                if present == "empty" else
                                 '<testsuite name="example.SelectedTest" tests="1" failures="0" errors="0" skipped="1">'
                                 '<testcase name="platformExcluded" classname="example.SelectedTest"><skipped/></testcase></testsuite>')
                     return 0, ''
 
-                with patch.object(fast_select, 'group_selection', return_value=selection), \
+                with patch.object(fast_select, 'group_selection', return_value=selection) as choose, \
                      patch.object(ci.fixtures, '_manifest', return_value=({'groups': {}},
                          {name: None for name in selection['junit']['classes']})), \
                      patch.object(recorder, 'command', side_effect=fresh):
-                    if present:
-                        ci.run_group(recorder, 'selected', cadence='hourly', prepared=True)
+                    if present is True:
+                        ci.run_group(recorder, 'selected', cadence='hourly', prepared=True, exact_class='example.SelectedTest')
                         self.assertTrue(recorder.data['passed'])
                     else:
-                        with self.assertRaisesRegex(RuntimeError, 'Grouped JUnit class mismatch'):
-                            ci.run_group(recorder, 'selected', cadence='hourly', prepared=True)
+                        with self.assertRaisesRegex(RuntimeError, 'Empty/inconsistent grouped JUnit suite'
+                                                   if present == 'empty' else 'Grouped JUnit class mismatch'):
+                            ci.run_group(recorder, 'selected', cadence='hourly', prepared=True, exact_class='example.SelectedTest')
+                    choose.assert_called_once_with(self.root, 'selected', cadence='hourly',
+                                                   exact_class='example.SelectedTest')
                     for mode in ('default', 'dense'):
                         self.assertTrue((recorder.directory / mode / 'xml/TEST-thc.runtime.HandoffTest.xml').exists())
 
