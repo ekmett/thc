@@ -2,7 +2,6 @@
   "schema": 1,
   "quarantinedJunitTags": ["foreign-exceptions-full-core"],
   "quarantinedJunit": [
-    "thc.runtime.RtsEventNativeTest",
     "thc.runtime.AggregateHeapNativeTest",
     "thc.runtime.FourWayAggregateNativeTest",
     "thc.runtime.FourWayAggregateStorageTest",

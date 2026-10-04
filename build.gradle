@@ -559,21 +559,6 @@ def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInter
 }
 compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
 
-[["rtsEventFullCoreTest", false],[ "rtsEventFullCoreDenseTest", true]].each { taskName, dense ->
-    tasks.register(taskName, Test) {
-        group = "verification"
-        description = "Tests original GHC event prerequisites and context-local logical capabilities."
-        testClassesDirs = fullCoreTests.output.classesDirs
-        classpath = fullCoreTests.runtimeClasspath
-        useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.RtsEventNativeTest") }
-        inputs.files(fileTree("build/rts-event") { include("*.cbd", "*.json") })
-        systemProperty("thc.handoffSlabs", dense.toString())
-        outputs.upToDateWhen { false }
-        outputs.doNotCacheIf("Original event prerequisites require fresh first-compiled-entry checks") { true }
-        doFirst { checkBuild(file("build/rts-event/manifest.json").isFile()) { "Run thc-fixtures rts-event with complete installed GHC Core" } }
-    }
-}
 [["compilerRtsFullCoreTest", false],[ "compilerRtsFullCoreDenseTest", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"

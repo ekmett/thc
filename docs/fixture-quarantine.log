@@ -98,11 +98,6 @@ Compiler-structure assertions (also excluded):
   tuple-join (124), sum-join (137): exact join/state-lambda/case shapes; generated
     receipt/audit files are not consumed by their behavioral tests.
 
-  rts-event (141, custom full-Core): three recursive producer subprocesses rewrite
-    the parent's GHC/log paths; exact compiled-entry counts and a broad native
-    eventfd/pipe/poll harness. RtsEventNativeTest is excluded. Its independent
-    safe-completion masking test should move to fixture-free runtime coverage.
-
   aggregate-heap (145, custom full-Core): both producer and consumer enumerate
     stage/Core output directories. AggregateHeapNativeTest is excluded until named
     module outputs replace the hidden input set. Preserve useful heap layout and

@@ -4472,48 +4472,6 @@ Structural-assertion quarantine follow-up
   are now excluded too. Their previously recorded exact Core/root/join/state-lambda
   assumptions are not admission requirements for the future compiler.
 
-141 rts-event (custom full-Core suite; I/O-manager prerequisites, not eventlog/JFR)
-Fixture rationale (141 rts-event)
-Purpose: Check logical capabilities, context-local manager slots and descriptor
-  lifecycles; the same JUnit class contains a useful direct masking/resumption test.
-Produces/consumed result: entry-specific pre/post CBDs, oracle.json and manifest.
-Cost and overlap: Six complete interfaces, thirty CBDs/audits, native interpreter
-  calls and three recursive producer subprocesses are excessive for ordinary
-  pipe/eventfd/poll package behavior. Preserve THC-owned capability/context state
-  and safe-completion masking in focused tests; use package integration for libc.
-Build status: QUARANTINED. Native child invocations rewrite the parent's log/compiler
-  paths, and consumers assert exact compiled-entry increments. Split valuable
-  fixture-free masking coverage before readmission; do not weaken first-call checks.
-Producer: t/haskell-fixtures/RtsEventFixtures.hs; consumer RtsEventNativeTest in
-  src/fullCoreTest; Gradle rtsEventFullCoreTest/rtsEventFullCoreDenseTest.
-IN t/fixtures/compiler/RtsEventAudit.hs, shared thc-fixtures/GHC API/plugin/interface
-  tools and auditor, selected GHC 9.14.1 native64 RTS/packages. Full ghc-internal
-  interfaces GHC/Internal/{Conc/Sync,Event/Thread,Event/Control,Event/EPoll,
-  Event/Poll,System/Posix/Internals}.hi. This is Linux API-dependent even though
-  the producer's initial host check only requires native64.
-Under build/rts-event/:
-  <entry>-<pre|post>.cbd <- typed original FCallId substitution into fixture Core;
-    entries processors, capabilities, siginfo, setfd, cloexec, eventThread,
-    timerManager, timerThread, eventfdCycle, pipeCycle, epollCycle, epollSafeCycle,
-    pollCycle, pollSafeCycle, controlCycle. GHC API serializes/tidies each separately.
-  ghc/ <- GHC interpreter/compiler products for the shared audit source.
-  oracle.json <- in-process hscCompileCoreExpr native calls for inputs 1,2,4;
-    rows (24) and descriptorRows (21). Capability changes are restored afterward.
-    controlCycle instead reexecutes thc-fixtures rts-event three times with
-    THC_RTS_EVENT_NATIVE_CONTROL set; each child repeats interface/compiler setup
-    in the SAME directory, rewrites version/info/libdir/imports logs, executes
-    native control and exits before the ordinary export/receipt phase.
-  <entry>-<stage>.audit.json <- corresponding CBD, named binder and Python auditor;
-    thirty auditor subprocesses.
-  logs/{version,info,libdir,imports,<entry>-<stage>,controlCycle-native-<1|2|4>}.*
-    <- command stdout/stderr/command.json; parent and child ownership collides.
-  manifest.json <- source/interface hashes, CBDs/audits/oracle; command logs are
-    produced but not in artifactHashes.
-Consumer reads receipts/Core/oracles, uses runtime native providers and creates
-  test-private descriptor/control state. Exact row/source declarations and compiled
-  entry increments are asserted; context capability values themselves are API
-  semantics, distinct from internal compiler root counts.
-
 143 compiler-rts (custom full-Core suite)
 Fixture rationale (143 compiler-rts)
 Purpose: Check compiler-package shared CAF slots/keepCAFs and unique address cells
