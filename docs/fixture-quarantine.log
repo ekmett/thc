@@ -41,15 +41,10 @@ Unrelated directory members change consumed inputs or make generation fail:
   data-to-tag (039), proxy-void (042): consume all CBDs found in the output tree.
   fetch-add-int-array (045), atomic-int-arrays (046), shrink-bytearrays (047),
     mutvar (081): exact output-directory inventories reject unrelated CBDs.
-  floating-tuples (086), sum-results (088),
+  floating-tuples (086),
     show-word-list (127), short-bytes-slices (129), unsafe-equality (134),
     tag-to-enum (135): recursively discovered products enter receipts consumed
-    by tests. Remaining sum-results includes only SumResultTest and SumProtocolTest.
-    Aggregate-layout and sum-layout have independent named products and commit
-    consumers on Linux/macOS. AggregateFrontierTest uses compact-model public CBD
-    controls; TupleRepresentationTest is fixture-free. Both use commit cadence.
-    Remaining sum-result consumers stay quarantined.
-    SumProtocolTest's actual post-return deoptimization control is preserved.
+    by tests.
   stable-pointers (084): both original and shared-CAF exports require exact
     output-directory inventories. Unrelated CBDs must not prevent regeneration;
     replace both listings with their declared pairs before readmission.

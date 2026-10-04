@@ -1300,7 +1300,6 @@
     "t/fixtures/compiler/JavaArrays.hs": {"junit": ["thc.runtime.JavaArrayTest"], "python": []},
     "t/fixtures/compiler/JavaInteropSafe.hs": {"junit": ["thc.runtime.JavaArrayTest"], "python": []},
     "src/test/java/thc/runtime/ExplicitInteropProbeRoot.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
-    "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
     "src/test/java/thc/runtime/ScalarTestCalls.java": {
       "junit": ["thc.ThreadedThunkTest","thc.runtime.CompilerRtsTest","thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.CompilerHeapHintTest","thc.runtime.EnabledCapabilitiesTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.DescriptorFlagsTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest"],
       "python": []
@@ -2005,7 +2004,6 @@
         "thc.runtime.BoxedCasTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
-        "thc.runtime.SumResultTest",
         "thc.runtime.Int8ArrayNativeTest",
         "thc.runtime.Int16ArrayNativeTest",
         "thc.runtime.Int16BoundaryCompilationTest",
@@ -3597,8 +3595,6 @@
       "thc.runtime.StockGraphRecoveryTest",
       "thc.runtime.SulongCbitsTest",
       "thc.runtime.SumInputLayoutTest",
-      "thc.runtime.SumProtocolTest",
-      "thc.runtime.SumResultTest",
       "thc.runtime.SynchronousExceptionsNativeTest",
       "thc.runtime.TagToEnumTest",
       "thc.runtime.TailCallFrameTest",

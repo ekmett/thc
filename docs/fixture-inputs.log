@@ -2744,21 +2744,14 @@ Modes native-only/export-only/allow-unsupported change the output set; default f
 Consumer reads receipts, TSVs, CBDs, audit/negative reports and command records.
 Receipt again includes unused PrimopTools.hs and omits shared auditor data tables.
 
-088 aggregate families (layout owners isolated; sum results quarantined)
-Fixture rationale (088 sum-results)
-Purpose: Check sum alternatives and aggregate result layouts carry the right values
-  through execution.
-Produces/consumed result: Named aggregate-layout/sum-layout CBDs and native sum
-  observations; quarantined sum-result CBDs/oracles.
-Cost and overlap: Remaining sum-result flows have recursive receipts and shape
-  gates; keep them quarantined pending semantic consolidation.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Quarantined consumers: thc.runtime.SumProtocolTest and SumResultTest.
-  AggregateFrontierTest now writes two public diagnostic/host ABI CBD models with
-    compact-model (041); TupleRepresentationTest is fixture-free. Both use commit
-    cadence; admission does not itself prove execution.
-  SumProtocolTest also writes model CBDs with the compact-model encoder.
+088 aggregate families (named file rules; no cached execution receipts)
+Purpose: Preserve actual GHC layout metadata, native sum observations and result
+  ownership/exception/deoptimization behavior at their existing owners.
+AggregateFrontierTest writes two public diagnostic/host ABI CBD models with
+  compact-model (041); TupleRepresentationTest is fixture-free. Both use commit
+  cadence. SumProtocolTest still reads genuine CBDs and writes a public alias CBD;
+  it has explicit compact-model and sum-layout dependencies and is not fixture-free.
+Generation, source admission and actual owner execution are separate proofs.
 A. Admitted aggregate-layout (cmake/CoreFixtures.cmake):
   IN AggregateLayoutAudit.hs, explicit plugin publication, export-core.sh/plugin.py,
     toolchain.sh and the selected GHC/package/SDK/compiler closure.
@@ -2786,27 +2779,27 @@ B. fixture-sum-layout (cmake/CoreFixtures.cmake):
     genuine State/empty and generic boxed-levity signatures, accepted/rejected roots
     and all named native scalar observers on both export stages/backends. It does
     not assert installed execution. Native row count is not a behavioral contract.
-  Quarantined SumResultTest/SumProtocolTest retain named sum-layout data through
-    an explicit fixture dependency; their remaining evidence gate is sum-result only.
+  SumResultTest/SumProtocolTest retain named sum-layout data through an explicit
+    fixture dependency; there is no cached acceptance/evidence gate.
   Pre-Tidy generated IDs need not reproduce byte-for-byte after prior-interface reuse;
     output directories may contain unrelated files. Source export does not qualify
     matching retained-library hydration.
-C. bin/prepare-sum-result-audit.py:
-  IN t/fixtures/compiler/SumResultAudit.hs, SumResultAuditNative.hs,
-    producer model/shared exporter/auditor/decoder/data.
+C. fixture-sum-results (cmake/CoreFixtures.cmake):
+  IN SumResultAudit.hs and SumResultAuditNative.hs; explicit plugin publication,
+    export-core.sh/toolchain.sh/plugin.py and selected GHC/package/SDK/compiler inputs.
   Under build/sum-result/:
-    <pre|post>-core/SumResultAudit.cbd and stage-ghc/: IN audit source/exporter.
-    pre-audit.json, post-audit.json: IN corresponding CBD/in-process auditor/data.
-    native/oracle and intermediates: IN native/audit sources/GHC.
-    oracle.tsv, oracle-pairs.tsv: IN binary normally / with --pairs respectively.
-    checks.json: IN model/oracle/audits; OUT coverage.
-    provenance.json: IN recursively all output files except itself/Core JSON,
-      plugin manifest/shared library, GHC/package descriptions and source hashes.
-      Old receipt removed first.
-Quarantined consumers read their named CBDs/oracles/checks and receipt-referenced files.
-Remaining sum-result recursive receipts turn stale compiler intermediates into
-  extra inputs; its output set is not closed. Keep its runtime consumers quarantined.
-  Preserve the actual post-return materialization/identity/release control in SumProtocolTest during any later consolidation.
+    pre-core/SumResultAudit.cbd and post-core/SumResultAudit.cbd: independent exports.
+    pre-ghc/SumResultAudit.hi/.o and post-ghc/SumResultAudit.hi/.o: export byproducts.
+    native/oracle, native/Main.hi/.o and native/SumResultAudit.hi/.o: native compilation.
+    oracle.tsv and oracle-pairs.tsv: independent successful captures from the same
+      binary, with --pairs only for the latter. Atomic publication preserves an old
+      output on child failure; unrelated directory members are not inputs.
+  Consumers: SumResultTest and SumProtocolTest, Linux/macOS commit cadence. Gradle
+    Test inputs are only the CBD pair and TSV pair. Native values, installed entry,
+    release/throw recovery and post-return materialization remain runtime assertions.
+    No recursive provenance, cached audit acceptance, checks.json, source notes,
+    exact native row/root counts or body-position metadata gates. Runtime execution
+    must qualify the class bodies before publication; generation alone is not proof.
 
 089 simd-floatx4
 Fixture rationale (089 simd-floatx4)

@@ -282,7 +282,7 @@ tasks.withType(Test).configureEach {
             "unsafe-equality/**/*.cbd", "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
             "map/boot-core/**/*.cbd", "cstring/boot-core/GHC.Internal.CString.cbd", "aggregate-layout/pre-core/AggregateLayoutAudit.cbd", "aggregate-layout/post-core/AggregateLayoutAudit.cbd",
             "sum-layout/pre-core/SumLayoutAudit.cbd", "sum-layout/post-core/SumLayoutAudit.cbd", "sum-layout/oracle.tsv",
-            "sum-result/**/*.json", "sum-result/**/*.cbd", "sum-result/*.tsv", "sum-result/native/**",
+            "sum-result/pre-core/SumResultAudit.cbd", "sum-result/post-core/SumResultAudit.cbd", "sum-result/oracle.tsv", "sum-result/oracle-pairs.tsv",
             "tuple-arithmetic/pre-core/**/*.cbd", "tuple-arithmetic/post-core/**/*.cbd",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-completion/**/*.cbd", "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
@@ -473,7 +473,7 @@ tasks.withType(Test).configureEach {
             "test-core-float-vector-memory.py",
             "test-core-double-vector-memory.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
-            "sum_layout_model.py", "test-sum-layout.py", "prepare-sum-result-audit.py", "test-core-sums.py")
+            "sum_layout_model.py", "test-sum-layout.py", "test-core-sums.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)

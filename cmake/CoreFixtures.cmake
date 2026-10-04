@@ -59,8 +59,7 @@ foreach(stage pre post)
 endforeach()
 add_custom_target(fixture-aggregate-layout DEPENDS ${aggregate_layout_outputs})
 
-# 088: sum signatures and actual GHC result values, isolated from sum-result and
-# frontier. Consumers check ABI/values themselves; no cached success reports.
+# 088: sum signatures and actual GHC result values, isolated from sum-result. Consumers check ABI/values themselves; no cached success reports.
 # No closure= export is requested. Native Main imports only SumLayoutAudit;
 # separate stage/native object directories give every named product one writer.
 set(sum_layout_out "${PROJECT_SOURCE_DIR}/build/sum-layout")
@@ -99,6 +98,52 @@ add_custom_command(OUTPUT "${sum_layout_out}/oracle.tsv"
   DEPENDS "${sum_layout_native}/sum-layout-oracle" "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
 add_custom_target(fixture-sum-layout DEPENDS ${sum_layout_outputs} "${sum_layout_out}/oracle.tsv")
+
+# 088: actual GHC sum results, forwarding, effects and independent pair operands.
+# Consumers own acceptance/values; no recursive receipt or cached test-success gate.
+# Pre/post export each writes only its CBD and module .hi/.o. Native Main imports
+# only SumResultAudit; two capture edges atomically publish its ordinary/pair TSVs.
+set(sum_result_out "${PROJECT_SOURCE_DIR}/build/sum-result")
+set(sum_result_outputs)
+foreach(stage pre post)
+  set(cbd "${sum_result_out}/${stage}-core/SumResultAudit.cbd")
+  set(stage_options)
+  if(stage STREQUAL "post")
+    list(APPEND stage_options -fplugin-opt=THC.Plugin:post-tidy)
+  endif()
+  add_custom_command(OUTPUT "${cbd}"
+    BYPRODUCTS "${sum_result_out}/${stage}-ghc/SumResultAudit.hi" "${sum_result_out}/${stage}-ghc/SumResultAudit.o"
+    COMMAND ${fixture_env} "THC_CORE_OUT=${sum_result_out}/${stage}-core" "THC_GHC_OUT=${sum_result_out}/${stage}-ghc"
+      "${PROJECT_SOURCE_DIR}/bin/export-core.sh" --plugin-manifest "${plugin_manifest}"
+      ${stage_options} "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumResultAudit.hs"
+    DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumResultAudit.hs"
+      ${plugin_outputs} ${toolchain_inputs} "${PROJECT_SOURCE_DIR}/bin/export-core.sh"
+      "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+  list(APPEND sum_result_outputs "${cbd}")
+endforeach()
+set(sum_result_native "${sum_result_out}/native")
+add_custom_command(OUTPUT "${sum_result_native}/oracle"
+  BYPRODUCTS "${sum_result_native}/Main.hi" "${sum_result_native}/Main.o"
+    "${sum_result_native}/SumResultAudit.hi" "${sum_result_native}/SumResultAudit.o"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${sum_result_native}"
+  COMMAND ${fixture_env} "${GHC}" --make -O2 -fforce-recomp -dcore-lint -dstg-lint
+    "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler" -odir "${sum_result_native}" -hidir "${sum_result_native}"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumResultAuditNative.hs" -o "${sum_result_native}/oracle"
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumResultAuditNative.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumResultAudit.hs" ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_command(OUTPUT "${sum_result_out}/oracle.tsv"
+  COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=${sum_result_native}/oracle" "-DOUTPUT=${sum_result_out}/oracle.tsv"
+    -P "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  DEPENDS "${sum_result_native}/oracle" "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_command(OUTPUT "${sum_result_out}/oracle-pairs.tsv"
+  COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=${sum_result_native}/oracle" "-DOUTPUT=${sum_result_out}/oracle-pairs.tsv" -DARGS=--pairs
+    -P "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  DEPENDS "${sum_result_native}/oracle" "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_target(fixture-sum-results DEPENDS ${sum_result_outputs} "${sum_result_out}/oracle.tsv" "${sum_result_out}/oracle-pairs.tsv")
 
 set(native_dir "${PROJECT_SOURCE_DIR}/build/native")
 set(native "${native_dir}/native-oracle")

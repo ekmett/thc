@@ -186,9 +186,8 @@ class FixtureGraphTest(unittest.TestCase):
         for name in classes:
             self.assertEqual("commit", cadence[name], name)
             self.assertNotIn(name, fast_fixtures.quarantined_classes(project))
-        self.assertTrue(manifest["groups"]["sum-results"]["quarantined"])
 
-    def test_sum_layout_has_one_independent_target_and_keeps_result_consumers_quarantined(self):
+    def test_sum_layout_has_one_independent_target_and_explicit_result_dependency(self):
         import fast_select
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -200,9 +199,28 @@ class FixtureGraphTest(unittest.TestCase):
         policy = json.loads((project / fast_select.POLICY).read_text())
         self.assertEqual("commit", fast_select.cadence_assignments(manifest, owners, policy)[classes[0]])
         remaining = manifest["groups"]["sum-results"]
-        self.assertTrue(remaining["quarantined"])
         self.assertIn("sum-layout", remaining["requires"])
         self.assertEqual({"thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"}, set(remaining["junit"]))
+
+    def test_sum_result_owners_use_named_products_and_explicit_dependencies(self):
+        import fast_select
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["sum-results"]
+        self.assertEqual({"compact-model", "sum-layout"}, set(group["requires"]))
+        self.assertEqual(set(group["outputs"]), {
+            *(f"build/sum-result/{stage}-core/SumResultAudit.cbd" for stage in ("pre", "post")),
+            *(f"build/sum-result/{stage}-ghc/SumResultAudit.{suffix}" for stage in ("pre", "post") for suffix in ("hi", "o")),
+            "build/sum-result/native/oracle", "build/sum-result/oracle.tsv", "build/sum-result/oracle-pairs.tsv",
+            *(f"build/sum-result/native/{module}.{suffix}" for module in ("Main", "SumResultAudit") for suffix in ("hi", "o")),
+        })
+        self.assertEqual(["fixture-compact-model", "fixture-sum-layout", "fixture-sum-results"],
+            fast_fixtures.prepare_cmake(project, self.selection(*group["junit"]), mock.Mock())["targets"])
+        policy = json.loads((project / fast_select.POLICY).read_text())
+        cadence = fast_select.cadence_assignments(manifest, owners, policy)
+        for name in group["junit"]:
+            self.assertEqual("commit", cadence[name], name)
+            self.assertNotIn(name, fast_fixtures.quarantined_classes(project))
 
     def test_frontier_public_models_and_representation_controls_have_separate_owners(self):
         import fast_select

@@ -813,12 +813,13 @@
       "sources": ["cmake/CoreFixtures.cmake", "cmake/CaptureOutput.cmake", "t/fixtures/compiler/SumLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAuditNative.hs", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
     },
     "sum-results": {
+      "cmakeTarget": "fixture-sum-results",
+      "ciPlatforms": ["Linux", "Darwin"],
       "requires": ["compact-model", "sum-layout"],
-      "quarantined": true,
       "junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-sum-result-audit.py"]}],
-      "outputs": ["build/sum-result"],
-      "sources": ["bin/prepare-sum-result-audit.py", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs"]
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-sum-results"]}],
+      "outputs": ["build/sum-result/pre-core/SumResultAudit.cbd", "build/sum-result/post-core/SumResultAudit.cbd", "build/sum-result/pre-ghc/SumResultAudit.hi", "build/sum-result/pre-ghc/SumResultAudit.o", "build/sum-result/post-ghc/SumResultAudit.hi", "build/sum-result/post-ghc/SumResultAudit.o", "build/sum-result/native/oracle", "build/sum-result/native/Main.hi", "build/sum-result/native/Main.o", "build/sum-result/native/SumResultAudit.hi", "build/sum-result/native/SumResultAudit.o", "build/sum-result/oracle.tsv", "build/sum-result/oracle-pairs.tsv"],
+      "sources": ["cmake/CoreFixtures.cmake", "cmake/CaptureOutput.cmake", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
     },
     "simd-floatx4": {
       "cmakeTarget": "fixture-simd-floatx4",
