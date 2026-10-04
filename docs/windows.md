@@ -89,6 +89,13 @@ and actions stay retained until explicit finalization, with newest-first callbac
 running once. Both backends and handoff modes are covered. These checks do not
 qualify general ephemeron handling, GC-triggered finalizers or the native weak corpus.
 
+Three fixture-free empty-join controls check ordered zero-width effects, no
+destination writes on failure, logical arity and state-contract rejection.
+The typed-host/raw-entry route covers local joins, same-frame empty capture,
+lazy tuple leaves and loan recovery on AST and bytecode, including the existing
+first compiled entry check. Public `EntryValue.compile` and native GHC empty-join
+fixtures are not qualified by these checks.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:

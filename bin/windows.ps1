@@ -69,7 +69,10 @@ try {
             'thc.ThreadedThunkTest.sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk',
             'thc.ThreadedThunkTest.disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker',
             'thc.runtime.ManagedWeakTest.identityOnlyGuestWeaksCollectWhileLiveKeysAndFirstCompiledCallsPreserveIdentity',
-            'thc.runtime.ManagedWeakTest.callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit')
+            'thc.runtime.ManagedWeakTest.callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit',
+            'thc.runtime.TupleJoinLoweringTest.emptyOperandRunsInLogicalOrderBeforeParallelMovesAndFailureTransfersNothing',
+            'thc.runtime.EmptyArgumentRuntimeTest.emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow',
+            'thc.runtime.EmptyArgumentRuntimeTest.exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava
