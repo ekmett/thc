@@ -1729,7 +1729,7 @@
       "python": []
     },
     "src/compiler/interface/Main.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+      "junit": ["thc.CoreInterfaceLoadTest", "thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
     "t/haskell-fixtures/InterfaceFixtures.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
@@ -2481,7 +2481,7 @@
     },
     "src/test/java/thc/CoreCbdTestSupport.java": {
       "junit": [
-        "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreUnitLoadTest",
+        "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreUnitLoadTest", "thc.CoreInterfaceLoadTest",
         "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest",
         "thc.LauncherDiagnosticsTest", "thc.CoreRequestTest", "thc.CoreUnitManagedExportTest",
         "thc.CoreCbdArchiveTest",
@@ -2496,7 +2496,7 @@
     },
     "src/test/java/thc/CoreExecutionTestSupport.java": {
       "junit": [
-        "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest", "thc.ReusableProgramTest",
+        "thc.CoreInterfaceLoadTest", "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest", "thc.ReusableProgramTest",
         "thc.RealCoreJoinTest", "thc.RuntimeTest", "thc.StrictFieldsTest",
         "thc.SumLayoutMetadataTest", "thc.TailCycleTest", "thc.ThreadedThunkTest",
         "thc.ThunkRetentionTest"
@@ -2549,7 +2549,7 @@
       "python": []
     },
     "t/haskell-fixtures/Main.hs": {
-      "junit": [
+      "junit": ["thc.CoreInterfaceLoadTest",
         "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest",
         "thc.CoreBackendPolicyTest",
         "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest",
@@ -2900,7 +2900,7 @@
       "haskell": ["driver-tests"]
     },
     "src/driver/THC/Driver/Installed.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
+      "junit": ["thc.CoreInterfaceLoadTest", "thc.runtime.InterfaceCoreNativeTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "src/main/java/thc/runtime/TargetLayout.java": {

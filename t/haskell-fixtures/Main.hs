@@ -100,7 +100,7 @@ import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
-import GhcApiFixtures (prepareGhcApi, prepareRecordFields)
+import GhcApiFixtures (prepareGhcApi, prepareRecordFields, prepareRecordFieldsDemand, recordFieldsDemandInventory)
 import RtsDiagnosticFixtures (prepareRtsDiagnostics)
 import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar, preparePackageNativeDemand)
@@ -1068,6 +1068,8 @@ main = do
     ["stable-pointers"] -> prepareStablePointers root
     "ghc-api" : probes -> prepareGhcApi root probes
     ["record-fields"] -> prepareRecordFields root
+    ["record-fields-demand"] -> prepareRecordFieldsDemand root
+    ["record-fields-demand-inventory", mode, destination] -> recordFieldsDemandInventory root mode destination
     ["stable-names"] -> prepareStableNames root
     ["sum-join"] -> prepareSumJoins root
     ["tuple-join"] -> prepareTupleJoins True root

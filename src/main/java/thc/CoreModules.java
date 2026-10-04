@@ -348,9 +348,11 @@ public final class CoreModules {
         String expected = text(input.get("packageManifestSha256"), "Missing package manifest identity"), supplied = text(input.get("packageCapability"), "Missing package request capability");
         require(sameCapability(supplied, packageCapability(manifest, expected, verify)), "Invalid package request capability");
         try {
-            byte[] bytes = Files.readAllBytes(Path.of(manifest)); if (verify) require(sha256(bytes).equals(expected), "Core package manifest changed after request: " + manifest);
+            byte[] bytes = Files.readAllBytes(Path.of(manifest)); if (verify || !expected.isEmpty()) require(sha256(bytes).equals(expected), "Core package manifest changed after request: " + manifest);
             if (!(Json.parse(new String(bytes, StandardCharsets.UTF_8)) instanceof Map<?,?> document)) throw new IllegalStateException("Invalid Core package manifest");
             var directory = CoreUnitDirectory.read(document);
+            require(!expected.isEmpty() || directory.getModules().stream().noneMatch(module -> module.interfaceSource() != null),
+                    "Interface process source requires a content-bound host request");
             require(Objects.equals(input.get("foreignExceptionBridgeUnit"), directory.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request"); return directory;
         } catch (Exception failure) { throw rethrow(failure); }
     }
@@ -541,7 +543,7 @@ public final class CoreModules {
         if (manifest != null) {
             byte[] bytes = Files.readAllBytes(Path.of(manifest));
             var directory = CoreUnitDirectory.read((Map<?,?>) Json.parse(new String(bytes, StandardCharsets.UTF_8)));
-            String hash = verify ? sha256(bytes) : "";
+            String hash = verify || directory.getModules().stream().anyMatch(module -> module.interfaceSource() != null) ? sha256(bytes) : "";
             document.put("packageManifest", manifest); document.put("packageManifestSha256", hash);
             document.put("packageCapability", packageCapability(manifest, hash, verify));
             document.put("foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit());

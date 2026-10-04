@@ -57,8 +57,10 @@ noteKey (Note span label) = show
 hasNote :: SourceTable -> Note -> Bool
 hasNote table note = noteKey note `Set.member` sourceSpanKeys table
 
-buildSourceTable :: [(Id, CoreExpr)] -> IO SourceTable
-buildSourceTable bindings = do
+-- | Preserve GHC's file/span identities. With @False@, do not read source
+-- text or invent UTF-16 offsets; retained line/column locations remain exact.
+buildSourceTable :: Bool -> [(Id, CoreExpr)] -> IO SourceTable
+buildSourceTable includeText bindings = do
   let notes = Map.fromList [(noteKey note,note) | note <- concatMap bindingNotes bindings]
       files = Map.fromListWith (++) [(unpackFS (srcSpanFile (noteSpan note)),[note]) | note <- Map.elems notes]
   pairs <- mapM readSource (Map.toAscList files)
@@ -77,13 +79,14 @@ buildSourceTable bindings = do
       Tick tick e -> maybe [] (:[]) (tickNote tick) ++ expressionNotes e
       _ -> []
     readSource (path,selected) = do
-      text <- try (withFile path ReadMode $ \handle -> do
-        hSetEncoding handle utf8
-        contents <- hGetContents handle
-        _ <- evaluate (length contents)
-        pure contents) :: IO (Either IOException String)
-      let content = either (const Nothing) Just text
-          positions = concat [[(srcSpanStartLine s,srcSpanStartCol s),
+      content <- if not includeText then pure Nothing else do
+        text <- try (withFile path ReadMode $ \handle -> do
+          hSetEncoding handle utf8
+          contents <- hGetContents handle
+          _ <- evaluate (length contents)
+          pure contents) :: IO (Either IOException String)
+        pure (either (const Nothing) Just text)
+      let positions = concat [[(srcSpanStartLine s,srcSpanStartCol s),
                                (srcSpanEndLine s,srcSpanEndCol s)] | Note s _ <- selected]
           offsets = Map.fromDistinctAscList (maybe [] (`sourceOffsets` positions) content)
           source = SourceFile path path content

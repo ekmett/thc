@@ -84,6 +84,7 @@ missing and ambiguous targets fail explicitly.
 | `--dist-dir DIR` | Select the THC/Cabal build and publication directory. |
 | `--with-ghc PATH`, `--with-ghc-pkg PATH` | Select the matching compiler and package tool. |
 | `--installed-core required` | Acquire complete executable Core from the selected installation. |
+| `--installed-core demand` | Defer eligible whole installed units to module demand; acquire units with native or startup obligations as CBD. |
 | `--ghc-source DIR` | Supply the matching configured GHC source tree for required foreign annotations. |
 | `--verify-artifacts` | On `run`, audit the reachable Core before launch and verify artifact hashes. |
 | `--dap-port PORT` | On `run`, listen for Graal DAP on `127.0.0.1:PORT` (1..65535), configure attachment waiting and first-statement suspension. |
@@ -117,6 +118,36 @@ Select `--installed-core required` to read complete simplified Core already
 retained in installed interfaces; missing Core fails without a fallback.
 Acquisition alone does not establish runtime support.
 See [GHC library Core](ghc-core.md) to check or build that installation.
+
+`--installed-core demand` reads the same installation but publishes eligible
+whole units as retained-interface sources. A single selected-GHC inventory probe
+checks their exact registered dependency closure, including cold interfaces.
+Every owned module must retain complete Core. Its decoded interface must prove
+no annotations, foreign products/calls/labels, delimited
+control, CLI main alias or foreign-exception bridge obligation. Units outside
+that conservative gate use the existing CBD acquisition and native linking.
+Thin requested units fail acquisition with their unit, module, interface path
+and instructions to retain Core or choose `pinned`; unknown facts are not false.
+`--ghc-source DIR` remains available for this mode's ordinary native fallback.
+
+On the first demand for a module, the JVM invokes the pinned GHC helper and
+admits its CBD through the existing reader. Converted files and readers belong
+to that program's context, are reused for subsequent demands, and are removed
+when it closes. There is no persistent conversion cache. Exact helper, settings,
+package-cache and hydration-interface bytes are hashed before and after every
+conversion; this whole-inventory work is an initial cost limitation, with no
+claimed speedup. Missing or changed published inputs fail on demand.
+The launcher explicitly grants helper process permission; embeddings must use
+an entered THC context with `allowCreateProcess(true)`. Demand conversion preserves
+retained file identities and line/column spans with `--source-spans`, omitting
+source text and UTF-16 offsets so no source-text reads escape its input snapshot.
+
+The existing offline prelaunch auditor and host CBD readers do not convert
+interfaces. `demand --verify-artifacts` therefore fails option validation before
+building; choose `required` or `pinned` for that audit. Interface input content
+verification is mandatory even without `--verify-artifacts`. The focused
+registered record fixture qualifies producer-to-JVM demand and reuse; it does
+not qualify whole-project or full installed-library execution.
 
 For the supported native x86_64/aarch64 Linux setup, `--ghc-source DIR` supplies
 the matching configured GHC 9.14.1 stage1 tree when selected `ghc-internal` or

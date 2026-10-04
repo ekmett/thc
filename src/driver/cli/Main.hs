@@ -89,8 +89,8 @@ bashCompletion cursor words' = case readMaybe cursor of
       else case lookup (words' !! 1) completionCommands of
         Just descriptors
           | "--" `elem` drop 2 before -> pure []
-          | previous == "--installed-core" && any (takesValue previous) descriptors -> pure ["required", "pinned"]
-          | "--installed-core=" `isPrefixOf` current && any (takesValue "--installed-core") descriptors -> pure ["--installed-core=required", "--installed-core=pinned"]
+          | previous == "--installed-core" && any (takesValue previous) descriptors -> pure ["required", "pinned", "demand"]
+          | "--installed-core=" `isPrefixOf` current && any (takesValue "--installed-core") descriptors -> pure ["--installed-core=required", "--installed-core=pinned", "--installed-core=demand"]
           | any (takesValue previous) descriptors -> pure []
           | otherwise -> pure (concatMap optionNames descriptors)
         Nothing -> do
@@ -188,8 +188,8 @@ runOptions =
       "Start guest execution before a debugger attaches (requires --dap-port)"
   , Option [] ["verify-artifacts"] (NoArg (\r -> r {runVerifyArtifacts = True}))
       "Audit reachable Core before launch and verify runtime artifacts (default: off)"
-  , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: pinned release sources); required never silently falls back"
-  , Option [] ["ghc-source"] (ReqArg (\path r -> r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
+  , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned|demand") "Project boot-library provider (default: pinned release sources); required never silently falls back"
+  , Option [] ["ghc-source"] (ReqArg (\path r -> r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required or demand provider)"
   ] ++ map liftPlanOption options
 
 -- Parse without Int overflow before enforcing the TCP port range.

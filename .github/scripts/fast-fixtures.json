@@ -1547,6 +1547,17 @@
       "outputs": ["build/process-signals"],
       "sources": ["t/haskell-fixtures/ProcessSignalFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"]
     },
+    "record-fields-demand": {
+      "cmakeTarget": "fixture-record-fields-demand",
+      "requires": ["compact-model"],
+      "ciPlatforms": ["Linux", "Darwin"],
+      "junit": ["thc.CoreInterfaceLoadTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "record-fields-demand"]}],
+      "outputs": ["build/record-fields-demand"],
+      "sources": ["src/test/java/thc/CoreCbdTestSupport.java", "t/haskell-fixtures/GhcApiFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/RecordFieldLibrary.hs", "t/fixtures/compiler/RecordFieldClient.hs", "t/fixtures/compiler/RecordFieldCold.hs", "t/fixtures/compiler/RecordFieldNative.hs",
+        "src/compiler/THC/Interface.hs", "src/compiler/THC/Plugin.hs", "src/compiler/THC/Sources.hs", "src/compiler/interface/Main.hs", "src/driver/THC/Driver/Installed.hs", "thc.cabal"]
+    },
     "record-fields": {
       "cmakeTarget": "fixture-record-fields",
       "junit": ["thc.runtime.RecordFieldNativeTest"],

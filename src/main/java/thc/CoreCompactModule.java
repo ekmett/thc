@@ -13,6 +13,7 @@ public final class CoreCompactModule implements AutoCloseable {
     private final TargetLayout targetLayout;
     private final boolean verifyArtifacts;
     private final CoreCompactFile file;
+    private final CoreUnitDirectory.Artifact artifact;
     private final CoreCompactRecords records;
     private Map<String,Object> metadata;
     private final Map<Long,Map<String,Object>> selected = new HashMap<>();
@@ -21,8 +22,12 @@ public final class CoreCompactModule implements AutoCloseable {
         this(module, targetLayout, verifyArtifacts, new HashMap<>());
     }
     CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts, Map<String,String> blobs) {
+        this(module, targetLayout, verifyArtifacts, blobs, module.artifact());
+    }
+    CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts,
+            Map<String,String> blobs, CoreUnitDirectory.Artifact artifact) {
         this.module = module; this.targetLayout = targetLayout; this.verifyArtifacts = verifyArtifacts;
-        var artifact = module.artifact();
+        this.artifact = artifact;
         file = new CoreCompactFile(artifact.path(), artifact.sha256(), verifyArtifacts);
         records = new CoreCompactRecords(file, artifact.sha256(), blobs);
     }
@@ -71,7 +76,7 @@ public final class CoreCompactModule implements AutoCloseable {
             var facts = metadata();
             var bindings = new ArrayList<Map<String,Object>>();
             // Complete verification must not retain cold bodies or their shape dictionaries.
-            var verifier = new CoreCompactRecords(file, module.artifact().sha256());
+            var verifier = new CoreCompactRecords(file, artifact.sha256());
             file.verifyBindingOffsets(offset -> bindings.add(decodeBinding(verifier, offset)));
             var original = new LinkedHashMap<>(facts); original.put("bindings", bindings);
             CoreForeignArtifacts.INSTANCE.validateArchive(original, true);

@@ -270,8 +270,8 @@ underTick d tick = case (sourceTable d, Sources.tickNote tick) of
 sourceKey :: Ctx -> String -> String
 sourceKey d key = maybe key (\unit -> show (unit,key)) (sourceUnit d)
 
-loadSources :: Bool -> [(Id,CoreExpr)] -> IO (Maybe Sources.SourceTable)
-loadSources enabled bindings = if enabled then Just <$> Sources.buildSourceTable bindings else pure Nothing
+loadSources :: Bool -> Bool -> [(Id,CoreExpr)] -> IO (Maybe Sources.SourceTable)
+loadSources enabled includeText bindings = if enabled then Just <$> Sources.buildSourceTable includeText bindings else pure Nothing
 
 pretty :: Outputable a => Ctx -> a -> String
 pretty d = showSDoc (dynFlags d) . ppr
@@ -1051,7 +1051,7 @@ foreignExceptionBridgeFields d unit modName binds
 
 optimizedModule :: DynFlags -> [CommandLineOption] -> ModGuts -> IO (Ctx,CoreOutput)
 optimizedModule flags opts guts = do
-  sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
+  sources <- loadSources (any (`elem` opts) ["source-notes", "source-spans"]) ("source-spans" `notElem` opts) (concatMap flattenBind (mg_binds guts))
   policies <- either fail pure (Backend.backendFields (mg_module guts)
     [(fmap nameOccName target,payload) | Annotation target payload <- mg_anns guts])
   exports <- staticExportFields (mg_module guts) (mg_anns guts) (mg_binds guts)
@@ -1341,7 +1341,7 @@ foreignArtifactRecord (ForeignCore.IfaceForeign stubs files) = O
 
 postTidyModule :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> IO (Ctx,CoreOutput)
 postTidyModule flags opts m tycons program = do
-  sources <- loadSources ("source-notes" `elem` opts) binds
+  sources <- loadSources (any (`elem` opts) ["source-notes", "source-spans"]) ("source-spans" `notElem` opts) binds
   let unit = unitString (moduleUnit m)
       modName = moduleNameString (moduleName m)
       d = Ctx flags (unit ++ ":" ++ modName) (if "unit-qualified" `elem` opts then Just unit else Nothing)
@@ -1475,7 +1475,7 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
       -- Conservatively forbid speculation of every imported definition while
       -- exporting their RHSs; this preserves recursive dictionary guards.
       recIds = mkVarSet [v | (_,v,_,_) <- imports]
-  sources <- loadSources (case sourceTable rootCtx of Just _ -> True; _ -> False) [(v,e) | (_,v,e,_) <- imports]
+  sources <- loadSources (case sourceTable rootCtx of Just _ -> True; _ -> False) ("source-spans" `notElem` opts) [(v,e) | (_,v,e,_) <- imports]
   let closureCtx = rootCtx { sourceTable = sources, sourceUnit = if "unit-qualified" `elem` opts then Just "dependency-closure" else Nothing }
   let importedBinding (d,v,e,_) = buildBinding (d { recursiveIds = recIds, deriveCBVContracts = False, sourceTable = sources, sourceUnit = sourceUnit closureCtx, activeSources = [] }) (v,e)
       cons = nubBy (\a b -> dataConName a == dataConName b) (concat [exprCons e | (_,_,e,_) <- imports])

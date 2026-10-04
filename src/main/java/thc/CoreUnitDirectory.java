@@ -19,7 +19,7 @@ public final class CoreUnitDirectory {
         public String getId() { return id; } public List<String> getDepends() { return depends; }
         public List<ModuleRecord> getModules() { return modules; }
     }
-    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact,
+    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact, CoreInterfaceSource interfaceSource,
             boolean containsDelimitedControl, boolean registrationObligations, boolean mainAlias, boolean packageScalarDeclarations) {
         public String getUnit() { return unit; } public String getName() { return name; } public String getSha256() { return sha256; }
         public Artifact getArtifact() { return artifact; }
@@ -68,6 +68,8 @@ public final class CoreUnitDirectory {
         private final boolean verifyArtifacts;
         private final Consumer<CoreCompactFile.Counters> compactAdmitted;
         private boolean closed;
+        private Path interfaceDirectory;
+        private long interfaceConversions;
         private final Map<ModuleRecord,CoreCompactModule> compactReaders = new HashMap<>();
         private final List<CoreCompactFile> consumerReaders = new ArrayList<>();
         private final Set<ModuleRecord> verified = new HashSet<>();
@@ -79,7 +81,16 @@ public final class CoreUnitDirectory {
         }
         private CoreCompactModule compact(ModuleRecord module) {
             return compactReaders.computeIfAbsent(module, ignored -> {
-                var reader = new CoreCompactModule(module, directory.targetLayout, verifyArtifacts, blobs);
+                var artifact = module.artifact();
+                if (module.interfaceSource() != null) {
+                    try {
+                        var environment = CoreInterfaceSource.processEnvironment();
+                        if (interfaceDirectory == null) interfaceDirectory = java.nio.file.Files.createTempDirectory("thc-interface-");
+                        artifact = module.interfaceSource().convert(module, interfaceDirectory, environment);
+                        interfaceConversions++;
+                    } catch (Throwable failure) { return rethrow(failure); }
+                }
+                var reader = new CoreCompactModule(module, directory.targetLayout, verifyArtifacts, blobs, artifact);
                 compactAdmitted.accept(reader.getCounters());
                 return reader;
             });
@@ -128,6 +139,7 @@ public final class CoreUnitDirectory {
             compact(module).verify();
             verified.add(module);
         }
+        public synchronized long interfaceConversions() { return interfaceConversions; }
         public synchronized List<CoreCompactFile.Counters> compactCounters() {
             var counters = new ArrayList<CoreCompactFile.Counters>();
             for (var reader : compactReaders.values()) counters.add(reader.getCounters());
@@ -142,13 +154,17 @@ public final class CoreUnitDirectory {
                 compactReaders.clear();
                 try { for (var reader : consumerReaders) reader.close(); }
                 catch (Exception failure) { rethrow(failure); }
-                finally { consumerReaders.clear(); blobs.clear(); }
+                finally {
+                    consumerReaders.clear(); blobs.clear();
+                    if (interfaceDirectory != null) CoreInterfaceSource.removeTemporary(interfaceDirectory);
+                }
             }
         }
     }
     private static final String BOUNDARY = "optimized-Core-after-Tidy-before-CorePrep";
     public static CoreUnitDirectory read(Map<?,?> document) {
         var rawUnits = list(document.get("units"), "Missing package units");
+        var interfaceInputs = CoreInterfaceSource.snapshot(document.get("interfaceInputs"));
         require(Objects.equals(document.get("format"), "thc-core-packages") && Objects.equals(document.get("schema"), 1L) &&
                 Objects.equals(document.get("ghc"), "9.14.1"), "Core package manifest requires schema 1 / GHC 9.14.1");
         var unitIds = new HashSet<String>();
@@ -168,6 +184,7 @@ public final class CoreUnitDirectory {
             for (Object value : depends) dependencyNames.add((String) value);
             List<String> dependencies = Collections.unmodifiableList(dependencyNames);
             var rawModules = list(unit.get("modules"), "Missing unit modules");
+            var interfaceSource = unit.containsKey("interfaceSource") ? CoreInterfaceSource.read(unit.get("interfaceSource"), interfaceInputs) : null;
             require(!unit.containsKey("bundle") && !unit.containsKey("json") && !unit.containsKey("symbols"),
                     "Core runtime inputs must be CBD modules: " + id);
             var names = new HashSet<String>();
@@ -180,7 +197,13 @@ public final class CoreUnitDirectory {
                 require(Collections.disjoint(module.keySet(), Set.of("start", "end", "bindingsStart", "bindingsEnd",
                         "metadataStart", "metadataEnd", "sourceMetadataStart", "sourceMetadataEnd", "index")),
                         "CBD module contains JSON storage extents");
-                modules.add(new ModuleRecord(id, name, (String) module.get("sha256"), artifact(module.get("compact"), artifactPaths),
+                require(interfaceSource == null ? !module.containsKey("interface") : !module.containsKey("compact"), "Conflicting Core module source");
+                var artifact = interfaceSource == null ? artifact(module.get("compact"), artifactPaths) : interfaceSource.artifact(module.get("interface"), artifactPaths);
+                if (interfaceSource != null) require(module.get("sha256").equals(artifact.sha256()) &&
+                  Boolean.FALSE.equals(module.get("containsDelimitedControl")) && Boolean.FALSE.equals(module.get("registrationObligations")) &&
+                  Boolean.FALSE.equals(module.get("mainAlias")) && Boolean.FALSE.equals(module.get("packageScalarDeclarations")),
+                  "Demand interfaces require checked false startup summaries");
+                modules.add(new ModuleRecord(id, name, (String) module.get("sha256"), artifact, interfaceSource,
                         flag(module, "containsDelimitedControl", "Missing delimited-control summary"),
                         flag(module, "registrationObligations", "Missing registration summary"),
                         flag(module, "mainAlias", "Missing main-alias summary"),

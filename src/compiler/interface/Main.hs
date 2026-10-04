@@ -48,13 +48,13 @@ import THC.Interface
 data Options = Options
   { libdir :: FilePath, unit :: String, moduleName :: String, interface :: FilePath
   , way :: String, databases :: [FilePath], sourceNotes :: Bool, inventoryProbe :: Bool
-  , prettyDiagnostics :: Bool
+  , prettyDiagnostics :: Bool, sourceSpans :: Bool
   , homeInterfaces :: Maybe FilePath
   }
 
 usage :: String
 usage = "thc-interface --libdir DIR --unit UNIT --module MODULE --interface FILE " ++
-  "[--way vanilla|dynamic|profiling] [--package-db DIR ...] [--source-notes] [--pretty-diagnostics] [--home-interfaces DIR]"
+  "[--way vanilla|dynamic|profiling] [--package-db DIR ...] [--source-notes|--source-spans] [--pretty-diagnostics] [--home-interfaces DIR]"
 
 parseOptions :: [String] -> Either String Options
 parseOptions = go Map.empty [] False False
@@ -65,14 +65,17 @@ parseOptions = go Map.empty [] False False
       u <- required "--unit"
       m <- if probe then pure "" else required "--module"
       i <- if probe then pure "" else required "--interface"
-      unless (not probe || all (`Map.notMember` values) ["--module", "--interface", "--pretty-diagnostics"] && not notes)
+      unless (not probe || all (`Map.notMember` values) ["--module", "--interface", "--pretty-diagnostics", "--source-spans"] && not notes)
         (Left "Inventory probe does not accept a single interface, source notes or pretty diagnostics")
       let w = Map.findWithDefault "vanilla" "--way" values
       unless (w `elem` ["vanilla", "dynamic", "profiling"]) (Left "Unsupported --way")
       let home = Map.lookup "--home-interfaces" values
       unless (not probe || home == Nothing) (Left "Inventory probe requires registered packages")
-      pure (Options l u m i w (reverse dbs) notes probe (Map.member "--pretty-diagnostics" values) home)
-    go values dbs False probe ("--source-notes":rest) = go values dbs True probe rest
+      pure (Options l u m i w (reverse dbs) notes probe (Map.member "--pretty-diagnostics" values) (Map.member "--source-spans" values) home)
+    go values dbs False probe ("--source-notes":rest)
+      | Map.notMember "--source-spans" values = go values dbs True probe rest
+    go values dbs False probe ("--source-spans":rest)
+      | Map.notMember "--source-spans" values = go (Map.insert "--source-spans" "" values) dbs False probe rest
     go values dbs notes False ("--probe-inventory":rest) = go values dbs notes True rest
     go values dbs notes probe ("--pretty-diagnostics":rest)
       | Map.notMember "--pretty-diagnostics" values =
@@ -139,7 +142,7 @@ homeInterfaceInventory :: FilePath -> String -> String -> IO Value
 homeInterfaceInventory lib owner selectedWay = do
   unless (selectedWay `elem` ["vanilla", "dynamic"]) (fail "Unsupported home interface way")
   entries <- (either fail pure . eitherDecode =<< BL.getContents) :: IO [ProbeEntry]
-  let options = Options lib owner "" "" selectedWay [] False False False (Just ".")
+  let options = Options lib owner "" "" selectedWay [] False False False False (Just ".")
   withSelected options $ \environment -> do
     rows <- forM entries $ \(ProbeEntry identifier name path) -> do
       unless (identifier == owner) (fail "Home interface request has another unit owner")
@@ -210,7 +213,7 @@ loadSelected options = withSelected options $ \environment -> do
   case loaded of
     Nothing -> pure Nothing
     Just core -> do
-      rendered <- interfaceCoreCBD (["unit-qualified"] ++ ["source-notes" | sourceNotes options] ++
+      rendered <- interfaceCoreCBD (["unit-qualified"] ++ ["source-notes" | sourceNotes options] ++ ["source-spans" | sourceSpans options] ++
         ["pretty-diagnostics" | prettyDiagnostics options]) core
       output <- Exception.evaluate rendered
       pure (Just output)
@@ -238,9 +241,9 @@ probeSelected options = do
         modules = Set.fromList ([(identifier, name) | ProbeEntry identifier name _ <- entries] ++
           [(unitString (moduleUnit m), name) | (ProbeEntry _ name _, m) <- zip entries resolvedModules])
     rows <- forM (zip entries resolvedModules) $ \(ProbeEntry identifier name path, expected) -> do
-      (digest, complete) <- probeInterface environment units modules expected path
+      (digest, complete, eligible) <- probeInterface environment units modules expected path
       pure $ object ["unit" .= identifier, "module" .= name, "interface" .= path,
-        "owner" .= unitString (moduleUnit expected), "fingerprint" .= show digest, "completeCore" .= complete]
+        "owner" .= unitString (moduleUnit expected), "fingerprint" .= show digest, "completeCore" .= complete, "demandEligible" .= eligible]
     -- Aeson already emits UTF-8. Char8.unpack followed by putStrLn would
     -- encode those bytes a second time, corrupting non-ASCII interface paths
     -- and making the driver's exact inventory check reject every cache hit.

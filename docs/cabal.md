@@ -40,6 +40,13 @@ configured source tree where required. Missing Core fails explicitly; the driver
 does not silently switch providers. Follow [GHC library Core](ghc-core.md) to
 prepare that installation. Acquisition alone does not establish runtime support.
 
+The opt-in `--installed-core demand` provider defers eligible whole installed
+units to the selected-GHC helper on actual module demand. Units with native or
+startup obligations retain ordinary CBD acquisition and linking. Thin requested
+units fail acquisition. The initial mode requires explicit context process
+permission and does not support `--verify-artifacts`; see the
+[eligibility and verification limits](driver.md#installed-library-core).
+
 Package C/C++ and CAPI imports use the configured native sources and link
 settings. See [foreign imports and exports](interface-foreign.md) for LLVM setup,
 buffer and callback contracts, and unsupported forms. Native build products are

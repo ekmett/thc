@@ -39,6 +39,12 @@ tests env = TestLabel "driver options and target selection" $ TestList
         options <- complete 2 ["thc", command, "--inst"]
         assertSuccess options
         assertEqual "parser-derived flag" "--installed-core\n" (out options)
+        demand <- complete 3 ["thc", command, "--installed-core", "de"]
+        assertSuccess demand
+        assertEqual "demand option value" "demand\n" (out demand)
+        demandEquals <- complete 2 ["thc", command, "--installed-core=de"]
+        assertSuccess demandEquals
+        assertEqual "demand option with equals" "--installed-core=demand\n" (out demandEquals)
       dap <- complete 2 ["thc", "run", "--dap-"]
       assertSuccess dap
       forM_ ["--dap-suspend\n", "--dap-wait-attached\n"] $ \option -> assertContains option (out dap)
@@ -195,6 +201,24 @@ tests env = TestLabel "driver options and target selection" $ TestList
         verified <- run env package Nothing 30 (arguments ++ ["--verify-artifacts"])
         assertFailure verified
         assertContains "bin/audit-core.py" (err verified)
+  , TestLabel "demand validates audit and source options before building" $ TestCase $
+      if os == "mingw32" then pure () else
+      withFixtureNamed env "t/fixtures/run-pure" "demand options" $ \package -> do
+        let launcher = package </> "launcher"
+            arguments = ["run", "--thc-root", package, "--runtime", launcher,
+                         "--installed-core", "demand"]
+        writeText launcher "not executed\n"
+        verified <- run env package Nothing 30 (arguments ++ ["--verify-artifacts"])
+        assertFailure verified
+        assertNoStdout verified
+        let diagnostic = unwords (words (err verified))
+        assertContains "does not yet support the offline prelaunch audit" diagnostic
+        assertContains "Select required or pinned" diagnostic
+        source <- run env package Nothing 30 (arguments ++ ["--ghc-source", package])
+        assertFailure source
+        assertNoStdout source
+        -- Accepted options reach the missing compiler prerequisite, with no build.
+        assertContains "bin/build-compiler.sh" (err source)
   , TestLabel "CLI rejects unknown options before building" $ TestCase $
       forM_ [["--unknown-option", "value"], ["--unknown-option=value"]] $ \arguments -> do
         result <- parseOnly ("run" : arguments)

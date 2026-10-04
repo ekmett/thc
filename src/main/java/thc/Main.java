@@ -48,11 +48,14 @@ public final class Main {
 
     /** Values and native resources must not outlive or cross this owning context. */
     public static Context executionContext() { return executionContext(false); }
-    public static Context executionContext(boolean fileIO) {
+    public static Context executionContext(boolean fileIO) { return executionContext(fileIO, false); }
+    private static Context executionContext(boolean fileIO, boolean interfaceHelper) {
+        if (fileIO && interfaceHelper && System.getProperty("os.name").startsWith("Windows"))
+            throw new IllegalArgumentException("Interface-demand IO launching currently requires macOS or Linux");
         if (fileIO && NativeIO.supportedHost())
-            return NativeIO.commandLineContext();
+            return NativeIO.commandLineContext(interfaceHelper);
         return withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
-            .allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER).build();
+            .allowCreateProcess(interfaceHelper).allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER).build();
     }
 
     /**
@@ -105,7 +108,7 @@ public final class Main {
         public String getProgramName() { return programName; }
         public String[] getArguments() { return arguments; }
     }
-    public record VerifiedArguments(String[] arguments, boolean verifyArtifacts) {
+    public record VerifiedArguments(String[] arguments, boolean verifyArtifacts, boolean interfaceHelper) {
         public String[] getArguments() { return arguments; }
         public boolean getVerifyArtifacts() { return verifyArtifacts; }
     }
@@ -124,24 +127,26 @@ public final class Main {
 
     public static VerifiedArguments launcherArtifactVerification(String[] arguments) {
         var selected = new ArrayList<String>();
-        boolean verify = false, guest = false;
+        boolean verify = false, guest = false, interfaceHelper = false;
         for (String argument : arguments) {
             if (argument.equals("--")) guest = true;
             require(guest || !argument.equals("--json-sidecar"), "JSON .idx sidecars are no longer supported");
             if (!guest && argument.equals("--verify-artifacts")) { require(!verify, "Duplicate --verify-artifacts"); verify = true; }
+            else if (!guest && argument.equals("--allow-interface-helper")) { require(!interfaceHelper, "Duplicate --allow-interface-helper"); interfaceHelper = true; }
             else selected.add(argument);
         }
-        return new VerifiedArguments(selected.toArray(String[]::new), verify);
+        return new VerifiedArguments(selected.toArray(String[]::new), verify, interfaceHelper);
     }
 
     public static void launch(String[] arguments) {
         var withVerification = launcherArtifactVerification(arguments);
         String[] args = withVerification.arguments();
         boolean verifyArtifacts = withVerification.verifyArtifacts();
+        boolean interfaceHelper = withVerification.interfaceHelper();
         if (args.length > 0 && args[0].equals("--run-executable")) {
             require(args.length >= 4, "Usage: thc --run-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 4);
-            try (Context context = executionContext(true)) {
+            try (Context context = executionContext(true, interfaceHelper)) {
                 initializeArguments(context, guest);
                 var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
@@ -152,7 +157,7 @@ public final class Main {
         if (args.length > 0 && args[0].equals("--run-io")) {
             require(args.length >= 3, "Usage: thc --run-io MODULE.cbd[,MODULE.cbd...] ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 3);
-            try (Context context = executionContext(true)) {
+            try (Context context = executionContext(true, interfaceHelper)) {
                 initializeArguments(context, guest);
                 var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "IO main did not complete");
@@ -162,7 +167,7 @@ public final class Main {
         }
         require(args.length >= 3, "Usage: thc MODULE.cbd[,MODULE.cbd...] ENTRY INTEGER [--compile]");
         long input = Long.parseLong(args[2]);
-        try (Context context = executionContext(false)) {
+        try (Context context = executionContext(false, interfaceHelper)) {
             var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), verifyArtifacts);
             Long before = null;
             if (Arrays.asList(args).subList(3, args.length).contains("--compile")) {

@@ -134,7 +134,9 @@ cabal list-bin exe:thc-interface --with-compiler=/path/to/ghc
 ```
 
 `--libdir`, `--unit`, `--module` and `--interface` are required. Package databases
-may be repeated in GHC stack order. The stack is explicitly the selected libdir's
+may be repeated in GHC stack order. `--source-spans` preserves retained file
+identities and line/column spans without reading source files; `--source-notes`
+keeps its existing optional text and UTF-16 offset capture. These flags are exclusive. The stack is explicitly the selected libdir's
 global database plus those arguments: implicit user databases and package
 environments are disabled. The helper does not discover packages, rebuild them,
 or run guest code. The caller must select a helper built against the same GHC
@@ -166,13 +168,21 @@ result never substitutes inline unfoldings. In the driver's installed-Core
 required mode it is a capability failure; choosing the pinned source provider
 is an explicit option, not a retry policy.
 
-The helper converts one requested interface; the JVM does not accept `.hi`
-inputs. Project acquisition currently converts every module in each selected
-installed registration, then the runtime decodes and lowers published CBD
-bindings on demand. Deferring interface conversion to module demand also
-requires retaining the checked target layout and module-directory summaries:
-delimited-control summaries select continuation behavior, and foreign
-registration obligations require admission before guest execution.
+The helper converts one requested interface. The default `pinned` and explicit
+`required` providers convert every module in each selected installed registration
+before runtime binding demand. The opt-in `demand` provider instead publishes
+checked retained-interface descriptors for whole units whose startup, native,
+main-alias and delimited-control facts are all provably false. GHC decodes the
+interface syntax for eligibility without hydrating or serializing every module.
+The private inventory protocol adds Boolean `demandEligible` alongside
+`completeCore`; false eligibility selects ordinary CBD/native acquisition, while
+missing complete Core in a requested unit fails acquisition.
+
+The JVM invokes this same helper only when a selected module is requested, then
+uses the existing compact reader and checks the emitted header facts against
+those recorded in the directory. It does not parse GHC binary interfaces.
+[Demand eligibility and limits](driver.md#installed-library-core) describe the
+process permission, source snapshot and explicit offline-audit restriction.
 
 ## Build a compiler with complete Core
 

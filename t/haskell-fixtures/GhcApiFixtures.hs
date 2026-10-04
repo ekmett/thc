@@ -22,7 +22,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Fixture acquisition support for ghc api.
-module GhcApiFixtures (prepareGhcApi, prepareRecordFields) where
+module GhcApiFixtures (prepareGhcApi, prepareRecordFields, prepareRecordFieldsDemand, recordFieldsDemandInventory) where
 
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value, object, (.=))
@@ -30,11 +30,14 @@ import qualified Data.ByteString.Char8 as BS
 import FixtureSupport
 import GhcApiAudit (ghcApiOptions, ghcApiAuditArguments, ghcApiAuditEvidence)
 import InstalledCoreFixtures (field, readJson)
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesFileExist, removeFile)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
 import THC.Compact.Module (readModuleValue)
+import qualified THC.Driver.Installed as Installed
+import qualified Data.Map.Strict as Map
+import qualified System.Info as Host
 
 -- Two independently compiled modules retain duplicate record selectors and a
 -- cross-module ordinary selector alias. Both plugin boundaries and subsequent
@@ -104,6 +107,76 @@ prepareRecordFields root = do
     ["schema" .= (1 :: Int), "inputHashes" .= inputs, "artifactHashes" .= artifacts,
      "commands" .= map commandRecord records]
   putStrLn "record-fields: original pre/post-Tidy and hydrated Core exported; six strict audits accepted"
+
+-- The same record sources compiled without the THC plugin supply raw retained
+-- and thin interfaces. Publication calls the actual installed demand provider;
+-- the JVM test, rather than fixture generation, exercises conversion and errors.
+prepareRecordFieldsDemand :: FilePath -> IO ()
+prepareRecordFieldsDemand root = do
+  let directory = root </> "build/record-fields-demand"
+      execute label program arguments = runLogged 180 root (directory </> "logs") label [] program arguments
+      single result = case BS.lines (commandStdout result) of
+        [value] -> pure (BS.unpack value)
+        _ -> die "record-fields-demand: expected one output line"
+      unit = "thc-record-demand-0.1"
+      names = ["RecordFieldLibrary", "RecordFieldClient", "RecordFieldCold"] :: [String]
+      sources = ["t/fixtures/compiler/RecordFieldNative.hs", "t/fixtures/compiler/RecordFieldCold.hs"]
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  pkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+  helper <- lookupEnv "THC_INTERFACE" >>= maybe (die "record-fields-demand requires the declared THC_INTERFACE tool") canonicalizePath
+  base <- single =<< execute "base-id" pkg ["--global", "--no-user-package-db", "field", "base", "id", "--simple-output"]
+  commands <- fmap concat $ forM ["full", "thin"] $ \mode -> do
+    let output = directory </> mode
+        database = output </> "package.conf.d"
+    createDirectoryIfMissing True output
+    let common = ["--make", "-O0", "-g", "-fforce-recomp", "-this-unit-id", unit,
+                  "-i", "-it/fixtures/compiler", "-odir", output, "-hidir", output]
+        selected = if mode == "full" then ["-fwrite-if-simplified-core", "-o", output </> "oracle"]
+                   else ["-fno-write-if-simplified-core", "-no-link"]
+    compiled <- execute (mode ++ "-compile") ghc (common ++ selected ++ sources)
+    exists <- doesDirectoryExist database
+    initialized <- if exists then pure [] else (:[]) <$> execute (mode ++ "-db-init") pkg ["init", database]
+    let registration = output </> unit ++ ".conf"
+    BS.writeFile registration $ BS.pack $ unlines
+      ["name: thc-record-demand", "version: 0.1", "id: " ++ unit, "key: " ++ unit,
+       "exposed: True", "exposed-modules: " ++ unwords names,
+       "import-dirs: " ++ output, "depends: " ++ base]
+    registered <- execute (mode ++ "-register") pkg ["--package-db", database, "update", registration]
+    pure ([compiled] ++ initialized ++ [registered])
+  oracle <- execute "native" (directory </> "full/oracle") []
+  BS.writeFile (directory </> "native.tsv") (commandStdout oracle)
+  writeJson (directory </> "tools.json") $ object ["ghc" .= ghc, "ghcPkg" .= pkg, "helper" .= helper]
+  recordFieldsDemandInventory root "full" (directory </> "packages.json")
+  inputs <- hashes root (sources ++ ["t/fixtures/compiler/RecordFieldLibrary.hs", "t/fixtures/compiler/RecordFieldClient.hs",
+      "t/haskell-fixtures/GhcApiFixtures.hs", "src/compiler/THC/Interface.hs", "src/driver/THC/Driver/Installed.hs"])
+  artifacts <- hashes root (["build/record-fields-demand" </> mode </> name ++ suffix |
+      mode <- ["full", "thin"], name <- names, suffix <- [".hi", ".o"]] ++
+      ["build/record-fields-demand/native.tsv", "build/record-fields-demand/packages.json", "build/record-fields-demand/tools.json"])
+  writeJson (directory </> "manifest.json") $ object ["schema" .= (1 :: Int), "inputHashes" .= inputs,
+    "artifactHashes" .= artifacts, "commands" .= map commandRecord (commands ++ [oracle])]
+  putStrLn "record-fields-demand: raw retained/thin interfaces and native oracle published"
+
+-- A command in the existing fixture tool calls real acquisition on either DB.
+-- In particular, thin-Core failure remains a live JVM assertion, not a cached
+-- producer success boolean. This operation never compiles or links anything.
+recordFieldsDemandInventory :: FilePath -> String -> FilePath -> IO ()
+recordFieldsDemandInventory root mode destination = do
+  unless (mode `elem` ["full", "thin"]) (die "record-fields-demand-inventory expects full or thin")
+  tools <- readJson (root </> "build/record-fields-demand/tools.json")
+  ghc <- field tools "ghc"
+  pkg <- field tools "ghcPkg"
+  helper <- field tools "helper"
+  let compiler = object ["id" .= ("ghc-9.14.1" :: String), "abi" .= ("fixture" :: String),
+                        "platform" .= (Host.arch ++ "-" ++ Host.os)]
+  selected <- Installed.installedContext ghc pkg helper
+    [root </> "build/record-fields-demand" </> mode </> "package.conf.d"] compiler
+  let context = selected { Installed.installedInterfaceWay = Installed.VanillaInterfaces }
+  unit <- Installed.discoverInstalled context "thc-record-demand-0.1"
+  (inputs, units) <- Installed.prepareInstalledDemand context [unit]
+  unless (Map.member (Installed.registeredId unit) units)
+    (die "record-fields-demand: raw fixture unit is not eligible for demand")
+  writeJson destination $ object ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int),
+    "ghc" .= ("9.14.1" :: String), "interfaceInputs" .= inputs, "units" .= Map.elems units]
 
 -- Ordinary production acquisition of the original compiler package. A failed
 -- stage leaves its command record/audit intact and never publishes a success

@@ -35,8 +35,9 @@ public final class NativeIO {
         String architecture = System.getProperty("os.arch");
         return "amd64".equals(architecture) || "x86_64".equals(architecture);
     }
-    public static Context commandLineContext() {
+    public static Context commandLineContext() { return commandLineContext(false); }
+    static Context commandLineContext(boolean interfaceHelper) {
         if (WindowsDirectoryStreams.supportedHost()) return WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER);
-        return NativeFileProvider.createContext(new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())), ContextProfile.LAUNCHER, supportedPosixHost());
+        return NativeFileProvider.createContext(new LinkedHashSet<>(Arrays.asList(StandardEndpoint.values())), ContextProfile.LAUNCHER, supportedPosixHost(), interfaceHelper);
     }
 }

@@ -360,6 +360,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         long coreCompactMappingCacheHits = 0;
         for (var item : compact) coreCompactMappingCacheHits += item.cacheHits();
         result.put("coreCompactMappingCacheHits", coreCompactMappingCacheHits);
+        result.put("coreInterfaceModuleConversions", sources.interfaceConversions());
         result.put("looseConsumerBindingHeaders", consumerBindings.size()); return result;
     }
     @Override public void close() { sources.close(); }
