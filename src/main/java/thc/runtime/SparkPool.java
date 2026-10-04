@@ -36,8 +36,9 @@ public final class SparkPool {
         var environment = thunk.getEnvironment();
         return environment != null && environment.getProgram() instanceof Program program && program.belongsToCurrentContext(node);
     }
-    @TruffleBoundary synchronized void hint(Node node, Object value) {
-        if (!isEnabled() || stopped || !(value instanceof Thunk thunk) || !suitable(thunk, node) || pending.size() >= capacity) return;
+    void hint(Node node, Object value) { if (capacity != 0) offer(node, value); }
+    @TruffleBoundary private synchronized void offer(Node node, Object value) {
+        if (stopped || !(value instanceof Thunk thunk) || !suitable(thunk, node) || pending.size() >= capacity) return;
         // A repeated hint does not retain the same thunk many times or crowd out work.
         if (pending.contains(thunk)) return;
         pending.addLast(thunk);
@@ -51,8 +52,10 @@ public final class SparkPool {
         }
         notifyAll();
     }
-    @TruffleBoundary synchronized long count() { return pending.size(); }
-    @TruffleBoundary synchronized Thunk poll() {
+    long count() { return capacity == 0 ? 0L : queuedCount(); }
+    @TruffleBoundary private synchronized long queuedCount() { return pending.size(); }
+    Thunk poll() { return capacity == 0 ? null : pollQueued(); }
+    @TruffleBoundary private synchronized Thunk pollQueued() {
         while (!pending.isEmpty()) {
             var thunk = pending.removeFirst();
             if (thunk.getState() == 0) return thunk;
@@ -78,6 +81,7 @@ public final class SparkPool {
     private void run(WorkerRoot root) {
         boolean registered = false;
         var outcome = GuestThreadStatus.FINISHED;
+        Throwable failure = null;
         try {
             owner.getThreads().enterCurrent(MaskingState.UNMASKED, true, true, null);
             registered = true;
@@ -97,15 +101,24 @@ public final class SparkPool {
             }
         } catch (AsyncDelivery delivery) {
             delivery.getRequest().acknowledge(); outcome = GuestThreadStatus.DIED;
-        } catch (Throwable failure) {
-            outcome = GuestThreadStatus.uncaught(failure); throw failure;
+        } catch (Throwable caught) {
+            failure = caught; outcome = GuestThreadStatus.uncaught(caught);
         } finally {
             stop();
-            if (registered) owner.getThreads().leaveCurrent(outcome);
+            try { if (registered) owner.getThreads().leaveCurrent(outcome); }
+            catch (Throwable cleanup) {
+                if (failure == null) failure = cleanup; else if (failure != cleanup) failure.addSuppressed(cleanup);
+            }
+        }
+        if (failure != null) {
+            GuestThreadOps.reportHostFailure(owner, failure);
+            SparkPool.<RuntimeException>rethrow(failure);
         }
     }
+    @SuppressWarnings("unchecked") private static <E extends Throwable> void rethrow(Throwable failure) throws E { throw (E) failure; }
     /** Stop admission and release unstarted work before managed carriers are cancelled/joined. */
-    @TruffleBoundary public synchronized void stop() { stopped = true; pending.clear(); notifyAll(); }
+    public void stop() { if (capacity != 0) stopPending(); }
+    @TruffleBoundary private synchronized void stopPending() { stopped = true; pending.clear(); notifyAll(); }
 
     private static final class WorkerRoot extends ContextRoot {
         @Child private Force force = new Force(new Metrics(false), true);
