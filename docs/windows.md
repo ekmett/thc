@@ -122,6 +122,11 @@ The launcher-policy check covers native backing by default, an explicit heap
 override and unchanged embedding defaults on AST and bytecode in both handoff
 modes.
 
+The creation-policy check covers allocation, pinning, resize, aliases and compact
+copying under heap/native policy on both backends and handoff modes, including
+first AST compiled-call evidence without qualifying bytecode compiled-body
+execution.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:

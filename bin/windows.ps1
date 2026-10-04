@@ -79,7 +79,8 @@ try {
             'thc.NarrowPublicEntryTest.partialApplicationUsesRemainingNotOriginalInputProofs',
             'thc.runtime.NativeByteArrayPolicyTest.nativeStorageRequiresNativeAuthorityAtContextCreation',
             'thc.runtime.NativeByteArrayPolicyTest.nativeOwnerOutlivesContextWhileRegistriesAndPointerCellBoundariesStayChecked',
-            'thc.runtime.NativeByteArrayPolicyTest.launcherDefaultsToNativeButHonorsHeapWithoutChangingEmbeddings')
+            'thc.runtime.NativeByteArrayPolicyTest.launcherDefaultsToNativeButHonorsHeapWithoutChangingEmbeddings',
+            'thc.runtime.NativeByteArrayPolicyTest.guestCreationQueriesResizeAndAliasesRespectContextPolicyOnBothBackends')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava
