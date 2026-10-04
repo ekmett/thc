@@ -107,7 +107,6 @@ import PackageScalarFixtures (preparePackageScalar, preparePackageNativeDemand)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import DynamicCallbackFixtures (prepareDynamicCallbacks)
-import LibyamlNativeFixtures (prepareLibyamlNative)
 import UnixLibcFixtures (prepareUnixLibc)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
@@ -1038,7 +1037,6 @@ main = do
     ["package-native-demand"] -> preparePackageNativeDemand root
     ["stableptr-ffi"] -> prepareStablePtrFFI root
     ["package-native-originals"] -> preparePackageNativeOriginals root
-    ["libyaml-native"] -> prepareLibyamlNative root
     ["package-native-archives"] -> preparePackageNativeArchives root
     ["dynamic-callback"] -> prepareDynamicCallbacks root
     ["unix-libc"] -> prepareUnixLibc root

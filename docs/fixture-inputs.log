@@ -5110,32 +5110,6 @@ Consumer: PackageNativeOriginalsTest. Under build/original-native/:
 Reject the fresh-directory prerequisite and native library conformance ceremony;
   retain only package integration cases not already covered by public smoke.
 
-167 libyaml-native (custom fixture)
-Fixture rationale (167 libyaml-native)
-Purpose: Check original libyaml package parser/encoder linkage and C-only dependency.
-Consumes: THC_LIBYAML_CAPTURE_STAGE plan/capture/store/native-pieces, exact native
-  registrations/archives, OriginalLibyamlNative.hs and selected GHC/package tool.
-Produces/consumed result: libyaml.zip, native.tsv, generated input.yaml and manifest.
-Cost and overlap: Package parser/encoder smoke supplies the useful behavior. A
-  retained-Cabal-capture fixture and per-C-library harness add unjustified setup.
-Build status: QUARANTINED. Output directory must not exist; an independently built
-  capture/store is required and native-pieces is symlinked to that external attempt.
-Consumer: LibyamlNativeProductsTest. Output defaults build/libyaml-native/ or
-  THC_LIBYAML_FIXTURE_OUTPUT; refuses any preexisting output path.
-  capture/<resolved libyaml unit>/** <- copied external stage/capture unit selected
-    from dist/cache/plan.json (libyaml0.1.4 + libyaml-clib0.2.5 dependency).
-  native-pieces symlink <- stage/native-pieces, retaining live external dependence.
-  libyaml.zip and native products <- publishCapturedStoreUnit using external plan,
-    store/package registrations, dist and copied capture.
-  native + objects/ <- OriginalLibyamlNative.hs, registered .a files of both units,
-    GHC --make -O0 -hide-all-packages with base/bytestring.
-  input.yaml <- native executable's test file; native.tsv <- executable stdout.
-  native-source.sha256, manifest.json <- oracle/source/input/bundle/native archive
-    hashes and command records. logs/native-{build,run} triplets <- commands.
-External registration search enumerates store partitions and candidate library dirs.
-  None of these inputs has a producer rule here. Do not port retained attempt state
-  or fresh-output rejection into the build graph.
-
 170 hashable-ffi (custom fixture)
 Fixture rationale (170 hashable-ffi)
 Purpose: Check public Hashable text/bytes instances agree with native GHC through

@@ -171,10 +171,6 @@ Compiler-structure assertions (also excluded):
     CBD staging enumerates outputs. PackageNativeOriginalsTest excluded. Replace
     standalone digest/erf/primitive scaffolding with public package integration.
 
-  libyaml-native (167): requires nonexistent output and a prebuilt capture/store, then symlinks to
-    that attempt's native pieces. LibyamlNativeProductsTest excluded; ordinary YAML
-    package smoke should replace this retained-Cabal-stage fixture.
-
   hashable-ffi (170): runs a prebuilt THC runtime during fixture preparation without an owning
     build edge. HashableFfiFullCoreTest excluded; keep public hashing behavior in
     intensive package integration using shared acquisition.

@@ -21,7 +21,6 @@
     "thc.runtime.StablePtrFfiFullCoreTest",
     "thc.runtime.PackageScalarCbitsTest",
     "thc.runtime.PackageNativeOriginalsTest",
-    "thc.runtime.LibyamlNativeProductsTest",
     "thc.runtime.HashableFfiFullCoreTest",
     "thc.runtime.PackageNativeArchiveFullCoreTest",
     "thc.runtime.WindowsCodePagesTest",

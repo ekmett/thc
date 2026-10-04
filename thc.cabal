@@ -1294,7 +1294,6 @@ executable thc-fixtures
     PackageNativeOriginalsFixtures
     PackageNativeArchiveFixtures
     DynamicCallbackFixtures
-    LibyamlNativeFixtures
     UnixLibcFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
