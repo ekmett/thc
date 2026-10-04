@@ -13,8 +13,9 @@ import thc.ContextProfile;
 import thc.Language;
 import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
-/** Small shared GC/clock/heap-hint ABI models; installed-original acquisition is separate. */
+/** Small shared GC/heap-hint ABI models; installed-original acquisition is separate. */
 public class CompilerHeapHintTest {
     private Map<String, Object> scalar(String rep, boolean evaluated) {
         return Map.of("kind", rep == null ? "void" : rep.equals("AddrRep") ? "address" : rep.startsWith("BoxedRep") ? "closure" : "long",
@@ -120,7 +121,7 @@ public class CompilerHeapHintTest {
     private final String[][] gcCalls = {
         {"getRTSStatsEnabled", "IntRep", "safe"}, {"getRTSStats", "", "safe"},
         {"performGC", "", "safe"}, {"performMajorGC", "", "safe"},
-        {"performBlockingMajorGC", "", "safe"}, {"getMonotonicNSec", "Word64Rep", "unsafe"}
+        {"performBlockingMajorGC", "", "safe"}
     };
     private Map<String, Object> gcTuple(String rep, boolean evaluated) {
         return rep.isEmpty() ? tuple(evaluated) : Map.of("kind", "unknown", "aggregate", "unboxed-tuple",
@@ -132,7 +133,7 @@ public class CompilerHeapHintTest {
             "convention", "ccall", "safety", call[2], "arity", arguments.size(), "suppliedArity", arguments.size(),
             "argumentReps", arguments, "resultRep", gcTuple(call[1], false));
     }
-    @Test public void gcAndClockRequireTheOriginalUnitSafetyAndStateResultAbi() {
+    @Test public void gcRequireTheOriginalUnitSafetyAndStateResultAbi() {
         for (var call : gcCalls) {
             var declaration = gcDeclaration(call); var result = gcTuple(call[1], true);
             var arguments = call[0].equals("getRTSStats") ? List.of(scalar("AddrRep", true), state) : List.of(state);
@@ -168,7 +169,7 @@ public class CompilerHeapHintTest {
                 "expr", List.of("lam", List.of(parameter, Map.of("id", "state", "lifted", false, "rep", state)),
                     body, Map.of("rep", closure, "resultRep", result)))));
     }
-    @Test public void gcAndClockReturnHonestResultsFromTheFirstCompiledCall() throws ReflectiveOperationException {
+    @Test public void gcReturnHonestResultsFromTheFirstCompiledCall() throws ReflectiveOperationException {
         for (var backend : List.of("ast", "bytecode")) for (var call : gcCalls) {
             if (call[0].equals("getRTSStats")) continue;
             try (var context = context()) {
@@ -180,11 +181,8 @@ public class CompilerHeapHintTest {
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                     long compiledBefore = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                    long start = System.nanoTime();
                     long answer = ((Number) Calls.target(target, new Object[]{0L, 42L, Unit.INSTANCE})).longValue();
-                    long end = System.nanoTime();
-                    if (call[0].equals("getMonotonicNSec")) assertTrue(answer - start >= 0 && end - answer >= 0, "JVM monotonic origin and units");
-                    else assertEquals(call[0].equals("getRTSStatsEnabled") ? 0L : 42L, answer, backend + "/" + call[0]);
+                    assertEquals(call[0].equals("getRTSStatsEnabled") ? 0L : 42L, answer, backend + "/" + call[0]);
                     assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore, "First call executed compiled code");
                     assertEquals(0, language.getHandoffState().get().getResults().getDepth());
                     assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
@@ -201,11 +199,11 @@ public class CompilerHeapHintTest {
                 var target = program.entryTarget("gc"); var bytes = new byte[]{11, 22, 33, 44};
                 // Null is independently useful: rejection must precede any buffer access.
                 for (var buffer : List.of(ManagedAddress.fromByteArray(bytes), ManagedAddress.nullAddress())) {
-                    var failure = assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, buffer, Unit.INSTANCE}));
+                    var failure = assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, buffer, Unit.INSTANCE}));
                     assertEquals("GHC RTS statistics are unavailable on the JVM; getRTSStatsEnabled is false", failure.getMessage());
                     assertArrayEquals(new byte[]{11, 22, 33, 44}, bytes);
                 }
-                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, ManagedAddress.fromByteArray(bytes), "not-state"}));
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, ManagedAddress.fromByteArray(bytes), "not-state"}));
                 assertEquals(0, language.getHandoffState().get().getResults().getDepth());
                 assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
             } finally { context.leave(); }

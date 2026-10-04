@@ -3,7 +3,7 @@
 
 # GHC garbage collection, statistics and monotonic time
 
-Both backends translate six original `ghc-internal` foreign declarations from
+Both backends translate five original GC/statistics `ghc-internal` foreign declarations from
 GHC 9.14.1. The original Haskell wrappers remain guest code; THC does not replace
 them with a host implementation of `GHC.Stats` or a benchmark harness.
 
@@ -14,7 +14,7 @@ them with a host implementation of `GHC.Stats` or a benchmark harness.
 | `performGC` | Requests collection with `System.gc()`. GHC's public `performMinorGC` uses this symbol. |
 | `performMajorGC` | The same advisory JVM request. GHC's public `performGC` and `performMajorGC` use this symbol. |
 | `performBlockingMajorGC` | The same request; no stronger completion guarantee. |
-| `getMonotonicNSec` | Returns `System.nanoTime()` bits as `Word64#`. |
+| `getMonotonicNSec` | Has no THC-owned override. Standalone Core calls without package native linkage reject as unsupported. |
 
 JVM collection policy, including disabled explicit GC, controls what happens.
 The requests do not promise a GHC generation, a complete collection, prompt
@@ -27,9 +27,8 @@ The original `GHC.Internal.Stats.getRTSStats` first calls
 `getRTSStatsEnabled`. When false it raises its own `UnsupportedOperation`
 `IOError`, before allocating an `RTSStats` buffer. The direct foreign leaf is
 also explicitly unavailable, not a buffer full of plausible zero counters.
-Monotonic time has an arbitrary JVM origin and nanosecond units, not guaranteed
-nanosecond resolution. Compare elapsed differences within a process; it is not
-wall-clock UTC and is not synchronized with another JVM or native GHC. The
+The original monotonic clock requires its ordinary package-declared native linkage;
+its acquisition and execution are not qualified by the fixture-free GC tests. The
 original `clock_gettime` CPU-time route uses the separately linked base CAPI ABI.
 
 ## Original time package clock module
@@ -59,13 +58,13 @@ can be translated; THC does not pass those encodings to unrelated host objects.
 This is not general POSIX clock or timer support.
 
 Admission preserves the original `ccall`, `ghc-internal` unit, saturated arity,
-State/result tuple and primitive ABI. The statistics and GC calls are `safe`;
-the clock is `unsafe`. With asynchronous exceptions enabled, successful safe
+State/result tuple and primitive ABI. The statistics and GC calls are `safe`.
+With asynchronous exceptions enabled, successful safe
 calls commit their result before polling. Saved continuation resumption does
 not replay the completed call. AST keeps its explicit opt-in policy; bytecode
 keeps its existing default.
 
-`CompilerHeapHintTest` checks the shared GC/clock foreign ABI, JVM return
+`CompilerHeapHintTest` checks the admitted shared GC foreign ABI, JVM return
 behavior on both backends from the first compiled call, and unavailable statistics
 without buffer reads or writes. These fixture-free callers use independent GHC
 9.14.1 signature models; they do not qualify acquisition or execution of the
