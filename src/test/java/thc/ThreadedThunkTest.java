@@ -226,6 +226,7 @@ class ThreadedThunkTest {
         SparkWorkRoot(Language language, java.util.function.Supplier<Object> body) {
             super(language, new FrameLayout().build()); this.body = body;
         }
+        @Override public long bloom(VirtualFrame frame) { return 0L; }
         @Override public Object execute(VirtualFrame frame) { return body.get(); }
     }
     private Context sparkContext(int capacity) {
@@ -269,7 +270,7 @@ class ThreadedThunkTest {
                 var driver = new Driver(new Metrics(false));
                 try (var pool = Executors.newSingleThreadExecutor()) {
                     long before = ((Number) caller.diagnostics().get("compiledEntries")).longValue();
-                    entered(context, () -> assertEquals(1L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, thunk})));
+                    entered(context, () -> { assertEquals(1L, ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, thunk})); return null; });
                     assertTrue(started.await(5, TimeUnit.SECONDS), backend + " starts speculative evaluation before demand");
                     if (installed) {
                         assertTrue(((Number) caller.diagnostics().get("compiledEntries")).longValue() > before);
