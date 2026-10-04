@@ -1265,7 +1265,6 @@ executable thc-fixtures
     SimdArithmeticFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
-    SqrtFixtures
     FloatDecodeFixtures
     FloatingRemainderFixtures
     ProxyVoidFixtures

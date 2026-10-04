@@ -266,7 +266,6 @@ tasks.withType(Test).configureEach {
             "addr-identity/**/*.json", "addr-identity/**/*.cbd", "addr-identity/oracle.txt", "addr-identity/native",
             "empty-join-input/**/*.cbd", "empty-join-input/**/*.json", "empty-join-input/*.tsv", "empty-join-input/native/**",
             "empty-tuple-input/**/*.cbd", "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
-            "sqrt/**/*.cbd", "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "tag-to-enum/**/*.cbd", "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
             "narrow-literal-proofs/**/*.json", "narrow-literal-proofs/**/*.cbd", "narrow-literal-proofs/*.tsv", "narrow-literal-proofs/native/**",
             "show-word-list/**/*.cbd", "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",

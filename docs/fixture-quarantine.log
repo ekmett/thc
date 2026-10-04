@@ -55,7 +55,6 @@ Unrelated directory members change consumed inputs or make generation fail:
   array-slices (123): consumes every stage CBD and also rewrites shared coverage.
 
 Published directories are cleared as part of the recipe:
-  sqrt (026): removes build/sqrt.
   address-identity (101): removes build/addr-identity.
   synchronous-exceptions (103): selection/default script removes its output tree;
     producer also enumerates stage CBDs.
@@ -222,7 +221,6 @@ Compiler-structure assertions (also excluded):
   empty-join-input (002): producer fixes join-call and State-lambda shapes. Retain
     semantic first-compiled checks and the unresolved Linux regression during repair.
 
-Current admission summary: 45 indexed groups and30 explicit classes excluded.
-  Total93 distinct classes; full-Core exception tag also withheld. Ordinary
-  selector: 409 selectable /66 withheld. These are selection counts, not
-  runtime pass/fail results. Quarantine does not resolve the underlying regressions.
+The current admission inventory is in .github/scripts/fast-fixtures.json.
+Full-Core exception tags are also withheld. Selection counts do not establish
+runtime pass/fail results; quarantine does not resolve the underlying regressions.

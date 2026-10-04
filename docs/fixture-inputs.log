@@ -1082,38 +1082,6 @@ Under build/floating-remainder/:
 Consumer reads inputs, TSV, manifest/receipt paths, CBDs and audit reports;
   mutation controls also require temp CBD encoder and python3 auditor/report files.
 
-026  sqrt
-Fixture rationale (026 sqrt)
-Purpose: Check Float/Double square root at exceptional and rounding boundaries.
-Produces/consumed result: SqrtAudit CBD, oracle.tsv and post audit; integer-oracle.tsv
-  is only receipt-hashed.
-Cost and overlap: Move useful cases into floating arithmetic. Deleting the published
-  output directory and producing a redundant oracle subset are not justified;
-  quarantined.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: t/haskell-fixtures/SqrtFixtures.hs:prepareSqrt.
-Consumer: src/test/java/thc/runtime/SqrtPrimitiveTest.java.
-IN: producer/Main.hs/FixtureSupport.hs, built thc-fixtures, exporter/auditor;
-  t/fixtures/compiler/SqrtAudit.hs and SqrtAuditNative.hs; GHC 9.14.1/native packages.
-Under build/sqrt/ (whole directory removed at producer start):
-  inputs.tsv: IN producer inputRows (integer patterns plus host Float/Double bit
-    conversions for math inputs); OUT native request file.
-  native/oracle: IN both Haskell sources/GHC tools/packages;
-    OUT executable and native/ interfaces/objects.
-  oracle.tsv: IN executable, inputs.tsv passed as filename argument;
-    OUT checked three-column native results.
-  integer-oracle.tsv: IN oracle stdout filtered to floatCase/doubleCase;
-    OUT subset TSV (consumer hashes it via receipt).
-  post-core/SqrtAudit.cbd: IN audit source/exporter, post-tidy and source notes;
-    OUT CBD and post-ghc/ intermediates. There is no pre stage in this producer.
-  post-audit.json: IN post CBD, all entry names, auditor/decoder/data; OUT report.
-  manifest.json: IN all six artifacts above, source receipt, GHC --info; OUT hashes.
-Consumer directly reads manifest, receipts, CBD, oracle.tsv and post-audit.json.
-  Receipt hashes PrimopTools.hs without executing it, and omits auditor tables.
-  The destructive directory reset prevents independent incremental output edges
-  inside this function until generation is split into owning operations.
-
 027  simd-address-families
 Fixture rationale (027 simd-address-families)
 Purpose: Check vector-address lane ordering, offsets and scalar/vector memory agreement.
@@ -4297,7 +4265,7 @@ Directory state is a defect, not a prerequisite to preserve
     intermediates into receipts and therefore into consumer input sets.
   - 044 boxed-cas and 098 original-stack: directory state selects run-N output paths;
     previous receipts and attempt directories accumulate.
-  - 026 sqrt deletes its output tree; 119 corpus deletes group directories; 133
+  - 119 corpus deletes group directories; 133
     managed-mvars refresh deletes its tree. Those observations identify current
     replacement policy; they do not justify a clean-directory graph dependency.
   - prepare-tests.sh removes build/synchronous-exceptions before its producer.

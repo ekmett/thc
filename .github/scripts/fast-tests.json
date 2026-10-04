@@ -367,6 +367,7 @@
     },
     "src/main/java/thc/runtime/RawBitCasts.java": {
       "junit": [
+        "thc.runtime.CoreFloatingLiteralTest",
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FusedFloatingTest",
@@ -391,7 +392,6 @@
         "thc.runtime.SimdFloatVectorTest",
         "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SimdWideFloatFmaTest",
-        "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.SumProtocolTest",
         "thc.runtime.SumResultTest",
         "thc.runtime.TupleInputNativeTest",
@@ -410,6 +410,7 @@
     },
     "src/main/java/thc/runtime/FloatingPrimitives.java": {
       "junit": [
+        "thc.runtime.CoreFloatingLiteralTest",
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FusedFloatingTest",
         "thc.runtime.WordFloatingTest",
@@ -433,7 +434,6 @@
         "thc.runtime.SimdFloatVectorTest",
         "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SimdWideFloatFmaTest",
-        "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.SumProtocolTest",
         "thc.runtime.SumResultTest",
         "thc.runtime.TupleInputNativeTest",
@@ -1308,7 +1308,7 @@
       "python": []
     },
     "src/test/java/thc/runtime/ScalarValueTestSupport.java": {
-      "junit": ["thc.runtime.ArithmeticExceptionLazinessTest","thc.runtime.BigNatLiteralTest","thc.runtime.CoreFloatingLiteralTest","thc.runtime.CoreKeepAliveTest","thc.runtime.CoreTouchTest","thc.runtime.DataToTagTest","thc.runtime.EmptyArgumentRuntimeTest","thc.runtime.FloatDecodeTest","thc.runtime.FloatingPrimitiveTest","thc.runtime.FloatingRemainderTest","thc.runtime.FloatingTupleTest","thc.runtime.FusedFloatingTest","thc.runtime.IntegerCompletionTest","thc.runtime.NarrowIntegerCarrierTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.ProxyVoidTest","thc.runtime.RubbishLiteralTest","thc.runtime.ScalarBitCastTest","thc.runtime.ScalarExceptionResultsNativeTest","thc.runtime.ShowWordListTest","thc.runtime.SqrtPrimitiveTest","thc.runtime.TagToEnumTest","thc.runtime.UnsafeEqualityTest","thc.runtime.WordCarryTest","thc.runtime.WordFloatingTest"],
+      "junit": ["thc.runtime.ArithmeticExceptionLazinessTest","thc.runtime.BigNatLiteralTest","thc.runtime.CoreFloatingLiteralTest","thc.runtime.CoreKeepAliveTest","thc.runtime.CoreTouchTest","thc.runtime.DataToTagTest","thc.runtime.EmptyArgumentRuntimeTest","thc.runtime.FloatDecodeTest","thc.runtime.FloatingPrimitiveTest","thc.runtime.FloatingRemainderTest","thc.runtime.FloatingTupleTest","thc.runtime.FusedFloatingTest","thc.runtime.IntegerCompletionTest","thc.runtime.NarrowIntegerCarrierTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.ProxyVoidTest","thc.runtime.RubbishLiteralTest","thc.runtime.ScalarBitCastTest","thc.runtime.ScalarExceptionResultsNativeTest","thc.runtime.ShowWordListTest","thc.runtime.TagToEnumTest","thc.runtime.UnsafeEqualityTest","thc.runtime.WordCarryTest","thc.runtime.WordFloatingTest"],
       "python": []
     },
 
@@ -2606,7 +2606,6 @@
         "thc.runtime.SimdCallNativeTest",
         "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SimdWideFloatFmaTest",
-        "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.WordFloatingTest",
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.LargeLiteralCaseNativeTest",
@@ -2878,10 +2877,6 @@
     },
     "t/haskell-fixtures/WordFloatingFixtures.hs": {
       "junit": ["thc.runtime.WordFloatingTest"],
-      "python": []
-    },
-    "t/haskell-fixtures/SqrtFixtures.hs": {
-      "junit": ["thc.runtime.SqrtPrimitiveTest"],
       "python": []
     },
     "t/haskell-fixtures/WideCharAddressFixtures.hs": {
@@ -3645,7 +3640,6 @@
       "thc.runtime.SimdWord32ByteArrayTest",
       "thc.runtime.SmallArrayTest",
       "thc.runtime.SourceCloneTest",
-      "thc.runtime.SqrtPrimitiveTest",
       "thc.runtime.StableNamesTest",
       "thc.runtime.StablePointerForeignTest",
       "thc.runtime.StablePointerTest",

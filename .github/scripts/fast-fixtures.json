@@ -757,13 +757,6 @@
       "outputs": ["build/floating-tuple"],
       "sources": ["bin/prepare-floating-tuples.py", "t/fixtures/compiler/FloatingTupleAudit.hs", "t/fixtures/compiler/FloatingTupleAuditNative.hs"]
     },
-    "sqrt": {
-      "quarantined": true,
-      "junit": ["thc.runtime.SqrtPrimitiveTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "sqrt"]}],
-      "outputs": ["build/sqrt"],
-      "sources": ["t/haskell-fixtures/SqrtFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/SqrtAudit.hs", "t/fixtures/compiler/SqrtAuditNative.hs"]
-    },
     "pinned-addresses": {
       "cmakeTarget": "fixture-pinned-addresses",
       "junit": ["thc.runtime.PinnedAddressTest"],

@@ -1649,9 +1649,6 @@ class FastInputTests(unittest.TestCase):
             self.assertFalse(cache.allowed_payload(name), name)
 
     def test_scalar_cbd_payloads_admit_only_the_exported_modules_and_stages(self):
-        self.assertTrue(cache.allowed_payload("build/sqrt/post-core/SqrtAudit.cbd"))
-        self.assertFalse(cache.allowed_payload("build/sqrt/pre-core/SqrtAudit.cbd"))
-        self.assertFalse(cache.allowed_payload("build/sqrt/post-core/Other.cbd"))
         for family, module in (("word-floating", "WordFloatingAudit"), ("scalar-bitcasts", "ScalarBitCastAudit"),
                                ("fused-floating", "FloatingAudit")):
             for stage in ("pre", "post"):
