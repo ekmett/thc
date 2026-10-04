@@ -16,6 +16,7 @@ public final class OriginalStdioFixtures {
         symbols.put("safe_write", "ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite");
         symbols.put("unsafe_write", "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite");
         symbols.put("errno", "__hscore_get_errno"); symbols.put("set_errno", "__hscore_set_errno");
+        symbols.put("open", "__hscore_open");
         symbols.put("dup", "dup"); symbols.put("dup2", "dup2"); symbols.put("unlink", "unlink");
         symbols.put("seek_set", "ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET");
         symbols.put("seek_cur", "ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR");
@@ -25,6 +26,7 @@ public final class OriginalStdioFixtures {
         signatures.put("unsafe_write", Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null));
         signatures.put("set_errno", Arrays.asList("Int32Rep", null));
         signatures.put("errno", Arrays.asList((String) null));
+        signatures.put("open", Arrays.asList("AddrRep", "Int32Rep", "Word32Rep", null));
         signatures.put("dup", Arrays.asList("Int32Rep", null));
         signatures.put("dup2", Arrays.asList("Int32Rep", "Int32Rep", null));
         signatures.put("unlink", Arrays.asList("AddrRep", null));
@@ -34,7 +36,7 @@ public final class OriginalStdioFixtures {
         signatures.put("strerror", Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null));
     }
     public static String convention(String name) {
-        return Set.of("errno", "set_errno", "dup", "dup2", "strerror", "unlink").contains(name) ? "ccall" : "capi";
+        return Set.of("errno", "set_errno", "dup", "dup2", "strerror", "unlink", "open").contains(name) ? "ccall" : "capi";
     }
     public static String safety(String name) { return name.equals("safe_write") || name.equals("strerror") ? "safe" : "unsafe"; }
     public static Map<String, Object> scalar(String rep) { return scalar(rep, true); }
@@ -70,7 +72,7 @@ public final class OriginalStdioFixtures {
             map("rep", tuple(name), "foreignCall", descriptor(name))));
     }
     private static Set<String> defaultNames() {
-        var names = new LinkedHashSet<>(signatures.keySet()); names.removeAll(Set.of("strerror", "unlink", "set_errno")); return names;
+        var names = new LinkedHashSet<>(signatures.keySet()); names.removeAll(Set.of("strerror", "unlink", "set_errno", "open")); return names;
     }
     public static Map<String, Object> module() { return module(defaultNames(), ignored -> {}); }
     public static Map<String, Object> module(Iterable<String> names) { return module(names, ignored -> {}); }
