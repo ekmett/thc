@@ -75,6 +75,13 @@ rejects boxed operand execution while preserving signed NaN payload bits.
 The native-GHC bitcast corpus
 remains outside this selection; the CMake fixture graph does not support Windows.
 
+Two fixture-free thunk checks cover opted-in speculative work starting before
+demand, demand sharing the original thunk, and one evaluation with the same
+published result after interpreted and first compiled hints in both backends.
+The disabled queue (the default zero capacity) leaves work unforced without
+admitting guest concurrency. These bounded checks do not qualify the whole
+concurrency suite or GHC-derived programs.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:
