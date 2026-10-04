@@ -172,6 +172,22 @@ class FixtureGraphTest(unittest.TestCase):
         self.assertEqual(len(expected), len(result["targets"]))
         self.assertEqual(["fixture-configure", "fixture-build"], [call.args[0] for call in run.call_args_list])
 
+    def test_aggregate_layout_has_one_independent_target_at_commit_cadence(self):
+        import fast_select
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        classes = ["thc.AggregateLayoutTest", "thc.runtime.UnknownBoxedNativeTest"]
+        self.assertEqual(classes, manifest["groups"]["aggregate-layout"]["junit"])
+        self.assertFalse(manifest["groups"]["aggregate-layout"].get("requires"))
+        result = fast_fixtures.prepare_cmake(project, self.selection(*classes), mock.Mock())
+        self.assertEqual(["fixture-aggregate-layout"], result["targets"])
+        policy = json.loads((project / fast_select.POLICY).read_text())
+        cadence = fast_select.cadence_assignments(manifest, owners, policy)
+        for name in classes:
+            self.assertEqual("commit", cadence[name], name)
+            self.assertNotIn(name, fast_fixtures.quarantined_classes(project))
+        self.assertTrue(manifest["groups"]["sum-results"]["quarantined"])
+
     def test_selected_consumers_share_one_dependency_build(self):
         self.manifest["groups"]["alpha"].update(cmakeTarget="fixture-alpha", requires=["beta"])
         self.manifest["groups"]["beta"]["cmakeTarget"] = "fixture-beta"

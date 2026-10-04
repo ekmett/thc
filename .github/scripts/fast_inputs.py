@@ -461,12 +461,12 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
     "manifest.json", "pre-core/GeneratedSimdSmoke.cbd", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
-PROVENANCE_DIRS = """io-main-pap aggregate-layout
+PROVENANCE_DIRS = """io-main-pap
 floating-tuple sum-layout sum-result tag-to-enum
 unsafe-equality simd simd-int32x4 simd-floatx4
 simd-doublex2 simd-int32x4-bytearray simd-word32x4-bytearray
 simd-floatx4-bytearray simd-doublex2-bytearray""".split()
-CHECK_DIRS = """aggregate-layout floating-tuple
+CHECK_DIRS = """floating-tuple
 sum-layout sum-result tag-to-enum
 unsafe-equality""".split()
 AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
@@ -1439,6 +1439,10 @@ def allowed_payload(name):
         return name in BASE_CORE_CBD_OUTPUTS or name in AGGREGATE_HOST_CBD_OUTPUTS
     if name.endswith(".json") and name[:-5] + ".cbd" in AGGREGATE_HOST_CBD_OUTPUTS:
         return False
+    if parts[1] == "aggregate-layout":
+        return name in AGGREGATE_HOST_CBD_OUTPUTS or name in {
+            f"build/aggregate-layout/{stage}-ghc/AggregateLayoutAudit.{suffix}"
+            for stage in ("pre", "post") for suffix in ("hi", "o")}
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
     if parts[1] == "unix-libc":

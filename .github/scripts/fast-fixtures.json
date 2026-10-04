@@ -795,13 +795,21 @@
       "outputs": ["build/scalar-bitcasts"],
       "sources": ["t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.ps1", "bin/windows-common.ps1", "t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs"]
     },
+    "aggregate-layout": {
+      "cmakeTarget": "fixture-aggregate-layout",
+      "ciPlatforms": ["Linux", "Darwin"],
+      "junit": ["thc.AggregateLayoutTest", "thc.runtime.UnknownBoxedNativeTest"],
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-aggregate-layout"]}],
+      "outputs": ["build/aggregate-layout/pre-core/AggregateLayoutAudit.cbd", "build/aggregate-layout/post-core/AggregateLayoutAudit.cbd", "build/aggregate-layout/pre-ghc/AggregateLayoutAudit.hi", "build/aggregate-layout/pre-ghc/AggregateLayoutAudit.o", "build/aggregate-layout/post-ghc/AggregateLayoutAudit.hi", "build/aggregate-layout/post-ghc/AggregateLayoutAudit.o"],
+      "sources": ["cmake/CoreFixtures.cmake", "t/fixtures/compiler/AggregateLayoutAudit.hs", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
+    },
     "sum-results": {
       "requires": ["compact-model"],
       "quarantined": true,
-      "junit": ["thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest", "thc.runtime.UnknownBoxedNativeTest"],
+      "junit": ["thc.AggregateFrontierTest", "thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest"],
       "commands": [{"argv": ["sh", "bin/prepare-aggregate-frontier.sh"]}, {"argv": ["python3", "bin/check-sum-layout.py", "--prepare"]}, {"argv": ["python3", "bin/prepare-sum-result-audit.py"]}],
-      "outputs": ["build/aggregate-core", "build/aggregate-post-core", "build/aggregate-native", "build/aggregate-frontier.json", "build/aggregate-layout", "build/sum-layout", "build/sum-result"],
-      "sources": ["bin/prepare-aggregate-frontier.sh", "bin/check-aggregate-frontier.py", "bin/check-aggregate-layout.py", "bin/check-sum-layout.py", "bin/sum_layout_model.py", "bin/test-sum-layout.py", "bin/prepare-sum-result-audit.py", "t/fixtures/compiler/AggregateFrontier.hs", "t/fixtures/compiler/AggregateFrontierNative.hs", "t/fixtures/compiler/AggregateLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAuditNative.hs", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs"]
+      "outputs": ["build/aggregate-core", "build/aggregate-post-core", "build/aggregate-native", "build/aggregate-frontier.json", "build/sum-layout", "build/sum-result"],
+      "sources": ["bin/prepare-aggregate-frontier.sh", "bin/check-aggregate-frontier.py", "bin/check-sum-layout.py", "bin/sum_layout_model.py", "bin/test-sum-layout.py", "bin/prepare-sum-result-audit.py", "t/fixtures/compiler/AggregateFrontier.hs", "t/fixtures/compiler/AggregateFrontierNative.hs", "t/fixtures/compiler/SumLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAuditNative.hs", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs"]
     },
     "simd-floatx4": {
       "cmakeTarget": "fixture-simd-floatx4",

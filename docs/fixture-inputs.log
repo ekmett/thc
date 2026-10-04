@@ -2744,20 +2744,19 @@ Modes native-only/export-only/allow-unsupported change the output set; default f
 Consumer reads receipts, TSVs, CBDs, audit/negative reports and command records.
 Receipt again includes unused PrimopTools.hs and omits shared auditor data tables.
 
-088 sum-results (three indexed commands, four producer flows)
+088 sum-results (three quarantined producer flows; aggregate-layout isolated)
 Fixture rationale (088 sum-results)
 Purpose: Check sum alternatives and aggregate result layouts carry the right values
   through execution.
-Produces/consumed result: Aggregate-frontier, aggregate-layout, sum-layout and sum-
-  result CBDs/oracles.
-Cost and overlap: Retain semantic layout cases in one aggregate corpus. Four producer
-  flows, recursive receipts and shape proofs are not justified; quarantined pending
-  consolidation.
+Produces/consumed result: Aggregate-frontier, sum-layout and sum-result CBDs/oracles;
+  aggregate-layout has its own named CMake rule and consumers.
+Cost and overlap: Remaining frontier/sum flows have recursive receipts and shape
+  gates; keep them quarantined pending semantic consolidation.
 Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
 
-Consumers: thc.AggregateFrontierTest, AggregateLayoutTest, SumLayoutMetadataTest;
-  thc.runtime.SumProtocolTest, SumResultTest, TupleRepresentationTest,
-  UnknownBoxedNativeTest. AggregateFrontierTest and SumProtocolTest also write
+Quarantined consumers: thc.AggregateFrontierTest, SumLayoutMetadataTest;
+  thc.runtime.SumProtocolTest, SumResultTest, TupleRepresentationTest.
+  AggregateFrontierTest and SumProtocolTest also write
   model CBDs, consuming shared compact-model encoder (041).
 A. bin/prepare-aggregate-frontier.sh:
   IN bin/toolchain.sh, built thc-fixtures, t/fixtures/compiler/AggregateFrontier.hs,
@@ -2770,17 +2769,18 @@ A. bin/prepare-aggregate-frontier.sh:
   build/aggregate-native/oracle.tsv: IN executable.
   build/aggregate-frontier.json: IN CBD pair/oracle,
     bin/check-aggregate-frontier.py and shared auditor/decoder/capabilities.
-  Then invokes B below.
-B. bin/check-aggregate-layout.py --prepare:
-  IN t/fixtures/compiler/AggregateLayoutAudit.hs, bin/sum_layout_model.py,
-    producer/exporter/auditor/decoder/capability data.
-  Under build/aggregate-layout/:
-    native/: IN source/GHC --make -no-link -O2 -dynamic; OUT .hi/.o (no oracle).
-    <pre|post>-core/AggregateLayoutAudit.cbd and stage-ghc/: IN source/exporter.
-    provenance.json: IN recursively found non-JSON native/core/ghc artifacts,
-      plugin manifest/shared library, GHC/ghc-pkg facts and source hashes.
-    checks.json: IN receipt/all hashes, CBDs/in-process auditor/layout model;
-      OUT coverage. Checking without --prepare still writes checks.json.
+B. Admitted aggregate-layout (cmake/CoreFixtures.cmake):
+  IN AggregateLayoutAudit.hs, explicit plugin publication, export-core.sh/plugin.py,
+    toolchain.sh and the selected GHC/package/SDK/compiler closure.
+  OUT build/aggregate-layout/<pre|post>-core/AggregateLayoutAudit.cbd;
+    <pre|post>-ghc/AggregateLayoutAudit.hi and .o from the same export compilation.
+  Two independent stage commands use the published plugin; no nested tool build,
+    native no-link duplicate/oracle, recursive provenance, checks.json or test result.
+  Consumers: AggregateLayoutTest and thc.runtime.UnknownBoxedNativeTest, commit
+    cadence on Linux/macOS. They read only the named CBD pair, preserving ABI
+    metadata, malformed/abstract boundaries, lazy boxed values and first-installed
+    unknown-levity returns. Generation and actual execution require separate proof.
+  These source exports do not qualify matching retained-library hydration.
 C. bin/check-sum-layout.py --prepare:
   IN t/fixtures/compiler/SumLayoutAudit.hs, SumLayoutAuditNative.hs,
     bin/sum_layout_model.py and shared tools/data.
@@ -2804,9 +2804,9 @@ D. bin/prepare-sum-result-audit.py:
       plugin manifest/shared library, GHC/package descriptions and source hashes.
       Old receipt removed first.
 Consumers read their named CBDs/oracles/checks and receipt-referenced files.
-Recursive receipts turn stale compiler intermediates into extra inputs; output sets
-  are not closed. Review overlap among frontier/layout/sum-layout/result suites
-  before carrying all four producers into the graph.
+Remaining sum-layout/result recursive receipts turn stale compiler intermediates
+  into extra inputs; their output sets are not closed. Keep these and frontier
+  quarantined while reviewing useful semantic consolidation.
 
 089 simd-floatx4
 Fixture rationale (089 simd-floatx4)

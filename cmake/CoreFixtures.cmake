@@ -34,6 +34,31 @@ core_fixture(source-core build/source-core build/source-ghc
 core_fixture(strict-fields build/core build/ghc/strict-fields
   SOURCES t/fixtures/compiler/StrictFields.hs MODULES StrictFields)
 
+# 088: genuine aggregate aliases and representation boundaries. These two CBDs
+# feed only the layout/boxed-levity owners; no native oracle or cached test result.
+# export-core.sh compiles one source module with -no-link -dynamic and default
+# .hi/.o suffixes. No closure= option is requested, so it emits no interface CBD.
+set(aggregate_layout_outputs)
+foreach(stage pre post)
+  set(out "${PROJECT_SOURCE_DIR}/build/aggregate-layout")
+  set(cbd "${out}/${stage}-core/AggregateLayoutAudit.cbd")
+  set(stage_options)
+  if(stage STREQUAL "post")
+    list(APPEND stage_options -fplugin-opt=THC.Plugin:post-tidy)
+  endif()
+  add_custom_command(OUTPUT "${cbd}"
+    BYPRODUCTS "${out}/${stage}-ghc/AggregateLayoutAudit.hi" "${out}/${stage}-ghc/AggregateLayoutAudit.o"
+    COMMAND ${fixture_env} "THC_CORE_OUT=${out}/${stage}-core" "THC_GHC_OUT=${out}/${stage}-ghc"
+      "${PROJECT_SOURCE_DIR}/bin/export-core.sh" --plugin-manifest "${plugin_manifest}"
+      ${stage_options} "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/AggregateLayoutAudit.hs"
+    DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/AggregateLayoutAudit.hs"
+      ${plugin_outputs} ${toolchain_inputs} "${PROJECT_SOURCE_DIR}/bin/export-core.sh"
+      "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+  list(APPEND aggregate_layout_outputs "${cbd}")
+endforeach()
+add_custom_target(fixture-aggregate-layout DEPENDS ${aggregate_layout_outputs})
+
 set(native_dir "${PROJECT_SOURCE_DIR}/build/native")
 set(native "${native_dir}/native-oracle")
 set(native_inputs "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/THC/Prim/Test.hs")

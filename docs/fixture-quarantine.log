@@ -44,7 +44,9 @@ Unrelated directory members change consumed inputs or make generation fail:
   floating-tuples (086), sum-results (088),
     show-word-list (127), short-bytes-slices (129), unsafe-equality (134),
     tag-to-enum (135): recursively discovered products enter receipts consumed
-    by tests. sum-results includes aggregate-layout, sum-layout and sum-result.
+    by tests. Remaining sum-results includes sum-layout and sum-result.
+    Aggregate-layout is isolated with named pre/post exports for its two consumers;
+    the remaining sum-results classes stay quarantined.
   stable-pointers (084): both original and shared-CAF exports require exact
     output-directory inventories. Unrelated CBDs must not prevent regeneration;
     replace both listings with their declared pairs before readmission.

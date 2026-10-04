@@ -1559,7 +1559,7 @@ class FastInputTests(unittest.TestCase):
 
     def test_payload_scope_has_no_runtime_or_test_outputs(self):
         self.assertTrue(cache.allowed_payload("build/unsafe-equality/api/predicate"))
-        self.assertTrue(cache.allowed_payload("build/aggregate-layout/pre-ghc/A.dyn_o"))
+        self.assertFalse(cache.allowed_payload("build/aggregate-layout/pre-ghc/A.dyn_o"))
         self.assertTrue(cache.allowed_payload("build/compiler/plugin.json"))
         self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.dylib"))
         self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.so"))
@@ -1611,6 +1611,12 @@ class FastInputTests(unittest.TestCase):
             self.assertIn(name, DECLARED_REQUIRED)
         for name in cache.AGGREGATE_HOST_CBD_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
+        for stage in ("pre", "post"):
+            for suffix in ("hi", "o"):
+                self.assertTrue(cache.allowed_payload(f"build/aggregate-layout/{stage}-ghc/AggregateLayoutAudit.{suffix}"))
+        for name in ("build/aggregate-layout/provenance.json", "build/aggregate-layout/checks.json",
+                     "build/aggregate-layout/native/AggregateLayoutAudit.o", "build/aggregate-layout/pre-ghc/Other.hi"):
+            self.assertFalse(cache.allowed_payload(name), name)
         for name in ("build/aggregate-core/Other.cbd", "build/aggregate-post-core/SumLayoutAudit.cbd",
                      "build/sum-layout/other-core/SumLayoutAudit.cbd", "build/sum-result/pre-core/Other.cbd",
                      "build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd", "build/empty-join-input/provenance.json"):

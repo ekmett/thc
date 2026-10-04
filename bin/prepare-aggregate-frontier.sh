@@ -5,11 +5,9 @@
 # Fixture rationale (088 sum-results)
 # Purpose: Check sum alternatives and aggregate result layouts carry the right values
 #   through execution.
-# Produces/consumed result: Aggregate-frontier, aggregate-layout, sum-layout and sum-
-#   result CBDs/oracles.
-# Cost and overlap: Retain semantic layout cases in one aggregate corpus. Four producer
-#   flows, recursive receipts and shape proofs are not justified; quarantined pending
-#   consolidation.
+# Produces/consumed result: Aggregate-frontier CBDs and native oracle.
+# Cost and overlap: Keep this flow quarantined pending semantic consolidation;
+#   aggregate-layout has an independent named CMake rule and two consumers.
 # Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
 # Detailed file inputs/outputs: docs/fixture-inputs.log, entry 088.
 
@@ -31,4 +29,3 @@ mkdir -p build/aggregate-native
   -o build/aggregate-native/aggregate-frontier t/fixtures/compiler/AggregateFrontierNative.hs
 build/aggregate-native/aggregate-frontier > build/aggregate-native/oracle.tsv
 python3 bin/check-aggregate-frontier.py
-python3 bin/check-aggregate-layout.py --prepare

@@ -3258,7 +3258,6 @@
     },
     "hourlyJunit": [
       "thc.AggregateFrontierTest",
-      "thc.AggregateLayoutTest",
       "thc.BloomHeaderTest",
       "thc.BoxedForeignProvenanceTest",
       "thc.BytecodeBackendTest",
@@ -3627,7 +3626,6 @@
       "thc.runtime.UncaughtSelfNativeTest",
       "thc.runtime.UnitCarrierTest",
       "thc.runtime.UnixLibcTest",
-      "thc.runtime.UnknownBoxedNativeTest",
       "thc.runtime.UnknownBoxedSumTest",
       "thc.runtime.UnknownBoxedTransportTest",
       "thc.runtime.UnsafeEqualityTest",
