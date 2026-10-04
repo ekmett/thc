@@ -24,8 +24,7 @@ class AggregateFrontierTest {
     }
     private List<Object> literal(long value) { return list("lit", "int", Long.toString(value), map("rep", integer)); }
     private Map<String, Object> function(String name, Map<String, Object> input, Object body) {
-        var binding = binder("main:Frontier." + name, closure);
-        binding.put("arity", 1);
+        var binding = map("id", "main:Frontier." + name, "name", name, "lifted", true, "rep", closure, "arity", 1);
         binding.put("expr", list("lam", list(binder("x", input)), body, map("rep", closure, "resultRep", integer)));
         return binding;
     }
@@ -41,9 +40,10 @@ class AggregateFrontierTest {
         var choice = list("case", argument, "selected", list(list("lit", list("int", "0"), list(), literal(-7), map("binders", list())),
             list("default", null, list(), coldCall, map("binders", list()))), map("rep", integer, "binder", binder("selected", integer)));
         // No aggregate proof: this constructor must fail when the separate cold definition is demanded.
-        var malformed = list("app", list("con", "main:Frontier.Sum", 1), list(argument), list(false), false, false, map("rep", integer));
+        var malformed = list("app", list("con", "main:Frontier.Sum", 1, map()), list(argument), list(false), false, false, map("rep", integer));
         var artifact = model(list(function("entry", integer, choice), function("cold", integer, malformed)),
-            list(map("id", "main:Frontier.Sum", "name", "Sum", "kind", "unboxed-sum", "arity", 1)));
+            list(map("id", "main:Frontier.Sum", "name", "Sum", "kind", "unboxed-sum", "arity", 1, "tag", 1, "sumArity", 2,
+                "strictFields", list(false), "fieldLifted", list(false), "fieldReps", list(list("IntRep")), "fieldTypes", list(integer))));
         for (String backend : list("ast", "bytecode")) {
             try (var context = context()) {
                 var function = context.eval("thc", CoreModules.request(list(artifact.toString()), "main:Frontier.entry", true, false, backend));
