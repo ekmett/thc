@@ -65,7 +65,9 @@ try {
         $focusedTests += @('thc.runtime.TupleArithmeticTest', 'thc.runtime.WordCarryTest',
             'thc.runtime.BitPrimopsTest', 'thc.SignedNarrowPrimopsTest',
             'thc.runtime.ScalarBitCastTest.directTypedCallsPreserveBitsOnFirstCompiledCallAndRejectWrongCarriers',
-            'thc.runtime.ScalarBitCastTest.typedNodesKeepRawBitsAndNeverUseBoxedOperandExecution')
+            'thc.runtime.ScalarBitCastTest.typedNodesKeepRawBitsAndNeverUseBoxedOperandExecution',
+            'thc.ThreadedThunkTest.sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk',
+            'thc.ThreadedThunkTest.disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava
