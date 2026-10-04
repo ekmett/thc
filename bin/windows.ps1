@@ -82,7 +82,8 @@ try {
             'thc.runtime.NativeByteArrayPolicyTest.launcherDefaultsToNativeButHonorsHeapWithoutChangingEmbeddings',
             'thc.runtime.NativeByteArrayPolicyTest.guestCreationQueriesResizeAndAliasesRespectContextPolicyOnBothBackends',
             'thc.runtime.PinnedPointerCellsTest.orderedAddressesRequireOneAllocationAndPreserveCheckedOffsets',
-            'thc.runtime.CallerContinuationProofTest.childFailureAfterSuspensionReentersCallerAndMemoizesNormally')
+            'thc.runtime.CallerContinuationProofTest.childFailureAfterSuspensionReentersCallerAndMemoizesNormally',
+            'thc.runtime.NarrowIntegerCarrierTest.narrowLiteralsRetainIntrinsicValuesWhenProofsAreErased')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava

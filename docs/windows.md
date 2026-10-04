@@ -135,6 +135,11 @@ One bytecode continuation check resumes a caller after two child suspensions,
 memoizes the child's guest failure and preserves its payload on later demand
 without replaying either prefix. It does not qualify compiled execution.
 
+One fixture-free literal check preserves Int8/Word8 values with absent or unknown
+proofs on AST and bytecode, rejects malformed metadata and out-of-range values,
+and keeps ordinary machine literals nonnarrow. It does not qualify compiled
+execution or exported Core.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:
