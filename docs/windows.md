@@ -110,6 +110,13 @@ identity through results, arguments, PAPs, captures, case and constructor fields
 on AST and bytecode in both handoff modes, including first installed calls and
 released loans. It does not qualify genuine GHC Core or export.
 
+Five fixture-free tuple representation checks cover parsed metadata ownership
+and refinement, logical shape identity with context-isolated layouts, loan
+release after mismatched results, scalar singleton-reference rejection and
+unknown metadata without inferred aggregate shapes. The whole class runs in
+both handoff modes; these shared model checks do not qualify backend execution,
+compiled calls or GHC export.
+
 Two public-manifest loader checks use model CBDs from the selected Haskell
 encoder. Cold references leave other units unopened; first demand decodes the
 binding once and subsequent calls reuse it. A bad demanded unit fails without
