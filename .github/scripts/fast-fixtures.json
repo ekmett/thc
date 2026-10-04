@@ -816,9 +816,9 @@
       "requires": ["compact-model", "sum-layout"],
       "quarantined": true,
       "junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"],
-      "commands": [{"argv": ["sh", "bin/prepare-aggregate-frontier.sh"]}, {"argv": ["python3", "bin/prepare-sum-result-audit.py"]}],
-      "outputs": ["build/aggregate-core", "build/aggregate-post-core", "build/aggregate-native", "build/aggregate-frontier.json", "build/sum-result"],
-      "sources": ["bin/prepare-aggregate-frontier.sh", "bin/check-aggregate-frontier.py", "bin/prepare-sum-result-audit.py", "t/fixtures/compiler/AggregateFrontier.hs", "t/fixtures/compiler/AggregateFrontierNative.hs", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs"]
+      "commands": [{"argv": ["python3", "bin/prepare-sum-result-audit.py"]}],
+      "outputs": ["build/sum-result"],
+      "sources": ["bin/prepare-sum-result-audit.py", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs"]
     },
     "simd-floatx4": {
       "cmakeTarget": "fixture-simd-floatx4",

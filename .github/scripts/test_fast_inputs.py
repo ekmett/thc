@@ -1582,7 +1582,6 @@ class FastInputTests(unittest.TestCase):
             *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
             *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
             "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
-            "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
         }
         self.assertEqual(expected, cache.CORE_CONTRACT_CBD_REQUIRED)
         self.assertTrue(expected <= set(DECLARED_REQUIRED))
@@ -1607,8 +1606,6 @@ class FastInputTests(unittest.TestCase):
                 self.pack()
 
     def test_aggregate_host_cbd_payloads_are_closed_to_exact_modules_and_stages(self):
-        for name in ("build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd"):
-            self.assertIn(name, DECLARED_REQUIRED)
         for name in cache.AGGREGATE_HOST_CBD_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
         for stage in ("pre", "post"):
@@ -1617,8 +1614,7 @@ class FastInputTests(unittest.TestCase):
         for name in ("build/aggregate-layout/provenance.json", "build/aggregate-layout/checks.json",
                      "build/aggregate-layout/native/AggregateLayoutAudit.o", "build/aggregate-layout/pre-ghc/Other.hi"):
             self.assertFalse(cache.allowed_payload(name), name)
-        for name in ("build/aggregate-core/Other.cbd", "build/aggregate-post-core/SumLayoutAudit.cbd",
-                     "build/sum-layout/other-core/SumLayoutAudit.cbd", "build/sum-result/pre-core/Other.cbd",
+        for name in ("build/sum-layout/other-core/SumLayoutAudit.cbd", "build/sum-result/pre-core/Other.cbd",
                      "build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd", "build/empty-join-input/provenance.json"):
             self.assertFalse(cache.allowed_payload(name), name)
 

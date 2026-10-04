@@ -470,7 +470,6 @@ CHECK_DIRS = """floating-tuple
 sum-result tag-to-enum
 unsafe-equality""".split()
 AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
-    "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
     "build/floating/core/FloatingAudit.cbd",
     *(f"build/{family}/{stage}-core/{module}.cbd" for family, module in (
         ("floating-tuple", "FloatingTupleAudit"), ("aggregate-layout", "AggregateLayoutAudit"),
@@ -493,11 +492,9 @@ CORE_CONTRACT_CBD_REQUIRED = frozenset({
     *(f"build/core/{module}.cbd" for module in ("StrictFields", "CBVAudit", "CBVCoercionAudit", "DemandAudit")),
     *(f"build/cbv-post-core/{module}.cbd" for module in ("CBVAudit", "CBVCoercionAudit")),
     "build/source-core/RepresentationAudit.cbd", "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd",
-    "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
 })
 
-CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
-             "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
+CORE_DIRS = ("build/core", "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
     *CORE_CONTRACT_CBD_REQUIRED,
     *BASE_CORE_CBD_OUTPUTS,
@@ -519,13 +516,13 @@ REQUIRED = tuple(sorted({
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
     *(f"build/{d}/checks.json" for d in CHECK_DIRS),
     "build/floating/checks.json", "build/primop-coverage.json",
-    "build/scalar-signatures/provenance.json", "build/aggregate-frontier.json",
-    "build/aggregate-native/oracle.tsv", "build/native/oracle.tsv",
+    "build/scalar-signatures/provenance.json",
+    "build/native/oracle.tsv",
     "build/map/boot-provenance.json", "build/corpus/corpus.json",
 
 }))
 BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-path-stat", "original-path-mode", "original-path-link", "original-directory-paths", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
-    "scalar-signatures", "aggregate-native", "native", "map"] +
+    "scalar-signatures", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 FLOAT_DECODE_COMMANDS = ("native-build", "native-oracle",
                         *(label for stage in ("pre", "post") for label in
@@ -1427,7 +1424,7 @@ def allowed_payload(name):
     if name.endswith(".json") and parts[-1][0].isupper() and any(
             part == "core" or part.endswith("-core") for part in parts[:-1]):
         return False
-    if name in ("build/primop-coverage.json", "build/aggregate-frontier.json"):
+    if name == "build/primop-coverage.json":
         return True
     if native_executable(name):
         return True
@@ -1606,7 +1603,7 @@ def allowed_payload(name):
     # scripts, JARs, Gradle state or JUnit status. Native executables are data here.
     suffix = PurePosixPath(name).suffix
     return suffix in (".json", ".tsv", ".hs", ".hi", ".o", ".dyn_hi", ".dyn_o") or (
-        not suffix and ("oracle" in parts[-1] or parts[-1] == "aggregate-frontier"))
+        not suffix and "oracle" in parts[-1])
 
 
 def hashes_in(value, tc):
@@ -1809,7 +1806,7 @@ def safe_mode(mode, name):
     if mode & 0o111:
         path = PurePosixPath(name)
         require(native_executable(name) or (not path.suffix and
-                ("oracle" in path.name or path.name == "aggregate-frontier")) or path.suffix in (".so", ".dylib"),
+                "oracle" in path.name) or path.suffix in (".so", ".dylib"),
                 "Executable non-native input: " + name)
     return mode
 

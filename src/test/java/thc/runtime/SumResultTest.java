@@ -29,8 +29,8 @@ class SumResultTest {
         return new File(root, "build/" + (extended ? "sum-result" : "sum-layout") + "/" + stage + "-core/" + (extended ? "SumResultAudit" : "SumLayoutAudit") + ".cbd").toPath();
     }
     private Map<String, Object> module(String stage, boolean extended) throws Exception { return CoreCbdFixtures.read(artifact(stage, extended)); }
-    private String entry(String name, boolean extended, boolean frontier) {
-        return "main:" + (frontier ? "AggregateFrontier" : extended ? "SumResultAudit" : "SumLayoutAudit") + "." + name;
+    private String entry(String name, boolean extended) {
+        return "main:" + (extended ? "SumResultAudit" : "SumLayoutAudit") + "." + name;
     }
     private Context context(boolean inlining) {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining)).option("engine.BackgroundCompilation", "false")
@@ -61,20 +61,18 @@ class SumResultTest {
         if (result == null) throw new NoSuchElementException("Collection contains no element matching the predicate.");
         return (String) result.get("id");
     }
-    @Test void nativeResultsInline() throws Exception { nativeResults(true, false, false, false); }
-    @Test void nativeResultsResidual() throws Exception { nativeResults(false, false, false, false); }
-    @Test void extendedNativeResultsInline() throws Exception { nativeResults(true, true, false, false); }
-    @Test void extendedNativeResultsResidual() throws Exception { nativeResults(false, true, false, false); }
-    @Test void originalFrontierResultsInline() throws Exception { nativeResults(true, false, true, false); }
-    @Test void originalFrontierResultsResidual() throws Exception { nativeResults(false, false, true, false); }
-    @Test void expandedLayoutResultsInline() throws Exception { nativeResults(true, false, false, true); }
-    @Test void expandedLayoutResultsResidual() throws Exception { nativeResults(false, false, false, true); }
-    private void nativeResults(boolean inlining, boolean extended, boolean frontier, boolean expanded) throws Exception {
+    @Test void nativeResultsInline() throws Exception { nativeResults(true, false, false); }
+    @Test void nativeResultsResidual() throws Exception { nativeResults(false, false, false); }
+    @Test void extendedNativeResultsInline() throws Exception { nativeResults(true, true, false); }
+    @Test void extendedNativeResultsResidual() throws Exception { nativeResults(false, true, false); }
+    @Test void expandedLayoutResultsInline() throws Exception { nativeResults(true, false, true); }
+    @Test void expandedLayoutResultsResidual() throws Exception { nativeResults(false, false, true); }
+    private void nativeResults(boolean inlining, boolean extended, boolean expanded) throws Exception {
         var supported = expanded ? Set.of("narrowWideCase", "threeWayCase", "nestedCase") : Set.of("sumCase", "directCase", "lazyCase", "zeroCase", "unitCase", "boxedKindsCase", "floatDoubleCase");
         var rows = new LinkedHashMap<String, List<List<String>>>();
-        for (String line : Files.readAllLines(new File(root, "build/" + (frontier ? "aggregate-native" : extended ? "sum-result" : "sum-layout") + "/oracle.tsv").toPath())) {
+        for (String line : Files.readAllLines(new File(root, "build/" + (extended ? "sum-result" : "sum-layout") + "/oracle.tsv").toPath())) {
             var row = Arrays.asList(line.split("\t", -1));
-            if (frontier ? Set.of("sumPayload", "sumZeroLazy", "coldSum").contains(row.getFirst()) : extended || supported.contains(row.getFirst())) rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row);
+            if (extended || supported.contains(row.getFirst())) rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row);
         }
         for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
             context.initialize("thc"); context.enter();
@@ -82,16 +80,16 @@ class SumResultTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var group : rows.entrySet()) {
                     String name = group.getKey(); var inputs = group.getValue();
-                    var artifact = frontier ? new File(root, "build/" + (stage.equals("pre") ? "aggregate-core" : "aggregate-post-core") + "/AggregateFrontier.cbd").toPath() : artifact(stage, extended);
+                    var artifact = artifact(stage, extended);
                     var source = CoreCbdFixtures.read(artifact);
-                    var id = entry(name, extended, frontier);
+                    var id = entry(name, extended);
                     var linked = CoreModules.reachable(source, id); var bindings = (List<Map<String, Object>>) linked.get("bindings");
                     List<String> retainedPath = switch (name) {
-                        case "zeroCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("zeroSum", extended, frontier), id, List.of(2));
-                        case "mixedCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("mixed", extended, frontier), id, List.of(2));
+                        case "zeroCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("zeroSum", extended), id, List.of(2));
+                        case "mixedCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("mixed", extended), id, List.of(2));
                         // Only the nonnegative source arm contains runRW, but its
                         // exact State# lambda is in-frame on both lowered paths.
-                        case "boxedKindsCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("boxedKindsSum", extended, frontier), entry("boxedKindsSum", extended, frontier), List.of(2, 3, 0, 3));
+                        case "boxedKindsCase" -> new ArrayCoreEvidence(source, id).loweredStateFunctionPath(entry("boxedKindsSum", extended), entry("boxedKindsSum", extended), List.of(2, 3, 0, 3));
                         default -> null;
                     };
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
@@ -111,8 +109,7 @@ class SumResultTest {
                                     assertEquals(active, activeTargets(host), label + " active target identity");
                                     for (var activeTarget : active) valid(activeTarget, label);
                                     long expected = retainedPath != null ? retainedPath.size() : switch (name) {
-                                        case "directCase", "coldSum" -> 1L;
-                                        case "sumPayload" -> 2L; // The strict Box Int# is constructed in the producer root.
+                                        case "directCase" -> 1L;
                                         case "forwardCase", "pairedCase", "selfCase", "effectStateCase", "effectEmptyCase", "throwCase" -> 3L;
                                         case "outstandingCase" -> 5L;
                                         case "mutualCase" -> 6L; // Two A reentries reuse its frame; B enters three times.

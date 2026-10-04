@@ -48,7 +48,7 @@ Unrelated directory members change consumed inputs or make generation fail:
     Aggregate-layout and sum-layout have independent named products and commit
     consumers on Linux/macOS. AggregateFrontierTest uses compact-model public CBD
     controls; TupleRepresentationTest is fixture-free. Both use commit cadence.
-    The old frontier producer and remaining sum-result consumers stay quarantined.
+    Remaining sum-result consumers stay quarantined.
     SumProtocolTest's actual post-return deoptimization control is preserved.
   stable-pointers (084): both original and shared-CAF exports require exact
     output-directory inventories. Unrelated CBDs must not prevent regeneration;
