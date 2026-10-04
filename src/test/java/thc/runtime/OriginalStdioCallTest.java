@@ -100,7 +100,12 @@ class OriginalStdioCallTest {
                     List<Path> names;
                     try (var entries = Files.list(observedDirectory)) { names = entries.filter(Files::isRegularFile).toList(); }
                     assertEquals(2, names.size()); assertNotEquals(names.get(0), names.get(1));
-                    var contents = new HashSet<String>(); for (var name : names) contents.add(hex(Files.readAllBytes(name)));
+                    var contents = new HashSet<String>(); var rawNames = new HashSet<String>();
+                    for (var name : names) {
+                        contents.add(hex(Files.readAllBytes(name)));
+                        String raw = name.toUri().getRawPath(); rawNames.add(raw.substring(raw.lastIndexOf('/') + 1));
+                    }
+                    assertEquals("Linux".equals(System.getProperty("os.name")) ? Set.of("n%FE", "n%FF") : Set.of("na", "nb"), rawNames);
                     assertEquals(Set.of("2501", "2502"), contents, "Both raw names must denote independent native files");
                     var absent = directory.resolve(backend + "-bad-state");
                     var address = ManagedAddress.fromByteArray((absent + "\0").getBytes(StandardCharsets.UTF_8));
