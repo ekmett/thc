@@ -4553,37 +4553,6 @@ Consumer reads receipts/Core/oracles, uses runtime native providers and creates
   entry increments are asserted; context capability values themselves are API
   semantics, distinct from internal compiler root counts.
 
-142 gc-stats (custom full-Core suite)
-Fixture rationale (142 gc-stats)
-Purpose: Check GC/clock calls return through the runtime boundary and unavailable
-  stats do not write a guest buffer. These do not prove equivalent GC algorithms.
-Produces/consumed result: twelve entry/stage CBDs and oracle.json/manifest.
-Cost and overlap: Three complete interfaces, native interpreter compilation and
-  twelve auditor starts are disproportionate to mostly input/input+1 observations.
-  Keep a bounded runtime GC/clock smoke and the unavailable-stats buffer guard.
-Build status: QUARANTINED. Native preparation secretly requires RTS stats disabled;
-  inherited runtime settings can invalidate it. Exact compiled-entry increments
-  also constrain compiler structure. Required RTS settings must be explicit inputs.
-Producer: t/haskell-fixtures/GcStatsFixtures.hs; consumer GcStatsNativeTest in
-  src/fullCoreTest; Gradle gcStatsFullCoreTest/gcStatsFullCoreDenseTest.
-IN t/fixtures/compiler/GcStatsAudit.hs, thc-fixtures/GHC API/plugin/interface/auditor
-  closure, selected native64 GHC 9.14.1/ghc-internal, complete installed interfaces
-  GHC/Internal/{Stats,System/Mem,Clock}.hi, producer RTS settings including GHCRTS.
-Under build/gc-stats/:
-  <enabled|stats|minor|major|blocking|clock>-<pre|post>.cbd <- typed original FCallId
-    substitution into audit source, simplification/tidying/serialization through GHC API.
-  ghc/ <- compiler/interpreter intermediates.
-  oracle.json <- hscCompileCoreExpr/in-process native calls for -7,0,42; fifteen rows
-    across five entries (stats leaf is not invoked). Requires enabled result equal
-    input and every other result input+1; aborts when native RTS stats are enabled.
-  <entry>-<stage>.audit.json <- matching CBD + named entry + auditor (twelve calls).
-  logs/{version,info,libdir,imports,<entry>-<stage>}.* <- stdout/stderr/command.json.
-  manifest.json <- input/interface hashes and CBD/oracle hashes; audit/log outputs
-    are produced but not included in artifactHashes; statsEnabled is hard-coded false.
-Consumer hashes the receipt, reads CBD/oracle rows, creates temporary controls and
-  checks unavailable stats leaves a buffer intact. Preexisting manifest is demanded
-  by the custom Gradle tasks; no producing task edge exists.
-
 143 compiler-rts (custom full-Core suite)
 Fixture rationale (143 compiler-rts)
 Purpose: Check compiler-package shared CAF slots/keepCAFs and unique address cells

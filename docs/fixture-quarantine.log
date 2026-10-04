@@ -106,11 +106,6 @@ Compiler-structure assertions (also excluded):
     eventfd/pipe/poll harness. RtsEventNativeTest is excluded. Its independent
     safe-completion masking test should move to fixture-free runtime coverage.
 
-  gc-stats (142, custom full-Core): requires native RTS stats disabled without
-    declaring/configuring the producer RTS environment; exact compiled-entry
-    counts and twelve audits for trivial reference observations. GcStatsNativeTest
-    is excluded. Preserve the useful no-write buffer guard in focused coverage.
-
   aggregate-heap (145, custom full-Core): both producer and consumer enumerate
     stage/Core output directories. AggregateHeapNativeTest is excluded until named
     module outputs replace the hidden input set. Preserve useful heap layout and

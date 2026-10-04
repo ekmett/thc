@@ -4,7 +4,6 @@
   "quarantinedJunit": [
     "thc.runtime.OriginalTimeClockTest",
     "thc.runtime.RtsEventNativeTest",
-    "thc.runtime.GcStatsNativeTest",
     "thc.runtime.AggregateHeapNativeTest",
     "thc.runtime.FourWayAggregateNativeTest",
     "thc.runtime.FourWayAggregateStorageTest",

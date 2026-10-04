@@ -64,3 +64,9 @@ the clock is `unsafe`. With asynchronous exceptions enabled, successful safe
 calls commit their result before polling. Saved continuation resumption does
 not replay the completed call. AST keeps its explicit opt-in policy; bytecode
 keeps its existing default.
+
+`CompilerHeapHintTest` checks the shared GC/clock foreign ABI, JVM return
+behavior on both backends from the first compiled call, and unavailable statistics
+without buffer reads or writes. These fixture-free callers use independent GHC
+9.14.1 signature models; they do not qualify acquisition or execution of the
+installed original Haskell wrappers.
