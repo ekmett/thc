@@ -186,6 +186,68 @@ class NativeFileProviderTest {
             } finally { pool.shutdownNow(); assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS)); }
         }
     }
+    @Test void rawOpenReservationPreventsStealingAndCreationUntilDisposalRollsBack() throws Exception {
+        record OpenResult(long descriptor, long error) {}
+        var fifo = directory.resolve("raw-registry"); var absent = directory.resolve("namespace-exhausted");
+        var create = new ProcessBuilder("mkfifo", fifo.toString()).start();
+        assertTrue(create.waitFor(10, TimeUnit.SECONDS)); assertEquals(0, create.exitValue());
+        try (var context = nativeContext()) {
+            int capacity = 8;
+            var files = entered(context, () -> {
+                var state = Language.currentState(null); var registry = new ManagedFiles(state.getEnv(), state.getThreads(), capacity);
+                registry.installNative(Objects.requireNonNull(state.getNativeFiles()), Set.of()); return registry;
+            });
+            var workers = Executors.newFixedThreadPool(2); Future<Object> opening = null;
+            try {
+                // Learn a free hole through the public namespace instead of fixing a descriptor number.
+                long hole = entered(context, () -> {
+                    var aliases = new ArrayList<Long>();
+                    for (int i = 0; i < capacity; i++) { long fd = files.duplicate(1); if (fd < 0) break; aliases.add(fd); }
+                    assertEquals(10L, files.errorKind()); assertFalse(aliases.isEmpty());
+                    long freed = aliases.getFirst(); assertEquals(0L, files.close(freed)); return freed;
+                });
+                var target = entered(context, () -> {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    return new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            long fd = files.openOriginal(path(fifo), 0, 0, OriginalStdioOp.OPEN_SAFE, this);
+                            return new OpenResult(fd, files.errorKind());
+                        }
+                    }.getCallTarget();
+                });
+                opening = workers.submit(() -> entered(context, target::call));
+                awaitNativeOpen(); assertFalse(opening.isDone());
+                entered(context, () -> {
+                    assertEquals(-1L, files.duplicateTo(1, hole)); assertEquals(8L, files.errorKind(), "The acquisition owns the reserved hole");
+                    var abi = StdioHostAbi.load(); long flags = abi.flagConstant(OriginalStdioOp.O_WRONLY) | abi.flagConstant(OriginalStdioOp.O_CREAT);
+                    assertEquals(-1L, files.openOriginal(path(absent), flags, 384));
+                    assertEquals(10L, files.errorKind(), "Reservation consumes the final namespace slot before another acquisition");
+                    assertFalse(Files.exists(absent), "Namespace exhaustion must precede native creation"); return null;
+                });
+                var disposal = workers.submit(() -> entered(context, () -> { files.dispose(); return null; }));
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (entered(context, () -> { assertEquals(-1L, files.duplicate(1)); return files.errorKind(); }) != 4L
+                        && System.nanoTime() < deadline) Thread.sleep(1);
+                assertEquals(4L, entered(context, files::errorKind), "Disposal must close the registry before acquisition completes");
+                assertFalse(disposal.isDone(), "Disposal must wait for the pending acquisition's cleanup");
+                try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                    assertEquals(new OpenResult(-1, 4), opening.get(10, TimeUnit.SECONDS)); disposal.get(10, TimeUnit.SECONDS);
+                }
+                assertEquals(0L, nativeDescriptors(fifo), "Rollback must physically close the acquired descriptor");
+                assertEquals(0L, nativeOpenWorkerCount(), "Rollback must join the owned native worker");
+            } finally {
+                // Release failed acquisition before disposal or executor shutdown can wait for it.
+                try {
+                    if (opening != null && !opening.isDone()) try (var release = new RandomAccessFile(fifo.toFile(), "rw")) {
+                        try { opening.get(10, TimeUnit.SECONDS); } catch (ExecutionException ignored) { }
+                    }
+                } finally {
+                    try { files.dispose(); }
+                    finally { workers.shutdownNow(); assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS)); }
+                }
+            }
+        }
+    }
     @Test void nativeAndCommandLineContextsPermitGuestThreads() throws Exception {
         for (var factory : List.<Supplier<Context>>of(this::nativeContext, () -> executionContext(true))) try (var context = factory.get()) { entered(context, () -> {
             assertNotNull(Language.currentState(null).getNativeFiles()); var ran = new CountDownLatch(1);
