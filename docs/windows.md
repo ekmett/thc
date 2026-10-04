@@ -104,6 +104,13 @@ touching the missing third unit. Runtime passes its matching encoder through
 handoff modes. They require no GHC Core acquisition or package native-library
 producer and do not qualify direct `.hi` loading or the Linux native-label tests.
 
+One public-entry PAP model checks the remaining Word32 input proof after a wide
+argument has been supplied. Invalid unsigned bounds fail before forcing the
+entry; zero and the maximum Word32 value retain their unsigned results. The
+exact method runs on AST and bytecode through loose CBD and indexed manifests
+in both handoff modes. This check does not qualify explicit compilation or the
+retained-GHC interface provider, which is currently Linux/macOS only.
+
 Registered plugin lookup accepts Cabal build directories reached through directory
 junctions and checks containment against the resolved `dist-newstyle/build` root.
 Keep native fixture outputs physically inside the checkout's `build` directory:
