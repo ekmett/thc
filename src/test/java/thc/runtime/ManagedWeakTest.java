@@ -15,6 +15,9 @@ import thc.EntryValue;
 import thc.Json;
 import thc.Language;
 import java.io.File;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.*;
@@ -40,6 +43,124 @@ class ManagedWeakTest {
             .option("engine.CompilationFailureAction", "Throw")
             .option("compiler.CompilationTimeout", "30")
             .build();
+    }
+    private ExecutableProgram identityWeakProgram(Language language, String backend) {
+        var key = Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
+        var weak = Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Unlifted)"), "evaluated", true);
+        var state = Map.of("kind", "void", "primReps", List.of(), "evaluated", true);
+        var flag = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
+        var closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
+        var made = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "primReps", List.of("BoxedRep (Just Unlifted)"),
+            "evaluated", true, "components", List.of(state, weak));
+        var observed = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "primReps", List.of("IntRep", "BoxedRep (Just Lifted)"),
+            "evaluated", true, "components", List.of(state, flag, key));
+        var keyVar = List.of("var", "key", Map.of("rep", key));
+        var stateVar = List.of("var", "s", Map.of("rep", state));
+        var make = List.of("app", List.of("prim", "mkWeakNoFinalizer#"), List.of(keyVar, keyVar, stateVar),
+            List.of(true, true, false), false, false, Map.of("rep", made));
+        var makeBody = List.of("case", make, "pair", List.of(List.of("data", "tuple2", List.of("s1", "weak"),
+            List.of("var", "weak", Map.of("rep", weak)), Map.of("binders", List.of(
+                Map.of("id", "s1", "lifted", false, "rep", state), Map.of("id", "weak", "lifted", false, "rep", weak))))),
+            Map.of("rep", weak, "binder", Map.of("id", "pair", "lifted", false, "rep", made)));
+        var dereference = List.of("app", List.of("prim", "deRefWeak#"),
+            List.of(List.of("var", "weak", Map.of("rep", weak)), stateVar), List.of(false, false), false, false, Map.of("rep", observed));
+        var observeBody = List.of("case", dereference, "triple", List.of(List.of("data", "tuple3", List.of("s1", "live", "value"),
+            List.of("var", "live", Map.of("rep", flag)), Map.of("binders", List.of(
+                Map.of("id", "s1", "lifted", false, "rep", state), Map.of("id", "live", "lifted", false, "rep", flag),
+                Map.of("id", "value", "lifted", true, "rep", key))))),
+            Map.of("rep", flag, "binder", Map.of("id", "triple", "lifted", false, "rep", observed)));
+        var source = Map.<String, Object>of("schema", 1, "ghc", "9.14.1", "instrument", true,
+            "constructors", List.of(Map.of("id", "tuple2", "name", "(#,#)", "arity", 2, "tag", 1, "kind", "unboxed-tuple"),
+                Map.of("id", "tuple3", "name", "(#,,#)", "arity", 3, "tag", 1, "kind", "unboxed-tuple")),
+            "bindings", List.of(
+                Map.of("id", "make", "name", "make", "arity", 2, "lifted", true, "rep", closure, "expr", List.of("lam",
+                    List.of(Map.of("id", "key", "lifted", true, "rep", key), Map.of("id", "s", "lifted", false, "rep", state)),
+                    makeBody, Map.of("rep", closure, "resultRep", weak))),
+                Map.of("id", "observe", "name", "observe", "arity", 2, "lifted", true, "rep", closure, "expr", List.of("lam",
+                    List.of(Map.of("id", "weak", "lifted", false, "rep", weak), Map.of("id", "s", "lifted", false, "rep", state)),
+                    observeBody, Map.of("rep", closure, "resultRep", flag)))));
+        return load(language, source, backend);
+    }
+    private Object makeIdentity(ExecutableProgram program, Object key) {
+        return ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"), new Object[]{0L, key, Unit.INSTANCE});
+    }
+    private long observeIdentity(ExecutableProgram program, Object weak) {
+        return (Long) ScalarTestCalls.callScalarTestTarget(program.entryTarget("observe"), new Object[]{0L, weak, Unit.INSTANCE});
+    }
+    private record Registration(Object weak, WeakReference<Object> key) {}
+    private Registration droppedIdentity(ExecutableProgram program, ReferenceQueue<Object> queue) {
+        var key = new Object();
+        return new Registration(makeIdentity(program, key), new WeakReference<>(key, queue));
+    }
+    private static final class Cycle { Cycle other; }
+    private WeakReference<Object> gcWitness(ReferenceQueue<Object> queue) {
+        var first = new Cycle(); var second = new Cycle(); first.other = second; second.other = first;
+        return new WeakReference<>(first, queue);
+    }
+    private void collect(ReferenceQueue<Object> queue, WeakReference<Object> expected) throws Exception {
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        do {
+            var pressure = new byte[16][1024 * 1024]; System.gc(); Reference.reachabilityFence(pressure);
+            if (queue.remove(100) == expected) { assertNull(expected.get()); return; }
+        } while (System.nanoTime() < deadline);
+        fail("Allocation pressure plus collection requests did not collect the weak referent");
+    }
+    @Test
+    void identityOnlyGuestWeaksCollectWhileLiveKeysAndFirstCompiledCallsPreserveIdentity() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = Language.currentState().getWeaks(); var program = identityWeakProgram(language, backend);
+                var key = new Object(); var live = makeIdentity(program, key);
+                assertEquals(1L, observeIdentity(program, live)); assertSame(key, registry.dereference(live).getValue());
+                for (var name : List.of("make", "observe")) {
+                    var target = program.entryTarget(name); target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target);
+                }
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                var queue = new ReferenceQueue<Object>(); var dropped = droppedIdentity(program, queue);
+                assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, backend + " first compiled make");
+                valid(program.entryTarget("make")); collect(queue, dropped.key());
+                before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                assertEquals(0L, observeIdentity(program, dropped.weak()));
+                assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, backend + " first compiled dead dereference");
+                valid(program.entryTarget("observe"));
+                assertEquals(0L, registry.addCallback(dropped.weak(), () -> fail("Collected weak ran a callback")));
+                assertEquals(0L, registry.finalize(dropped.weak()).getFlag());
+                assertEquals(1L, observeIdentity(program, live)); assertSame(key, registry.dereference(live).getValue());
+                Reference.reachabilityFence(key); registry.finalize(live); assertEquals(0, registry.retainedCount());
+            } finally { context.leave(); }
+        }
+    }
+    @Test
+    void callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = Language.currentState().getWeaks(); var program = identityWeakProgram(language, backend);
+                var key = new Object(); var promoted = makeIdentity(program, key); var keyReference = new WeakReference<>(key);
+                var calls = new ArrayList<Integer>();
+                assertEquals(1L, registry.addCallback(promoted, () -> {
+                    assertEquals(0L, registry.dereference(promoted).getFlag()); calls.add(1);
+                }));
+                assertEquals(1L, registry.addCallback(promoted, () -> calls.add(2)));
+                Reference.reachabilityFence(key); key = null;
+                var value = new Object(); var dependentKey = new Object(); var dependentReference = new WeakReference<>(dependentKey);
+                var dependent = registry.make(dependentKey, value, null); dependentKey = null;
+                var actionKey = new Object(); var actionReference = new WeakReference<>(actionKey);
+                Supplier<Object> action = actionKey::toString;
+                var actionWeak = registry.make(actionKey, actionKey, action); actionKey = null;
+                var queue = new ReferenceQueue<Object>(); var witness = gcWitness(queue); collect(queue, witness);
+                assertNotNull(keyReference.get()); assertEquals(1L, observeIdentity(program, promoted)); assertTrue(calls.isEmpty());
+                assertNotNull(dependentReference.get()); assertSame(value, registry.dereference(dependent).getValue());
+                assertNotNull(actionReference.get()); assertEquals(1L, registry.dereference(actionWeak).getFlag());
+                assertEquals(0L, registry.finalize(promoted).getFlag()); assertEquals(List.of(2, 1), calls);
+                assertEquals(0L, registry.finalize(promoted).getFlag()); assertEquals(List.of(2, 1), calls);
+                registry.finalize(dependent); assertSame(action, registry.finalize(actionWeak).getValue());
+                assertEquals(0, registry.retainedCount());
+            } finally { context.leave(); }
+        }
     }
     @Test
     void registrationsRetainLazyIdentityAndReturnTheRealActionWithoutCallingIt() {
