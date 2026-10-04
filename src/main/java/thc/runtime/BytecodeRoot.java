@@ -3653,8 +3653,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             SparkPool.current(node).hint(node, payload); return payload;
         }
     }
-    @Operation public static final class SparkCount {
-        @Specialization public static long count(@Bind Node node) { return SparkPool.current(node).count(); }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class SparkCount {
+        @Specialization public static void count(VirtualFrame frame, LocalAccessor destination, @Bind Node node) {
+            var bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setLong(bytecode, frame, SparkPool.current(node).count());
+        }
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "flag")
