@@ -745,11 +745,13 @@
       "sources": ["t/haskell-fixtures/WordFloatingFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "bin/export-core.ps1", "bin/windows-common.ps1", "t/fixtures/compiler/WordFloatingAudit.hs", "t/fixtures/compiler/WordFloatingNative.hs"]
     },
     "floating-tuples": {
-      "quarantined": true,
+      "cmakeTarget": "fixture-floating-tuples",
+      "ciPlatforms": ["Linux", "Darwin"],
+      "requires": ["compact-model"],
       "junit": ["thc.runtime.FloatingTupleTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-floating-tuples.py"]}],
-      "outputs": ["build/floating-tuple"],
-      "sources": ["bin/prepare-floating-tuples.py", "t/fixtures/compiler/FloatingTupleAudit.hs", "t/fixtures/compiler/FloatingTupleAuditNative.hs"]
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-floating-tuples"]}],
+      "outputs": ["build/floating-tuple/pre-core/FloatingTupleAudit.cbd", "build/floating-tuple/post-core/FloatingTupleAudit.cbd", "build/floating-tuple/pre-ghc/FloatingTupleAudit.hi", "build/floating-tuple/pre-ghc/FloatingTupleAudit.o", "build/floating-tuple/post-ghc/FloatingTupleAudit.hi", "build/floating-tuple/post-ghc/FloatingTupleAudit.o", "build/floating-tuple/native/oracle", "build/floating-tuple/native/Main.hi", "build/floating-tuple/native/Main.o", "build/floating-tuple/native/FloatingTupleAudit.hi", "build/floating-tuple/native/FloatingTupleAudit.o", "build/floating-tuple/oracle.tsv", "build/floating-tuple/bits.tsv"],
+      "sources": ["cmake/CoreFixtures.cmake", "cmake/CaptureOutput.cmake", "t/fixtures/compiler/FloatingTupleAudit.hs", "t/fixtures/compiler/FloatingTupleAuditNative.hs", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
     },
     "pinned-addresses": {
       "cmakeTarget": "fixture-pinned-addresses",

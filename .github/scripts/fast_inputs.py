@@ -462,12 +462,11 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
     "manifest.json", "pre-core/GeneratedSimdSmoke.cbd", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
 PROVENANCE_DIRS = """io-main-pap
-floating-tuple tag-to-enum
+tag-to-enum
 unsafe-equality simd simd-int32x4 simd-floatx4
 simd-doublex2 simd-int32x4-bytearray simd-word32x4-bytearray
 simd-floatx4-bytearray simd-doublex2-bytearray""".split()
-CHECK_DIRS = """floating-tuple
-tag-to-enum
+CHECK_DIRS = """tag-to-enum
 unsafe-equality""".split()
 AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
     "build/floating/core/FloatingAudit.cbd",
@@ -484,6 +483,13 @@ SUM_RESULT_OUTPUTS = frozenset({
     *(f"build/sum-result/{stage}-ghc/SumResultAudit.{suffix}" for stage in ("pre", "post") for suffix in ("hi", "o")),
     "build/sum-result/native/oracle", "build/sum-result/oracle.tsv", "build/sum-result/oracle-pairs.tsv",
     *(f"build/sum-result/native/{module}.{suffix}" for module in ("Main", "SumResultAudit") for suffix in ("hi", "o")),
+})
+
+FLOATING_TUPLE_OUTPUTS = frozenset({
+    *(f"build/floating-tuple/{stage}-core/FloatingTupleAudit.cbd" for stage in ("pre", "post")),
+    *(f"build/floating-tuple/{stage}-ghc/FloatingTupleAudit.{suffix}" for stage in ("pre", "post") for suffix in ("hi", "o")),
+    "build/floating-tuple/native/oracle", "build/floating-tuple/oracle.tsv", "build/floating-tuple/bits.tsv",
+    *(f"build/floating-tuple/native/{module}.{suffix}" for module in ("Main", "FloatingTupleAudit") for suffix in ("hi", "o")),
 })
 
 BASE_CORE_CBD_OUTPUTS = frozenset({
@@ -507,6 +513,7 @@ REQUIRED = tuple(sorted({
     *BASE_CORE_CBD_OUTPUTS,
     *AGGREGATE_HOST_CBD_OUTPUTS,
     *SUM_RESULT_OUTPUTS,
+    *FLOATING_TUPLE_OUTPUTS,
     *RUBBISH_OUTPUTS,
     *PROXY_VOID_OUTPUTS,
     *WEAK_OUTPUTS,
@@ -1454,6 +1461,8 @@ def allowed_payload(name):
             for stage in ("pre", "post") for suffix in ("hi", "o")} or name in {
             "build/sum-layout/native/sum-layout-oracle", "build/sum-layout/oracle.tsv",
             *(f"build/sum-layout/native/{module}.{suffix}" for module in ("Main", "SumLayoutAudit") for suffix in ("hi", "o"))}
+    if parts[1] == "floating-tuple":
+        return name in FLOATING_TUPLE_OUTPUTS
     if parts[1] == "sum-result":
         return name in SUM_RESULT_OUTPUTS
     if parts[1] == "integer-completion":

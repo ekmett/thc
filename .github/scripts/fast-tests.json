@@ -3443,7 +3443,6 @@
       "thc.runtime.FloatingByteOffsetTest",
       "thc.runtime.FloatingPrimitiveTest",
       "thc.runtime.FloatingRemainderTest",
-      "thc.runtime.FloatingTupleTest",
       "thc.runtime.ForceLocalWritebackTest",
       "thc.runtime.ForcedBindingTest",
       "thc.runtime.ForeignExceptionPolicyTest",

@@ -2679,33 +2679,25 @@ This producer executes an entire cache correctness suite before publishing ordin
   interface fixtures. Separate those test operations from reusable fixture products.
 
 086 floating-tuples
-Fixture rationale (086 floating-tuples)
-Purpose: Check mixed floating aggregate results survive calls and joins.
-Produces/consumed result: Pre/post CBDs, oracle.tsv and bits.tsv.
-Cost and overlap: Aggregate floating transport is useful; combine with general tuple
-  result coverage. Recursive receipts and frozen CPR/tuple/join shapes keep this recipe
-  quarantined.
-Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
-
-Producer: bin/prepare-floating-tuples.py; consumer: thc.runtime.FloatingTupleTest.
-Inputs: t/fixtures/compiler/FloatingTupleAudit.hs and FloatingTupleAuditNative.hs,
-  producer, shared exporter/plugin/auditor/decoder and pinned GHC/native libraries.
-Outputs under build/floating-tuple/ (singular):
-  native/oracle and native compiler intermediates: IN both Haskell sources/GHC.
-  oracle.tsv, bits.tsv: IN native/oracle, invoked normally and with argument bits.
-  pre-core/FloatingTupleAudit.cbd, post-core/FloatingTupleAudit.cbd and pre/post-ghc/:
-    IN audit source/exporter with corresponding stage flag.
-  pre-audit.json, post-audit.json: IN corresponding CBD, five entry names/auditor.
-  provenance.json: IN TSVs/audits, recursively found non-JSON files in native/,
-    pre-core/,post-core/, source receipts, build/compiler/plugin.json and its
-    sharedLibrary. OUT receipt; previous receipt is not invalidated first.
-  checks.json: IN receipt/all hashed files, oracles/CBDs/audits; OUT coverage checks.
-    --check-only also writes this file.
-Preflight consumes existing plugin manifest/database/library or builds if absent or
-  invalid; exporter subsequently invokes compiler build again. Consumer reads
-  receipt/all hashed files, both CBDs, audits, oracle.tsv and bits.tsv.
-Exact CPR producer/tuple/join shapes are asserted; review for compiler fossilization.
-Receipt includes unused PrimopTools.hs but misses shared auditor data tables.
+Purpose: Genuine Data.Complex CPR, mixed nested floating results, and native IEEE
+  tuple-bit transport. FloatingTupleTest consumes two CBDs and two native TSVs.
+Producer: fixture-floating-tuples in cmake/CoreFixtures.cmake, using the explicit
+  existing plugin publication/exporter and pinned GHC/package toolchain.
+Inputs: unchanged FloatingTupleAudit.hs/FloatingTupleAuditNative.hs, exporter,
+  plugin/toolchain inputs and atomic CaptureOutput.cmake.
+Outputs under build/floating-tuple/: pre/post-core/FloatingTupleAudit.cbd,
+  pre/post-ghc/FloatingTupleAudit.hi/.o; native/oracle, native/Main.hi/.o and
+  native/FloatingTupleAudit.hi/.o; oracle.tsv and bits.tsv (native argument bits).
+  No recursive receipt, audit JSON, cached test success or implicit build.
+Consumer: four existing methods, AST/bytecode, inlined/residual native arithmetic,
+  installed IEEE result delivery and a synthetic retained whole-tuple case.
+  Arithmetic NaNs are classified, not required to preserve native payload/sign.
+  Root owns actual product and both-mode qualification before publication.
+Overlap: TupleCompletionTest owns dynamic raw floating payload/reference copies;
+  ReusableTypedTest and BytecodeTypedTupleInputTest own mixed typed host/guest
+  transport; TupleRepresentationTest owns logical nesting/consumer cleanup.
+  Their component controls replace reflection/storage and body-position probes,
+  not genuine GHC CPR qualification. No new component matrix.
 
 087 pinned-addresses
 Fixture rationale (087 pinned-addresses)

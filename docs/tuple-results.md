@@ -62,6 +62,12 @@ from Longs and references. Cleanup touches only reference fields. This does not
 expand the optional scalar handoff ABI: its arguments remain Long/reference
 only, and residual scalar floating inputs still travel through Object packets.
 
+`FloatingTupleTest` retains genuine pre/post GHC complex/mixed arithmetic and
+native IEEE tuple-bit controls. Its whole-tuple identity case is deliberately
+inserted into exported Core; it does not qualify GHC preservation of that case.
+Arithmetic NaNs require classification, while non-arithmetic transport retains
+exact payload bits in the independent tuple completion owner.
+
 The compiler and auditor compare tagged recursive tuple/scalar layouts, not
 register counts or pretty names. They reject equal-width but differently nested
 proofs. Scalar reference kind/evaluatedness may refine at each use without forcing

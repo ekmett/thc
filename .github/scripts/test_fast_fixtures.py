@@ -202,6 +202,27 @@ class FixtureGraphTest(unittest.TestCase):
         self.assertIn("sum-layout", remaining["requires"])
         self.assertEqual({"thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"}, set(remaining["junit"]))
 
+    def test_floating_tuple_owner_uses_named_products_at_commit_cadence(self):
+        import fast_select
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["floating-tuples"]
+        self.assertEqual(["compact-model"], group["requires"])
+        self.assertEqual(["Linux", "Darwin"], group["ciPlatforms"])
+        self.assertEqual(set(group["outputs"]), {
+            *(f"build/floating-tuple/{stage}-core/FloatingTupleAudit.cbd" for stage in ("pre", "post")),
+            *(f"build/floating-tuple/{stage}-ghc/FloatingTupleAudit.{suffix}" for stage in ("pre", "post") for suffix in ("hi", "o")),
+            "build/floating-tuple/native/oracle", "build/floating-tuple/oracle.tsv", "build/floating-tuple/bits.tsv",
+            *(f"build/floating-tuple/native/{module}.{suffix}" for module in ("Main", "FloatingTupleAudit") for suffix in ("hi", "o")),
+        })
+        self.assertEqual(["fixture-compact-model", "fixture-floating-tuples"],
+            fast_fixtures.prepare_cmake(project, self.selection(*group["junit"]), mock.Mock())["targets"])
+        policy = json.loads((project / fast_select.POLICY).read_text())
+        name = "thc.runtime.FloatingTupleTest"
+        self.assertEqual([name], group["junit"])
+        self.assertEqual("commit", fast_select.cadence_assignments(manifest, owners, policy)[name])
+        self.assertNotIn(name, fast_fixtures.quarantined_classes(project))
+
     def test_sum_result_owners_use_named_products_and_explicit_dependencies(self):
         import fast_select
         project = Path(__file__).resolve().parents[2]

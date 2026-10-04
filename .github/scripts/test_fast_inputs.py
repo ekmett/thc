@@ -1618,6 +1618,17 @@ class FastInputTests(unittest.TestCase):
                      "build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd", "build/empty-join-input/provenance.json"):
             self.assertFalse(cache.allowed_payload(name), name)
 
+    def test_floating_tuple_products_exclude_receipts_and_unrelated_compiler_outputs(self):
+        import fast_fixtures
+        manifest, _ = fast_fixtures._manifest(Path(__file__).resolve().parents[2])
+        self.assertEqual(set(manifest["groups"]["floating-tuples"]["outputs"]), cache.FLOATING_TUPLE_OUTPUTS)
+        for name in cache.FLOATING_TUPLE_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name), name)
+            self.assertIn(name, DECLARED_REQUIRED)
+        for name in ("provenance.json", "checks.json", "pre-audit.json", "post-audit.json", "pre-ghc/Other.hi",
+                     "native/Other.o", "native/Main.dyn_o", "oracle.tsv.tmp", "bits.tsv.tmp"):
+            self.assertFalse(cache.allowed_payload("build/floating-tuple/" + name), name)
+
     def test_sum_result_products_exclude_receipts_and_unrelated_compiler_outputs(self):
         import fast_fixtures
         manifest, _ = fast_fixtures._manifest(Path(__file__).resolve().parents[2])
