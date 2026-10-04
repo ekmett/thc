@@ -1800,43 +1800,6 @@ Under build/wide-char-address/:
 Old manifest is not removed before generation. Source receipt is incomplete:
   top-level compiler files/core_*.py collection misses actual auditor JSON tables.
 
-052  aligned-scalar-memory
-Fixture rationale (052 aligned-scalar-memory)
-Purpose: Check aligned loads/stores for each scalar kind and offset.
-Produces/consumed result: Stage CBDs and oracle.tsv.
-Cost and overlap: Keep data/offset behavior, merge duplicate width cases with
-  address/array tests. Exact root or primitive-use counts must be removed before
-  optimization work.
-Build status: QUARANTINED; compiler-structure assertions must be removed.
-  Excluded from build/test entry points; see docs/fixture-quarantine.log.
-
-Producer: t/haskell-fixtures/AlignedScalarMemoryFixtures.hs:prepareAlignedScalarMemory.
-Consumer: thc.runtime.AlignedScalarMemoryTest.
-IN: t/fixtures/compiler/AlignedScalarMemoryAudit.hs, AlignedScalarMemoryNative.hs;
-  t/fixtures/core/StableWideCells.hs; producer/Main.hs/FixtureSupport.hs, built
-  thc-fixtures, exporter/auditor/tool closure; native 64-bit GHC9.14.1.
-Under build/aligned-scalar-memory/:
-  <pre|post>/core/AlignedScalarMemoryAudit.cbd: IN audit source/exporter/stage
-    option; OUT CBD plus stage/ghc/ intermediates.
-  <stage>/audit.json: IN stage CBD, alignedWideChar/alignedStablePtr entries,
-    auditor/data; OUT report.
-  native/oracle: IN native driver/audit source/native packages, --make -O2
-    -dynamic -dcore-lint -dstg-lint; OUT executable/native intermediates.
-  inputs.txt: IN producer WideChar/StablePtr cases; OUT requests.
-  oracle.tsv: IN native/oracle and inputs.txt read as stdin; OUT results.
-  native/stable-wide-cells: IN StableWideCells.hs/native packages; OUT executable
-    and native/example/ intermediates.
-  logs/example-run.stdout: IN stable-wide-cells execution; OUT two checked lines.
-  Logs ghc-version/info/inventory, pre/post-export/audit, native-build/oracle,
-    example-build/run: OUT three standard files per label. Inventory reads GHC
-    package via -package ghc -e, not a tracked text inventory.
-  manifest.json: IN both executables, requests/TSV, CBDs/reports/logs/source
-    receipt; OUT hashes. Old manifest removed first.
-Consumer reads receipts, oracle.tsv, CBDs and audits. It also asserts exact Core
-  binding/lambda counts (1 binding, 2 original lambdas, 1 lowered label) and 12
-  original calls: review as compiler-shape fossilization, separate from useful
-  memory behavior/ABI checks. Receipt misses polyglot ABI/SIMD auditor tables.
-
 053  scalar-memory-utilities
 Fixture rationale (053 scalar-memory-utilities)
 Purpose: Check memory utility operations preserve bytes, lengths and offsets.
@@ -3014,7 +2977,7 @@ Consumer reads receipt/all hashes, oracle.tsv, both CBDs/audits. Native binary a
 Fixture rationale (092 floating-address)
 Purpose: Check Float/Double address loads and stores retain numeric/bit results.
 Produces/consumed result: CBDs and oracle.tsv.
-Cost and overlap: Keep the address boundary; combine cases with aligned scalar memory.
+Cost and overlap: Keep the address boundary; shared widths are covered by general memory suites.
   Another full acquisition pipeline is not warranted.
 Build status: Value review only; admission still requires explicit inputs and single-
   owner outputs.
@@ -3100,7 +3063,7 @@ Under build/unaligned-scalar-memory/:
     OUT standard command triplets.
   manifest.json: IN source hashes/inputs/oracle/CBDs/audits/logs; old receipt removed.
 Consumer reads receipt/all hashes, oracle.tsv, stage CBDs/audits. Review overlap with
-  explicit64/floating-byte-offset/aligned scalar suites using behavior coverage.
+  explicit64/floating-byte-offset/general memory suites using behavior coverage.
 
 097 compiled-thunk-retention (two producers)
 Fixture rationale (097 compiled-thunk-retention)
@@ -4425,7 +4388,7 @@ Quarantine enforcement checkpoint
   toolchain discovery. No Gradle application build or runtime suite was executed.
 
 Structural-assertion quarantine follow-up
-  052 aligned-scalar-memory, 069 original-open, 124 tuple-join and 137 sum-join
+  069 original-open, 124 tuple-join and 137 sum-join
   are now excluded too. Their previously recorded exact Core/root/join/state-lambda
   assumptions are not admission requirements for the future compiler.
 

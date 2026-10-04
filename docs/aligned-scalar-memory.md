@@ -20,9 +20,7 @@ machine pointer bits. Allocation-owned managed pointer cells support copying
 and array/address aliases. They do not extend a registry handle's lifetime:
 dereference and equality continue to reject freed or foreign-context handles.
 Partial scalar overwrites and scalar reads of pointer cells are rejected;
-a complete overwrite removes the retained reference. Raw byte-array storage,
-native-exposed managed storage and native pointer-cell memory remain outside
-the supported StablePtr storage contract.
-
-See [StableWideCells.hs](../t/fixtures/core/StableWideCells.hs) for a native GHC
-example of StablePtr storage and four-byte character slots.
+a complete overwrite removes the retained reference. Raw byte-array storage and
+native-exposed managed storage reject retained pointer cells. Owned native memory
+transports StablePtr tokens with native-access permission; dereferencing a token
+still requires its live registry in the owning context.

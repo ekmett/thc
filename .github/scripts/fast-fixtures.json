@@ -1006,19 +1006,6 @@
         "t/fixtures/compiler/PinnedPointerCellsNative.hs"
       ]
     },
-    "aligned-scalar-memory": {
-      "quarantined": true,
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "aligned-scalar-memory"]}],
-      "outputs": ["build/aligned-scalar-memory"],
-      "sources": [
-        "t/haskell-fixtures/Main.hs",
-        "t/haskell-fixtures/AlignedScalarMemoryFixtures.hs",
-        "t/fixtures/compiler/AlignedScalarMemoryAudit.hs",
-        "t/fixtures/compiler/AlignedScalarMemoryNative.hs",
-        "t/fixtures/core/StableWideCells.hs"
-      ]
-    },
     "wide-char-address": {
       "cmakeTarget": "fixture-wide-char-address",
       "junit": ["thc.runtime.WideCharAddressTest"],

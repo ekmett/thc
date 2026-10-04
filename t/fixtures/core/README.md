@@ -1,8 +1,8 @@
 # Core regression inputs
 
 These Haskell modules exercise compiler and runtime behavior. They are test
-inputs, not public APIs. `NativeOracle.hs`, `LibraryOracle.hs` and
-`StableWideCells.hs` are separate native executables; each declares `Main`
+inputs, not public APIs. `NativeOracle.hs` and `LibraryOracle.hs`
+are separate native executables; each declares `Main`
 and is compiled independently.
 
 - `bin/native-oracle.sh` builds the focused native oracle.

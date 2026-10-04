@@ -1324,7 +1324,6 @@ executable thc-fixtures
     StackDecoderFixtures
     InstalledCoreFixtures
     BoxedArrayExtensionsFixtures
-    AlignedScalarMemoryFixtures
     BoxedCasFixtures
     WideCharAddressFixtures
     ManagedAddressReadFixtures

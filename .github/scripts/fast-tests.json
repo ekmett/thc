@@ -256,11 +256,11 @@
       "python": []
     },
     "src/main/java/thc/runtime/StablePointers.java": {
-      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
+      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
     "src/main/java/thc/runtime/StablePointerToken.java": {
-      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
+      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
     "src/main/java/thc/runtime/CoreStablePointers.java": {
@@ -1484,22 +1484,6 @@
     "src/main/java/thc/runtime/ThreadDelayToken.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/DelayThread.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/GuestAllocationAccounting.java": {"junit": ["thc.runtime.ThreadSchedulingTest", "thc.runtime.GuestThreadsTest"], "python": []},
-    "t/fixtures/core/StableWideCells.hs": {
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "python": []
-    },
-    "t/fixtures/compiler/AlignedScalarMemoryAudit.hs": {
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "python": []
-    },
-    "t/fixtures/compiler/AlignedScalarMemoryNative.hs": {
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "python": []
-    },
-    "t/haskell-fixtures/AlignedScalarMemoryFixtures.hs": {
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "python": []
-    },
     "t/haskell-fixtures/IntegerCompletionFixtures.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
     "t/fixtures/compiler/IntegerCompletionAudit.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
     "src/test/java/thc/runtime/IntegerCompletionTest.java": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
@@ -2028,7 +2012,6 @@
         "thc.runtime.OriginalOpenTest",
         "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest",
         "thc.runtime.AtomicIntArrayTest",
-        "thc.runtime.AlignedScalarMemoryTest",
         "thc.runtime.IntegerCompletionTest",
         "thc.runtime.UnalignedScalarMemoryTest",
         "thc.runtime.BoxedCasTest",
@@ -2566,7 +2549,6 @@
         "thc.runtime.SimdAddressFamiliesTest",
         "thc.runtime.StableNamesTest",
         "thc.runtime.FloatingRemainderTest",
-        "thc.runtime.AlignedScalarMemoryTest",
         "thc.runtime.IntegerCompletionTest",
         "thc.runtime.UnalignedScalarMemoryTest",
         "thc.runtime.AtomicAddressTest",
@@ -3396,7 +3378,6 @@
       "thc.runtime.AggregateHeapStorageTest",
       "thc.runtime.AggregateLetContinuationTest",
       "thc.runtime.AggregateLetTest",
-      "thc.runtime.AlignedScalarMemoryTest",
       "thc.runtime.ArithmeticExceptionLazinessTest",
       "thc.runtime.ArrayCoreEvidenceTest",
       "thc.runtime.ArraySliceTest",

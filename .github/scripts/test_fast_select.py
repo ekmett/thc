@@ -1575,7 +1575,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertIn("thc.runtime.OriginalDirectoryStreamsTest", consumers)
         self.assertIn("thc.runtime.OriginalDirectoryPathsTest", consumers)
         self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
-        self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.IntegerCompletionTest", consumers)
         # The isolated boundary control delegates to the native test's genuine
         # two-root fixture helper, so it also consumes ArrayCoreEvidence.

@@ -93,7 +93,6 @@ Not quarantined merely for this reason:
     fixture-inputs.log's shared appendix and still need repair at their owner.
 
 Compiler-structure assertions (also excluded):
-  aligned-scalar-memory (052): exact Core/root/primitive-use expectations.
   original-open (069): exact internal root counts.
   tuple-join (124), sum-join (137): exact join/state-lambda/case shapes; generated
     receipt/audit files are not consumed by their behavioral tests.
