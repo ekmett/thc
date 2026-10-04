@@ -42,19 +42,20 @@ Spark hints are discarded by default without evaluating their lifted arguments.
 `par#` returns one and `spark#` returns the identical argument. Set
 `thc.SparkQueueCapacity` to a value from 1 to 65536 to enable one managed guest
 worker and a bounded context-owned queue; zero disables it. The embedding must
-allow thread creation. The worker uses the selected platform or Loom hosting. This slice has JVM
-platform-hosting evidence; its reuse of Loom hosting is not yet qualified.
+allow thread creation. The worker uses the selected platform or Loom hosting.
+This slice has JVM platform-hosting evidence; its reuse of Loom hosting is not yet qualified.
 It evaluates original shared thunks to WHNF through ordinary `Force`; demand
 shares the same publication rather than starting a copied computation.
 
 This first slice admits only unevaluated original thunks from this context's
-AST or bytecode roots with asynchronous continuation capture enabled. Other
+AST or bytecode roots with asynchronous continuation capture enabled. Increasing
+capacity alone does not make ordinary synchronous thunk roots eligible. Other
 values, unsupported roots, duplicate pending hints and overflow are discarded
 without forcing. Thus enabling the queue does not promise evaluation of every
-hint. `numSparks#` counts queued entries;
-`getSpark#` removes an unclaimed thunk with success flag one, or returns zero
-with the pinned RTS's boxed `False` filler when empty. The state operand must complete successfully before `spark#` can enqueue its payload;
-failure or suspension cannot launch the hinted work.
+hint. `numSparks#` counts queued entries; `getSpark#` removes an unclaimed thunk with success flag one, or returns zero
+with the pinned RTS's boxed `False` filler when empty. The state operand must
+complete successfully before `spark#` can enqueue its payload; failure or
+suspension cannot launch the hinted work.
 
 Ordinary speculative guest failures stay on their originating thunk and are
 observed by later demand; unrelated guest work continues. Cooperative async
