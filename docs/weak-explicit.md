@@ -1,15 +1,27 @@
 <!-- SPDX-FileCopyrightText: 2026 Edward Kmett -->
 <!-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause -->
 
-# Explicit weak finalization (partial)
+# Managed weak registrations (partial)
 
-`mkWeak#`, `mkWeakNoFinalizer#`, `deRefWeak#` and `finalizeWeak#` have a bounded,
-context-owned implementation in both interpreters. This is **not automatic weak
-reference or ephemeron support**. Registrations strongly retain their lazy keys,
-values and Haskell actions until explicit finalization or context close. Dropping
-the Weak# does not erase its registration. Key/value/action cycles therefore
-cannot be collected prematurely, but unreachable keys and resources can remain
-retained for the context's entire lifetime.
+`mkWeak#`, `mkWeakNoFinalizer#`, `deRefWeak#` and `finalizeWeak#` share a
+context-owned implementation in both interpreters. An actionless registration
+without C callbacks, whose key and value are the identical boxed carrier, can be
+collected by the JVM while its `Weak#` handle remains live. Neither registration
+nor dereference forces that carrier. Once the key is collected, dereference returns flag 0;
+the registry releases the dead entry during a subsequent weak operation.
+Collector timing remains a JVM decision, and a GC request does not guarantee
+collection before returning.
+
+Attaching a supported C callback to a still-live identity registration atomically
+restores strong retention before the callback can run. Attaching to an already
+collected registration returns 0. Callbacks remain explicit-only: collection
+never executes C callbacks or Haskell actions.
+
+Registrations with a distinct value, a Haskell action, or attached C callbacks
+strongly retain their keys and payloads until explicit finalization or context
+close. Dropping the `Weak#` does not erase a live registration. This is **not
+ephemeron support**: a retained value or action can refer back to its key, and
+those otherwise unreachable cycles can remain for the context's entire lifetime.
 
 Finalization atomically marks the registration dead and drops its payload from
 the registry. It returns the actual Haskell action with flag 1; it does not call
@@ -30,5 +42,6 @@ Host cancellation is not claimed to guarantee execution of a returned action.
 `addCFinalizerToWeak#` admits only [source-certified one-argument C labels
 and owned `free` bases](c-finalizers.md). Explicit `finalizeWeak#` runs their
 callbacks outside the registry lock before returning the Haskell action. There
-is still no automatic GC finalizer thread, Java Cleaner/WeakReference
-approximation, heap walk or bounded-memory reclamation.
+is no automatic GC finalizer thread, Java Cleaner, general ephemeron collection
+or heap walk. Identity-only collection does not provide bounded-memory
+reclamation for registrations with dependent payloads or callbacks.
