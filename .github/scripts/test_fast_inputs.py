@@ -1622,6 +1622,15 @@ class FastInputTests(unittest.TestCase):
                      "build/empty-join-input/pre-core/EmptyJoinInputAudit.cbd", "build/empty-join-input/provenance.json"):
             self.assertFalse(cache.allowed_payload(name), name)
 
+    def test_sum_layout_products_exclude_receipts_and_unrelated_compiler_outputs(self):
+        for stage in ("pre", "post"):
+            for suffix in ("hi", "o"):
+                self.assertTrue(cache.allowed_payload(f"build/sum-layout/{stage}-ghc/SumLayoutAudit.{suffix}"))
+        for name in ("native/sum-layout-oracle", "oracle.tsv", "native/Main.hi", "native/Main.o", "native/SumLayoutAudit.hi", "native/SumLayoutAudit.o"):
+            self.assertTrue(cache.allowed_payload("build/sum-layout/" + name), name)
+        for name in ("provenance.json", "checks.json", "pre-ghc/Other.hi", "native/Other.o", "native/Main.dyn_o", "oracle.tsv.tmp"):
+            self.assertFalse(cache.allowed_payload("build/sum-layout/" + name), name)
+
     def test_cbv_contract_cbd_payloads_are_closed_to_exact_modules_and_stages(self):
         for name in cache.CBV_CONTRACT_CBD_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)

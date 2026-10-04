@@ -188,6 +188,22 @@ class FixtureGraphTest(unittest.TestCase):
             self.assertNotIn(name, fast_fixtures.quarantined_classes(project))
         self.assertTrue(manifest["groups"]["sum-results"]["quarantined"])
 
+    def test_sum_layout_has_one_independent_target_and_keeps_result_consumers_quarantined(self):
+        import fast_select
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["sum-layout"]
+        classes = ["thc.SumLayoutMetadataTest"]
+        self.assertEqual(classes, group["junit"])
+        self.assertFalse(group.get("requires"))
+        self.assertEqual(["fixture-sum-layout"], fast_fixtures.prepare_cmake(project, self.selection(*classes), mock.Mock())["targets"])
+        policy = json.loads((project / fast_select.POLICY).read_text())
+        self.assertEqual("commit", fast_select.cadence_assignments(manifest, owners, policy)[classes[0]])
+        remaining = manifest["groups"]["sum-results"]
+        self.assertTrue(remaining["quarantined"])
+        self.assertIn("sum-layout", remaining["requires"])
+        self.assertEqual({"thc.AggregateFrontierTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest"}, set(remaining["junit"]))
+
     def test_selected_consumers_share_one_dependency_build(self):
         self.manifest["groups"]["alpha"].update(cmakeTarget="fixture-alpha", requires=["beta"])
         self.manifest["groups"]["beta"]["cmakeTarget"] = "fixture-beta"

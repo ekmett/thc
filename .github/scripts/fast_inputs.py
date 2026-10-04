@@ -462,12 +462,12 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
     "manifest.json", "pre-core/GeneratedSimdSmoke.cbd", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
 PROVENANCE_DIRS = """io-main-pap
-floating-tuple sum-layout sum-result tag-to-enum
+floating-tuple sum-result tag-to-enum
 unsafe-equality simd simd-int32x4 simd-floatx4
 simd-doublex2 simd-int32x4-bytearray simd-word32x4-bytearray
 simd-floatx4-bytearray simd-doublex2-bytearray""".split()
 CHECK_DIRS = """floating-tuple
-sum-layout sum-result tag-to-enum
+sum-result tag-to-enum
 unsafe-equality""".split()
 AGGREGATE_HOST_CBD_OUTPUTS = frozenset({
     "build/aggregate-core/AggregateFrontier.cbd", "build/aggregate-post-core/AggregateFrontier.cbd",
@@ -1443,6 +1443,12 @@ def allowed_payload(name):
         return name in AGGREGATE_HOST_CBD_OUTPUTS or name in {
             f"build/aggregate-layout/{stage}-ghc/AggregateLayoutAudit.{suffix}"
             for stage in ("pre", "post") for suffix in ("hi", "o")}
+    if parts[1] == "sum-layout":
+        return name in AGGREGATE_HOST_CBD_OUTPUTS or name in {
+            f"build/sum-layout/{stage}-ghc/SumLayoutAudit.{suffix}"
+            for stage in ("pre", "post") for suffix in ("hi", "o")} or name in {
+            "build/sum-layout/native/sum-layout-oracle", "build/sum-layout/oracle.tsv",
+            *(f"build/sum-layout/native/{module}.{suffix}" for module in ("Main", "SumLayoutAudit") for suffix in ("hi", "o"))}
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
     if parts[1] == "unix-libc":

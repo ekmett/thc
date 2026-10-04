@@ -19,12 +19,12 @@ import java.io.File;
 import java.nio.file.Files;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.runtime.SumEvidence.verifySumEvidence;
+import static thc.runtime.SumEvidence.verifySumResultEvidence;
 
 @SuppressWarnings("unchecked")
 class SumResultTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
-    @BeforeEach void verifyEvidence() throws Exception { verifySumEvidence(root); }
+    @BeforeEach void verifyEvidence() throws Exception { verifySumResultEvidence(root); }
     private Path artifact(String stage, boolean extended) {
         return new File(root, "build/" + (extended ? "sum-result" : "sum-layout") + "/" + stage + "-core/" + (extended ? "SumResultAudit" : "SumLayoutAudit") + ".cbd").toPath();
     }

@@ -281,7 +281,7 @@ tasks.withType(Test).configureEach {
             "proxy-void/**/*.cbd", "proxy-void/**/*.json", "proxy-void/*.tsv", "proxy-void/native/**", "proxy-void/api/**", "proxy-void/commands/**",
             "unsafe-equality/**/*.cbd", "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
             "aggregate-core/**/*.cbd", "aggregate-post-core/**/*.cbd", "map/boot-core/**/*.cbd", "cstring/boot-core/GHC.Internal.CString.cbd", "aggregate-layout/pre-core/AggregateLayoutAudit.cbd", "aggregate-layout/post-core/AggregateLayoutAudit.cbd",
-            "sum-layout/**/*.json", "sum-layout/**/*.cbd", "sum-layout/*.tsv", "sum-layout/native/**",
+            "sum-layout/pre-core/SumLayoutAudit.cbd", "sum-layout/post-core/SumLayoutAudit.cbd", "sum-layout/oracle.tsv",
             "sum-result/**/*.json", "sum-result/**/*.cbd", "sum-result/*.tsv", "sum-result/native/**",
             "tuple-arithmetic/pre-core/**/*.cbd", "tuple-arithmetic/post-core/**/*.cbd",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
@@ -473,7 +473,7 @@ tasks.withType(Test).configureEach {
             "test-core-float-vector-memory.py",
             "test-core-double-vector-memory.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
-            "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py", "prepare-sum-result-audit.py", "test-core-sums.py")
+            "sum_layout_model.py", "test-sum-layout.py", "prepare-sum-result-audit.py", "test-core-sums.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)

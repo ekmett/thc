@@ -2744,13 +2744,13 @@ Modes native-only/export-only/allow-unsupported change the output set; default f
 Consumer reads receipts, TSVs, CBDs, audit/negative reports and command records.
 Receipt again includes unused PrimopTools.hs and omits shared auditor data tables.
 
-088 sum-results (three quarantined producer flows; aggregate-layout isolated)
+088 aggregate families (layout owners isolated; frontier/results quarantined)
 Fixture rationale (088 sum-results)
 Purpose: Check sum alternatives and aggregate result layouts carry the right values
   through execution.
-Produces/consumed result: Aggregate-frontier, sum-layout and sum-result CBDs/oracles;
-  aggregate-layout has its own named CMake rule and consumers.
-Cost and overlap: Remaining frontier/sum flows have recursive receipts and shape
+Produces/consumed result: Named aggregate-layout/sum-layout CBDs and native sum
+  observations; quarantined aggregate-frontier and sum-result CBDs/oracles.
+Cost and overlap: Remaining frontier/result flows have recursive receipts and shape
   gates; keep them quarantined pending semantic consolidation.
 Build status: QUARANTINED: excluded from the new fixture build; see docs/fixture-quarantine.log.
 
@@ -2781,16 +2781,26 @@ B. Admitted aggregate-layout (cmake/CoreFixtures.cmake):
     metadata, malformed/abstract boundaries, lazy boxed values and first-installed
     unknown-levity returns. Generation and actual execution require separate proof.
   These source exports do not qualify matching retained-library hydration.
-C. bin/check-sum-layout.py --prepare:
+C. fixture-sum-layout (cmake/CoreFixtures.cmake):
   IN t/fixtures/compiler/SumLayoutAudit.hs, SumLayoutAuditNative.hs,
-    bin/sum_layout_model.py and shared tools/data.
+    bin/export-core.sh, bin/toolchain.sh, bin/plugin.py, explicit plugin publication,
+    selected GHC/package/settings/compiler-library inputs, cmake/CaptureOutput.cmake.
   Under build/sum-layout/:
-    <pre|post>-core/SumLayoutAudit.cbd and stage-ghc/: IN audit source/exporter.
-    native/sum-layout-oracle and compiler intermediates: IN native/audit sources.
-    oracle.tsv: IN binary; checked against independent model.
-    provenance.json: IN recursive generated products/plugin/toolchain/source hashes;
-      old receipt removed first. Includes bin/test-sum-layout.py, not executed here.
-    checks.json: IN receipt/CBD inventory/in-process audits/layout model.
+    pre-core/SumLayoutAudit.cbd, post-core/SumLayoutAudit.cbd: IN audit source/exporter.
+    pre-ghc/SumLayoutAudit.hi/.o, post-ghc/SumLayoutAudit.hi/.o: named export byproducts.
+    native/sum-layout-oracle, native/Main.hi/.o, native/SumLayoutAudit.hi/.o:
+      IN both HS sources and selected native GHC toolchain.
+    oracle.tsv: IN native binary; CaptureOutput publishes stdout after exit success.
+    No recursive provenance, checks/audit JSON, Core JSON or cached test-success result.
+  SumLayoutMetadataTest alone is selected at Linux/macOS commit cadence. It checks
+    genuine State/empty and generic boxed-levity signatures, accepted/rejected roots
+    and all named native scalar observers on both export stages/backends. It does
+    not assert installed execution. Native row count is not a behavioral contract.
+  Quarantined SumResultTest/SumProtocolTest retain named sum-layout data through
+    an explicit fixture dependency; their remaining evidence gate is sum-result only.
+  Pre-Tidy generated IDs need not reproduce byte-for-byte after prior-interface reuse;
+    output directories may contain unrelated files. Source export does not qualify
+    matching retained-library hydration.
 D. bin/prepare-sum-result-audit.py:
   IN t/fixtures/compiler/SumResultAudit.hs, SumResultAuditNative.hs,
     producer model/shared exporter/auditor/decoder/data.
@@ -2803,10 +2813,11 @@ D. bin/prepare-sum-result-audit.py:
     provenance.json: IN recursively all output files except itself/Core JSON,
       plugin manifest/shared library, GHC/package descriptions and source hashes.
       Old receipt removed first.
-Consumers read their named CBDs/oracles/checks and receipt-referenced files.
-Remaining sum-layout/result recursive receipts turn stale compiler intermediates
-  into extra inputs; their output sets are not closed. Keep these and frontier
-  quarantined while reviewing useful semantic consolidation.
+Quarantined consumers read their named CBDs/oracles/checks and receipt-referenced files.
+Remaining sum-result recursive receipts turn stale compiler intermediates into
+  extra inputs; its output set is not closed. Keep its runtime consumers and frontier
+  quarantined. Preserve the actual post-return materialization/identity/release
+  control in SumProtocolTest during any later consolidation.
 
 089 simd-floatx4
 Fixture rationale (089 simd-floatx4)

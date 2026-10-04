@@ -59,6 +59,47 @@ foreach(stage pre post)
 endforeach()
 add_custom_target(fixture-aggregate-layout DEPENDS ${aggregate_layout_outputs})
 
+# 088: sum signatures and actual GHC result values, isolated from sum-result and
+# frontier. Consumers check ABI/values themselves; no cached success reports.
+# No closure= export is requested. Native Main imports only SumLayoutAudit;
+# separate stage/native object directories give every named product one writer.
+set(sum_layout_out "${PROJECT_SOURCE_DIR}/build/sum-layout")
+set(sum_layout_outputs)
+foreach(stage pre post)
+  set(cbd "${sum_layout_out}/${stage}-core/SumLayoutAudit.cbd")
+  set(stage_options)
+  if(stage STREQUAL "post")
+    list(APPEND stage_options -fplugin-opt=THC.Plugin:post-tidy)
+  endif()
+  add_custom_command(OUTPUT "${cbd}"
+    BYPRODUCTS "${sum_layout_out}/${stage}-ghc/SumLayoutAudit.hi" "${sum_layout_out}/${stage}-ghc/SumLayoutAudit.o"
+    COMMAND ${fixture_env} "THC_CORE_OUT=${sum_layout_out}/${stage}-core" "THC_GHC_OUT=${sum_layout_out}/${stage}-ghc"
+      "${PROJECT_SOURCE_DIR}/bin/export-core.sh" --plugin-manifest "${plugin_manifest}"
+      ${stage_options} "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumLayoutAudit.hs"
+    DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumLayoutAudit.hs"
+      ${plugin_outputs} ${toolchain_inputs} "${PROJECT_SOURCE_DIR}/bin/export-core.sh"
+      "${PROJECT_SOURCE_DIR}/bin/toolchain.sh" "${PROJECT_SOURCE_DIR}/bin/plugin.py"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+  list(APPEND sum_layout_outputs "${cbd}")
+endforeach()
+set(sum_layout_native "${sum_layout_out}/native")
+add_custom_command(OUTPUT "${sum_layout_native}/sum-layout-oracle"
+  BYPRODUCTS "${sum_layout_native}/Main.hi" "${sum_layout_native}/Main.o"
+    "${sum_layout_native}/SumLayoutAudit.hi" "${sum_layout_native}/SumLayoutAudit.o"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${sum_layout_native}"
+  COMMAND ${fixture_env} "${GHC}" --make -O2 -fforce-recomp -dcore-lint -dstg-lint
+    "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler" -odir "${sum_layout_native}" -hidir "${sum_layout_native}"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumLayoutAuditNative.hs" -o "${sum_layout_native}/sum-layout-oracle"
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumLayoutAuditNative.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/SumLayoutAudit.hs" ${toolchain_inputs}
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_command(OUTPUT "${sum_layout_out}/oracle.tsv"
+  COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=${sum_layout_native}/sum-layout-oracle" "-DOUTPUT=${sum_layout_out}/oracle.tsv"
+    -P "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  DEPENDS "${sum_layout_native}/sum-layout-oracle" "${PROJECT_SOURCE_DIR}/cmake/CaptureOutput.cmake"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM)
+add_custom_target(fixture-sum-layout DEPENDS ${sum_layout_outputs} "${sum_layout_out}/oracle.tsv")
+
 set(native_dir "${PROJECT_SOURCE_DIR}/build/native")
 set(native "${native_dir}/native-oracle")
 set(native_inputs "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/THC/Prim/Test.hs")
