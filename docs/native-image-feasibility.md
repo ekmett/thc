@@ -80,6 +80,14 @@ keeps its configured worker count.
 
 `ReusableLoaderTest` runs the saved factory after removing its CBD inputs with
 runtime Core lowering disabled. This is JVM evidence for preparation and runtime
-ownership. It does not establish Native Image heap capture, executable generation
-or bundled native libraries. Those remain tracked in
+ownership.
+
+A bounded Linux Native Image check also passes hosted preparation and reachability
+analysis with `-H:+ReturnAfterAnalysis`. The exact initialization inventory admits
+the retained option descriptor, empty carrier registry type and constructor-field
+metadata; their static initialization creates no runtime services or guest values.
+The diagnostic combines the tested portable classes with pinned Linux dependencies
+and deliberately omits THC native-resource groups. It stops before code generation
+and image serialization. Executable generation, runtime patching in a native image
+and bundled native libraries remain unqualified and tracked in
 [issue #1060](https://github.com/ekmett/thc/issues/1060).

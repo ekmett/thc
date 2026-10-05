@@ -19,7 +19,10 @@ a failed build must remain a failure.
 The separate `executable` mode now prepares a captured application's AST factory
 during Truffle context preinitialization and releases the selected Core bodies.
 Its JVM ownership/absence-of-runtime-lowering checks pass; Native Image generation
-and native-library bundling remain unqualified. See the
+and native-library bundling remain unqualified. A diagnostic using current portable
+classes and pinned Linux dependencies passes hosted preparation/reachability with
+`-H:+ReturnAfterAnalysis`; THC native-resource groups are deliberately absent, and
+that cutoff does not serialize an image or execute its runtime handoff. See the
 [application-bound recipe](../../docs/native-code-cache.md#application-bound-prepared-image).
 
 ## Reproduction

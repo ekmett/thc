@@ -2,6 +2,19 @@
 # context-thread-local values, guest instances or native handles are initialized.
 # Literal platform OptionKey and ContextReference language/index metadata only.
 thc.Language
+# Retained by preinitialized PolyglotLanguage.options. Fieldless generated
+# descriptor; its only initializer stores its own desiredAssertionStatus boolean.
+# OptionDescriptor values use the existing literal Language OptionKeys lazily.
+thc.LanguageOptionDescriptors
+# The preinitialized context shell retains two fresh empty carrier registries.
+# CarrierLocal has no static fields/initializer; its ThreadLocal parent is already
+# build-initialized by the pinned JDK feature. No cell, thread or State is created
+# by class initialization; carrier values remain lazy and runtime-owned.
+thc.runtime.CarrierLocal
+# Reusable constructor storage retains this logical-field descriptor. Its sole
+# static EMPTY has arity zero: empty arrays and offsets[1], no proof parsing,
+# guest value, context, thread or native resource is created by initialization.
+thc.runtime.CoreFields
 # Immutable descriptor sets and ASCII name Pattern; native access remains lazy.
 thc.runtime.CoreOriginalStdio
 # Immutable narrow-operation descriptors: primitive flags, enums, strings and
