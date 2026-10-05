@@ -201,6 +201,40 @@ class ManagedWeakTest {
         var registration = new Registration(weak, new WeakReference<>(key, queue));
         Reference.reachabilityFence(key); return registration;
     }
+    private void awaitNativeRetirement(java.lang.foreign.MemorySegment segment) throws Exception {
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (segment.scope().isAlive() && System.nanoTime() < deadline) Thread.sleep(10);
+        assertFalse(segment.scope().isAlive(), "Collected owned free must retire without a managed GC or weak operation");
+        assertThrows(IllegalStateException.class, () -> segment.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
+    }
+    @Test
+    void ownedFreeAutomaticallyRetiresCollectedKeysAndCompletedBorrows() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) for (boolean borrowed : new boolean[]{false, true})
+        try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState();
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = weakProgram(language, backend, true);
+                var address = state.getNativeAllocations().malloc(8);
+                var loan = address.nativeAllocation().borrow(); var segment = loan.segment();
+                if (!borrowed) loan.close();
+                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
+                try {
+                    collect(queue, dropped.referent());
+                    if (borrowed) {
+                        assertTrue(segment.scope().isAlive(), "Collection cannot consume an active borrow");
+                        segment.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 91);
+                    }
+                } finally { loan.close(); }
+                // No performGC, dereference, finalization or registry inspection precedes retirement.
+                awaitNativeRetirement(segment);
+                assertEquals(0L, state.getWeaks().dereference(dropped.weak()).getFlag());
+                assertThrows(RuntimeFault.class, () -> address.readWord8(0));
+                assertThrows(RuntimeFault.class, () -> state.getNativeAllocations().free(address));
+            } finally { context.leave(); }
+        }
+    }
     @Test
     void ownedFreeRetiresCollectedMutVarKeysAtManagedGcRequests() throws Exception {
         for (var backend : List.of("ast", "bytecode"))
