@@ -88,6 +88,19 @@ the retained option descriptor, empty carrier registry type and constructor-fiel
 metadata; their static initialization creates no runtime services or guest values.
 The diagnostic combines the tested portable classes with pinned Linux dependencies
 and deliberately omits THC native-resource groups. It stops before code generation
-and image serialization. Executable generation, runtime patching in a native image
-and bundled native libraries remain unqualified and tracked in
-[issue #1060](https://github.com/ekmett/thc/issues/1060).
+and image serialization.
+
+A separate Linux diagnostic completes image generation and runs the existing
+checked mutable-state IO/PAP sample through `NativeExecutable.main`, including its
+entry and shutdown actions, with the bound CBD directory unavailable. It uses the
+pure recipe's LLVM/NFI exclusions, omits THC native resources, and binds synchronous
+AST execution with heap byte arrays. This selects the ordinary launcher's existing
+embedding IO path. The same ELF also runs after relocation into a directory with no
+adjacent library sidecar. Its ELF dependencies are the system C, math and zlib
+libraries; this is not a static executable.
+
+That result qualifies serialization and runtime handoff for this sample. It does
+not qualify guest machine-code compilation, general package execution or native
+library bundling. The ordinary executable recipe still includes Sulong; the
+resource-stripped diagnostic is not a distributable build. These remaining limits
+are tracked in [issue #1060](https://github.com/ekmett/thc/issues/1060).

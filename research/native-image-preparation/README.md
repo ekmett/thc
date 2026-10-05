@@ -18,12 +18,14 @@ a failed build must remain a failure.
 
 The separate `executable` mode now prepares a captured application's AST factory
 during Truffle context preinitialization and releases the selected Core bodies.
-Its JVM ownership/absence-of-runtime-lowering checks pass; Native Image generation
-and native-library bundling remain unqualified. A diagnostic using current portable
-classes and pinned Linux dependencies passes hosted preparation/reachability with
-`-H:+ReturnAfterAnalysis`; THC native-resource groups are deliberately absent, and
-that cutoff does not serialize an image or execute its runtime handoff. See the
-[application-bound recipe](../../docs/native-code-cache.md#application-bound-prepared-image).
+Its JVM ownership/absence-of-runtime-lowering checks pass. Bounded Linux analysis
+also passes with the exact initialization inventory. A separate no-FFI diagnostic
+using the pure recipe's provider exclusions and no THC native resources generates
+an ELF and runs the checked IO/PAP entry and shutdown with its CBD inputs unavailable.
+This qualifies serialization and runtime handoff for that sample, not guest AOT
+machine code, the ordinary Sulong recipe or native-library bundling. See the
+[application-bound recipe](../../docs/native-code-cache.md#application-bound-prepared-image)
+and [qualification limits](../../docs/native-image-feasibility.md#preinitialized-runtime-state).
 
 ## Reproduction
 

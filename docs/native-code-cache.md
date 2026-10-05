@@ -129,10 +129,13 @@ creates fresh guest values. A missing factory or different language is an error;
 this mode does not fall back to runtime Core loading or accept external sources.
 
 The isolated JVM regression executes after deleting its CBD/manifest inputs with
-runtime lowering disabled. Native Image heap capture and executable generation
-for this path remain unqualified; this is not a compiled-guest cache claim.
-Native dependencies and resource-profile requirements remain, and cbits bundling
-is unfinished. Build inputs use a compact package manifest selected with
+runtime lowering disabled. A separate no-FFI Linux diagnostic also serializes the
+saved factory and runs its checked IO/PAP entry and shutdown with the bound CBD
+directory unavailable. It uses the pure recipe's provider exclusions and omits
+THC native resources; see the [exact qualification boundary](native-image-feasibility.md#preinitialized-runtime-state).
+This is not a compiled-guest cache or general package-executable claim. The ordinary
+recipe still includes Sulong, native dependencies and resource-profile requirements;
+cbits bundling is unfinished. Build inputs use a compact package manifest selected with
 `@packages.json`, not loose CBD paths.
 
 ### Compiled-cache compatibility
