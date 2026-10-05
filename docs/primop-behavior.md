@@ -60,7 +60,7 @@ remain unqualified; see [empty tuple inputs](empty-tuple-inputs.md).
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `par#` | Returns `1`; discards hints by default. With opt-in `thc.SparkQueueCapacity`, submits suitable original thunks for speculative WHNF evaluation without forcing on the caller. |
+| `par#` | Returns `1`; discards hints by default. With opt-in `thc.SparkQueueCapacity`, submits suitable context-owned AST/bytecode or updating GHC BCO thunks with continuation capture for speculative WHNF evaluation without forcing on the caller. |
 | `spark#` | Returns the identical, unforced payload; completes its state operand before optional queue submission. |
 | `numSparks#` | Returns queued entries in the context-owned opt-in queue; defaults to `0`. |
 | `getSpark#` | Dequeues an unclaimed thunk with flag `1`, or returns flag `0` and the pinned GHC boxed `False` filler when the queue is empty or disabled. |
@@ -247,7 +247,7 @@ Details: [native address projection](native-addresses.md), [managed pinning](pin
 | `compactAllocateBlock#` | Allocates blocks for that THC image, not arbitrary GHC heap images or cross-context/process import. Abandoned raw imports are retained until context disposal. |
 | `compactFixupPointers#` | Reconstructs a fresh graph using originating-context constructor metadata. Corrupt/incompatible images fail through the API's `Nothing` result; portable constructor resolution is not implemented. |
 | `newBCO#` | Decodes and executes the documented GHC 9.14.1 **opcode/ABI subset**, including scalar cases, internal tuple continuations, packed subword stacks and captured AP/PAP application. Function arity is independent of continuation bitmap width. Ordinary external function entry still requires one word per argument; external Core tuple and SIMD conventions require unsupported ABI adapters. |
-| `mkApUpd0#` | Creates an updating wrapper for a zero-arity BCO with an empty entry bitmap. Native calls, info-table/PACK instructions, breakpoints and explicit delimited capture through the interpreter remain unsupported. One-shot asynchronous and stack cuts preserve pending work and the shared update. |
+| `mkApUpd0#` | Creates an updating wrapper for a zero-arity BCO with an empty entry bitmap. Native calls, info-table/PACK instructions, breakpoints and explicit delimited capture through the interpreter remain unsupported. One-shot asynchronous and stack cuts preserve pending work and the shared update. Context-owned updating BCO/AP thunks are eligible for the existing opt-in spark pool; cooperative worker cancellation leaves their work resumable by demand. |
 
 Details: [compact regions and serialization](compact-regions.md),
 [BCO opcode list and ABI](ghc-bco.md).

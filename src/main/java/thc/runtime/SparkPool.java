@@ -31,7 +31,8 @@ public final class SparkPool {
         if (thunk.getState() != 0 || !thunk.getAsynchronousExceptions() || target == null ||
                 !(target.getRootNode() instanceof GuestRoot root) ||
                 !(root instanceof FunctionRoot function && function.getCapturesContinuations() ||
-                  root instanceof BytecodeRoot bytecode && bytecode.isAsyncEnabled())) return false;
+                  root instanceof BytecodeRoot bytecode && bytecode.isAsyncEnabled() ||
+                  root instanceof GhcBCORoot bco && bco.getOwner() == owner)) return false;
         if (root.compilationOwner() == owner.getCompilationOwner()) return true;
         var environment = thunk.getEnvironment();
         return environment != null && environment.getProgram() instanceof Program program && program.belongsToCurrentContext(node);
