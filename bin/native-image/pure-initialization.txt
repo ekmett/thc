@@ -86,6 +86,9 @@ thc.runtime.DispatchThunkTargetNodeGen
 thc.runtime.DispatchCallTargetNodeGen$Uncached
 thc.runtime.DispatchThunkTargetNodeGen$Uncached
 thc.runtime.BytecodeRootGen
+# The generated CLASS_TO_TAG_MASK prototype is a fieldless ClassValue subclass.
+# It maps fixed instrumentation tag classes to integer bits; no guest state.
+thc.runtime.BytecodeRootGen$1
 thc.runtime.BytecodeRootGen$Bytecode
 thc.runtime.BytecodeRootGen$IsTypedSelf_Node
 thc.runtime.BytecodeRootGen$IsSelf_Node

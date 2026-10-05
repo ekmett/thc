@@ -29,7 +29,8 @@ public final class CFinalizerLabels extends Expr {
             || proof.isVector() || !List.of("AddrRep").equals(proof.getPrimReps()))
             throw fault("Original C function label requires exact AddrRep proof");
     }
-    public static ManagedAddress fromCore(String symbol, CoreRepresentation proof) {
+    // Resolving a native label validates metadata and may load its owning library.
+    @TruffleBoundary public static ManagedAddress fromCore(String symbol, CoreRepresentation proof) {
         validate(symbol, proof);
         return Language.currentState(null).cbits().finalizerLabel(symbol);
     }
