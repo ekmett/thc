@@ -103,6 +103,13 @@ restoring preparation authority. The runtime and rejection cases run in both
 handoff modes. This check does not qualify Native Image heap capture, executable
 generation, hosted Core preparation or native library bundling.
 
+Two fixture-free reusable AST checks run after the preparation context closes.
+Cold AOT-compiled `myThreadId#` targets observe each fresh runtime context's
+identity under platform and Loom hosting. Narrow 8/16-bit address indexing checks
+signed values, element offsets and runtime allocations, then rejects reads after
+free without compilation. Both methods run in both handoff modes. These checks
+do not qualify bytecode, Windows Text, GHC export or Native Image execution.
+
 Fixture-free weak checks cover identity-only registrations and actionless raw
 `MutVar#` and `MVar#` keys with distinct values. The cycle check requires actual collection
 of value-to-key cycles while live keys retain their original values, including
