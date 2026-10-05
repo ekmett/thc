@@ -27,4 +27,23 @@ class NativeContextTest {
             else System.setProperty("polyglot.llvm.managed", previous);
         }
     }
+
+    @Test void explicitPolyglotPropertiesOverrideLauncherCompilerDefaults() {
+        for (var option : new String[] {"engine.SingleTierCompilationThreshold",
+                "compiler.CompilationTimeout", "compiler.MaximumGraalGraphSize"}) {
+            var key = "polyglot." + option;
+            var previous = System.getProperty(key);
+            try {
+                System.setProperty(key, "not-a-number");
+                var failure = assertThrows(IllegalArgumentException.class, () -> {
+                    try (var context = Main.withContextProfile(Context.newBuilder("thc"), ContextProfile.LAUNCHER).build()) {}
+                }, option + " must reach the real launcher builder");
+                assertTrue(failure.getMessage().contains(option.substring(option.indexOf('.') + 1)), failure.getMessage());
+                assertTrue(failure.getMessage().contains("not-a-number"), failure.getMessage());
+            } finally {
+                if (previous == null) System.clearProperty(key);
+                else System.setProperty(key, previous);
+            }
+        }
+    }
 }
