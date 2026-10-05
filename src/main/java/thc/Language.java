@@ -323,6 +323,7 @@ public final class Language extends TruffleLanguage<Language.State> {
     @Override protected void initializeMultiThreading(State context) { context.markMultithreaded(); }
 
     @SuppressWarnings("unchecked") @Override protected CallTarget parse(ParsingRequest request) {
+        if (NativeExecutable.IMAGE_BOUND) throw new UnsupportedCore("Application-bound THC image does not accept external sources");
         if (Boolean.getBoolean("thc.requireCachedCode")) throw new UnsupportedCore("Cached THC source required; parsing is disabled");
         var input = (Map<String, Object>) Json.parse(request.getSource().getCharacters().toString());
         require(!input.containsKey("prepareCode") || input.get("prepareCode") instanceof Boolean, "prepareCode must be a Boolean");

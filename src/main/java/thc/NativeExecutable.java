@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -18,6 +19,10 @@ import com.oracle.truffle.api.TruffleLanguage;
  * CAFs and native linkage per context. This is not compiled-guest persistence.
  */
 public final class NativeExecutable {
+    // The hosted feature freezes this before analysis. Ordinary JVM and generic
+    // images keep source parsing, even if the property is set at runtime.
+    static final boolean IMAGE_BOUND = ImageInfo.inImageBuildtimeCode()
+        && Boolean.getBoolean("thc.nativeImage.executable");
     private static NativeExecutable application;
     private final Map<String,Object> core;
     private final Main.ProgramArguments arguments;

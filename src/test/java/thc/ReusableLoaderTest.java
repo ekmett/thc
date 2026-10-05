@@ -144,6 +144,20 @@ class ReusableLoaderTest {
             "units", list(map("id", "fixture", "depends", list(), "modules", list(record))))));
         return Json.stringify(list("--run-executable", "@" + manifest, "fixture:PreparedIo.entry", "fixture:PreparedIo.stop", "--", "fixture", "-Dguest", "-Xguest"));
     }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void executableImagePropertyDoesNotDisableJvmParsing(String backend) throws Exception {
+        var app = unit("app", "Main", List.of(binding("app:Main.entry", literal(7))));
+        var request = input(List.of(app), null);
+        request.put("backend", backend);
+        String old = System.setProperty("thc.nativeImage.executable", "true");
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            assertEquals(7L, context.eval("thc", Json.stringify(request)).execute().asLong());
+        } finally {
+            if (old == null) System.clearProperty("thc.nativeImage.executable");
+            else System.setProperty("thc.nativeImage.executable", old);
+        }
+    }
     @Test void capturedExecutableLoadsAfterSourceRemoval() throws Exception {
         var module = ioModule();
         var definitions = new ArrayList<>((List<Map<String,Object>>) module.get("bindings"));

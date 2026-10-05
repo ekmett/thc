@@ -126,6 +126,10 @@ These settings do not change the produced executable's runtime limits. The
 captured-Core route has passed graph preparation and code generation on Linux;
 complete image construction and native executable launch remain unqualified.
 
+The application-bound image accepts only its captured program. External THC
+source parsing is disabled in that image; ordinary JVM, interpreter and code-cache
+loading retain their existing source entry points.
+
 The executable capture defaults to synchronous AST preparation, so a plain
 argument array needs no properties object. Explicit `thc.backend` values other
 than `ast` and `thc.asyncExceptions` values other than `false` are rejected.
