@@ -24,7 +24,7 @@ import thc.runtime.*;
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
     characterMimeTypes = "application/x-thc-core", defaultMimeType = "application/x-thc-core",
     dependentLanguages = "llvm", contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
-public final class Language extends TruffleLanguage<Language.State> {
+public final class Language extends TruffleLanguage<Language.ContextState> {
     @Option(name = "ThreadHosting", help = "Guest thread host: platform (default) or experimental loom (pinned JDK 25).", category = OptionCategory.USER)
     static final OptionKey<String> THREAD_HOSTING = new OptionKey<>("platform");
     @Option(name = "ByteArrayStorage", help = "Ordinary guest byte-array backing: heap (default) or native (requires native access).", category = OptionCategory.USER)
@@ -36,12 +36,88 @@ public final class Language extends TruffleLanguage<Language.State> {
     public HandoffLayouts getHandoffLayouts() { return currentState(null).handoffLayouts; }
     private final ContextThreadLocal<HandoffState> handoffState = locals.createContextThreadLocal((context, thread) -> new HandoffState());
     public ContextThreadLocal<HandoffState> getHandoffState() { return handoffState; }
-    private final ContextThreadLocal<GuestThreads.PollState> threadPollState = locals.createContextThreadLocal((context, thread) -> context.threads.pollState(thread));
+    private final ContextThreadLocal<GuestThreads.PollState> threadPollState = locals.createContextThreadLocal((context, thread) -> context.pollStates.get(thread));
     private final ContextThreadLocal<CarrierLocal.Cell<MaskingState>> threadMaskingState = locals.createContextThreadLocal((context, thread) -> context.maskingState.cell$org_intelligence_thc(thread));
     private final ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> threadAnnotations = locals.createContextThreadLocal((context, thread) -> context.stackAnnotations.cell$org_intelligence_thc(thread));
-    private static final ContextReference<State> CONTEXTS = ContextReference.create(Language.class);
+    private static final ContextReference<ContextState> CONTEXTS = ContextReference.create(Language.class);
     public static State currentState() { return currentState(null); }
-    public static State currentState(Node node) { return CONTEXTS.get(node); }
+    public static State currentState(Node node) { return CONTEXTS.get(node).requireState(); }
+
+    /** Truffle preserves this object when replacing a preinitialized context's Env. */
+    public static final class ContextState {
+        private enum Phase { PREPARING, PREPARED, ACTIVE, CLOSED }
+        @CompilerDirectives.CompilationFinal private State state;
+        private CarrierLocal<MaskingState> maskingState = new CarrierLocal<>(MaskingState.UNMASKED);
+        private CarrierLocal<StackAnnotationState> stackAnnotations = new CarrierLocal<>(StackAnnotationState.EMPTY);
+        private GuestThreads.PollStates pollStates = new GuestThreads.PollStates();
+        private Phase phase;
+        private Thread firstThread;
+        // Truffle initializes multithreading once for the holder's whole lifetime.
+        private boolean multithreaded;
+
+        private ContextState(Env env, Language language) {
+            phase = env.isPreInitialization() ? Phase.PREPARING : Phase.ACTIVE;
+            state = new State(env, language, maskingState, stackAnnotations, pollStates);
+        }
+        private State requireState() {
+            var current = state;
+            if (current == null) throw new IllegalStateException("THC context has no active runtime state");
+            return current;
+        }
+        private synchronized void noteThread(Thread thread) {
+            if (state != null) state.noteThread(thread);
+            else if (phase == Phase.PREPARED) {
+                if (firstThread == null) firstThread = thread;
+                else if (firstThread != thread) multithreaded = true;
+            }
+        }
+        private synchronized void markMultithreaded() {
+            multithreaded = true;
+            if (state != null) state.markMultithreaded();
+        }
+        private void finishPreparation() {
+            if (phase != Phase.PREPARING) return;
+            var preparation = requireState();
+            Throwable failure = finishState(preparation, null);
+            try { failure = disposeState(preparation, failure); }
+            finally {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                state = null;
+                // The build carrier's Truffle locals are disposed after initializeContext returns.
+                // Runtime factories run before patchContext, so install their empty epoch now.
+                maskingState = new CarrierLocal<>(MaskingState.UNMASKED);
+                stackAnnotations = new CarrierLocal<>(StackAnnotationState.EMPTY);
+                pollStates = new GuestThreads.PollStates();
+                firstThread = null;
+                phase = failure == null ? Phase.PREPARED : Phase.CLOSED;
+            }
+            if (failure != null) Language.<RuntimeException, Void>rethrow(failure);
+        }
+        private synchronized boolean patch(Env env, Language language) {
+            if (phase != Phase.PREPARED || env.isPreInitialization()) return false;
+            try {
+                var runtime = new State(env, language, maskingState, stackAnnotations, pollStates);
+                // Entry and its thread callbacks precede patchContext and will not be replayed.
+                runtime.noteThread(firstThread == null ? Thread.currentThread() : firstThread);
+                if (multithreaded) runtime.markMultithreaded();
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                state = runtime;
+                firstThread = null;
+                phase = Phase.ACTIVE;
+                return true;
+            } catch (Throwable failure) {
+                phase = Phase.CLOSED;
+                firstThread = null;
+                return Language.<RuntimeException, Boolean>rethrow(failure);
+            }
+        }
+        private void disposed() {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            state = null;
+            firstThread = null;
+            phase = Phase.CLOSED;
+        }
+    }
 
     public static final class State {
         private final Env env;
@@ -102,7 +178,10 @@ public final class Language extends TruffleLanguage<Language.State> {
         // they read this irreversible runtime admission state instead.
         private volatile boolean guestConcurrencyAdmitted;
         private final AtomicReference<FutureTask<SulongCbits>> nativeCbits;
-        public State(Env env, Language language) {
+        private State(Env env, Language language, CarrierLocal<MaskingState> maskingState,
+                CarrierLocal<StackAnnotationState> stackAnnotations, GuestThreads.PollStates pollStates) {
+            if (env.isPreInitialization() && env.isNativeAccessAllowed())
+                throw new IllegalArgumentException("THC context preinitialization requires native access to be disabled");
             this.env = env;
             nativeByteArrays = switch (env.getOptions().get(BYTE_ARRAY_STORAGE)) {
                 case "heap" -> false;
@@ -112,6 +191,12 @@ public final class Language extends TruffleLanguage<Language.State> {
                 }
                 default -> throw new IllegalArgumentException("ByteArrayStorage must be heap or native");
             };
+            // The inert pool owns capacity/permission validation and starts no worker here.
+            sparks = new SparkPool(this, language, env.getOptions().get(SPARK_QUEUE_CAPACITY));
+            this.maskingState = maskingState;
+            this.stackAnnotations = stackAnnotations;
+            // Hosting validation precedes allocation of the other runtime service owners.
+            threads = new GuestThreads(env, maskingState, env.getOptions().get(THREAD_HOSTING), pollStates);
             shutdown = new AtomicReference<>();
             managedExports = new ManagedExportRegistry(this, language);
             foreignRoots = new ManagedForeignRoots(this);
@@ -119,16 +204,11 @@ public final class Language extends TruffleLanguage<Language.State> {
             javaScriptImports = new JavaScriptImports();
             packageCbits = new PackageScalarLibraries(env);
             nativeCallbacks = new NativeCallbacks(this);
-            maskingState = new CarrierLocal<>(MaskingState.UNMASKED);
-            stackAnnotations = new CarrierLocal<>(StackAnnotationState.EMPTY);
-            threads = new GuestThreads(env, maskingState, env.getOptions().get(THREAD_HOSTING));
-            sparks = new SparkPool(this, language, env.getOptions().get(SPARK_QUEUE_CAPACITY));
             threadPollState = language.threadPollState;
             threadMaskingState = language.threadMaskingState;
             threadAnnotations = language.threadAnnotations;
             runtimeTrace = new RuntimeTraceServices(env.err());
             runtimeJit = new RuntimeJitServices(this);
-            graphRecovery = new GraphRecovery(this);
             stm = new ManagedSTM();
             files = new ManagedFiles(env, threads);
             rtsFileLocks = new RtsFileLocks();
@@ -158,6 +238,8 @@ public final class Language extends TruffleLanguage<Language.State> {
             weaks = new ManagedWeaks();
             singleThreadedAssumption = Truffle.getRuntime().createAssumption("THC single-threaded context");
             nativeCbits = new AtomicReference<>();
+            // This constructor installs a compiler listener; keep it after the inert service constructors.
+            graphRecovery = new GraphRecovery(this);
         }
         public Env getEnv() { return env; }
         public boolean getNativeByteArrays() { return nativeByteArrays; }
@@ -257,10 +339,14 @@ public final class Language extends TruffleLanguage<Language.State> {
         }
     }
 
-    @Override protected State createContext(Env env) { return new State(env, this); }
-    @Override protected Object getScope(State context) { return context.managedExports.getScope(); }
+    @Override protected ContextState createContext(Env env) { return new ContextState(env, this); }
+    @Override protected void initializeContext(ContextState context) { context.finishPreparation(); }
+    @Override protected boolean patchContext(ContextState context, Env newEnv) { return context.patch(newEnv, this); }
+    @Override protected Object getScope(ContextState context) { return context.requireState().managedExports.getScope(); }
     @Override protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) { return true; }
-    @Override protected void exitContext(State context, ExitMode exitMode, int exitCode) {
+    @Override protected void exitContext(ContextState holder, ExitMode exitMode, int exitCode) {
+        var context = holder.state;
+        if (context == null) return;
         try { context.files.shutdownEventManagers(); }
         finally {
             context.signals.requestStop();
@@ -268,59 +354,47 @@ public final class Language extends TruffleLanguage<Language.State> {
             context.iconv.dispose();
         }
     }
-    @Override protected void finalizeContext(State context) {
-        context.sparks.stop();
-        try { context.files.shutdownEventManagers(); }
-        finally {
-            try { context.signals.requestStop(); }
-            finally {
-                try { context.threads.stopHostedThreads(); }
-                finally { try { context.signals.close(); } finally { context.iconv.dispose(); } }
-            }
-        }
+    @Override protected void finalizeContext(ContextState holder) {
+        if (holder.state == null) return;
+        var failure = finishState(holder.state, null);
+        if (failure != null) Language.<RuntimeException, Void>rethrow(failure);
     }
-    @Override protected void disposeContext(State context) {
-        context.compilerRts.close();
-        context.graphRecovery.close();
-        try { context.runtimeJit.close(); } finally { context.runtimeTrace.close(); }
-        context.compactImages.close();
-        context.heapAddresses.close();
-        context.managedExports.close();
-        context.nativeCallbacks.close();
-        context.packageCbits.close();
-        context.foreignRoots.close();
-        context.savedTermios.close();
+    @Override protected void disposeContext(ContextState holder) {
+        Throwable failure = null;
         try {
-            try { try { context.stm.close(); } finally { context.threads.close(); } }
-            finally {
-                try { context.capturedAsyncRequests.close(); }
-                finally {
-                    try { context.files.dispose(); }
-                    finally {
-                        try { context.stdio.dispose(); }
-                        finally { try { context.rtsFileLocks.dispose(); } finally { context.stackSnapshots.dispose(); } }
-                    }
-                }
-            }
-        } finally {
-            try { try { context.weaks.close(); } finally { context.stableNames.close(); } }
-            finally {
-                try { context.stablePointers.close(); }
-                finally {
-                    try { context.nativeAddresses.close(); }
-                    finally {
-                        try { context.nativeAllocations.close(); }
-                        finally {
-                            try { context.coreUnitPrograms.forEach(CoreUnitProgram::close); }
-                            finally { context.coreUnitPrograms.clear(); }
-                        }
-                    }
-                }
+            if (holder.state != null) failure = disposeState(holder.state, null);
+        } finally { holder.disposed(); }
+        if (failure != null) Language.<RuntimeException, Void>rethrow(failure);
+    }
+    private static Throwable finishState(State context, Throwable failure) {
+        return closeOwners(failure, context.sparks::stop, context.files::shutdownEventManagers,
+            context.signals::requestStop, context.threads::stopHostedThreads, context.signals::close, context.iconv::dispose);
+    }
+    private static Throwable disposeState(State context, Throwable failure) {
+        failure = closeOwners(failure, context.compilerRts::close, context.graphRecovery::close,
+            context.runtimeJit::close, context.runtimeTrace::close, context.compactImages::close,
+            context.heapAddresses::close, context.managedExports::close, context.nativeCallbacks::close,
+            context.packageCbits::close, context.foreignRoots::close, context.savedTermios::close,
+            context.stm::close, context.threads::close, context.capturedAsyncRequests::close,
+            context.files::dispose, context.stdio::dispose, context.rtsFileLocks::dispose,
+            context.stackSnapshots::dispose, context.weaks::close, context.stableNames::close,
+            context.stablePointers::close, context.nativeAddresses::close, context.nativeAllocations::close);
+        for (var program : context.coreUnitPrograms) failure = closeOwners(failure, program::close);
+        context.coreUnitPrograms.clear();
+        return failure;
+    }
+    private static Throwable closeOwners(Throwable failure, Runnable... owners) {
+        for (var owner : owners) {
+            try { owner.run(); }
+            catch (Throwable cleanup) {
+                if (failure == null) failure = cleanup;
+                else if (failure != cleanup) failure.addSuppressed(cleanup);
             }
         }
+        return failure;
     }
-    @Override protected void initializeThread(State context, Thread thread) { context.noteThread(thread); }
-    @Override protected void initializeMultiThreading(State context) { context.markMultithreaded(); }
+    @Override protected void initializeThread(ContextState context, Thread thread) { context.noteThread(thread); }
+    @Override protected void initializeMultiThreading(ContextState context) { context.markMultithreaded(); }
 
     @SuppressWarnings("unchecked") @Override protected CallTarget parse(ParsingRequest request) {
         if (Boolean.getBoolean("thc.requireCachedCode")) throw new UnsupportedCore("Cached THC source required; parsing is disabled");

@@ -40,22 +40,26 @@ public final class GuestThreads {
         this(maskingState, CpuAffinity.discover(false), wake);
     }
     public GuestThreads(ThreadLocal<MaskingState> maskingState, CpuAffinity cpuAffinity, Wake wake) {
-        this(maskingState, cpuAffinity, wake, null);
+        this(maskingState, cpuAffinity, wake, null, new PollStates());
     }
-    private GuestThreads(ThreadLocal<MaskingState> maskingState, CpuAffinity cpuAffinity, Wake wake, TruffleLanguage.Env env) {
+    private GuestThreads(ThreadLocal<MaskingState> maskingState, CpuAffinity cpuAffinity, Wake wake, TruffleLanguage.Env env, PollStates pollStates) {
         this.env = env;
         this.maskingState = maskingState; this.cpuAffinity = cpuAffinity; this.wake = wake;
+        this.pollStates = pollStates;
         logicalCapabilities = cpuAffinity.getCount();
     }
     public GuestThreads(TruffleLanguage.Env env, ThreadLocal<MaskingState> maskingState) {
         this(env, maskingState, "platform");
     }
     public GuestThreads(TruffleLanguage.Env env, ThreadLocal<MaskingState> maskingState, String hosting) {
+        this(env, maskingState, hosting, new PollStates());
+    }
+    public GuestThreads(TruffleLanguage.Env env, ThreadLocal<MaskingState> maskingState, String hosting, PollStates pollStates) {
         this(maskingState, CpuAffinity.discover(env.isNativeAccessAllowed()), target ->
             env.submitThreadLocal(new Thread[]{target}, new ThreadLocalAction(true, false) {
                 // Only wake the target's safepoint. An async exception needs a saved guest cut.
                 @Override protected void perform(Access access) {}
-            }), env);
+            }), env, pollStates);
         if (hosting.equals("loom")) loom = new LoomScheduler(env, cpuAffinity);
         else if (!hosting.equals("platform")) throw new RuntimeFault("Unknown THC thread hosting mode: " + hosting);
     }
@@ -182,12 +186,21 @@ public final class GuestThreads {
         public AstStackScope getAstStack() { return astStack; }
         public void setAstStack(AstStackScope value) { astStack = value; }
     }
-    private final WeakHashMap<Thread, PollState> pollStates = new WeakHashMap<>();
-    @TruffleBoundary public synchronized PollState pollState(Thread thread) {
-        var state = pollStates.get(thread);
-        if (state == null) { state = new PollState(); pollStates.put(thread, state); }
-        return state;
+    /** Carrier cells can be initialized before the Env-owned guest-thread service is patched. */
+    public static final class PollStates {
+        private final WeakHashMap<Thread, PollState> states = new WeakHashMap<>();
+        @TruffleBoundary public synchronized PollState get(Thread thread) {
+            var state = states.get(thread);
+            if (state == null) { state = new PollState(); states.put(thread, state); }
+            return state;
+        }
+        private synchronized void close() {
+            for (var state : states.values()) state.current = null;
+            states.clear();
+        }
     }
+    private final PollStates pollStates;
+    public PollState pollState(Thread thread) { return pollStates.get(thread); }
     private final HashMap<Long, GuestThread> threads = new HashMap<>();
     private long nextIdentity = 1;
     // Weak keys release dead Java carriers; retained IDs keep their assigned capability.
@@ -551,8 +564,7 @@ public final class GuestThreads {
         var remaining = new ArrayList<AsyncRequest>();
         synchronized (this) {
             closed = true;
-            for (var state : pollStates.values()) state.current = null;
-            pollStates.clear(); mainThreadWeak = null; labels.clear(); knownThreads.clear();
+            pollStates.close(); mainThreadWeak = null; labels.clear(); knownThreads.clear();
             for (var identity : identities.values()) identity.status = GuestThreadStatus.RUNTIME_FAILURE;
             for (var slot : threads.values()) {
                 slot.identity.status = GuestThreadStatus.RUNTIME_FAILURE; slot.pending = false;

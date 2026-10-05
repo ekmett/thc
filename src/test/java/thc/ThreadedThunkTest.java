@@ -152,7 +152,7 @@ class ThreadedThunkTest {
     @Test void asyncDeliveryToAWaiterDoesNotChangeTheOwnersThunk() throws Exception {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc");
-            var state = entered(context, () -> TruffleLanguage.ContextReference.create(Language.class).get(null));
+            var state = entered(context, () -> Language.currentState());
             var started = new CountDownLatch(1); var release = new CountDownLatch(1); var evaluations = new AtomicInteger();
             var fixture = fixture(context, () -> new RootNode(null) {
                 @Override public Object execute(VirtualFrame frame) { evaluations.incrementAndGet(); started.countDown(); await(release); return 43L; }
@@ -506,7 +506,7 @@ class ThreadedThunkTest {
     }
     @Test void asyncOwnerUnwindDoesNotMemoizeOrReplayAnEffectWithoutAContinuation() throws Exception {
         try (var context = Main.executionContext(false)) {
-            context.initialize("thc"); var state = entered(context, () -> TruffleLanguage.ContextReference.create(Language.class).get(null));
+            context.initialize("thc"); var state = entered(context, () -> Language.currentState());
             var started = new CountDownLatch(1); var effects = new AtomicInteger();
             var fixture = fixture(context, () -> new RootNode(null) {
                 @Override public Object execute(VirtualFrame frame) { effects.incrementAndGet(); started.countDown(); while (true) TruffleSafepoint.poll(this); }

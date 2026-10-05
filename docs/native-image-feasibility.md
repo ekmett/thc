@@ -58,3 +58,21 @@ required before claiming native-image guest JIT support.
 The pure classpath cannot establish Sulong, foreign callbacks, native-resource
 cleanup or complete executable startup/shutdown support. JVM tests of those
 facilities do not substitute for native-image execution checks.
+
+## Preinitialized runtime state
+
+THC supports Truffle's preinitialized-context handoff on the pinned runtime.
+Preparation retires its Env-bound services before capture. When Truffle patches
+that context, THC creates fresh runtime services from the new permissions,
+arguments and streams while preserving the language instance. Per-carrier cells
+are ready before the patch hook, because Truffle enters the runtime carrier first.
+Preparation requires native access to remain disabled; native linking belongs to
+the runtime context.
+
+The isolated `ContextOwnershipTest` uses Truffle's actual JVM preinitialization
+entry point and rejects silent fallback to a fresh language. It covers the runtime
+handoff and failed-startup cleanup in both handoff modes. This establishes the
+context lifecycle only: application Core has not yet been lowered in that hook,
+and the test does not establish Native Image heap capture, executable generation
+or bundled native libraries. Those remain tracked in
+[issue #1060](https://github.com/ekmett/thc/issues/1060).
