@@ -98,6 +98,42 @@ class CoreInterfaceLoadTest {
             assertTrue(failure.getMessage().contains("entered THC context"), failure.getMessage());
         }
     }
+    @Test void linkedToolchainInputsRemainBoundAtDemand() throws Exception {
+        var manifest = directory.resolve("packages.json");
+        var output = directory.resolve("inventory.stdout"); var error = directory.resolve("inventory.stderr");
+        var process = new ProcessBuilder(CoreCbdTestSupport.fixtures(), "record-fields-demand-inventory", "linked-toolchain", manifest.toString())
+            .redirectOutput(output.toFile()).redirectError(error.toFile()).start();
+        try {
+            assertTrue(process.waitFor(60, TimeUnit.SECONDS), "bounded linked toolchain inventory");
+            assertEquals(0, process.exitValue(), Files.readString(output) + Files.readString(error));
+        } finally { if (process.isAlive()) { process.destroyForcibly(); process.waitFor(); } }
+        try (var context = context(true)) {
+            var entry = context.eval("thc", request(manifest, "RecordFieldClient", "duplicateFields", "bytecode"));
+            assertEquals(19L, entry.execute(3).asLong());
+            var replacement = directory.resolve("changed-settings");
+            Files.writeString(replacement, Files.readString(directory.resolve("settings")) + "\n");
+            var settings = directory.resolve("lib/settings");
+            Files.delete(settings);
+            Files.createSymbolicLink(settings, replacement);
+            var failure = assertThrows(PolyglotException.class,
+                () -> context.eval("thc", request(manifest, "RecordFieldCold", "cold", "bytecode")));
+            assertTrue(failure.getMessage().contains("after publication"), failure.getMessage());
+            assertTrue(failure.getMessage().contains(settings.toString()), failure.getMessage());
+        }
+    }
+    @Test void annotationEligibilityUsesValidatedEmptyProofs() throws Exception {
+        var result = directory.resolve("annotations.json");
+        var output = directory.resolve("annotations.stdout"); var error = directory.resolve("annotations.stderr");
+        var process = new ProcessBuilder(CoreCbdTestSupport.fixtures(), "record-fields-demand-inventory", "annotations", result.toString())
+            .redirectOutput(output.toFile()).redirectError(error.toFile()).start();
+        try {
+            assertTrue(process.waitFor(60, TimeUnit.SECONDS), "bounded annotation eligibility controls");
+            assertEquals(0, process.exitValue(), Files.readString(output) + Files.readString(error));
+            assertEquals(Map.of("empty-provenance", true, "unannotated", true,
+                "runtime-policy", false, "duplicate-proof", false, "named-proof", false,
+                "wrong-owner", false, "foreign-product", false), object(Json.parse(Files.readString(result))));
+        } finally { if (process.isAlive()) { process.destroyForcibly(); process.waitFor(); } }
+    }
     @Test void thinRequestedUnitFailsRealAcquisitionActionably() throws Exception {
         var output = directory.resolve("thin.stdout"); var error = directory.resolve("thin.stderr");
         var process = new ProcessBuilder(CoreCbdTestSupport.fixtures(), "record-fields-demand-inventory", "thin", directory.resolve("thin-packages.json").toString())

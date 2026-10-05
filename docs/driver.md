@@ -123,8 +123,10 @@ See [GHC library Core](ghc-core.md) to check or build that installation.
 whole units as retained-interface sources. A single selected-GHC inventory probe
 checks their exact registered dependency closure, including cold interfaces.
 Every owned module must retain complete Core. Its decoded interface must prove
-no annotations, foreign products/calls/labels, delimited
-control, CLI main alias or foreign-exception bridge obligation. Units outside
+no foreign products/calls/labels, delimited control, CLI main alias or
+foreign-exception bridge obligation. Annotations must be validated empty THC
+export, registration or import provenance; unknown annotations and backend
+policies remain on ordinary acquisition. Units outside
 that conservative gate use the existing CBD acquisition and native linking.
 Thin requested units fail acquisition with their unit, module, interface path
 and instructions to retain Core or choose `pinned`; unknown facts are not false.
@@ -145,9 +147,12 @@ source text and UTF-16 offsets so no source-text reads escape its input snapshot
 The existing offline prelaunch auditor and host CBD readers do not convert
 interfaces. `demand --verify-artifacts` therefore fails option validation before
 building; choose `required` or `pinned` for that audit. Interface input content
-verification is mandatory even without `--verify-artifacts`. The focused
-registered record fixture qualifies producer-to-JVM demand and reuse; it does
-not qualify whole-project or full installed-library execution.
+verification is mandatory even without `--verify-artifacts`. The registered
+record fixture checks producer-to-JVM demand, reuse and changed-input rejection.
+The ordinary word-frequency application matches native GHC on AST and bytecode
+in both handoff modes with retained installed Core, including actual interface
+conversion. Native-bearing units still use CBD fallback; this does not qualify
+every installed library.
 
 For the supported native x86_64/aarch64 Linux setup, `--ghc-source DIR` supplies
 the matching configured GHC 9.14.1 stage1 tree when selected `ghc-internal` or

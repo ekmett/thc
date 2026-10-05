@@ -25,15 +25,21 @@
 module GhcApiFixtures (prepareGhcApi, prepareRecordFields, prepareRecordFieldsDemand, recordFieldsDemandInventory) where
 
 import Control.Monad (forM, forM_, unless, when)
-import Data.Aeson (Value, object, (.=))
+import Data.Aeson (Value, object, toJSON, (.=))
 import qualified Data.ByteString.Char8 as BS
+import Data.List (isPrefixOf)
+import qualified GHC as Ghc
+import qualified GHC.Plugins as Ghc
+import qualified GHC.Iface.Binary as Iface
+import qualified GHC.Iface.Syntax as Iface
+import qualified GHC.Unit.Module.WholeCoreBindings as Foreign
 import FixtureSupport
 import GhcApiAudit (ghcApiOptions, ghcApiAuditArguments, ghcApiAuditEvidence)
 import InstalledCoreFixtures (field, readJson)
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeFile)
+import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, createDirectoryLink, createFileLink, doesDirectoryExist, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 import THC.Compact.Module (readModuleValue)
 import qualified THC.Driver.Installed as Installed
 import qualified Data.Map.Strict as Map
@@ -108,8 +114,9 @@ prepareRecordFields root = do
      "commands" .= map commandRecord records]
   putStrLn "record-fields: original pre/post-Tidy and hydrated Core exported; six strict audits accepted"
 
--- The same record sources compiled without the THC plugin supply raw retained
--- and thin interfaces. Publication calls the actual installed demand provider;
+-- The retained variant carries the same typed provenance annotations as
+-- acquired libraries; the thin variant uses plain GHC. Publication calls the
+-- actual installed demand provider;
 -- the JVM test, rather than fixture generation, exercises conversion and errors.
 prepareRecordFieldsDemand :: FilePath -> IO ()
 prepareRecordFieldsDemand root = do
@@ -124,6 +131,9 @@ prepareRecordFieldsDemand root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   pkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   helper <- lookupEnv "THC_INTERFACE" >>= maybe (die "record-fields-demand requires the declared THC_INTERFACE tool") canonicalizePath
+  pluginInfo <- lookupEnv "THC_PLUGIN_MANIFEST" >>= maybe (die "record-fields-demand requires the declared THC plugin") readJson
+  packageDb <- field pluginInfo "packageDb"
+  pluginUnit <- field pluginInfo "unitId"
   base <- single =<< execute "base-id" pkg ["--global", "--no-user-package-db", "field", "base", "id", "--simple-output"]
   commands <- fmap concat $ forM ["full", "thin"] $ \mode -> do
     let output = directory </> mode
@@ -131,8 +141,12 @@ prepareRecordFieldsDemand root = do
     createDirectoryIfMissing True output
     let common = ["--make", "-O0", "-g", "-fforce-recomp", "-this-unit-id", unit,
                   "-i", "-it/fixtures/compiler", "-odir", output, "-hidir", output]
-        selected = if mode == "full" then ["-fwrite-if-simplified-core", "-o", output </> "oracle"]
-                   else ["-fno-write-if-simplified-core", "-no-link"]
+        selected = if mode == "full" then
+          ["-fwrite-if-simplified-core", "-o", output </> "oracle",
+           "-package-db", packageDb, "-plugin-package-id", pluginUnit, "-fplugin=THC.Plugin"] ++
+          map ("-fplugin-opt=THC.Plugin:" ++) [output, "post-tidy", "foreign-export-associations",
+            "foreign-export-registration", "foreign-import-provenance"]
+          else ["-fno-write-if-simplified-core", "-no-link"]
     compiled <- execute (mode ++ "-compile") ghc (common ++ selected ++ sources)
     exists <- doesDirectoryExist database
     initialized <- if exists then pure [] else (:[]) <$> execute (mode ++ "-db-init") pkg ["init", database]
@@ -160,8 +174,61 @@ prepareRecordFieldsDemand root = do
 -- In particular, thin-Core failure remains a live JVM assertion, not a cached
 -- producer success boolean. This operation never compiles or links anything.
 recordFieldsDemandInventory :: FilePath -> String -> FilePath -> IO ()
+-- Live rejection controls own private copies; prepared fixture inputs are never
+-- changed. Each call uses the real provider, including its complete input hash.
+recordFieldsDemandInventory root "annotations" destination = do
+  let fixture = root </> "build/record-fields-demand"
+      directory = takeDirectory destination </> "interfaces"
+      database = directory </> "package.conf.d"
+      unitId = "thc-record-demand-0.1"
+      execute label program arguments = runLogged 60 root (directory </> "logs") label [] program arguments
+  tools <- readJson (fixture </> "tools.json")
+  ghc <- field tools "ghc"
+  pkg <- field tools "ghcPkg"
+  helper <- field tools "helper"
+  createDirectoryIfMissing True directory
+  forM_ ["RecordFieldLibrary", "RecordFieldClient", "RecordFieldCold"] $ \name ->
+    copyFile (fixture </> "full" </> name ++ ".hi") (directory </> name ++ ".hi")
+  registration <- readFile (fixture </> "full" </> unitId ++ ".conf")
+  let conf = directory </> unitId ++ ".conf"
+  writeFile conf $ unlines [if "import-dirs:" `isPrefixOf` line then "import-dirs: " ++ show directory else line |
+    line <- lines registration]
+  _ <- execute "init" pkg ["init", database]
+  _ <- execute "register" pkg ["--package-db", database, "update", conf]
+  selected <- Installed.installedContext ghc pkg helper [database] (object [])
+  let context = selected { Installed.installedInterfaceWay = Installed.VanillaInterfaces }
+  unit <- Installed.discoverInstalled context unitId
+  observations <- Ghc.runGhc (Just (Installed.installedLibdir context)) $ do
+    environment <- Ghc.getSession
+    Ghc.liftIO $ do
+      let profile = Ghc.targetProfile (Ghc.hsc_dflags environment)
+          path = directory </> "RecordFieldCold.hi"
+      original <- Iface.readBinIface profile (Ghc.hsc_NC environment) Iface.CheckHiWay Iface.QuietBinIFace path
+      proof <- case Ghc.mi_anns original of
+        first:_ -> pure first
+        [] -> die "record-fields-demand: expected compiler-produced provenance annotations"
+      simplified <- maybe (die "record-fields-demand: missing retained Core") pure (Ghc.mi_simplified_core original)
+      let annotations = Ghc.mi_anns original
+          unknown = Iface.IfaceAnnotation (Ghc.ModuleTarget (Ghc.mi_module original))
+            (Ghc.toSerialized Ghc.serializeWithData ("thc:backend=ast" :: String))
+          other = Ghc.mkModule (Ghc.moduleUnit (Ghc.mi_module original)) (Ghc.mkModuleName "RecordFieldClient")
+          controls =
+            [ ("empty-provenance", original)
+            , ("unannotated", Ghc.set_mi_anns [] original)
+            , ("runtime-policy", Ghc.set_mi_anns (unknown:annotations) original)
+            , ("duplicate-proof", Ghc.set_mi_anns (proof:annotations) original)
+            , ("named-proof", Ghc.set_mi_anns [proof {Iface.ifAnnotatedTarget = Ghc.NamedTarget (Ghc.mkVarOcc "cold")}] original)
+            , ("wrong-owner", Ghc.set_mi_anns [proof {Iface.ifAnnotatedTarget = Ghc.ModuleTarget other}] original)
+            , ("foreign-product", Ghc.set_mi_simplified_core (Just simplified {Ghc.mi_sc_foreign =
+                Foreign.IfaceForeign Nothing [Foreign.IfaceForeignFile Ghc.LangC "int extra;" ".c"]}) original)
+            ]
+      forM controls $ \(label, iface) -> do
+        Iface.writeBinIface profile Iface.QuietBinIFace Iface.NormalCompression path iface
+        (_, units) <- Installed.prepareInstalledDemand context [unit]
+        pure (label, Map.member unitId units)
+  writeJson destination (toJSON (Map.fromList observations :: Map.Map String Bool))
 recordFieldsDemandInventory root mode destination = do
-  unless (mode `elem` ["full", "thin"]) (die "record-fields-demand-inventory expects full or thin")
+  unless (mode `elem` ["full", "thin", "linked-toolchain"]) (die "record-fields-demand-inventory expects full, thin or linked-toolchain")
   tools <- readJson (root </> "build/record-fields-demand/tools.json")
   ghc <- field tools "ghc"
   pkg <- field tools "ghcPkg"
@@ -169,8 +236,23 @@ recordFieldsDemandInventory root mode destination = do
   let compiler = object ["id" .= ("ghc-9.14.1" :: String), "abi" .= ("fixture" :: String),
                         "platform" .= (Host.arch ++ "-" ++ Host.os)]
   selected <- Installed.installedContext ghc pkg helper
-    [root </> "build/record-fields-demand" </> mode </> "package.conf.d"] compiler
-  let context = selected { Installed.installedInterfaceWay = Installed.VanillaInterfaces }
+    [root </> "build/record-fields-demand" </> (if mode == "thin" then "thin" else "full") </> "package.conf.d"] compiler
+  libdir <- if mode /= "linked-toolchain" then pure (Installed.installedLibdir selected) else do
+    -- A retained-Core view links settings from the underlying GHC installation.
+    -- Keep a private target so the JVM can check a changed link after publication.
+    let view = takeDirectory destination </> "lib"
+        original = Installed.installedLibdir selected
+        settings = takeDirectory destination </> "settings"
+    createDirectoryIfMissing True view
+    copyFile (original </> "settings") settings
+    names <- listDirectory original
+    forM_ names $ \name -> do
+      let target = if name == "settings" then settings else original </> name
+      isDirectory <- doesDirectoryExist target
+      (if isDirectory then createDirectoryLink else createFileLink) target (view </> name)
+    pure view
+  let context = selected { Installed.installedInterfaceWay = Installed.VanillaInterfaces,
+                           Installed.installedLibdir = libdir }
   unit <- Installed.discoverInstalled context "thc-record-demand-0.1"
   (inputs, units) <- Installed.prepareInstalledDemand context [unit]
   unless (Map.member (Installed.registeredId unit) units)
