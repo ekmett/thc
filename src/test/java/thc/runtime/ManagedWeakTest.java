@@ -44,8 +44,8 @@ class ManagedWeakTest {
             .option("compiler.CompilationTimeout", "30")
             .build();
     }
-    private ExecutableProgram weakProgram(Language language, String backend, boolean mutvarValues) {
-        boolean lifted = !mutvarValues;
+    private ExecutableProgram weakProgram(Language language, String backend, boolean distinctValues) {
+        boolean lifted = !distinctValues;
         var key = Map.of("kind", "object", "primReps", List.of(lifted ? "BoxedRep (Just Lifted)" : "BoxedRep (Just Unlifted)"), "evaluated", !lifted);
         var weak = Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Unlifted)"), "evaluated", true);
         var state = Map.of("kind", "void", "primReps", List.of(), "evaluated", true);
@@ -57,7 +57,7 @@ class ManagedWeakTest {
             "evaluated", true, "components", List.of(state, flag, key));
         var keyVar = List.of("var", "key", Map.of("rep", key));
         var stateVar = List.of("var", "s", Map.of("rep", state));
-        var make = List.of("app", List.of("prim", "mkWeakNoFinalizer#"), List.of(keyVar, mutvarValues ? List.of("var", "value", Map.of("rep", key)) : keyVar, stateVar),
+        var make = List.of("app", List.of("prim", "mkWeakNoFinalizer#"), List.of(keyVar, distinctValues ? List.of("var", "value", Map.of("rep", key)) : keyVar, stateVar),
             List.of(lifted, lifted, false), false, false, Map.of("rep", made));
         var makeBody = List.of("case", make, "pair", List.of(List.of("data", "tuple2", List.of("s1", "weak"),
             List.of("var", "weak", Map.of("rep", weak)), Map.of("binders", List.of(
@@ -74,8 +74,8 @@ class ManagedWeakTest {
             "constructors", List.of(Map.of("id", "tuple2", "name", "(#,#)", "arity", 2, "tag", 1, "kind", "unboxed-tuple"),
                 Map.of("id", "tuple3", "name", "(#,,#)", "arity", 3, "tag", 1, "kind", "unboxed-tuple")),
             "bindings", List.of(
-                Map.of("id", "make", "name", "make", "arity", mutvarValues ? 3 : 2, "lifted", true, "rep", closure, "expr", List.of("lam",
-                    mutvarValues ? List.of(Map.of("id", "key", "lifted", lifted, "rep", key),
+                Map.of("id", "make", "name", "make", "arity", distinctValues ? 3 : 2, "lifted", true, "rep", closure, "expr", List.of("lam",
+                    distinctValues ? List.of(Map.of("id", "key", "lifted", lifted, "rep", key),
                         Map.of("id", "value", "lifted", lifted, "rep", key), Map.of("id", "s", "lifted", false, "rep", state))
                         : List.of(Map.of("id", "key", "lifted", lifted, "rep", key), Map.of("id", "s", "lifted", false, "rep", state)),
                     makeBody, Map.of("rep", closure, "resultRep", weak))),
@@ -95,13 +95,13 @@ class ManagedWeakTest {
         var key = new Object();
         return new Registration(makeIdentity(program, key), new WeakReference<>(key, queue));
     }
-    private Registration droppedMutVarCycle(ExecutableProgram program, ReferenceQueue<Object> queue) {
-        var key = new ManagedMutVar(Unit.INSTANCE);
+    private Registration droppedPrimitiveCycle(ExecutableProgram program, ReferenceQueue<Object> queue, boolean mvarKey) {
+        Object key = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE);
         var value = new ManagedMutVar(key);
         var weak = ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"), new Object[]{0L, key, value, Unit.INSTANCE});
         return new Registration(weak, new WeakReference<>(key, queue));
     }
-    private Registration mutVarValue(ManagedWeaks registry, ManagedMutVar key, ReferenceQueue<Object> queue) {
+    private Registration conditionalValue(ManagedWeaks registry, Object key, ReferenceQueue<Object> queue) {
         var value = new ManagedMutVar(Unit.INSTANCE);
         return new Registration(registry.make(key, value, null), new WeakReference<>(value, queue));
     }
@@ -149,19 +149,21 @@ class ManagedWeakTest {
     void mutVarKeyValueBackReferencesCollectOnFirstCompiledCalls() throws Exception {
         // GHC.Internal.Weak: a value's reference back to its key does not keep the key alive.
         // Roots here are the registry and Weak# only; neither may strongly reach the key/value cycle.
+        for (boolean mvarKey : new boolean[]{false, true})
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var registry = Language.currentState().getWeaks(); var program = weakProgram(language, backend, true);
-                var key = new ManagedMutVar(Unit.INSTANCE); var value = new ManagedMutVar(key);
+                Object key = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE);
+                var value = new ManagedMutVar(key);
                 var live = ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"), new Object[]{0L, key, value, Unit.INSTANCE});
                 assertEquals(1L, observeIdentity(program, live)); assertSame(value, registry.dereference(live).getValue());
                 for (var name : List.of("make", "observe")) {
                     var target = program.entryTarget(name); target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target);
                 }
                 long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                var queue = new ReferenceQueue<Object>(); var dropped = droppedMutVarCycle(program, queue);
+                var queue = new ReferenceQueue<Object>(); var dropped = droppedPrimitiveCycle(program, queue, mvarKey);
                 assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, backend + " first compiled make");
                 valid(program.entryTarget("make")); collect(queue, dropped.referent());
                 before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
@@ -177,19 +179,41 @@ class ManagedWeakTest {
     }
     @Test
     void liveMutVarKeysRetainDroppedRegistrationsUntilDetached() throws Exception {
-        var registry = new ManagedWeaks(); var key = new ManagedMutVar(Unit.INSTANCE);
-        var queue = new ReferenceQueue<Object>();
-        var first = mutVarValue(registry, key, queue); var droppedValue = first.referent(); first = null;
-        var second = mutVarValue(registry, key, queue);
+        for (boolean mvarKey : new boolean[]{false, true}) {
+            var registry = new ManagedWeaks(); Object key = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE);
+            var queue = new ReferenceQueue<Object>();
+            var first = conditionalValue(registry, key, queue); var droppedValue = first.referent(); first = null;
+            var second = conditionalValue(registry, key, queue);
+            collect(queue, gcWitness(queue));
+            assertNotNull(droppedValue.get()); assertNotNull(second.referent().get());
+            assertEquals(0L, registry.finalize(second.weak()).getFlag());
+            collect(queue, second.referent());
+            assertNotNull(droppedValue.get(), "Detaching one registration must preserve the other value");
+            registry.close(); Reference.reachabilityFence(key);
+        }
+    }
+    @Test
+    void retainedMVarRequestKeepsConditionalValueAliveUntilRequestIsDropped() throws Exception {
+        var registry = new ManagedWeaks(); var key = new ManagedMVar();
+        var request = key.beginRead(); var value = new ManagedMutVar(key);
+        var queue = new ReferenceQueue<Object>(); var keyReference = new WeakReference<Object>(key, queue);
+        var valueReference = new WeakReference<>(value); var weak = registry.make(key, value, null);
+        key = null; value = null;
         collect(queue, gcWitness(queue));
-        assertNotNull(droppedValue.get()); assertNotNull(second.referent().get());
-        assertEquals(0L, registry.finalize(second.weak()).getFlag());
-        collect(queue, second.referent());
-        assertNotNull(droppedValue.get(), "Detaching one registration must preserve the other value");
-        registry.close(); Reference.reachabilityFence(key);
+        assertNotNull(keyReference.get()); assertNotNull(valueReference.get());
+        assertSame(valueReference.get(), registry.dereference(weak).getValue());
+        assertTrue(request.cancel());
+        collect(queue, gcWitness(queue));
+        assertNotNull(keyReference.get(), "Even a cancelled retained request still owns its MVar");
+        assertSame(valueReference.get(), registry.dereference(weak).getValue());
+        Reference.reachabilityFence(request); request = null;
+        collect(queue, keyReference);
+        assertNull(valueReference.get()); assertEquals(0L, registry.dereference(weak).getFlag());
+        assertEquals(0L, registry.finalize(weak).getFlag()); registry.close();
     }
     @Test
     void callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit() throws Exception {
+        for (boolean mvarKey : new boolean[]{false, true})
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
@@ -202,7 +226,8 @@ class ManagedWeakTest {
                 }));
                 assertEquals(1L, registry.addCallback(promoted, () -> calls.add(2)));
                 Reference.reachabilityFence(key); key = null;
-                var managedKey = new ManagedMutVar(Unit.INSTANCE); var managedValue = new ManagedMutVar(managedKey);
+                Object managedKey = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE);
+                var managedValue = new ManagedMutVar(managedKey);
                 var managedKeyReference = new WeakReference<>(managedKey); var managedValueReference = new WeakReference<>(managedValue);
                 var managedWeak = registry.make(managedKey, managedValue, null); int[] managedCalls = {0};
                 assertEquals(1L, registry.addCallback(managedWeak, () -> ++managedCalls[0]));
@@ -346,34 +371,36 @@ class ManagedWeakTest {
     }
     @Test
     void actualContextCloseInvalidatesHandlesWithoutRunningHaskellActions() throws Exception {
-        var first = context();
-        first.initialize("thc");
-        first.enter();
-        var owner = Language.currentState().getWeaks();
-        int[] calls = {0};
-        Supplier<Integer> action = () -> ++calls[0];
-        var handle = owner.make(new Object(), new Object(), action);
-        var key = new ManagedMutVar(Unit.INSTANCE); var queue = new ReferenceQueue<Object>();
-        var conditional = mutVarValue(owner, key, queue);
-        first.leave();
-        try (var second = context()) {
-            second.initialize("thc");
-            second.enter();
-            try {
-                assertThrows(RuntimeFault.class, () -> Language.currentState().getWeaks().dereference(handle));
-                assertThrows(RuntimeFault.class, () -> Language.currentState().getWeaks().finalize(handle));
-                assertThrows(RuntimeFault.class, () -> Language.currentState().getWeaks().dereference(new Object()));
-            } finally {
-                second.leave();
+        for (boolean mvarKey : new boolean[]{false, true}) {
+            var first = context();
+            first.initialize("thc");
+            first.enter();
+            var owner = Language.currentState().getWeaks();
+            int[] calls = {0};
+            Supplier<Integer> action = () -> ++calls[0];
+            var handle = owner.make(new Object(), new Object(), action);
+            Object key = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE); var queue = new ReferenceQueue<Object>();
+            var conditional = conditionalValue(owner, key, queue);
+            first.leave();
+            try (var second = context()) {
+                second.initialize("thc");
+                second.enter();
+                try {
+                    assertThrows(RuntimeFault.class, () -> Language.currentState().getWeaks().dereference(handle));
+                    assertThrows(RuntimeFault.class, () -> Language.currentState().getWeaks().finalize(handle));
+                    assertThrows(RuntimeFault.class, () -> Language.currentState().getWeaks().dereference(new Object()));
+                } finally {
+                    second.leave();
+                }
             }
+            first.close();
+            assertEquals(0, calls[0]);
+            assertEquals(0, owner.retainedCount());
+            assertThrows(RuntimeFault.class, () -> owner.finalize(handle));
+            assertThrows(RuntimeFault.class, () -> owner.make(new Object(), new Object(), null));
+            assertThrows(RuntimeFault.class, () -> owner.dereference(conditional.weak()));
+            collect(queue, conditional.referent()); Reference.reachabilityFence(key);
         }
-        first.close();
-        assertEquals(0, calls[0]);
-        assertEquals(0, owner.retainedCount());
-        assertThrows(RuntimeFault.class, () -> owner.finalize(handle));
-        assertThrows(RuntimeFault.class, () -> owner.make(new Object(), new Object(), null));
-        assertThrows(RuntimeFault.class, () -> owner.dereference(conditional.weak()));
-        collect(queue, conditional.referent()); Reference.reachabilityFence(key);
     }
     @Test
     void mainThreadCapabilityProjectsOnlyLiveContextOwnedThreadKeys() {
