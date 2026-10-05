@@ -1,6 +1,6 @@
 # Native Image
 
-THC provides two experimental Native Image workflows on the pinned GraalVM
+THC provides experimental Native Image workflows on the pinned GraalVM
 toolchain:
 
 - The [selected-Core native code cache](native-code-cache.md) compiles selected
@@ -10,11 +10,19 @@ toolchain:
   interpreted guest entry. It admits synchronous AST code with numeric scalars,
   boxed data, closures, higher-order calls and recursive loops. Tuples, sums,
   vectors and zero-width values use the existing typed calling convention.
+- The application-bound executable recipe in the [cache guide](native-code-cache.md)
+  captures an application's selected detached Core during image construction and
+  lowers it at runtime through the synchronous AST prepared loader. Construction
+  accepts offline CBD sources; retained-interface demand conversion requires an
+  entered context with process permission and is outside the hosted capture hook. The captured
+  object loader is covered on the JVM after manifest/CBD removal; a fresh native
+  process with its external Core directory removed remains unqualified. Native
+  cbits linkage and full IO resource lifecycles remain separate work.
 - The pure interpreter recipe below packages the Java interpreter in a native
   executable and loads Core at launch. Its explicit guest compilation diagnostic
   remains unsupported.
 
-Neither workflow is a general Haskell executable distribution. The code cache
+These workflows do not yet provide a general Haskell executable distribution. The code cache
 does not yet admit bytecode, async delivery, IO or FFI. Its numeric CLI entry
 can exercise typed internal calls; direct typed public-host persistence remains
 to be qualified. Sulong execution and the full executable/resource lifecycle still need native

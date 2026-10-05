@@ -135,6 +135,45 @@ class ReusableLoaderTest {
             }
         }
     }
+    private String nativeBinding(Map<String,Object> module) throws Exception {
+        module = with(module, "bindings", ((List<Map<String,Object>>) module.get("bindings")).stream()
+            .map(binding -> with(binding, "id", "fixture:PreparedIo." + binding.get("id"))).toList());
+        var record = CoreCbdFixtures.module(directory.resolve("PreparedIo.cbd"), module);
+        var manifest = directory.resolve("packages.json");
+        Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1",
+            "units", list(map("id", "fixture", "depends", list(), "modules", list(record))))));
+        return Json.stringify(list("--run-executable", "@" + manifest, "fixture:PreparedIo.entry", "fixture:PreparedIo.stop", "--", "fixture", "-Dguest", "-Xguest"));
+    }
+    @Test void capturedExecutableLoadsAfterSourceRemoval() throws Exception {
+        var module = ioModule();
+        var definitions = new ArrayList<>((List<Map<String,Object>>) module.get("bindings"));
+        definitions.add(binding("unusedbad", list("unsupported", "must remain unselected", map())));
+        module.put("bindings", definitions);
+        var captured = NativeExecutable.capture(nativeBinding(module));
+        CoreFileMappings.shared.evictIdleBelow(directory);
+        try (var files = Files.list(directory)) { for (var file : files.toList()) Files.delete(file); }
+        // These are independent engines as well as contexts; only detached Core crosses them.
+        for (int owner = 0; owner < 2; owner++) try (var context = Context.newBuilder("thc")
+                .allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            for (int load = 0; load < 2; load++) {
+                var action = captured.load(context);
+                assertFalse(action.canExecute()); assertTrue(action.canInvokeMember("runIO"));
+                assertTrue(action.invokeMember("runIO").asBoolean());
+                assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO")).getMessage().contains("already started"));
+            }
+        }
+    }
+    @Test void capturedExecutableRejectsMissingColdDependency() throws Exception {
+        var module = ioModule();
+        var definitions = (List<Map<String,Object>>) module.get("bindings");
+        var entry = definitions.getFirst();
+        var lambda = (List<Object>) entry.get("expr");
+        var body = list("case", literal(0), "branch", list(list("lit", list("int", "0"), list(), lambda.get(2), map("binders", list())),
+            list("default", null, list(), list("var", "missing:Cold.value", map()), map("binders", list()))), map());
+        module.put("bindings", list(with(entry, "expr", list("lam", lambda.get(1), body, lambda.getLast())), definitions.get(1)));
+        var configuration = nativeBinding(module);
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> NativeExecutable.capture(configuration)).getMessage().contains("missing:Cold.value"));
+    }
     @ParameterizedTest @ValueSource(strings = {"platform", "loom"})
     void cachedIoReturnChecksInstalledCodeAfterMainAndShutdown(String hosting) {
         String oldCached = System.getProperty("thc.requireCachedCode"), oldCompiled = System.getProperty("thc.requireCompiledCode");

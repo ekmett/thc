@@ -110,8 +110,9 @@ The same experimental image recipe also accepts `executable`. Set
 `Main` prefix `["--run-executable", "MODULES", "ENTRY", "SHUTDOWN_ENTRY", "--",
 "PROGRAM_NAME"]`, optionally followed by default guest arguments. Set
 `THC_NATIVE_IMAGE_EXECUTABLE_NAME` to the desired ELF basename. The binding is
-embedded in the image; incoming arguments are appended as opaque guest argv.
-The original loader owns argument initialization, IO, shutdown and exit status.
+read during image construction to capture its selected detached Core closure;
+incoming arguments are appended as opaque guest argv. The original launcher
+owns argument initialization, IO, shutdown and exit status.
 An object with `arguments` containing that array and `properties` containing
 string-valued JVM system properties can also bind the THC execution profile.
 Native Image runtime-option parsing is disabled in this mode: guest `-D` and
@@ -120,13 +121,30 @@ runtime heap ceiling and two available processors at image build time.
 Its builder uses 16 GiB and two compiler threads; compiled-cache mode retains
 its separate 8 GiB builder limit.
 
-This produces an application-bound JVM-free runtime, but **lowers guest Core at
-runtime**. It does not imply that the guest was AOT-compiled or persisted in a
-code cache. Referenced Core/package files and native dependencies remain required
-external resources. Use the existing compact encoder for retained loose Core
-captures and register the resulting containers in a compact package manifest;
-the module argument selects that manifest with `@packages.json`, not loose CBD
-paths. Native Image provider/resource-profile requirements still apply.
+The executable capture defaults to synchronous AST preparation, so a plain
+argument array needs no properties object. Explicit `thc.backend` values other
+than `ast` and `thc.asyncExceptions` values other than `false` are rejected.
+Applications previously using the ordinary loader must fit prepared-code
+admission; bytecode, async execution and native callback labels are outside this
+bounded route. Hosted capture accepts offline CBD files and CBD-backed manifests;
+retained-interface conversion requires an entered context with explicit process
+permission and is outside this capture path. It follows entry,
+shutdown, registration roots and every cold branch through the existing strict
+Core selector. Only detached unevaluated Core and fixed settings survive in the
+application object: source readers, CBD paths and manifest authority do not.
+Runtime loads use the existing prepared factory with fresh CAFs and native
+resources in the invoking context. The ordinary serialized loader continues to
+reject inline Core.
+
+This route **lowers guest Core at runtime**. It does not imply that the guest
+was AOT-compiled or persisted in a code cache. JVM tests cover capture followed
+by removal of the original manifest/CBD files, fresh contexts, entry/shutdown
+lifecycles and missing cold dependencies. The existing prepared-program suite
+covers fresh CAF state and sharing. A fresh-process Native Image run with
+its entire external Core directory removed remains unqualified. Native cbits
+and dependent libraries still require separate platform packaging and real
+IO/FFI lifecycle qualification; capturing their declarations is not static
+linkage. Native Image provider/resource-profile requirements still apply.
 
 ### Compiled-cache compatibility
 

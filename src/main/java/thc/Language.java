@@ -337,6 +337,12 @@ public final class Language extends TruffleLanguage<Language.State> {
             }.getCallTarget();
         }
         if (!prepareCode) return unitRoot(input, directory);
+        if (!(input.get("entry") instanceof String entry)) throw new IllegalStateException("Expected entry name");
+        return preparedRoot(CoreModules.selectedModules(input, entry));
+    }
+
+    /** Internal image-owned Core follows the same admission and fresh-instance factory. */
+    @SuppressWarnings("unchecked") CallTarget preparedRoot(Map<String,Object> input) {
         var merger = new CoreModules.Merger();
         if (!(input.get("entry") instanceof String entry)) throw new IllegalStateException("Expected entry name");
         String shutdownEntry = input.get("shutdownEntry") instanceof String value ? value : null;
@@ -344,8 +350,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             "Executable shutdown requires a distinct IO entry");
         require(!Boolean.TRUE.equals(input.get("ioMain")) || !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
             "IO main requires strict unsupported-Core rejection");
-        var selectedModules = CoreModules.selectedModules(input, entry);
-        var layout = CoreModules.visitDecodedModules(selectedModules, module -> {
+        var layout = CoreModules.visitDecodedModules(input, module -> {
             for (var binding : (List<Map<String,Object>>) module.get("bindings")) {
                 String id = (String) binding.get("id");
                 require(CoreModules.backend(module, id, "ast").equals("ast"),

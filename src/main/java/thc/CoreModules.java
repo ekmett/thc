@@ -492,12 +492,12 @@ public final class CoreModules {
                 // executable requests deliberately omit source-note resources.
                 if (!key.equals("compactOrigin")) result.put((String) key, detachedValue(field));
             });
-            return result;
+            return Collections.unmodifiableMap(result);
         }
         if (value instanceof List<?> values) {
             var result = new ArrayList<Object>(values.size());
             for (Object field : values) result.add(detachedValue(field));
-            return result;
+            return Collections.unmodifiableList(result);
         }
         return value;
     }
