@@ -108,8 +108,8 @@ newest-first once. A retained MVar request, including a cancelled request, keeps
 its key and conditional value alive until the request is dropped; the
 [raw MVar ownership controls](https://github.com/ekmett/thc/pull/1139) also retain
 the cell's transfer, cancellation and no-replay checks. Selected checks run in
-both handoff modes. General ephemerons,
-Automatic Haskell/package finalizers and the native weak corpus remain outside this qualification.
+both handoff modes. General ephemerons, automatic Haskell/package finalizers
+and the native weak corpus remain outside this qualification.
 
 Managed GC-request checks cover the [canonical owned-free path](c-finalizers.md).
 Actual collected raw `MutVar#` keys retire malloc storage after first compiled
