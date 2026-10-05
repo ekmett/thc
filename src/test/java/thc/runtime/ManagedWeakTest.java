@@ -192,6 +192,10 @@ class ManagedWeakTest {
     }
     private Registration droppedOwnedFree(ExecutableProgram program, ReferenceQueue<Object> queue,
             ManagedAddress address) {
+        return droppedOwnedFree(program, queue, address, () -> {});
+    }
+    private Registration droppedOwnedFree(ExecutableProgram program, ReferenceQueue<Object> queue,
+            ManagedAddress address, Runnable whileKeyLive) {
         var key = new ManagedMutVar(Unit.INSTANCE); var value = new ManagedMutVar(key);
         var weak = ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"),
             new Object[]{0L, key, value, Unit.INSTANCE});
@@ -199,7 +203,8 @@ class ManagedWeakTest {
         assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"),
             address, 0L, weak, state.cbits()));
         var registration = new Registration(weak, new WeakReference<>(key, queue));
-        Reference.reachabilityFence(key); return registration;
+        try { whileKeyLive.run(); return registration; }
+        finally { Reference.reachabilityFence(key); }
     }
     private void awaitNativeRetirement(java.lang.foreign.MemorySegment segment) throws Exception {
         long deadline = System.nanoTime() + 5_000_000_000L;
@@ -217,9 +222,12 @@ class ManagedWeakTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = weakProgram(language, backend, true);
                 var address = state.getNativeAllocations().malloc(8);
-                var loan = address.nativeAllocation().borrow(); var segment = loan.segment();
+                var loanReference = new AtomicReference<ManagedNativeAllocations.Owner.Borrow>();
+                var queue = new ReferenceQueue<Object>();
+                var dropped = droppedOwnedFree(program, queue, address,
+                    () -> loanReference.set(address.nativeAllocation().borrow()));
+                var loan = loanReference.get(); var segment = loan.segment();
                 if (!borrowed) loan.close();
-                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
                 try {
                     collect(queue, dropped.referent());
                     if (borrowed) {
@@ -357,8 +365,9 @@ class ManagedWeakTest {
                 assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag());
                 // An explicitly retired owner consumes its stale automatic token without replay.
                 var staleAddress = state.getNativeAllocations().malloc(8);
-                dropped = droppedOwnedFree(program, queue, staleAddress);
-                collect(queue, dropped.referent()); state.getNativeAllocations().free(staleAddress);
+                dropped = droppedOwnedFree(program, queue, staleAddress,
+                    () -> state.getNativeAllocations().free(staleAddress));
+                collect(queue, dropped.referent());
                 requestGc(gc); requestGc(gc);
                 assertThrows(RuntimeFault.class, () -> state.getNativeAllocations().free(staleAddress));
             } finally { threads.leaveCurrent(); context.leave(); }
