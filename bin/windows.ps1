@@ -79,6 +79,7 @@ try {
             'thc.runtime.UnknownBoxedSumTest.poisonPointerSurvivesResultsArgumentsPapCaptureCaseAndConstructor',
             'thc.runtime.TupleRepresentationTest',
             'thc.AggregateFrontierTest',
+            'thc.runtime.ManagedStackRuntimeTest.rejectedDestinationsAndUnknownKeysNeverPartiallyWrite',
             'thc.CoreUnitLoadTest.coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding',
             'thc.CoreUnitLoadTest.missingOrBadColdUnitFailsOnlyAtDemandAndDoesNotTouchThirdUnit',
             'thc.NarrowPublicEntryTest.partialApplicationUsesRemainingNotOriginalInputProofs',

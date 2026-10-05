@@ -124,6 +124,13 @@ and rejects invalid host shapes, including unused formals. The whole class runs
 on AST and bytecode in both handoff modes. These synthetic models do not qualify
 original GHC exports or installed-Core acquisition.
 
+One managed-stack rejection check leaves destination bytes and pointer identity
+unchanged for raw/native-exposed, short, wrong-width, partial-pointer and
+nonwritable storage; an unknown key returns zero. Its synthetic layout uses the
+host's platform and GHC way, including Windows vanilla. Only this method runs
+in both handoff modes with live AST frames. It does not qualify bytecode guest
+execution, compiled calls or native GHC frame equivalence.
+
 Two public-manifest loader checks use model CBDs from the selected Haskell
 encoder. Cold references leave other units unopened; first demand decodes the
 binding once and subsequent calls reuse it. A bad demanded unit fails without
