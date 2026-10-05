@@ -420,6 +420,105 @@ public class PackageNativeLifecycleTest {
             } finally { context.leave(); }
         }
     }
+    @Test public void bundledNativeProvidersRetainTransitiveConstructorsAfterOriginalsAreDeleted() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var compiler = System.getenv().getOrDefault("THC_CLANG", "clang");
+        var suffix = directory.getFileName().toString().replaceAll("[^A-Za-z0-9_]", "_");
+        var leafName = "libthc_leaf_" + suffix + ".so";
+        var rootName = "libthc_root_" + suffix + ".so";
+        var trace = directory.resolve("bundle-trace.txt");
+        var traceLiteral = trace.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+        var leafSource = directory.resolve("leaf.c"); var rootSource = directory.resolve("root.c");
+        var leafFile = directory.resolve(leafName); var rootFile = directory.resolve(rootName);
+        Files.writeString(leafSource, """
+            #include <stdio.h>
+            #include <stdlib.h>
+            static long state;
+            __attribute__((constructor)) static void initialize(void) {
+                state = 40; FILE *f = fopen("%s", "a"); if (!f) abort(); fputs("leaf\\n", f); fclose(f);
+            }
+            long bundled_leaf_next(void) { return ++state; }
+            """.formatted(traceLiteral));
+        Files.writeString(rootSource, """
+            #include <stdio.h>
+            #include <stdlib.h>
+            extern long bundled_leaf_next(void);
+            static long initial;
+            __attribute__((constructor)) static void initialize(void) {
+                initial = bundled_leaf_next(); FILE *f = fopen("%s", "a"); if (!f) abort(); fputs("root\\n", f); fclose(f);
+            }
+            long bundled_root_next(void) { return 100 * initial + bundled_leaf_next(); }
+            """.formatted(traceLiteral));
+        command(List.of(compiler, "-shared", "-fPIC", leafSource.toString(), "-Wl,-soname," + leafName, "-o", leafFile.toString()));
+        command(List.of(compiler, "-shared", "-fPIC", rootSource.toString(), "-L" + directory, "-l:" + leafName,
+            "-Wl,-soname," + rootName, "-Wl,-rpath,$ORIGIN", "-o", rootFile.toString()));
+        var oracleSource = directory.resolve("bundle-oracle.c"); var oracle = directory.resolve("bundle-oracle");
+        Files.writeString(oracleSource, "#include <stdio.h>\nextern long bundled_root_next(void);\nint main(void) { printf(\"%ld\\n\", bundled_root_next() + 1); printf(\"%ld\\n\", bundled_root_next() + 1); }\n");
+        command(List.of(compiler, oracleSource.toString(), "-L" + directory, "-l:" + rootName,
+            "-Wl,-rpath," + directory, "-o", oracle.toString()));
+        var expected = command(List.of(oracle.toString())).lines().map(Long::parseLong).toList();
+        assertEquals(List.of(4143L, 4144L), expected);
+        assertEquals("leaf\nroot\n", Files.readString(trace)); Files.delete(trace);
+        var bundled = new ArrayList<PackageNativeComponent.BundledLibrary>();
+        for (var file : List.of(leafFile, rootFile)) {
+            var bytes = Files.readAllBytes(file);
+            bundled.add(new PackageNativeComponent.BundledLibrary(file.getFileName().toString(),
+                HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)), bytes));
+        }
+        var links = new ArrayList<PackageScalarLink>();
+        for (int i = 0; i < 2; i++) {
+            var source = directory.resolve("consumer" + i + ".c"); var output = directory.resolve("consumer" + i + ".so");
+            var symbol = "bundled_consumer_" + i;
+            Files.writeString(source, "extern long bundled_root_next(void); static long state; __attribute__((constructor)) static void initialize(void) { state = bundled_root_next(); } long " + symbol + "(void) { return ++state; }");
+            command(List.of(compiler, "-shared", "-fPIC", source.toString(), "-L" + directory, "-l:" + rootName, "-o", output.toString()));
+            var original = companion(Files.readAllBytes(output), "extern long " + symbol + "(void); static long calls; long entry(void) { return " + symbol + "() + 100000 * ++calls; }");
+            links.add(new PackageScalarLink("bundled-consumer-" + i, original.getTarget(), original.getComponentSha256(),
+                original.getBitcodeSha256(), original.getBytes(), original.getAbi(), original.getFormat(), Set.of(),
+                original.getNativeLibrary(), Set.of(), Set.of(), List.of(), Map.of(), bundled));
+            Files.delete(output);
+        }
+        Files.delete(leafFile); Files.delete(rootFile);
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                assertEquals(100000L + expected.get(0), invoke(links.get(0)));
+                assertEquals(100000L + expected.get(1), invoke(links.get(1)), "consumers share the retained provider");
+                assertEquals(200001L + expected.get(0), invoke(links.get(0)), "companion and LLVM state survive repeated linkage");
+                assertEquals("leaf\nroot\n", Files.readString(trace), "provider constructors run once in dependency order");
+                var conflicting = new PackageNativeComponent.BundledLibrary(leafName,
+                    HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(new byte[]{1})), new byte[]{1});
+                var original = companion(links.getFirst().getNativeLibrary(), "long entry(void) { return 0; }");
+                var conflict = new PackageScalarLink("conflicting-bundle", original.getTarget(), original.getComponentSha256(),
+                    original.getBitcodeSha256(), original.getBytes(), original.getAbi(), original.getFormat(), Set.of(),
+                    original.getNativeLibrary(), Set.of(), Set.of(), List.of(), Map.of(), List.of(conflicting));
+                assertThrows(RuntimeFault.class, () -> Language.currentState().getPackageCbits().declare(conflict));
+            } finally { context.leave(); }
+        }
+        var missingName = "libthc_missing_" + suffix + ".so"; var missingFile = directory.resolve(missingName);
+        command(List.of(compiler, "-shared", "-fPIC", leafSource.toString(), "-Wl,-soname," + missingName, "-o", missingFile.toString()));
+        command(List.of(compiler, "-shared", "-fPIC", rootSource.toString(), "-L" + directory, "-l:" + missingName,
+            "-Wl,-soname,libthc_unavailable.so", "-o", rootFile.toString()));
+        var missingBytes = Files.readAllBytes(rootFile);
+        var missing = new PackageNativeComponent.BundledLibrary("libthc_unavailable.so",
+            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(missingBytes)), missingBytes);
+        Files.delete(missingFile); Files.delete(rootFile);
+        var failed = new ArrayList<PackageScalarLink>();
+        for (int i = 0; i < 2; i++) {
+            var original = companion(links.getFirst().getNativeLibrary(), "long entry(void) { return " + i + "; }");
+            failed.add(new PackageScalarLink("missing-bundle-" + i, original.getTarget(), original.getComponentSha256(),
+                original.getBitcodeSha256(), original.getBytes(), original.getAbi(), original.getFormat(), Set.of(),
+                original.getNativeLibrary(), Set.of(), Set.of(), List.of(), Map.of(), List.of(missing)));
+        }
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var failure = assertThrows(Throwable.class, () -> invoke(failed.getFirst()));
+                assertTrue(failure.getMessage().contains(missingName), failure.toString());
+                assertSame(failure, assertThrows(Throwable.class, () -> invoke(failed.getFirst())));
+                assertSame(failure, assertThrows(Throwable.class, () -> invoke(failed.getLast())), "provider failure is shared across consumers");
+            } finally { context.leave(); }
+        }
+    }
     @ParameterizedTest @ValueSource(booleans = {false, true})
     public void constructorsRunOncePerContextAndNormalCloseRunsDestructors(boolean cxx) throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));

@@ -33,6 +33,9 @@ public final class PackageScalarLink {
         this(unit, target, componentSha256, bitcodeSha256, bytes, abi, format, finalizers, nativeLibrary, dataSymbols, exports, dependencies, Map.of());
     }
     public PackageScalarLink(String unit, String target, String componentSha256, String bitcodeSha256, byte[] bytes, List<PackageScalarSignature> abi, String format, Set<String> finalizers, byte[] nativeLibrary, Set<String> dataSymbols, Set<String> exports, List<PackageNativeComponent> dependencies, Map<String, CallSeed> callSeeds) {
+        this(unit, target, componentSha256, bitcodeSha256, bytes, abi, format, finalizers, nativeLibrary, dataSymbols, exports, dependencies, callSeeds, List.of());
+    }
+    public PackageScalarLink(String unit, String target, String componentSha256, String bitcodeSha256, byte[] bytes, List<PackageScalarSignature> abi, String format, Set<String> finalizers, byte[] nativeLibrary, Set<String> dataSymbols, Set<String> exports, List<PackageNativeComponent> dependencies, Map<String, CallSeed> callSeeds, List<PackageNativeComponent.BundledLibrary> bundledLibraries) {
         this.unit = unit; this.target = target; this.componentSha256 = componentSha256; this.bitcodeSha256 = bitcodeSha256;
         this.bytes = bytes; this.abi = abi; this.format = format;
         this.finalizers = Set.copyOf(finalizers);
@@ -40,7 +43,7 @@ public final class PackageScalarLink {
         this.dataSymbols = Set.copyOf(dataSymbols);
         this.callSeeds = Map.copyOf(callSeeds);
         component = bytes.length == 0 && !callSeeds.isEmpty() ? null :
-            new PackageNativeComponent(unit, target, componentSha256, bitcodeSha256, format, bytes, nativeLibrary, exports, dependencies);
+            new PackageNativeComponent(unit, target, componentSha256, bitcodeSha256, format, bytes, nativeLibrary, exports, dependencies, bundledLibraries);
     }
     public Map<String, CallSeed> getCallSeeds() { return callSeeds; }
     public PackageNativeComponent getComponent() { return component; }

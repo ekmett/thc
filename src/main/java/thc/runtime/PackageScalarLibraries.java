@@ -31,9 +31,12 @@ import static thc.runtime.RuntimeFault.fault;
 
 /** Component C globals and entrypoints belong to one Truffle context. */
 public final class PackageScalarLibraries {
+    private record Bundled(PackageNativeComponent.BundledLibrary library, FutureTask<Object> task) {}
     private record Loaded(PackageNativeComponent component, FutureTask<Object> task, Map<String, PackageScalarFunction> functions) {}
     private final TruffleLanguage.Env env;
     private final HashMap<String, Loaded> libraries = new HashMap<>();
+    private final HashMap<String, Bundled> bundledLibraries = new HashMap<>();
+    private final ThreadLocal<HashSet<String>> initializingBundled = ThreadLocal.withInitial(HashSet::new);
     private final HashMap<String, PackageScalarLink> declarations = new HashMap<>();
     private final HashMap<String, FutureTask<PackageScalarFunction>> adapters = new HashMap<>();
     private final ThreadLocal<HashSet<String>> initializingAdapters = ThreadLocal.withInitial(HashSet::new);
@@ -96,16 +99,27 @@ public final class PackageScalarLibraries {
             if (closed) throw fault("Package C library registry is closed");
             var old = declarations.get(link.getUnit());
             if (old != null && !old.same(link)) throw fault("Conflicting package C component ABI: " + link.getUnit());
+            var selectedBundled = new HashMap<String, PackageNativeComponent.BundledLibrary>();
+            for (var entry : bundledLibraries.values()) selectedBundled.put(entry.library().name(), entry.library());
             var identities = new HashMap<String, String>();
             for (var entry : libraries.values()) identities.put(entry.component().componentSha256(), entry.component().unit());
             for (var component : graph.values()) {
                 var owner = identities.putIfAbsent(component.componentSha256(), component.unit());
                 if (owner != null && !owner.equals(component.unit()))
                     throw fault("Package C entry namespace belongs to another unit: " + component.componentSha256());
+                if (!component.bundledLibraries().isEmpty() && !System.getProperty("os.name").equals("Linux"))
+                    throw fault("Bundled native libraries require Linux");
+                for (var library : component.bundledLibraries()) {
+                    var prior = selectedBundled.putIfAbsent(library.name(), library);
+                    if (prior != null && !prior.same(library))
+                        throw fault("Conflicting bundled native library: " + library.name());
+                }
                 var selected = libraries.get(component.unit());
                 if (selected != null && !selected.component().same(component))
                     throw fault("Conflicting package C component identity: " + component.unit());
             }
+            for (var library : selectedBundled.values()) bundledLibraries.computeIfAbsent(library.name(), ignored ->
+                new Bundled(library, new FutureTask<>(() -> loadNative(library.bytes(), ".so", "package-provider:" + library.name()))));
             for (var component : graph.values()) libraries.computeIfAbsent(component.unit(), ignored ->
                 new Loaded(component, new FutureTask<>(() -> initialize(component)), new HashMap<>()));
             declarations.putIfAbsent(link.getUnit(), link);
@@ -136,29 +150,11 @@ public final class PackageScalarLibraries {
         var stack = initializing.get(); stack.push(component);
         try {
             registerCallbacks(owner);
+            for (var library : component.bundledLibraries()) loadBundled(library);
             if (component.nativeLibrary().length != 0) {
                 boolean windows = System.getProperty("os.name").startsWith("Windows");
-                var file = Files.createTempFile("thc-package-native-", windows ? ".dll" :
-                    component.format().equals("llvm-embedded-mach-o") ? ".dylib" : ".so");
-                try {
-                    Files.write(file, component.nativeLibrary());
-                    // Keep ordinary unresolved native functions lazy: an
-                    // archive member can also contain unused RTS wrappers.
-                    // Register LOCAL handles in Sulong's existing context
-                    // registry, never in the process-global namespace.
-                    env.initializeLanguage(env.getInternalLanguages().get("llvm"));
-                    var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
-                    if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
-                    String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
-                    Object handle = env.parseInternal(Source.newBuilder("nfi",
-                        (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", "package-native").build()).call();
-                    nativeContext.addLibraryHandles(handle);
-                } finally {
-                    // Windows keeps loaded DLLs locked until their native handle
-                    // is released. Match the existing floating-provider lifetime.
-                    if (windows) file.toFile().deleteOnExit();
-                    else Files.deleteIfExists(file);
-                }
+                loadNative(component.nativeLibrary(), windows ? ".dll" :
+                    component.format().equals("llvm-embedded-mach-o") ? ".dylib" : ".so", "package-native");
             }
             Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(component.bytes()),
                 component.componentSha256() + switch (component.format()) {
@@ -179,6 +175,38 @@ public final class PackageScalarLibraries {
             }
             return library;
         } finally { stack.pop(); owner.getThreads().leaveForeign(previous); }
+    }
+    private Object loadNative(byte[] bytes, String suffix, String name) throws Exception {
+        var file = Files.createTempFile("thc-package-native-", suffix);
+        boolean windows = System.getProperty("os.name").startsWith("Windows");
+        try {
+            Files.write(file, bytes);
+            // Keep unused native references lazy and handles in Sulong's context registry.
+            env.initializeLanguage(env.getInternalLanguages().get("llvm"));
+            var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
+            if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
+            String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+            Object handle = env.parseInternal(Source.newBuilder("nfi",
+                (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", name).build()).call();
+            nativeContext.addLibraryHandles(handle);
+            return handle;
+        } finally {
+            // Windows keeps loaded DLLs locked; Unix mappings survive unlink.
+            if (windows) file.toFile().deleteOnExit();
+            else Files.deleteIfExists(file);
+        }
+    }
+    private void loadBundled(PackageNativeComponent.BundledLibrary library) {
+        Bundled selected;
+        synchronized (this) {
+            if (closed) throw fault("Package C library registry is closed");
+            selected = bundledLibraries.get(library.name());
+        }
+        if (selected == null || !selected.library().same(library)) throw fault("Undeclared bundled native library: " + library.name());
+        var pending = initializingBundled.get();
+        if (!pending.add(library.name())) throw fault("Bundled native library is awaiting initialization: " + library.name());
+        try { selected.task().run(); await(selected.task()); }
+        finally { pending.remove(library.name()); }
     }
     @TruffleBoundary public void link(PackageScalarLink link) {
         var selected = declaration(link);
@@ -461,7 +489,7 @@ public final class PackageScalarLibraries {
     }
     public synchronized void close() {
         closed = true; alive.invalidate(); finalizers.close();
-        libraries.clear(); declarations.clear(); adapters.clear();
+        libraries.clear(); bundledLibraries.clear(); declarations.clear(); adapters.clear();
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
 }
