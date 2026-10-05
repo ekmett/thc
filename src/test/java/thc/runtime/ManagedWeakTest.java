@@ -30,8 +30,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class ManagedWeakTest {
-    private Context context() {
+    private Context context() { return context(false); }
+    private Context context(boolean nativeAccess) {
         return Context.newBuilder("thc")
+            .allowNativeAccess(nativeAccess)
             .allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false")
@@ -175,6 +177,130 @@ class ManagedWeakTest {
                 assertEquals(1L, observeIdentity(program, live)); assertSame(value, registry.dereference(live).getValue());
                 Reference.reachabilityFence(key); registry.finalize(live);
             } finally { context.leave(); }
+        }
+    }
+    private ExecutableProgram gcProgram(Language language, String backend, GcForeignOp operation) {
+        return load(language, new CompilerHeapHintTest().gcModule(
+            new String[]{operation.getSymbol(), "", "safe"}), backend);
+    }
+    private void requestGc(ExecutableProgram program) {
+        assertEquals(42L, Calls.target(program.entryTarget("gc"), new Object[]{0L, 42L, Unit.INSTANCE}));
+    }
+    private Registration droppedOwnedFree(ExecutableProgram program, ReferenceQueue<Object> queue,
+            ManagedAddress address) {
+        var key = new ManagedMutVar(Unit.INSTANCE); var value = new ManagedMutVar(key);
+        var weak = ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"),
+            new Object[]{0L, key, value, Unit.INSTANCE});
+        var state = Language.currentState();
+        assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"),
+            address, 0L, weak, state.cbits()));
+        var registration = new Registration(weak, new WeakReference<>(key, queue));
+        Reference.reachabilityFence(key); return registration;
+    }
+    @Test
+    void ownedFreeRetiresCollectedMutVarKeysAtManagedGcRequests() throws Exception {
+        for (var backend : List.of("ast", "bytecode"))
+        for (var operation : List.of(GcForeignOp.MINOR, GcForeignOp.MAJOR, GcForeignOp.BLOCKING))
+        try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            var state = Language.currentState(); var threads = state.getThreads();
+            threads.enterCurrent(null, false, true, null);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = state.getWeaks(); var allocations = state.getNativeAllocations();
+                var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, operation);
+                var liveKey = new ManagedMutVar(Unit.INSTANCE); var liveAddress = allocations.malloc(8);
+                liveAddress.writeWord8(0, 73); var live = registry.make(liveKey, new ManagedMutVar(liveKey), null);
+                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), liveAddress, 0L, live, state.cbits()));
+                for (var target : List.of(program.entryTarget("make"), gc.entryTarget("gc"))) {
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target);
+                }
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                var address = allocations.malloc(8); var alias = address.plus(1);
+                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
+                assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before,
+                    backend + " first compiled make"); valid(program.entryTarget("make"));
+                assertDoesNotThrow(() -> collect(queue, dropped.referent()), backend + "/" + operation);
+                // Ordinary weak operations may observe collection before the GC drain.
+                assertEquals(0L, observeIdentity(program, dropped.weak()));
+                before = ((Number) gc.diagnostics().get("compiledEntries")).longValue(); requestGc(gc);
+                assertTrue(((Number) gc.diagnostics().get("compiledEntries")).longValue() > before,
+                    backend + " first compiled GC"); valid(gc.entryTarget("gc"));
+                assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
+                assertEquals(73L, liveAddress.readWord8(0), "A live key retains its allocation");
+                assertEquals(0L, registry.finalize(dropped.weak()).getFlag()); requestGc(gc);
+                assertThrows(RuntimeFault.class, () -> allocations.free(address), "Ordinary free still rejects retired aliases");
+                assertEquals(0L, registry.finalize(live).getFlag());
+                assertThrows(RuntimeFault.class, () -> liveAddress.readWord8(0));
+                assertEquals(0L, registry.finalize(live).getFlag()); Reference.reachabilityFence(liveKey);
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+    @Test
+    void ownedFreeDefersBorrowedAllocationsUntilAnotherManagedGcRequest() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            var state = Language.currentState(); var threads = state.getThreads();
+            threads.enterCurrent(null, false, true, null);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
+                var address = state.getNativeAllocations().malloc(8);
+                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
+                try (var borrow = address.nativeAllocation().borrow()) {
+                    collect(queue, dropped.referent());
+                    assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag());
+                    requestGc(gc); requestGc(gc);
+                    borrow.segment().set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 91);
+                    assertEquals(91L, address.readWord8(0), "Busy retirement must preserve the usable borrow");
+                }
+                requestGc(gc); assertThrows(RuntimeFault.class, () -> address.readWord8(0));
+                assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag());
+                // An explicitly retired owner consumes its stale automatic token without replay.
+                var staleAddress = state.getNativeAllocations().malloc(8);
+                dropped = droppedOwnedFree(program, queue, staleAddress);
+                collect(queue, dropped.referent()); state.getNativeAllocations().free(staleAddress);
+                requestGc(gc); requestGc(gc);
+                assertThrows(RuntimeFault.class, () -> state.getNativeAllocations().free(staleAddress));
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+    @Test
+    void ownedFreePromotionPreservesCanonicalAdmissionAndNewestFirstCallbacks() throws Exception {
+        try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            var state = Language.currentState(); var threads = state.getThreads();
+            threads.enterCurrent(null, false, true, null);
+            try {
+                var registry = state.getWeaks(); var allocations = state.getNativeAllocations();
+                var address = allocations.malloc(8); address.writeWord8(0, 37);
+                var key = new ManagedMutVar(Unit.INSTANCE); var keyReference = new WeakReference<>(key);
+                var value = new ManagedMutVar(key); var valueReference = new WeakReference<>(value);
+                var weak = registry.make(key, value, null);
+                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, weak, state.cbits()));
+                var calls = new ArrayList<Integer>();
+                assertEquals(1L, registry.addCallback(weak, () -> {
+                    assertEquals(0L, registry.dereference(weak).getFlag());
+                    assertEquals(37L, address.readWord8(0)); calls.add(1);
+                }));
+                assertEquals(1L, registry.addCallback(weak, () -> calls.add(2)));
+                Reference.reachabilityFence(key); key = null; value = null;
+                var queue = new ReferenceQueue<Object>(); collect(queue, gcWitness(queue));
+                GcForeignOp.MINOR.invoke();
+                assertNotNull(keyReference.get()); assertSame(valueReference.get(), registry.dereference(weak).getValue());
+                assertEquals(0L, registry.finalize(weak).getFlag()); assertEquals(List.of(2, 1), calls);
+                assertThrows(RuntimeFault.class, () -> address.readWord8(0));
+                // A constructed same-symbol label is explicit-only; identity certifies eligibility.
+                var impostorAddress = allocations.malloc(8); var impostorKey = new ManagedMutVar(Unit.INSTANCE);
+                var impostorReference = new WeakReference<>(impostorKey);
+                var explicit = registry.make(impostorKey, new ManagedMutVar(impostorKey), null);
+                var impostor = new CFinalizerFunction(state.cbits(), "free", null).getAddress();
+                assertEquals(1L, registry.addCFinalizer(impostor, impostorAddress, 0L, explicit, state.cbits()));
+                Reference.reachabilityFence(impostorKey); impostorKey = null;
+                collect(queue, gcWitness(queue)); GcForeignOp.MINOR.invoke();
+                assertNotNull(impostorReference.get()); assertDoesNotThrow(() -> impostorAddress.readWord8(0));
+                registry.finalize(explicit); assertThrows(RuntimeFault.class, () -> impostorAddress.readWord8(0));
+            } finally { threads.leaveCurrent(); context.leave(); }
         }
     }
     @Test

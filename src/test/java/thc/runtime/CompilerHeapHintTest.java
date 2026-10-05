@@ -148,7 +148,7 @@ public class CompilerHeapHintTest {
             assertThrows(RuntimeFault.class, () -> validate(declaration, arguments.subList(0, arguments.size() - 1), flags, result));
         }
     }
-    private Map<String, Object> gcModule(String[] call) {
+    Map<String, Object> gcModule(String[] call) {
         boolean stats = call[0].equals("getRTSStats"), query = !call[1].isEmpty();
         var proof = gcTuple(call[1], true); var result = query ? scalar(call[1], true) : integer;
         var operands = stats ? List.of(List.of("var", "buffer", Map.of("rep", scalar("AddrRep", true))),
