@@ -12,7 +12,7 @@ import java.util.HashMap;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/** Collect actionless identity/MutVar-key registrations; actions and callbacks remain explicit-only. */
+/** Collect actionless identity/MutVar/MVar-key registrations; actions and callbacks remain explicit-only. */
 public final class ManagedWeaks {
     private static final class Handle {
         final ManagedWeaks owner;
@@ -22,30 +22,40 @@ public final class ManagedWeaks {
         final Handle handle;
         Object key, value;
         final Object action;
-        final boolean mutVarValue;
+        final boolean keyOwnedValue;
         final ArrayList<Runnable> callbacks = new ArrayList<>();
         Payload(Handle handle, Object key, Object value, Object action, ReferenceQueue<Object> queue) {
-            super(action == null && (key == value || key instanceof ManagedMutVar) ? key : null, queue);
+            super(action == null && (key == value || key instanceof ManagedMutVar || key instanceof ManagedMVar) ? key : null, queue);
             this.handle = handle; this.action = action;
-            mutVarValue = action == null && key != value && key instanceof ManagedMutVar;
-            if (mutVarValue) ((ManagedMutVar) key).retainWeakValue(handle, value);
-            else if (action != null || key != value) { this.key = key; this.value = value; }
+            keyOwnedValue = action == null && key != value && (key instanceof ManagedMutVar || key instanceof ManagedMVar);
+            if (keyOwnedValue) {
+                if (key instanceof ManagedMutVar cell) cell.retainWeakValue(handle, value);
+                else ((ManagedMVar) key).retainWeakValue(handle, value);
+            } else if (action != null || key != value) { this.key = key; this.value = value; }
         }
         Object key() { return key == null ? get() : key; }
         Object value(Object retainedKey) {
             Object result = key != null ? value : retainedKey == null ? null
-                : mutVarValue ? ((ManagedMutVar) retainedKey).weakValue(handle) : retainedKey;
+                : !keyOwnedValue ? retainedKey : retainedKey instanceof ManagedMutVar cell
+                    ? cell.weakValue(handle) : ((ManagedMVar) retainedKey).weakValue(handle);
             Reference.reachabilityFence(retainedKey);
             return result;
         }
         void detach() {
-            if (mutVarValue && key == null && get() instanceof ManagedMutVar cell) cell.releaseWeakValue(handle);
+            if (keyOwnedValue && key == null) {
+                Object retainedKey = get();
+                if (retainedKey instanceof ManagedMutVar cell) cell.releaseWeakValue(handle);
+                else if (retainedKey instanceof ManagedMVar cell) cell.releaseWeakValue(handle);
+            }
         }
         void addCallback(Object retainedKey, Runnable callback) {
             if (key == null) {
                 value = value(retainedKey);
                 key = retainedKey; // Retain both before detaching key-owned storage.
-                if (mutVarValue) ((ManagedMutVar) retainedKey).releaseWeakValue(handle);
+                if (keyOwnedValue) {
+                    if (retainedKey instanceof ManagedMutVar cell) cell.releaseWeakValue(handle);
+                    else ((ManagedMVar) retainedKey).releaseWeakValue(handle);
+                }
                 clear();
             }
             callbacks.add(0, callback); // RTS prepends: explicit finalize visits newest first.
