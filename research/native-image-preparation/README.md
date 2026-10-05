@@ -72,9 +72,11 @@ On a shared host, wrap each command in its existing build-directory lease and
 check available host capacity. The script does not acquire a host-specific lock
 itself. Do not run duplicate image builders.
 
-`THC_NATIVE_IMAGE_BUILDER_HEAP=16g` selects the qualified larger builder budget
-when the default generic/cache 8 GiB is insufficient. Only `8g` and `16g` are
-accepted. Bound-executable mode defaults to 16 GiB. The choice is recorded in
+`THC_NATIVE_IMAGE_BUILDER_HEAP` selects an explicit builder budget of `8g`,
+`16g` or `32g`. Generic/cache mode defaults to 8 GiB and bound-executable mode
+to 16 GiB. The captured-Core application image exhausted 16 GiB during code
+generation; its 32 GiB construction remains under qualification. The choice is
+recorded in
 `reproduction-inventory/builder-heap.args` and changes only builder `-J-Xmx`,
 not the produced executable's runtime heap, compilation limits or two compiler
 threads. Check host headroom before selecting the larger budget.

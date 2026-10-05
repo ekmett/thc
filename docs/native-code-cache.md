@@ -118,8 +118,11 @@ string-valued JVM system properties can also bind the THC execution profile.
 Native Image runtime-option parsing is disabled in this mode: guest `-D` and
 `-X` options are not VM arguments. This experimental recipe fixes a 16 GiB
 runtime heap ceiling and two available processors at image build time.
-Its builder uses 16 GiB and two compiler threads; compiled-cache mode retains
-its separate 8 GiB builder limit.
+Its builder defaults to 16 GiB and two compiler threads; compiled-cache mode
+defaults to 8 GiB. `THC_NATIVE_IMAGE_BUILDER_HEAP=32g` permits a larger builder
+heap without changing the produced executable's runtime limits. The captured-Core
+application image exhausted the 16 GiB builder heap during code generation;
+the larger construction is not yet qualified.
 
 The executable capture defaults to synchronous AST preparation, so a plain
 argument array needs no properties object. Explicit `thc.backend` values other
