@@ -80,6 +80,7 @@ try {
             'thc.runtime.TupleRepresentationTest',
             'thc.AggregateFrontierTest',
             'thc.runtime.ManagedStackRuntimeTest.rejectedDestinationsAndUnknownKeysNeverPartiallyWrite',
+            'thc.runtime.ManagedStackRuntimeTest.layoutMismatchesAndMalformedIpeLayoutsFailBeforeAnyWrite',
             'thc.CoreUnitLoadTest.coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding',
             'thc.CoreUnitLoadTest.missingOrBadColdUnitFailsOnlyAtDemandAndDoesNotTouchThirdUnit',
             'thc.NarrowPublicEntryTest.partialApplicationUsesRemainingNotOriginalInputProofs',

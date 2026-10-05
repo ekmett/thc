@@ -131,6 +131,11 @@ host's platform and GHC way, including Windows vanilla. Only this method runs
 in both handoff modes with live AST frames. It does not qualify bytecode guest
 execution, compiled calls or native GHC frame equivalence.
 
+A separate managed-stack layout check rejects changed ABI identity and malformed
+tables-next-to-code, descriptor width and overlapping IPE fields before writing
+destination bytes. It uses the same synthetic boundary and runs as one exact
+method in both handoff modes.
+
 Two public-manifest loader checks use model CBDs from the selected Haskell
 encoder. Cold references leave other units unopened; first demand decodes the
 binding once and subsequent calls reuse it. A bad demanded unit fails without
