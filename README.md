@@ -18,7 +18,7 @@ For native Windows, use the [PowerShell build and test guide](docs/windows.md).
 It lists the required tools and current platform limits.
 
 You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16**,
-**GraalVM 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
+**GraalVM Community Edition 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
 point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
 directory. The Gradle wrapper downloads its dependencies on the first build.
 Linux x86_64 setup includes clang and GMP development headers and libraries

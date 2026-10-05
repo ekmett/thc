@@ -78,6 +78,18 @@ package tool and configured GHC sources when needed.
 include complete installed Core and matching configured GHC sources. See [Core compatibility checks](coverage.md)
 and [foreign code](interface-foreign.md) for setup and limits.
 
+## Known compiler limitation
+
+Use the pinned GraalVM Community Edition distribution used by CI. A recorded
+Linux run on Oracle GraalVM 25.3.4.1 (JDK
+`25.0.4.1+1-LTS-jvmci-25.3-b22`) returned the wrong value for a compiled AST loop
+that swaps scalars around an empty-tuple argument. Its saved compiler graphs
+first lose the required result in the Enterprise `LoopInversionPhase`.
+The corresponding regression passes on current Community Edition CI;
+that does not establish a fix for the Oracle build. See
+[issue #1066](https://github.com/ekmett/thc/issues/1066) for the affected build,
+graph evidence and remaining reproducer work.
+
 ## Find and change the implementation
 
 [Architecture](architecture.md) describes acquisition, linking and execution.
