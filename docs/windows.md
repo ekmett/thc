@@ -82,12 +82,17 @@ The disabled queue (the default zero capacity) leaves work unforced without
 admitting guest concurrency. These bounded checks do not qualify the whole
 concurrency suite or GHC-derived programs.
 
-Two fixture-free weak checks require actual identity-key collection while live
-keys preserve identity, including first compiled make and dead dereference calls.
-Callbacks promote identity registrations to explicit lifetime; dependent values
-and actions stay retained until explicit finalization, with newest-first callbacks
-running once. Both backends and handoff modes are covered. These checks do not
-qualify general ephemeron handling, GC-triggered finalizers or the native weak corpus.
+Fixture-free weak checks cover identity-only registrations and actionless raw
+`MutVar#` keys with distinct values. The MutVar check requires actual collection
+of value-to-key cycles while live keys retain their original values, including
+first compiled make and dead dereference calls on AST and bytecode.
+Shared controls retain dropped registrations under live keys until detach and
+check actual context close detaches values and invalidates handles without
+running Haskell actions. Callback attachment promotes collectible registrations
+to explicit lifetime; ordinary distinct-key values and all actions remain
+strongly retained until explicit finalization or context close. Callbacks run
+newest-first once. Selected checks run in both handoff modes. General ephemerons,
+GC-triggered finalizers and the native weak corpus remain outside this qualification.
 
 Three fixture-free empty-join controls check ordered zero-width effects, no
 destination writes on failure, logical arity and state-contract rejection.
