@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.bytecode.Instruction;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -31,8 +32,11 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 class ManagedWeakTest {
     private Context context() { return context(false); }
-    private Context context(boolean nativeAccess) {
+    private Context context(boolean nativeAccess) { return context(nativeAccess, "platform"); }
+    private Context context(boolean nativeAccess, String hosting) {
         return Context.newBuilder("thc")
+            .allowCreateThread(nativeAccess)
+            .option("thc.ThreadHosting", hosting)
             .allowNativeAccess(nativeAccess)
             .allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false")
@@ -301,6 +305,115 @@ class ManagedWeakTest {
                 assertNotNull(impostorReference.get()); assertDoesNotThrow(() -> impostorAddress.readWord8(0));
                 registry.finalize(explicit); assertThrows(RuntimeFault.class, () -> impostorAddress.readWord8(0));
             } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+    private CompletableFuture<Void> ownedFreeTask(Language.State state, Runnable action) {
+        var result = new CompletableFuture<Void>(); var threads = state.getThreads();
+        var thread = threads.newThread(state.getEnv(), () -> {
+            threads.enterCurrent(MaskingState.UNMASKED, true, true, null);
+            try { action.run(); result.complete(null); }
+            catch (Throwable failure) { result.completeExceptionally(failure); }
+            finally { threads.leaveCurrent(); }
+        }, null, null);
+        thread.setUncaughtExceptionHandler((_, failure) -> result.completeExceptionally(failure));
+        threads.startThread(thread); return result;
+    }
+    private void awaitOwnedFreeTask(Future<?> future) {
+        TruffleSafepoint.setBlockedThreadInterruptible(null, pending -> {
+            try { pending.get(5, TimeUnit.SECONDS); }
+            catch (ExecutionException | TimeoutException failure) { throw new AssertionError(failure); }
+        }, future);
+    }
+    @Test
+    void ownedFreeBorrowDeferralLetsOneLoomHecRunTheBorrowerAgain() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true, "loom")) {
+            context.initialize("thc"); context.enter();
+            var release = new ManagedMVar();
+            try {
+                var state = Language.currentState(); state.getThreads().setCapabilityCount(1);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
+                var address = state.getNativeAllocations().malloc(8);
+                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
+                var borrowed = new CompletableFuture<Void>();
+                var borrower = ownedFreeTask(state, () -> {
+                    assertTrue(Thread.currentThread().isVirtual());
+                    try (var loan = address.nativeAllocation().borrow()) {
+                        borrowed.complete(null); release.take(null);
+                        loan.segment().set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 91);
+                        assertEquals(91L, address.readWord8(0));
+                    }
+                });
+                awaitOwnedFreeTask(CompletableFuture.anyOf(borrowed, borrower)); collect(queue, dropped.referent());
+                awaitOwnedFreeTask(ownedFreeTask(state, () -> {
+                    requestGc(gc); assertDoesNotThrow(() -> address.readWord8(0));
+                    assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag());
+                    assertTrue(release.tryPut(Unit.INSTANCE));
+                }));
+                awaitOwnedFreeTask(borrower);
+                awaitOwnedFreeTask(ownedFreeTask(state, () -> {
+                    requestGc(gc); assertThrows(RuntimeFault.class, () -> address.readWord8(0));
+                }));
+            } finally { release.tryPut(Unit.INSTANCE); context.leave(); }
+        }
+    }
+    @Test
+    void ownedFreeExplicitFinalizeRacesManagedGcWithoutReplayingRetirement() throws Exception {
+        for (var backend : List.of("ast", "bytecode"))
+        for (boolean collected : new boolean[]{false, true}) try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState(); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
+                var address = state.getNativeAllocations().malloc(8); var queue = new ReferenceQueue<Object>();
+                var key = new ManagedMutVar(Unit.INSTANCE); Object weak;
+                if (collected) {
+                    var dropped = droppedOwnedFree(program, queue, address); weak = dropped.weak(); collect(queue, dropped.referent());
+                } else {
+                    weak = state.getWeaks().make(key, new ManagedMutVar(key), null);
+                    assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, weak, state.cbits()));
+                }
+                var gate = new ManagedMVar();
+                var finalizing = ownedFreeTask(state, () -> {
+                    gate.read(null); assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
+                });
+                var draining = ownedFreeTask(state, () -> { gate.read(null); requestGc(gc); });
+                try {
+                    assertTrue(gate.tryPut(Unit.INSTANCE)); awaitOwnedFreeTask(finalizing); awaitOwnedFreeTask(draining);
+                } finally { gate.tryPut(Unit.INSTANCE); }
+                assertThrows(RuntimeFault.class, () -> address.readWord8(0));
+                assertEquals(0L, state.getWeaks().finalize(weak).getFlag()); requestGc(gc); Reference.reachabilityFence(key);
+            } finally { context.leave(); }
+        }
+    }
+    @Test
+    void ownedFreeDrainCannotOutliveContextCancellation() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) for (var hosting : List.of("platform", "loom")) {
+            var context = context(true, hosting); context.initialize("thc"); context.enter();
+            var release = new ManagedMVar(); CompletableFuture<Void> draining = null;
+            java.lang.foreign.MemorySegment segment;
+            try {
+                var state = Language.currentState(); state.getThreads().setCapabilityCount(1);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
+                var address = state.getNativeAllocations().malloc(8);
+                try (var loan = address.nativeAllocation().borrow()) { segment = loan.segment(); }
+                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
+                collect(queue, dropped.referent());
+                // First defer a real token, then race cancellation with its next managed drain.
+                try (var loan = address.nativeAllocation().borrow()) { requestGc(gc); assertTrue(segment.scope().isAlive()); }
+                var ready = new CompletableFuture<Void>();
+                draining = ownedFreeTask(state, () -> {
+                    ready.complete(null); release.take(null);
+                    for (;;) { requestGc(gc); TruffleSafepoint.poll(null); }
+                });
+                awaitOwnedFreeTask(CompletableFuture.anyOf(ready, draining));
+            } finally { release.tryPut(Unit.INSTANCE); context.leave(); }
+            try { context.close(true); }
+            finally { context.close(true); }
+            assertNotNull(draining); assertTrue(draining.isDone(), "Context close joins admitted drains");
+            assertFalse(segment.scope().isAlive());
+            assertThrows(IllegalStateException.class, () -> segment.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
         }
     }
     @Test

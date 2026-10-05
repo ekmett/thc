@@ -1,4 +1,4 @@
-# Function labels and explicit C finalizers
+# Function labels and C finalizers
 
 GHC 9.14.1 `LitLabel` contains an exact symbol and `FunctionOrData` tag.
 The exporter preserves these as `function-addr` and `data-addr` literals with
@@ -22,6 +22,18 @@ weak lock. Only after those effects does it return the original Haskell action
 and its validity flag. A weak with only C finalizers returns flag 0 after running
 them. The Haskell action is never executed by the primitive itself.
 
+A single canonical current-context `free` on an actionless raw `MutVar#` key
+has a [cooperative retirement path](weak-explicit.md). Only a direct owned malloc
+base or null qualifies; the registration retains the native Owner rather than
+the address, function provider or guest payload. Existing managed GC requests
+claim the dead weak and attempt deallocation outside the weak lock. Borrowed or
+currently freeing owners remain pending for a later request, without waiting.
+Explicitly retired owners consume their stale automatic token without another
+free. Explicit free/finalization keep their existing freed-alias errors. A second
+callback promotes the original key/value to explicit ownership and preserves
+newest-first order. Context close discards pending tokens and disposes remaining
+native allocations. Background JVM collection alone does not execute callbacks.
+
 Package-owned one-address finalizers use a separate typed admission path. The
 exporter retains the actual stock `CLabel` declaration, its declared and
 normalized nominal types, and the unchanged foreign product. A normalized
@@ -36,8 +48,8 @@ reject. Native allocation borrows cover callback execution, including known
 returned aliases. Registration and explicit finalization keep the existing
 DEAD-before-call, newest-first and no-replay rules. The reserved `free` label
 still uses checked allocation ownership; package labels do not acquire that
-special deallocation authority. Automatic GC finalization and arbitrary function
-pointer calls remain unsupported.
+special deallocation authority. Automatic Haskell/package finalization and
+arbitrary function pointer calls remain unsupported.
 
 The native zlib dependency profile currently supports Linux x86-64 LP64. It
 validates the original LLVM declarations before linking libz, preserving its
@@ -53,7 +65,7 @@ than an expired argument-view lease. Explicit typed address reads recover newly
 written pointer fields; the runtime does not scan scalar fields for pointers.
 Moving buffers and opaque guest objects cannot be embedded as native pointers,
 and raw byte exposure of a pointer-bearing allocation remains rejected. This
-does not add native-to-guest callback support or automatic GC finalization.
+does not add native-to-guest callback support or automatic package finalization.
 
 Primary implementations at the pinned GHC revision:
 

@@ -153,8 +153,8 @@ and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 | `mkWeak#` | Strongly retains its lazy key, value and Haskell action until explicit finalization or context disposal. **No automatic weak-key/ephemeron collection**; otherwise unreachable resources can remain for the context lifetime. Dropping the `Weak#` does not remove its registration. |
 | `mkWeakNoFinalizer#` | Without callbacks, identical key/value carriers are weakly held; raw managed `MutVar#` or `MVar#` keys can also own distinct lazy values without rooting an otherwise unreachable key/value cycle. Finalization/disposal detaches those values. Distinct values with other key carriers remain strongly retained; general ephemeron collection is absent. |
 | `deRefWeak#` | Returns flag 0 after explicit finalization or collection of an identity-only or actionless raw `MutVar#` or `MVar#` key. Otherwise returns the original lazy value without forcing it. |
-| `finalizeWeak#` | Explicit finalization marks the weak dead, invokes registered supported C callbacks, and returns the actual Haskell action to the caller. Returning rather than running that action is intentional GHC primop behavior. Automatic GC finalization is absent; context close discards outstanding callbacks instead of executing them. |
-| `addCFinalizerToWeak#` | Accepts source-certified one-address callbacks (`free` for owned allocation bases and typed package finalizers from completely linked native components), with zero environment flag. Package callbacks require the retained `FunPtr (Ptr a -> IO ())` declaration and an exact rooted `void(pointer)` entry. Unknown labels and the two-address/environment ABI are unsupported. Attaching a callback to a live collectible registration restores strong retention of the original key and value; a collected registration returns 0. Callbacks run through explicit finalization only. See [C finalizers](c-finalizers.md). |
+| `finalizeWeak#` | Explicit finalization marks the weak dead, invokes registered supported C callbacks, and returns the actual Haskell action to the caller. Returning rather than running that action is intentional GHC primop behavior. Managed GC requests can retire one canonical owned free on an actionless raw MutVar key; general automatic finalization remains absent. Context close discards outstanding callbacks instead of executing them and disposes remaining native allocations. |
+| `addCFinalizerToWeak#` | Accepts source-certified one-address callbacks (`free` for owned allocation bases and typed package finalizers from completely linked native components), with zero environment flag. Package callbacks require the retained `FunPtr (Ptr a -> IO ())` declaration and an exact rooted `void(pointer)` entry. Unknown labels and the two-address/environment ABI are unsupported. A single canonical current-context owned free on an actionless raw `MutVar#` key retains only its direct malloc owner (or null) and can retire at a managed GC request without waiting for borrows. Other callbacks, including a second callback, restore strong retention of the original key and value and remain explicit-only; a collected registration returns 0. See [C finalizers](c-finalizers.md). |
 
 This limitation is not shared by stable names: `makeStableName#` really uses a
 weak identity map and does not retain its referent. Stable pointers intentionally
@@ -357,7 +357,8 @@ The compiler's original `setHeapSize` evaluates its byte-count/state operands an
 returns, ignoring the heap-size advisory: THC does not resize the process-wide
 JVM heap, request GC, or invent mutable native RTS sizing flags.
 Original `performGC`, `performMajorGC` and `performBlockingMajorGC` request JVM
-collection without GHC generation or completion guarantees. `getRTSStatsEnabled`
+collection and attempt pending eligible owned frees without waiting for borrows;
+there are no GHC generation or completion guarantees. `getRTSStatsEnabled`
 is false, and direct `getRTSStats` rejects without modifying its buffer; original
 Haskell retains its disabled-statistics exception. `getMonotonicNSec` uses the
 JVM monotonic clock with an arbitrary process-local origin. See

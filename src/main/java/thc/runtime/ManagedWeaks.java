@@ -12,7 +12,7 @@ import java.util.HashMap;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/** Collect actionless identity/MutVar/MVar-key registrations; actions and callbacks remain explicit-only. */
+/** Collect actionless identity/MutVar/MVar keys; managed GC calls can retire one canonical owned free. */
 public final class ManagedWeaks {
     private static final class Handle {
         final ManagedWeaks owner;
@@ -24,6 +24,8 @@ public final class ManagedWeaks {
         final Object action;
         final boolean keyOwnedValue;
         final ArrayList<Runnable> callbacks = new ArrayList<>();
+        boolean ownedFree;
+        ManagedNativeAllocations.Owner freeOwner;
         Payload(Handle handle, Object key, Object value, Object action, ReferenceQueue<Object> queue) {
             super(action == null && (key == value || key instanceof ManagedMutVar || key instanceof ManagedMVar) ? key : null, queue);
             this.handle = handle; this.action = action;
@@ -64,6 +66,7 @@ public final class ManagedWeaks {
     private static final WeakResult DEAD = new WeakResult(0L, null); // Invalid payload, never a fabricated no-op action.
     private final HashMap<Handle, Payload> live = new HashMap<>();
     private final ReferenceQueue<Object> collected = new ReferenceQueue<>();
+    private final ArrayList<ManagedNativeAllocations.Owner> pendingFrees = new ArrayList<>();
     private boolean closed;
 
     private void reap() {
@@ -71,7 +74,45 @@ public final class ManagedWeaks {
             var payload = (Payload) stale;
             // A callback may have promoted this entry before a queued record
             // was observed. Such an entry now has explicit strong ownership.
-            if (payload.key == null) live.remove(payload.handle, payload);
+            if (payload.key == null) retire(payload);
+        }
+    }
+    private void retire(Payload payload) {
+        if (live.remove(payload.handle, payload) && payload.ownedFree) {
+            pendingFrees.add(payload.freeOwner);
+            payload.ownedFree = false; payload.freeOwner = null;
+        }
+    }
+
+    /** Claim DEAD before native effects; busy borrows retain only their native owner for a later GC call. */
+    @TruffleBoundary void drainOwnedFrees() {
+        ArrayList<ManagedNativeAllocations.Owner> pending;
+        synchronized (this) {
+            if (closed) return;
+            reap();
+            // Java may clear a referent before publishing its queue record.
+            for (var iterator = live.values().iterator(); iterator.hasNext();) {
+                var payload = iterator.next();
+                if (payload.ownedFree && payload.key() == null) {
+                    iterator.remove(); pendingFrees.add(payload.freeOwner);
+                    payload.ownedFree = false; payload.freeOwner = null;
+                }
+            }
+            pending = new ArrayList<>(pendingFrees); pendingFrees.clear();
+        }
+        var allocations = Language.currentState(null).getNativeAllocations();
+        for (int i = 0; i < pending.size(); i++) {
+            try {
+                if (!allocations.tryFree(pending.get(i))) synchronized (this) {
+                    if (!closed) pendingFrees.add(pending.get(i));
+                }
+            } catch (Throwable failure) {
+                // The attempted token is consumed even on failure. Preserve unattempted tokens.
+                synchronized (this) {
+                    if (!closed) pendingFrees.addAll(pending.subList(i + 1, pending.size()));
+                }
+                throw failure;
+            }
         }
     }
     private Handle handle(Object value) {
@@ -93,7 +134,7 @@ public final class ManagedWeaks {
         var handle = handle(value);
         var payload = live.get(handle);
         Object result = payload == null ? null : payload.value(payload.key());
-        if (result == null) { live.remove(handle); return DEAD; }
+        if (result == null) { if (payload != null) retire(payload); return DEAD; }
         return new WeakResult(1L, result);
     }
 
@@ -107,10 +148,20 @@ public final class ManagedWeaks {
         var handle = handle(weak);
         var payload = live.get(handle);
         Object key = payload == null ? null : payload.key();
-        if (key == null) { live.remove(handle); return 0L; }
+        if (key == null) { if (payload != null) retire(payload); return 0L; }
         // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
         if (callback.getSymbol().equals("free")) Language.currentState(null).getNativeAllocations().requireFreeTarget(address);
         else if (address != ManagedAddress.nullAddress()) address.requireByteRegion(0L, false);
+        if (payload.action == null && key instanceof ManagedMutVar && payload.key == null
+                && payload.callbacks.isEmpty() && !payload.ownedFree && provider.isOwnedFree(callback)
+                && Language.currentState(null).getWeaks() == this) {
+            var owner = Language.currentState(null).getNativeAllocations().ownedFreeTarget(address);
+            if (owner != null || address == ManagedAddress.nullAddress()) {
+                payload.ownedFree = true; payload.freeOwner = owner;
+                Reference.reachabilityFence(key);
+                return 1L;
+            }
+        }
         payload.addCallback(key, () -> callback.invoke(address));
         return 1L;
     }
@@ -118,7 +169,7 @@ public final class ManagedWeaks {
         var handle = handle(value);
         var payload = live.get(handle);
         Object key = payload == null ? null : payload.key();
-        if (key == null) { live.remove(handle); return 0L; }
+        if (key == null) { if (payload != null) retire(payload); return 0L; }
         payload.addCallback(key, callback);
         return 1L;
     }
@@ -126,11 +177,22 @@ public final class ManagedWeaks {
         // Publish DEAD before calling C; neither Sulong nor guest code runs under this monitor.
         Payload payload;
         synchronized (this) {
-            payload = live.remove(handle(value));
-            if (payload != null) payload.detach();
+            var handle = handle(value);
+            payload = live.get(handle);
+            if (payload != null) {
+                Object key = payload.key();
+                if (key == null) { retire(payload); payload = null; }
+                else { live.remove(handle); payload.detach(); Reference.reachabilityFence(key); }
+            }
         }
         if (payload == null) return DEAD;
         for (var callback : payload.callbacks) callback.run();
+        if (payload.ownedFree) {
+            var state = Language.currentState(null);
+            if (state.getWeaks() != this) throw fault("C finalizer belongs to another THC context");
+            state.getNativeAllocations().free(payload.freeOwner == null ? ManagedAddress.nullAddress()
+                : ManagedAddress.fromNativeAllocation(payload.freeOwner));
+        }
         return payload.action == null ? DEAD : new WeakResult(1L, payload.action);
     }
 
@@ -139,7 +201,7 @@ public final class ManagedWeaks {
         var weak = handle(value);
         var payload = live.get(weak);
         Object key = payload == null ? null : payload.key();
-        if (key == null) { live.remove(weak); throw fault("Main thread requires a live Weak#"); }
+        if (key == null) { if (payload != null) retire(payload); throw fault("Main thread requires a live Weak#"); }
         if (!(key instanceof GuestThreadId identity)) throw fault("Main thread Weak# key is not a ThreadId#");
         threads.requireIdentity(identity);
         return new MainThreadWeakKey(this, weak, threads);
@@ -153,14 +215,14 @@ public final class ManagedWeaks {
         Object key = payload == null ? null : payload.key();
         // mainThreadKey admitted this immutable key before publishing the capability.
         // Collection/close expires liveness; it does not invalidate the query itself.
-        if (key == null) { live.remove(handle); return null; }
+        if (key == null) { if (payload != null) retire(payload); return null; }
         return threads.liveJavaId((GuestThreadId) key);
     }
     public synchronized int retainedCount() { reap(); return live.size(); }
     public synchronized void close() {
         closed = true;
         for (var payload : live.values()) payload.detach();
-        live.clear();
+        live.clear(); pendingFrees.clear();
         while (collected.poll() != null) { /* Release queued registrations too. */ }
     }
     public static ManagedWeaks current(Node node) { return Language.currentState(node).getWeaks(); }

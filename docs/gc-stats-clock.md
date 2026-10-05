@@ -23,6 +23,14 @@ reclamation, finalizer execution, or waiting for a concurrent collector. GHC's
 available separately through [THC runtime services](runtime-services.md); JVM
 heap/collector counters are not relabeled as GHC allocated/copied/live bytes.
 
+After each managed GC request, its admitted caller also attempts the narrowly
+eligible [canonical owned-free registrations](weak-explicit.md). The weak is
+DEAD before the native effect, and busy native borrows defer retirement until a
+later request without blocking the guest or a Loom HEC. This does not guarantee
+collection, retirement before return, or background finalizer execution. Haskell
+actions and package callbacks remain explicit-only. Statistics and clock queries
+do not drain weak registrations.
+
 The original `GHC.Internal.Stats.getRTSStats` first calls
 `getRTSStatsEnabled`. When false it raises its own `UnsupportedOperation`
 `IOError`, before allocating an `RTSStats` buffer. The direct foreign leaf is
@@ -43,6 +51,8 @@ keeps its existing default.
 
 `CompilerHeapHintTest` checks the admitted shared GC foreign ABI, JVM return
 behavior on both backends from the first compiled call, and unavailable statistics
-without buffer reads or writes. These fixture-free callers use independent GHC
+without buffer reads or writes. `ManagedWeakTest` checks real owned-free retirement, live-key controls, callback
+promotion, borrow deferral, explicit-finalize races and context cancellation.
+These fixture-free callers use independent GHC
 9.14.1 signature models; they do not qualify acquisition or execution of the
 installed original Haskell wrappers.

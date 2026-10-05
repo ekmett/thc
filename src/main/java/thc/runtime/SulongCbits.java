@@ -108,6 +108,10 @@ public final class SulongCbits {
         if (function == null) return Language.currentState(null).getPackageCbits().dataAddress(null, symbol);
         return function.getAddress();
     }
+    /** Only this live context's canonical label can shed its explicit callback roots. */
+    boolean isOwnedFree(CFinalizerFunction function) {
+        return function == ownedFree && Language.currentState(null).cbits() == this;
+    }
     public void invokeFinalizer(CFinalizerFunction function, ManagedAddress address) {
         function.requireOwner(this);
         if (Language.currentState(null).cbits() != this) throw fault("C finalizer belongs to another THC context");

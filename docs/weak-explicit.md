@@ -22,14 +22,29 @@ detach each registration's value from its key. A retained MVar request keeps its
 cell and that cell's weak values alive, even after the request is cancelled;
 cancellation alone does not make the cell unreachable.
 
-Attaching a supported C callback to either kind of still-live collectible
-registration atomically restores strong retention of its exact key and value
-before the callback can run. Attaching to an already
-collected registration returns 0. Callbacks remain explicit-only: collection
-never executes C callbacks or Haskell actions.
+One canonical THC-owned `free` callback on an actionless raw `MutVar#` key can
+retain only its direct malloc owner (or null), leaving the key collectible. This
+also permits a distinct lazy value that refers back to its key. The original
+function label must belong to the current context; a constructed same-symbol
+label, returned-address wrapper, second callback or generic callback remains
+explicit-only. Attaching any such callback to a live collectible registration
+atomically restores strong retention of its exact key and value. Callback order
+remains newest first. Attaching to an already collected registration returns 0.
+
+After each original `performGC`, `performMajorGC` or `performBlockingMajorGC`
+request, the admitted guest caller attempts pending eligible owned frees. The
+weak becomes DEAD before deallocation. A busy native borrow or concurrent
+explicit retirement defers that token until a later managed GC request; the
+attempt never waits for a borrow, including with one Loom HEC. An owner already
+retired by explicit free or realloc consumes its stale token without another
+native call. Ordinary free and explicit finalization still reject freed aliases.
+A failing attempted token is consumed rather than replayed. Observing a dead
+weak through another weak operation preserves its pending free. JVM collection
+alone does not dispatch these frees, and a managed GC request does not guarantee
+collection or completion of deferred retirement.
 
 Distinct-value registrations with other key carriers, and all registrations
-with a Haskell action or attached C callbacks, strongly retain their keys and
+with a Haskell action or other attached C callbacks, strongly retain their keys and
 payloads until explicit finalization or context close. Dropping the `Weak#` does
 not erase a live registration. General ephemeron support remains absent:
 otherwise unreachable cycles through these retained values or actions can remain
@@ -50,11 +65,15 @@ tuple fields are retained. Malformed arity, representations, lifted flags and
 contradictory lexical proofs are rejected. The runtime checks opaque handle
 identity and context ownership. Closing a context invalidates its handles and
 releases registry references without executing outstanding Haskell finalizers.
+Pending owned-free tokens are discarded; native allocation disposal releases
+any remaining owned storage after admitted guest operations have stopped.
 Host cancellation is not claimed to guarantee execution of a returned action.
 
 `addCFinalizerToWeak#` admits only [source-certified one-argument C labels
 and owned `free` bases](c-finalizers.md). Explicit `finalizeWeak#` runs their
-callbacks outside the registry lock before returning the Haskell action. There
+callbacks outside the registry lock before returning the Haskell action.
+The eligible owned-free path above is cooperative native resource retirement;
+Haskell actions and package callbacks still require explicit finalization. There
 is no automatic GC finalizer thread, Java Cleaner, general ephemeron collection
 or heap walk. Identity and actionless `MutVar#`/`MVar#` collection do not establish
-bounded-memory reclamation for other keys or registrations with finalizers.
+bounded-memory reclamation for other keys or general registrations with finalizers.

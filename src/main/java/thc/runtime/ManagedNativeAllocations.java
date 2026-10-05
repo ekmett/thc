@@ -263,6 +263,39 @@ public final class ManagedNativeAllocations {
         if (address.returnedAddress() == null) freeableOwner(address, Allocator.MALLOC);
     }
 
+    /** A direct owned base supplies a referent-independent token; wrappers stay explicit-only. */
+    @TruffleBoundary
+    synchronized Owner ownedFreeTarget(ManagedAddress address) {
+        current();
+        if (address.returnedAddress() != null) return null;
+        return freeableOwner(address, Allocator.MALLOC);
+    }
+
+    /** GC retirement never waits for a borrower, or repeats an already-consumed owner. */
+    @TruffleBoundary
+    boolean tryFree(Owner owner) {
+        current();
+        synchronized (this) {
+            if (closed) throw fault("Native allocation registry is closed");
+            if (owner == null || !live.contains(owner)) return true;
+            if (freeing.contains(owner) || !owner.lifetime.writeLock().tryLock()) return false;
+            freeing.add(owner);
+        }
+        boolean retired = false;
+        try {
+            var threads = Language.currentState(null).getThreads();
+            var previous = threads.enterForeign(ForeignSafety.UNSAFE);
+            try {
+                owner.release(); // The reentrant write lock is already held: no borrow wait.
+                retired = true;
+                return true;
+            } finally { threads.leaveForeign(previous); }
+        } finally {
+            synchronized (this) { if (retired) live.remove(owner); freeing.remove(owner); }
+            owner.lifetime.writeLock().unlock();
+        }
+    }
+
     /** Known aliases retain our ownership checks; external C keeps its allocator contract. */
     private synchronized ManagedAddress deallocationAddress(ManagedAddress address) {
         if (closed) throw fault("Native allocation registry is closed");
