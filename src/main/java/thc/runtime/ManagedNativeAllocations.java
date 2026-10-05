@@ -48,13 +48,20 @@ public final class ManagedNativeAllocations {
         private final ReentrantReadWriteLock lifetime = new ReentrantReadWriteLock(true);
         private final Arena arena = Arena.ofShared();
         private final MemorySegment segment;
-        private boolean closed;
+        private volatile boolean closed;
+        private volatile boolean pendingRetirement;
+        private volatile Throwable retirementFailure;
+        private boolean arenaClosed;
+        private volatile boolean retired;
+        private final MethodHandle deallocator;
 
         Owner(MemorySegment pointer, long size) { this(pointer, size, Allocator.MALLOC); }
         Owner(MemorySegment pointer, long size, Allocator allocator) {
             this.pointer = pointer;
             this.size = size;
             this.allocator = allocator;
+            deallocator = allocator == Allocator.MALLOC
+                ? WindowsDirectoryStreams.supportedHost() ? WindowsMalloc.free : Libc.FREE : null;
             try { segment = pointer.reinterpret(size, arena, null); }
             catch (Throwable failure) { arena.close(); throw propagate(failure); }
         }
@@ -67,9 +74,9 @@ public final class ManagedNativeAllocations {
             current();
             lifetime.readLock().lock();
             try {
-                if (closed) throw fault("Native allocation is freed");
+                requireNotRetired();
                 return new Borrow();
-            } catch (Throwable failure) { lifetime.readLock().unlock(); throw propagate(failure); }
+            } catch (Throwable failure) { lifetime.readLock().unlock(); retryRetirement(); throw propagate(failure); }
         }
 
         public final class Borrow implements AutoCloseable {
@@ -82,7 +89,7 @@ public final class ManagedNativeAllocations {
             @TruffleBoundary
             @Override public void close() {
                 if (thread != Thread.currentThread()) throw fault("Native allocation borrow belongs to another thread");
-                if (!released) { released = true; lifetime.readLock().unlock(); }
+                if (!released) { released = true; lifetime.readLock().unlock(); retryRetirement(); }
             }
 
             /** Preserve try-with-resources cleanup without expanding suppression into guest graphs. */
@@ -101,17 +108,72 @@ public final class ManagedNativeAllocations {
             if (lifetime.getReadHoldCount() != 0) throw fault("Cannot free an allocation borrowed by this thread");
         }
 
+        void requireNotRetired() {
+            reportRetirementFailure();
+            if (closed) throw fault("Native allocation is freed");
+        }
+        void reportRetirementFailure() {
+            var failed = retirementFailure;
+            if (failed != null) {
+                var reported = new RuntimeFault(arenaClosed
+                    ? "Native free effect is uncertain; allocation is invalid and will not be freed again"
+                    : "Native allocation arena close failed before free; storage may be leaked");
+                reported.initCause(failed); throw reported;
+            }
+        }
+        void requestRetirement() {
+            synchronized (ManagedNativeAllocations.this) {
+                if (ManagedNativeAllocations.this.closed || !live.contains(this)) return;
+                pendingRetirement = true;
+            }
+            retryRetirement();
+        }
+        /** Existing freeing claims cover the whole realloc gap; cleanup never waits on them or borrows. */
+        void retryRetirement() {
+            if (!pendingRetirement) return;
+            synchronized (ManagedNativeAllocations.this) {
+                if (closed || ManagedNativeAllocations.this.closed || !live.contains(this)) {
+                    pendingRetirement = false; return;
+                }
+                if (freeing.contains(this) || !lifetime.writeLock().tryLock()) return;
+                pendingRetirement = false; freeing.add(this);
+            }
+            try { release(); }
+            catch (Throwable failure) {
+                // MALLOC release records its failure before throwing; incidental completion must not throw it.
+                if (retirementFailure == null) retirementFailure = failure;
+            } finally {
+                lifetime.writeLock().unlock();
+                synchronized (ManagedNativeAllocations.this) {
+                    if (retired) live.remove(this);
+                    freeing.remove(this);
+                    if (closed) pendingRetirement = false;
+                }
+                retryRetirement();
+            }
+        }
         @TruffleBoundary
         void release() {
             requireFreeable();
             lifetime.writeLock().lock();
             try {
+                reportRetirementFailure();
                 if (closed) return;
-                // Failed LocalFree retains ownership and a usable segment.
-                if (allocator == Allocator.WINDOWS_LOCAL) WindowsCodePages.releaseLocal(pointer);
-                else releaseNative(pointer);
-                closed = true;
-                arena.close();
+                if (allocator == Allocator.WINDOWS_LOCAL) {
+                    // Known LocalFree failure retains ownership and a usable segment, as before.
+                    WindowsCodePages.releaseLocal(pointer);
+                    closed = true; arena.close(); retired = true;
+                } else {
+                    closed = true; // Terminal before any effect; ambiguous downcalls must never replay.
+                    try {
+                        // The original raw malloc pointer has an independent/global scope.
+                        arena.close(); arenaClosed = true;
+                        deallocator.invokeExact(pointer);
+                        retired = true;
+                    } catch (Throwable failure) {
+                        retirementFailure = failure; reportRetirementFailure();
+                    }
+                }
             } finally { lifetime.writeLock().unlock(); }
         }
 
@@ -199,15 +261,16 @@ public final class ManagedNativeAllocations {
             if (owner == null) return;
             freeing.add(owner);
         }
-        var threads = Language.currentState(null).getThreads();
-        var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         boolean retired = false;
         try {
-            owner.release(); // Wait for other threads' borrows before consuming ownership.
-            retired = true;
+            // The finally covers the claim even if foreign admission itself fails.
+            var threads = Language.currentState(null).getThreads();
+            var previous = threads.enterForeign(ForeignSafety.UNSAFE);
+            try { owner.release(); retired = true; }
+            finally { threads.leaveForeign(previous); }
         } finally {
             synchronized (this) { if (retired) live.remove(owner); freeing.remove(owner); }
-            threads.leaveForeign(previous);
+            owner.retryRetirement();
         }
     }
 
@@ -252,6 +315,7 @@ public final class ManagedNativeAllocations {
             throw propagate(failure);
         } finally {
             synchronized (this) { if (retired) live.remove(owner); freeing.remove(owner); }
+            owner.retryRetirement();
         }
     }
 
@@ -271,29 +335,14 @@ public final class ManagedNativeAllocations {
         return freeableOwner(address, Allocator.MALLOC);
     }
 
-    /** GC retirement never waits for a borrower, or repeats an already-consumed owner. */
+    /** Managed GC remains an optional request/inspection path for the same owner retirement. */
     @TruffleBoundary
     boolean tryFree(Owner owner) {
         current();
-        synchronized (this) {
-            if (closed) throw fault("Native allocation registry is closed");
-            if (owner == null || !live.contains(owner)) return true;
-            if (freeing.contains(owner) || !owner.lifetime.writeLock().tryLock()) return false;
-            freeing.add(owner);
-        }
-        boolean retired = false;
-        try {
-            var threads = Language.currentState(null).getThreads();
-            var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-            try {
-                owner.release(); // The reentrant write lock is already held: no borrow wait.
-                retired = true;
-                return true;
-            } finally { threads.leaveForeign(previous); }
-        } finally {
-            synchronized (this) { if (retired) live.remove(owner); freeing.remove(owner); }
-            owner.lifetime.writeLock().unlock();
-        }
+        synchronized (this) { if (closed) throw fault("Native allocation registry is closed"); }
+        if (owner == null) return true;
+        owner.requestRetirement(); owner.reportRetirementFailure();
+        return owner.closed;
     }
 
     /** Known aliases retain our ownership checks; external C keeps its allocator contract. */
@@ -316,6 +365,7 @@ public final class ManagedNativeAllocations {
         if (owner.allocator != allocator) throw fault("Native deallocation requires its matching allocator");
         if (!live.contains(owner) || freeing.contains(owner)) throw fault("Native free requires a live allocation from this context");
         if (!address.isNativeBase()) throw fault("Native free requires the allocation base");
+        owner.requireNotRetired();
         owner.requireFreeable();
         return owner;
     }
@@ -354,14 +404,33 @@ public final class ManagedNativeAllocations {
 
     /** Recover only existing context-owned allocations; unknown bits remain non-dereferenceable. */
     @TruffleBoundary
-    public synchronized ManagedAddress recoverAddress(long bits) {
-        current();
-        if (closed) throw fault("Native allocation registry is closed");
-        for (var owner : live) if (!freeing.contains(owner)) {
+    public ManagedAddress recoverAddress(long bits) {
+        ArrayList<Owner> candidates;
+        synchronized (this) {
+            current();
+            if (closed) throw fault("Native allocation registry is closed");
+            candidates = new ArrayList<>(live);
+        }
+        for (var owner : candidates) {
+            synchronized (this) {
+                if (!live.contains(owner) || freeing.contains(owner)) continue;
+                owner.reportRetirementFailure();
+                if (owner.closed) continue;
+            }
             long displacement;
             try (var loan = owner.borrow()) { displacement = bits - loan.segment().address(); }
-            if (Long.compareUnsigned(displacement, owner.size) <= 0)
-                return ManagedAddress.fromNativeAllocation(owner).plus(displacement);
+            catch (RuntimeFault failure) {
+                synchronized (this) {
+                    owner.reportRetirementFailure();
+                    if (owner.retired || !live.contains(owner)) continue;
+                }
+                throw failure;
+            }
+            if (Long.compareUnsigned(displacement, owner.size) <= 0) synchronized (this) {
+                owner.reportRetirementFailure();
+                if (!closed && live.contains(owner) && !freeing.contains(owner) && !owner.closed)
+                    return ManagedAddress.fromNativeAllocation(owner).plus(displacement);
+            }
         }
         return null;
     }

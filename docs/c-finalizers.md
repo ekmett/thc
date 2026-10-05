@@ -25,8 +25,8 @@ them. The Haskell action is never executed by the primitive itself.
 A single canonical current-context `free` on an actionless registration with
 identical key/value carriers, or a raw managed `MutVar#` or `MVar#` key, has a
 [automatic malloc retirement path](weak-explicit.md). Only a direct owned
-malloc base or null qualifies. The registration and JDK Cleaner action weakly
-reference the Owner; neither retains the address, function provider, context or
+malloc base or null qualifies. The JDK Cleaner action holds only a weak Owner
+reference and an armed flag; it retains no address, function provider, context or
 guest payload. JVM collection can trigger the paired raw native free without a
 managed GC request. Busy borrows or existing free/realloc reservations latch
 pending work, retried at completion without blocking or another collection.

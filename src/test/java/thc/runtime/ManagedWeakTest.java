@@ -344,7 +344,7 @@ class ManagedWeakTest {
         }
     }
     @Test
-    void ownedFreeDefersBorrowedAllocationsUntilAnotherManagedGcRequest() throws Exception {
+    void ownedFreeDefersBorrowedAllocationsUntilBorrowCompletion() throws Exception {
         for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
             context.initialize("thc"); context.enter();
             var state = Language.currentState(); var threads = state.getThreads();
@@ -353,15 +353,19 @@ class ManagedWeakTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
                 var address = state.getNativeAllocations().malloc(8);
-                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
-                try (var borrow = address.nativeAllocation().borrow()) {
+                var queue = new ReferenceQueue<Object>();
+                var loan = new java.util.concurrent.atomic.AtomicReference<ManagedNativeAllocations.Owner.Borrow>();
+                var dropped = droppedOwnedFree(program, queue, address, () -> loan.set(address.nativeAllocation().borrow()));
+                var segment = loan.get().segment();
+                try (var borrow = loan.get()) {
                     collect(queue, dropped.referent());
                     assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag());
                     requestGc(gc); requestGc(gc);
                     borrow.segment().set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 91);
                     assertEquals(91L, address.readWord8(0), "Busy retirement must preserve the usable borrow");
                 }
-                requestGc(gc); assertThrows(RuntimeFault.class, () -> address.readWord8(0));
+                awaitNativeRetirement(segment); requestGc(gc);
+                assertThrows(RuntimeFault.class, () -> address.readWord8(0));
                 assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag());
                 // An explicitly retired owner consumes its stale automatic token without replay.
                 var staleAddress = state.getNativeAllocations().malloc(8);
@@ -438,17 +442,21 @@ class ManagedWeakTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
                 var address = state.getNativeAllocations().malloc(8);
-                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
-                var borrowed = new CompletableFuture<Void>();
-                var borrower = ownedFreeTask(state, () -> {
-                    assertTrue(Thread.currentThread().isVirtual());
-                    try (var loan = address.nativeAllocation().borrow()) {
-                        borrowed.complete(null); release.take(null);
-                        loan.segment().set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 91);
-                        assertEquals(91L, address.readWord8(0));
-                    }
+                var queue = new ReferenceQueue<Object>(); var borrowed = new CompletableFuture<Void>();
+                var borrowerReference = new java.util.concurrent.atomic.AtomicReference<CompletableFuture<Void>>();
+                var dropped = droppedOwnedFree(program, queue, address, () -> {
+                    var borrower = ownedFreeTask(state, () -> {
+                        assertTrue(Thread.currentThread().isVirtual());
+                        try (var loan = address.nativeAllocation().borrow()) {
+                            borrowed.complete(null); release.take(null);
+                            loan.segment().set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 91);
+                            assertEquals(91L, address.readWord8(0));
+                        }
+                    });
+                    borrowerReference.set(borrower);
+                    awaitOwnedFreeTask(CompletableFuture.anyOf(borrowed, borrower));
                 });
-                awaitOwnedFreeTask(CompletableFuture.anyOf(borrowed, borrower)); collect(queue, dropped.referent());
+                var borrower = borrowerReference.get(); collect(queue, dropped.referent());
                 awaitOwnedFreeTask(ownedFreeTask(state, () -> {
                     requestGc(gc); assertDoesNotThrow(() -> address.readWord8(0));
                     assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag());
@@ -501,18 +509,26 @@ class ManagedWeakTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
                 var address = state.getNativeAllocations().malloc(8);
-                try (var loan = address.nativeAllocation().borrow()) { segment = loan.segment(); }
-                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedFree(program, queue, address);
-                collect(queue, dropped.referent());
-                // First defer a real token, then race cancellation with its next managed drain.
-                try (var loan = address.nativeAllocation().borrow()) { requestGc(gc); assertTrue(segment.scope().isAlive()); }
-                var ready = new CompletableFuture<Void>();
-                draining = ownedFreeTask(state, () -> {
-                    ready.complete(null); release.take(null);
-                    for (;;) { requestGc(gc); TruffleSafepoint.poll(null); }
+                var queue = new ReferenceQueue<Object>(); var ready = new CompletableFuture<Void>();
+                var segmentReference = new java.util.concurrent.atomic.AtomicReference<java.lang.foreign.MemorySegment>();
+                var drainingReference = new java.util.concurrent.atomic.AtomicReference<CompletableFuture<Void>>();
+                var dropped = droppedOwnedFree(program, queue, address, () -> {
+                    var borrower = ownedFreeTask(state, () -> {
+                        try (var loan = address.nativeAllocation().borrow()) {
+                            segmentReference.set(loan.segment()); ready.complete(null);
+                            release.take(null);
+                            for (;;) { requestGc(gc); TruffleSafepoint.poll(null); }
+                        }
+                    });
+                    drainingReference.set(borrower);
+                    awaitOwnedFreeTask(CompletableFuture.anyOf(ready, borrower));
                 });
-                awaitOwnedFreeTask(CompletableFuture.anyOf(ready, draining));
+                draining = drainingReference.get(); segment = segmentReference.get();
+                collect(queue, dropped.referent());
+                // Cancellation unwinds the active borrower and completes its pending retirement.
+                requestGc(gc); assertTrue(segment.scope().isAlive());
             } finally { release.tryPut(Unit.INSTANCE); context.leave(); }
+            assertTrue(segment.scope().isAlive(), "The borrower retains native storage until cancellation");
             try { context.close(true); }
             finally { context.close(true); }
             assertNotNull(draining); assertTrue(draining.isDone(), "Context close joins admitted drains");

@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
+import java.lang.ref.Cleaner;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
@@ -12,11 +13,23 @@ import java.util.HashMap;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/** Collect actionless identity/MutVar/MVar keys; managed GC calls can retire one canonical owned free. */
+/** Collect actionless identity/MutVar/MVar keys; one canonical MALLOC free may retire without guest execution. */
 public final class ManagedWeaks {
     private static final class Handle {
         final ManagedWeaks owner;
         Handle(ManagedWeaks owner) { this.owner = owner; }
+    }
+    private static final class Cleaners { static final Cleaner INSTANCE = Cleaner.create(); }
+    private static final class OwnedFreeCleanup implements Runnable {
+        final WeakReference<ManagedNativeAllocations.Owner> owner;
+        private boolean armed = true;
+        OwnedFreeCleanup(WeakReference<ManagedNativeAllocations.Owner> owner) { this.owner = owner; }
+        synchronized void disarm() { armed = false; }
+        @Override public void run() {
+            synchronized (this) { if (!armed) return; armed = false; }
+            var retained = owner.get();
+            if (retained != null) retained.requestRetirement();
+        }
     }
     private static final class Payload extends WeakReference<Object> {
         final Handle handle;
@@ -25,7 +38,9 @@ public final class ManagedWeaks {
         final boolean keyOwnedValue;
         final ArrayList<Runnable> callbacks = new ArrayList<>();
         boolean ownedFree;
-        ManagedNativeAllocations.Owner freeOwner;
+        WeakReference<ManagedNativeAllocations.Owner> freeOwner;
+        OwnedFreeCleanup cleanup;
+        Cleaner.Cleanable cleanable;
         Payload(Handle handle, Object key, Object value, Object action, ReferenceQueue<Object> queue) {
             super(action == null && (key == value || key instanceof ManagedMutVar || key instanceof ManagedMVar) ? key : null, queue);
             this.handle = handle; this.action = action;
@@ -50,6 +65,11 @@ public final class ManagedWeaks {
                 else if (retainedKey instanceof ManagedMVar cell) cell.releaseWeakValue(handle);
             }
         }
+        Cleaner.Cleanable disarm() {
+            if (cleanup != null) cleanup.disarm();
+            var cancelled = cleanable; cleanable = null; cleanup = null;
+            return cancelled;
+        }
         void addCallback(Object retainedKey, Runnable callback) {
             if (key == null) {
                 value = value(retainedKey);
@@ -66,7 +86,7 @@ public final class ManagedWeaks {
     private static final WeakResult DEAD = new WeakResult(0L, null); // Invalid payload, never a fabricated no-op action.
     private final HashMap<Handle, Payload> live = new HashMap<>();
     private final ReferenceQueue<Object> collected = new ReferenceQueue<>();
-    private final ArrayList<ManagedNativeAllocations.Owner> pendingFrees = new ArrayList<>();
+    private final ArrayList<WeakReference<ManagedNativeAllocations.Owner>> pendingFrees = new ArrayList<>();
     private boolean closed;
 
     private void reap() {
@@ -79,14 +99,14 @@ public final class ManagedWeaks {
     }
     private void retire(Payload payload) {
         if (live.remove(payload.handle, payload) && payload.ownedFree) {
-            pendingFrees.add(payload.freeOwner);
+            if (payload.freeOwner != null) pendingFrees.add(payload.freeOwner);
             payload.ownedFree = false; payload.freeOwner = null;
         }
     }
 
-    /** Claim DEAD before native effects; busy borrows retain only their native owner for a later GC call. */
+    /** Optional managed-GC fallback/inspection; Cleaner and completion also retire eligible owners. */
     @TruffleBoundary void drainOwnedFrees() {
-        ArrayList<ManagedNativeAllocations.Owner> pending;
+        ArrayList<WeakReference<ManagedNativeAllocations.Owner>> pending;
         synchronized (this) {
             if (closed) return;
             reap();
@@ -94,7 +114,8 @@ public final class ManagedWeaks {
             for (var iterator = live.values().iterator(); iterator.hasNext();) {
                 var payload = iterator.next();
                 if (payload.ownedFree && payload.key() == null) {
-                    iterator.remove(); pendingFrees.add(payload.freeOwner);
+                    iterator.remove();
+                    if (payload.freeOwner != null) pendingFrees.add(payload.freeOwner);
                     payload.ownedFree = false; payload.freeOwner = null;
                 }
             }
@@ -103,7 +124,7 @@ public final class ManagedWeaks {
         var allocations = Language.currentState(null).getNativeAllocations();
         for (int i = 0; i < pending.size(); i++) {
             try {
-                if (!allocations.tryFree(pending.get(i))) synchronized (this) {
+                if (!allocations.tryFree(pending.get(i).get())) synchronized (this) {
                     if (!closed) pendingFrees.add(pending.get(i));
                 }
             } catch (Throwable failure) {
@@ -139,59 +160,82 @@ public final class ManagedWeaks {
     }
 
     /** One-address C callbacks use a zero environment flag. */
-    @TruffleBoundary public synchronized long addCFinalizer(ManagedAddress function, ManagedAddress address,
+    @TruffleBoundary public long addCFinalizer(ManagedAddress function, ManagedAddress address,
             long flag, Object weak, SulongCbits provider) {
-        var callback = function.finalizerFunction();
-        if (callback == null) throw fault("Expected an original C function label");
-        callback.requireOwner(provider);
-        if (flag != 0L) throw fault("Original C finalizer requires a one-address ABI");
-        var handle = handle(weak);
-        var payload = live.get(handle);
-        Object key = payload == null ? null : payload.key();
-        if (key == null) { if (payload != null) retire(payload); return 0L; }
-        // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
-        if (callback.getSymbol().equals("free")) Language.currentState(null).getNativeAllocations().requireFreeTarget(address);
-        else if (address != ManagedAddress.nullAddress()) address.requireByteRegion(0L, false);
-        if (payload.action == null && payload.key == null
-                && payload.callbacks.isEmpty() && !payload.ownedFree && provider.isOwnedFree(callback)
-                && Language.currentState(null).getWeaks() == this) {
-            var owner = Language.currentState(null).getNativeAllocations().ownedFreeTarget(address);
-            if (owner != null || address == ManagedAddress.nullAddress()) {
-                payload.ownedFree = true; payload.freeOwner = owner;
-                Reference.reachabilityFence(key);
-                return 1L;
+        Cleaner.Cleanable cancelled;
+        synchronized (this) {
+            var callback = function.finalizerFunction();
+            if (callback == null) throw fault("Expected an original C function label");
+            callback.requireOwner(provider);
+            if (flag != 0L) throw fault("Original C finalizer requires a one-address ABI");
+            var handle = handle(weak);
+            var payload = live.get(handle);
+            Object key = payload == null ? null : payload.key();
+            if (key == null) { if (payload != null) retire(payload); return 0L; }
+            // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
+            if (callback.getSymbol().equals("free")) Language.currentState(null).getNativeAllocations().requireFreeTarget(address);
+            else if (address != ManagedAddress.nullAddress()) address.requireByteRegion(0L, false);
+            if (payload.action == null && payload.key == null
+                    && payload.callbacks.isEmpty() && !payload.ownedFree && provider.isOwnedFree(callback)
+                    && Language.currentState(null).getWeaks() == this) {
+                var owner = Language.currentState(null).getNativeAllocations().ownedFreeTarget(address);
+                if (owner != null || address == ManagedAddress.nullAddress()) {
+                    if (owner != null) {
+                        var reference = new WeakReference<>(owner);
+                        var cleanup = new OwnedFreeCleanup(reference);
+                        var cleanable = Cleaners.INSTANCE.register(key, cleanup);
+                        payload.freeOwner = reference; payload.cleanup = cleanup; payload.cleanable = cleanable;
+                    }
+                    payload.ownedFree = true;
+                    Reference.reachabilityFence(key); return 1L;
+                }
             }
+            cancelled = payload.disarm();
+            payload.addCallback(key, () -> callback.invoke(address));
         }
-        payload.addCallback(key, () -> callback.invoke(address));
+        if (cancelled != null) cancelled.clean();
         return 1L;
     }
-    @TruffleBoundary public synchronized long addCallback(Object value, Runnable callback) {
-        var handle = handle(value);
-        var payload = live.get(handle);
-        Object key = payload == null ? null : payload.key();
-        if (key == null) { if (payload != null) retire(payload); return 0L; }
-        payload.addCallback(key, callback);
+    @TruffleBoundary public long addCallback(Object value, Runnable callback) {
+        Cleaner.Cleanable cancelled;
+        synchronized (this) {
+            var handle = handle(value);
+            var payload = live.get(handle);
+            Object key = payload == null ? null : payload.key();
+            if (key == null) { if (payload != null) retire(payload); return 0L; }
+            cancelled = payload.disarm();
+            payload.addCallback(key, callback);
+        }
+        if (cancelled != null) cancelled.clean();
         return 1L;
     }
     @TruffleBoundary public WeakResult finalize(Object value) {
         // Publish DEAD before calling C; neither Sulong nor guest code runs under this monitor.
         Payload payload;
+        Cleaner.Cleanable cancelled = null;
         synchronized (this) {
             var handle = handle(value);
             payload = live.get(handle);
             if (payload != null) {
                 Object key = payload.key();
                 if (key == null) { retire(payload); payload = null; }
-                else { live.remove(handle); payload.detach(); Reference.reachabilityFence(key); }
+                else {
+                    cancelled = payload.disarm();
+                    live.remove(handle); payload.detach(); Reference.reachabilityFence(key);
+                }
             }
         }
+        if (cancelled != null) cancelled.clean();
         if (payload == null) return DEAD;
         for (var callback : payload.callbacks) callback.run();
         if (payload.ownedFree) {
             var state = Language.currentState(null);
             if (state.getWeaks() != this) throw fault("C finalizer belongs to another THC context");
-            state.getNativeAllocations().free(payload.freeOwner == null ? ManagedAddress.nullAddress()
-                : ManagedAddress.fromNativeAllocation(payload.freeOwner));
+            var owner = payload.freeOwner == null ? null : payload.freeOwner.get();
+            if (payload.freeOwner != null && owner == null)
+                throw fault("Native free requires a live allocation from this context");
+            state.getNativeAllocations().free(owner == null ? ManagedAddress.nullAddress()
+                : ManagedAddress.fromNativeAllocation(owner));
         }
         return payload.action == null ? DEAD : new WeakResult(1L, payload.action);
     }
@@ -219,11 +263,19 @@ public final class ManagedWeaks {
         return threads.liveJavaId((GuestThreadId) key);
     }
     public synchronized int retainedCount() { reap(); return live.size(); }
-    public synchronized void close() {
-        closed = true;
-        for (var payload : live.values()) payload.detach();
-        live.clear(); pendingFrees.clear();
-        while (collected.poll() != null) { /* Release queued registrations too. */ }
+    public void close() {
+        var cancelled = new ArrayList<Cleaner.Cleanable>();
+        synchronized (this) {
+            closed = true;
+            for (var payload : live.values()) {
+                var cleanable = payload.disarm();
+                if (cleanable != null) cancelled.add(cleanable);
+                payload.detach();
+            }
+            live.clear(); pendingFrees.clear();
+            while (collected.poll() != null) { /* Release queued registrations too. */ }
+        }
+        for (var cleanable : cancelled) cleanable.clean();
     }
     public static ManagedWeaks current(Node node) { return Language.currentState(node).getWeaks(); }
 }
