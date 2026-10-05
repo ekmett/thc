@@ -16,6 +16,12 @@ own validation. This is not guest AOT: the launcher still lowers and compiles
 guest code after launch. Compiler assertions and blocklist checks remain enabled;
 a failed build must remain a failure.
 
+The separate `executable` mode now prepares a captured application's AST factory
+during Truffle context preinitialization and releases the selected Core bodies.
+Its JVM ownership/absence-of-runtime-lowering checks pass; Native Image generation
+and native-library bundling remain unqualified. See the
+[application-bound recipe](../../docs/native-code-cache.md#application-bound-prepared-image).
+
 ## Reproduction
 
 The supported experimental entry point is `bin/native-runtime`. After building

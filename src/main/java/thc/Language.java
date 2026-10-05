@@ -18,6 +18,7 @@ import java.util.function.Predicate;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
+import org.graalvm.nativeimage.ImageInfo;
 import thc.runtime.*;
 
 @ProvidedTags({StandardTags.RootTag.class, StandardTags.RootBodyTag.class, StandardTags.StatementTag.class, DebuggerTags.AlwaysHalt.class})
@@ -75,10 +76,10 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
             multithreaded = true;
             if (state != null) state.markMultithreaded();
         }
-        private void finishPreparation() {
+        private void finishPreparation(Throwable failure) {
             if (phase != Phase.PREPARING) return;
             var preparation = requireState();
-            Throwable failure = finishState(preparation, null);
+            failure = finishState(preparation, failure);
             try { failure = disposeState(preparation, failure); }
             finally {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -340,7 +341,16 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
     }
 
     @Override protected ContextState createContext(Env env) { return new ContextState(env, this); }
-    @Override protected void initializeContext(ContextState context) { context.finishPreparation(); }
+    @Override protected void initializeContext(ContextState context) {
+        if (context.phase != ContextState.Phase.PREPARING) return;
+        Throwable failure = null;
+        try {
+            // Runtime images use the captured factory; the AST lowerer remains hosted/JVM-only.
+            if (!ImageInfo.inImageRuntimeCode()) NativeExecutable.prepareForImage(this);
+        }
+        catch (Throwable caught) { failure = caught; }
+        finally { context.finishPreparation(failure); }
+    }
     @Override protected boolean patchContext(ContextState context, Env newEnv) { return context.patch(newEnv, this); }
     @Override protected Object getScope(ContextState context) { return context.requireState().managedExports.getScope(); }
     @Override protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) { return true; }
@@ -397,6 +407,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
     @Override protected void initializeMultiThreading(ContextState context) { context.markMultithreaded(); }
 
     @SuppressWarnings("unchecked") @Override protected CallTarget parse(ParsingRequest request) {
+        if (NativeExecutable.IMAGE_BOUND) throw new UnsupportedCore("Application-bound THC image does not accept external sources");
         if (Boolean.getBoolean("thc.requireCachedCode")) throw new UnsupportedCore("Cached THC source required; parsing is disabled");
         var input = (Map<String, Object>) Json.parse(request.getSource().getCharacters().toString());
         require(!input.containsKey("prepareCode") || input.get("prepareCode") instanceof Boolean, "prepareCode must be a Boolean");
@@ -411,6 +422,17 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
             }.getCallTarget();
         }
         if (!prepareCode) return unitRoot(input, directory);
+        if (!(input.get("entry") instanceof String entry)) throw new IllegalStateException("Expected entry name");
+        return preparedRoot(CoreModules.selectedModules(input, entry));
+    }
+
+    /** Ordinary cached sources retain their configured preparation parallelism. */
+    RootCallTarget preparedRoot(Map<String,Object> input) {
+        return preparedRoot(input, Integer.parseInt(System.getProperty("thc.prepareCodeJobs", "4")));
+    }
+
+    /** Reader-free application Core uses the same admission and fresh-instance factory. */
+    @SuppressWarnings("unchecked") RootCallTarget preparedRoot(Map<String,Object> input, int jobs) {
         var merger = new CoreModules.Merger();
         if (!(input.get("entry") instanceof String entry)) throw new IllegalStateException("Expected entry name");
         String shutdownEntry = input.get("shutdownEntry") instanceof String value ? value : null;
@@ -418,8 +440,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
             "Executable shutdown requires a distinct IO entry");
         require(!Boolean.TRUE.equals(input.get("ioMain")) || !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
             "IO main requires strict unsupported-Core rejection");
-        var selectedModules = CoreModules.selectedModules(input, entry);
-        var layout = CoreModules.visitDecodedModules(selectedModules, module -> {
+        var layout = CoreModules.visitDecodedModules(input, module -> {
             for (var binding : (List<Map<String,Object>>) module.get("bindings")) {
                 String id = (String) binding.get("id");
                 require(CoreModules.backend(module, id, "ast").equals("ast"),
@@ -479,7 +500,7 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         require(backend.equals("ast") && !async && !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
             "Reusable code currently requires synchronous, strict AST preparation");
         var entries = shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry);
-        return new PreparedRoot(this, Program.prepareCode(this, linked, entries), entry,
+        return new PreparedRoot(this, Program.prepareCode(this, linked, entries, jobs), entry,
             ((Number) selected.get("arity")).intValue(), hostInputs, hostResult,
             ioResult, shutdownEntry, shutdownResult, processSignals).getCallTarget();
     }

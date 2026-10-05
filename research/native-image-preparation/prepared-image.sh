@@ -95,8 +95,8 @@ fi
 executable_options=()
 builder_heap=8g
 if [[ "$mode" == executable* ]]; then
-    # Bind the ordinary loader, argv and shutdown to one application. External
-    # Core resources remain external; this does NOT prepare a guest code cache.
+    # Capture selected Core, then lower synchronous AST during Truffle preinitialization.
+    # Runtime uses the saved factory; image compilation and native bundling remain separate.
     : "${THC_NATIVE_IMAGE_EXECUTABLE_CONFIG:?Supply a fixed Main executable argument JSON array}"
     : "${THC_NATIVE_IMAGE_EXECUTABLE_NAME:?Supply the ELF output basename}"
     [[ "$THC_NATIVE_IMAGE_EXECUTABLE_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 2
@@ -109,7 +109,7 @@ if [[ "$mode" == executable* ]]; then
     # arguments. Keep VM bounds in the image, separate from opaque guest argv.
     # Original GHC owns HUP/INT/QUIT/TERM in this standalone process. The runtime
     # checks the effective option; do not substitute a trusted-looking property.
-    executable_options=(-H:IncludeResources=thc-native-executable.json -H:-ParseRuntimeOptions -R:-EnableSignalHandling
+    executable_options=(-J-Dthc.nativeImage.executable=true -H:-ParseRuntimeOptions -R:-EnableSignalHandling
         -H:MaxHeapSize=17179869184 -H:ActiveProcessorCount=2)
     # The full ordinary-loader image needs room for frame metadata after codegen.
     builder_heap=16g

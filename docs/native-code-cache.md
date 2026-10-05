@@ -103,15 +103,16 @@ itself a compiled-code cache.
 
 ## Rebuild, compatibility and errors
 
-### Application-bound runtime image (not a compiled guest cache)
+### Application-bound prepared image
 
 The same experimental image recipe also accepts `executable`. Set
 `THC_NATIVE_IMAGE_EXECUTABLE_CONFIG` to a JSON array containing the ordinary
 `Main` prefix `["--run-executable", "MODULES", "ENTRY", "SHUTDOWN_ENTRY", "--",
 "PROGRAM_NAME"]`, optionally followed by default guest arguments. Set
 `THC_NATIVE_IMAGE_EXECUTABLE_NAME` to the desired ELF basename. The binding is
-embedded in the image; incoming arguments are appended as opaque guest argv.
-The original loader owns argument initialization, IO, shutdown and exit status.
+consumed during image construction; incoming arguments are appended as opaque
+guest argv. The ordinary launcher owns argument initialization, IO, shutdown and
+exit status.
 An object with `arguments` containing that array and `properties` containing
 string-valued JVM system properties can also bind the THC execution profile.
 Native Image runtime-option parsing is disabled in this mode: guest `-D` and
@@ -120,13 +121,19 @@ runtime heap ceiling and two available processors at image build time.
 Its builder uses 16 GiB and two compiler threads; compiled-cache mode retains
 its separate 8 GiB builder limit.
 
-This produces an application-bound JVM-free runtime, but **lowers guest Core at
-runtime**. It does not imply that the guest was AOT-compiled or persisted in a
-code cache. Referenced Core/package files and native dependencies remain required
-external resources. Use the existing compact encoder for retained loose Core
-captures and register the resulting containers in a compact package manifest;
-the module argument selects that manifest with `@packages.json`, not loose CBD
-paths. Native Image provider/resource-profile requirements still apply.
+The hosted feature captures the reachable entry and shutdown Core and prepares
+its synchronous AST factory through Truffle context preinitialization. Preparation
+uses one worker, evaluates no guest body, and releases the Core after lowering.
+At startup the same language receives fresh runtime state and the saved factory
+creates fresh guest values. A missing factory or different language is an error;
+this mode does not fall back to runtime Core loading or accept external sources.
+
+The isolated JVM regression executes after deleting its CBD/manifest inputs with
+runtime lowering disabled. Native Image heap capture and executable generation
+for this path remain unqualified; this is not a compiled-guest cache claim.
+Native dependencies and resource-profile requirements remain, and cbits bundling
+is unfinished. Build inputs use a compact package manifest selected with
+`@packages.json`, not loose CBD paths.
 
 ### Compiled-cache compatibility
 

@@ -95,7 +95,12 @@ public final class Main {
 
     /** Ordinary package users invoke the Haskell thc run driver. */
     public static void main(String[] args) {
-        try { launch(args); }
+        processExit(() -> launch(args));
+    }
+
+    /** Owning contexts close before either launcher terminates the process. */
+    static void processExit(Runnable launch) {
+        try { launch.run(); }
         catch (PolyglotException exit) {
             if (!exit.isExit()) throw exit;
             // All owning contexts have closed before process termination.
@@ -138,6 +143,16 @@ public final class Main {
         return new VerifiedArguments(selected.toArray(String[]::new), verify, interfaceHelper);
     }
 
+    /** Shared command-line authority, argv and one-shot entry/shutdown lifecycle. */
+    static void runExecutable(ProgramArguments guest, boolean interfaceHelper, java.util.function.Function<Context,Value> load) {
+        try (Context context = executionContext(true, interfaceHelper)) {
+            initializeArguments(context, guest);
+            var action = load.apply(context);
+            check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
+            if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
+        }
+    }
+
     public static void launch(String[] arguments) {
         var withVerification = launcherArtifactVerification(arguments);
         String[] args = withVerification.arguments();
@@ -146,12 +161,8 @@ public final class Main {
         if (args.length > 0 && args[0].equals("--run-executable")) {
             require(args.length >= 4, "Usage: thc --run-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 4);
-            try (Context context = executionContext(true, interfaceHelper)) {
-                initializeArguments(context, guest);
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts);
-                check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
-                if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
-            }
+            runExecutable(guest, interfaceHelper, context -> loadEntry(context, modules(args[1]), args[2], true,
+                defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts));
             return;
         }
         if (args.length > 0 && args[0].equals("--run-io")) {

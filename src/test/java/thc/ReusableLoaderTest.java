@@ -135,6 +135,108 @@ class ReusableLoaderTest {
             }
         }
     }
+    private String nativeBinding(Map<String,Object> module) throws Exception {
+        module = with(module, "bindings", ((List<Map<String,Object>>) module.get("bindings")).stream()
+            .map(binding -> with(binding, "id", "fixture:PreparedIo." + binding.get("id"))).toList());
+        var record = CoreCbdFixtures.module(directory.resolve("PreparedIo.cbd"), module);
+        var manifest = directory.resolve("packages.json");
+        Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1",
+            "units", list(map("id", "fixture", "depends", list(), "modules", list(record))))));
+        return Json.stringify(list("--run-executable", "@" + manifest, "fixture:PreparedIo.entry", "fixture:PreparedIo.stop", "--", "fixture"));
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void executableImagePropertyDoesNotDisableJvmParsing(String backend) throws Exception {
+        var app = unit("app", "Main", List.of(binding("app:Main.entry", literal(7))));
+        var request = input(List.of(app), null);
+        request.put("backend", backend);
+        String old = System.setProperty("thc.nativeImage.executable", "true");
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            assertEquals(7L, context.eval("thc", Json.stringify(request)).execute().asLong());
+        } finally {
+            if (old == null) System.clearProperty("thc.nativeImage.executable");
+            else System.setProperty("thc.nativeImage.executable", old);
+        }
+    }
+    @Test void capturedExecutableRejectsMissingColdDependency() throws Exception {
+        var module = ioModule();
+        var definitions = (List<Map<String,Object>>) module.get("bindings");
+        var entry = definitions.getFirst();
+        var lambda = (List<Object>) entry.get("expr");
+        var body = list("case", literal(0), "branch", list(list("lit", list("int", "0"), list(), lambda.get(2), map("binders", list())),
+            list("default", null, list(), list("var", "missing:Cold.value", map()), map("binders", list()))), map());
+        module.put("bindings", list(with(entry, "expr", list("lam", lambda.get(1), body, lambda.getLast())), definitions.get(1)));
+        var configuration = nativeBinding(module);
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> NativeExecutable.capture(configuration)).getMessage().contains("missing:Cold.value"));
+    }
+    /** Actual upstream preinit; inputs are one CBD model/manifest, removed before execution. */
+    @Test void preinitializedApplicationRunsWithoutCoreInputsOrRuntimeLowering() throws Exception {
+        var output = directory.resolve("preinit.log");
+        var command = new ProcessBuilder(System.getProperty("java.home") + "/bin/java",
+            "--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED",
+            "--add-exports=org.graalvm.truffle.compiler/com.oracle.truffle.compiler=ALL-UNNAMED",
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "-Dthc.handoffSlabs=" + System.getProperty("thc.handoffSlabs", "false"),
+            "-cp", System.getProperty("thc.testRuntimeClasspath"), ReusableLoaderTest.class.getName(), directory.toString())
+            .redirectErrorStream(true).redirectOutput(output.toFile());
+        for (var variable : List.of("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS")) command.environment().remove(variable);
+        var process = command.start();
+        try {
+            assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS), "Hosted application preparation timed out");
+            assertEquals(0, process.exitValue(), Files.readString(output));
+        } finally { if (process.isAlive()) process.destroyForcibly().waitFor(); }
+    }
+
+    public static void main(String[] arguments) throws Exception {
+        var fixture = new ReusableLoaderTest(); fixture.directory = Path.of(arguments[0]);
+        var module = fixture.ioModule();
+        var definitions = new ArrayList<>((List<Map<String,Object>>) module.get("bindings"));
+        definitions.add(fixture.binding("unusedbad", list("unsupported", "must remain unselected", map())));
+        module.put("bindings", definitions);
+        var captured = NativeExecutable.capture(fixture.nativeBinding(module));
+        var application = NativeExecutable.class.getDeclaredField("application"); application.setAccessible(true);
+        application.set(null, captured);
+        var core = NativeExecutable.class.getDeclaredField("core"); core.setAccessible(true);
+        assertNotNull(core.get(captured));
+        String option = "polyglot.image-build-time.PreinitializeContexts";
+        System.clearProperty(option);
+        var holder = Class.forName("org.graalvm.polyglot.Engine$ImplHolder");
+        var preinitialize = holder.getDeclaredMethod("preInitializeEngine"); preinitialize.setAccessible(true);
+        var reset = holder.getDeclaredMethod("resetPreInitializedEngine"); reset.setAccessible(true);
+        try {
+            System.setProperty(option, "thc"); preinitialize.invoke(null); System.clearProperty(option);
+            assertNull(core.get(captured), "Hosted preparation must drop the detached Core bodies");
+            var factoryField = NativeExecutable.class.getDeclaredField("factory"); factoryField.setAccessible(true);
+            var factory = (Language.PreparedRoot) factoryField.get(captured);
+            assertNotNull(factory, "Upstream preinitialization must produce the application factory");
+            assertFalse(((com.oracle.truffle.runtime.OptimizedCallTarget) factory.getCallTarget()).wasExecuted(),
+                "Preparation must not instantiate or run the application");
+            CoreFileMappings.shared.evictIdleBelow(fixture.directory);
+            Files.delete(fixture.directory.resolve("PreparedIo.cbd"));
+            Files.delete(fixture.directory.resolve("packages.json"));
+            System.setProperty("thc.requireCachedCode", "true");
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.Compilation", "false").build()) {
+                for (int load = 0; load < 2; load++) {
+                    var action = captured.load(context);
+                    assertTrue(action.invokeMember("runIO").asBoolean());
+                    assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO"))
+                        .getMessage().contains("already started"));
+                }
+            }
+            // A second implicit engine cannot consume the one-shot preinitialized language.
+            try (var foreign = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.Compilation", "false").build()) {
+                var failure = assertThrows(thc.runtime.UnsupportedCore.class, () -> captured.load(foreign));
+                assertTrue(failure.getMessage().contains("prepared and current language"), failure.getMessage());
+            }
+        } finally {
+            System.clearProperty(option); System.clearProperty("thc.requireCachedCode");
+            application.set(null, null); reset.invoke(null); fixture.releaseMappings();
+        }
+    }
+
     @ParameterizedTest @ValueSource(strings = {"platform", "loom"})
     void cachedIoReturnChecksInstalledCodeAfterMainAndShutdown(String hosting) {
         String oldCached = System.getProperty("thc.requireCachedCode"), oldCompiled = System.getProperty("thc.requireCompiledCode");

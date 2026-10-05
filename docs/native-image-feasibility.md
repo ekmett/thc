@@ -71,8 +71,15 @@ the runtime context.
 
 The isolated `ContextOwnershipTest` uses Truffle's actual JVM preinitialization
 entry point and rejects silent fallback to a fresh language. It covers the runtime
-handoff and failed-startup cleanup in both handoff modes. This establishes the
-context lifecycle only: application Core has not yet been lowered in that hook,
-and the test does not establish Native Image heap capture, executable generation
+handoff and failed-startup cleanup in both handoff modes. The experimental
+application-bound recipe now captures its selected entry and shutdown dependencies,
+lowers them in this hook with one preparation worker, and discards the Core bodies.
+Runtime loads use the saved AST factory under its original language and fresh
+State; there is no runtime-lowering fallback. Ordinary cached-source preparation
+keeps its configured worker count.
+
+`ReusableLoaderTest` runs the saved factory after removing its CBD inputs with
+runtime Core lowering disabled. This is JVM evidence for preparation and runtime
+ownership. It does not establish Native Image heap capture, executable generation
 or bundled native libraries. Those remain tracked in
 [issue #1060](https://github.com/ekmett/thc/issues/1060).

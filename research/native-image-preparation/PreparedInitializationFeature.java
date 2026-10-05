@@ -27,6 +27,13 @@ public final class PreparedInitializationFeature implements Feature {
                 // Match the old CLI's ignored absent names, but never treat one as a package.
                 if (type != null) RuntimeClassInitialization.initializeAtBuildTime(type);
             }
+            if (Boolean.getBoolean("thc.nativeImage.executable")) {
+                RuntimeClassInitialization.initializeAtBuildTime(thc.NativeExecutable.class);
+                thc.NativeExecutable.captureForImage();
+                // Truffle's beforeAnalysis handoff will lower this capture inside initializeContext.
+                System.setProperty("polyglot.image-build-time.PreinitializeContexts", "thc");
+                System.setProperty("polyglot.image-build-time.PreinitializeContextsWithNative", "false");
+            }
         } catch (Exception error) {
             throw new IllegalStateException("Cannot apply prepared initialization inventory", error);
         }
