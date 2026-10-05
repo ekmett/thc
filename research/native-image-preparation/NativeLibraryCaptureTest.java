@@ -11,7 +11,10 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import thc.Json;
 
-/** Hosted Linux selection checked against a constructor-observed native control. */
+/** Protects hosted capture from constructor effects and loss of provider identity.
+ * Uses real NativeLibraryCapture/thc.Json, the image-host Java/glibc loader,
+ * THC_CLANG and THC_LLVM_READOBJ. Retains sources, native fixtures, command logs
+ * and receipts in one owned native-capture-* child of a reusable output parent. */
 @SuppressWarnings("unchecked")
 public final class NativeLibraryCaptureTest {
     private static int checks, commands;
@@ -55,11 +58,13 @@ public final class NativeLibraryCaptureTest {
         }
     }
     public static void main(String[] args) throws Exception {
-        if (args.length != 1) throw new IllegalArgumentException("OUTPUT required");
+        if (args.length != 1) throw new IllegalArgumentException("OUTPUT_PARENT required");
         if (!System.getProperty("os.name").equals("Linux") || !System.getProperty("os.arch").equals("amd64"))
             throw new IllegalArgumentException("Native capture regression requires Linux x86-64");
-        output = Path.of(args[0]).toAbsolutePath().resolve("native-capture");
-        Files.createDirectory(output);
+        var parent = Path.of(args[0]).toAbsolutePath();
+        Files.createDirectories(parent);
+        output = Files.createTempDirectory(parent, "native-capture-");
+        System.out.println("Native capture evidence: " + output);
         var compiler = System.getenv().getOrDefault("THC_CLANG", "clang");
         var marker = output.resolve("constructors.txt");
         var markerLiteral = marker.toString().replace("\\", "\\\\").replace("\"", "\\\"");
