@@ -28,8 +28,10 @@ export THC_LLVM_NM=/path/to/llvm/bin/llvm-nm
 ```
 
 The LLVM tool variables are optional when matching tools are on `PATH`.
-Pure Haskell acquisition does not require LLVM tools. Cabal's native build still
-uses its selected GHC and native compiler; LLVM acquisition is a separate step.
+Acquisition needs them even for a pure Haskell package: boot libraries with
+native imports, such as `ghc-internal`, are compiled to LLVM bitcode. Cabal's
+native build still uses its selected GHC and native compiler; LLVM acquisition
+is a separate step.
 Use `thc acquire` with the same build options to prepare the package without
 executing it. Add `--verify-artifacts` to `thc run` for a strict pre-launch Core
 audit and artifact-hash verification.
