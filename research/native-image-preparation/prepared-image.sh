@@ -96,7 +96,7 @@ executable_options=()
 builder_heap=8g
 if [[ "$mode" == executable* ]]; then
     # Capture selected Core, then lower synchronous AST during Truffle preinitialization.
-    # Runtime uses the saved factory; image compilation and native bundling remain separate.
+    # Runtime uses the saved factory and opens captured native providers on demand.
     : "${THC_NATIVE_IMAGE_EXECUTABLE_CONFIG:?Supply a fixed Main executable argument JSON array}"
     : "${THC_NATIVE_IMAGE_EXECUTABLE_NAME:?Supply the ELF output basename}"
     [[ "$THC_NATIVE_IMAGE_EXECUTABLE_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 2
@@ -166,7 +166,7 @@ fi
 # CLI eager initialization can create LanguageCache entries before Truffle's
 # optional resource registry is populated. Apply the SAME finite class policy
 # during setup, after all features' registration hooks have completed.
-"$JAVA_HOME/bin/javac" -cp "$classpath" -d "$probe_dir" "$recipe_dir/PreparedInitializationFeature.java"
+"$JAVA_HOME/bin/javac" -cp "$classpath" -d "$probe_dir" "$recipe_dir/PreparedInitializationFeature.java" "$recipe_dir/NativeLibraryCapture.java"
 classpath="$probe_dir:$classpath"
 builder_overlays=
 foreign_patch=()

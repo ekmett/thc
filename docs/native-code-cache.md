@@ -129,14 +129,31 @@ creates fresh guest values. A missing factory or different language is an error;
 this mode does not fall back to runtime Core loading or accept external sources.
 
 The isolated JVM regression executes after deleting its CBD/manifest inputs with
-runtime lowering disabled. A separate no-FFI Linux diagnostic also serializes the
-saved factory and runs its checked IO/PAP entry and shutdown with the bound CBD
-directory unavailable. It uses the pure recipe's provider exclusions and omits
-THC native resources; see the [exact qualification boundary](native-image-feasibility.md#preinitialized-runtime-state).
-This is not a compiled-guest cache or general package-executable claim. The ordinary
-recipe still includes Sulong, native dependencies and resource-profile requirements;
-cbits bundling is unfinished. Build inputs use a compact package manifest selected with
-`@packages.json`, not loose CBD paths.
+runtime lowering disabled. Linux images also execute checked IO/PAP and Unicode
+`Text.reverse` applications with the bound CBD directory unavailable. The Text
+image retains ordinary Sulong/NFI and native resources; see the
+[exact qualification boundary](native-image-feasibility.md#preinitialized-runtime-state).
+Build inputs use a compact package manifest selected with `@packages.json`, not
+loose CBD paths. The saved factory still executes through the AST runtime.
+
+For Linux x86-64 executables, the hosted feature also captures the transitive
+shared-library dependencies of retained package companions. The image host's glibc
+loader selects providers; pinned `llvm-readobj` (or `THC_LLVM_READOBJ`) checks ELF
+metadata. This records image-build selection, not the original acquisition link.
+Provider names, paths and SHA-256 hashes, inspection tools and the system ABI
+libraries appear in `reproduction-inventory/native-libraries.json`. The recipe
+adds provider bytes to detached metadata without rewriting CBD archives.
+
+At runtime the existing context-owned NFI loader extracts these providers and
+loads them in dependency order before the package companion. Constructors run
+there; image preparation retains no native handles. Same-name providers must have
+identical bytes. The glibc ABI family remains supplied by the deployment system;
+GMP is captured even when installed under `/lib`. Missing providers, inconsistent
+SONAMEs, cyclic non-system dependencies, path-bearing `DT_NEEDED`, loader
+indirections and companions requiring their original `$ORIGIN` directory are
+rejected. Providers that load additional files themselves still need those files.
+This is shared-library embedding, not static linking or a general clean-machine
+deployment guarantee; the image's own system dependencies remain external.
 
 ### Compiled-cache compatibility
 

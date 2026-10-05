@@ -35,14 +35,16 @@ public final class NativeExecutable {
     }
 
     /** The hosted feature captures reader-free Core before Truffle preinitializes THC. */
-    public static void captureForImage() throws IOException {
+    public static void captureForImage(java.util.function.UnaryOperator<Map<String,Object>> nativeLibraries) throws IOException {
         if (application != null) throw new IllegalStateException("Native executable already captured");
         try (var input = NativeExecutable.class.getResourceAsStream("/thc-native-executable.json")) {
             if (input == null) throw new IllegalStateException("Native executable binding is missing");
             var configuration = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             // Apply the trusted image binding before selecting Core or initializing lowering classes.
             initializeProperties(configuration);
-            application = capture(configuration);
+            var captured = capture(configuration);
+            captured.core = nativeLibraries.apply(captured.core);
+            application = captured;
         }
     }
 

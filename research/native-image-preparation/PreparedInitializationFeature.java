@@ -29,7 +29,8 @@ public final class PreparedInitializationFeature implements Feature {
             }
             if (Boolean.getBoolean("thc.nativeImage.executable")) {
                 RuntimeClassInitialization.initializeAtBuildTime(thc.NativeExecutable.class);
-                thc.NativeExecutable.captureForImage();
+                thc.NativeExecutable.captureForImage(new NativeLibraryCapture(
+                    inventory.getParent().resolve("native-libraries.json"))::capture);
                 // Truffle's beforeAnalysis handoff will lower this capture inside initializeContext.
                 System.setProperty("polyglot.image-build-time.PreinitializeContexts", "thc");
                 System.setProperty("polyglot.image-build-time.PreinitializeContextsWithNative", "false");
