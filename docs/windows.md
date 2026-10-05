@@ -82,6 +82,12 @@ The disabled queue (the default zero capacity) leaves work unforced without
 admitting guest concurrency. These bounded checks do not qualify the whole
 concurrency suite or GHC-derived programs.
 
+Three additional spark lifecycle checks defer guest failure until demand while
+unrelated work continues, resume the same thunk after worker cancellation without
+replaying its effect, and stop claimed work and discard queued hints on context
+disposal. Each checks AST and bytecode in both handoff modes. These lifecycle
+checks do not establish compiled execution.
+
 A fixture-free async check delivers the first external request to a concurrent
 loop that has executed installed code before request publication. AST and bytecode
 parents retain saved operands through delivery and resumption, accept a later
