@@ -75,9 +75,12 @@ itself. Do not run duplicate image builders.
 `THC_NATIVE_IMAGE_BUILDER_HEAP` selects an explicit builder budget of `8g`,
 `16g` or `32g`. Generic/cache mode defaults to 8 GiB and bound-executable mode
 to 16 GiB. The captured-Core application image exhausted 16 GiB during code
-generation. A 32 GiB attempt passed that stage but failed when the pinned
-compiler lacked the generated `BytecodeRootGen$TagNode.findProbe` deoptimization
-method during compilation. No captured-Core native executable is qualified yet.
+generation. The finite preparation inventory includes the generated `TagNode`
+empty-array initializer: leaving its declaring class uninitialized caused Graal
+to reject `findProbe`'s deoptimization graph during analysis and fail later in
+compilation. Analysis-only before/after checks confirm that this entry restores
+the graph without creating probes or guest state. No captured-Core native
+executable is qualified yet.
 The choice is recorded in
 `reproduction-inventory/builder-heap.args` and changes only builder `-J-Xmx`,
 not the produced executable's runtime heap, compilation limits or two compiler

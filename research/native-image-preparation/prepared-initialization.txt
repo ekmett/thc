@@ -65,6 +65,10 @@ thc.runtime.AstSelfCall
 thc.runtime.AtomicAddressOp
 thc.runtime.BytecodeRootGen$AbstractBytecodeNode
 thc.runtime.BytecodeRootGen$CachedBytecodeNode
+# Generated instrumentation metadata: only an empty TagNode array is allocated.
+# Probes, tag-tree nodes and guest state remain instance-owned and lazy. The
+# declaring type must be initialized for runtime/deoptimization graph validation.
+thc.runtime.BytecodeRootGen$TagNode
 thc.runtime.BytecodeRootGen$InstructionDescriptorImpl
 thc.runtime.BytecodeRootGen$InstructionDescriptorList
 thc.runtime.BytecodeRootGen$Instructions$ArgumentDescriptorImpl
