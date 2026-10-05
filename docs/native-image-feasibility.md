@@ -82,25 +82,25 @@ keeps its configured worker count.
 runtime Core lowering disabled. This is JVM evidence for preparation and runtime
 ownership.
 
-A bounded Linux Native Image check also passes hosted preparation and reachability
-analysis with `-H:+ReturnAfterAnalysis`. The exact initialization inventory admits
-the retained option descriptor, empty carrier registry type and constructor-field
-metadata; their static initialization creates no runtime services or guest values.
-The diagnostic combines the tested portable classes with pinned Linux dependencies
-and deliberately omits THC native-resource groups. It stops before code generation
-and image serialization.
+Linux diagnostics complete image generation and execute saved factories through
+`NativeExecutable.main`, including entry and shutdown, with their bound CBD
+namespace unavailable. The checked mutable-state IO/PAP sample uses the pure
+recipe's LLVM/NFI exclusions and heap byte arrays. A checked Unicode
+`Text.reverse` application also matches native GHC with LLVM/NFI and matching
+Linux native resources retained, using synchronous AST execution and native byte
+arrays. Its prepared graph retains the validated GHC target-layout descriptor;
+that exact class is included in the audited initialization inventory.
 
-A separate Linux diagnostic completes image generation and runs the existing
-checked mutable-state IO/PAP sample through `NativeExecutable.main`, including its
-entry and shutdown actions, with the bound CBD directory unavailable. It uses the
-pure recipe's LLVM/NFI exclusions, omits THC native resources, and binds synchronous
-AST execution with heap byte arrays. This selects the ordinary launcher's existing
-embedding IO path. The same ELF also runs after relocation into a directory with no
-adjacent library sidecar. Its ELF dependencies are the system C, math and zlib
-libraries; this is not a static executable.
+The Text executable runs both in its build directory and after relocation into a
+directory containing only the same ELF. It also passes with an initially empty
+Graal resource cache. File-access traces show no CBD or manifest reads and no
+access to the old resource cache in that run. Sulong and package native libraries
+are extracted at runtime; system C, math, zlib, dynamic-loader and GMP libraries
+remain dependencies. The loader still probes build-machine GHC library paths
+before finding system GMP, so this is not a clean deployment contract or a static
+executable.
 
-That result qualifies serialization and runtime handoff for this sample. It does
-not qualify guest machine-code compilation, general package execution or native
-library bundling. The ordinary executable recipe still includes Sulong; the
-resource-stripped diagnostic is not a distributable build. These remaining limits
-are tracked in [issue #1060](https://github.com/ekmett/thc/issues/1060).
+These results qualify serialization and runtime handoff for the selected programs.
+General package/Unix-library coverage, transitive native dependency deployment,
+Windows images and guest machine-code compilation remain unqualified and are
+tracked in [issue #1060](https://github.com/ekmett/thc/issues/1060).
