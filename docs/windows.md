@@ -82,6 +82,13 @@ The disabled queue (the default zero capacity) leaves work unforced without
 admitting guest concurrency. These bounded checks do not qualify the whole
 concurrency suite or GHC-derived programs.
 
+A fixture-free async check delivers the first external request to a concurrent
+loop that has executed installed code before request publication. AST and bytecode
+parents retain saved operands through delivery and resumption, accept a later
+request, and leave another context's compiled target valid on the shared engine.
+The exact method runs in both handoff modes. This synthetic check does not
+qualify the whole async suite, native GHC exports or polling performance.
+
 Fixture-free weak checks cover identity-only registrations and actionless raw
 `MutVar#` keys with distinct values. The MutVar check requires actual collection
 of value-to-key cycles while live keys retain their original values, including

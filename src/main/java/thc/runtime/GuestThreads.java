@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.ThreadLocalAction;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
@@ -22,6 +24,8 @@ public final class GuestThreads {
     private final CpuAffinity cpuAffinity;
     private final Wake wake;
     private final TruffleLanguage.Env env;
+    // Monotone mailbox history, independent of concurrency admission and masking.
+    private final Assumption noAsyncRequestPublished = Truffle.getRuntime().createAssumption("THC no async request published");
     // Guest completion precedes Truffle carrier teardown. Retain ownership independently.
     private final WeakHashMap<Thread, Boolean> platformCarriers = new WeakHashMap<>();
     private boolean stoppingPlatform;
@@ -465,6 +469,7 @@ public final class GuestThreads {
             else {
                 boolean self = currentSlot.get() == target && activeIdentity.get() == target.identity;
                 if (!self && !target.externalAsync) throw new UnsupportedCore("External killThread# to a nonresumable AST fork is unsupported");
+                noAsyncRequestPublished.invalidate("An async request is being published");
                 request = new AsyncRequest(this, targetId, target.thread, payload, self);
                 if (self) target.queue.addFirst(request); else target.queue.addLast(request);
                 target.pending = target.claimed == null;
@@ -584,6 +589,7 @@ public final class GuestThreads {
             if (request.getState() != AsyncRequestState.PAUSED) return;
             var target = threads.get(request.targetId);
             if (closed || target == null || target.thread != request.target) { request.transition(AsyncRequestState.TARGET_FINISHED); return; }
+            noAsyncRequestPublished.invalidate("An async request is being resumed");
             target.queue.addLast(request); request.transition(AsyncRequestState.PENDING); target.pending = target.claimed == null; thread = target.thread;
         }
         try { wake.wake(thread); }
@@ -603,6 +609,7 @@ public final class GuestThreads {
     public static AsyncRequest pollCurrent(Node node, boolean interruptible) {
         if (!ordinaryPollEnabled(node)) return null;
         checkpointCurrent(node);
+        if (ordinaryMailboxUnpublished(node)) return null;
         return pollMandatoryCurrentWithoutYield(node, interruptible);
     }
     /** Only ordinary polls speculate. Calls and their capture handlers never do. */
@@ -624,7 +631,14 @@ public final class GuestThreads {
     /** Used under commit/owner locks; scheduling yield happens before acquiring them. */
     public static AsyncRequest pollCurrentWithoutYield(Node node, boolean interruptible) {
         if (!ordinaryPollEnabled(node)) return null;
+        if (ordinaryMailboxUnpublished(node)) return null;
         return pollMandatoryCurrentWithoutYield(node, interruptible);
+    }
+    private static boolean ordinaryMailboxUnpublished(Node node) {
+        // Eager delivery and prepared roots retain polling without this speculation.
+        if (node != null && node.getRootNode() instanceof GuestRoot root &&
+                (root.getEagerAsyncPolls() || root instanceof FunctionRoot function && function.usesRuntimeAsyncAdmission())) return false;
+        return current(node).noAsyncRequestPublished.isValid();
     }
     private static AsyncRequest pollMandatoryCurrentWithoutYield(Node node, boolean interruptible) {
         var context = Language.currentState(node);
