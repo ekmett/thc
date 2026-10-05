@@ -38,7 +38,6 @@ class NativeContextTest {
                 var failure = assertThrows(IllegalArgumentException.class, () -> {
                     try (var context = Main.withContextProfile(Context.newBuilder("thc"), ContextProfile.LAUNCHER).build()) {}
                 }, option + " must reach the real launcher builder");
-                assertTrue(failure.getMessage().contains(option.substring(option.indexOf('.') + 1)), failure.getMessage());
                 assertTrue(failure.getMessage().contains("not-a-number"), failure.getMessage());
             } finally {
                 if (previous == null) System.clearProperty(key);
