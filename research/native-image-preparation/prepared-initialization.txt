@@ -159,6 +159,11 @@ thc.runtime.IoUnitDestination
 thc.runtime.ManagedExportIoRoot$ManagedExportDestination
 thc.runtime.STMCall$AsyncDestination
 
+# Literal ABI field/source names and closure tags only; no host probe or native
+# resource is initialized. The Windows source-catalog cache starts null.
+# Each retained layout already passed target validation during Core capture.
+thc.runtime.TargetLayout
+
 # Finite Java metadata compatibility inventory; see the closure audit in README.
 # Literal enum descriptors and argument lists only, not their runtime operations.
 thc.runtime.ArrayOp

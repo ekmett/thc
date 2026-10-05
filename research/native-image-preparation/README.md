@@ -220,6 +220,12 @@ has an initializer; it is not weakened to admit arbitrary class-array holders.
 Preparing nested destination classes does not initialize their enclosing roots
 or STM implementation. Ordinary per-instance execution and ownership stay unchanged.
 
+`TargetLayout` retains the validated GHC ABI metadata used by prepared package
+stack operations. Its initializer creates only literal field/source-name
+collections and closure tags; target checks remain in layout parsing. The lazy
+Windows source-catalog cache starts null. Initialization performs no host probe,
+resource read, native allocation or context creation.
+
 The manual Windows additions are:
 
 ```diff
