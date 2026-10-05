@@ -153,6 +153,78 @@ class PreparedAdmissionCompatibilityTest {
         }
     }
     @ParameterizedTest @ValueSource(strings = {"platform", "loom"})
+    void preparedMyThreadIdObservesEachCurrentContext(String hosting) throws Exception {
+        var thread = map("kind", "object", "primReps", list("BoxedRep (Just Unlifted)"), "evaluated", true);
+        var tuple = map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(VOID, thread),
+            "primReps", list("BoxedRep (Just Unlifted)"), "evaluated", true);
+        var stateBinder = map("id", "s", "name", "s", "lifted", false, "coercion", false, "rep", VOID);
+        var threadBinder = map("id", "tid", "name", "tid", "lifted", false, "coercion", false, "rep", thread);
+        var current = list("app", list("prim", "myThreadId#"), list(variable("s", VOID)),
+            list(false), false, false, map("rep", tuple));
+        var body = list("case", current, "current", list(list("data", "StateThread", list("s1", "tid"), variable("tid", thread),
+            map("binders", list(with(stateBinder, "id", "s1", "name", "s1"), threadBinder)))),
+            map("rep", thread, "binder", map("id", "current", "name", "current", "lifted", false, "rep", tuple)));
+        var source = map("bindings", list(map("id", "currentThread", "name", "currentThread", "arity", 1, "lifted", true,
+            "expr", list("lam", list(stateBinder), body, map("resultRep", thread)))),
+            "constructors", list(map("id", "StateThread", "name", "StateThread", "kind", "unboxed-tuple", "arity", 2)));
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            final Language preparedLanguage;
+            final Program.PreparedCode code;
+            var previous = new GuestThreadId[1];
+            try (var preparation = context(hosting, engine)) {
+                preparation.initialize("thc"); preparation.enter();
+                try {
+                    preparedLanguage = language();
+                    var threads = Language.currentState().getThreads();
+                    java.util.concurrent.Callable<Program.PreparedCode> prepare = () -> {
+                        threads.enterCurrent();
+                        try {
+                            previous[0] = threads.currentIdentity();
+                            return Program.prepareCode(preparedLanguage, source, List.of("currentThread"));
+                        } finally { threads.leaveCurrent(); }
+                    };
+                    code = threads.needsHosting() ? threads.hostEntry(null, prepare) : prepare.call();
+                    for (var target : targets(code)) assertFalse(target.wasExecuted());
+                } finally { preparation.leave(); }
+            }
+            try (var first = context(hosting, engine); var second = context(hosting, engine)) {
+                first.initialize("thc"); second.initialize("thc");
+                first.enter();
+                try {
+                    assertSame(preparedLanguage, language());
+                    for (var target : targets(code)) {
+                        assertFalse(target.wasExecuted());
+                        assertTrue(target.prepareForAOT()); target.compile(true);
+                        assertFalse(target.wasExecuted());
+                    }
+                    code.requireInstalledCode();
+                } finally { first.leave(); }
+                for (var runtime : List.of(first, second)) {
+                    runtime.enter();
+                    try {
+                        assertSame(preparedLanguage, language());
+                        var threads = Language.currentState().getThreads();
+                        var program = code.newInstance(preparedLanguage);
+                        var entry = assertInstanceOf(Closure.class, program.entryValue("currentThread"));
+                        java.util.concurrent.Callable<GuestThreadId> execute = () -> {
+                            threads.enterCurrent();
+                            try {
+                                var expected = threads.currentIdentity();
+                                assertSame(threads, expected.getOwner());
+                                assertNotSame(previous[0], expected);
+                                assertSame(expected, Calls.target(entry.target, new Object[]{0L, entry.environment, Unit.INSTANCE}));
+                                return expected;
+                            } finally { threads.leaveCurrent(); }
+                        };
+                        previous[0] = threads.needsHosting() ? threads.hostEntry(entry.target.getRootNode(), execute) : execute.call();
+                        code.requireInstalledCode();
+                    } finally { runtime.leave(); }
+                }
+            }
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"platform", "loom"})
     void preparedPureInstanceAcceptsDifferentPublicOrigins(String hosting) throws Exception {
         try (var context = context(hosting)) {
             context.initialize("thc"); context.enter();

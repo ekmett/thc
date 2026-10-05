@@ -82,6 +82,14 @@ recursive or lifted aggregate lets retain their ordinary rejection. Bytecode and
 diagnostic execution remain outside reusable admission; selected IO, foreign and
 managed-export forms retain their existing explicit admission requirements.
 
+Prepared `myThreadId#` observes the current guest entry when executed. It retains
+no identity from preparation; each fresh context supplies its own thread state.
+This observation does not admit thread creation, MVar operations or file waits.
+
+Narrow scalar address indexing (`indexWord8OffAddr#`, `indexInt8OffAddr#`,
+`indexWord16OffAddr#`, `indexInt16OffAddr#`) uses the invoking address and preserves
+its ordinary bounds, context and lifetime checks, including rejection after free.
+
 Reusable AST roots are capture-capable from first lowering. AOT preparation
 declares materializable frames and polymorphic completion before any guest
 execution, preserving owned typed transport and unfinished caller operands.

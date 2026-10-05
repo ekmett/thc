@@ -502,9 +502,10 @@ public final class Program implements ExecutableProgram {
                             PinnedMemoryOp.named(name) == null && TupleArithmeticOp.named(name) == null &&
                             CoreArithmeticExceptions.payload(name) == null &&
                             !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "minusAddr#", "remAddr#", "addr2Int#", "int2Addr#",
-                            "eqAddr#", "neAddr#", "ltAddr#", "leAddr#", "gtAddr#", "geAddr#", "indexCharOffAddr#", "tagToEnum#",
+                            "eqAddr#", "neAddr#", "ltAddr#", "leAddr#", "gtAddr#", "geAddr#", "indexCharOffAddr#",
+                            "indexWord8OffAddr#", "indexInt8OffAddr#", "indexWord16OffAddr#", "indexInt16OffAddr#", "tagToEnum#",
                             "raise#", "raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#",
-                            "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#", "keepAlive#", "getCurrentCCS#",
+                            "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#", "keepAlive#", "getCurrentCCS#", "myThreadId#",
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
                             "+##", "-##", "*##", "/##", "negateDouble#",
                             "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
