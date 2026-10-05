@@ -51,10 +51,13 @@ class GhcBCOContinuationTest {
                 "expr", list("lam", list(arg("prefix", CELL), arg("cell", CELL)), body, map("resultRep", REF)))));
     }
     private static Context context() { return context(0); }
-    private static Context context(int sparkCapacity) {
-        return Context.newBuilder("thc").allowCreateThread(sparkCapacity != 0).allowExperimentalOptions(true)
+    private static Context context(int sparkCapacity) { return context(sparkCapacity, null); }
+    private static Context context(int sparkCapacity, String hosting) {
+        var builder = Context.newBuilder("thc").allowCreateThread(sparkCapacity != 0).allowExperimentalOptions(true)
             .option("thc.SparkQueueCapacity", Integer.toString(sparkCapacity)).option("engine.WarnInterpreterOnly", "false")
-            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").build();
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false");
+        if (hosting != null) builder.option("thc.ThreadHosting", hosting);
+        return builder.build();
     }
     private static byte[] words(long... words) {
         byte[] result = new byte[words.length * 8];
@@ -123,9 +126,9 @@ class GhcBCOContinuationTest {
         try { return action.call(); }
         finally { threads.leaveCurrent(); }
     }
-    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
-    void sparkedUpdatingApplicationsShareWorkAndResumeCancelledWorkersWithoutReplay(String backend) throws Exception {
-        for (boolean cancel : new boolean[]{false, true}) try (var context = context(1)) {
+    @ParameterizedTest @CsvSource({"ast,platform", "bytecode,platform", "ast,loom", "bytecode,loom"})
+    void sparkedUpdatingApplicationsShareWorkAndResumeCancelledWorkersWithoutReplay(String backend, String hosting) throws Exception {
+        for (boolean cancel : new boolean[]{false, true}) try (var context = context(1, hosting)) {
             context.initialize("thc"); context.enter();
             var cell = new ManagedMVar(); var answer = new Object();
             try {
@@ -142,6 +145,7 @@ class GhcBCOContinuationTest {
                 if (cancel) {
                     var worker = thunk.getOwner(); assertNotNull(worker);
                     assertEquals(threads.isLoom(), worker.isVirtual());
+                    assertEquals(hosting.equals("loom"), worker.isVirtual(), "BCO spark worker uses the requested hosting");
                     var request = admitted(threads, () -> {
                         for (var candidate : threads.snapshot())
                             if (candidate instanceof GuestThreadId id && id.getCarrier().get() == worker)
