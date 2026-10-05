@@ -78,6 +78,8 @@ try {
             'thc.runtime.ManagedWeakTest.liveMutVarKeysRetainDroppedRegistrationsUntilDetached',
             'thc.runtime.ManagedWeakTest.callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit',
             'thc.runtime.ManagedWeakTest.actualContextCloseInvalidatesHandlesWithoutRunningHaskellActions',
+            'thc.runtime.ManagedWeakTest.retainedMVarRequestKeepsConditionalValueAliveUntilRequestIsDropped',
+            'thc.runtime.ManagedMVarCellTest',
             'thc.runtime.TupleJoinLoweringTest.emptyOperandRunsInLogicalOrderBeforeParallelMovesAndFailureTransfersNothing',
             'thc.runtime.TupleJoinLoweringTest.tupleResultScratchIsClearedAfterCopyingUnlessTheDestinationAliasesIt',
             'thc.runtime.EmptyArgumentRuntimeTest.emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow',

@@ -96,7 +96,7 @@ The exact method runs in both handoff modes. This synthetic check does not
 qualify the whole async suite, native GHC exports or polling performance.
 
 Fixture-free weak checks cover identity-only registrations and actionless raw
-`MutVar#` keys with distinct values. The MutVar check requires actual collection
+`MutVar#` and `MVar#` keys with distinct values. The cycle check requires actual collection
 of value-to-key cycles while live keys retain their original values, including
 first compiled make and dead dereference calls on AST and bytecode.
 Shared controls retain dropped registrations under live keys until detach and
@@ -104,7 +104,11 @@ check actual context close detaches values and invalidates handles without
 running Haskell actions. Callback attachment promotes collectible registrations
 to explicit lifetime; ordinary distinct-key values and all actions remain
 strongly retained until explicit finalization or context close. Callbacks run
-newest-first once. Selected checks run in both handoff modes. General ephemerons,
+newest-first once. A retained MVar request, including a cancelled request, keeps
+its key and conditional value alive until the request is dropped; the
+[raw MVar ownership controls](https://github.com/ekmett/thc/pull/1139) also retain
+the cell's transfer, cancellation and no-replay checks. Selected checks run in
+both handoff modes. General ephemerons,
 GC-triggered finalizers and the native weak corpus remain outside this qualification.
 
 Three fixture-free empty-join controls check ordered zero-width effects, no
