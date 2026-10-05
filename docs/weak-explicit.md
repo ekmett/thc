@@ -22,9 +22,10 @@ detach each registration's value from its key. A retained MVar request keeps its
 cell and that cell's weak values alive, even after the request is cancelled;
 cancellation alone does not make the cell unreachable.
 
-One canonical THC-owned `free` callback on an actionless raw `MutVar#` key can
-retain only its direct malloc owner (or null), leaving the key collectible. This
-also permits a distinct lazy value that refers back to its key. The original
+One canonical THC-owned `free` callback can leave an actionless registration
+collectible when its key and value are identical, or its key is a raw managed
+`MutVar#` or `MVar#`. It retains only a direct malloc owner (or null), permitting
+the same key-owned distinct lazy values described above. The original
 function label must belong to the current context; a constructed same-symbol
 label, returned-address wrapper, second callback or generic callback remains
 explicit-only. Attaching any such callback to a live collectible registration

@@ -152,7 +152,7 @@ public final class ManagedWeaks {
         // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
         if (callback.getSymbol().equals("free")) Language.currentState(null).getNativeAllocations().requireFreeTarget(address);
         else if (address != ManagedAddress.nullAddress()) address.requireByteRegion(0L, false);
-        if (payload.action == null && key instanceof ManagedMutVar && payload.key == null
+        if (payload.action == null && payload.key == null
                 && payload.callbacks.isEmpty() && !payload.ownedFree && provider.isOwnedFree(callback)
                 && Language.currentState(null).getWeaks() == this) {
             var owner = Language.currentState(null).getNativeAllocations().ownedFreeTarget(address);

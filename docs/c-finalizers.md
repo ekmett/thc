@@ -22,8 +22,9 @@ weak lock. Only after those effects does it return the original Haskell action
 and its validity flag. A weak with only C finalizers returns flag 0 after running
 them. The Haskell action is never executed by the primitive itself.
 
-A single canonical current-context `free` on an actionless raw `MutVar#` key
-has a [cooperative retirement path](weak-explicit.md). Only a direct owned malloc
+A single canonical current-context `free` on an actionless registration with
+identical key/value carriers, or a raw managed `MutVar#` or `MVar#` key, has a
+[cooperative retirement path](weak-explicit.md). Only a direct owned malloc
 base or null qualifies; the registration retains the native Owner rather than
 the address, function provider or guest payload. Existing managed GC requests
 claim the dead weak and attempt deallocation outside the weak lock. Borrowed or
