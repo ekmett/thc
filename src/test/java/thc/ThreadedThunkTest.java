@@ -26,6 +26,12 @@ class ThreadedThunkTest {
     private <T> T entered(Context context, Callable<T> action) throws Exception {
         context.enter(); try { return action.call(); } finally { context.leave(); }
     }
+    private <T> T admitted(GuestThreads threads, Callable<T> action) throws Exception {
+        if (threads.needsHosting()) return threads.hostEntry(null, () -> admitted(threads, action));
+        threads.enterCurrent(null, false, true, null);
+        try { return action.call(); }
+        finally { threads.leaveCurrent(); }
+    }
     // RootNode.execute cannot declare checked exceptions; retain the original await failure unchanged.
     @SuppressWarnings("unchecked") private static <E extends Throwable> void rethrow(Throwable error) throws E { throw (E) error; }
     private static void await(CountDownLatch latch) {
@@ -398,21 +404,20 @@ class ThreadedThunkTest {
                 finally { if (!reading.isDone()) ready.tryPut(Unit.INSTANCE); }
             }
             var worker = thunk.getOwner(); assertNotNull(worker);
-            var request = entered(context, () -> {
-                var threads = state.getThreads(); threads.enterCurrent(null, false, true, null);
-                try {
-                    for (var candidate : threads.snapshot()) if (candidate instanceof GuestThreadId id && id.getCarrier().get() == worker)
-                        return threads.send(id, "stop speculative worker");
-                    throw new AssertionError("Spark worker has no registered guest identity");
-                } finally { threads.leaveCurrent(); }
-            });
+            var threads = state.getThreads();
+            assertEquals(threads.isLoom(), worker.isVirtual());
+            var request = entered(context, () -> admitted(threads, () -> {
+                for (var candidate : threads.snapshot()) if (candidate instanceof GuestThreadId id && id.getCarrier().get() == worker)
+                    return threads.send(id, "stop speculative worker");
+                throw new AssertionError("Spark worker has no registered guest identity");
+            }));
             worker.join(5000); assertFalse(worker.isAlive(), backend + " cooperative worker cancellation completes");
             assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
             assertTrue(gate.tryPut(marker)); var driver = entered(context, () -> new Driver(new Metrics(false)));
-            var resumed = entered(context, () -> driver.force(thunk));
+            var resumed = entered(context, () -> admitted(threads, () -> driver.force(thunk)));
             assertEquals(marker.toString(), resumed.toString(), backend + " demand resumes to Done");
             assertFalse(ready.tryTake().getPresent(), "The pre-suspension ready effect must not repeat");
-            assertSame(resumed, entered(context, () -> driver.force(thunk)));
+            assertSame(resumed, entered(context, () -> admitted(threads, () -> driver.force(thunk))));
         }
     }
     @Test void boundedSparkQueuePreservesIdentityRejectsOverflowAndCompletesStateBeforeEnqueue() throws Exception {
