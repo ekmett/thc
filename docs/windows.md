@@ -95,6 +95,14 @@ request, and leave another context's compiled target valid on the shared engine.
 The exact method runs in both handoff modes. This synthetic check does not
 qualify the whole async suite, native GHC exports or polling performance.
 
+A fixture-free context lifecycle check uses pinned Truffle's actual JVM
+preinitialization in an isolated process. It retains the same language and context
+holder while replacing preparation authority with the runtime Env, checks neutral
+carrier cells and second-carrier invalidation, and rejects failed startup without
+restoring preparation authority. The runtime and rejection cases run in both
+handoff modes. This check does not qualify Native Image heap capture, executable
+generation, hosted Core preparation or native library bundling.
+
 Fixture-free weak checks cover identity-only registrations and actionless raw
 `MutVar#` and `MVar#` keys with distinct values. The cycle check requires actual collection
 of value-to-key cycles while live keys retain their original values, including

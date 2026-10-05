@@ -74,6 +74,7 @@ try {
             'thc.ThreadedThunkTest.disposingSparkContextStopsClaimedWorkAndDiscardsUnstartedHints',
             'thc.runtime.GhcBCOContinuationTest.sparkedUpdatingApplicationsShareWorkAndResumeCancelledWorkersWithoutReplay',
             'thc.runtime.AdaptiveAsyncTest.firstExternalRequestReachesRequestFreeCompiledConcurrentLoop',
+            'thc.runtime.ContextOwnershipTest.preinitializedContextReplacesBuildAuthority',
             'thc.runtime.ManagedWeakTest.identityOnlyGuestWeaksCollectWhileLiveKeysAndFirstCompiledCallsPreserveIdentity',
             'thc.runtime.ManagedWeakTest.mutVarKeyValueBackReferencesCollectOnFirstCompiledCalls',
             'thc.runtime.ManagedWeakTest.liveMutVarKeysRetainDroppedRegistrationsUntilDetached',
