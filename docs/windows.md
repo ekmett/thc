@@ -109,7 +109,16 @@ its key and conditional value alive until the request is dropped; the
 [raw MVar ownership controls](https://github.com/ekmett/thc/pull/1139) also retain
 the cell's transfer, cancellation and no-replay checks. Selected checks run in
 both handoff modes. General ephemerons,
-GC-triggered finalizers and the native weak corpus remain outside this qualification.
+Automatic Haskell/package finalizers and the native weak corpus remain outside this qualification.
+
+Managed GC-request checks cover the [canonical owned-free path](c-finalizers.md).
+Actual collected raw `MutVar#` keys retire malloc storage after first compiled
+make/GC calls on AST and bytecode. Borrowed owners defer without waiting, including
+with one Loom HEC; later requests retire them. Controls preserve canonical
+admission, callback promotion/newest-first order, explicit-finalize races,
+context cancellation and existing free/realloc alias rules. Both handoff modes
+pass. Background JVM collection alone does not dispatch frees; arbitrary
+Haskell/package callbacks and GHC/exporter parity remain unqualified.
 
 Three fixture-free empty-join controls check ordered zero-width effects, no
 destination writes on failure, logical arity and state-contract rejection.
