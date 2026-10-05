@@ -50,8 +50,7 @@ class GhcBCOContinuationTest {
             "bindings", list(map("id", "wait", "name", "wait", "lifted", true,
                 "expr", list("lam", list(arg("prefix", CELL), arg("cell", CELL)), body, map("resultRep", REF)))));
     }
-    private static Context context() { return context(0); }
-    private static Context context(int sparkCapacity) { return context(sparkCapacity, null); }
+    private static Context context() { return context(0, null); }
     private static Context context(int sparkCapacity, String hosting) {
         var builder = Context.newBuilder("thc").allowCreateThread(sparkCapacity != 0).allowExperimentalOptions(true)
             .option("thc.SparkQueueCapacity", Integer.toString(sparkCapacity)).option("engine.WarnInterpreterOnly", "false")
