@@ -118,11 +118,12 @@ if [[ "$mode" == executable* ]]; then
     image_path="$repo_dir/build/native-image/$THC_NATIVE_IMAGE_EXECUTABLE_NAME"
 fi
 # Builder memory is separate from the produced executable's runtime limits.
-# Keep builder budgets explicit; 32 GiB supports larger application images.
+# Keep builder budgets explicit; 31 GiB retains compressed references on the
+# pinned JVM, while 32 GiB crosses its default compressed-oop heap limit.
 builder_heap=${THC_NATIVE_IMAGE_BUILDER_HEAP:-$builder_heap}
 case "$builder_heap" in
-    8g|16g|32g) ;;
-    *) echo 'THC_NATIVE_IMAGE_BUILDER_HEAP must be 8g, 16g or 32g' >&2; exit 2 ;;
+    8g|16g|31g|32g) ;;
+    *) echo 'THC_NATIVE_IMAGE_BUILDER_HEAP must be 8g, 16g, 31g or 32g' >&2; exit 2 ;;
 esac
 printf '%s\n' "-J-Xmx$builder_heap" > "$inventory_dir/builder-heap.args"
 # Switch tables depend only on enums ALREADY selected above. This final category

@@ -119,11 +119,12 @@ Native Image runtime-option parsing is disabled in this mode: guest `-D` and
 `-X` options are not VM arguments. This experimental recipe fixes a 16 GiB
 runtime heap ceiling and two available processors at image build time.
 Its builder defaults to 16 GiB and two compiler threads; compiled-cache mode
-defaults to 8 GiB. `THC_NATIVE_IMAGE_BUILDER_HEAP=32g` permits a larger builder
-heap without changing the produced executable's runtime limits. The captured-Core
-application image exhausted the 16 GiB builder heap during code generation;
-the 32 GiB attempt then failed on the generated `BytecodeRootGen$TagNode.findProbe`
-deoptimization method. Native executable construction remains unqualified.
+defaults to 8 GiB. `THC_NATIVE_IMAGE_BUILDER_HEAP=31g` permits a larger builder
+heap while retaining compressed object references on the pinned Linux JVM;
+`32g` is also accepted but crosses that JVM's default compressed-reference limit.
+These settings do not change the produced executable's runtime limits. The
+captured-Core route has passed graph preparation and code generation on Linux;
+complete image construction and native executable launch remain unqualified.
 
 The executable capture defaults to synchronous AST preparation, so a plain
 argument array needs no properties object. Explicit `thc.backend` values other

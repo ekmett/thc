@@ -250,6 +250,8 @@ public final class InitializationArgumentsTest {
         check(inventory(manual, "builder-heap.args").equals("-J-Xmx8g\n"), "generic builder default remains 8 GiB");
         check(prepare(manual, null, "prepare-only", null, "16g") == 0 &&
             inventory(manual, "builder-heap.args").equals("-J-Xmx16g\n"), "explicit 16 GiB builder heap only");
+        check(prepare(manual, null, "prepare-only", null, "31g") == 0 &&
+            inventory(manual, "builder-heap.args").equals("-J-Xmx31g\n"), "explicit compressed-reference builder heap only");
         check(prepare(manual, null, "prepare-only", null, "24g") == 2, "unqualified larger builder heap rejected");
         check(prepare(manual, null, "prepare-only", null, "16g -Xmx32g") == 2, "builder option injection rejected");
         check(prepare(manual) == 0 && inventory(manual, "builder-heap.args").equals("-J-Xmx8g\n"),
