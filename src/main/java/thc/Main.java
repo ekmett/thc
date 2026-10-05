@@ -41,9 +41,9 @@ public final class Main {
             .option("engine.CompilationFailureAction", "Print")
             .option("engine.CompilerThreads", System.getProperty("polyglot.engine.CompilerThreads", LAUNCHER_COMPILER_THREADS))
             .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
-            .option("engine.SingleTierCompilationThreshold", "10000")
-            .option("compiler.CompilationTimeout", "30")
-            .option("compiler.MaximumGraalGraphSize", "100000");
+            .option("engine.SingleTierCompilationThreshold", System.getProperty("polyglot.engine.SingleTierCompilationThreshold", "10000"))
+            .option("compiler.CompilationTimeout", System.getProperty("polyglot.compiler.CompilationTimeout", "30"))
+            .option("compiler.MaximumGraalGraphSize", System.getProperty("polyglot.compiler.MaximumGraalGraphSize", "100000"));
     }
 
     /** Values and native resources must not outlive or cross this owning context. */
