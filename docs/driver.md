@@ -123,8 +123,10 @@ See [GHC library Core](ghc-core.md) to check or build that installation.
 whole units as retained-interface sources. A single selected-GHC inventory probe
 checks their exact registered dependency closure, including cold interfaces.
 Every owned module must retain complete Core. Its decoded interface must prove
-no annotations, foreign products/calls/labels, delimited
-control, CLI main alias or foreign-exception bridge obligation. Units outside
+no foreign products/calls/labels, delimited control, CLI main alias or
+foreign-exception bridge obligation. Annotations must be validated empty THC
+export, registration or import provenance; unknown annotations and backend
+policies remain on ordinary acquisition. Units outside
 that conservative gate use the existing CBD acquisition and native linking.
 Thin requested units fail acquisition with their unit, module, interface path
 and instructions to retain Core or choose `pinned`; unknown facts are not false.

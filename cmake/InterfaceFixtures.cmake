@@ -40,7 +40,8 @@ add_custom_command(OUTPUT ${record_outputs} BYPRODUCTS ${record_objects}
   COMMENT "Generate record-field Core, native results and hydrated interfaces")
 add_custom_target(fixture-record-fields DEPENDS ${record_outputs})
 
-# Retained-interface demand uses the same small record sources without a plugin.
+# Retained-interface demand uses the same small record sources with the ordinary
+# typed provenance annotations; the thin variant has no plugin.
 # The test consumes the registered full/thin interfaces, production source
 # manifest and native results. No installed library Core is acquired here.
 set(demand_out "${PROJECT_SOURCE_DIR}/build/record-fields-demand")
@@ -63,13 +64,17 @@ foreach(label base-id full-compile full-register thin-compile thin-register nati
     list(APPEND demand_outputs "${demand_out}/logs/${label}.${suffix}")
   endforeach()
 endforeach()
-add_custom_command(OUTPUT ${demand_outputs}
+set(demand_cbd)
+foreach(module RecordFieldLibrary RecordFieldClient RecordFieldCold Main)
+  list(APPEND demand_cbd "${demand_out}/full/${module}.cbd")
+endforeach()
+add_custom_command(OUTPUT ${demand_outputs} BYPRODUCTS ${demand_cbd}
   COMMAND ${fixture_env} "THC_INTERFACE=${interface_exe}" "${fixtures_exe}" record-fields-demand
   DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RecordFieldLibrary.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RecordFieldClient.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RecordFieldCold.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/RecordFieldNative.hs"
-    ${tool_sources} ${cabal_inputs} ${toolchain_inputs} "${fixtures_exe}" "${interface_exe}"
+    ${tool_sources} ${cabal_inputs} ${plugin_outputs} ${toolchain_inputs} "${fixtures_exe}" "${interface_exe}"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate registered retained/thin record interfaces and native results")
 add_custom_target(fixture-record-fields-demand DEPENDS ${demand_outputs})

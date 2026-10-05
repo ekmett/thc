@@ -53,6 +53,9 @@ import GHC.Utils.Binary (openBinMem, putFullBinData, put_, putFS, setWriterUserD
                         mkWriterUserData, mkSomeBinaryWriter, mkWriter, simpleBindingNameWriter)
 import GHC.Utils.Fingerprint (Fingerprint)
 import System.FilePath (replaceExtension)
+import qualified THC.ForeignExports as Exports
+import qualified THC.ForeignExportProvenance as ExportProvenance
+import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Plugin (serializePostTidyCoreWithAnnotations, serializePostTidyCoreWithAnnotationsBytes,
   serializePostTidyCoreWithAnnotationsCBD)
 
@@ -136,17 +139,36 @@ probeInterface environment units modules expected path = do
 -- Demand is restricted to whole units with no native or startup obligations.
 -- Inspect GHC's decoded retained syntax, including cold RHSs and unfoldings;
 -- neither hydration nor THC serialization is needed to prove these false facts.
--- Annotations may carry foreign provenance or runtime profiles, so annotated
--- modules stay on ordinary CBD acquisition in this first source path.
+-- Acquisition attaches foreign provenance even when the products are empty.
+-- Validate those proofs; unknown annotations and runtime profiles stay eager.
 demandEligible :: ModIface -> Bool
-demandEligible iface = null (mi_anns iface) &&
+demandEligible iface =
   moduleNameString (moduleName (mi_module iface)) `notElem` ["THC.Exception", "THC.Internal.Exception"] &&
   unitString (moduleUnit (mi_module iface)) /= "main" &&
   all (safeDeclaration . snd) (mi_decls iface) && case mi_simplified_core iface of
     Nothing -> False
     Just simplified -> emptyForeign (mi_sc_foreign simplified) &&
+      emptyAnnotations (mi_sc_foreign simplified) &&
       all (safeBinding safeTop safeRhs) (mi_sc_extra_decls simplified)
   where
+    emptyAnnotations original = case
+      ( Exports.readStaticExports owner annotations []
+      , ExportProvenance.inspectProvenance owner annotations (Just []) original
+      , ImportProvenance.inspectImports owner annotations original
+      ) of
+        (Right exports, Right registration, Right imports) ->
+          -- Each reader accepts at most one payload of its distinct GHC type.
+          -- Count against ALL annotations so named, wrong-owner and unknown
+          -- payloads cannot disappear through a reader's filtering.
+          length (mi_anns iface) == length (filter id
+            [ case exports of Just (Exports.StaticExports _ _ _ []) -> True; _ -> False
+            , case registration of ExportProvenance.VerifiedRetainedRegistration _ [] -> True; _ -> False
+            , case imports of Just (ImportProvenance.Verified [] []) -> True; _ -> False
+            ])
+        _ -> False
+    owner = mi_module iface
+    annotations = [Annotation (ModuleTarget target) payload |
+      Iface.IfaceAnnotation (ModuleTarget target) payload <- mi_anns iface]
     emptyForeign (Foreign.IfaceForeign Nothing []) = True
     emptyForeign (Foreign.IfaceForeign (Just (Foreign.IfaceCStubs "" "" [] [])) []) = True
     emptyForeign _ = False
