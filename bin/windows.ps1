@@ -81,6 +81,8 @@ try {
             'thc.runtime.ManagedWeakTest.actualContextCloseInvalidatesHandlesWithoutRunningHaskellActions',
             'thc.runtime.ManagedWeakTest.retainedMVarRequestKeepsConditionalValueAliveUntilRequestIsDropped',
             'thc.runtime.ManagedWeakTest.ownedFreeRetiresCollectedMutVarKeysAtManagedGcRequests',
+            'thc.runtime.ManagedWeakTest.ownedFreeRetiresCollectedIdentityKeysAtManagedGcRequests',
+            'thc.runtime.ManagedWeakTest.ownedFreeWaitsForRetainedMVarRequestsBeforeRetiringCollectedKeys',
             'thc.runtime.ManagedWeakTest.ownedFreeDefersBorrowedAllocationsUntilAnotherManagedGcRequest',
             'thc.runtime.ManagedWeakTest.ownedFreePromotionPreservesCanonicalAdmissionAndNewestFirstCallbacks',
             'thc.runtime.ManagedWeakTest.ownedFreeBorrowDeferralLetsOneLoomHecRunTheBorrowerAgain',

@@ -113,7 +113,10 @@ and the native weak corpus remain outside this qualification.
 
 Managed GC-request checks cover the [canonical owned-free path](c-finalizers.md).
 Actual collected raw `MutVar#` keys retire malloc storage after first compiled
-make/GC calls on AST and bytecode. Borrowed owners defer without waiting, including
+make/GC calls on AST and bytecode. Identity-key and raw `MVar#` controls also retire
+owned allocations on both backends. Retained pending or cancelled MVar requests
+keep their allocation and weak value alive until the request is dropped and its
+key collected. Borrowed owners defer without waiting, including
 with one Loom HEC; later requests retire them. Controls preserve canonical
 admission, callback promotion/newest-first order, explicit-finalize races,
 context cancellation and existing free/realloc alias rules. Both handoff modes
