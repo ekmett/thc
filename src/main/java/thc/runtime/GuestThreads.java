@@ -635,8 +635,9 @@ public final class GuestThreads {
         return pollMandatoryCurrentWithoutYield(node, interruptible);
     }
     private static boolean ordinaryMailboxUnpublished(Node node) {
-        // Prepared roots retain their runtime policy without context assumptions.
-        if (node != null && node.getRootNode() instanceof FunctionRoot function && function.usesRuntimeAsyncAdmission()) return false;
+        // Eager delivery and prepared roots retain polling without this speculation.
+        if (node != null && node.getRootNode() instanceof GuestRoot root &&
+                (root.getEagerAsyncPolls() || root instanceof FunctionRoot function && function.usesRuntimeAsyncAdmission())) return false;
         return current(node).noAsyncRequestPublished.isValid();
     }
     private static AsyncRequest pollMandatoryCurrentWithoutYield(Node node, boolean interruptible) {
