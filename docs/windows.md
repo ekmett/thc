@@ -117,6 +117,13 @@ unknown metadata without inferred aggregate shapes. The whole class runs in
 both handoff modes; these shared model checks do not qualify backend execution,
 compiled calls or GHC export.
 
+Two public CBD diagnostic controls use the selected Haskell model encoder.
+Strict and diagnostic loading leave an unsupported cold definition lazy until
+demand; diagnostic mode preserves the first installed call before the cold trap
+and rejects invalid host shapes, including unused formals. The whole class runs
+on AST and bytecode in both handoff modes. These synthetic models do not qualify
+original GHC exports or installed-Core acquisition.
+
 Two public-manifest loader checks use model CBDs from the selected Haskell
 encoder. Cold references leave other units unopened; first demand decodes the
 binding once and subsequent calls reuse it. A bad demanded unit fails without
