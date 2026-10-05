@@ -442,11 +442,9 @@ extra-source-files:
   t/fixtures/compiler/WindowsBridgeAudit.hs
   t/fixtures/compiler/OriginalErrnoAudit.hs
   t/fixtures/compiler/OriginalErrnoNative.hs
-  t/fixtures/compiler/OriginalProcessIdentityAudit.hs
   t/fixtures/compiler/ProcessLifecycleAudit.hs
   t/fixtures/process-lifecycle/Main.hs
   t/fixtures/process-lifecycle/sigchld-policy.c
-  t/fixtures/compiler/OriginalProcessIdentityNative.hs
   t/fixtures/compiler/OriginalOpenRequestNative.hs
   t/fixtures/compiler/OriginalSavedTermiosAudit.hs
   t/fixtures/compiler/OriginalSavedTermiosNative.hs
