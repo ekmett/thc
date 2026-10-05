@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
+import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -11,7 +12,7 @@ import java.util.HashMap;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-/** Collect actionless identity registrations; dependent payloads and callbacks remain explicit-only. */
+/** Collect actionless identity/MutVar-key registrations; actions and callbacks remain explicit-only. */
 public final class ManagedWeaks {
     private static final class Handle {
         final ManagedWeaks owner;
@@ -21,17 +22,32 @@ public final class ManagedWeaks {
         final Handle handle;
         Object key, value;
         final Object action;
+        final boolean mutVarValue;
         final ArrayList<Runnable> callbacks = new ArrayList<>();
         Payload(Handle handle, Object key, Object value, Object action, ReferenceQueue<Object> queue) {
-            super(action == null && key == value ? key : null, queue);
+            super(action == null && (key == value || key instanceof ManagedMutVar) ? key : null, queue);
             this.handle = handle; this.action = action;
-            // A null strong key denotes identity-only ownership: the one weak
-            // referent supplies both key and value, with no dependent payload.
-            if (action != null || key != value) { this.key = key; this.value = value; }
+            mutVarValue = action == null && key != value && key instanceof ManagedMutVar;
+            if (mutVarValue) ((ManagedMutVar) key).retainWeakValue(handle, value);
+            else if (action != null || key != value) { this.key = key; this.value = value; }
         }
         Object key() { return key == null ? get() : key; }
+        Object value(Object retainedKey) {
+            Object result = key != null ? value : retainedKey == null ? null
+                : mutVarValue ? ((ManagedMutVar) retainedKey).weakValue(handle) : retainedKey;
+            Reference.reachabilityFence(retainedKey);
+            return result;
+        }
+        void detach() {
+            if (mutVarValue && key == null && get() instanceof ManagedMutVar cell) cell.releaseWeakValue(handle);
+        }
         void addCallback(Object retainedKey, Runnable callback) {
-            if (key == null) { key = retainedKey; value = retainedKey; clear(); }
+            if (key == null) {
+                value = value(retainedKey);
+                key = retainedKey; // Retain both before detaching key-owned storage.
+                if (mutVarValue) ((ManagedMutVar) retainedKey).releaseWeakValue(handle);
+                clear();
+            }
             callbacks.add(0, callback); // RTS prepends: explicit finalize visits newest first.
         }
     }
@@ -66,7 +82,7 @@ public final class ManagedWeaks {
     @TruffleBoundary public synchronized WeakResult dereference(Object value) {
         var handle = handle(value);
         var payload = live.get(handle);
-        Object result = payload == null ? null : payload.key == null ? payload.get() : payload.value;
+        Object result = payload == null ? null : payload.value(payload.key());
         if (result == null) { live.remove(handle); return DEAD; }
         return new WeakResult(1L, result);
     }
@@ -99,7 +115,10 @@ public final class ManagedWeaks {
     @TruffleBoundary public WeakResult finalize(Object value) {
         // Publish DEAD before calling C; neither Sulong nor guest code runs under this monitor.
         Payload payload;
-        synchronized (this) { payload = live.remove(handle(value)); }
+        synchronized (this) {
+            payload = live.remove(handle(value));
+            if (payload != null) payload.detach();
+        }
         if (payload == null) return DEAD;
         for (var callback : payload.callbacks) callback.run();
         return payload.action == null ? DEAD : new WeakResult(1L, payload.action);
@@ -129,7 +148,9 @@ public final class ManagedWeaks {
     }
     public synchronized int retainedCount() { reap(); return live.size(); }
     public synchronized void close() {
-        closed = true; live.clear();
+        closed = true;
+        for (var payload : live.values()) payload.detach();
+        live.clear();
         while (collected.poll() != null) { /* Release queued registrations too. */ }
     }
     public static ManagedWeaks current(Node node) { return Language.currentState(node).getWeaks(); }
