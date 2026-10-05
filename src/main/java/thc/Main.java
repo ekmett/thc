@@ -138,6 +138,14 @@ public final class Main {
         return new VerifiedArguments(selected.toArray(String[]::new), verify, interfaceHelper);
     }
 
+    /**
+     * Whether an IO launch reports its runtime metrics. The metrics are collected only
+     * then: their counters are shared by every guest thread, and incrementing them on
+     * each loop iteration costs a hot multi-threaded program measurable time for a
+     * report nobody asked for.
+     */
+    static boolean launcherDiagnostics() { return Boolean.getBoolean("thc.diagnostics"); }
+
     public static void launch(String[] arguments) {
         var withVerification = launcherArtifactVerification(arguments);
         String[] args = withVerification.arguments();
@@ -148,9 +156,9 @@ public final class Main {
             var guest = launcherArguments(args, 4);
             try (Context context = executionContext(true, interfaceHelper)) {
                 initializeArguments(context, guest);
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], launcherDiagnostics(), defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
-                if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
+                if (launcherDiagnostics()) System.err.println(action.getMember("diagnostics").asString());
             }
             return;
         }
@@ -159,9 +167,9 @@ public final class Main {
             var guest = launcherArguments(args, 3);
             try (Context context = executionContext(true, interfaceHelper)) {
                 initializeArguments(context, guest);
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], launcherDiagnostics(), defaultBackend(), true, null, configuredAsyncExceptions(), verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "IO main did not complete");
-                if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
+                if (launcherDiagnostics()) System.err.println(action.getMember("diagnostics").asString());
             }
             return;
         }

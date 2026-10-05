@@ -28,6 +28,19 @@ class NativeContextTest {
         }
     }
 
+    @Test void launcherCollectsMetricsOnlyWhenDiagnosticsAreRequested() {
+        var previous = System.getProperty("thc.diagnostics");
+        try {
+            System.clearProperty("thc.diagnostics");
+            assertFalse(Main.launcherDiagnostics());
+            System.setProperty("thc.diagnostics", "true");
+            assertTrue(Main.launcherDiagnostics());
+        } finally {
+            if (previous == null) System.clearProperty("thc.diagnostics");
+            else System.setProperty("thc.diagnostics", previous);
+        }
+    }
+
     @Test void explicitPolyglotPropertiesOverrideLauncherCompilerDefaults() {
         for (var option : new String[] {"engine.SingleTierCompilationThreshold",
                 "compiler.CompilationTimeout", "compiler.MaximumGraalGraphSize"}) {
