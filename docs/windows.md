@@ -206,6 +206,13 @@ One bytecode continuation check resumes a caller after two child suspensions,
 memoizes the child's guest failure and preserves its payload on later demand
 without replaying either prefix. It does not qualify compiled execution.
 
+A fixture-free [GHC BCO](ghc-bco.md) spark check shares the original updating AP
+and resumes cancelled workers without replaying completed effects on AST and
+bytecode, with explicit platform and Loom hosting in both handoff modes.
+Related continuation controls retain captured application cuts, updates, pending
+apply and overapplication arguments. These checks do not qualify BCO JIT
+execution, the whole BCO suite or GHC/exporter parity.
+
 One fixture-free literal check preserves Int8/Word8 values with absent or unknown
 proofs on AST and bytecode, rejects malformed metadata and out-of-range values,
 and keeps ordinary machine literals nonnarrow. It does not qualify compiled
