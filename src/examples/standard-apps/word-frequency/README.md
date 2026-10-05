@@ -44,9 +44,25 @@ LLVM 21, use `export PATH="$(brew --prefix llvm@21)/bin:$PATH"`.
 This example uses only the GHC-pinned base, bytestring, text, and containers
 packages; it adds no native dependencies of its own.
 
-The pinned-provider application has been compared with native GHC on macOS
-arm64 in both AST and bytecode backends and both handoff modes. Multi-file Unicode
-counts match; empty input, missing files, invalid UTF-8 and usage exits were also
-checked. These checks do not establish large-input performance. Running this
-application from a complete retained-Core installation with `--installed-core
-required` remains to be qualified in [#1059](https://github.com/ekmett/thc/issues/1059).
+With matching GHC libraries that retain complete Core, select that installation:
+
+```sh
+"$THC_DRIVER" run exe:word-frequency \
+  --project-dir "$THC_ROOT/src/examples/standard-apps/word-frequency" \
+  --thc-root "$THC_ROOT" --dist-dir "$THC_ROOT/build/word-frequency-required" \
+  --with-ghc "$CORE_GHC" --with-ghc-pkg "$CORE_GHC_PKG" \
+  --installed-core required -- \
+  "$THC_ROOT/src/examples/standard-apps/word-frequency/sample.txt"
+```
+
+Set `CORE_GHC` and `CORE_GHC_PKG` to the compiler and package manager for the same
+complete-Core installation; see [library Core setup](../../../../docs/ghc-core.md).
+
+Both acquisition routes have been compared with native GHC on macOS arm64 in
+both AST and bytecode backends and both handoff modes. Multi-file Unicode counts
+match; empty input, missing files, invalid UTF-8 and usage exits were also checked.
+The required-provider run selected a registered view of the pinned libraries
+built with retained Core, preserving their matching native library registration.
+These checks do not establish large-input performance or native Windows package
+acquisition. The application milestone is tracked in
+[#1059](https://github.com/ekmett/thc/issues/1059).
