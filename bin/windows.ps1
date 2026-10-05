@@ -69,6 +69,7 @@ try {
             'thc.runtime.ScalarBitCastTest.typedNodesKeepRawBitsAndNeverUseBoxedOperandExecution',
             'thc.ThreadedThunkTest.sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk',
             'thc.ThreadedThunkTest.disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker',
+            'thc.runtime.AdaptiveAsyncTest.firstExternalRequestReachesRequestFreeCompiledConcurrentLoop',
             'thc.runtime.ManagedWeakTest.identityOnlyGuestWeaksCollectWhileLiveKeysAndFirstCompiledCallsPreserveIdentity',
             'thc.runtime.ManagedWeakTest.mutVarKeyValueBackReferencesCollectOnFirstCompiledCalls',
             'thc.runtime.ManagedWeakTest.liveMutVarKeysRetainDroppedRegistrationsUntilDetached',
