@@ -24,16 +24,19 @@ them. The Haskell action is never executed by the primitive itself.
 
 A single canonical current-context `free` on an actionless registration with
 identical key/value carriers, or a raw managed `MutVar#` or `MVar#` key, has a
-[cooperative retirement path](weak-explicit.md). Only a direct owned malloc
-base or null qualifies; the registration retains the native Owner rather than
-the address, function provider or guest payload. Existing managed GC requests
-claim the dead weak and attempt deallocation outside the weak lock. Borrowed or
-currently freeing owners remain pending for a later request, without waiting.
-Explicitly retired owners consume their stale automatic token without another
-free. Explicit free/finalization keep their existing freed-alias errors. A second
-callback promotes the original key/value to explicit ownership and preserves
-newest-first order. Context close discards pending tokens and disposes remaining
-native allocations. Background JVM collection alone does not execute callbacks.
+[automatic malloc retirement path](weak-explicit.md). Only a direct owned
+malloc base or null qualifies. The registration and JDK Cleaner action weakly
+reference the Owner; neither retains the address, function provider, context or
+guest payload. JVM collection can trigger the paired raw native free without a
+managed GC request. Busy borrows or existing free/realloc reservations latch
+pending work, retried at completion without blocking or another collection.
+Explicitly retired owners consume stale tokens without replay; explicit
+free/finalization preserve freed-alias errors. A second callback disarms cleanup
+and promotes the exact key/value to strong ownership with newest-first order.
+Context close disarms registrations and disposes remaining allocations. There
+is no abandoned-context reclamation guarantee. Arena-close/downcall failures
+are retained and terminal as described in the weak guide; Windows LocalFree and
+arbitrary Haskell/package callbacks remain outside automatic retirement.
 
 Package-owned one-address finalizers use a separate typed admission path. The
 exporter retains the actual stock `CLabel` declaration, its declared and

@@ -25,9 +25,10 @@ heap/collector counters are not relabeled as GHC allocated/copied/live bytes.
 
 After each managed GC request, its admitted caller also attempts the narrowly
 eligible [canonical owned-free registrations](weak-explicit.md). The weak is
-DEAD before the native effect, and busy native borrows defer retirement until a
-later request without blocking the guest or a Loom HEC. This does not guarantee
-collection, retirement before return, or background finalizer execution. Haskell
+DEAD before the native effect. Busy native borrows or free/realloc reservations
+defer retirement until completion without blocking the guest or a Loom HEC.
+JDK Cleaner also attempts this restricted retirement after collection without a
+managed GC request; no request guarantees collection or retirement before return. Haskell
 actions and package callbacks remain explicit-only. Statistics and clock queries
 do not drain weak registrations.
 

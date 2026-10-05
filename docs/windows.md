@@ -117,11 +117,13 @@ make/GC calls on AST and bytecode. Identity-key and raw `MVar#` controls also re
 owned allocations on both backends. Retained pending or cancelled MVar requests
 keep their allocation and weak value alive until the request is dropped and its
 key collected. Borrowed owners defer without waiting, including
-with one Loom HEC; later requests retire them. Controls preserve canonical
+with one Loom HEC. Controls preserve canonical
 admission, callback promotion/newest-first order, explicit-finalize races,
 context cancellation and existing free/realloc alias rules. Both handoff modes
-pass. Background JVM collection alone does not dispatch frees; arbitrary
-Haskell/package callbacks and GHC/exporter parity remain unqualified.
+pass. The [automatic malloc cleanup contract](weak-explicit.md) additionally
+permits retirement without a managed GC request; these recorded checks do not
+qualify that standalone collection behavior. Arbitrary Haskell/package callbacks
+and GHC/exporter parity remain unqualified.
 
 Three fixture-free empty-join controls check ordered zero-width effects, no
 destination writes on failure, logical arity and state-contract rejection.

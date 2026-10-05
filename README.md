@@ -139,7 +139,7 @@ thunks retain their unfinished work. Ordinary evaluation bounds nested calls
 and forcing through saved continuations. Load requests and ordinary executable
 launches default to async off on both backends: off speculates on a single guest
 admission origin until guest concurrency is admitted. Explicit async opt-in
-enables polling immediately. Delimited capture across STM, automatic weak finalization and GC-driven
+enables polling immediately. Delimited capture across STM, general automatic weak finalization and GC-driven
 deadlock detection remain unsupported.
 
 The public [`thc:runtime` API](docs/runtime-services.md) exposes permissions,

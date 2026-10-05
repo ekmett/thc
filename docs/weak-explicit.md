@@ -24,7 +24,8 @@ cancellation alone does not make the cell unreachable.
 
 One canonical THC-owned `free` callback can leave an actionless registration
 collectible when its key and value are identical, or its key is a raw managed
-`MutVar#` or `MVar#`. It retains only a direct malloc owner (or null), permitting
+`MutVar#` or `MVar#`. It holds only a weak reference to a direct malloc owner
+(or null), permitting
 the same key-owned distinct lazy values described above. The original
 function label must belong to the current context; a constructed same-symbol
 label, returned-address wrapper, second callback or generic callback remains
@@ -32,17 +33,32 @@ explicit-only. Attaching any such callback to a live collectible registration
 atomically restores strong retention of its exact key and value. Callback order
 remains newest first. Attaching to an already collected registration returns 0.
 
-After each original `performGC`, `performMajorGC` or `performBlockingMajorGC`
-request, the admitted guest caller attempts pending eligible owned frees. The
-weak becomes DEAD before deallocation. A busy native borrow or concurrent
-explicit retirement defers that token until a later managed GC request; the
-attempt never waits for a borrow, including with one Loom HEC. An owner already
-retired by explicit free or realloc consumes its stale token without another
-native call. Ordinary free and explicit finalization still reject freed aliases.
-A failing attempted token is consumed rather than replayed. Observing a dead
-weak through another weak operation preserves its pending free. JVM collection
-alone does not dispatch these frees, and a managed GC request does not guarantee
-collection or completion of deferred retirement.
+JVM collection can retire this malloc storage without a guest GC request or
+another weak operation. A standard JDK Cleaner action holds only a weak Owner
+reference and an armed flag; it retains no context, key, value, address or
+function provider. The context's allocation registry owns the live allocation.
+The action invokes only the already-paired raw native free, outside weak and
+allocation registry locks; it executes no guest or package callback. A collected
+key makes its weak DEAD before the native effect. Collection and cleanup timing
+remain nondeterministic, including in idle contexts.
+
+Cleanup never waits for native borrows or an explicit free/realloc reservation,
+including with one Loom HEC. It latches pending retirement and retries when the
+last borrow or reservation completes, without requiring another collection.
+Managed `performGC`, `performMajorGC` and `performBlockingMajorGC` calls retain
+their opportunistic drain but guarantee neither collection nor completion.
+An owner already retired by explicit free or realloc consumes a stale token
+without another native call. Ordinary free and explicit finalization still
+reject freed aliases. Promotion and explicit finalization disarm cleanup before
+releasing the key; an already collected registration preserves pending work.
+
+Malloc retirement invalidates its shared arena before invoking raw free. If
+arena close fails, native free is not invoked and storage may leak. An uncertain
+native effect is terminal and never replayed. Background failures are retained
+and reported by subsequent address access, explicit free/address recovery or
+context disposal. Successful retirement removes the Owner from the allocation
+registry. Windows LocalFree retains its existing separate failure contract and
+is ineligible for this automatic route.
 
 Distinct-value registrations with other key carriers, and all registrations
 with a Haskell action or other attached C callbacks, strongly retain their keys and
@@ -66,15 +82,18 @@ tuple fields are retained. Malformed arity, representations, lifted flags and
 contradictory lexical proofs are rejected. The runtime checks opaque handle
 identity and context ownership. Closing a context invalidates its handles and
 releases registry references without executing outstanding Haskell finalizers.
-Pending owned-free tokens are discarded; native allocation disposal releases
-any remaining owned storage after admitted guest operations have stopped.
+Owned-free cleanup registrations are disarmed before keys are released; native
+allocation disposal releases remaining owned storage after admitted guest
+operations have stopped. Cleanup weakly references its Owner and does not
+promise reclamation of an abandoned, unclosed context; deterministic context
+close remains the resource-lifetime contract.
 Host cancellation is not claimed to guarantee execution of a returned action.
 
 `addCFinalizerToWeak#` admits only [source-certified one-argument C labels
 and owned `free` bases](c-finalizers.md). Explicit `finalizeWeak#` runs their
 callbacks outside the registry lock before returning the Haskell action.
-The eligible owned-free path above is cooperative native resource retirement;
-Haskell actions and package callbacks still require explicit finalization. There
-is no automatic GC finalizer thread, Java Cleaner, general ephemeron collection
-or heap walk. Identity and actionless `MutVar#`/`MVar#` collection do not establish
+The eligible owned-free path above provides automatic malloc retirement through
+JDK Cleaner; Haskell actions and package callbacks still require explicit
+finalization. There is no general callback executor, ephemeron collection or
+heap walk. Identity and actionless `MutVar#`/`MVar#` collection do not establish
 bounded-memory reclamation for other keys or general registrations with finalizers.
