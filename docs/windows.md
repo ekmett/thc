@@ -213,6 +213,49 @@ PowerShell helpers treat native exit codes as authoritative. An ordinary
 compiler message on stderr is not a failed native command. Failed commands
 still stop the workflow.
 
+## Spark hosting checks
+
+The four sharing and lifecycle methods above also run under Loom on native
+Windows in both handoff modes, retaining their AST and bytecode cases. Only the
+sharing method establishes first compiled hint execution. Cancellation checks
+managed admission, the worker's hosting policy, acknowledgement, termination and
+resumption without replaying its effect; it also runs under explicit platform
+hosting. This does not qualify the whole concurrency suite or a parallel speedup.
+
+With the pinned tools selected, run these fixture-free checks sequentially in
+an owned checkout with no other build running. Preserve each hosting's XML before
+the next invocation replaces the ordinary task reports:
+
+~~~powershell
+. ./bin/windows-common.ps1
+$sparkChecks = @(
+    'thc.ThreadedThunkTest.sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk',
+    'thc.ThreadedThunkTest.sparkedGuestFailureIsDeferredAndDoesNotStopUnrelatedWork',
+    'thc.ThreadedThunkTest.cancellingSparkWorkerLeavesTheSameThunkResumableWithoutReplayingItsEffect',
+    'thc.ThreadedThunkTest.disposingSparkContextStopsClaimedWorkAndDiscardsUnstartedHints'
+)
+$savedToolOptions = $env:JAVA_TOOL_OPTIONS
+try {
+    foreach ($hosting in @('loom', 'platform')) {
+        $env:JAVA_TOOL_OPTIONS = "$savedToolOptions -Dpolyglot.thc.ThreadHosting=$hosting".Trim()
+        $selection = if ($hosting -eq 'loom') { $sparkChecks } else { @($sparkChecks[2]) }
+        $arguments = @('--no-daemon', '--max-workers=4', '--continue')
+        foreach ($mode in @('testDefault', 'testDense')) {
+            $arguments += @($mode, '--rerun')
+            foreach ($test in $selection) { $arguments += @('--tests', $test) }
+        }
+        Invoke-ThcTool "$PWD/gradlew.bat" $arguments
+        foreach ($mode in @('testDefault', 'testDense')) {
+            $reportPath = "build/test-results/$mode/TEST-thc.ThreadedThunkTest.xml"
+            Copy-Item -LiteralPath $reportPath -Destination "build/test-results/$hosting-$mode.xml"
+        }
+    }
+} finally {
+    if ($null -eq $savedToolOptions) { Remove-Item Env:JAVA_TOOL_OPTIONS -ErrorAction SilentlyContinue }
+    else { $env:JAVA_TOOL_OPTIONS = $savedToolOptions }
+}
+~~~
+
 ## Native export and launch
 
 The word-floating, scalar-bitcasts, bit, signed-narrow and explicit64 producers

@@ -46,7 +46,8 @@ allow thread creation. The worker uses the selected platform or Loom hosting.
 For the installed launcher, pass `-Dpolyglot.thc.SparkQueueCapacity=1` in
 `JAVA_OPTS`; the ordinary launcher contexts allow thread creation.
 Loom worker sharing, deferred failures, cancellation/resumption and disposal have
-been checked on macOS with both backends and handoff modes. Broader workloads
+been checked on macOS and native Windows with both backends and handoff modes.
+See the [bounded Windows checks](windows.md#spark-hosting-checks). Broader workloads
 remain experimental.
 It evaluates original shared thunks to WHNF through ordinary `Force`; demand
 shares the same publication rather than starting a copied computation.
