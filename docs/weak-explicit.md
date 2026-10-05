@@ -12,16 +12,27 @@ the registry releases the dead entry during a subsequent weak operation.
 Collector timing remains a JVM decision, and a GC request does not guarantee
 collection before returning.
 
-Attaching a supported C callback to a still-live identity registration atomically
-restores strong retention before the callback can run. Attaching to an already
+An actionless registration without C callbacks also supports a distinct value
+when its key is the raw managed `MutVar#` carrier. The key owns that registration's
+original lazy value, while the registry holds the key weakly. A live key retains
+its value even if the `Weak#` handle is dropped. An otherwise unrooted value that
+refers back to its key does not keep that cycle alive. Registration and
+dereference do not force either carrier. Explicit finalization and context close
+detach each registration's value from its key.
+
+Attaching a supported C callback to either kind of still-live collectible
+registration atomically restores strong retention of its exact key and value
+before the callback can run. Attaching to an already
 collected registration returns 0. Callbacks remain explicit-only: collection
 never executes C callbacks or Haskell actions.
 
-Registrations with a distinct value, a Haskell action, or attached C callbacks
-strongly retain their keys and payloads until explicit finalization or context
-close. Dropping the `Weak#` does not erase a live registration. This is **not
-ephemeron support**: a retained value or action can refer back to its key, and
-those otherwise unreachable cycles can remain for the context's entire lifetime.
+Distinct-value registrations with other key carriers, and all registrations
+with a Haskell action or attached C callbacks, strongly retain their keys and
+payloads until explicit finalization or context close. Dropping the `Weak#` does
+not erase a live registration. General ephemeron support remains absent:
+otherwise unreachable cycles through these retained values or actions can remain
+for the context's entire lifetime. The `MutVar#` path recognizes only the raw
+carrier; it does not force a lifted key or unwrap an `IORef` box.
 
 Finalization atomically marks the registration dead and drops its payload from
 the registry. It returns the actual Haskell action with flag 1; it does not call
@@ -43,5 +54,5 @@ Host cancellation is not claimed to guarantee execution of a returned action.
 and owned `free` bases](c-finalizers.md). Explicit `finalizeWeak#` runs their
 callbacks outside the registry lock before returning the Haskell action. There
 is no automatic GC finalizer thread, Java Cleaner, general ephemeron collection
-or heap walk. Identity-only collection does not provide bounded-memory
-reclamation for registrations with dependent payloads or callbacks.
+or heap walk. Identity and actionless `MutVar#` collection do not establish
+bounded-memory reclamation for other keys or registrations with finalizers.
