@@ -284,11 +284,17 @@ prepareInstalledDemand :: InstalledContext -> [InstalledUnit] -> IO ([Value], Ma
 prepareInstalledDemand _ [] = pure ([], Map.empty)
 prepareInstalledDemand context requested = do
   units <- probeClosures context requested
-  let databases = nub (installedLibdirGlobalDb context : helperDatabases context)
-      paths = nub ([installedHelper context, installedLibdir context </> "settings"] ++
+  helper <- canonicalizePath (installedHelper context)
+  libdir <- canonicalizePath (installedLibdir context)
+  dbs <- mapM canonicalizePath (helperDatabases context)
+  global <- canonicalizePath (installedLibdirGlobalDb context)
+  let databases = nub (global : dbs)
+      paths = nub ([helper, libdir </> "settings"] ++
         map (</> "package.cache") databases ++ concatMap (map snd . installedInterfaces) units)
       observe = forM paths $ \path -> do
-        absolute <- canonicalizePath path
+        -- Snapshot the path the helper consumes. Resolving a linked settings
+        -- or package.cache file loses both view membership and later retargets.
+        absolute <- makeAbsolute path
         bytes <- withBinaryFile absolute ReadMode $ \handle ->
           evaluate . SHA.hashlazy =<< BL.hGetContents handle
         let digest = concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value) (BS.unpack bytes)
@@ -299,10 +305,6 @@ prepareInstalledDemand context requested = do
   after <- observe
   unless (before == after) (fail "installed inputs changed during demand inventory")
   checkProbeRegistrations context units
-  helper <- canonicalizePath (installedHelper context)
-  libdir <- canonicalizePath (installedLibdir context)
-  dbs <- mapM canonicalizePath (helperDatabases context)
-  global <- canonicalizePath (installedLibdirGlobalDb context)
   records <- fmap concat $ forM requested $ \unit -> do
     let selected = [row | row <- rows, valueAt row "unit" == Just (registeredId unit)]
     if null selected || any (\row -> valueAt row "demandEligible" /= Just True) selected

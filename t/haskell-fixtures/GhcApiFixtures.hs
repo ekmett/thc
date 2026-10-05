@@ -36,7 +36,7 @@ import qualified GHC.Unit.Module.WholeCoreBindings as Foreign
 import FixtureSupport
 import GhcApiAudit (ghcApiOptions, ghcApiAuditArguments, ghcApiAuditEvidence)
 import InstalledCoreFixtures (field, readJson)
-import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeFile)
+import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, createDirectoryLink, createFileLink, doesDirectoryExist, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
@@ -228,7 +228,7 @@ recordFieldsDemandInventory root "annotations" destination = do
         pure (label, Map.member unitId units)
   writeJson destination (toJSON (Map.fromList observations :: Map.Map String Bool))
 recordFieldsDemandInventory root mode destination = do
-  unless (mode `elem` ["full", "thin"]) (die "record-fields-demand-inventory expects full or thin")
+  unless (mode `elem` ["full", "thin", "linked-toolchain"]) (die "record-fields-demand-inventory expects full, thin or linked-toolchain")
   tools <- readJson (root </> "build/record-fields-demand/tools.json")
   ghc <- field tools "ghc"
   pkg <- field tools "ghcPkg"
@@ -236,8 +236,23 @@ recordFieldsDemandInventory root mode destination = do
   let compiler = object ["id" .= ("ghc-9.14.1" :: String), "abi" .= ("fixture" :: String),
                         "platform" .= (Host.arch ++ "-" ++ Host.os)]
   selected <- Installed.installedContext ghc pkg helper
-    [root </> "build/record-fields-demand" </> mode </> "package.conf.d"] compiler
-  let context = selected { Installed.installedInterfaceWay = Installed.VanillaInterfaces }
+    [root </> "build/record-fields-demand" </> (if mode == "thin" then "thin" else "full") </> "package.conf.d"] compiler
+  libdir <- if mode /= "linked-toolchain" then pure (Installed.installedLibdir selected) else do
+    -- A retained-Core view links settings from the underlying GHC installation.
+    -- Keep a private target so the JVM can check a changed link after publication.
+    let view = takeDirectory destination </> "lib"
+        original = Installed.installedLibdir selected
+        settings = takeDirectory destination </> "settings"
+    createDirectoryIfMissing True view
+    copyFile (original </> "settings") settings
+    names <- listDirectory original
+    forM_ names $ \name -> do
+      let target = if name == "settings" then settings else original </> name
+      isDirectory <- doesDirectoryExist target
+      (if isDirectory then createDirectoryLink else createFileLink) target (view </> name)
+    pure view
+  let context = selected { Installed.installedInterfaceWay = Installed.VanillaInterfaces,
+                           Installed.installedLibdir = libdir }
   unit <- Installed.discoverInstalled context "thc-record-demand-0.1"
   (inputs, units) <- Installed.prepareInstalledDemand context [unit]
   unless (Map.member (Installed.registeredId unit) units)
