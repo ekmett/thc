@@ -240,6 +240,67 @@ class ManagedWeakTest {
             } finally { threads.leaveCurrent(); context.leave(); }
         }
     }
+    private Registration droppedOwnedIdentityFree(ExecutableProgram program, ReferenceQueue<Object> queue,
+            ManagedAddress address) {
+        var key = new Object(); var weak = makeIdentity(program, key);
+        var state = Language.currentState();
+        assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"),
+            address, 0L, weak, state.cbits()));
+        var registration = new Registration(weak, new WeakReference<>(key, queue));
+        Reference.reachabilityFence(key); return registration;
+    }
+    @Test
+    void ownedFreeRetiresCollectedIdentityKeysAtManagedGcRequests() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            var state = Language.currentState(); var threads = state.getThreads();
+            threads.enterCurrent(null, false, true, null);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = weakProgram(language, backend, false); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
+                var address = state.getNativeAllocations().malloc(8); var alias = address.plus(1);
+                var queue = new ReferenceQueue<Object>(); var dropped = droppedOwnedIdentityFree(program, queue, address);
+                assertDoesNotThrow(() -> collect(queue, dropped.referent()), backend + " identity key");
+                assertEquals(0L, observeIdentity(program, dropped.weak())); requestGc(gc);
+                assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
+                assertEquals(0L, state.getWeaks().finalize(dropped.weak()).getFlag()); requestGc(gc);
+                assertThrows(RuntimeFault.class, () -> state.getNativeAllocations().free(address));
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+    @Test
+    void ownedFreeWaitsForRetainedMVarRequestsBeforeRetiringCollectedKeys() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            var state = Language.currentState(); var threads = state.getThreads();
+            threads.enterCurrent(null, false, true, null);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = state.getWeaks(); var allocations = state.getNativeAllocations();
+                var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, GcForeignOp.MINOR);
+                var address = allocations.malloc(8); address.writeWord8(0, 73); var alias = address.plus(1);
+                var key = new ManagedMVar(); var request = key.beginRead(); var value = new ManagedMutVar(key);
+                var weak = ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"),
+                    new Object[]{0L, key, value, Unit.INSTANCE});
+                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, weak, state.cbits()));
+                var queue = new ReferenceQueue<Object>(); var keyReference = new WeakReference<Object>(key, queue);
+                var valueReference = new WeakReference<>(value); key = null; value = null;
+                collect(queue, gcWitness(queue)); requestGc(gc);
+                assertNotNull(keyReference.get(), "A pending request owns its MVar and native lifetime");
+                assertSame(valueReference.get(), registry.dereference(weak).getValue());
+                assertEquals(73L, address.readWord8(0)); assertTrue(request.cancel());
+                collect(queue, gcWitness(queue)); requestGc(gc);
+                assertNotNull(keyReference.get(), "A retained cancelled request still owns its MVar");
+                assertSame(valueReference.get(), registry.dereference(weak).getValue());
+                assertEquals(73L, address.readWord8(0)); Reference.reachabilityFence(request); request = null;
+                assertDoesNotThrow(() -> collect(queue, keyReference), backend + " MVar key");
+                assertNull(valueReference.get()); assertEquals(0L, registry.dereference(weak).getFlag()); requestGc(gc);
+                assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
+                assertEquals(0L, registry.finalize(weak).getFlag()); requestGc(gc);
+                assertThrows(RuntimeFault.class, () -> allocations.free(address));
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
     @Test
     void ownedFreeDefersBorrowedAllocationsUntilAnotherManagedGcRequest() throws Exception {
         for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
@@ -278,7 +339,7 @@ class ManagedWeakTest {
             try {
                 var registry = state.getWeaks(); var allocations = state.getNativeAllocations();
                 var address = allocations.malloc(8); address.writeWord8(0, 37);
-                var key = new ManagedMutVar(Unit.INSTANCE); var keyReference = new WeakReference<>(key);
+                var key = new ManagedMVar(); var keyReference = new WeakReference<>(key);
                 var value = new ManagedMutVar(key); var valueReference = new WeakReference<>(value);
                 var weak = registry.make(key, value, null);
                 assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, weak, state.cbits()));
