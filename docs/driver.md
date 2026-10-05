@@ -300,6 +300,11 @@ and bundles.
 
 ## Run real applications
 
+The [word-frequency example](../src/examples/standard-apps/word-frequency/README.md)
+is a small ordinary Cabal application using ByteString, Text and Map. Its recipe
+works with the default pinned provider and compares file IO, Unicode output and
+error exits against native GHC.
+
 These Linux x86_64 examples run **Happy 2.2.1**, **HsColour 1.25** and
 **Alex 3.5.4.2** inside THC using bytecode and the executable startup/shutdown
 protocol. The commands demonstrate these workloads; other applications may
