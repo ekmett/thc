@@ -75,8 +75,10 @@ itself. Do not run duplicate image builders.
 `THC_NATIVE_IMAGE_BUILDER_HEAP` selects an explicit builder budget of `8g`,
 `16g` or `32g`. Generic/cache mode defaults to 8 GiB and bound-executable mode
 to 16 GiB. The captured-Core application image exhausted 16 GiB during code
-generation; its 32 GiB construction remains under qualification. The choice is
-recorded in
+generation. A 32 GiB attempt passed that stage but failed when the pinned
+compiler lacked the generated `BytecodeRootGen$TagNode.findProbe` deoptimization
+method during compilation. No captured-Core native executable is qualified yet.
+The choice is recorded in
 `reproduction-inventory/builder-heap.args` and changes only builder `-J-Xmx`,
 not the produced executable's runtime heap, compilation limits or two compiler
 threads. Check host headroom before selecting the larger budget.

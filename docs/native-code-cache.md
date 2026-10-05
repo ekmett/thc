@@ -122,7 +122,8 @@ Its builder defaults to 16 GiB and two compiler threads; compiled-cache mode
 defaults to 8 GiB. `THC_NATIVE_IMAGE_BUILDER_HEAP=32g` permits a larger builder
 heap without changing the produced executable's runtime limits. The captured-Core
 application image exhausted the 16 GiB builder heap during code generation;
-the larger construction is not yet qualified.
+the 32 GiB attempt then failed on the generated `BytecodeRootGen$TagNode.findProbe`
+deoptimization method. Native executable construction remains unqualified.
 
 The executable capture defaults to synchronous AST preparation, so a plain
 argument array needs no properties object. Explicit `thc.backend` values other
