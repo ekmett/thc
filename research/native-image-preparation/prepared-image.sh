@@ -5,13 +5,13 @@
 # Retain normal compiler checks; separate from the pure-interpreter recipe.
 set -euo pipefail
 if (( $# < 1 || $# > 3 )); then
-    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only [BUILD_DIR]]' >&2
+    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only|executable-inputs [BUILD_DIR]]' >&2
     exit 2
 fi
 recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$1" && pwd)
 mode=${2:-build}
-case "$mode" in prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only) ;; *) exit 2 ;; esac
+case "$mode" in prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only|executable-inputs) ;; *) exit 2 ;; esac
 # Automatic vectorization is a process-wide compiler policy, independent of
 # explicit Vector API intrinsics. Apply it to image code and the runtime JIT.
 case "${THC_NATIVE_IMAGE_AUTOVECTORIZE:-false}" in
@@ -173,6 +173,13 @@ fi
 # during setup, after all features' registration hooks have completed.
 "$JAVA_HOME/bin/javac" -cp "$classpath" -d "$probe_dir" "$recipe_dir/PreparedInitializationFeature.java" "$recipe_dir/NativeLibraryCapture.java"
 classpath="$probe_dir:$classpath"
+if [[ "$mode" == executable-inputs ]]; then
+    # Reuse hosted selection on the JVM before paying for image construction.
+    # This records current loader choices; it never executes or prepares guest code.
+    exec "$JAVA_HOME/bin/java" "-Xmx$builder_heap" -XX:-UseJVMCICompiler \
+        --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED \
+        -cp "$classpath" PreparedInitializationFeature "$inventory_dir/native-libraries.json"
+fi
 builder_overlays=
 foreign_patch=()
 if [[ "$vector_profile" == intrinsics ]]; then

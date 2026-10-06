@@ -18,6 +18,14 @@ public final class PreparedInitializationFeature implements Feature {
         return names.split(",");
     }
 
+    /** Discover the bound application's native inputs without building an image or running guest code. */
+    public static void main(String[] arguments) throws Exception {
+        if (arguments.length != 1) throw new IllegalArgumentException("NATIVE_LIBRARY_RECEIPT required");
+        var receipt = Path.of(arguments[0]);
+        Files.deleteIfExists(receipt);
+        thc.NativeExecutable.captureForImage(new NativeLibraryCapture(receipt)::capture);
+    }
+
     @Override public void duringSetup(DuringSetupAccess access) {
         try {
             var inventory = Path.of(System.getProperty("thc.nativeImage.initialization"));

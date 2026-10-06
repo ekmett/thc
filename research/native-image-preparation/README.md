@@ -93,6 +93,28 @@ directory is not required.
 bash research/native-image-preparation/prepared-image.sh "$PWD" prepare-only "$PWD/build/my-target"
 ```
 
+`executable-inputs` uses the same application binding, installed classpath and
+native provider selector as `executable`, but stops after writing
+`reproduction-inventory/native-libraries.json`. It runs on the JVM without
+constructing a Native Image, preparing guest code or executing native constructors.
+Use the same `THC_NATIVE_IMAGE_EXECUTABLE_CONFIG`,
+`THC_NATIVE_IMAGE_EXECUTABLE_NAME` and execution profile as the image build:
+
+```sh
+bash research/native-image-preparation/prepared-image.sh "$PWD" executable-inputs "$PWD/build/my-target"
+```
+
+The receipt ties each original companion digest and its direct ELF dependencies
+to the canonical provider paths and hashes actually selected by the host loader.
+It also retains provider dependency edges, tool identities and external system
+library observations. Repeated calls discover the current selection; they do not
+trust yesterday's provider paths. JVM discovery removes its prior receipt before
+selecting inputs; consume the new receipt only after the command succeeds.
+This is an input-discovery result, not proof of a completed or runnable image,
+and it does not enable image cache reuse. A complete image cache still needs the
+builder/toolchain and remaining recipe inputs, verified outputs, and a check that
+provider selection stayed the same between discovery and image construction.
+
 Each build directory needs one writer. On a shared host, hold its existing
 build-directory lease and check available capacity before starting an image
 builder. The script does not acquire a host-specific lock itself.
