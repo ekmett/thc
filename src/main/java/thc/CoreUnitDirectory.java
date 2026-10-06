@@ -29,6 +29,7 @@ public final class CoreUnitDirectory {
         public boolean getPackageScalarDeclarations() { return packageScalarDeclarations; }
         public String getPrefix() { return unit + ":" + name + "."; }
     }
+    private final Map<ModuleRecord,CoreHiReader> nativeInputs;
     private final List<UnitRecord> units;
     private final String foreignExceptionBridgeUnit;
     private final TargetLayout targetLayout;
@@ -36,12 +37,58 @@ public final class CoreUnitDirectory {
     private final Map<String,ModuleRecord> owners = new LinkedHashMap<>();
     private final Map<String,List<ModuleRecord>> aliases = new LinkedHashMap<>();
     private CoreUnitDirectory(List<UnitRecord> units, String foreignExceptionBridgeUnit, TargetLayout targetLayout) {
+        this(units, foreignExceptionBridgeUnit, targetLayout, Map.of());
+    }
+    private CoreUnitDirectory(List<UnitRecord> units, String foreignExceptionBridgeUnit, TargetLayout targetLayout,
+            Map<ModuleRecord,CoreHiReader> nativeInputs) {
+        this.nativeInputs = Map.copyOf(nativeInputs);
         this.units = units; this.foreignExceptionBridgeUnit = foreignExceptionBridgeUnit; this.targetLayout = targetLayout;
         modules = new ArrayList<>();
         for (var unit : units) for (var module : unit.modules) {
             modules.add(module); owners.put(module.getPrefix(), module);
             if (module.mainAlias) aliases.computeIfAbsent(MAIN_ALIAS, ignored -> new ArrayList<>()).add(module);
         }
+    }
+    /** Loose interfaces carry only their actual module identities, not a guessed
+     * package dependency graph. Immutable snapshots are shared with Sources;
+     * mutable declaration/lowering state belongs to each opened Sources. */
+    CoreUnitDirectory withNativeInputs(List<Artifact> files) {
+        if (files.isEmpty()) return this;
+        var paths = new HashSet<Path>();
+        for (var module : modules) paths.add(module.artifact().path());
+        var added = new LinkedHashMap<String,List<ModuleRecord>>();
+        var snapshots = new HashMap<>(nativeInputs);
+        var identities = new HashSet<>(owners.keySet());
+        try {
+            for (var artifact : files) {
+                Path path = artifact.path().toRealPath();
+                require(paths.add(path), "Duplicate native interface path: " + path);
+                byte[] bytes = java.nio.file.Files.readAllBytes(path);
+                require(CoreModules.sha256(bytes).equals(artifact.sha256()), "Native interface changed after request: " + path);
+                var reader = new CoreHiReader(bytes, path.toString());
+                String unit = reader.module.unit(), name = reader.module.name();
+                require(!unit.isEmpty() && !name.isEmpty() && identities.add(unit + ":" + name + "."),
+                        "Duplicate or invalid GHC module: " + unit + ":" + name);
+                // Accepted syntax proves no native/control/main startup obligations.
+                // This admission resolves no dependencies and lowers no bodies.
+                new CoreHiModule(reader);
+                var module = new ModuleRecord(unit, name, artifact.sha256(), new Artifact(path, artifact.sha256()),
+                        null, true, false, false, false, false);
+                added.computeIfAbsent(unit, ignored -> new ArrayList<>()).add(module);
+                snapshots.put(module, reader);
+            }
+        } catch (Exception failure) { return rethrow(failure); }
+        var combined = new ArrayList<UnitRecord>();
+        for (var unit : units) {
+            var extra = added.remove(unit.id());
+            if (extra == null) combined.add(unit);
+            else {
+                var selected = new ArrayList<>(unit.modules()); selected.addAll(extra);
+                combined.add(new UnitRecord(unit.id(), unit.depends(), List.copyOf(selected)));
+            }
+        }
+        added.forEach((id, selected) -> combined.add(new UnitRecord(id, List.of(), List.copyOf(selected))));
+        return new CoreUnitDirectory(List.copyOf(combined), foreignExceptionBridgeUnit, targetLayout, snapshots);
     }
     public List<UnitRecord> getUnits() { return units; }
     public String getForeignExceptionBridgeUnit() { return foreignExceptionBridgeUnit; }
@@ -101,10 +148,13 @@ public final class CoreUnitDirectory {
             if (cached != null) return cached;
             try {
                 var artifact = module.artifact();
-                byte[] bytes = java.nio.file.Files.readAllBytes(artifact.path());
-                require(CoreModules.sha256(bytes).equals(artifact.sha256()),
-                        "Native interface changed after publication: " + artifact.path());
-                var reader = new CoreHiReader(bytes, artifact.path().toString());
+                var reader = directory.nativeInputs.get(module);
+                if (reader == null) {
+                    byte[] bytes = java.nio.file.Files.readAllBytes(artifact.path());
+                    require(CoreModules.sha256(bytes).equals(artifact.sha256()),
+                            "Native interface changed after publication: " + artifact.path());
+                    reader = new CoreHiReader(bytes, artifact.path().toString());
+                }
                 reader.requireIdentity(module.unit(), module.name());
                 var admitted = new CoreHiModule(reader, id -> {
                     var dependency = directory.owner(id);

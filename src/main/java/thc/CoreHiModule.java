@@ -57,6 +57,7 @@ final class CoreHiModule {
             int offset = c.position(), tag = c.byteValue();
             c.require(tag == 0 || tag == 2, "unsupported native Core declaration tag " + tag);
             var name = CoreHiNames.read(reader, c);
+            c.require(!CoreHiNames.id(name).equals(CoreUnitDirectory.MAIN_ALIAS), "unsupported native Core main alias obligations");
             c.require(name.module().equals(reader.module), "declaration belongs to another module");
             if (tag == 2) { dataDeclaration(c, name, offset); continue; }
             var body = reader.cursor(c.lazy(), "IfaceId " + CoreHiNames.id(name));
@@ -316,6 +317,7 @@ final class CoreHiModule {
             int tag = c.byteValue();
             if (tag == 1) {
                 var name = CoreHiNames.read(reader, c);
+                c.require(!CoreHiNames.id(name).equals(CoreUnitDirectory.MAIN_ALIAS), "unsupported native Core main alias obligations");
                 Binder declaration = declarations.get(CoreHiNames.id(name));
                 c.require(declaration != null, "retained global binder has no IfaceId declaration " + CoreHiNames.id(name));
                 return declaration;
@@ -364,7 +366,14 @@ final class CoreHiModule {
             }
             case 7 -> values(group(c, false, depth + 1), expr(c, depth + 1));
             case 9 -> values(literal(c));
-            case 11 -> values(CoreHiNames.read(reader, c));
+            case 10 -> throw unsupported(c, "foreign call; native interface foreign transport is not implemented");
+            case 11 -> {
+                var name = CoreHiNames.read(reader, c);
+                c.require(!CoreHiNames.id(name).equals(CoreUnitDirectory.MAIN_ALIAS), "unsupported native Core main alias obligations");
+                c.require(!CoreHiNames.isPrimop(name) || !Set.of("prompt#", "control0#").contains(name.occurrence()),
+                        "unsupported native Core delimited-control obligations");
+                yield values(name);
+            }
             default -> throw unsupported(c, "expression tag " + tag);
         };
         return new Expr(tag, fields, offset);
