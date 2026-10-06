@@ -35,7 +35,7 @@ import Numeric (showHex)
 import System.Directory
   ( canonicalizePath, copyFileWithMetadata, createDirectory, createDirectoryIfMissing
   , doesDirectoryExist, doesFileExist, executable, findExecutable, getFileSize
-  , getPermissions, listDirectory, removeDirectoryRecursive, removeFile, renameDirectory
+  , getPermissions, listDirectory, removeDirectoryRecursive, removeFile, removePathForcibly, renameDirectory
   , renameFile )
 import System.Environment (getEnv, getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
@@ -86,7 +86,8 @@ validateNativeImage root = do
 --
 -- @completion.json@ exists only after successful construction and validation.
 -- Failure removes the previous marker, retains previous artifacts, and reports
--- the fresh staging directory containing command/output evidence. The result is
+-- @.native-image-failed@ containing command/output evidence until the next
+-- owned attempt. The result is
 -- a dynamic ELF plus emitted sidecars, not static linking or cache evidence.
 buildNativeImage :: FilePath -> FilePath -> String -> FilePath -> IO ()
 buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
@@ -94,8 +95,10 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
   output <- canonicalizePath suppliedOutput
   withLock (output </> ".native-image.lock") $ do
     let completion = output </> "completion.json"
+        failed = output </> ".native-image-failed"
     exists <- doesFileExist completion
     when exists (removeFile completion)
+    removePathForcibly failed
     root <- canonicalizePath suppliedRoot
     validateNativeImage root
     require (not (null program) && notElem '\0' program) "native image program name must be nonempty and contain no NUL"
@@ -116,7 +119,12 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
         bindingPath = stage </> "application.json"
         recipe = root </> "research/native-image-preparation/prepared-image.sh"
         arguments = [recipe, root, "executable", stage]
-        report = hPutStrLn stderr ("Native image build evidence retained at " ++ stage)
+        report = do
+          retained <- tryIOError (renameDirectory stage failed)
+          case retained of
+            Right () -> hPutStrLn stderr ("Native image build evidence retained at " ++ failed)
+            Left problem -> hPutStrLn stderr ("Native image build evidence retained at " ++ stage ++
+              "; failed to move to " ++ failed ++ ": " ++ show problem)
     onException (do
       BS.writeFile bindingPath (BL.toStrict (encode binding))
       BS.writeFile (stage </> "command.json") (BL.toStrict (encode ("bash" : arguments)))

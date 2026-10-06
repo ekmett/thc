@@ -86,9 +86,15 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
           expectFailure "native image producer failed" (buildNativeImage root output program manifest)
         assertBool "failure removes prior success marker" . not =<< doesFileExist completion
         assertBool "failure preserves prior artifact" =<< doesFileExist image
-        attempts <- filter (isPrefixOf ".native-image-build-") <$> listDirectory output
-        assertEqual "failed command evidence remains" 1 (length attempts)
-        assertContains "intentional producer failure" =<< readText (output </> head attempts </> "build.stderr")
+        let failed = output </> ".native-image-failed"
+        assertContains "intentional producer failure" =<< readText (failed </> "build.stderr")
+        writeText (failed </> "previous-attempt.txt") "old failure"
+        withEnvironment [("THC_TEST_NATIVE_MODE", "fail")] $
+          expectFailure "native image producer failed" (buildNativeImage root output program manifest)
+        assertContains "intentional producer failure" =<< readText (failed </> "build.stderr")
+        assertBool "next attempt removes the previous failed stage" . not =<< doesFileExist (failed </> "previous-attempt.txt")
+        assertBool "failed staging does not accumulate" . null . filter (isPrefixOf ".native-image-build-") =<< listDirectory output
+        assertEqual "repeated failure preserves unrelated caller content" "keep" =<< readText (output </> "unrelated.txt")
     , TestLabel "zero exit cannot bless missing or invalid artifacts" $ TestCase $ withProducer $ \root output manifest ->
         forM_ ["missing", "invalid", "not-executable", "bad-sidecar", "report-missing", "escape", "symlink-escape", "bad-report"] $ \mode -> do
           writeText (output </> "completion.json") "stale success"
