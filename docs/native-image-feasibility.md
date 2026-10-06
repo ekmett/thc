@@ -99,6 +99,17 @@ conditions. File-access traces show no CBD or manifest reads. The hosted capture
 regression checks dependency order and provider identity without running native
 constructors; a native control confirms that the constructor witness is live.
 
+A freshly acquired `run-static-exports` package also executes from a prepared
+image in an otherwise empty filesystem containing only the executable and ten
+explicit system C/zlib libraries. It matches native GHC's result of `43`: a C
+constructor retains a Haskell callback, which dereferences a StablePtr and makes
+a nested native CAPI call; C then releases the StablePtr. Original GHC startup
+and shutdown run with no GHC, CBD archives, package installation or build tree
+available. The image includes THC's generated native IO resources, and preparation
+uses the ordinary linker's dependency graph for runtime-entered guest code.
+This qualifies synchronous callback execution and the release call, not leak
+freedom, post-release rejection or every callback lifetime.
+
 Sulong and package native libraries are extracted at runtime. System C, math,
 zlib and the dynamic loader remain external dependencies. This qualifies captured
 native providers for the selected Linux x86-64 programs, not static linking or
