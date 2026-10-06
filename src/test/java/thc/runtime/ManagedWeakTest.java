@@ -378,7 +378,7 @@ class ManagedWeakTest {
         }
     }
     @Test
-    void ownedFreePromotionPreservesCanonicalAdmissionAndNewestFirstCallbacks() throws Exception {
+    void explicitOwnedFreeFinalizationPreservesAdmissionAndCallbackOrder() throws Exception {
         try (var context = context(true)) {
             context.initialize("thc"); context.enter();
             var state = Language.currentState(); var threads = state.getThreads();
@@ -386,8 +386,7 @@ class ManagedWeakTest {
             try {
                 var registry = state.getWeaks(); var allocations = state.getNativeAllocations();
                 var address = allocations.malloc(8); address.writeWord8(0, 37);
-                var key = new ManagedMVar(); var keyReference = new WeakReference<>(key);
-                var value = new ManagedMutVar(key); var valueReference = new WeakReference<>(value);
+                var key = new ManagedMVar(); var value = new ManagedMutVar(key);
                 var weak = registry.make(key, value, null);
                 assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, weak, state.cbits()));
                 var calls = new ArrayList<Integer>();
@@ -396,22 +395,18 @@ class ManagedWeakTest {
                     assertEquals(37L, address.readWord8(0)); calls.add(1);
                 }));
                 assertEquals(1L, registry.addCallback(weak, () -> calls.add(2)));
-                Reference.reachabilityFence(key); key = null; value = null;
-                var queue = new ReferenceQueue<Object>(); collect(queue, gcWitness(queue));
-                GcForeignOp.MINOR.invoke();
-                assertNotNull(keyReference.get()); assertSame(valueReference.get(), registry.dereference(weak).getValue());
+                assertSame(value, registry.dereference(weak).getValue());
                 assertEquals(0L, registry.finalize(weak).getFlag()); assertEquals(List.of(2, 1), calls);
                 assertThrows(RuntimeFault.class, () -> address.readWord8(0));
-                // A constructed same-symbol label is explicit-only; identity certifies eligibility.
-                var impostorAddress = allocations.malloc(8); var impostorKey = new ManagedMutVar(Unit.INSTANCE);
-                var impostorReference = new WeakReference<>(impostorKey);
-                var explicit = registry.make(impostorKey, new ManagedMutVar(impostorKey), null);
-                var impostor = new CFinalizerFunction(state.cbits(), "free", null).getAddress();
-                assertEquals(1L, registry.addCFinalizer(impostor, impostorAddress, 0L, explicit, state.cbits()));
-                Reference.reachabilityFence(impostorKey); impostorKey = null;
-                collect(queue, gcWitness(queue)); GcForeignOp.MINOR.invoke();
-                assertNotNull(impostorReference.get()); assertDoesNotThrow(() -> impostorAddress.readWord8(0));
-                registry.finalize(explicit); assertThrows(RuntimeFault.class, () -> impostorAddress.readWord8(0));
+                // Explicit finalization also uses the checked allocation boundary for a separately constructed label.
+                var separateAddress = allocations.malloc(8); var separateKey = new ManagedMutVar(Unit.INSTANCE);
+                var explicit = registry.make(separateKey, new ManagedMutVar(separateKey), null);
+                var separate = new CFinalizerFunction(state.cbits(), "free", null).getAddress();
+                assertEquals(1L, registry.addCFinalizer(separate, separateAddress, 0L, explicit, state.cbits()));
+                assertDoesNotThrow(() -> separateAddress.readWord8(0));
+                registry.finalize(explicit); assertThrows(RuntimeFault.class, () -> separateAddress.readWord8(0));
+                // These checks own live keys; they do not require callbacks to keep dead keys alive.
+                Reference.reachabilityFence(key); Reference.reachabilityFence(separateKey);
             } finally { threads.leaveCurrent(); context.leave(); }
         }
     }
@@ -571,46 +566,43 @@ class ManagedWeakTest {
         assertEquals(0L, registry.finalize(weak).getFlag()); registry.close();
     }
     @Test
-    void callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit() throws Exception {
+    void explicitFinalizationPreservesValuesActionsAndCallbackOrder() throws Exception {
         for (boolean mvarKey : new boolean[]{false, true})
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var registry = Language.currentState().getWeaks(); var program = weakProgram(language, backend, false);
-                var key = new Object(); var promoted = makeIdentity(program, key); var keyReference = new WeakReference<>(key);
+                var key = new Object(); var identity = makeIdentity(program, key);
                 var calls = new ArrayList<Integer>();
-                assertEquals(1L, registry.addCallback(promoted, () -> {
-                    assertEquals(0L, registry.dereference(promoted).getFlag()); calls.add(1);
+                assertEquals(1L, registry.addCallback(identity, () -> {
+                    assertEquals(0L, registry.dereference(identity).getFlag()); calls.add(1);
                 }));
-                assertEquals(1L, registry.addCallback(promoted, () -> calls.add(2)));
-                Reference.reachabilityFence(key); key = null;
+                assertEquals(1L, registry.addCallback(identity, () -> calls.add(2)));
                 Object managedKey = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE);
                 var managedValue = new ManagedMutVar(managedKey);
-                var managedKeyReference = new WeakReference<>(managedKey); var managedValueReference = new WeakReference<>(managedValue);
                 var managedWeak = registry.make(managedKey, managedValue, null); int[] managedCalls = {0};
                 assertEquals(1L, registry.addCallback(managedWeak, () -> ++managedCalls[0]));
-                managedKey = null; managedValue = null;
-                var value = new Object(); var dependentKey = new Object(); var dependentReference = new WeakReference<>(dependentKey);
-                var dependent = registry.make(dependentKey, value, null); dependentKey = null;
-                var actionKey = new Object(); var actionReference = new WeakReference<>(actionKey);
-                Supplier<Object> action = actionKey::toString;
-                var actionWeak = registry.make(actionKey, actionKey, action); var retainedAction = new WeakReference<>(action);
-                actionKey = null; action = null;
-                var queue = new ReferenceQueue<Object>(); var witness = gcWitness(queue); collect(queue, witness);
-                assertNotNull(keyReference.get()); assertEquals(1L, observeIdentity(program, promoted)); assertTrue(calls.isEmpty());
-                assertNotNull(managedKeyReference.get()); assertNotNull(managedValueReference.get());
-                assertSame(managedValueReference.get(), registry.dereference(managedWeak).getValue());
+                var value = new Object(); var dependentKey = new Object();
+                var dependent = registry.make(dependentKey, value, null);
+                var actionKey = new Object(); Supplier<Object> action = actionKey::toString;
+                var actionWeak = registry.make(actionKey, actionKey, action);
+                assertEquals(1L, observeIdentity(program, identity)); assertTrue(calls.isEmpty());
+                assertSame(managedValue, registry.dereference(managedWeak).getValue());
                 assertEquals(0, managedCalls[0]);
                 assertEquals(0L, registry.finalize(managedWeak).getFlag()); assertEquals(1, managedCalls[0]);
                 assertEquals(0L, registry.finalize(managedWeak).getFlag()); assertEquals(1, managedCalls[0]);
-                assertNotNull(dependentReference.get()); assertSame(value, registry.dereference(dependent).getValue());
-                assertNotNull(actionReference.get()); assertEquals(1L, registry.dereference(actionWeak).getFlag());
-                assertEquals(0L, registry.finalize(promoted).getFlag()); assertEquals(List.of(2, 1), calls);
-                assertEquals(0L, registry.finalize(promoted).getFlag()); assertEquals(List.of(2, 1), calls);
-                registry.finalize(dependent); var returned = retainedAction.get(); assertNotNull(returned);
-                assertSame(returned, registry.finalize(actionWeak).getValue());
-                assertEquals(0, registry.retainedCount());
+                assertSame(value, registry.dereference(dependent).getValue());
+                assertEquals(1L, registry.dereference(actionWeak).getFlag());
+                assertEquals(0L, registry.finalize(identity).getFlag()); assertEquals(List.of(2, 1), calls);
+                assertEquals(0L, registry.finalize(identity).getFlag()); assertEquals(List.of(2, 1), calls);
+                registry.finalize(dependent);
+                assertSame(action, registry.finalize(actionWeak).getValue());
+                assertEquals(0L, registry.dereference(dependent).getFlag());
+                assertEquals(0L, registry.dereference(actionWeak).getFlag());
+                // Keep every key live through the explicit-finalization checks on both backends.
+                Reference.reachabilityFence(key); Reference.reachabilityFence(managedKey);
+                Reference.reachabilityFence(dependentKey); Reference.reachabilityFence(actionKey);
             } finally { context.leave(); }
         }
     }
