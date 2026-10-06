@@ -22,6 +22,7 @@ final class CoreHiModule {
     private record Variable(String id,Ty type) {}
     private record Lowered(List<Object> expression,Ty type) {}
     private record Literal(String kind,Object value,Ty type) {}
+    private record ForeignCall(Map<String,Object> target,String convention,String safety,String sourceText) {}
     private record Constructor(CoreHiReader.ExternalName name,Ty result,List<CoreHiTypes.Variable> universal,
                                List<CoreHiTypes.Variable> existential,List<Ty> fields,Ty signature,
                                List<Ty> multiplicities,List<Bang> bangs,int tag,int offset,boolean newtype,
@@ -48,6 +49,8 @@ final class CoreHiModule {
     private final Function<String,CoreHiModule> dependencyModules;
     private final CoreHiTypes types;
     private final CoreHiTypes.Binary binary;
+    private final CoreHiAnnotations annotations;
+    private final String annotationProducerUnit;
     private final Map<CoreHiReader.ExternalName,Declaration> typeDeclarations=new LinkedHashMap<>();
     private final Map<String,Axiom> typeAxioms=new LinkedHashMap<>();
     private final Map<String,CoreHiReader.ExternalName> pendingNewtypeAxioms=new LinkedHashMap<>();
@@ -63,35 +66,51 @@ final class CoreHiModule {
     private final List<Group> groups=new ArrayList<>();
     private final Set<CoreHiNames.TupleFamily> tuples=new LinkedHashSet<>();
     private final List<String> foreignObligations=new ArrayList<>();
+    private Map<String,Object> foreignProducts;
+    private boolean hasForeignProducts;
     private boolean control,mainAlias,registration,scalarDeclarations;
     private long localOrdinal;
     private int declarationDepth;
     CoreHiModule(CoreHiReader reader){this(reader,ignored->null);}
-    CoreHiModule(CoreHiReader reader,Function<String,CoreHiModule> dependencies){
+    CoreHiModule(CoreHiReader reader,Function<String,CoreHiModule> dependencies){this(reader,dependencies,null);}
+    CoreHiModule(CoreHiReader reader,Function<String,CoreHiModule> dependencies,String annotationProducerUnit){
         this.reader=reader;dependencyModules=Objects.requireNonNull(dependencies);
+        this.annotationProducerUnit=annotationProducerUnit;annotations=CoreHiAnnotations.read(reader);
+        scalarDeclarations=hasRetainedCore()&&annotations.packageScalarDeclarations(annotationProducerUnit);
         binary=new CoreHiTypes.Binary(reader);types=new CoreHiTypes(this::declaration,this::axiom);
-        var c = reader.cursor(reader.publicSections.get("annotations"),"interface annotations");
-        c.require(c.count(1) == 0,"native interface annotations require package declaration transport");
-        c.expectEnd();
-        if (reader.simplifiedCore != null)
-            c.require(reader.signatureOf == null && reader.sourceKind == 0,
-                "signature or boot interface cannot provide executable retained Core");
-        c=reader.cursor(reader.publicSections.get("declarations"),"interface declarations");
+        var c=reader.cursor(reader.publicSections.get("declarations"),"interface declarations");
+        if(reader.simplifiedCore!=null)c.require(reader.signatureOf==null&&reader.sourceKind==0,
+            "signature or boot interface cannot provide executable retained Core");
+
         int count=c.count(4);
         for(int i=0;i<count;i++){c.unsigned(64);c.unsigned(64);declaration(c);}
         c.expectEnd();
         if(reader.simplifiedCore!=null){
             c=reader.cursor(reader.simplifiedCore,"retained Core");count=c.count(2);
             for(int i=0;i<count;i++)groups.add(group(c,true,0));
+            Map<String,Object> stubs=null;
             if(c.optional()){
                 String header=c.string(),source=c.string();
-                if (!header.isEmpty()) foreignObligations.add("foreign header");
-                if (!source.isEmpty()) foreignObligations.add("foreign source");
-                registration |= !header.isEmpty() || !source.isEmpty();
-                int n=c.count(1);registration |= n != 0;for(int i=0;i<n;i++)foreignObligations.add("initializer "+CoreHiNames.id(CoreHiNames.read(reader,c)));
-                n=c.count(1);registration |= n != 0;for(int i=0;i<n;i++)foreignObligations.add("finalizer "+CoreHiNames.id(CoreHiNames.read(reader,c)));
+                var initializers=foreignLabels(c,true);
+                var finalizers=foreignLabels(c,false);
+                stubs=map("header",header,"source",source,"initializers",initializers,"finalizers",finalizers);
+                hasForeignProducts=!header.isEmpty()||!source.isEmpty()||!initializers.isEmpty()||!finalizers.isEmpty();
+                if(!header.isEmpty())foreignObligations.add("foreign header");
+                if(!source.isEmpty())foreignObligations.add("foreign source");
+                for(var label:initializers)foreignObligations.add("initializer "+label.get("name"));
+                for(var label:finalizers)foreignObligations.add("finalizer "+label.get("name"));
+                registration=!initializers.isEmpty()||!finalizers.isEmpty();
             }
-            count=c.count(1);registration |= count != 0;for(int i=0;i<count;i++){int language=c.byteValue();foreignObligations.add("foreign file "+language+":"+c.string());}
+            count=c.count(3);
+            var files=new ArrayList<Map<String,Object>>();
+            for(int i=0;i<count;i++){
+                int language=c.byteValue();c.require(language<=6,"invalid foreign source language");
+                String[] languages={"LangC","LangCxx","LangObjc","LangObjcxx","LangAsm","LangJs","RawObject"};
+                files.add(map("language",languages[language],"source",c.string(),"extension",c.string()));
+                foreignObligations.add("foreign file "+languages[language]);
+            }
+            hasForeignProducts|=!files.isEmpty();registration|=!files.isEmpty();
+            foreignProducts=map("schema",1L,"execution","not-linked","stubs",stubs,"files",List.copyOf(files));
             c.expectEnd();
             for(Group group:groups)for(Definition definition:group.definitions){
                 Binder b=definition.binder;String id=prefix()+b.name;mainAlias|=id.equals(CoreUnitDirectory.MAIN_ALIAS);
@@ -139,8 +158,56 @@ final class CoreHiModule {
     }
     Map<String,Object> metadata(){
         // Declaration-only metadata has no executable or startup admission.
-        if(!foreignObligations.isEmpty())throw error(new Expr(-1,List.of(),0),"native foreign obligations require explicit package/native artifact admission: "+foreignObligations);
-        return map("schema",1L,"ghc","9.14.1","unit",reader.module.unit(),"module",reader.module.name(),"boundary",hasRetainedCore()?"optimized-Core-after-Tidy-before-CorePrep":"interface-declarations","bindings",List.of(),"constructors",constructorLayouts());
+        var metadata=map("schema",hasForeignProducts?2L:1L,"ghc","9.14.1","unit",reader.module.unit(),"module",reader.module.name(),"boundary",hasRetainedCore()?"optimized-Core-after-Tidy-before-CorePrep":"interface-declarations","bindings",List.of(),"constructors",constructorLayouts());
+        if(hasForeignProducts)metadata.put("foreign",foreignProducts);
+        // Thin interfaces cannot attest to retained foreign products, binders or calls.
+        // Their private envelopes remain opaque; ordinary String policy still applies.
+        String authority=hasRetainedCore()?annotationProducerUnit:null;
+        metadata.putAll(annotations.fields(foreignProducts,this::foreignCalls,authority,this::foreignBinderMatches));
+        var bridge=foreignExceptionBridge();
+        if(bridge!=null)metadata.put("foreignExceptionBridge",bridge);
+        return metadata;
+    }
+    /** The existing runtime bridge is owned by its real retained Haskell module.
+     * Match THC.Plugin's reciprocal signature proof without manufacturing bodies. */
+    private Map<String,Object> foreignExceptionBridge() {
+        if(!hasRetainedCore()||!reader.module.name().equals("THC.Internal.Exception"))return null;
+        String boxer=prefix()+"boxForeign",projector=prefix()+"projectForeign";
+        if(!definitions.containsKey(boxer)||!definitions.containsKey(projector))
+            throw new IllegalArgumentException(reader.module+": foreign exception bridge lacks its actual helper definitions");
+        Ty box=types.view(signature(boxer),false),project=types.view(signature(projector),false);
+        if(!(box instanceof Fun b)||!(project instanceof Fun p)||
+            types.view(b.result(),false) instanceof Fun||types.view(p.result(),false) instanceof Fun||
+            !types.equal(b.argument(),p.result())||!types.equal(b.result(),p.argument())||
+            !nominalType(b.argument(),"ghc-internal:GHC.Internal.Types.Any")||
+            !nominalType(b.result(),"ghc-internal:GHC.Internal.Exception.Type.SomeException"))
+            throw new IllegalArgumentException(reader.module+": foreign exception bridge lacks reciprocal Any/SomeException helper types");
+        return map("schema",1L,"unit",reader.module.unit(),"module",reader.module.name(),"box",boxer,"project",projector,
+            "payloadType",prefix()+"ForeignException","exceptionType","ghc-internal:GHC.Internal.Exception.Type.SomeException");
+    }
+    private boolean nominalType(Ty type,String identity) {
+        return types.view(type,false) instanceof Con con&&CoreHiNames.id(con.name()).equals(identity);
+    }
+    private boolean foreignBinderMatches(Map<String,Object> identity,Map<String,Object> declaredType) {
+        if(!Objects.equals(identity.get("unit"),reader.module.unit())||!Objects.equals(identity.get("module"),reader.module.name())||
+            !Objects.equals(identity.get("namespace"),"value"))return false;
+        String id=prefix()+identity.get("occurrence");
+        if(!definitions.containsKey(id))return false;
+        try{return types.foreignTypeIdentity(signature(id)).equals(declaredType);}catch(IllegalArgumentException unavailable){return false;}
+    }
+    private List<Map<?,?>> foreignCalls() {
+        if(!hasRetainedCore())return null;
+        var calls=new ArrayList<Map<?,?>>();
+        for(var entry:definitions.entrySet())if(containsForeignCall(entry.getValue().rhs))
+            calls.addAll(PackageNativeArchive.calls(binding(entry.getKey())));
+        return List.copyOf(calls);
+    }
+    private static boolean containsForeignCall(Object syntax) {
+        if(syntax instanceof Expr expression)return expression.tag==10||expression.fields.stream().anyMatch(CoreHiModule::containsForeignCall);
+        if(syntax instanceof Group group)return group.definitions.stream().anyMatch(d->containsForeignCall(d.rhs));
+        if(syntax instanceof Alt alternative)return containsForeignCall(alternative.rhs);
+        if(syntax instanceof List<?> fields)return fields.stream().anyMatch(CoreHiModule::containsForeignCall);
+        return false;
     }
     List<Map<String,Object>> constructorLayouts(){
         var layouts=new ArrayList<Map<String,Object>>();
@@ -501,7 +568,7 @@ final class CoreHiModule {
         }
         return new Info(arity, null, null);
     }
-    private void sourceText(CoreHiReader.Cursor c) { if (c.optional()) reader.fastString(c); }
+    private String sourceText(CoreHiReader.Cursor c) { return c.optional()?reader.fastString(c):null; }
     private void demand(CoreHiReader.Cursor c, int depth) {
         int card = c.byteValue(); c.require(card <= 5, "invalid demand cardinality");
         if (card != 0 && card != 5) subDemand(c, depth + 1);
@@ -610,7 +677,7 @@ final class CoreHiModule {
             case 2 -> values(binary.coercion(c,depth+1));
             case 13 -> values(expr(c,depth+1),type(c,depth+1));
             case 14 -> {Object rr=type(c,depth+1);int torc=c.byteValue();c.require(torc<=1,"invalid rubbish type/constraint");yield values(values("con",new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Prim"),3,null,torc==0?"TYPE":"CONSTRAINT"),false,List.of(0),List.of(values(0,rr))));}
-            case 10 -> {String call=foreignCall(c);scalarDeclarations=true;foreignObligations.add(call);yield values(call,type(c,depth+1));}
+            case 10 -> values(foreignCall(c),type(c,depth+1));
             case 11 -> {
                 var name = CoreHiNames.read(reader, c);
 
@@ -639,6 +706,11 @@ final class CoreHiModule {
             byte[] bytes = new byte[size];
             for (int i = 0; i < size; i++) bytes[i] = (byte) c.byteValue();
             return new Literal("string-bytes", HexFormat.of().formatHex(bytes), primitive("AddrRep"));
+        }
+        if(tag==2)return new Literal("null-addr","0",primitive("AddrRep"));
+        if(tag==5){
+            String symbol=reader.fastString(c);int kind=c.byteValue();c.require(kind<=1,"invalid foreign label kind");
+            return new Literal(kind==0?"function-addr":"data-addr",symbol,primitive("AddrRep"));
         }
         if (tag == 3 || tag == 4) {
             BigInteger numerator = integer(c), denominator = integer(c);
@@ -886,6 +958,15 @@ final class CoreHiModule {
             }
             case 2->{Co co=types.readCo(e.fields.getFirst(),typeScope);yield expression(types.coercionType(co),e,"void");}
             case 9->{Literal literal=(Literal)e.fields.getFirst();yield expression(literal.type,e,"lit",literal.kind,literal.value);}
+            case 10->{
+                var foreign=expression(types.read(e.fields.get(1),typeScope),e,"var","\u0000hi-fcall:"+prefix()+localOrdinal++);
+                // mkFCallId counts anonymous Pi binders for its value arity.
+                // Only a positive arity proves a lifted FCallId is already HNF.
+                Ty pi=types.view(foreign.type,false);
+                while(pi instanceof ForAll forall)pi=types.view(forall.body(),false);
+                metadata(foreign.expression).put("rep",rep(foreign.type,pi instanceof Fun,e));
+                yield foreign;
+            }
             case 4 -> {
                 var inner = new HashMap<>(scope);
                 var innerTypes = new HashMap<>(typeScope);
@@ -972,7 +1053,9 @@ final class CoreHiModule {
                     }
                     yield new Lowered(payload,result);
                 }
-                yield expression(result,e,"app",head.expression,args,lifted,false,false);
+                Lowered application=expression(result,e,"app",head.expression,args,lifted,false,false);
+                if(headExpr.tag==10)metadata(application.expression).put("foreignCall",foreignDescriptor(headExpr,rawArgs,typeScope,args.size()));
+                yield application;
             }
             case 6->{
                 Lowered scrutinee=lower((Expr)e.fields.getFirst(),scope,typeScope);
@@ -1066,7 +1149,81 @@ final class CoreHiModule {
     private Object lifted(Ty type){return types.lifted(type);}
     private Map<String,Object> rep(Ty type,boolean evaluated,Expr location){try{return types.representation(type,evaluated);}catch(IllegalArgumentException failure){throw error(location,failure.getMessage());}}
     private static Ty primitive(String rep){String name=rep.substring(0,rep.length()-3)+"#";return con(new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Prim"),3,null,name),false);}
-    private String foreignCall(CoreHiReader.Cursor c){int target=c.byteValue();c.require(target<=1,"invalid C call target");String symbol="dynamic";if(target==0){sourceText(c);symbol=reader.fastString(c);if(c.optional())reader.fastString(c);bool(c);}int convention=c.byteValue(),safety=c.byteValue();c.require(convention<=4&&safety<=2,"invalid foreign calling convention or safety");return "foreign call "+symbol;}
+    private List<Map<String,Object>> foreignLabels(CoreHiReader.Cursor c,boolean initializer) {
+        int count=c.count(5);var labels=new ArrayList<Map<String,Object>>();
+        for(int i=0;i<count;i++){
+            boolean kind=bool(c);c.require(kind==initializer,"foreign lifecycle label kind mismatch");
+            var owner=reader.module(c);
+            labels.add(map("isInitializer",kind,"unit",owner.unit(),"module",owner.name(),"name",reader.fastString(c)));
+        }
+        return List.copyOf(labels);
+    }
+    private ForeignCall foreignCall(CoreHiReader.Cursor c) {
+        int kind=c.byteValue();c.require(kind<=1,"invalid C call target");
+        Map<String,Object> target;String source=null;
+        if(kind==0){
+            source=sourceText(c);String symbol=reader.fastString(c);
+            String unit=c.optional()?reader.unit(c):null;
+            target=map("kind","static","symbol",symbol,"isFunction",bool(c));
+            if(unit!=null)target.put("unit",unit);
+        }else target=map("kind","dynamic");
+        int convention=c.byteValue(),safety=c.byteValue();
+        c.require(convention<=4&&safety<=2,"invalid foreign calling convention or safety");
+        return new ForeignCall(Collections.unmodifiableMap(target),new String[]{"ccall","stdcall","prim","capi","javascript"}[convention],
+            new String[]{"safe","interruptible","unsafe"}[safety],source);
+    }
+    private Map<String,Object> foreignDescriptor(Expr head,List<Expr> arguments,Map<String,CoreHiTypes.Variable> scope,int supplied) {
+        var call=(ForeignCall)head.fields.getFirst();
+        Ty signature=types.read(head.fields.get(1),scope);
+        int first=0;
+        while(first<arguments.size()&&arguments.get(first).tag==1){
+            signature=types.piApply(signature,List.of(types.read(arguments.get(first++).fields.getFirst(),scope)));
+        }
+        for(int i=first;i<arguments.size();i++)if(arguments.get(i).tag==1)
+            throw error(arguments.get(i),"foreign type arguments must precede value arguments");
+        Ty result=types.view(signature,false);
+        if(result instanceof ForAll)throw error(head,"foreign call lacks instantiated parameter type proof");
+        var proofs=new ArrayList<Map<String,Object>>();var argumentTypes=new ArrayList<Object>();
+        boolean arrays=false;
+        while(result instanceof Fun function){
+            var proof=rep(function.argument(),false,head);
+            // These describe a declaration, not evaluated operand expressions.
+            proof.put("evaluated",false);proofs.add(proof);
+            Ty normalized=types.view(function.argument(),true);String array=null;
+            if(normalized instanceof Con con&&con.name().module().equals(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Prim"))&&
+                Set.of("ByteArray#","MutableByteArray#").contains(con.name().occurrence()))array=con.name().occurrence();
+            arrays|=array!=null;argumentTypes.add(array);
+            result=types.view(function.result(),false);
+        }
+        var resultProof=rep(result,false,head);resultProof.put("evaluated",false);
+        var descriptor=map("schema",arrays?2L:1L,"target",call.target,"convention",call.convention,"safety",call.safety,
+            "arity",(long)proofs.size(),"suppliedArity",(long)supplied,"argumentReps",proofs,"resultRep",resultProof);
+        if(arrays)descriptor.put("argumentTypes",argumentTypes);
+        if(call.convention.equals("ccall")&&Set.of("safe","unsafe").contains(call.safety)&&
+            call.target.get("kind").equals("static")&&Boolean.TRUE.equals(call.target.get("isFunction"))){
+            String source=javascriptSource((String)call.target.get("symbol"));
+            if(source!=null){descriptor.put("intrinsic","javascript-v1");descriptor.put("javascriptSource",source);}
+        }
+        return descriptor;
+    }
+
+    /** Match THC.Plugin's versioned marker, including GHC FastString encoding.
+     * Runtime admission independently checks source and typed JavaScript ABI. */
+    private static String javascriptSource(String symbol) {
+        String prefix="thc_javascript_v1_";
+        if(!symbol.startsWith(prefix))return null;
+        String hex=symbol.substring(prefix.length());
+        if((hex.length()&1)!=0)return null;
+        for(int i=0;i<hex.length();i++){
+            char digit=hex.charAt(i);
+            if(!(digit>='0'&&digit<='9'||digit>='a'&&digit<='f'))return null;
+        }
+        byte[] encoded=HexFormat.of().parseHex(hex);
+        // mkFastString writes NUL as C0 80, never a bare zero byte.
+        for(byte value:encoded)if(value==0)return null;
+        try{return CoreHiReader.modifiedUtf8(encoded);}catch(IllegalArgumentException malformed){return null;}
+    }
+
     @SuppressWarnings("unchecked") private static Map<String,Object> metadata(List<Object> expression) {
         return (Map<String,Object>) expression.getLast();
     }

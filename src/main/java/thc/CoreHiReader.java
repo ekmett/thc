@@ -151,10 +151,41 @@ final class CoreHiReader {
         return List.copyOf(points);
     }
 
-    private ModuleId module(Cursor cursor) {
-        int tag = cursor.byteValue();
-        cursor.require(tag == 0, "unsupported unit tag " + tag + " (virtual/hole units require Backpack decoding)");
-        return new ModuleId(fastString(cursor), fastString(cursor));
+    static String modifiedUtf8(byte[] encoded) {
+        var text = new StringBuilder(encoded.length);
+        decodeUtf8(encoded, 0, encoded.length, text::appendCodePoint);
+        return text.toString();
+    }
+    private static void decodeUtf8(byte[] encoded, int start, int end, java.util.function.IntConsumer output) {
+        int position = start;
+        while (position < end) {
+            int offset = position, first = encoded[position++] & 255;
+            if (first < 128) { output.accept(first); continue; }
+            int extra = first >= 0xc0 && first <= 0xdf ? 1 : first >= 0xe0 && first <= 0xef ? 2 :
+                first >= 0xf0 && first <= 0xf4 ? 3 : -1;
+            if (extra < 0) throw invalidUtf8(offset, "invalid leading byte");
+            int cp = first & (127 >>> (extra + 1));
+            for (int i = 0; i < extra; i++) {
+                if (position == end) throw invalidUtf8(position, "truncated input");
+                int next = encoded[position++] & 255;
+                if ((next & 0xc0) != 0x80) throw invalidUtf8(position - 1, "invalid continuation byte");
+                cp = (cp << 6) | (next & 63);
+            }
+            int minimum = extra == 1 ? 0x80 : extra == 2 ? 0x800 : 0x10000;
+            if (!(cp >= minimum || extra == 1 && cp == 0) || cp > Character.MAX_CODE_POINT)
+                throw invalidUtf8(offset, "invalid code point or overlong encoding");
+            output.accept(cp);
+        }
+    }
+    private static IllegalArgumentException invalidUtf8(int offset, String message) {
+        return new IllegalArgumentException("Modified UTF-8 at byte " + offset + ": " + message);
+    }
+
+    ModuleId module(Cursor cursor) { return new ModuleId(unit(cursor),fastString(cursor)); }
+    String unit(Cursor cursor) {
+        int tag=cursor.byteValue();
+        cursor.require(tag==0,"unsupported unit tag "+tag+" (virtual/hole units require Backpack decoding)");
+        return fastString(cursor);
     }
 
     private Map<String, Section> readExtensions(int start) {
@@ -261,24 +292,8 @@ final class CoreHiReader {
         private void decodeUtf8(int length, java.util.function.IntConsumer output) {
             int start = position;
             skip(length);
-            var encoded = new Cursor(start, position, label + " Modified UTF-8");
-            while (encoded.remaining() > 0) {
-                int first = encoded.byteValue();
-                if (first < 128) { output.accept(first); continue; }
-                int extra = first >= 0xc0 && first <= 0xdf ? 1 : first >= 0xe0 && first <= 0xef ? 2 :
-                    first >= 0xf0 && first <= 0xf4 ? 3 : -1;
-                encoded.require(extra >= 0, "invalid leading byte");
-                int cp = first & (127 >>> (extra + 1));
-                for (int i = 0; i < extra; i++) {
-                    int next = encoded.byteValue();
-                    encoded.require((next & 0xc0) == 0x80, "invalid continuation byte");
-                    cp = (cp << 6) | (next & 63);
-                }
-                int minimum = extra == 1 ? 0x80 : extra == 2 ? 0x800 : 0x10000;
-                encoded.require((cp >= minimum || extra == 1 && cp == 0) && cp <= Character.MAX_CODE_POINT,
-                    "invalid code point or overlong encoding");
-                output.accept(cp);
-            }
+            try { CoreHiReader.decodeUtf8(bytes, start, position, output); }
+            catch (IllegalArgumentException malformed) { require(false, malformed.getMessage()); }
         }
         boolean optional() {
             int tag = byteValue();

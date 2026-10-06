@@ -658,6 +658,30 @@ final class CoreHiTypes {
     private static boolean alphaArgs(List<Arg>a,List<Arg>b,Map<Variable,Variable>names){if(a.size()!=b.size())return false;for(int i=0;i<a.size();i++)if(!alphaEquals(a.get(i).type,b.get(i).type,names))return false;return true;}
 
 
+    /** Exact nominal identity in THC's existing typed foreign annotation schema.
+     * This is serialization, not synonym/newtype normalization or ABI inference. */
+    Map<String,Object> foreignTypeIdentity(Ty type) { return foreignTypeIdentity(type,List.of()); }
+    private Map<String,Object> foreignTypeIdentity(Ty type,List<Variable> bound) {
+        if(type instanceof Tuple tuple)type=tupleConstructor(tuple);
+        if(type instanceof Con con){
+            String namespace=switch(con.name.namespace()){case 0->"value";case 1->"data";case 3->"type";default->throw new IllegalArgumentException("Foreign annotation type has unsupported name namespace");};
+            var name=Map.of("unit",con.name.module().unit(),"module",con.name.module().name(),"occurrence",con.name.occurrence(),"namespace",namespace);
+            return Map.of("kind","tycon","name",name,"arguments",con.arguments.stream().map(a->foreignTypeIdentity(a.type,bound)).toList());
+        }
+        if(type instanceof App app){
+            Map<String,Object> result=foreignTypeIdentity(app.head,bound);
+            for(var arg:app.arguments)result=Map.of("kind","application","function",result,"argument",foreignTypeIdentity(arg.type,bound));
+            return result;
+        }
+        if(type instanceof Fun fun&&fun.flag==0)return Map.of("kind","function","multiplicity",foreignTypeIdentity(fun.multiplicity,bound),
+            "argument",foreignTypeIdentity(fun.argument,bound),"result",foreignTypeIdentity(fun.result,bound));
+        if(type instanceof Var variable){int index=bound.indexOf(variable.variable);if(index>=0)return Map.of("kind","bound-variable","index",(long)index);}
+        if(type instanceof ForAll forall){
+            var inner=new ArrayList<Variable>();inner.add(forall.variable);inner.addAll(bound);
+            return Map.of("kind","forall","binderKind",foreignTypeIdentity(forall.variable.kind,bound),"body",foreignTypeIdentity(forall.body,inner));
+        }
+        throw new IllegalArgumentException("Foreign annotation schema cannot represent this actual type");
+    }
     Ty function(Ty multiplicity,Ty argument,Ty result) { return new Fun(functionFlag(argument,result),multiplicity,argument,result); }
     Ty lambdaType(Variable binder,Ty result) {
         return !binder.coercion || free(result).contains(binder) ? new ForAll(binder,1,result) :
