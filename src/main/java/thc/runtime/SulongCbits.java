@@ -112,15 +112,16 @@ public final class SulongCbits {
     boolean isOwnedFree(CFinalizerFunction function) {
         return function == ownedFree && Language.currentState(null).cbits() == this;
     }
-    public void invokeFinalizer(CFinalizerFunction function, ManagedAddress address) {
+    public void invokeFinalizer(CFinalizerFunction function, ManagedAddress... arguments) {
         function.requireOwner(this);
+        function.requireArity(arguments.length);
         if (Language.currentState(null).cbits() != this) throw fault("C finalizer belongs to another THC context");
         if (function.getPackageFunction() != null) {
-            try { PackageFinalizerRegistry.invoke(function.getPackageFunction(), address); }
+            try { PackageFinalizerRegistry.invoke(function.getPackageFunction(), arguments); }
             catch (Exception failure) { throw rethrow(failure); }
             return;
         }
-        if (function.getSymbol().equals("free")) { Language.currentState(null).getNativeAllocations().free(address); return; }
+        if (function.getSymbol().equals("free")) { Language.currentState(null).getNativeAllocations().free(arguments[0]); return; }
         throw fault("Unsupported C finalizer");
     }
     public Object iconvLibrary() {

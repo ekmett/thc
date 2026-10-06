@@ -608,7 +608,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (installedNativeSignatures "fixture-unit" (installed (set "intrinsic" Null call)))
       assertBool "intrinsic classification cannot hide malformed retained import proof" (isLeft
         (nativeSignatures "fixture-unit" [withCall call (moduleWith [set "isFunction" (Bool False) javascript])]))
-  , TestCase $ do
+  , TestLabel "C finalizer declaration and linked definition ABI" $ TestCase $ do
       let named modName name args = object ["kind" .= ("tycon"::String), "name" .= object
             ["unit" .= ("ghc-internal"::String), "module" .= (modName::String),
              "occurrence" .= (name::String), "namespace" .= ("type"::String)], "arguments" .= (args::[Value])]
@@ -629,6 +629,24 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
           original = address (ty pointer (io unit))
       assertEqual "actual typed address creates a distinct retained adapter" (Right [("cleanup","ccall","unsafe",["AddrRep"],"void")])
         (nativeSignatures "fixture-unit" [module' [original]])
+      let environmentType = ty pointer (function pointer (io unit))
+          environment = set "callback" (object ["arguments" .= (["AddrRep","AddrRep"]::[String]), "result" .= ("void"::String)])
+            (address environmentType)
+      assertEqual "environment adapter retains its declared two-pointer ABI"
+        (Right [("cleanup","ccall","unsafe",["AddrRep","AddrRep"],"void")])
+        (nativeSignatures "fixture-unit" [module' [environment]])
+      assertBool "one-pointer type cannot certify a two-pointer callback tag" (isLeft
+        (nativeSignatures "fixture-unit" [module' [set "normalizedType" (ty pointer (io unit)) environment]]))
+      let one = "define void @cleanup(ptr noundef %object) {\n ret void\n}\n"
+          two = "define dso_local void @cleanup(ptr noundef %env, ptr nocapture %object) {\n ret void\n}\n"
+      assertBool "exact one-pointer definition" (nativeFinalizerDefinition "cleanup" ["AddrRep"] one)
+      assertBool "exact environment definition" (nativeFinalizerDefinition "cleanup" ["AddrRep","AddrRep"] two)
+      assertBool "linked definition arity cannot replace metadata" (not (nativeFinalizerDefinition "cleanup" ["AddrRep"] two))
+      forM_ [one, "define void @cleanup(ptr %env, i64 %object) {\n ret void\n}\n",
+          "define i32 @cleanup(ptr %env, ptr %object) {\n ret i32 0\n}\n",
+          "define void @cleanup(ptr %env, ...) {\n ret void\n}\n", two ++ two] $ \bad ->
+        assertBool "wrong linked C ABI cannot acquire environment authority"
+          (not (nativeFinalizerDefinition "cleanup" ["AddrRep","AddrRep"] bad))
       assertEqual "address metadata does not manufacture call inventory" (Just (toJSON ([]::[Value])))
         (lookupField "staticForeignImports" (module' [original]) >>= lookupField "expectedCalls")
       forM_ [ty integer (io unit), ty pointer (io integer), ty pointer unit,

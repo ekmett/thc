@@ -4025,7 +4025,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress function, ManagedAddress address, long flag, ManagedAddress environment,
                 Object weak, Object state, @Bind("$node") Node node) {
             TupleResults.requireVoidCarrier(state);
-            long added = ManagedWeaks.current(node).addCFinalizer(function, address, flag, weak,
+            long added = ManagedWeaks.current(node).addCFinalizer(function, address, flag, environment, weak,
                     SulongCbits.current(node));
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, added);
         }

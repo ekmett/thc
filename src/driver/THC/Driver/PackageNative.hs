@@ -18,7 +18,7 @@ module THC.Driver.PackageNative
   , finishPackageNativeWithDependencies
   , linkInstalledNative, linkInstalledNativeWithProduct, installedNativeSignatures, nativeCapiSource
   , nativeIrSymbol, nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned, nativeDeferredLinkArguments, nativeRootArguments, tool
-  , nativeCallSeedWitness, nativeFunctionExternals
+  , nativeCallSeedWitness, nativeFunctionExternals, nativeFinalizerDefinition
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -176,9 +176,8 @@ nativeSignatures unit modules = do
   called <- mapM (nativeSignature unit) imports
   _ <- mapM coreNativeOverride (filter (owned unit) (concatMap calls modules))
   core <- mapM coreNativeImport imports
-  finalizers <- nativeFinalizers unit modules
-  let signatures = [signature | (signature,False) <- zip called core] ++
-        [(symbol,"ccall","unsafe",["AddrRep"],"void") | symbol <- finalizers]
+  finalizers <- nativeFinalizerSignatures unit modules
+  let signatures = [signature | (signature,False) <- zip called core] ++ finalizers
   require (all supportedSignature signatures) "package native call has unsupported safety/carriers"
   let ordered = sort (nub signatures)
   forM_ (groupBy (\a b -> first a == first b) ordered) $ \variants -> do
@@ -337,8 +336,8 @@ javascriptSymbol call
   | otherwise = Nothing
 
 -- Address declarations carry their own nominal type and stock-emitter evidence.
--- They never become synthetic expectedCalls. Only the concrete one-pointer,
--- IO-unit profile is eligible for a C finalizer adapter.
+-- They never become synthetic expectedCalls. The C-finalizer ABI has one
+-- object pointer or an environment pointer followed by the object pointer.
 nativeAddresses :: String -> Value -> Either String [Value]
 nativeAddresses unit value = case member value "staticForeignImports" of
   Just proof | member proof "schema" `elem` map (Just . toJSON) ([2,3,4]::[Int]), member proof "status" == Just "verified" -> do
@@ -361,24 +360,30 @@ nativeAddresses unit value = case member value "staticForeignImports" of
       field entry "declaredType" >>= nativeType 0
       field entry "normalizedType" >>= nativeType 0
       require (member entry "callback" == Just Null || function &&
-        maybe False finalizerType (member entry "normalizedType") && member entry "callback" ==
-          Just (object ["arguments" .= (["AddrRep"]::[String]),"result" .= ("void"::String)]))
+        (case member entry "normalizedType" >>= finalizerType of
+          Just arguments' -> member entry "callback" ==
+            Just (object ["arguments" .= arguments',"result" .= ("void"::String)])
+          Nothing -> False))
         "unsupported native callback proof"
     pure addresses
   _ -> Right []
 
 -- The normalized nominal type is checked independently of the callback tag.
--- It is deliberately a pointer-to-IO-unit profile, not arbitrary indirect FFI.
-finalizerType :: Value -> Bool
+-- These are the two RTS C-finalizer ABIs, not arbitrary indirect FFI.
+finalizerType :: Value -> Maybe [String]
 finalizerType value
-  | member value "kind" == Just "forall" = maybe False finalizerType (member value "body")
+  | member value "kind" == Just "forall" = member value "body" >>= finalizerType
   | Just [function] <- named value "GHC.Internal.Ptr" "FunPtr",
-    member function "kind" == Just "function",
-    Just argument <- member function "argument", Just [_] <- named argument "GHC.Internal.Ptr" "Ptr",
-    Just result <- member function "result", Just [unit] <- named result "GHC.Internal.Types" "IO",
-    Just [] <- named unit "GHC.Internal.Tuple" "Unit" = True
-  | otherwise = False
+    Just arguments' <- pointers function, length arguments' `elem` [1,2] = Just arguments'
+  | otherwise = Nothing
   where
+    pointers function
+      | member function "kind" == Just "function",
+        Just argument <- member function "argument", Just [_] <- named argument "GHC.Internal.Ptr" "Ptr",
+        Just result <- member function "result", Just rest <- pointers result = Just ("AddrRep":rest)
+      | Just [unit] <- named function "GHC.Internal.Types" "IO",
+        Just [] <- named unit "GHC.Internal.Tuple" "Unit" = Just []
+      | otherwise = Nothing
     named item modName occurrence
       | member item "kind" == Just "tycon", member item "name" == Just (object
           ["unit" .= ("ghc-internal"::String),"module" .= (modName::String),
@@ -386,13 +391,40 @@ finalizerType value
         Just (Array args) <- member item "arguments" = Just (foldr (:) [] args)
       | otherwise = Nothing
 
-nativeFinalizers :: String -> [Value] -> Either String [String]
-nativeFinalizers unit modules = do
+nativeFinalizerSignatures :: String -> [Value] -> Either String [Signature]
+nativeFinalizerSignatures unit modules = do
   mapM_ (nativeImports unit) modules
   addresses <- concat <$> mapM (nativeAddresses unit) modules
-  sort . nub <$> mapM (\entry -> field entry "symbol")
-    [entry | entry <- addresses, member entry "callback" /= Just Null,
-      member entry "symbol" /= Just "free"]
+  sort . nub <$> mapM signature [entry | entry <- addresses, member entry "callback" /= Just Null,
+    member entry "symbol" /= Just "free"]
+  where
+    signature entry = do
+      symbol <- field entry "symbol"
+      callback <- field entry "callback"
+      arguments' <- field callback "arguments"
+      pure (symbol,"ccall","unsafe",arguments',"void")
+
+nativeFinalizers :: String -> [Value] -> Either String [String]
+nativeFinalizers unit modules = sort . nub . map (\(symbol,_,_,_,_) -> symbol) <$> nativeFinalizerSignatures unit modules
+
+-- | Check the original linked definition against the retained RTS callback ABI.
+nativeFinalizerDefinition :: String -> [String] -> String -> Bool
+nativeFinalizerDefinition symbol arguments' source =
+  length definitions == 1 && all valid definitions
+  where
+    definitions = [line | line <- lines source, "define " `isPrefixOf` line,
+      ("@" ++ symbol ++ "(") `isInfixOf` line]
+    valid line = let (before,rest) = break (== '@') line
+                     parameters = takeWhile (/= ')') (drop (length symbol + 2) rest)
+                     ordinary = ["dso_local","noundef"]
+                     fields = map T.unpack (T.splitOn "," (T.pack parameters))
+                 in filter (`notElem` ordinary) (words before) == ["define","void"] &&
+                   arguments' `elem` [["AddrRep"],["AddrRep","AddrRep"]] &&
+                   length fields == length arguments' && all pointer fields
+    pointer parameter = case words parameter of
+      "ptr":attributes -> not (null attributes) && "%" `isPrefixOf` last attributes &&
+        all (`elem` ["noundef","nocapture","readonly","writeonly"]) (init attributes)
+      _ -> False
 
 nativeSignature :: String -> Value -> Either String Signature
 nativeSignature unit entry = do
@@ -798,8 +830,8 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
     ["unit" .= unit,"installed" .= installed,"root" .= root,"objectRoots" .= roots,"bitcode" .= bitcode,"target" .= target,
      "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,"providers" .= providers,
      "dataLibraries" .= dataLibraries,"dataSymbols" .= [entry | (_,True,entry) <- entries],
-     "finalizers" .= [entry | ((symbol,"ccall","unsafe",["AddrRep"],"void"),False,entry) <- entries,
-       symbol `elem` finalizers],
+     "finalizers" .= [entry | ((symbol,"ccall","unsafe",arguments',"void"),False,entry) <- entries,
+       arguments' `elem` [["AddrRep"],["AddrRep","AddrRep"]], symbol `elem` finalizers],
      "abi" .= [object ["symbol" .= symbol,"entry" .= entry,"convention" .= convention,"safety" .= safety,
        "arguments" .= arguments',"result" .= result] |
        ((symbol,convention,safety,arguments',result),_,entry) <- entries]])
@@ -1188,21 +1220,12 @@ finishPackageNativeWithDependencies packageTool ownedProduct dependencyPaths pub
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     linkedSource <- readFile linkedIR
     -- A typed Haskell address is not a C definition proof. Require the actual
-    -- linked definition before allowing its namespaced one-pointer adapter.
+    -- linked definition before allowing its namespaced pointer adapter.
     forM_ [value | value <- abi, member value "entry" `elem` map (Just . toJSON) finalizers] $ \value -> do
       symbol <- get value "symbol"
-      let definitions = [line | line <- lines linkedSource, "define " `isPrefixOf` line,
-            ("@" ++ symbol ++ "(") `isInfixOf` line]
-          valid line = let (before,rest) = break (== '@') line
-                           parameters = takeWhile (/= ')') (drop (length symbol + 2) rest)
-                           ordinary = ["dso_local","noundef"]
-                       in filter (`notElem` ordinary) (words before) == ["define","void"] &&
-                         case words parameters of
-                           "ptr":attributes -> not (',' `elem` parameters) && not (null attributes) &&
-                             "%" `isPrefixOf` last attributes && all (`elem` ["noundef","nocapture","readonly","writeonly"])
-                               (init attributes)
-                           _ -> False
-      check (length definitions == 1 && all valid definitions) ("package finalizer lacks an exact void(pointer) definition: " ++ symbol)
+      arguments' <- get value "arguments" :: IO [String]
+      check (nativeFinalizerDefinition symbol arguments' linkedSource)
+        ("package finalizer definition differs from its pointer ABI: " ++ symbol)
     -- Preserve actual constructor/destructor metadata. Sulong initializes each
     -- loaded component once and runs its destructors on normal context close.
     -- LLVM verification remains mandatory before and after trimming.

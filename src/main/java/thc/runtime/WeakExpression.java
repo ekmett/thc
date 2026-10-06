@@ -30,11 +30,11 @@ final class WeakExpression extends Expr {
             long flag;
             try { flag = operands[2].executeLong(frame); }
             catch (UnexpectedResultException failure) { throw propagate(failure); }
-            operands[3].executeRequiredAddress(frame);
+            var environment = operands[3].executeRequiredAddress(frame);
             var weak = operands[4].execute(frame);
             TupleResults.requireVoidCarrier(operands[5].execute(frame));
             var provider = Language.currentState(this).cbits();
-            FrameAccess.writeLong(frame, slots[offset], registry.addCFinalizer(function, address, flag, weak, provider));
+            FrameAccess.writeLong(frame, slots[offset], registry.addCFinalizer(function, address, flag, environment, weak, provider));
         } else {
             TupleResults.requireVoidCarrier(operands[1].execute(frame));
             var result = operation == WeakOp.FINALIZE ? registry.finalize(first) : registry.dereference(first);

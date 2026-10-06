@@ -159,22 +159,21 @@ public final class ManagedWeaks {
         return new WeakResult(1L, result);
     }
 
-    /** One-address C callbacks use a zero environment flag. */
+    /** A nonzero flag selects the environment/object C ABI; zero ignores the environment. */
     @TruffleBoundary public long addCFinalizer(ManagedAddress function, ManagedAddress address,
-            long flag, Object weak, SulongCbits provider) {
+            long flag, ManagedAddress environment, Object weak, SulongCbits provider) {
         Cleaner.Cleanable cancelled;
         synchronized (this) {
             var callback = function.finalizerFunction();
             if (callback == null) throw fault("Expected an original C function label");
             callback.requireOwner(provider);
-            if (flag != 0L) throw fault("Original C finalizer requires a one-address ABI");
+            callback.requireArity(flag == 0L ? 1 : 2);
             var handle = handle(weak);
             var payload = live.get(handle);
             Object key = payload == null ? null : payload.key();
             if (key == null) { if (payload != null) retire(payload); return 0L; }
             // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
             if (callback.getSymbol().equals("free")) Language.currentState(null).getNativeAllocations().requireFreeTarget(address);
-            else if (address != ManagedAddress.nullAddress()) address.requireByteRegion(0L, false);
             if (payload.action == null && payload.key == null
                     && payload.callbacks.isEmpty() && !payload.ownedFree && provider.isOwnedFree(callback)
                     && Language.currentState(null).getWeaks() == this) {
@@ -191,7 +190,7 @@ public final class ManagedWeaks {
                 }
             }
             cancelled = payload.disarm();
-            payload.addCallback(key, () -> callback.invoke(address));
+            payload.addCallback(key, flag == 0L ? () -> callback.invoke(address) : () -> callback.invoke(environment, address));
         }
         if (cancelled != null) cancelled.clean();
         return 1L;

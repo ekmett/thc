@@ -38,17 +38,21 @@ is no abandoned-context reclamation guarantee. Arena-close/downcall failures
 are retained and terminal as described in the weak guide; Windows LocalFree and
 arbitrary Haskell/package callbacks remain outside automatic retirement.
 
-Package-owned one-address finalizers use a separate typed admission path. The
+Package-owned C finalizers use a separate typed admission path. The
 exporter retains the actual stock `CLabel` declaration, its declared and
 normalized nominal types, and the unchanged foreign product. A normalized
-`FunPtr (Ptr a -> IO ())` proves a candidate ABI; it does not by itself make the
-label executable. Acquisition must retain the original C definition with an
-exact `void(pointer)` ABI and root its namespaced adapter in a completely linked
-component.
+`FunPtr (Ptr a -> IO ())` or `FunPtr (Ptr env -> Ptr a -> IO ())` proves the
+candidate argument list; it does not by itself make the label executable.
+Acquisition must retain the original C definition with the matching exact
+`void(pointer)` or `void(pointer, pointer)` ABI and root its namespaced adapter
+in a completely linked component. The environment flag must select that declared
+arity. Zero ignores the environment; every nonzero value passes it first.
 
 Runtime labels retain that component and owning context. Cross-context, closed
 component, ambiguous-label, malformed signature and disposed-allocation uses
-reject. Native allocation borrows cover callback execution, including known
+reject. Both arguments use the existing typed address transport, including opaque
+stable-pointer tokens. Native allocation borrows cover both arguments and their
+transitive pointer-cell graphs throughout callback execution, including known
 returned aliases. Registration and explicit finalization keep the existing
 DEAD-before-call, newest-first and no-replay rules. The reserved `free` label
 still uses checked allocation ownership; package labels do not acquire that

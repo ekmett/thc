@@ -436,17 +436,20 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
         let addresses = case field "addresses" proof of Just (Array values) -> toList values; _ -> []
         check (if variant `elem` ["plain", "wrapper"] then null addresses &&
             field "schema" proof == Just (Number (if variant == "wrapper" then 3 else 1))
-          else length addresses == (if variant == "finalizer-label" then 3 else 2) && field "schema" proof == Just (Number 2) &&
+          else length addresses == (if variant == "finalizer-label" then 4 else 2) && field "schema" proof == Just (Number 2) &&
             all (\address -> field "normalizationRole" address == Just (String "representational") &&
               field "declaredType" address /= Nothing && field "normalizedType" address /= Nothing &&
               field "emitted" address == Nothing) addresses)
           "Stock address declarations must retain nominal type evidence without inventing a foreign call"
         let callbacks = [address | address <- addresses, field "callback" address /= Just Null]
         check (if variant == "finalizer-label" then case callbacks of
-          [address] -> field "symbol" address == Just (String "thc_provenance_unlinked_finalizer") &&
-            field "callback" address == Just (object ["arguments" .= (["AddrRep"]::[String]), "result" .= ("void"::String)])
+          [_,_] -> all (\(symbol,arguments') -> case filter ((== Just (String symbol)) . field "symbol") callbacks of
+              [address] -> field "callback" address == Just (object ["arguments" .= arguments', "result" .= ("void"::String)])
+              _ -> False)
+            [("thc_provenance_unlinked_finalizer",["AddrRep"]::[String]),
+             ("thc_provenance_unlinked_environment_finalizer",["AddrRep","AddrRep"])]
           _ -> False
-          else null callbacks) "Only the actual FunPtr (Ptr a -> IO ()) type proves the finalizer ABI"
+          else null callbacks) "Only the actual normalized pointer-to-IO-unit type proves each finalizer ABI"
         case interfaceForeign core of
           ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs header body initializers finalizers)) [] -> do
             let wrappers = case field "wrappers" proof of Just (Array values) -> toList values; _ -> []

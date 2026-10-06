@@ -201,7 +201,7 @@ class ManagedWeakTest {
             new Object[]{0L, key, value, Unit.INSTANCE});
         var state = Language.currentState();
         assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"),
-            address, 0L, weak, state.cbits()));
+            address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
         var registration = new Registration(weak, new WeakReference<>(key, queue));
         try { whileKeyLive.run(); return registration; }
         finally { Reference.reachabilityFence(key); }
@@ -257,7 +257,7 @@ class ManagedWeakTest {
                 var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, operation);
                 var liveKey = new ManagedMutVar(Unit.INSTANCE); var liveAddress = allocations.malloc(8);
                 liveAddress.writeWord8(0, 73); var live = registry.make(liveKey, new ManagedMutVar(liveKey), null);
-                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), liveAddress, 0L, live, state.cbits()));
+                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), liveAddress, 0L, ManagedAddress.nullAddress(), live, state.cbits()));
                 for (var target : List.of(program.entryTarget("make"), gc.entryTarget("gc"))) {
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target);
                 }
@@ -287,7 +287,7 @@ class ManagedWeakTest {
         var key = new Object(); var weak = makeIdentity(program, key);
         var state = Language.currentState();
         assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"),
-            address, 0L, weak, state.cbits()));
+            address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
         var registration = new Registration(weak, new WeakReference<>(key, queue));
         Reference.reachabilityFence(key); return registration;
     }
@@ -324,7 +324,7 @@ class ManagedWeakTest {
                 var key = new ManagedMVar(); var request = key.beginRead(); var value = new ManagedMutVar(key);
                 var weak = ScalarTestCalls.callScalarTestTarget(program.entryTarget("make"),
                     new Object[]{0L, key, value, Unit.INSTANCE});
-                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, weak, state.cbits()));
+                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
                 var queue = new ReferenceQueue<Object>(); var keyReference = new WeakReference<Object>(key, queue);
                 var valueReference = new WeakReference<>(value); key = null; value = null;
                 collect(queue, gcWitness(queue)); requestGc(gc);
@@ -388,7 +388,7 @@ class ManagedWeakTest {
                 var address = allocations.malloc(8); address.writeWord8(0, 37);
                 var key = new ManagedMVar(); var value = new ManagedMutVar(key);
                 var weak = registry.make(key, value, null);
-                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, weak, state.cbits()));
+                assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
                 var calls = new ArrayList<Integer>();
                 assertEquals(1L, registry.addCallback(weak, () -> {
                     assertEquals(0L, registry.dereference(weak).getFlag());
@@ -402,7 +402,7 @@ class ManagedWeakTest {
                 var separateAddress = allocations.malloc(8); var separateKey = new ManagedMutVar(Unit.INSTANCE);
                 var explicit = registry.make(separateKey, new ManagedMutVar(separateKey), null);
                 var separate = new CFinalizerFunction(state.cbits(), "free", null).getAddress();
-                assertEquals(1L, registry.addCFinalizer(separate, separateAddress, 0L, explicit, state.cbits()));
+                assertEquals(1L, registry.addCFinalizer(separate, separateAddress, 0L, ManagedAddress.nullAddress(), explicit, state.cbits()));
                 assertDoesNotThrow(() -> separateAddress.readWord8(0));
                 registry.finalize(explicit); assertThrows(RuntimeFault.class, () -> separateAddress.readWord8(0));
                 // These checks own live keys; they do not require callbacks to keep dead keys alive.
@@ -478,7 +478,7 @@ class ManagedWeakTest {
                     var dropped = droppedOwnedFree(program, queue, address); weak = dropped.weak(); collect(queue, dropped.referent());
                 } else {
                     weak = state.getWeaks().make(key, new ManagedMutVar(key), null);
-                    assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, weak, state.cbits()));
+                    assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
                 }
                 var gate = new ManagedMVar();
                 var finalizing = ownedFreeTask(state, () -> {

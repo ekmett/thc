@@ -212,7 +212,7 @@ class PackagePointerCellsTest {
                 assertTrue(stream.readAddressByteOffset(24).sameLocation(output.plus(fixture.compressed().length)));
                 var action = new Object();
                 var weak = state.getWeaks().make(new Object(), new Object(), action);
-                assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("end_stream"), address, 0, weak, state.cbits()));
+                assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("end_stream"), address, 0, ManagedAddress.nullAddress(), weak, state.cbits()));
                 var finalized = state.getWeaks().finalize(weak);
                 assertEquals(1L, finalized.getFlag());
                 assertSame(action, finalized.getValue(), "flag reports the unforced Haskell action, not the C callback");

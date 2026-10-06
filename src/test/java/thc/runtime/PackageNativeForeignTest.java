@@ -243,7 +243,7 @@ public class PackageNativeForeignTest {
                         case "finalizer" -> {
                             var weak = state.getWeaks().make(new Object(), new Object(), null);
                             var provider = state.cbits();
-                            assertEquals(1L, state.getWeaks().addCFinalizer(provider.finalizerLabel("free"), address, 0L, weak, provider));
+                            assertEquals(1L, state.getWeaks().addCFinalizer(provider.finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, provider));
                             state.getWeaks().finalize(weak);
                             consumed = true;
                             assertEquals(0L, state.getWeaks().finalize(weak).getFlag());

@@ -62,6 +62,26 @@ class PackageFinalizersTest {
         assertEquals(List.of(), ((Map<?,?>) original.get("staticForeignImports")).get("expectedCalls"));
     }
 
+    @Test void environmentCallbackRequiresItsExactTwoPointerDeclarationAndComponentABI() throws Exception {
+        var declaration = with(address(type(pointer, function(pointer, io))),
+            "callback", map("arguments", list("AddrRep", "AddrRep"), "result", "void"));
+        var original = module(declaration);
+        var link = (Map<?,?>) original.get("packageNativeLink");
+        var entry = (Map<?,?>) ((List<?>) link.get("abi")).getFirst();
+        var complete = with(original, "packageNativeLink", with(link, "abi",
+            list(with(entry, "arguments", list("AddrRep", "AddrRep")))));
+        assertEquals(Set.of("thc_native_" + "a".repeat(64) + "_0"),
+            Objects.requireNonNull(PackageScalarLinks.read(complete)).getProved());
+        assertEquals(1, ((List<?>) CoreModules.merge(List.of(complete)).get("packageScalarLinks")).size());
+        assertThrows(IllegalArgumentException.class, () -> CoreModules.merge(List.of(original)),
+            "a two-pointer declaration cannot certify a one-pointer component");
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(original));
+        var onePointer = module(address(type(pointer, io)));
+        var mismatched = with(onePointer, "packageNativeLink", complete.get("packageNativeLink"));
+        assertThrows(IllegalArgumentException.class, () -> CoreModules.merge(List.of(mismatched)),
+            "a one-pointer declaration cannot certify a two-pointer component");
+    }
+
     @Test void ordinaryCallProofCannotAuthorizeAMarkedFinalizer() throws Exception {
         var original = module(address(type(pointer, io)));
         var proof = (Map<?,?>) original.get("staticForeignImports");
