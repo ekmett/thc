@@ -7,7 +7,7 @@ GHC bytecode or a call into the AST interpreter.
 
 ```sh
 bin/try.sh
-THC_BACKEND=bytecode bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
+THC_BACKEND=bytecode bin/run.sh build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd main:Fixtures.sumLoop 100000 --compile
 THC_BACKEND=bytecode THC_DIAGNOSTIC_UNSUPPORTED=true bin/try-map.sh
 ```
 

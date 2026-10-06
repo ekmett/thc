@@ -21,8 +21,18 @@ You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16
 **GraalVM Community Edition 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
 point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
 directory. The Gradle wrapper downloads its dependencies on the first build.
+These versions are checked: `thc run` requires cabal-install 3.16, and Truffle
+rejects any other GraalVM release, older or newer, by falling back to
+interpretation without runtime compilation.
 Linux x86_64 setup includes clang and GMP development headers and libraries
 (for example, `libgmp-dev` on Debian/Ubuntu) for native package dependencies.
+
+`thc run` also needs LLVM 18's `clang`, `llvm-link`, `opt` and `llvm-nm`, even
+for pure Haskell programs: acquisition compiles the native imports of boot
+libraries such as `ghc-internal` to LLVM bitcode. CI uses Homebrew's keg-only
+`llvm@18` on macOS and `clang-18` and `llvm-18` on Linux. Put that `bin`
+directory on `PATH` or set the
+[LLVM tool variables](docs/interface-foreign.md#run-a-package-with-native-imports).
 
 The JDK is stock, but THC's default distribution includes **patched Truffle API,
 runtime and Sulong JARs**. Their [patch inventory and shared-host effects](docs/truffle-patches.md)
@@ -165,13 +175,13 @@ checks that code was installed:
 
 ```sh
 bin/try.sh
-bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
+bin/run.sh build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd main:Fixtures.sumLoop 100000 --compile
 ```
 
 The [bytecode backend](docs/bytecode.md) is the default. To use the AST backend:
 
 ```sh
-THC_BACKEND=ast bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
+THC_BACKEND=ast bin/run.sh build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd main:Fixtures.sumLoop 100000 --compile
 ```
 
 THC launchers disable Graal's automatic loop vectorization by default. Explicit JDK
