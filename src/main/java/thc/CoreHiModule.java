@@ -8,7 +8,7 @@ import java.util.function.Function;
 
 /** Native retained-Core lowering for pinned GHC 9.14.1. Declarations and RHS
  * syntax are parsed at module admission; unsupported tags fail immediately.
- * Supported scalar, fixed-lifted polymorphic and monomorphic boxed bodies are lowered only when demanded. */
+ * Supported scalar, fixed-lifted polymorphic and ordinary boxed bodies are lowered only when demanded. */
 final class CoreHiModule {
     // Internal type forms cannot collide with canonical unit:module names.
     private static final String FORALL = "\u0000hi-forall:", TYPE_VARIABLE = "\u0000hi-type-variable:", ABSTRACT_LIFTED = "\u0000hi-lifted-variable:";
@@ -20,7 +20,7 @@ final class CoreHiModule {
         boolean abstractLifted() { return name.startsWith(ABSTRACT_LIFTED); }
         Type result() { return arguments.get(1); }
     }
-    private record Constructor(Type result, List<Type> fields, Map<String,Object> metadata) {}
+    private record Constructor(Type result, List<Binder> parameters, List<Type> fields, Map<String,Object> metadata) {}
     private record Info(int arity, List<Boolean> marks, Integer join) {}
     private record Binder(String name, Type type, Info info, int offset, boolean typeVariable) {}
     private record Expr(int tag, List<Object> fields, int offset) {}
@@ -34,7 +34,7 @@ final class CoreHiModule {
     private final Function<String, CoreHiModule> dependencyModules;
     private final Map<Integer,Type> shared = new HashMap<>();
     private final Set<Integer> readingTypes = new HashSet<>();
-    private final Set<String> dataTypes = new HashSet<>();
+    private final Map<String,List<Binder>> dataTypes = new HashMap<>();
     private final Map<String,Constructor> constructors = new LinkedHashMap<>();
     private final Map<String,Binder> declarations = new LinkedHashMap<>();
     private final Map<String,Definition> definitions = new LinkedHashMap<>();
@@ -94,7 +94,7 @@ final class CoreHiModule {
 
     // Dependency resolution occurs only after admission has reserved every local declaration.
     private CoreHiModule owner(String id) {
-        if (definitions.containsKey(id) || declarations.containsKey(id) || constructors.containsKey(id) || dataTypes.contains(id)) return this;
+        if (definitions.containsKey(id) || declarations.containsKey(id) || constructors.containsKey(id) || dataTypes.containsKey(id)) return this;
         return dependencyModules.apply(id);
     }
     private String prefix() { return reader.module.unit() + ":" + reader.module.name() + "."; }
@@ -113,6 +113,10 @@ final class CoreHiModule {
         if (constructor == null) return null;
         Type signature = constructor.result;
         for (int i = constructor.fields.size() - 1; i >= 0; i--) signature = Type.fun(constructor.fields.get(i), signature);
+        for (int i = constructor.parameters.size() - 1; i >= 0; i--) {
+            Binder parameter = constructor.parameters.get(i);
+            signature = new Type(FORALL + parameter.name, List.of(parameter.type, signature));
+        }
         return signature;
     }
     Map<String,Object> binding(String id) {
@@ -122,12 +126,26 @@ final class CoreHiModule {
     }
 
     private void dataDeclaration(CoreHiReader.Cursor c, CoreHiReader.ExternalName name, int offset) {
-        c.require(name.namespace() == 3 && dataTypes.add(CoreHiNames.id(name)), "invalid or duplicate data type");
-        c.require(c.count(1) == 0, "unsupported data type parameters");
+        c.require(name.namespace() == 3 && !dataTypes.containsKey(CoreHiNames.id(name)), "invalid or duplicate data type");
+        int parameterCount = c.count(2);
+        var parameters = new ArrayList<Binder>(parameterCount); var names = new HashSet<String>();
+        for (int i = 0; i < parameterCount; i++) {
+            Binder parameter = lambdaBinder(c, 0);
+            c.require(parameter.typeVariable && liftedKind(parameter.type) && names.add(parameter.name),
+                    "unsupported or duplicate data type parameter");
+            int visibility = c.byteValue(); c.require(visibility <= 1, "invalid data binder visibility");
+            if (visibility == 1) c.require(c.byteValue() <= 2, "invalid named data binder visibility");
+            parameters.add(parameter);
+        }
+        dataTypes.put(CoreHiNames.id(name), List.copyOf(parameters));
         Type kind = type(c, 0);
         c.require(liftedKind(kind), "unsupported data result kind " + kind);
         c.require(!c.optional(), "unsupported data C type");
-        c.require(c.count(1) == 0 && c.count(1) == 0, "unsupported data roles or context");
+        int roles = c.count(1); c.require(roles == parameterCount, "data role count mismatch");
+        for (int i = 0; i < roles; i++) {
+            int role = c.byteValue(); c.require(role >= 1 && role <= 3, "invalid data role");
+        }
+        c.require(c.count(1) == 0, "unsupported data context");
         c.require(c.byteValue() == 1, "unsupported data type form (requires ordinary boxed data)");
         int count = c.count(1); c.require(count > 0, "unsupported empty native data type");
         // GHC allocates tags by declaration order, starting at fIRST_TAG = 1.
@@ -140,18 +158,30 @@ final class CoreHiModule {
         c.require(con.module().equals(reader.module) && con.namespace() == 1, "invalid data constructor identity");
         c.require(!bool(c), "unsupported data constructor wrapper");
         bool(c); // infix printing only
-        c.require(c.count(1) == 0 && c.count(1) == 0 && c.count(1) == 0 && c.count(1) == 0,
-                "unsupported existential, user type binders, equalities or constructor context");
+        c.require(c.count(1) == 0, "unsupported existential constructor binders");
+        var parameters = dataTypes.get(CoreHiNames.id(name));
+        int universals = c.count(2); c.require(universals == parameters.size(), "unsupported constructor type binders");
+        var fieldScope = new HashMap<String,Type>();
+        for (int i = 0; i < universals; i++) {
+            Binder parameter = lambdaBinder(c, 0), expected = parameters.get(i);
+            c.require(parameter.typeVariable && parameter.name.equals(expected.name) && parameter.type.equals(expected.type),
+                    "unsupported reordered or refined constructor type binder");
+            c.require(c.byteValue() <= 2, "invalid constructor forall visibility");
+            fieldScope.put(parameter.name, Type.scalar(ABSTRACT_LIFTED + CoreHiNames.id(name) + "." + i));
+        }
+        c.require(c.count(1) == 0 && c.count(1) == 0, "unsupported constructor equalities or context");
         int arity = c.count(2);
         var fields = new ArrayList<Type>(arity); var representations = new ArrayList<Map<String,Object>>(arity);
-        var primitiveReps = new ArrayList<Object>(arity);
+        var primitiveReps = new ArrayList<Object>(arity); var fieldLifted = new ArrayList<Boolean>(arity);
         for (int i = 0; i < arity; i++) {
             type(c, 0); // multiplicity
             Type field = type(c, 0);
             // Reject wider fields before owner-aware representation lookup can resolve a dependency.
-            c.require(scalar(field), "unsupported constructor field type " + field);
-            var proof = rep(field, true, new Expr(-1, List.of(), offset));
-            fields.add(field); representations.add(proof); primitiveReps.add(proof.get("primReps"));
+            Type storage = fieldScope.get(field.name.startsWith(TYPE_VARIABLE) ? field.name.substring(TYPE_VARIABLE.length()) : "");
+            c.require(scalar(field) || storage != null && field.arguments.isEmpty(), "unsupported constructor field type " + field);
+            boolean lifted = storage != null;
+            var proof = rep(lifted ? storage : field, !lifted, new Expr(-1, List.of(), offset));
+            fields.add(field); fieldLifted.add(lifted); representations.add(proof); primitiveReps.add(proof.get("primReps"));
         }
         c.require(c.count(1) == 0, "unsupported record field labels");
         int strictCount = c.count(1); c.require(strictCount == 0 || strictCount == arity, "constructor strictness count mismatch");
@@ -166,9 +196,9 @@ final class CoreHiModule {
         }
         String id = CoreHiNames.id(con);
         var metadata = map("id", id, "name", con.occurrence(), "arity", (long) arity, "tag", (long) tag, "kind", "boxed",
-                "strictFields", List.copyOf(strict), "fieldLifted", Collections.nCopies(arity, false),
+                "strictFields", List.copyOf(strict), "fieldLifted", List.copyOf(fieldLifted),
                 "fieldReps", primitiveReps, "fieldTypes", representations);
-        c.require(constructors.putIfAbsent(id, new Constructor(new Type(CoreHiNames.id(name), List.of()), List.copyOf(fields), metadata)) == null,
+        c.require(constructors.putIfAbsent(id, new Constructor(new Type(CoreHiNames.id(name), parameters.stream().map(p -> Type.scalar(TYPE_VARIABLE + p.name)).toList()), parameters, List.copyOf(fields), metadata)) == null,
                 "duplicate data constructor " + id);
     }
 
@@ -575,13 +605,20 @@ final class CoreHiModule {
                         String id = CoreHiNames.id((CoreHiReader.ExternalName) alt.discriminator);
                         var module = owner(id);
                         var constructor = module == null ? null : module.constructors.get(id);
-                        if (constructor == null || !constructor.result.equals(scrutinee.type)) throw error(e, "unsupported data alternative " + id);
+                        if (constructor == null || !constructor.result.name.equals(scrutinee.type.name) ||
+                                constructor.parameters.size() != scrutinee.type.arguments.size()) throw error(e, "unsupported data alternative " + id);
+                        var fieldScope = new HashMap<String,Type>();
+                        for (int i = 0; i < constructor.parameters.size(); i++) {
+                            Type supplied = scrutinee.type.arguments.get(i);
+                            if (!lifted(supplied, e)) throw error(e, "unsupported unlifted data argument");
+                            fieldScope.put(constructor.parameters.get(i).name, supplied);
+                        }
                         if (alt.binders.size() != constructor.fields.size()) throw error(e, "constructor case field count mismatch " + id);
                         discriminator = id;
                         for (int i = 0; i < alt.binders.size(); i++) {
-                            Binder field = new Binder(alt.binders.get(i), constructor.fields.get(i), new Info(0, null, null), alt.rhs.offset, false);
+                            Binder field = new Binder(alt.binders.get(i), resolve(constructor.fields.get(i), fieldScope, e, false), new Info(0, null, null), alt.rhs.offset, false);
                             Variable fieldVariable = local(field); branch.put(field.name, fieldVariable);
-                            ids.add(fieldVariable.id); parameters.add(binder(field, fieldVariable, true));
+                            ids.add(fieldVariable.id); parameters.add(binder(field, fieldVariable, !lifted(field.type, e)));
                         }
                     } else if (!alt.binders.isEmpty()) throw error(e, "unexpected scalar alternative binders");
                     Lowered rhs = lower(alt.rhs, branch, typeScope); if (result == null) result = rhs.type;
@@ -663,9 +700,11 @@ final class CoreHiModule {
         };
     }
     private boolean data(Type type) {
-        if (!type.arguments.isEmpty() || type.name.indexOf(':') < 0) return false;
+        if (type.name.indexOf(':') < 0) return false;
         var module = owner(type.name);
-        return module != null && module.dataTypes.contains(type.name);
+        var parameters = module == null ? null : module.dataTypes.get(type.name);
+        if (parameters == null || parameters.size() != type.arguments.size()) return false;
+        return type.arguments.stream().allMatch(argument -> argument.function() || argument.abstractLifted() || data(argument));
     }
     private boolean lifted(Type type, Expr location) {
         type = runtimeType(type, location);
