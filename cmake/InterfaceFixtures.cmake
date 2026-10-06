@@ -189,3 +189,34 @@ add_custom_command(OUTPUT ${ready_outputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Generate original readiness Core, native observations and ABI controls")
 add_custom_target(fixture-original-fd-ready DEPENDS ${ready_outputs})
+
+# Native JVM .hi envelope checks: stock GHC only, no plugin, CBD or acquisition.
+set(hi_out "${PROJECT_SOURCE_DIR}/build/native-hi-reader")
+set(hi_outputs)
+foreach(mode normal safe max thin)
+  if(mode STREQUAL "normal")
+    set(compression 1)
+  elseif(mode STREQUAL "max")
+    set(compression 3)
+  else()
+    set(compression 2)
+  endif()
+  if(mode STREQUAL "thin")
+    set(retain -fno-write-if-simplified-core)
+  else()
+    set(retain -fwrite-if-simplified-core)
+  endif()
+  set(hi_file "${hi_out}/${mode}/NativeHiFixture.hi")
+  list(APPEND hi_outputs "${hi_file}")
+  add_custom_command(OUTPUT "${hi_file}"
+    BYPRODUCTS "${hi_out}/${mode}/NativeHiFixture.o"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${hi_out}/${mode}"
+    COMMAND ${fixture_env} "${GHC}" -c -O1 -fforce-recomp -hide-all-packages -package base
+      -this-unit-id thc-native-hi-fixture ${retain} "-fwrite-if-compression=${compression}"
+      -hidir "${hi_out}/${mode}" -odir "${hi_out}/${mode}"
+      "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiFixture.hs"
+    DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiFixture.hs" ${toolchain_inputs}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+    COMMENT "Compile ${mode} GHC interface for native envelope checks")
+endforeach()
+add_custom_target(fixture-native-hi-reader DEPENDS ${hi_outputs})

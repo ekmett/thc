@@ -66,6 +66,12 @@ quarantine need explicit package/archive products before admission. The producti
 pinned-source and installed-Core providers remain available; fixture generation
 does not establish runtime support for either provider.
 
+`native-hi-reader` compiles `NativeHiFixture.hs` with stock GHC 9.14.1 at
+compression levels 1, 2 and 3 with retained Core, plus a thin interface.
+`CoreHiReaderTest` checks native Java envelope/table/section indexing and malformed
+input rejection. This group needs no plugin, CBD or installed-Core acquisition;
+it does not establish executable interface loading.
+
 `native-open-request` compiles its existing Haskell observer and THC C bridge
 with the installed GHC packages on Linux x86_64 and Darwin x86_64/arm64. It needs
 no Core export or fixture-tool build. `NativeFileProviderTest` executes the child
