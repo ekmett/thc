@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
+import java.math.BigInteger;
 import java.util.*;
 import java.util.function.Function;
 
 /** Native retained-Core lowering for pinned GHC 9.14.1. Declarations and RHS
  * syntax are parsed at module admission; unsupported tags fail immediately.
- * Supported scalar binding bodies are lowered only when demanded. */
+ * Supported scalar and monomorphic boxed binding bodies are lowered only when demanded. */
 final class CoreHiModule {
     record Type(String name, List<Type> arguments) {
         static Type scalar(String primitive) { return new Type(primitive, List.of()); }
@@ -15,6 +16,7 @@ final class CoreHiModule {
         boolean function() { return name.equals("->"); }
         Type result() { return arguments.get(1); }
     }
+    private record Constructor(Type result, List<Type> fields, Map<String,Object> metadata) {}
     private record Info(int arity, List<Boolean> marks, Integer join) {}
     private record Binder(String name, Type type, Info info, int offset) {}
     private record Expr(int tag, List<Object> fields, int offset) {}
@@ -28,6 +30,8 @@ final class CoreHiModule {
     private final Function<CoreHiReader.ExternalName, Type> dependencyTypes;
     private final Map<Integer,Type> shared = new HashMap<>();
     private final Set<Integer> readingTypes = new HashSet<>();
+    private final Set<String> dataTypes = new HashSet<>();
+    private final Map<String,Constructor> constructors = new LinkedHashMap<>();
     private final Map<String,Binder> declarations = new LinkedHashMap<>();
     private final Map<String,Definition> definitions = new LinkedHashMap<>();
     private final Map<String,Variable> topScope = new HashMap<>();
@@ -47,9 +51,10 @@ final class CoreHiModule {
         for (int i = 0; i < count; i++) {
             c.unsigned(64); c.unsigned(64); // declaration fingerprint
             int offset = c.position(), tag = c.byteValue();
-            c.require(tag == 0, "unsupported native Core declaration tag " + tag + " (scalar IfaceId declarations only)");
+            c.require(tag == 0 || tag == 2, "unsupported native Core declaration tag " + tag);
             var name = CoreHiNames.read(reader, c);
             c.require(name.module().equals(reader.module), "declaration belongs to another module");
+            if (tag == 2) { dataDeclaration(c, name, offset); continue; }
             var body = reader.cursor(c.lazy(), "IfaceId " + CoreHiNames.id(name));
             Type type = type(body, 0);
             List<Boolean> marks = details(body);
@@ -85,19 +90,74 @@ final class CoreHiModule {
     private String prefix() { return reader.module.unit() + ":" + reader.module.name() + "."; }
     Map<String,Object> metadata() {
         return map("schema", 1L, "ghc", "9.14.1", "unit", reader.module.unit(), "module", reader.module.name(),
-                "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", List.of(), "constructors", List.of());
+                "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", List.of(), "constructors", constructors.values().stream().map(Constructor::metadata).toList());
     }
     boolean containsSymbol(String id) { return definitions.containsKey(id); }
     Set<String> bindingIds() { return Collections.unmodifiableSet(definitions.keySet()); }
     Type signature(String id) {
         var definition = definitions.get(id);
         var declaration = declarations.get(id);
-        return definition != null ? definition.binder.type : declaration != null ? declaration.type : null;
+        if (definition != null) return definition.binder.type;
+        if (declaration != null) return declaration.type;
+        var constructor = constructors.get(id);
+        if (constructor == null) return null;
+        Type signature = constructor.result;
+        for (int i = constructor.fields.size() - 1; i >= 0; i--) signature = Type.fun(constructor.fields.get(i), signature);
+        return signature;
     }
     Map<String,Object> binding(String id) {
         var definition = definitions.get(id);
         if (definition == null) return null;
         return lowered.computeIfAbsent(id, ignored -> binding(definition, new Variable(id, definition.binder.type), topScope));
+    }
+
+    private void dataDeclaration(CoreHiReader.Cursor c, CoreHiReader.ExternalName name, int offset) {
+        c.require(name.namespace() == 3 && dataTypes.add(CoreHiNames.id(name)), "invalid or duplicate data type");
+        c.require(c.count(1) == 0, "unsupported data type parameters");
+        Type kind = type(c, 0);
+        Type lifted = new Type("ghc-internal:GHC.Internal.Types.Lifted", List.of());
+        Type boxed = new Type("ghc-internal:GHC.Internal.Types.BoxedRep", List.of(lifted));
+        Type liftedRep = new Type("ghc-internal:GHC.Internal.Types.LiftedRep", List.of());
+        c.require(kind.equals(new Type("ghc-internal:GHC.Internal.Types.Type", List.of())) ||
+                kind.equals(new Type("ghc-internal:GHC.Internal.Prim.TYPE", List.of(boxed))) ||
+                kind.equals(new Type("ghc-internal:GHC.Internal.Prim.TYPE", List.of(liftedRep))), "unsupported data result kind " + kind);
+        c.require(!c.optional(), "unsupported data C type");
+        c.require(c.count(1) == 0 && c.count(1) == 0, "unsupported data roles or context");
+        c.require(c.byteValue() == 1, "unsupported data type form (requires ordinary boxed data)");
+        int count = c.count(1); c.require(count == 1, "native data slice requires one constructor");
+        var con = CoreHiNames.read(reader, c);
+        c.require(con.module().equals(reader.module) && con.namespace() == 1, "invalid data constructor identity");
+        c.require(!bool(c), "unsupported data constructor wrapper");
+        bool(c); // infix printing only
+        c.require(c.count(1) == 0 && c.count(1) == 0 && c.count(1) == 0 && c.count(1) == 0,
+                "unsupported existential, user type binders, equalities or constructor context");
+        int arity = c.count(2);
+        var fields = new ArrayList<Type>(arity); var representations = new ArrayList<Map<String,Object>>(arity);
+        var primitiveReps = new ArrayList<Object>(arity);
+        for (int i = 0; i < arity; i++) {
+            type(c, 0); // multiplicity
+            Type field = type(c, 0); var proof = rep(field, true, new Expr(-1, List.of(), offset));
+            c.require(Objects.equals(proof.get("kind"), "long"), "unsupported constructor field type " + field);
+            fields.add(field); representations.add(proof); primitiveReps.add(proof.get("primReps"));
+        }
+        c.require(c.count(1) == 0, "unsupported record field labels");
+        int strictCount = c.count(1); c.require(strictCount == 0 || strictCount == arity, "constructor strictness count mismatch");
+        var strict = new ArrayList<Boolean>(arity);
+        for (int i = 0; i < arity; i++) {
+            int bang = strictCount == 0 ? 0 : c.byteValue();
+            c.require(bang <= 1, "unsupported unpacked constructor field"); strict.add(bang == 1);
+        }
+        int sourceCount = c.count(2); c.require(sourceCount == 0 || sourceCount == arity, "constructor source strictness count mismatch");
+        for (int i = 0; i < sourceCount; i++) {
+            c.require(c.byteValue() <= 2 && c.byteValue() <= 2, "invalid constructor source bang");
+        }
+        c.require(!bool(c) && c.byteValue() == 0, "unsupported GADT or data family parent");
+        String id = CoreHiNames.id(con);
+        var metadata = map("id", id, "name", con.occurrence(), "arity", (long) arity, "tag", 1L, "kind", "boxed",
+                "strictFields", List.copyOf(strict), "fieldLifted", Collections.nCopies(arity, false),
+                "fieldReps", primitiveReps, "fieldTypes", representations);
+        c.require(constructors.putIfAbsent(id, new Constructor(new Type(CoreHiNames.id(name), List.of()), List.copyOf(fields), metadata)) == null,
+                "duplicate data constructor " + id);
     }
 
     private Type type(CoreHiReader.Cursor c, int depth) {
@@ -303,14 +363,27 @@ final class CoreHiModule {
         c.require(tag == 6, "unsupported native Core literal tag " + tag);
         int number = c.byteValue(); c.require(number >= 1 && number <= 10, "unsupported numeric literal type " + number);
         int integerTag = c.byteValue();
-        c.require(integerTag == 0, "scalar literal exceeds GHC signed 64-bit encoding");
-        long value = c.signed();
+        c.require(integerTag <= 2, "invalid GHC Integer tag");
+        BigInteger value;
+        if (integerTag == 0) value = BigInteger.valueOf(c.signed());
+        else {
+            int size = c.count(1);
+            c.require(size > 0 && size <= 8, "scalar literal magnitude exceeds 64 bits");
+            byte[] magnitude = new byte[size];
+            for (int i = size - 1; i >= 0; i--) magnitude[i] = (byte) c.byteValue();
+            c.require(magnitude[0] != 0, "noncanonical GHC Integer magnitude");
+            value = new BigInteger(1, magnitude);
+            if (integerTag == 1) value = value.negate();
+            c.require(value.compareTo(BigInteger.valueOf(Long.MIN_VALUE)) < 0 || value.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0,
+                    "noncanonical large GHC Integer");
+        }
         String[] kinds = {"", "int", "int8", "int16", "int32", "int64", "word", "word8", "word16", "word32", "word64"};
         String[] reps = {"", "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep"};
         int width = switch (number) { case 2, 7 -> 8; case 3, 8 -> 16; case 4, 9 -> 32; default -> 64; };
-        c.require(number < 6 ? width == 64 || value >= -(1L << (width - 1)) && value < (1L << (width - 1))
-                : value >= 0 && (width == 64 || value < (1L << width)), "out-of-range scalar literal");
-        return new Literal(kinds[number], Long.toString(value), Type.scalar(reps[number]));
+        BigInteger bound = BigInteger.ONE.shiftLeft(number < 6 ? width - 1 : width);
+        c.require(value.compareTo(number < 6 ? bound.negate() : BigInteger.ZERO) >= 0 && value.compareTo(bound) < 0,
+                "out-of-range scalar literal");
+        return new Literal(kinds[number], value.toString(), Type.scalar(reps[number]));
     }
 
     private Map<String,Object> binding(Definition definition, Variable variable, Map<String,Variable> scope) {
@@ -348,8 +421,8 @@ final class CoreHiModule {
         var information = map("cbvEligible", binder.info.marks != null || binder.info.join != null);
         if (binder.info.marks != null) information.put("cbvMarks", binder.info.marks);
         if (binder.info.join != null) information.put("joinArity", (long) binder.info.join);
-        return map("id", variable.id, "name", binder.name, "lifted", binder.type.function(), "coercion", false,
-                "rep", rep(binder.type, evaluated || !binder.type.function(), location), "info", information);
+        return map("id", variable.id, "name", binder.name, "lifted", lifted(binder.type), "coercion", false,
+                "rep", rep(binder.type, evaluated || !lifted(binder.type), location), "info", information);
     }
     private Variable local(Binder binder) { return new Variable("\u0000hi-local:" + prefix() + localOrdinal++, binder.type); }
     private Lowered lower(Expr e, Map<String,Variable> scope) {
@@ -364,6 +437,8 @@ final class CoreHiModule {
                 var name = (CoreHiReader.ExternalName) e.fields.getFirst();
                 String id = CoreHiNames.id(name);
                 Type type;
+                var constructor = constructors.get(id);
+                if (constructor != null) yield expression(signature(id), e, "con", id, (long) constructor.fields.size());
                 var signature = CoreHiNames.scalarSignature(name);
                 if (CoreHiNames.isPrimop(name)) {
                     if (signature == null) throw error(e, "unsupported scalar primop signature " + id);
@@ -412,7 +487,7 @@ final class CoreHiModule {
                 for (var argument : args) {
                     if (!result.function()) throw error(e, "unsupported application of a non-function scalar type");
                     Lowered value = lower(argument, scope);
-                    arguments.add(value.expression); lifted.add(value.type.function()); result = result.result();
+                    arguments.add(value.expression); lifted.add(lifted(value.type)); result = result.result();
                 }
                 // Retained interfaces do not carry Core's speculation predicates.
                 yield expression(result, e, "app", head.expression, arguments, lifted, false, false);
@@ -425,15 +500,29 @@ final class CoreHiModule {
                 var alternatives = new ArrayList<List<Object>>(); Type result = null;
                 for (var raw : (List<?>) e.fields.get(2)) {
                     Alt alt = (Alt) raw;
-                    if (alt.tag == 1 || !alt.binders.isEmpty()) throw error(e, "unsupported data alternative or alternative fields");
-                    Lowered rhs = lower(alt.rhs, inner); if (result == null) result = rhs.type;
+                    var branch = new HashMap<>(inner);
+                    var parameters = new ArrayList<Map<String,Object>>();
+                    var ids = new ArrayList<String>();
                     Object discriminator = null;
+                    if (alt.tag == 1) {
+                        String id = CoreHiNames.id((CoreHiReader.ExternalName) alt.discriminator);
+                        var constructor = constructors.get(id);
+                        if (constructor == null || !constructor.result.equals(scrutinee.type)) throw error(e, "unsupported data alternative " + id);
+                        if (alt.binders.size() != constructor.fields.size()) throw error(e, "constructor case field count mismatch " + id);
+                        discriminator = id;
+                        for (int i = 0; i < alt.binders.size(); i++) {
+                            Binder field = new Binder(alt.binders.get(i), constructor.fields.get(i), new Info(0, null, null), alt.rhs.offset);
+                            Variable fieldVariable = local(field); branch.put(field.name, fieldVariable);
+                            ids.add(fieldVariable.id); parameters.add(binder(field, fieldVariable, true));
+                        }
+                    } else if (!alt.binders.isEmpty()) throw error(e, "unexpected scalar alternative binders");
+                    Lowered rhs = lower(alt.rhs, branch); if (result == null) result = rhs.type;
                     if (alt.tag == 2) {
                         Literal literal = (Literal) alt.discriminator;
                         if (literal.value == null) throw error(e, "unsupported case literal");
                         discriminator = values(literal.kind, literal.value);
                     }
-                    alternatives.add(values(alt.tag == 0 ? "default" : "lit", discriminator, List.of(), rhs.expression, map("binders", List.of())));
+                    alternatives.add(values(alt.tag == 0 ? "default" : alt.tag == 1 ? "data" : "lit", discriminator, ids, rhs.expression, map("binders", parameters)));
                 }
                 Lowered selected = expression(result, e, "case", scrutinee.expression, variable.id, alternatives);
                 metadata(selected.expression).put("binder", binder(binder, variable, true));
@@ -457,13 +546,15 @@ final class CoreHiModule {
     }
     private Lowered expression(Type type, Expr origin, Object... fields) {
         var expression = values(fields);
-        boolean evaluated = fields[0].equals("lam") || fields[0].equals("lit") || fields[0].equals("var") && !type.function();
+        boolean evaluated = fields[0].equals("lam") || fields[0].equals("lit") || fields[0].equals("var") && !lifted(type);
         expression.add(map("rep", rep(type, evaluated, origin)));
         return new Lowered(expression, type);
     }
+    private boolean lifted(Type type) { return type.function() || dataTypes.contains(type.name); }
     private Map<String,Object> rep(Type type, boolean evaluated, Expr location) {
         if (type.function()) return map("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         if (!type.arguments.isEmpty()) throw error(location, "unsupported native Core runtime type " + type.name);
+        if (dataTypes.contains(type.name)) return map("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         String kind = switch (type.name) {
             case "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep" -> "long";
             default -> throw error(location, "unsupported native Core runtime type " + type.name);
