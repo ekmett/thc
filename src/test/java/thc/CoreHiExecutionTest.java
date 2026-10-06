@@ -16,13 +16,24 @@ import static org.junit.jupiter.api.Assertions.*;
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
     private static final String UNIT = "thc-native-hi-scalar";
+    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiBox", "NativeHiBoxType");
     @TempDir Path directory;
 
-    private Path manifest() throws Exception {
-        var modules = new ArrayList<Object>();
-        for (String module : List.of("NativeHiScalar", "NativeHiDependency", "NativeHiBox", "NativeHiBoxType")) {
+    private List<String> interfaces() throws Exception {
+        var paths = new ArrayList<String>();
+        for (String module : MODULES) {
             Path file = directory.resolve(module + ".hi");
             Files.copy(INPUT.resolve(module + ".hi"), file, StandardCopyOption.REPLACE_EXISTING);
+            paths.add(file.toString());
+        }
+        return paths;
+    }
+
+    private Path manifest() throws Exception {
+        interfaces();
+        var modules = new ArrayList<Object>();
+        for (String module : MODULES) {
+            Path file = directory.resolve(module + ".hi");
             String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)));
             modules.add(Map.of("name", module, "boundary", "optimized-Core-after-Tidy-before-CorePrep", "sha256", hash,
                     "interface", Map.of("format", "ghc-hi", "path", file.toString(), "sha256", hash),
@@ -35,12 +46,8 @@ class CoreHiExecutionTest {
         return manifest;
     }
 
-    private String request(Path manifest, String entry, String backend) {
-        return request(manifest, "NativeHiScalar", entry, backend);
-    }
-
-    private String request(Path manifest, String module, String entry, String backend) {
-        return CoreModules.request(List.of("@" + manifest), UNIT + ":" + module + "." + entry,
+    private String request(List<String> paths, String module, String entry, String backend) {
+        return CoreModules.request(paths, UNIT + ":" + module + "." + entry,
                 true, false, backend, true, false, null, false, false);
     }
 
@@ -53,12 +60,12 @@ class CoreHiExecutionTest {
             assertEquals(row[0] <= 0 ? 0 : row[0] * (row[0] + 1) / 2, row[2], "native recursion agrees with model");
             assertEquals(row[0] < 0 ? -7 : 3 * (row[0] + 2), row[3], "native constructor/case agrees with model");
         }
-        Path manifest = manifest();
+        List<String> paths = interfaces();
         for (String backend : List.of("ast", "bytecode")) {
             try (var context = Main.executionContext(false, false)) {
-                var entry = context.eval("thc", request(manifest, "entry", backend));
-                var recursive = context.eval("thc", request(manifest, "recursive", backend));
-                var boxed = context.eval("thc", request(manifest, "NativeHiBox", "entry", backend));
+                var entry = context.eval("thc", request(paths, "NativeHiScalar", "entry", backend));
+                var recursive = context.eval("thc", request(paths, "NativeHiScalar", "recursive", backend));
+                var boxed = context.eval("thc", request(paths, "NativeHiBox", "entry", backend));
                 for (var row : rows) {
                     assertEquals(row[1], entry.execute(row[0]).asLong(), backend + " cross-module/private call");
                     assertEquals(row[2], recursive.execute(row[0]).asLong(), backend + " recursive case");
@@ -76,19 +83,50 @@ class CoreHiExecutionTest {
             }
         }
         try (var files = Files.list(directory)) {
-            assertEquals(Set.of("NativeHiScalar.hi", "NativeHiDependency.hi", "NativeHiBox.hi", "NativeHiBoxType.hi", "packages.json"),
+            assertEquals(Set.of("NativeHiScalar.hi", "NativeHiDependency.hi", "NativeHiBox.hi", "NativeHiBoxType.hi"),
                     files.map(file -> file.getFileName().toString()).collect(java.util.stream.Collectors.toSet()));
+        }
+        // Published native manifests retain the same input route and ownership.
+        try (var context = Main.executionContext(false, false)) {
+            var entry = context.eval("thc", request(List.of("@" + manifest()), "NativeHiScalar", "entry", "bytecode"));
+            assertEquals(rows.getLast()[1], entry.execute(rows.getLast()[0]).asLong());
         }
     }
 
     @Test void changedInterfaceIsRejectedBeforeExecution() throws Exception {
         Path manifest = manifest();
-        String request = request(manifest, "entry", "bytecode");
+        var requests = List.of(request(List.of("@" + manifest), "NativeHiScalar", "entry", "bytecode"),
+                request(MODULES.stream().map(module -> directory.resolve(module + ".hi").toString()).toList(), "NativeHiScalar", "entry", "bytecode"));
         Path source = directory.resolve("NativeHiScalar.hi");
         Files.write(source, new byte[]{0}, StandardOpenOption.APPEND);
-        try (var context = Main.executionContext(false, false)) {
+        for (String request : requests) try (var context = Main.executionContext(false, false)) {
             var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request));
-            assertTrue(failure.getMessage().contains("Native interface changed after publication"), failure.getMessage());
+            assertTrue(failure.getMessage().contains("Native interface changed after ") && failure.getMessage().contains("NativeHiScalar.hi"), failure.getMessage());
         }
     }
+
+    @Test void looseInputsCannotForgeAuthorityOrDuplicateOwners() throws Exception {
+        var paths = interfaces();
+        var duplicatePath = assertThrows(IllegalArgumentException.class,
+                () -> request(List.of(paths.getFirst(), paths.getFirst()), "NativeHiScalar", "entry", "bytecode"));
+        assertTrue(duplicatePath.getMessage().contains("Duplicate native interface path"));
+
+        Path alias = directory.resolve("alias.hi");
+        Files.copy(Path.of(paths.getFirst()), alias);
+        String duplicate = request(List.of(paths.getFirst(), alias.toString()), "NativeHiScalar", "entry", "bytecode");
+        try (var context = Main.executionContext(false, false)) {
+            var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", duplicate));
+            assertTrue(failure.getMessage().contains("Duplicate or invalid GHC module"), failure.getMessage());
+        }
+
+        var forged = new LinkedHashMap<Object,Object>((Map<?, ?>) Json.parse(request(paths, "NativeHiScalar", "entry", "bytecode")));
+        var artifact = new LinkedHashMap<Object,Object>((Map<?, ?>) ((List<?>) forged.get("nativeInterfaceFiles")).getFirst());
+        artifact.put("capability", "invalid");
+        forged.put("nativeInterfaceFiles", List.of(artifact));
+        try (var context = Main.executionContext(false, false)) {
+            var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", Json.stringify(forged)));
+            assertTrue(failure.getMessage().contains("Invalid native interface request capability"), failure.getMessage());
+        }
+    }
+
 }

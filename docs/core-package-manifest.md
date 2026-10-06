@@ -86,11 +86,29 @@ receipts remain in the producer cache, not as runtime execution alternatives.
 
 ## Native interface modules
 
+The existing loading API accepts an explicit list of retained `.hi` files:
+
+```java
+var entry = Main.loadEntry(context,
+    List.of("build/Example.hi", "build/Helper.hi"), "unit-id:Example.entry");
+long result = entry.execute(7L).asLong();
+```
+
+Use the exact unit identity recorded by GHC, and compile these modules with
+`-fwrite-if-simplified-core`. Supply each required native declaration provider;
+the loader performs no directory search. Paths are canonicalized, their bytes
+are content-bound to the host request, and duplicate module identities reject.
+Loose inputs need no package manifest. Their declarations and binding caches
+belong to the execution context; retained file snapshots are immutable. Explicit
+foreign, delimited-control and main/shutdown obligations are unsupported and
+reject during admission. Imported native types require native interface providers;
+CBD and native inputs may otherwise coexist with distinct module identities.
+
 An experimental native JVM reader accepts a module's `interface` artifact with
 `"format": "ghc-hi"`, an absolute `path` and its raw-file `sha256`. The module's
 `sha256` must match it. Omit `compact` and the helper-backed unit `interfaceSource`.
-The four startup summaries must be false for the currently supported scalar
-subset. The runtime verifies the exact bytes it parses, checks module identity,
+The four startup summaries must be false for the currently supported subset;
+native admission checks the corresponding absence of startup obligations. The runtime verifies the exact bytes it parses, checks module identity,
 and feeds decoded bindings directly to the existing linker and backends. It
 creates no helper process or intermediate CBD.
 
