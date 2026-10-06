@@ -225,7 +225,7 @@ final class CoreHiModule {
     private static String scalarTyCon(CoreHiReader.ExternalName name) {
         if (!name.module().equals(new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Prim")) || name.namespace() != 3) return null;
         return switch (name.occurrence()) {
-            case "Int#" -> "IntRep"; case "Word#" -> "WordRep";
+            case "Int#" -> "IntRep"; case "Word#" -> "WordRep"; case "Addr#" -> "AddrRep";
             case "Int8#" -> "Int8Rep"; case "Int16#" -> "Int16Rep"; case "Int32#" -> "Int32Rep"; case "Int64#" -> "Int64Rep";
             case "Word8#" -> "Word8Rep"; case "Word16#" -> "Word16Rep"; case "Word32#" -> "Word32Rep"; case "Word64#" -> "Word64Rep";
             default -> null;
@@ -380,7 +380,13 @@ final class CoreHiModule {
     }
     private Literal literal(CoreHiReader.Cursor c) {
         int tag = c.byteValue();
-        if (tag == 1) { c.skip(c.count(1)); return new Literal("string-bytes", null, Type.scalar("AddrRep")); }
+        if (tag == 1) {
+            int size = c.count(1);
+            c.require(size <= Integer.MAX_VALUE / 2, "byte literal exceeds hexadecimal string size");
+            byte[] bytes = new byte[size];
+            for (int i = 0; i < size; i++) bytes[i] = (byte) c.byteValue();
+            return new Literal("string-bytes", HexFormat.of().formatHex(bytes), Type.scalar("AddrRep"));
+        }
         c.require(tag == 6, "unsupported native Core literal tag " + tag);
         int number = c.byteValue(); c.require(number >= 1 && number <= 10, "unsupported numeric literal type " + number);
         int integerTag = c.byteValue();
@@ -671,6 +677,7 @@ final class CoreHiModule {
         type = runtimeType(type, location);
         if (type.abstractLifted()) return map("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         if (type.function()) return map("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
+        if (type.equals(Type.scalar("AddrRep"))) return map("kind", "address", "primReps", List.of("AddrRep"), "evaluated", evaluated);
         if (scalar(type)) return map("kind", "long", "primReps", List.of(type.name), "evaluated", evaluated);
         if (data(type)) return map("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         throw error(location, "unsupported native Core runtime type " + type.name);
