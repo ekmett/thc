@@ -11,7 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Ordinary GHC .hi files execute directly, including retained private RHSs,
- * scalar recursion, a separate module and boxed construction/case. Native results come from the same
+ * scalar recursion, erased polymorphism and cross-module boxed construction/case. Native results come from the same
  * source build; process creation is denied and the runtime receives no CBD. */
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
@@ -65,6 +65,14 @@ class CoreHiExecutionTest {
                     assertEquals(row[3], boxed.execute(row[0]).asLong(), backend + " constructor/case");
                 }
                 assertEquals(rows.getLast()[1], entry.execute(rows.getLast()[0]).asLong(), backend + " repeated call");
+                assertTrue(boxed.invokeMember("compile").asBoolean(), backend + " native interface compilation");
+                var before = (Map<?, ?>) Json.parse(boxed.getMember("diagnostics").asString());
+                assertEquals(rows.getFirst()[3], boxed.execute(rows.getFirst()[0]).asLong(), backend + " first installed constructor case");
+                var after = (Map<?, ?>) Json.parse(boxed.getMember("diagnostics").asString());
+                assertTrue(((Number) after.get("compiledEntries")).longValue() > ((Number) before.get("compiledEntries")).longValue(),
+                        backend + " first installed call enters compiled guest code");
+                Main.installed(after);
+                assertEquals(rows.getLast()[3], boxed.execute(rows.getLast()[0]).asLong(), backend + " installed boxed alternative");
             }
         }
         try (var files = Files.list(directory)) {

@@ -94,15 +94,19 @@ subset. The runtime verifies the exact bytes it parses, checks module identity,
 and feeds decoded bindings directly to the existing linker and backends. It
 creates no helper process or intermediate CBD.
 
-GHC 9.14.1 vanilla, 64-bit retained interfaces are supported for non-polymorphic
-integer functions, private bindings, recursion, local bindings, literal/default
-cases and calls to other native interface modules. A monomorphic boxed datatype
-with nullary or integer-field constructors can be constructed and matched
-across native interface modules. An actual multi-module program
-matches native GHC on both backends and handoff modes with process creation
-disabled and only `.hi` files in its Core closure. Polymorphism, constructor
-wrappers, records, unpacking, GADTs, foreign
-obligations, annotations and further expression forms are not yet supported. Complete offline execution auditing is also unavailable;
+GHC 9.14.1 vanilla, 64-bit retained interfaces are supported for integer
+functions, private bindings, recursion, local bindings, literal/default cases and
+calls to other native interface modules. Prenex type variables of kind `Type`
+are erased from value parameters and applications; type-only aliases preserve
+the original function value. A monomorphic boxed datatype with nullary or
+integer-field constructors can be constructed and matched across native
+interface modules. An actual multi-module program passes a boxed value through
+polymorphic identity and its monomorphic alias, then matches native GHC on both
+backends and handoff modes, including the first installed guest call. Process
+creation is disabled and the Core closure contains only `.hi` files.
+Higher-rank and representation-polymorphic types, typeclass dictionaries,
+constructor wrappers, records, unpacking, GADTs, foreign obligations, annotations
+and further expression forms are not yet supported. Complete offline execution auditing is also unavailable;
 `--verify-artifacts` rejects these modules. The project driver does not yet
 publish this native format. Broader coverage remains tracked in
 [#1063](https://github.com/ekmett/thc/issues/1063).

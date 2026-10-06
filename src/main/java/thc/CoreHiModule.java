@@ -8,7 +8,7 @@ import java.util.function.Function;
 
 /** Native retained-Core lowering for pinned GHC 9.14.1. Declarations and RHS
  * syntax are parsed at module admission; unsupported tags fail immediately.
- * Supported scalar and monomorphic boxed binding bodies are lowered only when demanded. */
+ * Supported scalar, fixed-lifted polymorphic and monomorphic boxed bodies are lowered only when demanded. */
 final class CoreHiModule {
     // Internal type forms cannot collide with canonical unit:module names.
     private static final String FORALL = "\u0000hi-forall:", TYPE_VARIABLE = "\u0000hi-type-variable:", ABSTRACT_LIFTED = "\u0000hi-lifted-variable:";
