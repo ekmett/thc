@@ -267,7 +267,12 @@ public final class Program implements ExecutableProgram {
         // metadata for constructors actually reached during selected lowering.
         Program builder = new Program(language, module, false, false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
-        ArrayDeque<String> pending = new ArrayDeque<>(entries);
+        // The linker includes runtime-entered service roots as well as explicit Core references.
+        var selected = (List<Map<String,Object>>) thc.CoreModules.reachable(module, entries).get("bindings");
+        ArrayDeque<String> pending = new ArrayDeque<>();
+        for (var binding : selected) pending.add((String) binding.get("id"));
+        if (selected.stream().anyMatch(binding -> CoreSignalForeign.dispatcher.equals(binding.get("id"))))
+            SignalDispatchRoot.prepareLayouts(builder);
         if (module.get("selectedForeignExceptionBridge") instanceof Map<?,?> bridge) {
             for (String helper : List.of("box", "project")) {
                 if (!(bridge.get(helper) instanceof String id) || !builder.globals.containsKey(id))
