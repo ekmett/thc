@@ -83,21 +83,43 @@ final class CoreHiModule {
         if(reader.simplifiedCore!=null){
             c=reader.cursor(reader.simplifiedCore,"retained Core");count=c.count(2);
             for(int i=0;i<count;i++)groups.add(group(c,true,0,true));
-            if(c.optional()){
-                String header=c.string(),source=c.string();
-                if (!header.isEmpty()) foreignObligations.add("foreign header");
-                if (!source.isEmpty()) foreignObligations.add("foreign source");
-                registration |= !header.isEmpty() || !source.isEmpty();
-                int n=c.count(1);registration |= n != 0;for(int i=0;i<n;i++)foreignObligations.add("initializer "+CoreHiNames.id(CoreHiNames.read(reader,c)));
-                n=c.count(1);registration |= n != 0;for(int i=0;i<n;i++)foreignObligations.add("finalizer "+CoreHiNames.id(CoreHiNames.read(reader,c)));
-            }
-            count=c.count(1);registration |= count != 0;for(int i=0;i<count;i++){int language=c.byteValue();foreignObligations.add("foreign file "+language+":"+c.string());}
+            foreignProducts(c);
             c.expectEnd();
             for(Group group:groups)for(Definition definition:group.definitions){
                 Binder b=definition.binder;String id=prefix()+b.name;mainAlias|=id.equals(CoreUnitDirectory.MAIN_ALIAS);
                 c.require(definitions.putIfAbsent(id,definition)==null,"duplicate retained binding "+id);
                 topScope.put(b.name,new Variable(id,types.read(b.type,Map.of())));
             }
+        }
+    }
+    private void foreignProducts(CoreHiReader.Cursor c) {
+        if (c.optional()) {
+            String header = c.string(), source = c.string();
+            if (!header.isEmpty()) foreignObligations.add("foreign header");
+            if (!source.isEmpty()) foreignObligations.add("foreign source");
+            registration |= !header.isEmpty() || !source.isEmpty();
+            foreignLabels(c, true);
+            foreignLabels(c, false);
+        }
+        int count = c.count(3);
+        registration |= count != 0;
+        for (int i = 0; i < count; i++) {
+            int language = c.byteValue();
+            c.require(language <= 6, "invalid foreign source language");
+            String source = c.string(), extension = c.string();
+            foreignObligations.add("foreign file " + language + ":" + source + " (" + extension + ")");
+        }
+    }
+    private void foreignLabels(CoreHiReader.Cursor c, boolean initializer) {
+        int count = c.count(5);
+        registration |= count != 0;
+        for (int i = 0; i < count; i++) {
+            boolean kind = bool(c);
+            c.require(kind == initializer, "foreign lifecycle label kind mismatch");
+            var owner = reader.module(c);
+            String name = reader.fastString(c);
+            foreignObligations.add((initializer ? "initializer " : "finalizer ") +
+                    owner.unit() + ":" + owner.name() + ":" + name);
         }
     }
     private String prefix(){return reader.module.unit()+":"+reader.module.name()+".";}
