@@ -13,10 +13,12 @@ import thc.runtime.CoreFloatingLiteral;
 final class CoreHiModule {
     // Internal type forms cannot collide with canonical unit:module names.
     private static final String FORALL = "\u0000hi-forall:", TYPE_VARIABLE = "\u0000hi-type-variable:", ABSTRACT_LIFTED = "\u0000hi-lifted-variable:";
+    private static final String UNBOXED_TUPLE = "\u0000hi-unboxed-tuple";
     record Type(String name, List<Type> arguments) {
         static Type scalar(String primitive) { return new Type(primitive, List.of()); }
         static Type fun(Type argument, Type result) { return new Type("->", List.of(argument, result)); }
         boolean function() { return name.equals("->"); }
+        boolean tuple() { return name.equals(UNBOXED_TUPLE); }
         boolean forall() { return name.startsWith(FORALL); }
         boolean abstractLifted() { return name.startsWith(ABSTRACT_LIFTED); }
         Type result() { return arguments.get(1); }
@@ -38,6 +40,7 @@ final class CoreHiModule {
     private final Map<String,List<Binder>> dataTypes = new HashMap<>();
     private final Map<String,Constructor> constructors = new LinkedHashMap<>();
     private final Map<String,Constructor> newtypes = new LinkedHashMap<>();
+    private final Set<Integer> tupleArities = new TreeSet<>();
     private final Map<String,Binder> declarations = new LinkedHashMap<>();
     private final Map<String,Definition> definitions = new LinkedHashMap<>();
     private final Map<String,Variable> topScope = new HashMap<>();
@@ -107,8 +110,14 @@ final class CoreHiModule {
             if (!lifted(constructor.result, location)) throw error(location, "unsupported unlifted newtype representation");
             rep(constructor.result, false, location);
         }
+        var layouts = new ArrayList<>(constructors.values().stream().map(this::constructorMetadata).toList());
+        for (int arity : tupleArities) {
+            var name = CoreHiNames.unboxedTupleName(arity, 1);
+            // Per-use components live on expression/binder proofs; every provider publishes identical structural metadata.
+            layouts.add(map("id", CoreHiNames.id(name), "name", name.occurrence(), "arity", (long) arity, "tag", 1L, "kind", "unboxed-tuple"));
+        }
         return map("schema", 1L, "ghc", "9.14.1", "unit", reader.module.unit(), "module", reader.module.name(),
-                "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", List.of(), "constructors", constructors.values().stream().map(this::constructorMetadata).toList());
+                "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", List.of(), "constructors", List.copyOf(layouts));
     }
     private Map<String,Object> constructorMetadata(Constructor constructor) {
         // Sources reserves the parsed module before this lookup; layout never follows other constructor fields.
@@ -289,8 +298,31 @@ final class CoreHiModule {
                 String primitive = scalarTyCon(name);
                 yield new Type(primitive != null ? primitive : CoreHiNames.id(name), List.copyOf(arguments));
             }
+            case 8 -> {
+                c.require(c.byteValue() == 1 && !bool(c), "unsupported boxed, constraint or promoted tuple type");
+                int count = c.count(2); c.require(count % 2 == 0, "unboxed tuple type argument count mismatch");
+                int arity = count / 2; reserveTuple(c, arity);
+                var arguments = new ArrayList<Type>(count);
+                for (int i = 0; i < count; i++) {
+                    arguments.add(type(c, depth + 1));
+                    // Pinned tuple kind has Specified RuntimeRep binders followed by Required component types.
+                    c.require(c.byteValue() == (i < arity ? 1 : 0), "unboxed tuple argument visibility mismatch");
+                }
+                var components = List.copyOf(arguments.subList(arity, count));
+                for (int i = 0; i < arity; i++) {
+                    Type component = components.get(i);
+                    c.require(scalar(component), "unsupported non-scalar unboxed tuple component " + component);
+                    c.require(arguments.get(i).equals(Type.scalar("ghc-internal:GHC.Internal.Types." + component.name)),
+                            "unboxed tuple RuntimeRep mismatch at component " + i);
+                }
+                yield new Type(UNBOXED_TUPLE, components);
+            }
             default -> throw unsupported(c, "type tag " + tag);
         };
+    }
+    private void reserveTuple(CoreHiReader.Cursor c, int arity) {
+        c.require(arity >= 2 && arity <= CoreHiNames.MAX_UNBOXED_TUPLE_ARITY, "unsupported unboxed tuple arity " + arity);
+        tupleArities.add(arity);
     }
     private static String scalarTyCon(CoreHiReader.ExternalName name) {
         if (!name.module().equals(new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Prim")) || name.namespace() != 3) return null;
@@ -441,7 +473,18 @@ final class CoreHiModule {
         List<Object> fields = switch (tag) {
             case 0 -> values(reader.fastString(c));
             case 1 -> values(type(c, depth + 1));
-            case 4 -> { Binder binder = lambdaBinder(c, depth + 1); bool(c); yield values(binder, expr(c, depth + 1)); }
+            case 3 -> {
+                c.require(c.byteValue() == 1, "unsupported boxed or constraint tuple expression");
+                int count = c.count(1); reserveTuple(c, count);
+                var components = new ArrayList<Expr>(count);
+                for (int i = 0; i < count; i++) components.add(expr(c, depth + 1));
+                yield values(List.copyOf(components));
+            }
+            case 4 -> {
+                Binder binder = lambdaBinder(c, depth + 1);
+                c.require(!binder.type.tuple(), "unsupported native unboxed tuple lambda argument");
+                bool(c); yield values(binder, expr(c, depth + 1));
+            }
             case 5 -> values(expr(c, depth + 1), expr(c, depth + 1));
             case 6 -> {
                 Expr scrutinee = expr(c, depth + 1); String name = reader.fastString(c);
@@ -450,6 +493,11 @@ final class CoreHiModule {
                 for (int i = 0; i < count; i++) {
                     int alt = c.byteValue(); c.require(alt <= 2, "invalid alternative tag");
                     Object discriminator = alt == 1 ? CoreHiNames.read(reader, c) : alt == 2 ? literal(c) : null;
+                    if (alt == 1) {
+                        var constructorName = (CoreHiReader.ExternalName) discriminator;
+                        int arity = CoreHiNames.unboxedTupleArity(constructorName);
+                        if (arity >= 0) { c.require(constructorName.namespace() == 1, "invalid unboxed tuple alternative identity"); reserveTuple(c, arity); }
+                    }
                     int binders = c.count(1); var names = new ArrayList<String>(binders);
                     for (int j = 0; j < binders; j++) names.add(reader.fastString(c));
                     alts.add(new Alt(alt, discriminator, List.copyOf(names), expr(c, depth + 1)));
@@ -635,6 +683,7 @@ final class CoreHiModule {
             case 11 -> {
                 var name = (CoreHiReader.ExternalName) e.fields.getFirst();
                 String id = CoreHiNames.id(name);
+                if (CoreHiNames.unboxedTupleArity(name) >= 0) throw error(e, "unsupported partial unboxed tuple constructor");
                 Type type;
                 var signature = CoreHiNames.scalarSignature(name);
                 if (CoreHiNames.isPrimop(name)) {
@@ -651,6 +700,19 @@ final class CoreHiModule {
                 if (constructor != null) yield expression(type, e, "con", id, (long) constructor.fields.size());
                 if (type == null) throw error(e, "missing native Core dependency type " + id);
                 yield expression(type, e, "var", id);
+            }
+            case 3 -> {
+                var arguments = new ArrayList<List<Object>>(); var components = new ArrayList<Type>();
+                for (var raw : (List<?>) e.fields.getFirst()) {
+                    Lowered component = lower((Expr) raw, scope, typeScope);
+                    if (!scalar(component.type)) throw error(e, "unsupported non-scalar unboxed tuple component " + component.type);
+                    arguments.add(component.expression); components.add(component.type);
+                }
+                Type type = new Type(UNBOXED_TUPLE, List.copyOf(components)), signature = type;
+                for (int i = components.size() - 1; i >= 0; i--) signature = Type.fun(components.get(i), signature);
+                String id = CoreHiNames.id(CoreHiNames.unboxedTupleName(components.size(), 1));
+                Lowered constructor = expression(signature, e, "con", id, (long) components.size());
+                yield expression(type, e, "app", constructor.expression, arguments, Collections.nCopies(components.size(), false), false, false);
             }
             case 12 -> {
                 Lowered body = lower((Expr) e.fields.getFirst(), scope, typeScope);
@@ -724,6 +786,7 @@ final class CoreHiModule {
                     }
                     if (!result.function()) throw error(e, "unsupported application of a non-function scalar type");
                     Lowered value = lower(argument, scope, typeScope);
+                    if (value.type.tuple()) throw error(e, "unsupported native unboxed tuple value argument");
                     arguments.add(value.expression); lifted.add(lifted(value.type, e)); result = result.result();
                 }
                 if (arguments.isEmpty()) {
@@ -740,6 +803,7 @@ final class CoreHiModule {
             case 6 -> {
                 Lowered scrutinee = lower((Expr) e.fields.getFirst(), scope, typeScope);
                 if (scrutinee.type.function()) throw error(e, "unsupported function case scrutinee");
+                if (scrutinee.type.tuple() && ((List<?>) e.fields.get(2)).size() != 1) throw error(e, "unboxed tuple case requires one alternative");
                 Binder binder = new Binder((String) e.fields.get(1), scrutinee.type, new Info(0, null, null), e.offset, false);
                 Variable variable = local(binder); var inner = new HashMap<>(scope); inner.put(binder.name, variable);
                 var alternatives = new ArrayList<List<Object>>(); Type result = null;
@@ -751,20 +815,29 @@ final class CoreHiModule {
                     Object discriminator = null;
                     if (alt.tag == 1) {
                         String id = CoreHiNames.id((CoreHiReader.ExternalName) alt.discriminator);
-                        var module = owner(id);
-                        var constructor = module == null ? null : module.constructors.get(id);
-                        if (constructor == null || !constructor.result.name.equals(scrutinee.type.name) ||
-                                constructor.parameters.size() != scrutinee.type.arguments.size()) throw error(e, "unsupported data alternative " + id);
-                        var fieldScope = new HashMap<String,Type>();
-                        for (int i = 0; i < constructor.parameters.size(); i++) {
-                            Type supplied = scrutinee.type.arguments.get(i);
-                            if (!lifted(supplied, e)) throw error(e, "unsupported unlifted data argument");
-                            fieldScope.put(constructor.parameters.get(i).name, supplied);
+                        List<Type> fields;
+                        if (scrutinee.type.tuple()) {
+                            var name = (CoreHiReader.ExternalName) alt.discriminator;
+                            if (name.namespace() != 1 || CoreHiNames.unboxedTupleArity(name) != scrutinee.type.arguments.size())
+                                throw error(e, "unboxed tuple alternative shape mismatch");
+                            fields = scrutinee.type.arguments;
+                        } else {
+                            var module = owner(id);
+                            var constructor = module == null ? null : module.constructors.get(id);
+                            if (constructor == null || !constructor.result.name.equals(scrutinee.type.name) ||
+                                    constructor.parameters.size() != scrutinee.type.arguments.size()) throw error(e, "unsupported data alternative " + id);
+                            var fieldScope = new HashMap<String,Type>();
+                            for (int i = 0; i < constructor.parameters.size(); i++) {
+                                Type supplied = scrutinee.type.arguments.get(i);
+                                if (!lifted(supplied, e)) throw error(e, "unsupported unlifted data argument");
+                                fieldScope.put(constructor.parameters.get(i).name, supplied);
+                            }
+                            fields = constructor.fields.stream().map(field -> resolve(field, fieldScope, e, false)).toList();
                         }
-                        if (alt.binders.size() != constructor.fields.size()) throw error(e, "constructor case field count mismatch " + id);
+                        if (alt.binders.size() != fields.size()) throw error(e, "constructor case field count mismatch " + id);
                         discriminator = id;
                         for (int i = 0; i < alt.binders.size(); i++) {
-                            Binder field = new Binder(alt.binders.get(i), resolve(constructor.fields.get(i), fieldScope, e, false), new Info(0, null, null), alt.rhs.offset, false);
+                            Binder field = new Binder(alt.binders.get(i), fields.get(i), new Info(0, null, null), alt.rhs.offset, false);
                             Variable fieldVariable = local(field); branch.put(field.name, fieldVariable);
                             ids.add(fieldVariable.id); parameters.add(binder(field, fieldVariable, !lifted(field.type, e)));
                         }
@@ -904,6 +977,16 @@ final class CoreHiModule {
     }
     private Map<String,Object> rep(Type type, boolean evaluated, Expr location) {
         type = runtimeType(type, location);
+        if (type.tuple()) {
+            var components = new ArrayList<Map<String,Object>>(); var primitives = new ArrayList<Object>();
+            for (Type component : type.arguments) {
+                if (!scalar(component)) throw error(location, "unsupported non-scalar unboxed tuple component " + component);
+                var proof = rep(component, true, location);
+                components.add(proof); primitives.addAll((List<?>) proof.get("primReps"));
+            }
+            return map("kind", "unknown", "primReps", List.copyOf(primitives), "aggregate", "unboxed-tuple",
+                    "components", List.copyOf(components), "evaluated", evaluated);
+        }
         if (type.abstractLifted()) return map("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         if (type.function()) return map("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         if (type.equals(Type.scalar("AddrRep"))) return map("kind", "address", "primReps", List.of("AddrRep"), "evaluated", evaluated);
