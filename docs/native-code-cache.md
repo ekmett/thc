@@ -131,10 +131,11 @@ this mode does not fall back to runtime Core loading or accept external sources.
 The isolated JVM regression executes after deleting its CBD/manifest inputs with
 runtime lowering disabled. Linux images also execute checked IO/PAP and Unicode
 `Text.reverse` applications with the bound CBD directory unavailable. The Text
-image retains ordinary Sulong/NFI and native resources. These Linux executable
-checks use `THC_NATIVE_IMAGE_VECTOR_PROFILE=resource-copy`; select that profile
-explicitly when reproducing them. The default `intrinsics` profile requires the
-separately hash-checked Vector API overlay and has different prerequisites. See the
+image retains ordinary Sulong/NFI and native resources. Its qualification uses
+`THC_NATIVE_IMAGE_VECTOR_PROFILE=resource-copy`; select that profile explicitly
+when reproducing the native-resource checks. The default `intrinsics` profile
+requires the separately hash-checked Vector API overlay and has different
+prerequisites. See the
 [exact qualification boundary](native-image-feasibility.md#preinitialized-runtime-state).
 Build inputs use a compact package manifest selected with `@packages.json`, not
 loose CBD paths. The saved factory still executes through the AST runtime.
