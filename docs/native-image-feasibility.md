@@ -91,16 +91,20 @@ Linux native resources retained, using synchronous AST execution and native byte
 arrays. Its prepared graph retains the validated GHC target-layout descriptor;
 that exact class is included in the audited initialization inventory.
 
-The Text executable runs both in its build directory and after relocation into a
-directory containing only the same ELF. It also passes with an initially empty
-Graal resource cache. File-access traces show no CBD or manifest reads and no
-access to the old resource cache in that run. Sulong and package native libraries
-are extracted at runtime; system C, math, zlib, dynamic-loader and GMP libraries
-remain dependencies. The loader still probes build-machine GHC library paths
-before finding system GMP, so this is not a clean deployment contract or a static
-executable.
+The Text executable runs after relocation into a directory containing only its
+ELF, with an initially empty Graal resource cache, its bound CBD directory hidden
+and the original GMP provider unavailable. The image embeds GMP and extracts it
+before loading the package companion; the earlier image fails under the same
+conditions. File-access traces show no CBD or manifest reads. The hosted capture
+regression checks dependency order and provider identity without running native
+constructors; a native control confirms that the constructor witness is live.
 
-These results qualify serialization and runtime handoff for the selected programs.
-General package/Unix-library coverage, transitive native dependency deployment,
-Windows images and guest machine-code compilation remain unqualified and are
-tracked in [issue #1060](https://github.com/ekmett/thc/issues/1060).
+Sulong and package native libraries are extracted at runtime. System C, math,
+zlib and the dynamic loader remain external dependencies. This qualifies captured
+native providers for the selected Linux x86-64 programs, not static linking or
+arbitrary clean-machine deployment. Providers that open additional data files
+still require those files.
+
+General package/Unix-library coverage, Windows images and guest machine-code
+compilation remain unqualified and are tracked in
+[issue #1060](https://github.com/ekmett/thc/issues/1060).
