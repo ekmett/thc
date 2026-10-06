@@ -21,9 +21,9 @@ You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16
 **GraalVM Community Edition 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
 point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
 directory. The Gradle wrapper downloads its dependencies on the first build.
-These versions are checked: `thc run` requires cabal-install 3.16, and Truffle
-rejects any other GraalVM release, older or newer, by falling back to
-interpretation without runtime compilation.
+The driver checks for cabal-install 3.16. Use the pinned GraalVM release
+above: incompatible Graal and Truffle compiler versions can disable runtime
+compilation and leave execution in the interpreter.
 Linux x86_64 setup includes clang and GMP development headers and libraries
 (for example, `libgmp-dev` on Debian/Ubuntu) for native package dependencies.
 
