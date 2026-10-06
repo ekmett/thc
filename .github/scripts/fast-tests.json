@@ -3254,6 +3254,20 @@
       ],
       "thc.runtime.ManagedStackSnapshotTest": [
         "captureBeforeSynchronousUnwindRemainsStableAfterGuestFramesAndContextReturn"
+      ],
+      "thc.CoreInterfaceLoadTest": [
+        "retainedRecordHelperExecutesAndReusesDemandedLibrary",
+        "helperCapabilityIsExplicitAndContentBound"
+      ],
+      "thc.runtime.SumResultTest": [
+        "nativeResultsResidual",
+        "expandedLayoutResultsResidual",
+        "independentPairInputsResidual",
+        "representativeExtendedNativeResultsResidual"
+      ],
+      "thc.runtime.FloatingTupleTest": [
+        "compiledResidualProducerPreservesNativeIeeeBits",
+        "wholeNestedTupleCaseBinderCopiesFloatingSlotsOnBothBackends"
       ]
     },
     "hourlyJunit": [

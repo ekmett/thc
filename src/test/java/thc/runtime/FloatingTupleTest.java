@@ -118,6 +118,8 @@ class FloatingTupleTest {
         }
         new Visit().target(entry); return targets;
     }
+    // Scheduled matrix covers complex observers across compiler stages and inlining.
+    // Commit retains the independent IEEE-bit and nested whole-tuple installed-call witnesses below.
     @Test void nativeComplexAndMixedResultsExecuteInlined() throws Exception { nativeResults(true); }
     @Test void nativeComplexAndMixedResultsExecuteAcrossResidualCalls() throws Exception { nativeResults(false); }
     private void nativeResults(boolean inlining) throws Exception {

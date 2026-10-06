@@ -94,14 +94,22 @@ class SumResultTest {
     @Test void extendedNativeResultsResidual() throws Exception { nativeResults(false, true, false); }
     @Test void expandedLayoutResultsInline() throws Exception { nativeResults(true, false, true); }
     @Test void expandedLayoutResultsResidual() throws Exception { nativeResults(false, false, true); }
+    // Commit samples heterogeneous leaves and zero-width effect/throw recovery on real post-Tidy Core.
+    // Scheduled methods retain the full observer, compiler-stage and inlining matrix.
+    @Test void representativeExtendedNativeResultsResidual() throws Exception {
+        nativeResults(false, true, false, Set.of("mixedCase", "effectEmptyCase"), List.of("post"));
+    }
     private void nativeResults(boolean inlining, boolean extended, boolean expanded) throws Exception {
+        nativeResults(inlining, extended, expanded, Set.of(), List.of("pre", "post"));
+    }
+    private void nativeResults(boolean inlining, boolean extended, boolean expanded, Set<String> selected, List<String> stages) throws Exception {
         var supported = expanded ? Set.of("narrowWideCase", "threeWayCase", "nestedCase") : Set.of("sumCase", "directCase", "lazyCase", "zeroCase", "unitCase", "boxedKindsCase", "floatDoubleCase");
         var rows = new LinkedHashMap<String, List<List<String>>>();
         for (var row : nativeRows(new File(root, "build/" + (extended ? "sum-result" : "sum-layout") + "/oracle.tsv").toPath(),
                 extended ? RESULT_OBSERVERS : LAYOUT_OBSERVERS, false)) {
-            if (extended || supported.contains(row.getFirst())) rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row);
+            if ((extended || supported.contains(row.getFirst())) && (selected.isEmpty() || selected.contains(row.getFirst()))) rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row);
         }
-        for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
+        for (String stage : stages) for (String backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);

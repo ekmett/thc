@@ -42,7 +42,11 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
     private final ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> threadAnnotations = locals.createContextThreadLocal((context, thread) -> context.stackAnnotations.cell$org_intelligence_thc(thread));
     private static final ContextReference<ContextState> CONTEXTS = ContextReference.create(Language.class);
     public static State currentState() { return currentState(null); }
-    public static State currentState(Node node) { return CONTEXTS.get(node).requireState(); }
+    public static State currentState(Node node) {
+        var context = CONTEXTS.get(node);
+        if (context == null) throw new IllegalStateException("No entered THC context");
+        return context.requireState();
+    }
 
     /** Truffle preserves this object when replacing a preinitialized context's Env. */
     public static final class ContextState {

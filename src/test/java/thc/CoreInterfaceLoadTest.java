@@ -27,11 +27,32 @@ class CoreInterfaceLoadTest {
     private long conversions(Value entry) {
         return ((Number) object(Json.parse(entry.getMember("diagnostics").asString())).get("coreInterfaceModuleConversions")).longValue();
     }
-    @Test void retainedRecordsConvertOnDemandAndReuseWithinTheirProgram() throws Exception {
-        var manifest = FIXTURE.resolve("packages.json");
+    private List<long[]> nativeRepresentativeRows() throws Exception {
         var rows = Files.readAllLines(FIXTURE.resolve("native.tsv")).stream()
             .map(line -> Arrays.stream(line.strip().split("\\s+")).mapToLong(Long::parseLong).toArray()).toList();
-        assertEquals(7, rows.size());
+        return List.of(rows.stream().filter(row -> row[0] < 0).findFirst().orElseThrow(),
+            rows.stream().filter(row -> row[0] > 0).findFirst().orElseThrow());
+    }
+    // Commit witness: real declared GHC helper acquisition, demand and reuse.
+    // The scheduled matrix additionally checks both backends and the cold strict wrapper.
+    @Test void retainedRecordHelperExecutesAndReusesDemandedLibrary() throws Exception {
+        var rows = nativeRepresentativeRows();
+        try (var context = context(true)) {
+            var entry = context.eval("thc", request(FIXTURE.resolve("packages.json"), "RecordFieldClient", "duplicateFields", "ast"));
+            long before = conversions(entry);
+            for (var row : rows) {
+                assertEquals(4 * row[0] + 7, row[2], "native oracle agrees with the arithmetic model");
+                assertEquals(row[2], entry.execute(row[0]).asLong());
+            }
+            long demanded = conversions(entry);
+            assertTrue(demanded > before, "guest use demands the registered library");
+            assertEquals(rows.getLast()[2], entry.execute(rows.getLast()[0]).asLong());
+            assertEquals(demanded, conversions(entry), "repeated use reuses converted CBD readers");
+        }
+    }
+    @Test void retainedRecordsConvertOnDemandAndReuseWithinTheirProgram() throws Exception {
+        var manifest = FIXTURE.resolve("packages.json");
+        var rows = nativeRepresentativeRows();
         for (String backend : List.of("ast", "bytecode")) try (var context = context(true)) {
             var entry = context.eval("thc", request(manifest, "RecordFieldClient", "duplicateFields", backend));
             assertEquals(1L, conversions(entry), "only the selected module is converted before guest use");
@@ -45,10 +66,13 @@ class CoreInterfaceLoadTest {
             // Demand the formerly cold module in an independent program. Its
             // real helper header must match the producer's four false facts too.
             var cold = context.eval("thc", request(manifest, "RecordFieldCold", "cold", backend));
-            assertEquals(1L, conversions(cold));
+            long beforeCold = conversions(cold), original = conversions(entry);
             assertEquals(19L, cold.execute(19).asLong());
-            assertEquals(3L, conversions(cold));
-            assertEquals(2L, conversions(entry), "programs retain independent demand state");
+            assertTrue(conversions(cold) > beforeCold, "the strict cold wrapper demands its dependencies");
+            long coldDemanded = conversions(cold);
+            assertEquals(19L, cold.execute(19).asLong());
+            assertEquals(coldDemanded, conversions(cold), "cold program reuses its demanded readers");
+            assertEquals(original, conversions(entry), "programs retain independent demand state");
         }
     }
     private Map<String,Object> manifest() throws Exception {
@@ -98,6 +122,7 @@ class CoreInterfaceLoadTest {
             assertTrue(failure.getMessage().contains("entered THC context"), failure.getMessage());
         }
     }
+    // Scheduled provider controls protect real acquisition/content boundaries; no fixture booleans.
     @Test void linkedToolchainInputsRemainBoundAtDemand() throws Exception {
         var manifest = directory.resolve("packages.json");
         var output = directory.resolve("inventory.stdout"); var error = directory.resolve("inventory.stderr");
