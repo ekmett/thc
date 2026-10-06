@@ -427,8 +427,8 @@ class DelimitedContinuationsTest {
     }
     @SuppressWarnings("unchecked")
     @ParameterizedTest
-    @CsvSource({"0,11023000000,0", "96,107119096192,1"})
-    void freshCaptureCopiesEveryRecursiveSuffix(long depth, long expected, int nativeRow) throws Exception {
+    @CsvSource({"0,11023000000,0,false", "96,107119096192,1,false", "96,107119096192,1,true"})
+    void freshCaptureCopiesEveryRecursiveSuffix(long depth, long expected, int nativeRow, boolean prepared) throws Exception {
         Path evidence = Path.of(System.getProperty("thc.projectRoot"), "build/delimited-continuations/parked");
         provenance();
         var manifest = (Map<?, ?>) Json.parse(Files.readString(new File(root, "build/delimited-continuations/manifest.json").toPath()));
@@ -439,7 +439,9 @@ class DelimitedContinuationsTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new Program(language, CoreModules.reachable(module, "main:ParkedControl.observe"), true);
+                var selected = CoreModules.reachable(module, "main:ParkedControl.observe");
+                var program = prepared ? Program.prepareCode(language, selected, List.of("main:ParkedControl.observe")).newInstance(language)
+                    : new Program(language, selected, true);
                 var function = context.asValue(new EntryValue(program, "main:ParkedControl.observe", 1));
                 assertEquals(expected, function.execute(depth).asLong());
                 assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(null));

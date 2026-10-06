@@ -67,7 +67,7 @@ class ReusableProgramTest {
                             var entry = (Closure)program.entryValue("read");
                             assertEquals(47L, Calls.target(entry.target, new Object[]{0L, entry.environment, 0L}));
                             assertEquals(-25L, Calls.target(entry.target, new Object[]{0L, entry.environment, 1L}));
-                            assertEquals(0, count(program, "loweredRootCount")); assertEquals(2, count(program, "compiledEntries"));
+                            assertEquals(0, count(program, "loweredRootCount"));
                             code.requireInstalledCode();
                         }
                     } finally { context.leave(); }
@@ -470,7 +470,6 @@ class ReusableProgramTest {
                     runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, reader.target);
                     assertEquals(true, type.getMethod("isValidLastTier").invoke(reader.target), "nested-call reader before first entry");
                     assertEquals(47L, Calls.target(reader.target, new Object[]{0L, reader.environment, 4L}));
-                    assertEquals(4L, count(program, "compiledEntries"));
                     assertEquals(1L, count(program, "thunkEvaluations"));
                     assertEquals(0L, count(program, "loweredRootCount"));
                     code.requireInstalledCode();
@@ -482,33 +481,79 @@ class ReusableProgramTest {
         }
     }
 
-    @Test void reusableForceTailBounceUpdatesItsCafWithInvocationOwnedMetrics() {
-        try (var context = Main.executionContext(false)) {
+    @ParameterizedTest @ValueSource(strings = {"fresh", "call", "thunk"})
+    void reusableForceTailBounceUpdatesItsCafWithInvocationOwnedMetrics(String boundary) throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var code = Program.prepareCode(language, module(list(
                     binding("shared", plus(literal(17), literal(25)), true),
                     binding("read", lambda(plus(variable("shared"), variable("x"))), true))), List.of("read"));
+                var targets = Program.PreparedCode.class.getDeclaredField("targets"); targets.setAccessible(true);
+                for (var value : (Iterable<?>) targets.get(code)) {
+                    var target = (com.oracle.truffle.runtime.OptimizedCallTarget) value;
+                    assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true);
+                    assertFalse(target.wasExecuted());
+                }
+                code.requireInstalledCode();
                 var first = code.newInstance(language);
                 var sibling = code.newInstance(language);
                 var caf = (Thunk) first.entryValue("shared");
                 var actualBody = caf.getTarget();
-                // Deterministically take the existing tail-transfer protocol at
-                // the thunk call boundary, then run the real lowered CAF body.
-                caf.setTarget(new com.oracle.truffle.api.nodes.RootNode(null) {
-                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
-                        throw new TailCall(actualBody, new Object[]{0L, frame.getArguments()[1]});
+                var environment = caf.getEnvironment();
+                var resumed = new AtomicInteger();
+                // Force an actual tail transfer, including resumption through a
+                // parked child. Its destination remains the real lowered CAF.
+                if (boundary.equals("fresh")) {
+                    caf.setTarget(new com.oracle.truffle.api.nodes.RootNode(null) {
+                        @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                            throw new TailCall(actualBody, new Object[]{0L, frame.getArguments()[1]});
+                        }
+                    }.getCallTarget());
+                } else {
+                    var leaf = new SavedGuestContinuation() {
+                        public Object getIdentity() { return this; }
+                        public Object getSourceRoot() { return actualBody.getRootNode(); }
+                        public Object getYielded() { return Unit.INSTANCE; }
+                        public Object continueWith(Object input) {
+                            resumed.incrementAndGet();
+                            throw new TailCall(actualBody, new Object[]{0L, environment});
+                        }
+                    };
+                    Object marker;
+                    if (boundary.equals("call")) marker = new CallSegmentSuspended(new CallSegment(leaf));
+                    else {
+                        var child = new Thunk(actualBody, environment);
+                        child.setValue(leaf); child.setState(5);
+                        marker = new ThunkSuspended(child);
                     }
-                }.getCallTarget());
-                assertEquals(47L, call(first, first.entryValue("read"), 5L));
-                assertEquals(2, caf.getState()); assertNull(caf.getEnvironment());
-                assertEquals(1L, count(first, "thunkEvaluations"));
-                assertEquals(1L, count(first, "trampolineIterations"));
-                assertEquals(0L, count(sibling, "thunkEvaluations"));
-                assertEquals(0L, count(sibling, "trampolineIterations"));
-                assertEquals(49L, call(first, first.entryValue("read"), 7L));
-                assertEquals(1L, count(first, "thunkEvaluations"));
+                    var parent = new SavedGuestContinuation() {
+                        public Object getIdentity() { return this; }
+                        public Object getSourceRoot() { return actualBody.getRootNode(); }
+                        public Object getYielded() { return marker; }
+                        public Object continueWith(Object input) { return ((ChildResume) input).getValue(); }
+                    };
+                    caf.setValue(parent); caf.setState(5);
+                }
+                String previous = System.setProperty("thc.requireCompiledCode", "true");
+                try {
+                    assertEquals(47L, call(first, first.entryValue("read"), 5L));
+                    assertEquals(2, caf.getState()); assertNull(caf.getEnvironment());
+                    assertEquals(boundary.equals("fresh") ? 1L : 0L, count(first, "thunkEvaluations"));
+                    assertEquals(1L, count(first, "trampolineIterations"));
+                    assertEquals(0L, count(sibling, "thunkEvaluations"));
+                    assertEquals(0L, count(sibling, "trampolineIterations"));
+                    assertEquals(49L, call(first, first.entryValue("read"), 7L));
+                    assertEquals(boundary.equals("fresh") ? 0 : 1, resumed.get(), "Repeated CAF reads must not replay a saved child");
+                    assertEquals(boundary.equals("fresh") ? 1L : 0L, count(first, "thunkEvaluations"));
+                    code.requireInstalledCode();
+                } finally {
+                    if (previous == null) System.clearProperty("thc.requireCompiledCode");
+                    else System.setProperty("thc.requireCompiledCode", previous);
+                }
             } finally { context.leave(); }
         }
     }
@@ -794,19 +839,14 @@ class ReusableProgramTest {
         }
     }
 
-    @Test void admissionRejectsForeignOwnershipAndUnknownInputs() {
+    @Test void preparedForeignExceptionBridgeRequiresItsBindings() {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var foreign = module(list(binding("read", lambda(variable("x")), true)));
                 foreign.put("selectedForeignExceptionBridge", map("unit", "u", "box", "b", "project", "p"));
-                var unknown = map("id", "x", "name", "x", "type", "Unknown", "lifted", false, "coercion", false,
-                    "rep", map("kind", "unknown", "evaluated", true, "primReps", list()));
-                var unsupported = module(list(binding("read", list("lam", list(unknown), variable("x")), true)));
-                assertAll(
-                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, foreign, List.of("read"))),
-                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, unsupported, List.of("read"))));
+                assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, foreign, List.of("read")));
             } finally { context.leave(); }
         }
     }

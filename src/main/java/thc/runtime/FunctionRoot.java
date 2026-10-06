@@ -312,8 +312,8 @@ public final class FunctionRoot extends GuestRoot {
             getTupleResult() == null && AstTailResult.supports(getScalarResultProof());
     }
     /** The driver runs the saved suffix, not the original body. */
-    public Object drainTailChild(SavedGuestContinuation saved) {
-        return entryForce.drainStack(saved, saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, true);
+    public Object drainTailChild(VirtualFrame frame, SavedGuestContinuation saved) {
+        return entryForce.drainStack(saved, saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, true, invocationMetrics(frame));
     }
     public Object restartTailAnchor(VirtualFrame frame, TailCall transfer) {
         if (role != FunctionRootRole.FUNCTION || !isSelf(transfer.getTarget())) throw new IllegalStateException("Check failed.");
@@ -514,7 +514,8 @@ public final class FunctionRoot extends GuestRoot {
             try { result = executeInitial(frame, stack.getDepth() >= AstStackScope.MAX_DEPTH); }
             finally { stack.setDepth(stack.getDepth() - 1); }
             SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
-            if (driver && saved != null && saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved);
+            if (driver && saved != null && saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved,
+                saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, false, invocationMetrics(frame));
             return result;
         } finally { if (driver) stack.setDriving(false); }
     }
@@ -598,7 +599,7 @@ public final class FunctionRoot extends GuestRoot {
     }
     public Object resumeDelimited(VirtualFrame frame, ControlFlowException transfer, DelimitedActionSite site) {
         if (role == FunctionRootRole.PASS_THROUGH) throw transfer;
-        if (transfer instanceof TailCall tail && !isSelf(tail.getTarget())) return site.tail(tail);
+        if (transfer instanceof TailCall tail && !isSelf(tail.getTarget())) return site.tail(frame, tail);
         if (transfer instanceof HandoffTailCall tail && !isSelf(tail.getTarget())) {
             HandoffEntry entry = handoff;
             if (entry == null) throw fault("Missing saved handoff entry");
@@ -613,7 +614,7 @@ public final class FunctionRoot extends GuestRoot {
         if (handoff != null) handoff.initializeOrdinary(frame);
         try { return executeBody(frame); }
         catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedRootStep(this)); }
-        catch (TailCall tail) { return site.tail(tail); }
+        catch (TailCall tail) { return site.tail(frame, tail); }
         catch (HandoffTailCall tail) {
             HandoffEntry entry = handoff;
             if (entry == null) throw fault("Missing saved handoff entry");

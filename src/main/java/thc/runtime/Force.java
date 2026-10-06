@@ -72,7 +72,7 @@ public final class Force extends Node {
                 observed = savedGuestContinuation(original.getValue());
             }
             // The continuation owns its callee frame; never materialize this caller.
-            if (suspendedChild(observed) != null) return resumeChain(original, false, false);
+            if (suspendedChild(observed) != null) return resumeChain(original, false, false, invocationMetrics);
             Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics);
             if (result != RETRY) return result;
         }
@@ -158,7 +158,7 @@ public final class Force extends Node {
                     segment.setValue(null); segment.setOwner(Thread.currentThread()); segment.setState(1); claimed = true;
                 }
                 if (afterClaim != null) afterClaim.run();
-                return evaluateCallSegment(segment, savedGuestContinuation(saved), mask, new PrivateIOUnwind(child, payload, request));
+                return evaluateCallSegment(segment, savedGuestContinuation(saved), mask, new PrivateIOUnwind(child, payload, request), metrics);
             } catch (Throwable failure) {
                 if (claimed) suspendCallOwned(segment);
                 if (claimed && request != null) request.fail$org_intelligence_thc();
@@ -168,9 +168,6 @@ public final class Force extends Node {
         throw fault("Async IO handler cut requires a captured thunk or call segment");
     }
 
-    private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue) {
-        return executeOne(original, observed, resumeValue, metrics);
-    }
     private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics) {
         while (true) {
             switch (original.getState()) {
@@ -219,7 +216,7 @@ public final class Force extends Node {
         }
     }
 
-    @TruffleBoundary private Object resumeChain(Object original, boolean drainSpills, boolean delimitedInvocation) {
+    @TruffleBoundary private Object resumeChain(Object original, boolean drainSpills, boolean delimitedInvocation, Metrics invocationMetrics) {
         var parked = new ArrayDeque<Parked>();
         var seen = new IdentityHashMap<Object, Boolean>();
         Object leaf = original;
@@ -247,8 +244,8 @@ public final class Force extends Node {
                 Object outcome;
                 try {
                     Object answer = switch (current) {
-                        case Thunk thunk -> executeOne(thunk, expected, input);
-                        case CallSegment segment -> executeCallSegment(segment, expected, input);
+                        case Thunk thunk -> executeOne(thunk, expected, input, invocationMetrics);
+                        case CallSegment segment -> executeCallSegment(segment, expected, input, invocationMetrics);
                         default -> throw fault("Invalid suspended continuation boundary");
                     };
                     outcome = answer == RETRY ? null : new ChildResume(answer, null);
@@ -341,23 +338,27 @@ public final class Force extends Node {
     public Object drainStack(SavedGuestContinuation initial, TupleShape resultShape, boolean delimitedInvocation) {
         return drainStack(initial, resultShape, delimitedInvocation, false);
     }
+    public Object drainStack(SavedGuestContinuation initial, TupleShape resultShape,
+                             boolean delimitedInvocation, boolean tailSpill) {
+        return drainStack(initial, resultShape, delimitedInvocation, tailSpill, metrics);
+    }
     @TruffleBoundary public Object drainStack(SavedGuestContinuation initial, TupleShape resultShape,
-                                             boolean delimitedInvocation, boolean tailSpill) {
+                                             boolean delimitedInvocation, boolean tailSpill, Metrics invocationMetrics) {
         MaskingState mask = SynchronousMasking.current(this);
         if (!(initial.getSourceRoot() instanceof GuestRoot root)) throw fault("AST stack cut has no guest root");
         MaskingState parkedMask = initial.getYielded() instanceof CallSegmentSuspended cut ? cut.getParkedActiveMask() : null;
         if (parkedMask == null) parkedMask = mask;
         CallSegment segment = new CallSegment(initial.getIdentity(), parkedMask, mask, resultShape, false, tailSpill);
         while (true) {
-            try { return resumeChain(segment, true, delimitedInvocation); }
+            try { return resumeChain(segment, true, delimitedInvocation, invocationMetrics); }
             catch (CallSegmentSuspended cut) {
                 if (cut.getSegment() != segment) throw cut;
                 if (!cut.getStackSpill() || cut.getAsyncRequest() != null) return new AstStackContinuation(root, cut);
             }
         }
     }
-    @TruffleBoundary Object executeInitialization(CallSegment segment) { return resumeChain(segment, false, false); }
-    @TruffleBoundary public Object drainDelimitedBoundary(Object boundary) { return resumeChain(boundary, true, true); }
+    @TruffleBoundary Object executeInitialization(CallSegment segment) { return resumeChain(segment, false, false, metrics); }
+    @TruffleBoundary public Object drainDelimitedBoundary(Object boundary, Metrics invocationMetrics) { return resumeChain(boundary, true, true, invocationMetrics); }
     private SavedGuestContinuation continuationOf(Object boundary) {
         return switch (boundary) {
             case Thunk thunk -> thunk.getState() == 5 ? savedGuestContinuation(thunk.getValue()) : null;
@@ -372,7 +373,7 @@ public final class Force extends Node {
         return null;
     }
 
-    private Object executeCallSegment(CallSegment segment, SavedGuestContinuation observed, Object resumeValue) {
+    private Object executeCallSegment(CallSegment segment, SavedGuestContinuation observed, Object resumeValue, Metrics invocationMetrics) {
         boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;
         while (true) {
             if (!capturing) switch (segment.getState()) {
@@ -406,7 +407,7 @@ public final class Force extends Node {
                     }
                 }
                 switch (claim) {
-                    case 0 -> { return evaluateCallSegment(segment, continuation, resumeMask, resumeValue); }
+                    case 0 -> { return evaluateCallSegment(segment, continuation, resumeMask, resumeValue, invocationMetrics); }
                     case 1 -> awaitCallOwner(segment);
                     case 2 -> throw fault("Blackhole: cyclic call segment entered while evaluating");
                     case 3 -> { return RETRY; }
@@ -418,7 +419,7 @@ public final class Force extends Node {
         }
     }
     private Object evaluateCallSegment(CallSegment segment, SavedGuestContinuation continuation,
-                                       MaskingState resumeMask, Object resumeValue) {
+                                       MaskingState resumeMask, Object resumeValue, Metrics invocationMetrics) {
         MaskingState carrierAmbient = SynchronousMasking.current(this);
         StackAnnotationState carrierAnnotations = StackAnnotations.current(this);
         try {
@@ -431,7 +432,7 @@ public final class Force extends Node {
             try { returned = continuation.continueWith(resumeValue); }
             catch (TailCall tail) {
                 if (segment.getTailSpill() && AstTailAnchor.accepts(astStackScope(this).getTailAnchor(), tail)) throw tail;
-                tailCallProfile.enter(); returned = trampoline.execute(tail);
+                tailCallProfile.enter(); returned = trampoline.execute(tail, invocationMetrics);
             }
             Object result = returned instanceof TailYield tail ? tail.getContinuation() :
                 returned instanceof AstTailYield tail ? tail.getContinuation() : returned;

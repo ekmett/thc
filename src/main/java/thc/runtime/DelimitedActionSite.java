@@ -26,9 +26,15 @@ public final class DelimitedActionSite extends Node {
         two = new PreparedDispatch(2, false, metrics, new boolean[0], null);
         force = new Force(metrics); trampoline = new TailCallLoop(metrics);
     }
-    public Object tail(TailCall transfer) { return trampoline.execute(transfer); }
+    private Metrics invocationMetrics(VirtualFrame frame) {
+        return metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
+    }
+    public Object tail(VirtualFrame frame, TailCall transfer) { return trampoline.execute(transfer, invocationMetrics(frame)); }
     public Object finish(Object result, TupleShape shape) { return finish(result, shape, null); }
     public Object finish(Object result, TupleShape shape, RootCallTarget expectedTarget) {
+        return finish(result, shape, expectedTarget, metrics);
+    }
+    private Object finish(Object result, TupleShape shape, RootCallTarget expectedTarget, Metrics invocationMetrics) {
         DelimitedControl.captureBytecode(result, shape);
         SavedGuestContinuation saved = switch (result) {
             case TailYield tail -> SavedGuestContinuations.savedGuestContinuation(tail.getContinuation());
@@ -51,7 +57,7 @@ public final class DelimitedActionSite extends Node {
             AsyncRequest request = saved.asyncRequest();
             if (request != null) throw new AsyncDelivery(request, this);
             if (!AsyncContinuations.isYieldMarker(saved.getYielded())) throw fault("Unsupported delimited invocation cut");
-            answer = force.drainStack(saved, shape, true, false);
+            answer = force.drainStack(saved, shape, true, false, invocationMetrics);
             DelimitedControl.asyncResult(answer, this);
         }
         return shape == null ? answer : ownedTupleResult(answer, shape);
@@ -64,22 +70,22 @@ public final class DelimitedActionSite extends Node {
         AsyncRequest request = cut.asyncRequest();
         if (request != null) throw new AsyncDelivery(request, this);
         if (!(getRootNode() instanceof GuestRoot root)) throw fault("Missing delimited invocation root");
-        return finish(cut.freeze(root, frame.materialize()), shape);
+        return finish(cut.freeze(root, frame.materialize()), shape, null, invocationMetrics(frame));
     }
     private Object forceAction(VirtualFrame frame, Object action) {
         try { return force.execute(frame, action); }
         catch (ThunkSuspended cut) {
             if (cut.getAsyncRequest() != null) throw new AsyncDelivery(cut.getAsyncRequest(), this);
-            return force.drainDelimitedBoundary(cut.getThunk());
+            return force.drainDelimitedBoundary(cut.getThunk(), invocationMetrics(frame));
         } catch (CallSegmentSuspended cut) {
             if (cut.getAsyncRequest() != null) throw new AsyncDelivery(cut.getAsyncRequest(), this);
-            return force.drainDelimitedBoundary(cut.getSegment());
+            return force.drainDelimitedBoundary(cut.getSegment(), invocationMetrics(frame));
         }
     }
     public Object invoke(VirtualFrame frame, Object action, Object[] arguments, TupleShape shape) {
         try {
             Closure closure = requireClosure(forceAction(frame, action));
-            try { return finish((arguments.length == 1 ? one : two).execute(frame, closure, arguments), shape, closure.target); }
+            try { return finish((arguments.length == 1 ? one : two).execute(frame, closure, arguments), shape, closure.target, invocationMetrics(frame)); }
             catch (AstCapture cut) { return finishCapture(frame, shape, cut); }
         } catch (ThunkSuspended cut) {
             if (cut.getAsyncRequest() != null) throw new AsyncDelivery(cut.getAsyncRequest(), this);
@@ -90,7 +96,7 @@ public final class DelimitedActionSite extends Node {
         } catch (AsyncBlocked blocked) { throw new AsyncDelivery(blocked.getRequest(), this); }
     }
     public Object handle(VirtualFrame frame, DelimitedCut cut, TupleShape shape) {
-        Closure continuation = snapshot(cut, shape, metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame));
+        Closure continuation = snapshot(cut, shape, invocationMetrics(frame));
         return invoke(frame, cut.getHandler(), new Object[] {continuation, thc.runtime.Unit.INSTANCE}, shape);
     }
     @TruffleBoundary private Closure snapshot(DelimitedCut cut, TupleShape shape, Metrics invocationMetrics) { return new DelimitedStack(cut, shape).closure(language, invocationMetrics); }
