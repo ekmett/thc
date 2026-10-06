@@ -77,6 +77,8 @@ try {
             'thc.runtime.ContextOwnershipTest.preinitializedContextReplacesBuildAuthority',
             'thc.runtime.PreparedAdmissionCompatibilityTest.preparedMyThreadIdObservesEachCurrentContext',
             'thc.ReusableBytesTest.preparedNarrowAddressReadsUseRuntimeAllocation',
+            'thc.runtime.ResumableThunkProofTest.globalInitializerRunsOutsidePreparationLockAndUsesItsFirstEvaluatorMask',
+            'thc.runtime.ResumableThunkProofTest.suspendedGlobalReadPublishesItsCompletedValueWithoutReplayingInitializer',
             'thc.runtime.ManagedWeakTest.identityOnlyGuestWeaksCollectWhileLiveKeysAndFirstCompiledCallsPreserveIdentity',
             'thc.runtime.ManagedWeakTest.mutVarKeyValueBackReferencesCollectOnFirstCompiledCalls',
             'thc.runtime.ManagedWeakTest.liveMutVarKeysRetainDroppedRegistrationsUntilDetached',

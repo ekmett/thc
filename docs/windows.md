@@ -110,6 +110,12 @@ signed values, element offsets and runtime allocations, then rejects reads after
 free without compilation. Both methods run in both handoff modes. These checks
 do not qualify bytecode, Windows Text, GHC export or Native Image execution.
 
+Two fixture-free global-initializer checks retain execution outside the lowering
+lock and the first evaluator's masking state. A suspended AST global read resumes
+the existing bytecode-yield initializer and publishes its completed value once
+without replaying effects. Both methods run in both handoff modes; these checks
+do not qualify compiled execution, exported Core or Native Image execution.
+
 Fixture-free weak checks cover identity-only registrations and actionless raw
 `MutVar#` and `MVar#` keys with distinct values. The cycle check requires actual collection
 of value-to-key cycles while live keys retain their original values, including
