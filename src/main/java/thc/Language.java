@@ -501,8 +501,9 @@ public final class Language extends TruffleLanguage<Language.ContextState> {
         require(!input.containsKey("asyncExceptions") || input.get("asyncExceptions") instanceof Boolean, "asyncExceptions must be a Boolean");
         boolean async = Boolean.TRUE.equals(input.get("asyncExceptions"));
         boolean processSignals = bindings.stream().anyMatch(binding -> CoreSignalForeign.dispatcher.equals(binding.get("id")));
-        require(backend.equals("ast") && !async && !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
-            "Reusable code currently requires synchronous, strict AST preparation");
+        require(backend.equals("ast") && !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
+            "Reusable code requires strict AST preparation");
+        linked.put("asyncExceptions", async);
         var entries = shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry);
         return new PreparedRoot(this, Program.prepareCode(this, linked, entries, jobs), entry,
             ((Number) selected.get("arity")).intValue(), hostInputs, hostResult,

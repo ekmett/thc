@@ -93,6 +93,10 @@ Narrow scalar address indexing (`indexWord8OffAddr#`, `indexInt8OffAddr#`,
 `indexWord16OffAddr#`, `indexInt16OffAddr#`) uses the invoking address and preserves
 its ordinary bounds, context and lifetime checks, including rejection after free.
 
+Prepared requests retain the Boolean `asyncExceptions` policy in their shared code
+and fresh instances. `true` enables ordinary polling immediately; absent or `false`
+uses adaptive admission, just as ordinary AST programs do.
+
 Reusable AST roots are capture-capable from first lowering. AOT preparation
 declares materializable frames and polymorphic completion before any guest
 execution, preserving owned typed transport and unfinished caller operands.

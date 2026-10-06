@@ -54,10 +54,12 @@ public final class NativeExecutable {
         var properties = properties(configuration);
         String backend = properties.getOrDefault("thc.backend", "ast");
         String async = properties.getOrDefault("thc.asyncExceptions", "false");
-        if (!backend.equals("ast") || !async.equals("false"))
-            throw new IllegalArgumentException("Captured executable Core currently requires synchronous AST preparation");
+        if (!backend.equals("ast"))
+            throw new IllegalArgumentException("Captured executable Core requires AST preparation");
+        if (!async.equals("true") && !async.equals("false"))
+            throw new IllegalArgumentException("thc.asyncExceptions must be true or false");
         var request = (Map<String,Object>) Json.parse(CoreModules.request(Arrays.asList(args[1].split(",", -1)),
-            args[2], true, false, backend, false, true, args[3], false, fixed.verifyArtifacts()));
+            args[2], true, false, backend, false, true, args[3], Boolean.parseBoolean(async), fixed.verifyArtifacts()));
         // The shared selector closes readers and retains neither archive authority nor lazy bodies.
         var core = CoreModules.selectedModules(request, args[2]);
         return new NativeExecutable(core, Main.launcherArguments(args, 4), properties);

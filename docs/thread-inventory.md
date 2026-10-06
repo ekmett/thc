@@ -25,8 +25,8 @@ unlifted thread identities do not require a lifted wrapper.
 Fork admission invalidates speculative single-origin execution before child
 publication. Ordinary programs on both backends capture external `killThread#`
 delivery, including lazy action-head evaluation and shared thunk resumption,
-even with the default `asyncExceptions=false`. Prepared synchronous code rejects
-concurrency admission. Both backends permit self-delivery to the original handler
+even with the default `asyncExceptions=false`. Prepared AST code retains the
+same continuation capture and uses its runtime context's admission bit. Both backends permit self-delivery to the original handler
 or child termination as `DIED`.
 Both kinds are real Truffle-managed threads cancelled by `Context.close(true)`;
 context-wide cancellation is distinct from resumable guest async delivery.

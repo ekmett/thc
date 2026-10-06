@@ -265,7 +265,9 @@ public final class Program implements ExecutableProgram {
             throw new UnsupportedCore("Reusable AST preparation requires detached binding bodies");
         // Validate with the real module descriptors, retaining only storage
         // metadata for constructors actually reached during selected lowering.
-        Program builder = new Program(language, module, false, false, false, true, null);
+        if (module.containsKey("asyncExceptions") && !(module.get("asyncExceptions") instanceof Boolean))
+            throw new IllegalArgumentException("asyncExceptions must be a Boolean");
+        Program builder = new Program(language, module, Boolean.TRUE.equals(module.get("asyncExceptions")), false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
         // The linker includes runtime-entered service roots as well as explicit Core references.
         var selected = (List<Map<String,Object>>) thc.CoreModules.reachable(module, entries).get("bindings");
@@ -310,6 +312,7 @@ public final class Program implements ExecutableProgram {
         Map<String,Object> declarations = new LinkedHashMap<>();
         declarations.put("bindings", List.copyOf(headers)); declarations.put("constructors", List.of());
         declarations.put("instrument", builder.metrics.getEnabled());
+        declarations.put("asyncExceptions", builder.eagerAsyncPolls);
         declarations.put("foreignLinks", List.copyOf(builder.foreignLinks));
         declarations.put("packageScalarLinks", List.copyOf(builder.packageScalarLinks));
         declarations.put("boxedForeignDeclarations", builder.boxedForeignDeclarations);
@@ -424,7 +427,7 @@ public final class Program implements ExecutableProgram {
         private Program newInstance(TruffleLanguage<?> language, boolean nativeStartup) {
             if (language != this.language || language != LANGUAGES.get(null))
                 throw new UnsupportedCore("Reusable AST instance requires its prepared and current language");
-            return new Program(language, module, false, false, false, true, this, nativeStartup);
+            return new Program(language, module, Boolean.TRUE.equals(module.get("asyncExceptions")), false, false, true, this, nativeStartup);
         }
         /** Observe existing installation only: no binding demand, execution or compilation. */
         public void requireInstalledCode() {

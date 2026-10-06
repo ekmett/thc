@@ -115,10 +115,11 @@ class ReusableLoaderTest {
                     "strictFields", list(false, false), "fieldLifted", list(false, true), "fieldReps", list(list(), list("BoxedRep (Just Lifted)")), "fieldTypes", list(state, unit)),
                 map("id", unitId, "name", "()", "kind", "boxed", "arity", 0, "tag", 1, "strictFields", list(), "fieldLifted", list(), "fieldReps", list(), "fieldTypes", list())));
     }
-    @Test void preparedIoFactoryRetainsShutdownAndCreatesFreshEntryLifecycle() throws Exception {
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void preparedIoFactoryRetainsShutdownAndCreatesFreshEntryLifecycle(boolean eager) throws Exception {
         var module = ioModule();
         var path = CoreCbdFixtures.write(directory.resolve("PreparedIo.cbd"), module);
-        var request = document(CoreModules.request(List.of(path.toString()), "entry", true, false, "ast", false, true, "stop", false, true));
+        var request = document(CoreModules.request(List.of(path.toString()), "entry", true, false, "ast", false, true, "stop", eager, true));
         request.put("prepareCode", true);
         var source = Source.newBuilder("thc", Json.stringify(request), "prepared-io").cached(true).build();
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
@@ -128,6 +129,7 @@ class ReusableLoaderTest {
                     var action = context.parse(source).execute();
                     assertFalse(action.canExecute()); assertTrue(action.canInvokeMember("runIO"));
                     var before = (Map<?,?>) Json.parse(action.getMember("diagnostics").asString());
+                    assertEquals(eager, before.get("asyncExceptions"));
                     assertEquals(0L, before.get("loweredRootCount")); assertEquals(0L, before.get("compiledEntries"));
                     assertTrue(action.invokeMember("runIO").asBoolean());
                     assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO")).getMessage().contains("already started"));
@@ -170,6 +172,12 @@ class ReusableLoaderTest {
         var configuration = nativeBinding(module);
         assertTrue(assertThrows(IllegalArgumentException.class, () -> NativeExecutable.capture(configuration)).getMessage().contains("missing:Cold.value"));
     }
+    @Test void capturedExecutableRejectsMalformedAsyncPolicy() throws Exception {
+        var configuration = Json.stringify(map("arguments", Json.parse(nativeBinding(ioModule())),
+            "properties", map("thc.asyncExceptions", "yes")));
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> NativeExecutable.capture(configuration))
+            .getMessage().contains("thc.asyncExceptions must be true or false"));
+    }
     /** Actual upstream preinit; inputs are one CBD model/manifest, removed before execution. */
     @Test void preinitializedApplicationRunsWithoutCoreInputsOrRuntimeLowering() throws Exception {
         var output = directory.resolve("preinit.log");
@@ -194,11 +202,13 @@ class ReusableLoaderTest {
         var definitions = new ArrayList<>((List<Map<String,Object>>) module.get("bindings"));
         definitions.add(fixture.binding("unusedbad", list("unsupported", "must remain unselected", map())));
         module.put("bindings", definitions);
-        var captured = NativeExecutable.capture(fixture.nativeBinding(module));
+        var configuration = Json.stringify(map("arguments", Json.parse(fixture.nativeBinding(module)),
+            "properties", map("thc.asyncExceptions", "true")));
+        var captured = NativeExecutable.capture(configuration);
         var application = NativeExecutable.class.getDeclaredField("application"); application.setAccessible(true);
         application.set(null, captured);
         var core = NativeExecutable.class.getDeclaredField("core"); core.setAccessible(true);
-        assertNotNull(core.get(captured));
+        assertEquals(true, ((Map<?,?>) core.get(captured)).get("asyncExceptions"));
         String option = "polyglot.image-build-time.PreinitializeContexts";
         System.clearProperty(option);
         var holder = Class.forName("org.graalvm.polyglot.Engine$ImplHolder");
@@ -220,6 +230,7 @@ class ReusableLoaderTest {
                     .option("engine.Compilation", "false").build()) {
                 for (int load = 0; load < 2; load++) {
                     var action = captured.load(context);
+                    assertEquals(true, ((Map<?,?>) Json.parse(action.getMember("diagnostics").asString())).get("asyncExceptions"));
                     assertTrue(action.invokeMember("runIO").asBoolean());
                     assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO"))
                         .getMessage().contains("already started"));

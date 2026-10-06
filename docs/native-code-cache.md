@@ -122,7 +122,9 @@ Its builder uses 16 GiB and two compiler threads; compiled-cache mode retains
 its separate 8 GiB builder limit.
 
 The hosted feature captures the reachable entry and shutdown Core and prepares
-its synchronous AST factory through Truffle context preinitialization. Preparation
+its AST factory through Truffle context preinitialization. The binding retains
+`thc.asyncExceptions=true|false` as the prepared polling policy; this does not
+establish persisted-image qualification for concurrent programs. Preparation
 uses one worker, evaluates no guest body, and releases the Core after lowering.
 At startup the same language receives fresh runtime state and the saved factory
 creates fresh guest values. A missing factory or different language is an error;
