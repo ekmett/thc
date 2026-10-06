@@ -87,7 +87,7 @@ final class CoreHiModule {
         c.expectEnd();
         if(reader.simplifiedCore!=null){
             c=reader.cursor(reader.simplifiedCore,"retained Core");count=c.count(2);
-            for(int i=0;i<count;i++)groups.add(group(c,true,0));
+            for(int i=0;i<count;i++)groups.add(group(c,true,0,true));
             Map<String,Object> stubs=null;
             if(c.optional()){
                 String header=c.string(),source=c.string();
@@ -541,13 +541,13 @@ final class CoreHiModule {
             case 2 -> {
                 bool(c);
                 int tag = c.byteValue();
-                if(tag==1){int binders=c.count(1);for(int j=0;j<binders;j++)lambdaBinder(c,depth+1);int expressions=c.count(1);for(int j=0;j<expressions;j++)expr(c,depth+1);break;}
+                if(tag==1){int binders=c.count(1);for(int j=0;j<binders;j++)lambdaBinder(c,depth+1);int expressions=c.count(1);for(int j=0;j<expressions;j++)expr(c,depth+1,false);break;}
                 c.require(tag==0,"invalid unfolding tag");
                 c.require(c.byteValue() <= 3, "invalid unfolding source");
                 c.require(c.byteValue() <= 15, "invalid unfolding cache");
                 int guidance = c.byteValue(); c.require(guidance <= 1, "invalid unfolding guidance");
                 if (guidance == 1) { c.count(0); bool(c); bool(c); }
-                expr(c, depth + 1); // retained RHS is the execution authority
+                expr(c, depth + 1, false); // retained RHS is the execution authority
             }
             case 3 -> { sourceText(c);
                 int spec = c.byteValue(); c.require(spec <= 4, "invalid inline specification");
@@ -623,7 +623,7 @@ final class CoreHiModule {
         int join = c.byteValue(); c.require(join <= 1, "invalid join point tag");
         return new Binder(name, type, new Info(info.arity, null, join == 1 ? c.count(0) : null), offset, false);
     }
-    private Group group(CoreHiReader.Cursor c, boolean top, int depth) {
+    private Group group(CoreHiReader.Cursor c, boolean top, int depth, boolean executionFacts) {
         int tag = c.byteValue(); c.require(tag <= 1, "invalid binding group tag");
         int count = tag == 0 ? 1 : c.count(2);
         c.require(count > 0, "empty recursive binding group");
@@ -631,30 +631,34 @@ final class CoreHiModule {
         for (int i = 0; i < count; i++) {
             Binder binder = bindingBinder(c, top, depth + 1);
             if (top) c.require(c.byteValue()==1,"retained IfUseUnfoldingRhs requires an available public unfolding");
-            definitions.add(new Definition(binder, expr(c, depth + 1)));
+            definitions.add(new Definition(binder, expr(c, depth + 1, executionFacts)));
         }
         return new Group(tag == 1, List.copyOf(definitions));
     }
-    private Expr expr(CoreHiReader.Cursor c, int depth) {
+    private Expr expr(CoreHiReader.Cursor c, int depth, boolean executionFacts) {
         c.require(depth < 256, "expression nesting exceeds native Core limit");
         int offset = c.position(), tag = c.byteValue();
+        if (tag == 8) {
+            tick(c, depth + 1);
+            return expr(c, depth + 1, executionFacts);
+        }
         List<Object> fields = switch (tag) {
             case 0 -> values(reader.fastString(c));
             case 1 -> values(type(c, depth + 1));
             case 3 -> {
                 int sort=c.byteValue();c.require(sort<=2,"invalid tuple sort");
-                int count=c.count(1);tuples.add(new CoreHiNames.TupleFamily(sort,count));
+                int count=c.count(1);if (executionFacts) tuples.add(new CoreHiNames.TupleFamily(sort,count));
                 var components = new ArrayList<Expr>(count);
-                for (int i = 0; i < count; i++) components.add(expr(c, depth + 1));
+                for (int i = 0; i < count; i++) components.add(expr(c, depth + 1, executionFacts));
                 yield values(sort,List.copyOf(components));
             }
             case 4 -> {
                 Binder binder = lambdaBinder(c, depth + 1);
-                bool(c); yield values(binder, expr(c, depth + 1));
+                bool(c); yield values(binder, expr(c, depth + 1, executionFacts));
             }
-            case 5 -> values(expr(c, depth + 1), expr(c, depth + 1));
+            case 5 -> values(expr(c, depth + 1, executionFacts), expr(c, depth + 1, executionFacts));
             case 6 -> {
-                Expr scrutinee = expr(c, depth + 1); String name = reader.fastString(c);
+                Expr scrutinee = expr(c, depth + 1, executionFacts); String name = reader.fastString(c);
                 int count = c.count(3); var alts = new ArrayList<Alt>(count);
                 c.require(count > 0, "IfaceCase has no alternatives");
                 for (int i = 0; i < count; i++) {
@@ -663,26 +667,28 @@ final class CoreHiModule {
                     if (alt == 1) {
                         var constructorName = (CoreHiReader.ExternalName) discriminator;
                         c.require(constructorName.namespace() == 1,"invalid data alternative identity");
-                        rememberCompilerConstructor(constructorName);
+                        if (executionFacts) rememberCompilerConstructor(constructorName);
                     }
                     int binders = c.count(1); var names = new ArrayList<String>(binders);
                     for (int j = 0; j < binders; j++) names.add(reader.fastString(c));
-                    alts.add(new Alt(alt, discriminator, List.copyOf(names), expr(c, depth + 1)));
+                    alts.add(new Alt(alt, discriminator, List.copyOf(names), expr(c, depth + 1, executionFacts)));
                 }
                 yield values(scrutinee, name, List.copyOf(alts));
             }
-            case 7 -> values(group(c, false, depth + 1), expr(c, depth + 1));
+            case 7 -> values(group(c, false, depth + 1, executionFacts), expr(c, depth + 1, executionFacts));
             case 9 -> values(literal(c));
-            case 12 -> values(expr(c,depth+1),binary.coercion(c,depth+1));
+            case 12 -> values(expr(c,depth+1,executionFacts),binary.coercion(c,depth+1));
             case 2 -> values(binary.coercion(c,depth+1));
-            case 13 -> values(expr(c,depth+1),type(c,depth+1));
+            case 13 -> values(expr(c,depth+1,executionFacts),type(c,depth+1));
             case 14 -> {Object rr=type(c,depth+1);int torc=c.byteValue();c.require(torc<=1,"invalid rubbish type/constraint");yield values(values("con",new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Prim"),3,null,torc==0?"TYPE":"CONSTRAINT"),false,List.of(0),List.of(values(0,rr))));}
             case 10 -> values(foreignCall(c),type(c,depth+1));
             case 11 -> {
                 var name = CoreHiNames.read(reader, c);
 
-                control|=CoreHiNames.isPrimop(name)&&Set.of("prompt#","control0#").contains(name.occurrence());
-                rememberCompilerConstructor(name);
+                if (executionFacts) {
+                    control|=CoreHiNames.isPrimop(name)&&Set.of("prompt#","control0#").contains(name.occurrence());
+                    rememberCompilerConstructor(name);
+                }
                 yield values(name);
             }
             default -> throw unsupported(c, "expression tag " + tag);
@@ -698,8 +704,47 @@ final class CoreHiModule {
         else if (CoreHiNames.constructor(name) != null || CoreHiNames.tupleFamily(name) != null || CoreHiNames.sumFamily(name) != null)
             constructor(name);
     }
+    /** THC.Plugin erases ticks; only optional display data consumes their notes.
+     * Decode the complete payload without promoting breakpoint captures to code. */
+    private void tick(CoreHiReader.Cursor c, int depth) {
+        int tag = c.byteValue();
+        switch (tag) {
+            case 0 -> { reader.module(c); c.signed(); } // HPC module/index.
+            case 1 -> {
+                int centre = c.byteValue(); c.require(centre <= 1, "invalid cost centre tag");
+                if (centre == 0) {
+                    int flavour = c.byteValue(); c.require(flavour <= 1, "invalid cost centre flavour");
+                    if (flavour == 1) {
+                        long indexed = c.signed(); c.require(indexed >= 0 && indexed <= 4, "invalid indexed cost centre flavour");
+                        c.signed();
+                    }
+                    reader.fastString(c);
+                }
+                reader.module(c);
+                bool(c); bool(c); // Counting and scoping flags follow the exporter erasure law.
+            }
+            case 2 -> {
+                reader.fastString(c);
+                for (int i = 0; i < 4; i++) c.signed(); // Source span coordinates.
+                reader.fastString(c);
+            }
+            case 3 -> {
+                reader.module(c); c.signed();
+                int count = c.count(1);
+                for (int i = 0; i < count; i++) expr(c, depth + 1, false);
+            }
+            default -> throw unsupported(c, "tick tag " + tag);
+        }
+    }
+
     private Literal literal(CoreHiReader.Cursor c) {
         int tag = c.byteValue();
+        if (tag == 0) {
+            long point = c.unsigned(32);
+            c.require(point <= 0x10ffff, "out-of-range GHC Char literal");
+            return new Literal("char", Long.toString(point), con(new CoreHiReader.ExternalName(
+                    new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Prim"), 3, null, "Char#"), false));
+        }
         if (tag == 1) {
             int size = c.count(1);
             c.require(size <= Integer.MAX_VALUE / 2, "byte literal exceeds hexadecimal string size");

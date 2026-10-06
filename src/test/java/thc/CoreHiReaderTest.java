@@ -13,6 +13,93 @@ class CoreHiReaderTest {
     private static final Path FIXTURE = Path.of("build/native-hi-reader");
     private static Path path(String mode) { return FIXTURE.resolve(mode).resolve("NativeHiFixture.hi"); }
 
+    @Test void charactersAndTicksPreserveTheExecutedChild() throws Exception {
+        var reader = CoreHiReader.read(path("normal"));
+        var module = new CoreHiModule(reader);
+        var constructors = module.constructorLayouts();
+        var admission = module.admission();
+        int unit = reader.strings.indexOf(reader.module.unit());
+        int owner = reader.strings.indexOf(reader.module.name());
+        assertTrue(unit >= 0 && owner >= 0);
+        for (int point : new int[]{0, 'A', 0xd800, 0xdc00, 0x10000, 0x10ffff}) {
+            var literal = new java.io.ByteArrayOutputStream();
+            literal.write(9); literal.write(0); unsigned(literal, point);
+            var plain = nativeExpression(reader, module, literal.toByteArray());
+            assertEquals(List.of("lit", "char", Integer.toString(point)), plain.subList(0, 3));
+            var proof = (Map<?,?>) ((Map<?,?>) plain.getLast()).get("rep");
+            assertEquals(List.of("WordRep"), proof.get("primReps"));
+            assertEquals(true, proof.get("evaluated"));
+        }
+        var literal = new java.io.ByteArrayOutputStream();
+        literal.write(9); literal.write(0); unsigned(literal, 'A');
+        var plain = nativeExpression(reader, module, literal.toByteArray());
+        for (int tick : new int[]{0, 1, 2, 3}) {
+            for (boolean flag : tick == 1 ? List.of(false, true) : List.of(false)) {
+                var bytes = new java.io.ByteArrayOutputStream();
+                bytes.write(8); bytes.write(tick);
+                if (tick == 1) {
+                    bytes.write(0); // NormalCC, IndexedCC flavour.
+                    bytes.write(1); bytes.write(4); bytes.write(0);
+                    unsigned(bytes, owner);
+                }
+                if (tick <= 1 || tick == 3) {
+                    bytes.write(0); unsigned(bytes, unit); unsigned(bytes, owner);
+                }
+                if (tick == 0 || tick == 3) bytes.write(0);
+                if (tick == 1) { bytes.write(flag ? 1 : 0); bytes.write(flag ? 0 : 1); }
+                if (tick == 2) {
+                    unsigned(bytes, owner);
+                    bytes.writeBytes(new byte[]{1, 1, 1, 2});
+                    unsigned(bytes, owner);
+                }
+                if (tick == 3) {
+                    bytes.write(2); // Captured expressions are decoded, never executed/indexed.
+                    bytes.writeBytes(new byte[]{3, 1, 0}); // Empty unboxed tuple.
+                    bytes.writeBytes(new byte[]{10, 1, 0, 0, 1}); // Dynamic CCall, unsafe, type variable.
+                    unsigned(bytes, owner);
+                }
+                bytes.writeBytes(literal.toByteArray());
+                assertEquals(plain, nativeExpression(reader, module, bytes.toByteArray()));
+                assertEquals(constructors, module.constructorLayouts());
+                assertEquals(admission, module.admission());
+            }
+        }
+        var invalid = new java.io.ByteArrayOutputStream();
+        invalid.write(9); invalid.write(0); unsigned(invalid, 0x110000);
+        var failure = assertThrows(java.lang.reflect.InvocationTargetException.class,
+                () -> nativeExpression(reader, module, invalid.toByteArray()));
+        assertTrue(failure.getCause().getMessage().contains("expression-codec.hi"));
+        assertTrue(failure.getCause().getMessage().contains("out-of-range GHC Char"));
+        failure = assertThrows(java.lang.reflect.InvocationTargetException.class,
+                () -> nativeExpression(reader, module, new byte[]{8, 4}));
+        assertTrue(failure.getCause().getMessage().contains("tick tag 4"));
+    }
+
+    private static void unsigned(java.io.ByteArrayOutputStream bytes, long value) {
+        do {
+            int low = (int) (value & 127); value >>>= 7;
+            bytes.write(low | (value == 0 ? 0 : 128));
+        } while (value != 0);
+    }
+
+    private static List<?> nativeExpression(CoreHiReader reader, CoreHiModule module, byte[] expression) throws Exception {
+        byte[] bytes = Files.readAllBytes(path("normal"));
+        int start = reader.publicSections.get("declarations").start();
+        System.arraycopy(expression, 0, bytes, start, expression.length);
+        var encoded = new CoreHiReader(bytes, "expression-codec.hi");
+        var cursor = encoded.cursor(new CoreHiReader.Section(start, start + expression.length), "expression");
+        var parse = CoreHiModule.class.getDeclaredMethod("expr", CoreHiReader.Cursor.class, int.class, boolean.class);
+        parse.setAccessible(true);
+        Object parsed = parse.invoke(module, cursor, 0, true);
+        assertEquals(0, cursor.remaining());
+        var lower = CoreHiModule.class.getDeclaredMethod("lower", parsed.getClass(), Map.class, Map.class);
+        lower.setAccessible(true);
+        Object lowered = lower.invoke(module, parsed, Map.of(), Map.of());
+        var result = lowered.getClass().getDeclaredMethod("expression");
+        result.setAccessible(true);
+        return (List<?>) result.invoke(lowered);
+    }
+
     @Test void typeSubstitutionPreservesLexicalBinding() {
         var kind = CoreHiTypes.con(new CoreHiReader.ExternalName(
                 new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Types"), 3, null, "Type"), false);
