@@ -37,6 +37,7 @@ final class CoreHiModule {
     private final Set<Integer> readingTypes = new HashSet<>();
     private final Map<String,List<Binder>> dataTypes = new HashMap<>();
     private final Map<String,Constructor> constructors = new LinkedHashMap<>();
+    private final Map<String,Constructor> newtypes = new LinkedHashMap<>();
     private final Map<String,Binder> declarations = new LinkedHashMap<>();
     private final Map<String,Definition> definitions = new LinkedHashMap<>();
     private final Map<String,Variable> topScope = new HashMap<>();
@@ -100,6 +101,12 @@ final class CoreHiModule {
     }
     private String prefix() { return reader.module.unit() + ":" + reader.module.name() + "."; }
     Map<String,Object> metadata() {
+        // Newtypes have no runtime constructor. Validate their owned representation after module reservation.
+        for (var constructor : newtypes.values()) {
+            Expr location = new Expr(-1, List.of(), constructor.offset);
+            if (!lifted(constructor.result, location)) throw error(location, "unsupported unlifted newtype representation");
+            rep(constructor.result, false, location);
+        }
         return map("schema", 1L, "ghc", "9.14.1", "unit", reader.module.unit(), "module", reader.module.name(),
                 "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", List.of(), "constructors", constructors.values().stream().map(this::constructorMetadata).toList());
     }
@@ -173,14 +180,26 @@ final class CoreHiModule {
             int role = c.byteValue(); c.require(role >= 1 && role <= 3, "invalid data role");
         }
         c.require(c.count(1) == 0, "unsupported data context");
-        c.require(c.byteValue() == 1, "unsupported data type form (requires ordinary boxed data)");
-        int count = c.count(1); c.require(count > 0, "unsupported empty native data type");
-        // GHC allocates tags by declaration order, starting at fIRST_TAG = 1.
-        for (int i = 0; i < count; i++) dataConstructor(c, name, offset, i + 1);
+        int form = c.byteValue();
+        c.require(form == 1 || form == 3, "unsupported data type form (requires ordinary data or closed newtype)");
+        if (form == 3) {
+            c.require(parameterCount == 0, "unsupported parameterized newtype");
+            Constructor constructor = dataConstructor(c, name, offset, 1);
+            c.require(constructor.fields.size() == 1 && constructor.metadata.get("strictFields").equals(List.of(false)),
+                    "unsupported newtype constructor layout");
+            newtypes.put(CoreHiNames.id(name), constructor);
+        } else {
+            int count = c.count(1); c.require(count > 0, "unsupported empty native data type");
+            // GHC allocates tags by declaration order, starting at fIRST_TAG = 1.
+            for (int i = 0; i < count; i++) {
+                Constructor constructor = dataConstructor(c, name, offset, i + 1);
+                constructors.put((String) constructor.metadata.get("id"), constructor);
+            }
+        }
         c.require(!bool(c) && c.byteValue() == 0, "unsupported GADT or data family parent");
     }
 
-    private void dataConstructor(CoreHiReader.Cursor c, CoreHiReader.ExternalName name, int offset, int tag) {
+    private Constructor dataConstructor(CoreHiReader.Cursor c, CoreHiReader.ExternalName name, int offset, int tag) {
         var con = CoreHiNames.read(reader, c);
         c.require(con.module().equals(reader.module) && con.namespace() == 1, "invalid data constructor identity");
         c.require(!bool(c), "unsupported data constructor wrapper");
@@ -217,8 +236,10 @@ final class CoreHiModule {
         String id = CoreHiNames.id(con);
         var metadata = map("id", id, "name", con.occurrence(), "arity", (long) arity, "tag", (long) tag, "kind", "boxed",
                 "strictFields", List.copyOf(strict));
-        c.require(constructors.putIfAbsent(id, new Constructor(new Type(CoreHiNames.id(name), parameters.stream().map(p -> Type.scalar(TYPE_VARIABLE + p.name)).toList()), parameters, List.copyOf(fields), metadata, offset)) == null,
+        c.require(!constructors.containsKey(id) && newtypes.values().stream().noneMatch(n -> n.metadata.get("id").equals(id)),
                 "duplicate data constructor " + id);
+        return new Constructor(new Type(CoreHiNames.id(name), parameters.stream().map(p -> Type.scalar(TYPE_VARIABLE + p.name)).toList()),
+                parameters, List.copyOf(fields), metadata, offset);
     }
 
     private Type type(CoreHiReader.Cursor c, int depth) {
@@ -437,6 +458,7 @@ final class CoreHiModule {
             }
             case 7 -> values(group(c, false, depth + 1), expr(c, depth + 1));
             case 9 -> values(literal(c));
+            case 12 -> values(expr(c, depth + 1), coercion(c, depth + 1, 2));
             case 10 -> throw unsupported(c, "foreign call; native interface foreign transport is not implemented");
             case 11 -> {
                 var name = CoreHiNames.read(reader, c);
@@ -449,6 +471,35 @@ final class CoreHiModule {
         };
         return new Expr(tag, fields, offset);
     }
+    // Coercions share the bounded syntax carrier; owned endpoints resolve only after module reservation.
+    private Expr coercion(CoreHiReader.Cursor c, int depth, int role) {
+        c.require(depth < 256, "coercion nesting exceeds native Core limit");
+        int offset = c.position(), tag = c.byteValue();
+        List<Object> fields = switch (tag) {
+            case 1 -> { c.require(role == 1, "nominal reflexivity in representational coercion"); yield values(type(c, depth + 1)); }
+            case 2 -> {
+                c.require(c.byteValue() == role, "unsupported coercion role");
+                Type type = type(c, depth + 1);
+                c.require(c.byteValue() == 1, "unsupported kind-changing reflexivity");
+                yield values(type);
+            }
+            case 3 -> {
+                c.require(role == 2 && c.byteValue() == role, "unsupported function coercion role");
+                yield values(coercion(c, depth + 1, 1), coercion(c, depth + 1, 2), coercion(c, depth + 1, 2));
+            }
+            case 10 -> values(coercion(c, depth + 1, role));
+            case 17 -> {
+                c.require(role == 2 && c.byteValue() == 1, "unsupported newtype coercion axiom rule");
+                var axiom = CoreHiNames.read(reader, c);
+                c.require(axiom.namespace() == 3 && axiom.occurrence().startsWith("N:"), "unsupported newtype coercion axiom identity");
+                c.require(c.count(1) == 0, "unsupported applied newtype coercion");
+                yield values(axiom);
+            }
+            default -> throw unsupported(c, "coercion tag " + tag);
+        };
+        return new Expr(tag, fields, offset);
+    }
+
     private Literal literal(CoreHiReader.Cursor c) {
         int tag = c.byteValue();
         if (tag == 1) {
@@ -601,6 +652,20 @@ final class CoreHiModule {
                 if (type == null) throw error(e, "missing native Core dependency type " + id);
                 yield expression(type, e, "var", id);
             }
+            case 12 -> {
+                Lowered body = lower((Expr) e.fields.getFirst(), scope, typeScope);
+                var endpoints = coercionEndpoints((Expr) e.fields.get(1), typeScope);
+                Type source = endpoints.getFirst(), target = endpoints.get(1);
+                if (!body.type.equals(source)) throw error(e, "newtype cast source type mismatch");
+                if (!rep(source, false, e).equals(rep(target, false, e))) throw error(e, "unsupported representation-changing cast");
+                // Match the exporter: erase the cast, preserving evaluation and the existing executable children.
+                var erased = new ArrayList<>(body.expression);
+                var information = new LinkedHashMap<>(metadata(body.expression));
+                var original = (Map<?,?>) information.get("rep");
+                information.put("rep", rep(target, Boolean.TRUE.equals(original.get("evaluated")), e));
+                erased.set(erased.size() - 1, information);
+                yield new Lowered(erased, target);
+            }
             case 9 -> {
                 var literal = (Literal) e.fields.getFirst();
                 yield expression(literal.type, e, "lit", literal.kind, literal.value);
@@ -731,6 +796,38 @@ final class CoreHiModule {
             default -> throw error(e, "unsupported executable expression tag " + e.tag);
         };
     }
+    private List<Type> coercionEndpoints(Expr coercion, Map<String,Type> scope) {
+        return switch (coercion.tag) {
+            case 1, 2 -> {
+                Type type = resolve((Type) coercion.fields.getFirst(), scope, coercion, false);
+                yield List.of(type, type);
+            }
+            case 10 -> {
+                var endpoints = coercionEndpoints((Expr) coercion.fields.getFirst(), scope);
+                yield List.of(endpoints.get(1), endpoints.getFirst());
+            }
+            case 17 -> {
+                var axiom = (CoreHiReader.ExternalName) coercion.fields.getFirst();
+                String id = axiom.module().unit() + ":" + axiom.module().name() + "." + axiom.occurrence().substring(2);
+                var module = owner(id);
+                var constructor = module == null ? null : module.newtypes.get(id);
+                if (constructor == null) throw error(coercion, "missing owned closed newtype axiom " + CoreHiNames.id(axiom));
+                yield List.of(constructor.result, resolve(constructor.fields.getFirst(), Map.of(), coercion, false));
+            }
+            case 3 -> {
+                var multiplicity = coercionEndpoints((Expr) coercion.fields.getFirst(), scope);
+                var argument = coercionEndpoints((Expr) coercion.fields.get(1), scope);
+                var result = coercionEndpoints((Expr) coercion.fields.get(2), scope);
+                if (!multiplicity.getFirst().equals(multiplicity.get(1)) || !argument.getFirst().equals(argument.get(1)))
+                    throw error(coercion, "unsupported non-reflexive function coercion domain or multiplicity");
+                if (!rep(result.getFirst(), false, coercion).equals(rep(result.get(1), false, coercion)))
+                    throw error(coercion, "unsupported representation-changing function coercion");
+                yield List.of(Type.fun(argument.getFirst(), result.getFirst()), Type.fun(argument.get(1), result.get(1)));
+            }
+            default -> throw error(coercion, "unsupported coercion endpoints");
+        };
+    }
+
     private Lowered expression(Type type, Expr origin, Object... fields) {
         var expression = values(fields);
         boolean evaluated = fields[0].equals("lam") || fields[0].equals("lit") || fields[0].equals("var") && !lifted(type, origin);
@@ -774,7 +871,18 @@ final class CoreHiModule {
             if (!liftedKind(type.arguments.getFirst())) throw error(location, "unsupported forall kind " + type.arguments.getFirst());
             type = replace(type.arguments.get(1), TYPE_VARIABLE + type.name.substring(FORALL.length()), Type.scalar(ABSTRACT_LIFTED + "erased"));
         }
-        return resolve(type, Map.of(), location, false);
+        type = resolve(type, Map.of(), location, false);
+        var seen = new HashSet<String>();
+        while (!type.abstractLifted() && type.name.indexOf(':') >= 0) {
+            var module = owner(type.name);
+            if (module == null) throw error(location, "missing native Core type owner " + type.name);
+            var constructor = module.newtypes.get(type.name);
+            if (constructor == null) break;
+            if (!type.arguments.isEmpty()) throw error(location, "unsupported applied closed newtype " + type.name);
+            if (!seen.add(type.name)) throw error(location, "cyclic native newtype representation " + type.name);
+            type = resolve(constructor.fields.getFirst(), Map.of(), location, false);
+        }
+        return type;
     }
     private static boolean scalar(Type type) {
         return type.arguments.isEmpty() && switch (type.name) {
