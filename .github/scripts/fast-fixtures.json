@@ -24,6 +24,7 @@
     "thc.WindowsDistributionTest"
   ],
   "fixtureFreeJunit": [
+    "thc.CoreHiAxiomsTest",
     "thc.runtime.OriginalProcessIdentityTest",
     "thc.runtime.ForkHostFailureTest",
     "thc.runtime.LoomSignalProcessTest",

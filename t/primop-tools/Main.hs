@@ -280,6 +280,23 @@ cliTests root executable =
       stale <- BS.readFile path
       run dir ["known-keys"] >>= expectFailure "Known-key catalogue differs"
       BS.readFile path >>= (@?= stale))
+  , "CLI axiom oracle is compiler-owned, deterministic and fresh" ~: isolated (\dir -> do
+      let path = dir </> "axiom-oracle.json"
+      run dir ["known-keys", "--write-axiom-oracle", path] >>= expectSuccess
+      before <- BS.readFile path
+      BS.readFile (root </> "src/test/resources/thc/native-hi-axiom-oracle.json") >>= (@?= before)
+      run dir ["known-keys", "--write-axiom-oracle", path] >>= expectSuccess
+      BS.readFile path >>= (@?= before)
+      value <- readJson path
+      field "ghc" value @?= Right ("9.14.1" :: T.Text)
+      digest <- hashFile (dir </> implementationSource)
+      field "generatorSha256" value @?= Right digest
+      cases <- ok (field "cases" value :: Either String [Value])
+      catalogue <- ok knownKeyCatalogue
+      rules <- ok (field "axiomRules" catalogue :: Either String [Value])
+      actual <- Map.fromList <$> traverse (\row -> (,) <$> ok (field "name" row :: Either String T.Text) <*> pure ()) rules
+      observed <- Map.fromList <$> traverse (\row -> (,) <$> ok (field "rule" row :: Either String T.Text) <*> pure ()) cases
+      observed @?= actual)
   , "CLI stale scalar check leaves contract untouched" ~: isolated (\dir -> do
       BS.appendFile (dir </> scalarPath) " "
       stale <- BS.readFile (dir </> scalarPath)
@@ -345,7 +362,8 @@ main = do
         tycons <- ok (field "tycons" catalogue :: Either String [Value])
         names <- traverse (ok . field "name") tycons :: IO [Value]
         length names @?= Map.size (Map.fromList [(encode name, ()) | name <- names])
-        forM_ (Prim.primTyCons ++ Builtin.wiredInTyCons) $ \tc -> do
+        forM_ (Prim.primTyCons ++ Builtin.wiredInTyCons ++
+          [GHC.promoteDataCon con | tc <- Builtin.wiredInTyCons, con <- GHC.tyConDataCons tc]) $ \tc -> do
           name <- ok (metadataName (GHC.tyConName tc))
           assertBool "Compiler-owned tycon missing" (name `elem` names)
           case [entry | entry <- tycons, field "name" entry == Right name] of

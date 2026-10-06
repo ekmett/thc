@@ -15,7 +15,7 @@
 -- compiler API. Ordinary library declarations remain owned by their interfaces.
 module PrimopTools where
 
-import Control.Monad (foldM, forM_, unless, when)
+import Control.Monad (foldM, forM, forM_, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA256
 import Data.Aeson
 import Data.Aeson.Types (parseEither)
@@ -25,7 +25,8 @@ import Data.Bits ((.&.), (.|.), finiteBitSize, shiftL, shiftR)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Char (chr, ord)
-import Data.List (intercalate)
+import Data.List (intercalate, nub, sortOn)
+import Data.Foldable (toList)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import Data.Scientific (base10Exponent)
@@ -43,7 +44,11 @@ import qualified GHC.Core.DataCon as DataCon
 import qualified GHC.Core.Coercion.Axiom as Ax
 import qualified GHC.Core.TyCo.Rep as Rep
 import qualified GHC.Core.TyCo.Tidy as Tidy
+import qualified GHC.Core.TyCo.FVs as FVs
+import GHC.Core.TyCo.Compare (eqType)
+import GHC.Data.Pair (Pair(..))
 import qualified GHC.Types.TyThing as Thing
+import qualified GHC.Types.Unique.FM as UFM
 import GHC.CoreToIface (toIfaceType, toIfaceBndr)
 import qualified GHC.Iface.Type as Iface
 import qualified GHC.Plugins as GHC
@@ -376,7 +381,7 @@ ifaceTypeValue ty = case ty of
   Iface.IfaceTupleTy sort promotion args -> node "tuple" <$> sequence [pure (tupleSortValue sort), pure (promotionValue promotion), argumentsValue args]
   Iface.IfaceLitTy literal -> pure (node "lit" (case literal of
     Iface.IfaceNumTyLit value -> [toJSON (1 :: Int), toJSON (show value)]
-    Iface.IfaceStrTyLit value -> [toJSON (2 :: Int), toJSON (unpackFS (GHC.getLexicalFastString value))]
+    Iface.IfaceStrTyLit value -> [toJSON (2 :: Int), toJSON (map ord (unpackFS (GHC.getLexicalFastString value)))]
     Iface.IfaceCharTyLit value -> [toJSON (3 :: Int), toJSON (ord value)]))
   Iface.IfaceCastTy inner coercion -> node "cast" <$> sequence [ifaceTypeValue inner, ifaceCoercionValue coercion]
   Iface.IfaceCoercionTy coercion -> node "coercion" . (:[]) <$> ifaceCoercionValue coercion
@@ -508,6 +513,292 @@ tyConValue tc = do
           let vis = case visibility of GHC.AnonTCB -> [toJSON (0 :: Int)]; GHC.NamedTCB flag -> [toJSON (1 :: Int), visibilityValue flag]
           pure (toJSON [encoded, toJSON vis])
 
+-- | A source-level port of GHC.Builtin.Types.Literals' rule constructors.
+-- Inputs are coercion endpoint pairs. Literal folds consume the right endpoints;
+-- structural rewrites substitute left and right endpoints independently.
+data RuleExpr
+  = Input Int Int
+  | Family GHC.TyCon [RuleExpr]
+  | Constant Type
+  | Argument GHC.TyCon Int RuleExpr
+  | Operation T.Text [RuleExpr]
+  | Equal RuleExpr RuleExpr
+  | IsConstructor GHC.TyCon Int RuleExpr
+  | Require RuleExpr RuleExpr
+  | PairExpr RuleExpr RuleExpr
+
+ruleExprValue :: RuleExpr -> Either String Value
+ruleExprValue expression = case expression of
+  Input index side -> pure (node "input" [toJSON index, toJSON side])
+  Family tc arguments -> node "family" <$> sequence [metadataName (GHC.tyConName tc), toJSON <$> traverse ruleExprValue arguments]
+  Constant ty -> node "type" . (:[]) <$> closedTypeValue ty
+  Argument tc index value -> node "argument" <$> sequence [metadataName (GHC.tyConName tc), pure (toJSON (GHC.tyConArity tc)), pure (toJSON index), ruleExprValue value]
+  Operation operator arguments -> node "operation" . (toJSON operator :) . (:[]) . toJSON <$> traverse ruleExprValue arguments
+  Equal a b -> binary "equal" a b
+  IsConstructor tc arity value -> node "iscon" <$> sequence [metadataName (GHC.tyConName tc), pure (toJSON arity), ruleExprValue value]
+  Require condition value -> binary "require" condition value
+  PairExpr a b -> binary "pair" a b
+  where binary tag a b = node tag <$> traverse ruleExprValue [a,b]
+
+-- Lists below mirror the complete pinned rule-constructor composition, not a
+-- runtime admission list. Every label/order is checked against compiler data.
+-- The compiler's own listToUFM chooses duplicate names, exactly as its reader does.
+familyPrograms :: GHC.TyCon -> Either String ([(String,RuleExpr)],[(String,RuleExpr)])
+familyPrograms tc
+  | tc == Literal.typeNatAddTyCon = pure
+      ([rewrite "Add0L" [zero,l 0] (r 0), rewrite "Add0R" [l 0,zero] (r 0), foldRule "AddDef" "add" 2],
+       [deduce "AddT-0L" (op "zero" [z]) a zero, deduce "AddT-0R" (op "zero" [z]) b zero,
+        result "AddT-KKL" b (op "subtract" [z,a]), result "AddT-KKR" a (op "subtract" [z,b])] ++ cancelRules "AddI" ["xx","xy","yx","yy"] Nothing)
+  | tc == Literal.typeNatSubTyCon = pure
+      ([rewrite "Sub0R" [l 0,zero] (r 0), foldRule "SubDef" "subtract" 2],
+       [result "SubT" (Family Literal.typeNatAddTyCon [op "natural" [z],b]) a] ++ cancelRules "SubI" ["xx","yy"] Nothing)
+  | tc == Literal.typeNatMulTyCon = pure
+      ([rewrite "Mul0L" [zero,l 0] zero, rewrite "Mul0R" [l 0,zero] zero,
+        rewrite "Mul1L" [one,l 0] (r 0), rewrite "Mul1R" [l 0,one] (r 0), foldRule "MulDef" "multiply" 2],
+       [deduce "MulT1" (op "one" [z]) a z, deduce "MulT2" (op "one" [z]) b z,
+        result "MulT3" b (op "divideExact" [z,a]), result "MulT4" a (op "divideExact" [z,b])] ++ cancelRules "MulI" ["xx","yy"] (Just "nonzero"))
+  | tc == Literal.typeNatExpTyCon = pure
+      ([rewrite "Exp0R" [l 0,zero] one, rewrite "Exp1L" [one,l 0] one,
+        rewrite "Exp1R" [l 0,one] (r 0), foldRule "ExpDef" "power" 2],
+       [deduce "ExpT1" (op "zero" [z]) a z,
+        result "ExpT2" b (op "logExact" [z,a]), result "ExpT3" a (op "rootExact" [z,b])] ++
+       cancelRules "ExpI" ["xx"] (Just "greaterOne") ++ cancelRules "ExpI" ["yy"] (Just "nonzero"))
+  | tc == Literal.typeNatDivTyCon = pure ([rewrite "Div1" [l 0,one] (r 0), foldRule "DivDef" "divide" 2], [])
+  | tc == Literal.typeNatModTyCon = pure ([rewrite "Mod1" [l 0,one] zero, foldRule "ModDef" "modulo" 2], [])
+  | tc == Literal.typeNatLogTyCon = pure ([foldRule "LogDef" "log2" 1], [])
+  | tc == Literal.typeNatCmpTyCon = comparePrograms "CmpNatRefl" "CmpNatDef" "compareNatural" "CmpNatT3"
+  | tc == Literal.typeSymbolCmpTyCon = comparePrograms "CmpSymbolRefl" "CmpSymbolDef" "compareSymbol" "CmpSymbolT"
+  | tc == Literal.typeCharCmpTyCon = comparePrograms "CmpCharRefl" "CmpCharDef" "compareChar" "CmpCharT"
+  | tc == Literal.typeSymbolAppendTyCon = pure
+      ([rewrite "Concat0R" [empty,l 0] (r 0), rewrite "Concat0L" [l 0,empty] (r 0), foldRule "AppendSymbolDef" "append" 2],
+       [deduce "AppendSymbolT1" (op "empty" [z]) a empty, deduce "AppendSymbolT2" (op "empty" [z]) b empty,
+        result "AppendSymbolT3" b (op "stripPrefix" [a,z]), result "AppendSymbolT3" a (op "stripSuffix" [b,z])] ++
+       cancelRules "AppI" ["xx","yy"] Nothing)
+  | tc == Literal.typeConsSymbolTyCon = pure
+      ([foldRule "ConsSymbolDef" "cons" 2],
+       [result "ConsSymbolT1" a (op "headSymbol" [z]), result "ConsSymbolT2" b (op "tailSymbol" [z])] ++
+       cancelRules "ConsI" ["xx","yy"] Nothing)
+  | tc == Literal.typeUnconsSymbolTyCon = pure
+      ([("ConsSymbolDef", PairExpr (Family tc [l 0]) (op "uncons" [r 0, Constant nothingType, Constant justPairTemplate]))],
+       [deduce "UnconsSymbolT1" (IsConstructor Builtin.promotedNothingDataCon 1 z) a empty,
+        result "UnconsSymbolT2" a (op "cons" [Argument pairCon 2 justValue, Argument pairCon 3 justValue]),
+        ("UnconsI1", PairExpr a (Argument tc 0 z))])
+  | tc == Literal.typeCharToNatTyCon = pure
+      ([foldRule "CharToNatDef" "charToNatural" 1], [result "CharToNatT1" a (op "naturalToChar" [z])])
+  | tc == Literal.typeNatToCharTyCon = pure
+      ([foldRule "NatToCharDef" "naturalToChar" 1], [result "CharToNatT1" a (op "charToNatural" [z])])
+  | otherwise = Left "Built-in family semantics missing from pinned source port"
+  where
+    l index = Input index 0
+    r index = Input index 1
+    x = Input 0 0
+    z = Input 0 1
+    a = Argument tc 0 x
+    b = Argument tc 1 x
+    zero = Constant (GHC.mkNumLitTy 0)
+    one = Constant (GHC.mkNumLitTy 1)
+    empty = Constant (GHC.mkStrLitTy (GHC.mkFastString ""))
+    op = Operation
+    rewrite label lhs rhs = (label, PairExpr (Family tc lhs) rhs)
+    foldRule label operation arity = (label, PairExpr (Family tc [l i | i <- [0..arity-1]]) (op operation [r i | i <- [0..arity-1]]))
+    result label lhs rhs = (label, PairExpr lhs rhs)
+    deduce label condition lhs rhs = (label, Require condition (PairExpr lhs rhs))
+    cancelRules prefix variants guardOp = map cancel variants
+      where cancel variant =
+              let (i,j,outI,outJ) = case variant of
+                    "xx" -> (0,0,1,1)
+                    "xy" -> (0,1,0,1)
+                    "yx" -> (1,0,1,0)
+                    _ -> (1,1,0,0)
+                  matched = Argument tc i x
+                  other = Argument tc j z
+                  pair = if variant == "xy" || variant == "yx" then PairExpr (Argument tc outI z) (Argument tc outJ x)
+                         else PairExpr (Argument tc outI x) (Argument tc outJ z)
+                  guarded = maybe pair (\operation -> Require (op operation [matched]) pair) guardOp
+              in (prefix ++ "-" ++ variant, Require (Equal matched other) guarded)
+    comparePrograms reflLabel defLabel operation injectLabel = pure
+      ([rewrite reflLabel [l 0,l 0] equalOrdering,
+        (defLabel, PairExpr (Family tc [l 0,l 1]) (op operation ([r 0,r 1] ++ orderingTypes)))],
+       [deduce injectLabel (IsConstructor Builtin.promotedEQDataCon 0 z) a b])
+    orderingTypes = map (Constant . GHC.mkTyConTy) [Builtin.promotedLTDataCon, Builtin.promotedEQDataCon, Builtin.promotedGTDataCon]
+    equalOrdering = Constant (GHC.mkTyConTy Builtin.promotedEQDataCon)
+    pairCon = Builtin.promotedTupleDataCon GHC.Boxed 2
+    justValue = Argument Builtin.promotedJustDataCon 1 z
+    pairKind = GHC.mkTyConApp (Builtin.tupleTyCon GHC.Boxed 2) [Builtin.charTy, Builtin.typeSymbolKind]
+    nothingType = Builtin.mkPromotedMaybeTy pairKind Nothing
+    justPairTemplate =
+      let variables = Prim.mkTemplateTyVars [Builtin.charTy, Builtin.typeSymbolKind]
+      in case map GHC.mkTyVarTy variables of
+        [character,symbol] -> GHC.mkSpecForAllTys variables (Builtin.mkPromotedMaybeTy pairKind (Just (Builtin.mkPromotedPairTy Builtin.charTy Builtin.typeSymbolKind character symbol)))
+        _ -> error "Compiler template-variable arity changed"
+
+axiomRuleName :: Ax.CoAxiomRule -> GHC.FastString
+axiomRuleName (Ax.BuiltInFamRew rule) = Ax.bifrw_name rule
+axiomRuleName (Ax.BuiltInFamInj rule) = Ax.bifinj_name rule
+axiomRuleName _ = error "Non-built-in rule in compiler built-in rule map"
+
+axiomRuleDescriptors :: Either String [Value]
+axiomRuleDescriptors = do
+  composed <- concat <$> traverse family Literal.typeNatTyCons
+  let selected = UFM.listToUFM [(axiomRuleName rule, (rule,tc,program)) | (rule,tc,program) <- composed]
+      actual = sortOn (unpackFS . axiomRuleName) (UFM.nonDetEltsUFM Literal.typeNatCoAxiomRules)
+  require (UFM.sizeUFM selected == length actual) "Built-in rule source port differs from compiler map"
+  forM actual $ \rule -> do
+    (_,tc,program) <- maybe (Left "Compiler-selected built-in axiom lacks semantics") pure (UFM.lookupUFM selected (axiomRuleName rule))
+    encoded <- ruleExprValue program
+    name <- metadataName (GHC.tyConName tc)
+    pure (object ["name" .= unpackFS (axiomRuleName rule), "family" .= name,
+      "flavour" .= (case rule of Ax.BuiltInFamRew{} -> "rewrite"; _ -> "injectivity" :: T.Text),
+      "argRoles" .= map roleValue (Ax.coAxiomRuleArgRoles rule),
+      "role" .= roleValue (Ax.coAxiomRuleRole rule), "program" .= encoded])
+  where
+    family tc = do
+      (rewritePrograms, injectPrograms) <- familyPrograms tc
+      ops <- maybe (Left "Non-built-in compiler literal family") pure (GHC.isBuiltInSynFamTyCon_maybe tc)
+      let rewrites = Ax.sfMatchFam ops
+          injections = Ax.sfInteract ops
+      require (map (unpackFS . Ax.bifrw_name) rewrites == map fst rewritePrograms) "Built-in rewrite source composition differs from compiler"
+      require (map (unpackFS . Ax.bifinj_name) injections == map fst injectPrograms) "Built-in injectivity source composition differs from compiler"
+      pure ([(Ax.BuiltInFamInj rule,tc,program) | (rule,(_,program)) <- zip injections injectPrograms] ++
+            [(Ax.BuiltInFamRew rule,tc,program) | (rule,(_,program)) <- zip rewrites rewritePrograms])
+
+-- | Independent compiler callback oracle. This finite corpus qualifies the port;
+-- it never determines which semantics or descriptors the native reader admits.
+axiomOracle :: Either String [Value]
+axiomOracle = do
+  descriptors <- axiomRuleDescriptors
+  compactOracle . concat <$> forM descriptors (\descriptor -> do
+    label <- field "name" descriptor
+    familyName <- field "family" descriptor
+    tc <- case [con | con <- Literal.typeNatTyCons, metadataName (GHC.tyConName con) == Right familyName] of
+      [con] -> pure con
+      _ -> Left "Oracle family not owned by compiler"
+    rule <- maybe (Left "Compiler-selected oracle rule missing") pure (UFM.lookupUFM Literal.typeNatCoAxiomRules (GHC.mkFastString label))
+    let kinds = map (GHC.varType . GHC.binderVar) (GHC.tyConBinders tc)
+        inputs = case rule of
+          Ax.BuiltInFamRew rewrite ->
+            let arity = Ax.bifrw_arity rewrite
+                argumentKinds = if arity == length kinds then kinds else take arity kinds
+                rights = vectors argumentKinds
+            in [zipWith Pair (zipWith leftVariable [0..] argumentKinds) values | values <- rights]
+          Ax.BuiltInFamInj _ ->
+            [ [Pair (GHC.mkTyConApp tc values) result]
+            -- GHC genRoot computes full x^degree intermediates; avoid costly
+            -- oracle degrees while qualifying wide degrees in rewrites below.
+            | values <- [vs | vs <- vectors kinds, all (maybe True (<= 9) . GHC.isNumLitTy) (drop 1 vs)]
+            , result <- take 2 (valuesFor (GHC.tyConResKind tc)) ++ reduced tc values ++
+                [GHC.mkTyConApp tc changed | changed <- variants values] ]
+          _ -> []
+    forM inputs (\arguments -> do
+      let result = case rule of
+            Ax.BuiltInFamRew rewrite -> Ax.bifrw_proves rewrite arguments
+            Ax.BuiltInFamInj injection -> case arguments of [equation] -> Ax.bifinj_proves injection equation; _ -> Nothing
+            _ -> Nothing
+          allTypes = concatMap (\(Pair a b) -> [a,b]) arguments ++ maybe [] (\(Pair a b) -> [a,b]) result
+          freeVariables = sortOn (getKey . getUnique) (FVs.tyCoVarsOfTypesList allTypes)
+          (env, tidied) = Tidy.tidyVarBndrs GHC.emptyTidyEnv freeVariables
+          encodeType = typeValue . Tidy.tidyType env
+          encodePair (Pair a b) = toJSON <$> traverse encodeType [a,b]
+      binders <- traverse (binderValue . toIfaceBndr) tidied
+      encodedInputs <- traverse encodePair arguments
+      encodedResult <- traverse encodePair result
+      pure (object ["rule" .= (label :: String), "binders" .= binders, "arguments" .= encodedInputs, "result" .= encodedResult])))
+  where
+    big = 2^(80 :: Int) + 3
+    nats = map GHC.mkNumLitTy [0,1,2,3,8,9,big]
+    symbols = map (GHC.mkStrLitTy . GHC.mkFastString) ["","a","aa","\0","\x10000","\xe000","a\x10000\&b","\xd800\xdc00","\xd800"]
+    characters = map GHC.mkCharLitTy ['\0','a','\xd800','\x10000','\x10ffff']
+    orders = map GHC.mkTyConTy [Builtin.promotedLTDataCon,Builtin.promotedEQDataCon,Builtin.promotedGTDataCon]
+    pairKind = GHC.mkTyConApp (Builtin.tupleTyCon GHC.Boxed 2) [Builtin.charTy,Builtin.typeSymbolKind]
+    resultMaybe = [Builtin.mkPromotedMaybeTy pairKind Nothing,
+      Builtin.mkPromotedMaybeTy pairKind (Just (Builtin.mkPromotedPairTy Builtin.charTy Builtin.typeSymbolKind (GHC.mkCharLitTy 'a') (GHC.mkStrLitTy (GHC.mkFastString "b"))))]
+    literalTypes = nats ++ symbols ++ characters ++ orders ++ resultMaybe
+    variableKinds = [Builtin.naturalTy,Builtin.typeSymbolKind,Builtin.charTy,GHC.mkTyConTy Builtin.orderingTyCon,Builtin.mkMaybeTy pairKind]
+    variables = Prim.mkTemplateTyVars (concat (replicate 3 variableKinds))
+    leftVariable index kind = case drop index [v | v <- take (2 * length variableKinds) variables, eqType kind (GHC.varType v)] of
+      variable:_ -> GHC.mkTyVarTy variable
+      [] -> error "Pinned oracle kind not represented"
+    valuesFor kind = [value | value <- literalTypes, eqType kind (GHC.typeKind value)] ++
+      [GHC.mkTyVarTy v | v <- drop (2 * length variableKinds) variables, eqType kind (GHC.varType v)]
+    vectors [] = [[]]
+    vectors [kind] = map (:[]) (valuesFor kind)
+    vectors [a,b] =
+      -- Keep the second natural small; arbitrary exponents can allocate a result
+      -- exponentially larger than the oracle itself. Include huge exponents at
+      -- bases 0/1, which have exact constant-size results across all families.
+      -- Diagonal, adjacent and identity operands exercise equality, ordering,
+      -- cancellation and non-exact guards without a Cartesian product.
+      (let xs = valuesFor a; ys = [v | v <- valuesFor b, maybe True (<= 9) (GHC.isNumLitTy v)]
+       in zipWith (\x y -> [x,y]) xs ys ++
+          zipWith (\x y -> [x,y]) xs (drop 1 ys ++ take 1 ys) ++
+          zipWith (\x y -> [x,y]) (drop 1 xs ++ take 1 xs) ys ++
+          [[x,y] | x <- xs, y <- take 2 ys]) ++
+      [[GHC.mkNumLitTy base,GHC.mkNumLitTy big] | base <- [0,1], eqType a Builtin.naturalTy, eqType b Builtin.naturalTy]
+    vectors _ = error "Pinned literal family arity changed"
+    variants [] = [[]]
+    variants values = values : reverse values :
+      [take i values ++ [alternative] ++ drop (i+1) values
+      | (i,value) <- zip [0..] values, alternative <- take 2 (valuesFor (GHC.typeKind value))]
+    reduced tc values = case GHC.isBuiltInSynFamTyCon_maybe tc of
+      Just ops -> [result | rewrite <- Ax.sfMatchFam ops, Just (_,result) <- [Ax.bifrw_match rewrite values]]
+      Nothing -> []
+
+-- | Preserve semantic partitions rather than thousands of interchangeable
+-- Cartesian cases. Equality-sharing distinguishes cancellation/orientation;
+-- input/result shapes distinguish successful and rejected literal guards.
+-- Each literal-domain witness is independent of the other domains, rather than
+-- multiplied across every operand.
+-- These partitions select evidence only, never native admission behavior.
+compactOracle :: [Value] -> [Value]
+compactOracle rows = reverse (snd (foldl collect (Map.empty,[]) rows))
+  where
+    collect (seen,kept) row =
+      let keys = partition row
+      in if all (`Map.member` seen) keys then (seen,kept)
+         else (foldr (\key -> Map.insert key ()) seen keys,row:kept)
+    partition row = case (field "arguments" row, field "result" row) of
+      (Right inputs, Right result) ->
+        let inputPairs = inputs :: [[Value]]
+            endpoints = concat inputPairs ++ maybe [] id (result :: Maybe [Value])
+        in encode (toJSON [shape row, toJSON [[a == b | b <- endpoints] | a <- endpoints]]) :
+           [encode (toJSON [either error toJSON (field "rule" row :: Either String T.Text), toJSON (result /= Nothing), toJSON property])
+           | property <- nub (literalPartitions (toJSON endpoints))]
+      _ -> error "Malformed compiler oracle row"
+    shape (Object objectFields) = Object (KM.mapWithKey (\key v -> if key == "binders" then toJSON ([] :: [Value]) else shape v) objectFields)
+    shape (Array values) = case toList values of
+      [String "lit", Number sortTag, _] -> node "lit" [Number sortTag]
+      [String "var", _] -> node "var" []
+      xs -> toJSON (map shape xs)
+    shape value = value
+    -- Literal properties qualify domains globally; coupling every property to
+    -- every operand position only repeats the same guards and arithmetic laws.
+    literalPartitions :: Value -> [T.Text]
+    literalPartitions (Array values) = case toList values of
+      [String "lit", Number 1, String number] -> [naturalClass (read (T.unpack number))]
+      [String "lit", Number 2, Array chars] ->
+        (if null chars then "empty-symbol" else if length chars == 1 then "single-symbol" else "multiple-symbol") : map characterClass (toList chars)
+      [String "lit", Number 3, code] -> [characterClass code]
+      xs -> concatMap literalPartitions xs
+    literalPartitions _ = []
+    naturalClass n | n == (0 :: Integer) = "zero"
+                   | n == 1 = "one"
+                   | n > 2^(64 :: Int) = "wide"
+                   | otherwise = "positive"
+    characterClass value = case fromJSON value of
+      Success code -> if code == (0 :: Int) then "nul" else if code >= 0xd800 && code <= 0xdfff then "surrogate" else if code > 0xffff then "supplementary" else "bmp"
+      Error message -> error message
+
+runAxiomOracle :: FilePath -> IO ()
+runAxiomOracle path = do
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  _ <- queryGhc ghc
+  rows <- either die pure axiomOracle
+  digest <- hashFile implementationSource
+  writeJson path (object ["schema" .= (1 :: Int), "ghc" .= cProjectVersion,
+    "source" .= ("GHC.Builtin.Types.Literals.typeNatCoAxiomRules proves callbacks" :: T.Text),
+    "generatorSha256" .= digest, "cases" .= rows])
+  putStrLn ("GHC built-in axiom oracle: " ++ show (length rows) ++ " endpoint cases")
+
 -- | Complete compiler-owned declarations, not ordinary library declarations.
 -- IO is a known-key name but has no wired-in TyThing: its definition belongs to
 -- the real GHC.Internal.Types interface and is deliberately not synthesized here.
@@ -517,12 +808,14 @@ wiredMetadata = do
         Just (Thing.ATyCon tc) -> [tc]
         Just (Thing.AConLike (ConLike.RealDataCon con)) -> [GHC.promoteDataCon con]
         _ -> []
-      tcs = Prim.primTyCons ++ Builtin.wiredInTyCons ++ Literal.typeNatTyCons ++ concatMap fromName knownKeyNames
+      owned = Prim.primTyCons ++ Builtin.wiredInTyCons ++ Literal.typeNatTyCons ++ concatMap fromName knownKeyNames
+      tcs = owned ++ [GHC.promoteDataCon con | tc <- owned, con <- GHC.tyConDataCons tc]
   declarations <- traverse (\tc -> (,) <$> knownKeyIdentity (GHC.tyConName tc) <*> pure tc) tcs
   tycons <- traverse tyConValue (Map.elems (Map.fromList declarations))
   primops <- traverse idValue allThePrimOpIds
   ids <- traverse idValue (wiredInIds ++ ghcPrimIds)
-  pure [("tycons",toJSON tycons),("primops",toJSON primops),("wiredIds",toJSON ids)]
+  rules <- axiomRuleDescriptors
+  pure [("tycons",toJSON tycons),("primops",toJSON primops),("wiredIds",toJSON ids),("axiomRules",toJSON rules)]
 
 -- | Finite names round-trip through GHC's actual known-key lookup. Wired
 -- declaration ASTs preserve types; algorithmic tuple/sum families remain
@@ -591,9 +884,10 @@ main = do
   case args of
     ["known-keys"] -> runKnownKeys False >> exitSuccess
     ["known-keys", "--write"] -> runKnownKeys True >> exitSuccess
+    ["known-keys", "--write-axiom-oracle", path] -> runAxiomOracle path >> exitSuccess
     _ -> pure ()
   root <- getCurrentDirectory
-  let usage = "Usage (from THC root): thc-primops coverage [--check | --write-checklist] [--output PATH] | scalars [--write] | known-keys [--write]"
+  let usage = "Usage (from THC root): thc-primops coverage [--check | --write-checklist] [--output PATH] | scalars [--write] | known-keys [--write | --write-axiom-oracle PATH]"
       parseCoverage mode output [] = Right (mode, output)
       parseCoverage Nothing output ("--check":rest) = parseCoverage (Just False) output rest
       parseCoverage Nothing output ("--write-checklist":rest) = parseCoverage (Just True) output rest
