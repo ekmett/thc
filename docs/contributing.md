@@ -78,6 +78,14 @@ package tool and configured GHC sources when needed.
 include complete installed Core and matching configured GHC sources. See [Core compatibility checks](coverage.md)
 and [foreign code](interface-foreign.md) for setup and limits.
 
+Track CI performance against its expected duration, separately from the failure
+timeout. Set job and command timeouts to roughly two to three times the expected
+runtime on that platform, including preparation and ordinary cache variation.
+Commit CI should still finish below seven minutes: use recorded timings and
+Perfetto traces to catch drift and fix its cause. A timeout is a hang safeguard;
+placing it only 10–20% above normal runtime creates noisy failures and wasted
+rebuilds.
+
 ## Known compiler limitation
 
 Use the pinned GraalVM Community Edition distribution used by CI. A recorded
