@@ -20,26 +20,34 @@ import Data.Aeson
 import Data.Aeson.Types (parseEither)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
-import Data.Bits (finiteBitSize)
+import Data.Bits ((.&.), (.|.), finiteBitSize, shiftL, shiftR)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
+import Data.Char (chr, ord)
 import Data.List (intercalate)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import Data.Scientific (base10Exponent)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import GHC.Builtin.PrimOps (allThePrimOps, primOpOcc, primOpSig, primOpType)
+import Data.Word (Word32)
+import GHC.Builtin.PrimOps (allThePrimOps, primOpOcc, primOpSig, primOpType, primOpWrapperId)
+import GHC.Builtin.PrimOps.Ids (allThePrimOpIds)
+import GHC.Builtin.Utils (knownKeyNames, lookupKnownKeyName)
 import GHC.Core.Type (Type, splitTyConApp_maybe)
 import GHC.Core.TyCon (PrimRep(..), isPrimTyCon)
+import GHC.Data.FastString (unpackFS)
 import GHC.Settings.Config (cProjectVersion)
-import GHC.Types.Name.Occurrence (occNameString)
+import GHC.Types.Name (Name, isExternalName, nameModule, nameOccName, nameUnique)
+import GHC.Types.Name.Occurrence (occNameString, occNameSpace, fieldOcc_maybe, isDataConNameSpace, isTcClsNameSpace, isTvNameSpace, isVarNameSpace, isFieldNameSpace)
 import GHC.Types.RepType (typePrimRep_maybe)
+import GHC.Types.Unique (getKey, getUnique, mkUnique, unpkUnique)
+import GHC.Unit.Module (moduleName, moduleNameString, moduleUnit, unitString)
 import GHC.Utils.Outputable (defaultSDocContext, ppr, renderWithContext)
 import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory, removeFile)
 import System.Environment (getArgs, getExecutablePath, lookupEnv)
-import System.Exit (die)
+import System.Exit (die, exitSuccess)
 import System.FilePath ((</>), takeDirectory, takeFileName)
 import System.Process (readProcess)
 import Text.Printf (printf)
@@ -49,11 +57,12 @@ type Row = (T.Text, Int, T.Text)
 type Declarations = Map.Map T.Text Value
 type Signatures = Map.Map T.Text ([T.Text], T.Text)
 
-implementationSource, scalarPath, capabilityPath, checklistPath :: FilePath
+implementationSource, scalarPath, capabilityPath, checklistPath, knownKeyPath :: FilePath
 implementationSource = "src/tools/primops/PrimopTools.hs"
 scalarPath = "src/main/resources/thc/scalar-primop-signatures.json"
 capabilityPath = "bin/core-capabilities.json"
 checklistPath = "docs/primops.md"
+knownKeyPath = "src/main/resources/thc/ghc-9.14.1-known-key-names.json"
 
 require :: Bool -> String -> Either String ()
 require True _ = Right ()
@@ -272,6 +281,78 @@ queryGhc ghc = do
   pure (rows, scalars, object ["compilerInfo" .= info, "compiledGhc" .= cProjectVersion,
     "compilerCommands" .= [[ghc, "--numeric-version"], [ghc, "--info"]]])
 
+-- | The unsigned name-reference word used by GHC.Iface.Binary.putName.
+-- Decoding its tag/index reconstructs the original known-key Unique.
+knownKeyWord :: Name -> Either String Word32
+knownKeyWord name = do
+  let (tag, index) = unpkUnique (nameUnique name)
+  require (ord tag < 256 && index < 2^(22 :: Int)) "Known-key Unique outside interface encoding"
+  pure (0x80000000 .|. (fromIntegral (ord tag) `shiftL` 22) .|. fromIntegral index)
+
+-- | Canonical external identity, with the pinned Binary NameSpace byte.
+-- Field identity also includes the canonical constructor parent.
+knownKeyIdentity :: Name -> Either String (Int, Maybe String, String, String, String)
+knownKeyIdentity name = do
+  require (isExternalName name) "Internal name in finite known-key catalogue"
+  let occ = nameOccName name
+      ns = occNameSpace occ
+      modId = nameModule name
+  namespace <- if isFieldNameSpace ns then Right 4
+    else if isTvNameSpace ns then Right 2
+    else if isDataConNameSpace ns then Right 1
+    else if isTcClsNameSpace ns then Right 3
+    else if isVarNameSpace ns then Right 0
+    else Left "Unknown known-key namespace"
+  pure (namespace, unpackFS <$> fieldOcc_maybe occ, unitString (moduleUnit modId), moduleNameString (moduleName modId), occNameString occ)
+
+-- | Finite identity catalogue only; GHC.Builtin.Uniques.knownUniqueName
+-- additionally computes tuple, sum and constraint-tuple families.
+-- Every serialized word must round-trip through GHC's actual name lookup.
+knownKeyCatalogue :: Either String Value
+knownKeyCatalogue = do
+  (entries, _) <- foldM insert (Map.empty, Map.empty) knownKeyNames
+  pure $ object
+    ["schema" .= (1 :: Int), "ghc" .= cProjectVersion,
+     "source" .= ("GHC.Builtin.Utils.knownKeyNames" :: T.Text),
+     "scope" .= ("Finite knownKeyNames only; algorithmic GHC.Builtin.Uniques.knownUniqueName families require separate decoding." :: T.Text),
+     "names" .= Map.elems entries]
+  where
+    categories = Map.fromList $
+      [(getKey (getUnique ident), "primop" :: T.Text) | ident <- allThePrimOpIds] ++
+      [(getKey (getUnique (primOpWrapperId op)), "primop-wrapper") | op <- allThePrimOps]
+    insert (entries, identities) name = do
+      word <- knownKeyWord name
+      identity@(namespace, parent, unit, modName, occurrence) <- knownKeyIdentity name
+      require (Map.notMember word entries) "Duplicate serialized known-key Unique"
+      require (Map.notMember identity identities) "Duplicate canonical known-key identity"
+      let unique = mkUnique (chr (fromIntegral ((word .&. 0x3fc00000) `shiftR` 22)))
+                           (fromIntegral (word .&. 0x003fffff))
+      require (unique == nameUnique name) "Known-key Unique encoding did not round-trip"
+      recovered <- maybe (Left "Known-key lookup failed") pure (lookupKnownKeyName unique)
+      recoveredIdentity <- knownKeyIdentity recovered
+      require (recoveredIdentity == identity) "Known-key lookup changed canonical identity"
+      let entry = object $ ["nameWord" .= word, "namespace" .= namespace,
+            "unit" .= unit, "module" .= modName, "occurrence" .= occurrence,
+            "category" .= Map.findWithDefault "known-key" (getKey unique) categories] ++ maybe [] (\fieldParent -> ["fieldParent" .= fieldParent]) parent
+      pure (Map.insert word entry entries, Map.insert identity word identities)
+
+-- | Generate/check development metadata. The JVM consumes the checked-in
+-- resource directly; it never runs this compiler API query.
+runKnownKeys :: Bool -> IO ()
+runKnownKeys write = do
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  _ <- queryGhc ghc
+  catalogue <- either die pure knownKeyCatalogue
+  let expected = encode catalogue <> "\n"
+  if write then do
+    createDirectoryIfMissing True (takeDirectory knownKeyPath)
+    BL.writeFile knownKeyPath expected
+  else do
+    actual <- BL.readFile knownKeyPath
+    unless (actual == expected) $ die "Known-key catalogue differs; run cabal run exe:thc-primops -- known-keys --write"
+  names <- either die pure (field "names" catalogue :: Either String [Value])
+  putStrLn ("GHC finite known-key catalogue: " ++ show (length names) ++ " names; Unique encoding and lookup agree")
+
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either (die . ((path ++ ": ") ++)) pure . eitherDecodeStrict'
 
@@ -287,8 +368,12 @@ hashFile path = concatMap hex . BS.unpack . SHA256.hash <$> BS.readFile path
 main :: IO ()
 main = do
   args <- getArgs
+  case args of
+    ["known-keys"] -> runKnownKeys False >> exitSuccess
+    ["known-keys", "--write"] -> runKnownKeys True >> exitSuccess
+    _ -> pure ()
   root <- getCurrentDirectory
-  let usage = "Usage (from THC root): thc-primops coverage [--check | --write-checklist] [--output PATH] | scalars [--write]"
+  let usage = "Usage (from THC root): thc-primops coverage [--check | --write-checklist] [--output PATH] | scalars [--write] | known-keys [--write]"
       parseCoverage mode output [] = Right (mode, output)
       parseCoverage Nothing output ("--check":rest) = parseCoverage (Just False) output rest
       parseCoverage Nothing output ("--write-checklist":rest) = parseCoverage (Just True) output rest

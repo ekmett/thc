@@ -141,6 +141,36 @@ cabal test primop-tools
 Do not edit the generated [primop checklist](primops.md) by hand. The
 [behavior reference](primop-behavior.md) records operational limits separately.
 
+## Generated interface names
+
+The JVM native interface reader's finite GHC 9.14.1 known-key identity catalogue
+is generated with the same compiled compiler API tool:
+
+```sh
+cabal run exe:thc-primops -- known-keys --write
+cabal run exe:thc-primops -- known-keys
+cabal test primop-tools
+```
+
+`src/main/resources/thc/ghc-9.14.1-known-key-names.json` has schema 1 and entries
+sorted by unsigned `nameWord`. This is the name-reference word from
+`GHC.Iface.Binary.putName`: `0x80000000 | (ord(tag) << 22) | index`.
+Each entry includes canonical `unit`, `module`, `occurrence`, the binary
+namespace byte (`0` variable, `1` data constructor, `2` type variable,
+`3` type constructor/class, `4` record field with `fieldParent`), and `category` (`primop`, `primop-wrapper`, or
+`known-key`). Primop categories come from compiler API identities, not spelling.
+Generation rejects duplicate words/identities and verifies every word through
+`GHC.Builtin.Utils.lookupKnownKeyName`; the tool suite also compares the words
+with GHC's actual interface serializer. The resource is intended for direct JVM loading,
+without invoking GHC or writing intermediate CBD.
+
+This catalogue covers only `GHC.Builtin.Utils.knownKeyNames`.
+`GHC.Builtin.Uniques.knownUniqueName` separately computes names for boxed/unboxed
+tuples (tags `4`, `5`, `7`, `8`), constraint tuples/selectors (`j`, `k`, `m`)
+and unboxed sums (`z`). Those families require algorithmic decoding in the
+reader; absence from the finite resource does not make a family name invalid.
+The catalogue supplies identity, not complete types or executable Core.
+
 ## Generated instruction metadata
 
 The pinned Truffle processor can produce instruction metadata exceeding the JVM
