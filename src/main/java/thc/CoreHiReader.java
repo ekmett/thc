@@ -20,6 +20,7 @@ final class CoreHiReader {
     private final byte[] bytes;
     private final String source;
     final List<String> strings;
+    private final List<Section> stringBytes;
     final List<ExternalName> names;
     final List<Section> sharedTypes;
     final ModuleId module;
@@ -53,9 +54,15 @@ final class CoreHiReader {
         var dictionary = new Cursor(fs, ext, "FastString table");
         int count = dictionary.count(1);
         var strings = new ArrayList<String>(count);
-        for (int i = 0; i < count; i++) strings.add(dictionary.utf8(dictionary.count(1)));
+        var stringBytes = new ArrayList<Section>(count);
+        for (int i = 0; i < count; i++) {
+            int length = dictionary.count(1), start = dictionary.position();
+            strings.add(dictionary.utf8(length));
+            stringBytes.add(new Section(start, dictionary.position()));
+        }
         dictionary.expectEnd();
         this.strings = List.copyOf(strings);
+        this.stringBytes = List.copyOf(stringBytes);
 
         var symbols = new Cursor(ns, fs, "name table");
         count = symbols.count(5);
@@ -130,6 +137,18 @@ final class CoreHiReader {
         long index = cursor.unsigned(32);
         cursor.require(index < strings.size(), "FastString index out of range: " + index);
         return strings.get((int) index);
+    }
+
+    /** Preserve GHC Char boundaries, including two surrogate Chars versus one
+     * supplementary Char. Java String cannot represent that distinction. */
+    List<Integer> fastStringCodePoints(Cursor cursor) {
+        long index = cursor.unsigned(32);
+        cursor.require(index < stringBytes.size(), "FastString index out of range: " + index);
+        var section = stringBytes.get((int) index);
+        var encoded = cursor(section, "Symbol Modified UTF-8");
+        var points = new ArrayList<Integer>();
+        encoded.decodeUtf8(section.end() - section.start(), points::add);
+        return List.copyOf(points);
     }
 
     private ModuleId module(Cursor cursor) {
@@ -235,13 +254,17 @@ final class CoreHiReader {
         /** GHC.Internal.Encoding.UTF8 encodes NUL as C0 80, permits surrogate
          * Char values and uses four bytes for supplementary code points. */
         String utf8(int length) {
+            var text = new StringBuilder(length);
+            decodeUtf8(length, text::appendCodePoint);
+            return text.toString();
+        }
+        private void decodeUtf8(int length, java.util.function.IntConsumer output) {
             int start = position;
             skip(length);
             var encoded = new Cursor(start, position, label + " Modified UTF-8");
-            var text = new StringBuilder(length);
             while (encoded.remaining() > 0) {
                 int first = encoded.byteValue();
-                if (first < 128) { text.append((char) first); continue; }
+                if (first < 128) { output.accept(first); continue; }
                 int extra = first >= 0xc0 && first <= 0xdf ? 1 : first >= 0xe0 && first <= 0xef ? 2 :
                     first >= 0xf0 && first <= 0xf4 ? 3 : -1;
                 encoded.require(extra >= 0, "invalid leading byte");
@@ -254,9 +277,8 @@ final class CoreHiReader {
                 int minimum = extra == 1 ? 0x80 : extra == 2 ? 0x800 : 0x10000;
                 encoded.require((cp >= minimum || extra == 1 && cp == 0) && cp <= Character.MAX_CODE_POINT,
                     "invalid code point or overlong encoding");
-                text.appendCodePoint(cp);
+                output.accept(cp);
             }
-            return text.toString();
         }
         boolean optional() {
             int tag = byteValue();
