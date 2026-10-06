@@ -658,6 +658,11 @@ final class CoreHiTypes {
     private static boolean alphaArgs(List<Arg>a,List<Arg>b,Map<Variable,Variable>names){if(a.size()!=b.size())return false;for(int i=0;i<a.size();i++)if(!alphaEquals(a.get(i).type,b.get(i).type,names))return false;return true;}
 
 
+    Ty function(Ty multiplicity,Ty argument,Ty result) { return new Fun(functionFlag(argument,result),multiplicity,argument,result); }
+    Ty lambdaType(Variable binder,Ty result) {
+        return !binder.coercion || free(result).contains(binder) ? new ForAll(binder,1,result) :
+            function(dataCon("Many"),binder.kind,result);
+    }
     Ty nominalEquality(Ty left,Ty right){return con(builtin("GHC.Internal.Prim",3,"~#"),false,kind(left),kind(right),left,right);}
     Ty multiplyMultiplicity(Ty left,Ty right){
         Ty one=dataCon("One"),many=dataCon("Many");if(equal(left,one))return right;if(equal(right,one))return left;if(equal(left,many)||equal(right,many))return many;
