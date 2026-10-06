@@ -20,11 +20,17 @@ import Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import Data.IORef (newIORef)
+import Data.Foldable (toList)
 import Data.List (isInfixOf)
 import Data.Word (Word32)
-import GHC.Builtin.Utils (knownKeyNames)
+import GHC.Builtin.Utils (knownKeyNames, wiredInIds, ghcPrimIds)
+import GHC.Builtin.PrimOps.Ids (allThePrimOpIds)
+import qualified GHC.Builtin.Types as Builtin
+import qualified GHC.Builtin.Types.Prim as Prim
+import qualified GHC.Plugins as GHC
 import GHC.Data.FastMutInt (newFastMutInt)
 import GHC.Iface.Binary (BinSymbolTable(..), putName)
+import GHC.Types.Unique (mkUnique)
 import GHC.Types.Unique.FM (emptyUFM)
 import qualified GHC.Utils.Binary as Binary
 import qualified Data.Map.Strict as Map
@@ -264,7 +270,7 @@ cliTests root executable =
         parent <- ok (field "fieldParent" row :: Either String T.Text)
         assertBool "Missing canonical field parent" (not (T.null parent))
       primops <- filterM (fmap (== ("primop" :: T.Text)) . ok . field "category") names
-      length primops @?= 1491
+      length primops @?= length allThePrimOpIds
       plus <- case [row | row <- primops, field "occurrence" row == Right ("+#" :: T.Text)] of
         [row] -> pure row
         _ -> assertFailure "Missing or duplicate +# primop identity" >> fail "primop"
@@ -330,5 +336,47 @@ main = do
             actual <- Binary.get reader :: IO Word32
             expected <- ok (knownKeyWord name)
             actual @?= expected
-  counts <- runTestTT (TestList (coverageTests ++ scalarTests ++ [apiTest, knownKeysTest] ++ cliTests root executable))
+  let wiredTypesTest = "wired metadata preserves every compiler declaration and full type" ~: do
+        catalogue <- ok knownKeyCatalogue
+        forM_ [("primops", allThePrimOpIds), ("wiredIds", wiredInIds ++ ghcPrimIds)] $ \(key, identifiers) -> do
+          entries <- ok (field key catalogue :: Either String [Value])
+          expected <- traverse (ok . idValue) identifiers
+          entries @?= expected
+        tycons <- ok (field "tycons" catalogue :: Either String [Value])
+        names <- traverse (ok . field "name") tycons :: IO [Value]
+        length names @?= Map.size (Map.fromList [(encode name, ()) | name <- names])
+        forM_ (Prim.primTyCons ++ Builtin.wiredInTyCons) $ \tc -> do
+          name <- ok (metadataName (GHC.tyConName tc))
+          assertBool "Compiler-owned tycon missing" (name `elem` names)
+          case [entry | entry <- tycons, field "name" entry == Right name] of
+            [entry] -> do
+              field "kind" entry @?= closedTypeValue (GHC.tyConKind tc)
+              field "roles" entry @?= Right (map roleValue (GHC.tyConRoles tc))
+              constructors <- ok (field "constructors" entry :: Either String [Value])
+              expectedConstructors <- traverse (ok . constructorValue) (GHC.tyConDataCons tc)
+              constructors @?= expectedConstructors
+            _ -> assertFailure "Duplicate compiler-owned tycon"
+  let lexicalTypesTest = "Unique-bound types retain distinct lexical binders" ~: do
+        let variable index = GHC.mkTyVar (GHC.mkInternalName (mkUnique 'z' index)
+              (GHC.mkTyVarOcc "a") GHC.noSrcSpan) GHC.liftedTypeKind
+            outer = variable 1
+            inner = variable 2
+            ty = GHC.mkSpecForAllTys [outer, inner]
+              (GHC.mkVisFunTyMany (GHC.mkTyVarTy outer) (GHC.mkTyVarTy inner))
+        encoded <- ok (closedTypeValue ty)
+        let array (Array values) = toList values
+            array _ = []
+        case array encoded of
+          [String "forall", outerBinder, _, body] -> case (array outerBinder, array body) of
+            ([outerName, Bool False, _], [String "forall", innerBinder, _, result]) ->
+              case (array innerBinder, array result) of
+                ([innerName, Bool False, _], [String "fun", _, _, argument, returned]) -> do
+                  assertBool "Serialized inner binder captured outer binder" (outerName /= innerName)
+                  argument @?= node "var" [outerName]
+                  returned @?= node "var" [innerName]
+                _ -> assertFailure "Missing serialized function/binder"
+            _ -> assertFailure "Missing serialized nested forall"
+          _ -> assertFailure "Missing serialized forall"
+  counts <- runTestTT (TestList (coverageTests ++ scalarTests ++
+    [apiTest, knownKeysTest, wiredTypesTest, lexicalTypesTest] ++ cliTests root executable))
   unless (errors counts == 0 && failures counts == 0) exitFailure

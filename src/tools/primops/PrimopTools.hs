@@ -11,7 +11,8 @@
 -- Stability   : experimental
 -- Portability : GHC 9.14.1 compiler API
 --
--- The inventory and scalar contracts share one pinned, compiled GHC API query.
+-- Inventory, scalar contracts and native wired declarations share the pinned
+-- compiler API. Ordinary library declarations remain owned by their interfaces.
 module PrimopTools where
 
 import Control.Monad (foldM, forM_, unless, when)
@@ -33,7 +34,19 @@ import qualified Data.Text.IO as T
 import Data.Word (Word32)
 import GHC.Builtin.PrimOps (allThePrimOps, primOpOcc, primOpSig, primOpType, primOpWrapperId)
 import GHC.Builtin.PrimOps.Ids (allThePrimOpIds)
-import GHC.Builtin.Utils (knownKeyNames, lookupKnownKeyName)
+import GHC.Builtin.Utils (knownKeyNames, lookupKnownKeyName, wiredInIds, ghcPrimIds)
+import qualified GHC.Builtin.Types as Builtin
+import qualified GHC.Builtin.Types.Literals as Literal
+import qualified GHC.Builtin.Types.Prim as Prim
+import qualified GHC.Core.ConLike as ConLike
+import qualified GHC.Core.DataCon as DataCon
+import qualified GHC.Core.Coercion.Axiom as Ax
+import qualified GHC.Core.TyCo.Rep as Rep
+import qualified GHC.Core.TyCo.Tidy as Tidy
+import qualified GHC.Types.TyThing as Thing
+import GHC.CoreToIface (toIfaceType, toIfaceBndr)
+import qualified GHC.Iface.Type as Iface
+import qualified GHC.Plugins as GHC
 import GHC.Core.Type (Type, splitTyConApp_maybe)
 import GHC.Core.TyCon (PrimRep(..), isPrimTyCon)
 import GHC.Data.FastString (unpackFS)
@@ -305,17 +318,224 @@ knownKeyIdentity name = do
     else Left "Unknown known-key namespace"
   pure (namespace, unpackFS <$> fieldOcc_maybe occ, unitString (moduleUnit modId), moduleNameString (moduleName modId), occNameString occ)
 
--- | Finite identity catalogue only; GHC.Builtin.Uniques.knownUniqueName
--- additionally computes tuple, sum and constraint-tuple families.
--- Every serialized word must round-trip through GHC's actual name lookup.
+-- | Canonical names are compiler identities, including field namespaces.
+metadataName :: Name -> Either String Value
+metadataName name = do
+  (namespace, parent, unit, modName, occurrence) <- knownKeyIdentity name
+  pure (toJSON [toJSON unit, toJSON modName, toJSON namespace, toJSON parent, toJSON occurrence])
+
+node :: T.Text -> [Value] -> Value
+node tag fields = toJSON (String tag : fields)
+
+roleValue :: GHC.Role -> Value
+roleValue role = toJSON (case role of GHC.Nominal -> 1; GHC.Representational -> 2; GHC.Phantom -> 3 :: Int)
+
+visibilityValue :: GHC.ForAllTyFlag -> Value
+visibilityValue flag = toJSON (case flag of GHC.Required -> 0; GHC.Invisible GHC.SpecifiedSpec -> 1; GHC.Invisible GHC.InferredSpec -> 2 :: Int)
+
+tupleSortValue :: GHC.TupleSort -> Value
+tupleSortValue sort = toJSON (case sort of GHC.BoxedTuple -> 0; GHC.UnboxedTuple -> 1; GHC.ConstraintTuple -> 2 :: Int)
+
+binderValue :: Iface.IfaceBndr -> Either String Value
+binderValue binder = case binder of
+  Iface.IfaceTvBndr (name, kind) -> make name False kind
+  Iface.IfaceIdBndr (_, name, kind) -> make name True kind
+  where make name coercion kind = do
+          encoded <- ifaceTypeValue kind
+          pure (toJSON [toJSON (unpackFS (Iface.ifLclNameFS name)), toJSON coercion, encoded])
+
+sortValue :: Iface.IfaceTyConSort -> Value
+sortValue sort = toJSON (case sort of
+  Iface.IfaceNormalTyCon -> [toJSON (0 :: Int)]
+  Iface.IfaceTupleTyCon arity tuple -> [toJSON (1 :: Int), toJSON arity, tupleSortValue tuple]
+  Iface.IfaceSumTyCon arity -> [toJSON (2 :: Int), toJSON arity]
+  Iface.IfaceEqualityTyCon -> [toJSON (3 :: Int)])
+
+promotionValue :: GHC.PromotionFlag -> Value
+promotionValue flag = toJSON (case flag of GHC.NotPromoted -> False; GHC.IsPromoted -> True)
+
+argumentsValue :: Iface.IfaceAppArgs -> Either String Value
+argumentsValue = fmap toJSON . go
+  where go Iface.IA_Nil = pure []
+        go (Iface.IA_Arg ty visibility rest) = do
+          value <- ifaceTypeValue ty
+          values <- go rest
+          pure (toJSON [visibilityValue visibility, value] : values)
+
+-- | Preserve GHC's interface type algebra. Type/kind substitution remains the
+-- native reader's operation; no variable or aggregate is replaced by an erased rep.
+ifaceTypeValue :: Iface.IfaceType -> Either String Value
+ifaceTypeValue ty = case ty of
+  Iface.IfaceTyVar name -> pure (node "var" [toJSON (unpackFS (Iface.ifLclNameFS name))])
+  Iface.IfaceAppTy fun args -> node "app" <$> sequence [ifaceTypeValue fun, argumentsValue args]
+  Iface.IfaceFunTy flag multiplicity argument result -> do
+    let code = case flag of GHC.FTF_T_T -> 0; GHC.FTF_T_C -> 1; GHC.FTF_C_T -> 2; GHC.FTF_C_C -> 3 :: Int
+    node "fun" . (toJSON code :) <$> traverse ifaceTypeValue [multiplicity, argument, result]
+  Iface.IfaceForAllTy (GHC.Bndr binder visibility) body -> node "forall" <$> sequence [binderValue binder, pure (visibilityValue visibility), ifaceTypeValue body]
+  Iface.IfaceTyConApp (Iface.IfaceTyCon name (Iface.IfaceTyConInfo promotion sort)) args -> node "con" <$> sequence [metadataName name, pure (promotionValue promotion), pure (sortValue sort), argumentsValue args]
+  Iface.IfaceTupleTy sort promotion args -> node "tuple" <$> sequence [pure (tupleSortValue sort), pure (promotionValue promotion), argumentsValue args]
+  Iface.IfaceLitTy literal -> pure (node "lit" (case literal of
+    Iface.IfaceNumTyLit value -> [toJSON (1 :: Int), toJSON (show value)]
+    Iface.IfaceStrTyLit value -> [toJSON (2 :: Int), toJSON (unpackFS (GHC.getLexicalFastString value))]
+    Iface.IfaceCharTyLit value -> [toJSON (3 :: Int), toJSON (ord value)]))
+  Iface.IfaceCastTy inner coercion -> node "cast" <$> sequence [ifaceTypeValue inner, ifaceCoercionValue coercion]
+  Iface.IfaceCoercionTy coercion -> node "coercion" . (:[]) <$> ifaceCoercionValue coercion
+  Iface.IfaceFreeTyVar _ -> Left "Free type variable in compiler-owned interface metadata"
+
+ifaceCoercionValue :: Iface.IfaceCoercion -> Either String Value
+ifaceCoercionValue coercion = case coercion of
+  Iface.IfaceReflCo ty -> node "refl" . (:[]) <$> ifaceTypeValue ty
+  Iface.IfaceGReflCo role ty maybeCo -> node "grefl" <$> sequence [pure (roleValue role), ifaceTypeValue ty, case maybeCo of Iface.IfaceMRefl -> pure Null; Iface.IfaceMCo co -> ifaceCoercionValue co]
+  Iface.IfaceFunCo role mult argument result -> node "funco" . (roleValue role :) <$> traverse ifaceCoercionValue [mult, argument, result]
+  Iface.IfaceTyConAppCo role (Iface.IfaceTyCon name (Iface.IfaceTyConInfo promotion sort)) coercions -> node "conco" <$> sequence [pure (roleValue role), metadataName name, pure (promotionValue promotion), pure (sortValue sort), listCo coercions]
+  Iface.IfaceAppCo a b -> binary "appco" a b
+  Iface.IfaceForAllCo binder visL visR kind body -> node "forallco" <$> sequence [binderValue binder, pure (visibilityValue visL), pure (visibilityValue visR), ifaceCoercionValue kind, ifaceCoercionValue body]
+  Iface.IfaceCoVarCo name -> pure (node "varco" [toJSON (unpackFS (Iface.ifLclNameFS name))])
+  Iface.IfaceUnivCo provenance role a b coercions -> node "univ" <$> sequence [pure (provenanceValue provenance), pure (roleValue role), ifaceTypeValue a, ifaceTypeValue b, listCo coercions]
+  Iface.IfaceSymCo co -> unary "sym" co
+  Iface.IfaceTransCo a b -> binary "trans" a b
+  Iface.IfaceSelCo selector co -> node "sel" <$> sequence [pure (selectorValue selector), ifaceCoercionValue co]
+  Iface.IfaceLRCo lr co -> node "lr" <$> sequence [pure (toJSON (case lr of GHC.CLeft -> 0; GHC.CRight -> 1 :: Int)), ifaceCoercionValue co]
+  Iface.IfaceInstCo a b -> binary "inst" a b
+  Iface.IfaceKindCo co -> unary "kind" co
+  Iface.IfaceSubCo co -> unary "sub" co
+  Iface.IfaceAxiomCo rule coercions -> node "axiom" <$> sequence [ruleValue rule, listCo coercions]
+  Iface.IfaceFreeCoVar _ -> Left "Free coercion variable in compiler-owned interface metadata"
+  Iface.IfaceHoleCo _ -> Left "Coercion hole in compiler-owned interface metadata"
+  where unary tag co = node tag . (:[]) <$> ifaceCoercionValue co
+        binary tag a b = node tag <$> traverse ifaceCoercionValue [a,b]
+        listCo = fmap toJSON . traverse ifaceCoercionValue
+
+provenanceValue :: Rep.UnivCoProvenance -> Value
+provenanceValue provenance = toJSON (case provenance of
+  Rep.PhantomProv -> [toJSON (1 :: Int)]
+  Rep.ProofIrrelProv -> [toJSON (2 :: Int)]
+  Rep.PluginProv plugin -> [toJSON (3 :: Int), toJSON plugin])
+
+selectorValue :: Rep.CoSel -> Value
+selectorValue selector = toJSON (case selector of
+  Rep.SelTyCon index role -> [toJSON (0 :: Int), toJSON index, roleValue role]
+  Rep.SelForAll -> [toJSON (1 :: Int)]
+  Rep.SelFun Rep.SelMult -> [toJSON (2 :: Int)]
+  Rep.SelFun Rep.SelArg -> [toJSON (3 :: Int)]
+  Rep.SelFun Rep.SelRes -> [toJSON (4 :: Int)])
+
+ruleValue :: Iface.IfaceAxiomRule -> Either String Value
+ruleValue rule = case rule of
+  Iface.IfaceAR_X name -> pure (toJSON [toJSON (0 :: Int), toJSON (unpackFS (Iface.ifLclNameFS name))])
+  Iface.IfaceAR_U name -> toJSON . (toJSON (1 :: Int) :) . (:[]) <$> metadataName name
+  Iface.IfaceAR_B name branch -> do
+    encoded <- metadataName name
+    pure (toJSON [toJSON (2 :: Int), encoded, toJSON branch])
+
+typeValue :: Type -> Either String Value
+typeValue = ifaceTypeValue . toIfaceType
+
+-- GHC requires unique lexical names before converting its Unique-bound types
+-- to IfaceType. Declaration fields share the same tidied binder environment.
+closedTypeValue :: Type -> Either String Value
+closedTypeValue = typeValue . Tidy.tidyTopType
+
+idValue :: GHC.Id -> Either String Value
+idValue ident = do
+  name <- metadataName (GHC.idName ident)
+  ty <- closedTypeValue (GHC.idType ident)
+  pure (object ["name" .= name, "type" .= ty])
+
+branchValue :: Ax.CoAxBranch -> Either String Value
+branchValue branch = do
+  let (env, variables) = Tidy.tidyVarBndrs GHC.emptyTidyEnv (Ax.cab_tvs branch ++ Ax.cab_cvs branch)
+  binders <- traverse (binderValue . toIfaceBndr) variables
+  lhs <- traverse (typeValue . Tidy.tidyType env) (Ax.cab_lhs branch)
+  rhs <- typeValue (Tidy.tidyType env (Ax.cab_rhs branch))
+  pure (object ["binders" .= binders, "roles" .= map roleValue (Ax.cab_roles branch), "lhs" .= lhs, "rhs" .= rhs])
+
+-- | Worker fields are the actual Core representation fields, including their
+-- multiplicities. Existential coercion arguments remain distinct from fields;
+-- GHC's rep arity and strictness marks are preserved without certification.
+constructorValue :: GHC.DataCon -> Either String Value
+constructorValue con = do
+  let universals = GHC.dataConUnivTyVars con
+      (env, variables) = Tidy.tidyVarBndrs GHC.emptyTidyEnv
+        (universals ++ GHC.dataConExTyCoVars con)
+      (universalVars, existentialVars) = splitAt (length universals) variables
+      arguments = GHC.dataConRepArgTys con
+      scoped = typeValue . Tidy.tidyType env
+  name <- metadataName (GHC.dataConName con)
+  worker <- metadataName (GHC.idName (GHC.dataConWorkId con))
+  ty <- closedTypeValue (GHC.dataConRepType con)
+  universal <- traverse (binderValue . toIfaceBndr) universalVars
+  existential <- traverse (binderValue . toIfaceBndr) existentialVars
+  fields <- traverse (scoped . Rep.scaledThing) arguments
+  multiplicities <- traverse (scoped . Rep.scaledMult) arguments
+  wrapper <- traverse idValue (GHC.dataConWrapId_maybe con)
+  pure (object (["name" .= name, "worker" .= worker, "type" .= ty,
+    "universal" .= universal, "existential" .= existential,
+    "fields" .= fields, "multiplicities" .= multiplicities,
+    "tag" .= GHC.dataConTag con, "repArity" .= GHC.dataConRepArity con,
+    "strictFields" .= map DataCon.isMarkedStrict (GHC.dataConRepStrictness con)] ++
+    maybe [] (\value -> ["wrapper" .= value]) wrapper))
+
+axiomValue :: Ax.CoAxiom branch -> Either String Value
+axiomValue ax = do
+  name <- metadataName (Ax.coAxiomName ax)
+  branches <- traverse branchValue (Ax.fromBranches (Ax.coAxiomBranches ax))
+  pure (object ["name" .= name, "role" .= roleValue (Ax.coAxiomRole ax), "branches" .= branches])
+
+tyConValue :: GHC.TyCon -> Either String Value
+tyConValue tc = do
+  name <- metadataName (GHC.tyConName tc)
+  let (env, variables) = Tidy.tidyForAllTyBinders GHC.emptyTidyEnv (GHC.tyConBinders tc)
+  kind <- closedTypeValue (GHC.tyConKind tc)
+  resultKind <- typeValue (Tidy.tidyType env (GHC.tyConResKind tc))
+  binders <- traverse binder variables
+  rhs <- traverse (typeValue . Tidy.tidyType env) (if GHC.isNewTyCon tc then Just (snd (GHC.newTyConRhs tc)) else GHC.synTyConRhs_maybe tc)
+  axiom <- case GHC.unwrapNewTyCon_maybe tc of
+    Just (_,_,ax) -> Just <$> axiomValue ax
+    Nothing -> traverse axiomValue (GHC.isClosedSynFamilyTyConWithAxiom_maybe tc)
+  constructors <- traverse constructorValue (GHC.tyConDataCons tc)
+  let form | GHC.isPrimTyCon tc = "primitive"
+           | GHC.isNewTyCon tc = "newtype"
+           | GHC.isTypeSynonymTyCon tc = "synonym"
+           | GHC.isFamilyTyCon tc = "family"
+           | otherwise = "data" :: T.Text
+  pure (object (["name" .= name, "binders" .= binders, "kind" .= kind, "resultKind" .= resultKind,
+                 "roles" .= map roleValue (GHC.tyConRoles tc), "form" .= form,
+                 "constructors" .= constructors] ++
+               maybe [] (\value -> ["rhs" .= value]) rhs ++ maybe [] (\value -> ["axiom" .= value]) axiom))
+  where binder (GHC.Bndr variable visibility) = do
+          encoded <- binderValue (toIfaceBndr variable)
+          let vis = case visibility of GHC.AnonTCB -> [toJSON (0 :: Int)]; GHC.NamedTCB flag -> [toJSON (1 :: Int), visibilityValue flag]
+          pure (toJSON [encoded, toJSON vis])
+
+-- | Complete compiler-owned declarations, not ordinary library declarations.
+-- IO is a known-key name but has no wired-in TyThing: its definition belongs to
+-- the real GHC.Internal.Types interface and is deliberately not synthesized here.
+wiredMetadata :: Either String [(Key,Value)]
+wiredMetadata = do
+  let fromName name = case GHC.wiredInNameTyThing_maybe name of
+        Just (Thing.ATyCon tc) -> [tc]
+        Just (Thing.AConLike (ConLike.RealDataCon con)) -> [GHC.promoteDataCon con]
+        _ -> []
+      tcs = Prim.primTyCons ++ Builtin.wiredInTyCons ++ Literal.typeNatTyCons ++ concatMap fromName knownKeyNames
+  declarations <- traverse (\tc -> (,) <$> knownKeyIdentity (GHC.tyConName tc) <*> pure tc) tcs
+  tycons <- traverse tyConValue (Map.elems (Map.fromList declarations))
+  primops <- traverse idValue allThePrimOpIds
+  ids <- traverse idValue (wiredInIds ++ ghcPrimIds)
+  pure [("tycons",toJSON tycons),("primops",toJSON primops),("wiredIds",toJSON ids)]
+
+-- | Finite names round-trip through GHC's actual known-key lookup. Wired
+-- declaration ASTs preserve types; algorithmic tuple/sum families remain
+-- algorithmic, and ordinary library declarations are not synthesized.
 knownKeyCatalogue :: Either String Value
 knownKeyCatalogue = do
   (entries, _) <- foldM insert (Map.empty, Map.empty) knownKeyNames
+  metadata <- wiredMetadata
   pure $ object
-    ["schema" .= (1 :: Int), "ghc" .= cProjectVersion,
+    (["schema" .= (1 :: Int), "ghc" .= cProjectVersion,
      "source" .= ("GHC.Builtin.Utils.knownKeyNames" :: T.Text),
      "scope" .= ("Finite knownKeyNames only; algorithmic GHC.Builtin.Uniques.knownUniqueName families require separate decoding." :: T.Text),
-     "names" .= Map.elems entries]
+     "names" .= Map.elems entries] ++ metadata)
   where
     categories = Map.fromList $
       [(getKey (getUnique ident), "primop" :: T.Text) | ident <- allThePrimOpIds] ++
