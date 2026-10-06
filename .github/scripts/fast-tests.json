@@ -1298,6 +1298,7 @@
     }
   },
   "owners": {
+    "t/fixtures/compiler/NativeHiBoxType.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
     "t/fixtures/compiler/NativeHiScalar.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
     "t/fixtures/compiler/NativeHiDependency.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
     "t/fixtures/compiler/NativeHiBox.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},

@@ -401,6 +401,7 @@ extra-source-files:
   t/fixtures/compiler/NativeHiFixture.hs
   t/fixtures/compiler/NativeHiDependency.hs
   t/fixtures/compiler/NativeHiScalar.hs
+  t/fixtures/compiler/NativeHiBoxType.hs
   t/fixtures/compiler/NativeHiBox.hs
   t/fixtures/compiler/NativeHiOracle.hs
   t/fixtures/compiler/InterfaceLibrary.hs

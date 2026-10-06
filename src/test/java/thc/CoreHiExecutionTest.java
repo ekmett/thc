@@ -20,7 +20,7 @@ class CoreHiExecutionTest {
 
     private Path manifest() throws Exception {
         var modules = new ArrayList<Object>();
-        for (String module : List.of("NativeHiScalar", "NativeHiDependency", "NativeHiBox")) {
+        for (String module : List.of("NativeHiScalar", "NativeHiDependency", "NativeHiBox", "NativeHiBoxType")) {
             Path file = directory.resolve(module + ".hi");
             Files.copy(INPUT.resolve(module + ".hi"), file, StandardCopyOption.REPLACE_EXISTING);
             String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)));
@@ -68,7 +68,7 @@ class CoreHiExecutionTest {
             }
         }
         try (var files = Files.list(directory)) {
-            assertEquals(Set.of("NativeHiScalar.hi", "NativeHiDependency.hi", "NativeHiBox.hi", "packages.json"),
+            assertEquals(Set.of("NativeHiScalar.hi", "NativeHiDependency.hi", "NativeHiBox.hi", "NativeHiBoxType.hi", "packages.json"),
                     files.map(file -> file.getFileName().toString()).collect(java.util.stream.Collectors.toSet()));
         }
     }
