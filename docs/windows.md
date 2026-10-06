@@ -191,7 +191,7 @@ binding once and subsequent calls reuse it. A bad demanded unit fails without
 touching the missing third unit. Runtime passes its matching encoder through
 `THC_FIXTURES` and selects only these two methods on AST and bytecode in both
 handoff modes. They require no GHC Core acquisition or package native-library
-producer and do not qualify direct `.hi` loading or the Linux native-label tests.
+producer and do not qualify the Linux native-label tests.
 
 One public-entry PAP model checks the remaining Word32 input proof after a wide
 argument has been supplied. Invalid unsigned bounds fail before forcing the

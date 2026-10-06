@@ -15,24 +15,11 @@
 module Main (main) where
 
 import Control.Exception (bracket, try)
-import Control.Monad (filterM, forM_, unless, when)
+import Control.Monad (forM_, unless)
 import Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
-import Data.IORef (newIORef)
-import Data.Foldable (toList)
 import Data.List (isInfixOf)
-import Data.Word (Word32)
-import GHC.Builtin.Utils (knownKeyNames, wiredInIds, ghcPrimIds)
-import GHC.Builtin.PrimOps.Ids (allThePrimOpIds)
-import qualified GHC.Builtin.Types as Builtin
-import qualified GHC.Builtin.Types.Prim as Prim
-import qualified GHC.Plugins as GHC
-import GHC.Data.FastMutInt (newFastMutInt)
-import GHC.Iface.Binary (BinSymbolTable(..), putName)
-import GHC.Types.Unique (mkUnique)
-import GHC.Types.Unique.FM (emptyUFM)
-import qualified GHC.Utils.Binary as Binary
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -254,49 +241,6 @@ cliTests root executable =
       forM_ (Map.toList inputs) $ \(input, digest) -> hashFile (dir </> input) >>= (@?= digest)
       digest <- hashFile executable
       field "executableSha256" proof @?= Right digest)
-  , "CLI finite known-key catalogue is deterministic and checked" ~: isolated (\dir -> do
-      let path = dir </> "src/main/resources/thc/ghc-9.14.1-known-key-names.json"
-      run dir ["known-keys", "--write"] >>= expectSuccess
-      before <- BS.readFile path
-      run dir ["known-keys", "--write"] >>= expectSuccess
-      BS.readFile path >>= (@?= before)
-      run dir ["known-keys"] >>= expectSuccess
-      value <- readJson path
-      field "ghc" value @?= Right ("9.14.1" :: T.Text)
-      names <- ok (field "names" value :: Either String [Value])
-      nameWords <- traverse (ok . field "nameWord") names :: IO [Word32]
-      nameWords @?= Map.keys (Map.fromList [(word, ()) | word <- nameWords])
-      forM_ names $ \row -> when (field "namespace" row == Right (4 :: Int)) $ do
-        parent <- ok (field "fieldParent" row :: Either String T.Text)
-        assertBool "Missing canonical field parent" (not (T.null parent))
-      primops <- filterM (fmap (== ("primop" :: T.Text)) . ok . field "category") names
-      length primops @?= length allThePrimOpIds
-      plus <- case [row | row <- primops, field "occurrence" row == Right ("+#" :: T.Text)] of
-        [row] -> pure row
-        _ -> assertFailure "Missing or duplicate +# primop identity" >> fail "primop"
-      field "module" plus @?= Right ("GHC.Internal.Prim" :: T.Text)
-      field "namespace" plus @?= Right (0 :: Int)
-      BS.appendFile path " "
-      stale <- BS.readFile path
-      run dir ["known-keys"] >>= expectFailure "Known-key catalogue differs"
-      BS.readFile path >>= (@?= stale))
-  , "CLI axiom oracle is compiler-owned, deterministic and fresh" ~: isolated (\dir -> do
-      let path = dir </> "axiom-oracle.json"
-      run dir ["known-keys", "--write-axiom-oracle", path] >>= expectSuccess
-      before <- BS.readFile path
-      BS.readFile (root </> "src/test/resources/thc/native-hi-axiom-oracle.json") >>= (@?= before)
-      run dir ["known-keys", "--write-axiom-oracle", path] >>= expectSuccess
-      BS.readFile path >>= (@?= before)
-      value <- readJson path
-      field "ghc" value @?= Right ("9.14.1" :: T.Text)
-      digest <- hashFile (dir </> implementationSource)
-      field "generatorSha256" value @?= Right digest
-      oracleCases <- ok (field "cases" value :: Either String [Value])
-      catalogue <- ok knownKeyCatalogue
-      rules <- ok (field "axiomRules" catalogue :: Either String [Value])
-      actual <- Map.fromList <$> traverse (\row -> (,) <$> ok (field "name" row :: Either String T.Text) <*> pure ()) rules
-      observed <- Map.fromList <$> traverse (\row -> (,) <$> ok (field "rule" row :: Either String T.Text) <*> pure ()) oracleCases
-      observed @?= actual)
   , "CLI stale scalar check leaves contract untouched" ~: isolated (\dir -> do
       BS.appendFile (dir </> scalarPath) " "
       stale <- BS.readFile (dir </> scalarPath)
@@ -342,59 +286,5 @@ main = do
         let names = map fst scalarRows
         assertBool "Tuple/vector/polymorphic scalar leak" (all (`notElem` names) ["packInt64X2#", "tagToEnum#", "newMVar#"])
         assertBool "Pointer scalar omitted" ("plusAddr#" `elem` names)
-  let knownKeysTest = "known-key words agree with actual GHC interface serialization" ~: do
-        _ <- ok knownKeyCatalogue
-        table <- BinSymbolTable <$> newFastMutInt 0 <*> newIORef emptyUFM
-        writer <- Binary.openBinMem 4096
-        forM_ knownKeyNames (putName table writer)
-        Binary.withBinBuffer writer $ \bytes -> do
-          reader <- Binary.unsafeUnpackBinBuffer bytes
-          forM_ knownKeyNames $ \name -> do
-            actual <- Binary.get reader :: IO Word32
-            expected <- ok (knownKeyWord name)
-            actual @?= expected
-  let wiredTypesTest = "wired metadata preserves every compiler declaration and full type" ~: do
-        catalogue <- ok knownKeyCatalogue
-        forM_ [("primops", allThePrimOpIds), ("wiredIds", wiredInIds ++ ghcPrimIds)] $ \(key, identifiers) -> do
-          entries <- ok (field key catalogue :: Either String [Value])
-          expected <- traverse (ok . idValue) identifiers
-          entries @?= expected
-        tycons <- ok (field "tycons" catalogue :: Either String [Value])
-        names <- traverse (ok . field "name") tycons :: IO [Value]
-        length names @?= Map.size (Map.fromList [(encode name, ()) | name <- names])
-        forM_ (Prim.primTyCons ++ Builtin.wiredInTyCons ++
-          [GHC.promoteDataCon con | tc <- Builtin.wiredInTyCons, con <- GHC.tyConDataCons tc]) $ \tc -> do
-          name <- ok (metadataName (GHC.tyConName tc))
-          assertBool "Compiler-owned tycon missing" (name `elem` names)
-          case [entry | entry <- tycons, field "name" entry == Right name] of
-            [entry] -> do
-              field "kind" entry @?= closedTypeValue (GHC.tyConKind tc)
-              field "roles" entry @?= Right (map roleValue (GHC.tyConRoles tc))
-              constructors <- ok (field "constructors" entry :: Either String [Value])
-              expectedConstructors <- traverse (ok . constructorValue) (GHC.tyConDataCons tc)
-              constructors @?= expectedConstructors
-            _ -> assertFailure "Duplicate compiler-owned tycon"
-  let lexicalTypesTest = "Unique-bound types retain distinct lexical binders" ~: do
-        let variable index = GHC.mkTyVar (GHC.mkInternalName (mkUnique 'z' index)
-              (GHC.mkTyVarOcc "a") GHC.noSrcSpan) GHC.liftedTypeKind
-            outer = variable 1
-            inner = variable 2
-            ty = GHC.mkSpecForAllTys [outer, inner]
-              (GHC.mkVisFunTyMany (GHC.mkTyVarTy outer) (GHC.mkTyVarTy inner))
-        encoded <- ok (closedTypeValue ty)
-        let array (Array values) = toList values
-            array _ = []
-        case array encoded of
-          [String "forall", outerBinder, _, body] -> case (array outerBinder, array body) of
-            ([outerName, Bool False, _], [String "forall", innerBinder, _, result]) ->
-              case (array innerBinder, array result) of
-                ([innerName, Bool False, _], [String "fun", _, _, argument, returned]) -> do
-                  assertBool "Serialized inner binder captured outer binder" (outerName /= innerName)
-                  argument @?= node "var" [outerName]
-                  returned @?= node "var" [innerName]
-                _ -> assertFailure "Missing serialized function/binder"
-            _ -> assertFailure "Missing serialized nested forall"
-          _ -> assertFailure "Missing serialized forall"
-  counts <- runTestTT (TestList (coverageTests ++ scalarTests ++
-    [apiTest, knownKeysTest, wiredTypesTest, lexicalTypesTest] ++ cliTests root executable))
+  counts <- runTestTT (TestList (coverageTests ++ scalarTests ++ [apiTest] ++ cliTests root executable))
   unless (errors counts == 0 && failures counts == 0) exitFailure

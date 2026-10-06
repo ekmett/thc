@@ -51,7 +51,7 @@ Logical source paths remain relative; executable `compact.path` references are a
 or native-only dependency units may have no Core modules, but a reachable guest
 global must still have an exported definition. The JVM loader checks units,
 module names, boundaries and binding owners, and rejects missing reachable
-globals. CBD file-hash verification is opt-in; native interface hashes are always checked. The separate auditor accepts
+globals. CBD file-hash verification is opt-in. The separate auditor accepts
 `--package-manifest packages.json`. The JVM command-line module argument accepts
 `@packages.json`, including with `--run-io`. Add `--verify-artifacts` before the
 guest `--` separator to check artifact hashes and original source identity.
@@ -83,83 +83,6 @@ the acquisition receipt. Missing layout is not replaced by a host assumption.
 Artifact hashes remain verification metadata, not a default whole-unit scan.
 The explicit auditor verifies module hashes and derived facts. ZIP acquisition
 receipts remain in the producer cache, not as runtime execution alternatives.
-
-## Native interface modules
-
-The existing loading API accepts an explicit list of retained `.hi` files:
-
-```java
-var entry = Main.loadEntry(context,
-    List.of("build/Example.hi", "build/Helper.hi"), "unit-id:Example.entry");
-long result = entry.execute(7L).asLong();
-```
-
-Use the exact unit identity recorded by GHC, and compile these modules with
-`-fwrite-if-simplified-core`. Supply each required native declaration provider;
-the loader performs no directory search. Paths are canonicalized, their bytes
-are content-bound to the host request, and duplicate module identities reject.
-Loose inputs need no package manifest. Their declarations and binding caches
-belong to the execution context; retained file snapshots are immutable. Imported
-native types require native interface providers. A provider may lack retained
-Core when only declarations or compiler-defined dictionary selectors are needed.
-Ordinary function bodies still require `-fwrite-if-simplified-core`. CBD and native inputs may
-coexist with distinct module identities.
-
-The native JVM reader also accepts a module's `interface` artifact with
-`"format": "ghc-hi"`, an absolute `path` and its raw-file `sha256`. The module's
-`sha256` must match it. Omit `compact` and the helper-backed unit `interfaceSource`.
-The runtime verifies the exact bytes it parses, checks module identity and
-startup summaries against the interface, and feeds decoded bindings directly
-to the existing linker and backends. It creates no helper process or
-intermediate CBD. A declaration-only provider cannot stand in for a complete
-executable module's provenance.
-
-The reader targets GHC 9.14.1 vanilla, 64-bit interfaces. Types retain lexical
-binder identity, kinds, roles, multiplicities, applications and coercions.
-Capture-avoiding substitution drives polymorphic applications, constructor
-instantiation, synonyms, parameterized newtypes and coercion axioms. Runtime
-layouts follow the type's `RuntimeRep`; unknown representation and levity remain
-unknown. Type variables erase from value arguments, while coercion and `State#`
-arguments preserve their value arity with zero-width storage. Casts change type
-and representation metadata without evaluating or copying their expression.
-
-Boxed constructors use their worker fields, including GADT equality evidence,
-existential binders and unpacked payloads. Layouts resolve after admission
-reserves the module owner, so forward and imported declarations do not depend
-on file or declaration order. Lazy fields keep their suspended values. General
-newtype representation makes ordinary `IO a` work through the existing IO
-execution boundary: its definition comes from the installed
-`GHC.Internal.Types.hi`, rather than a loader-specific replacement.
-
-Class declarations supply their dictionary constructor and field order. Method
-and superclass selectors follow GHC's generated selector semantics, even when
-that declaration provider has no retained Core. Unary classes use the same late
-representation erasure as the Core exporter, without treating them as newtypes
-or inferring evaluation evidence. Instance dictionaries and default methods use
-their retained bodies. Pattern-synonym declarations retain matcher, builder and
-record-selector identities; those functions also use their ordinary Core bodies.
-
-Integer, byte and floating literals use the existing runtime representations.
-Raw byte literals preserve embedded NUL and high bytes. Floating rationals round
-directly to their IEEE format with ties to even, including subnormals and
-overflow. Type-level `Symbol` literals preserve GHC's sequence of `Char` values,
-including the distinction between two surrogate characters and one
-supplementary character. Compiler-owned declarations and built-in coercion rules
-come from the pinned generated catalogue; ordinary library declarations come
-from their owning interfaces.
-
-The focused execution fixture compares native GHC results for recursive calls,
-lazy boxed fields, parameterized newtypes, GADTs, unpacking, nested tuples/sums
-polymorphic IO, class methods, superclass projections and record pattern synonyms.
-It runs both backends and handoff modes, including first-installed-call checks
-for the pure functions and a guest-exception negative control for IO. Process
-creation is disabled and the runtime receives only interfaces.
-
-Annotation transport, remaining expression forms, native foreign artifact
-admission and complete offline
-execution auditing still need integration; `--verify-artifacts` rejects native
-modules. The project driver does not yet publish this native format. Remaining work is tracked in
-[#1063](https://github.com/ekmett/thc/issues/1063).
 
 ## Helper-backed retained interface sources
 

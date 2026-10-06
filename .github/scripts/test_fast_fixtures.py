@@ -65,13 +65,6 @@ class FixtureGraphTest(unittest.TestCase):
         result = fast_fixtures.prepare_cmake(project, self.selection("thc.runtime.Int32ByteOffsetTest"), mock.Mock())
         self.assertEqual([], result["targets"])
 
-    def test_native_interface_parser_needs_only_stock_ghc(self):
-        project = Path(__file__).resolve().parents[2]
-        for test, target in (("thc.CoreHiReaderTest", "fixture-native-hi-reader"),
-                             ("thc.CoreHiExecutionTest", "fixture-native-hi-execution")):
-            result = fast_fixtures.prepare_cmake(project, self.selection(test), mock.Mock())
-            self.assertEqual([target], result["targets"])
-
     def test_process_native_controls_do_not_acquire_package_core(self):
         project = Path(__file__).resolve().parents[2]
         for name in ("thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest"):

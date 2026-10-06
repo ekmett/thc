@@ -11,10 +11,6 @@
     ]
   },
   "leafSources": {
-    "src/main/java/thc/CoreHiNames.java": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
-    "src/main/java/thc/CoreHiModule.java": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
-    "src/main/resources/thc/ghc-9.14.1-known-key-names.json": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
-    "src/main/java/thc/CoreHiReader.java": {"junit": ["thc.CoreHiReaderTest", "thc.CoreHiExecutionTest"], "python": []},
 
     "src/main/java/thc/runtime/AstSameFrameArm.java": {"junit": ["thc.runtime.SameFrameCaseTest", "thc.runtime.LocalJoinGraphBudgetTest"], "python": []},
     "src/main/java/thc/runtime/AstStackScope.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
@@ -1298,12 +1294,6 @@
     }
   },
   "owners": {
-    "t/fixtures/compiler/NativeHiBoxType.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
-    "t/fixtures/compiler/NativeHiScalar.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
-    "t/fixtures/compiler/NativeHiDependency.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
-    "t/fixtures/compiler/NativeHiBox.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
-    "t/fixtures/compiler/NativeHiOracle.hs": {"junit": ["thc.CoreHiExecutionTest"], "python": []},
-    "t/fixtures/compiler/NativeHiFixture.hs": {"junit": ["thc.CoreHiReaderTest"], "python": []},
 
     "bin/run.sh": {"junit": ["thc.LauncherDiagnosticsTest"], "python": []},
     "src/test/java/thc/runtime/ExplicitInteropLibraryTest.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},

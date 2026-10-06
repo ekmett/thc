@@ -7,8 +7,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import thc.runtime.TargetLayout;
 
-/** Package directory owns module names, never binding names. CBD files open on
- * demand; native interfaces are snapshotted and checked before publication. */
+/** Package directory owns module names, never binding names. CBD files open on demand. */
 public final class CoreUnitDirectory {
     // GHC keeps this CLI wrapper identity even with a non-Main -main-is module.
     static final String MAIN_ALIAS = "main::Main.main";
@@ -20,7 +19,7 @@ public final class CoreUnitDirectory {
         public String getId() { return id; } public List<String> getDepends() { return depends; }
         public List<ModuleRecord> getModules() { return modules; }
     }
-    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact, CoreInterfaceSource interfaceSource, boolean nativeInterface, boolean declarationOnly,
+    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact, CoreInterfaceSource interfaceSource,
             boolean containsDelimitedControl, boolean registrationObligations, boolean mainAlias, boolean packageScalarDeclarations) {
         public String getUnit() { return unit; } public String getName() { return name; } public String getSha256() { return sha256; }
         public Artifact getArtifact() { return artifact; }
@@ -30,7 +29,6 @@ public final class CoreUnitDirectory {
         public boolean getPackageScalarDeclarations() { return packageScalarDeclarations; }
         public String getPrefix() { return unit + ":" + name + "."; }
     }
-    private final Map<ModuleRecord,CoreHiReader> nativeInputs;
     private final List<UnitRecord> units;
     private final String foreignExceptionBridgeUnit;
     private final TargetLayout targetLayout;
@@ -38,56 +36,12 @@ public final class CoreUnitDirectory {
     private final Map<String,ModuleRecord> owners = new LinkedHashMap<>();
     private final Map<String,List<ModuleRecord>> aliases = new LinkedHashMap<>();
     private CoreUnitDirectory(List<UnitRecord> units, String foreignExceptionBridgeUnit, TargetLayout targetLayout) {
-        this(units, foreignExceptionBridgeUnit, targetLayout, Map.of());
-    }
-    private CoreUnitDirectory(List<UnitRecord> units, String foreignExceptionBridgeUnit, TargetLayout targetLayout,
-            Map<ModuleRecord,CoreHiReader> nativeInputs) {
-        this.nativeInputs = Map.copyOf(nativeInputs);
         this.units = List.copyOf(units); this.foreignExceptionBridgeUnit = foreignExceptionBridgeUnit; this.targetLayout = targetLayout;
         modules = this.units.stream().flatMap(unit -> unit.modules.stream()).toList();
         for (var module : modules) {
             owners.put(module.getPrefix(), module);
             if (module.mainAlias) aliases.computeIfAbsent(MAIN_ALIAS, ignored -> new ArrayList<>()).add(module);
         }
-    }
-    /** Loose interfaces carry only their actual module identities, not a guessed
-     * package dependency graph. Immutable snapshots are shared with Sources;
-     * mutable declaration/lowering state belongs to each opened Sources. */
-    CoreUnitDirectory withNativeInputs(List<Artifact> files) {
-        if (files.isEmpty()) return this;
-        var paths = new HashSet<Path>();
-        for (var module : modules) paths.add(module.artifact().path());
-        var added = new LinkedHashMap<String,List<ModuleRecord>>();
-        var snapshots = new HashMap<>(nativeInputs);
-        var identities = new HashSet<>(owners.keySet());
-        try {
-            for (var artifact : files) {
-                Path path = artifact.path().toRealPath();
-                require(paths.add(path), "Duplicate native interface path: " + path);
-                var reader = nativeSnapshot(new Artifact(path, artifact.sha256()), "request");
-                String unit = reader.module.unit(), name = reader.module.name();
-                require(!unit.isEmpty() && !name.isEmpty() && identities.add(unit + ":" + name + "."),
-                        "Duplicate or invalid GHC module: " + unit + ":" + name);
-                // Parse declaration and startup facts without resolving types or lowering bodies.
-                var admission = new CoreHiModule(reader).admission();
-                var module = new ModuleRecord(unit, name, artifact.sha256(), new Artifact(path, artifact.sha256()),
-                        null, true, admission.declarationOnly(), admission.containsDelimitedControl(), admission.registrationObligations(),
-                        admission.mainAlias(), admission.packageScalarDeclarations());
-                added.computeIfAbsent(unit, ignored -> new ArrayList<>()).add(module);
-                snapshots.put(module, reader);
-            }
-        } catch (Exception failure) { return rethrow(failure); }
-        var combined = new ArrayList<UnitRecord>();
-        for (var unit : units) {
-            var extra = added.remove(unit.id());
-            if (extra == null) combined.add(unit);
-            else {
-                var selected = new ArrayList<>(unit.modules()); selected.addAll(extra);
-                combined.add(new UnitRecord(unit.id(), unit.depends(), List.copyOf(selected)));
-            }
-        }
-        added.forEach((id, selected) -> combined.add(new UnitRecord(id, List.of(), List.copyOf(selected))));
-        return new CoreUnitDirectory(List.copyOf(combined), foreignExceptionBridgeUnit, targetLayout, snapshots);
     }
     public List<UnitRecord> getUnits() { return units; }
     public String getForeignExceptionBridgeUnit() { return foreignExceptionBridgeUnit; }
@@ -117,7 +71,6 @@ public final class CoreUnitDirectory {
         private Path interfaceDirectory;
         private long interfaceConversions;
         private final Map<ModuleRecord,CoreCompactModule> compactReaders = new HashMap<>();
-        private final Map<ModuleRecord,CoreHiModule> interfaceReaders = new HashMap<>();
         private final List<CoreCompactFile> consumerReaders = new ArrayList<>();
         private final Set<ModuleRecord> verified = new HashSet<>();
         private final Map<String,String> blobs = new HashMap<>();
@@ -141,28 +94,6 @@ public final class CoreUnitDirectory {
                 compactAdmitted.accept(reader.getCounters());
                 return reader;
             });
-        }
-        private CoreHiModule nativeInterface(ModuleRecord module) {
-            var cached = interfaceReaders.get(module);
-            if (cached != null) return cached;
-            try {
-                var artifact = module.artifact();
-                var reader = directory.nativeInputs.get(module);
-                if (reader == null) {
-                    reader = nativeSnapshot(artifact, "publication");
-                }
-                reader.requireIdentity(module.unit(), module.name());
-                var admitted = new CoreHiModule(reader, id -> {
-                    var dependency = directory.owner(id);
-                    require(dependency != null && dependency.nativeInterface(),
-                            "Missing native interface declaration provider: " + id);
-                    return nativeInterface(dependency);
-                });
-                requireNativeSummary(module, admitted.admission());
-                // Admission resolves no dependencies; publish the reader before demanded lowering can do so.
-                interfaceReaders.put(module, admitted);
-                return admitted;
-            } catch (Exception failure) { return rethrow(failure); }
         }
         /** Explicit loose inputs retain their readers in this context, just like package modules. */
         public synchronized Map<String,Object> consumer(Path path, String sha256) {
@@ -188,24 +119,23 @@ public final class CoreUnitDirectory {
         public synchronized Map<String,Object> metadata(ModuleRecord module) {
             check(!closed, "Core unit sources are closed");
             verifyModule(module);
-            return module.nativeInterface() ? nativeInterface(module).metadata() : compact(module).metadata();
+            return compact(module).metadata();
         }
         public synchronized Map<String,Object> binding(String id) {
             check(!closed, "Core unit sources are closed");
             var module = directory.owner(id);
             if (module == null) return null;
-            return module.nativeInterface() ? nativeInterface(module).binding(id) : compact(module).binding(id);
+            return compact(module).binding(id);
         }
         public synchronized boolean containsSymbol(String id) {
             check(!closed, "Core unit sources are closed");
             var module = directory.owner(id);
             if (module == null) return false;
-            return module.nativeInterface() ? nativeInterface(module).containsSymbol(id) : compact(module).containsSymbol(id);
+            return compact(module).containsSymbol(id);
         }
         public synchronized void verifyModule(ModuleRecord module) {
             check(!closed, "Core unit sources are closed");
             if (!verifyArtifacts || verified.contains(module)) return;
-            require(!module.nativeInterface(), "Offline execution audit for native interfaces is not implemented");
             compact(module).verify();
             verified.add(module);
         }
@@ -221,7 +151,7 @@ public final class CoreUnitDirectory {
             closed = true; verified.clear();
             try { compactReaders.values().forEach(CoreCompactModule::close); }
             finally {
-                compactReaders.clear(); interfaceReaders.clear();
+                compactReaders.clear();
                 try { for (var reader : consumerReaders) reader.close(); }
                 catch (Exception failure) { rethrow(failure); }
                 finally {
@@ -241,7 +171,6 @@ public final class CoreUnitDirectory {
         var artifactPaths = new HashSet<Path>();
         TargetLayout layout = null;
         var units = new ArrayList<UnitRecord>();
-        var nativeInputs = new HashMap<ModuleRecord,CoreHiReader>();
         for (Object raw : rawUnits) {
             var unit = record(raw, "Invalid package unit");
             String id = text(unit.get("id"), "Missing GHC unit ID");
@@ -257,7 +186,7 @@ public final class CoreUnitDirectory {
             var rawModules = list(unit.get("modules"), "Missing unit modules");
             var interfaceSource = unit.containsKey("interfaceSource") ? CoreInterfaceSource.read(unit.get("interfaceSource"), interfaceInputs) : null;
             require(!unit.containsKey("bundle") && !unit.containsKey("json") && !unit.containsKey("symbols"),
-                    "Core runtime inputs must be declared CBD or native interface modules: " + id);
+                    "Core runtime inputs must be declared CBD modules: " + id);
             var names = new HashSet<String>();
             var modules = new ArrayList<ModuleRecord>();
             for (Object item : rawModules) {
@@ -268,29 +197,19 @@ public final class CoreUnitDirectory {
                 require(Collections.disjoint(module.keySet(), Set.of("start", "end", "bindingsStart", "bindingsEnd",
                         "metadataStart", "metadataEnd", "sourceMetadataStart", "sourceMetadataEnd", "index")),
                         "CBD module contains JSON storage extents");
-                boolean nativeInterface = interfaceSource == null && module.containsKey("interface");
                 require(!module.containsKey("compact") || !module.containsKey("interface"), "Conflicting Core module source");
-                var artifact = nativeInterface ? artifact(module.get("interface"), artifactPaths, "ghc-hi") :
-                        interfaceSource == null ? artifact(module.get("compact"), artifactPaths, CoreCompactFormat.NAME) :
+                var artifact = interfaceSource == null ? artifact(module.get("compact"), artifactPaths) :
                         interfaceSource.artifact(module.get("interface"), artifactPaths);
-                if (interfaceSource != null || nativeInterface) require(module.get("sha256").equals(artifact.sha256()),
-                  "Interface module hash differs from its artifact: " + id + ":" + name);
+                if (interfaceSource != null) require(module.get("sha256").equals(artifact.sha256()),
+                        "Interface module hash differs from its artifact: " + id + ":" + name);
                 if (interfaceSource != null) require(Boolean.FALSE.equals(module.get("containsDelimitedControl")) && Boolean.FALSE.equals(module.get("registrationObligations")) &&
                   Boolean.FALSE.equals(module.get("mainAlias")) && Boolean.FALSE.equals(module.get("packageScalarDeclarations")),
                   "Demand interfaces require checked false startup summaries");
-                CoreHiReader reader = nativeInterface ? nativeSnapshot(artifact, "publication") : null;
-                if (reader != null) reader.requireIdentity(id, name);
-                var admission = reader == null ? null : new CoreHiModule(reader).admission();
-                var record = new ModuleRecord(id, name, (String) module.get("sha256"), artifact, interfaceSource, nativeInterface,
-                        admission != null && admission.declarationOnly(),
+                var record = new ModuleRecord(id, name, (String) module.get("sha256"), artifact, interfaceSource,
                         flag(module, "containsDelimitedControl", "Missing delimited-control summary"),
                         flag(module, "registrationObligations", "Missing registration summary"),
                         flag(module, "mainAlias", "Missing main-alias summary"),
                         flag(module, "packageScalarDeclarations", "Missing package declaration summary"));
-                if (reader != null) {
-                    requireNativeSummary(record, admission);
-                    nativeInputs.put(record, reader);
-                }
                 modules.add(record);
             }
             if (unit.get("targetLayout") != null) {
@@ -302,23 +221,7 @@ public final class CoreUnitDirectory {
         }
         Object bridge = document.get("foreignExceptionBridgeUnit");
         require(bridge == null || bridge instanceof String name && !blank(name), "Invalid foreign exception bridge unit");
-        return new CoreUnitDirectory(units, (String) bridge, layout, nativeInputs);
-    }
-    private static CoreHiReader nativeSnapshot(Artifact artifact, String phase) {
-        try {
-            byte[] bytes = java.nio.file.Files.readAllBytes(artifact.path());
-            require(CoreModules.sha256(bytes).equals(artifact.sha256()),
-                    "Native interface changed after " + phase + ": " + artifact.path());
-            return new CoreHiReader(bytes, artifact.path().toString());
-        } catch (Exception failure) { return rethrow(failure); }
-    }
-    private static void requireNativeSummary(ModuleRecord module, CoreHiModule.Admission admission) {
-        require(module.declarationOnly() == admission.declarationOnly() &&
-                module.containsDelimitedControl() == admission.containsDelimitedControl() &&
-                module.registrationObligations() == admission.registrationObligations() &&
-                module.mainAlias() == admission.mainAlias() &&
-                module.packageScalarDeclarations() == admission.packageScalarDeclarations(),
-                "Native interface startup summary mismatch: " + module.unit() + ":" + module.name());
+        return new CoreUnitDirectory(units, (String) bridge, layout);
     }
     private static boolean blank(String value) {
         for (int i = 0; i < value.length(); i++) {
@@ -327,12 +230,12 @@ public final class CoreUnitDirectory {
         }
         return true;
     }
-    private static Artifact artifact(Object raw, Set<Path> paths, String format) {
+    private static Artifact artifact(Object raw, Set<Path> paths) {
         require(raw instanceof Map<?,?>, "Missing Core artifact");
         var record = (Map<?,?>) raw;
         var path = Path.of(text(record.get("path"), "Missing unit artifact path"));
         String hash = text(record.get("sha256"), "Missing unit artifact identity");
-        require(record.keySet().equals(Set.of("path", "sha256", "format")) && Objects.equals(record.get("format"), format) &&
+        require(record.keySet().equals(Set.of("path", "sha256", "format")) && Objects.equals(record.get("format"), CoreCompactFormat.NAME) &&
                 path.isAbsolute() && hash.matches("[0-9a-f]{64}") && paths.add(path.normalize()), "Invalid or duplicate unit artifact reference");
         return new Artifact(path.normalize(), hash);
     }

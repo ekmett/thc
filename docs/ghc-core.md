@@ -181,12 +181,6 @@ missing complete Core in a requested unit fails acquisition.
 The JVM invokes this same helper only when a selected module is requested, then
 uses the existing compact reader and checks the emitted header facts against
 those recorded in the directory. It does not parse GHC binary interfaces.
-A separate [native interface module path](core-package-manifest.md#native-interface-modules)
-now decodes a bounded scalar subset directly into the shared runtime, without a
-GHC helper or intermediate CBD. It executes retained private functions,
-recursion and cross-module integer calls on both backends and handoff modes.
-It is not yet a general installed-library loader; [#1063](https://github.com/ekmett/thc/issues/1063)
-remains open for declarations, types, expression coverage and driver integration.
 [Demand eligibility and limits](driver.md#installed-library-core) describe the
 process permission, source snapshot and explicit offline-audit restriction.
 

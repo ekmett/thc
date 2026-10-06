@@ -24,7 +24,6 @@
     "thc.WindowsDistributionTest"
   ],
   "fixtureFreeJunit": [
-    "thc.CoreHiAxiomsTest",
     "thc.runtime.OriginalProcessIdentityTest",
     "thc.runtime.ForkHostFailureTest",
     "thc.runtime.LoomSignalProcessTest",
@@ -291,77 +290,6 @@
     "thc.runtime.TupleRepresentationTest"
   ],
   "groups": {
-    "native-hi-execution": {
-      "cmakeTarget": "fixture-native-hi-execution",
-      "ciPlatforms": [
-        "Linux",
-        "Darwin"
-      ],
-      "junit": [
-        "thc.CoreHiExecutionTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "cmake",
-            "--build",
-            "build/fixtures",
-            "--target",
-            "fixture-native-hi-execution"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/native-hi-execution/NativeHiScalar.hi",
-        "build/native-hi-execution/NativeHiDependency.hi",
-        "build/native-hi-execution/NativeHiClasses.hi",
-        "build/native-hi-execution/NativeHiBox.hi",
-        "build/native-hi-execution/NativeHiBoxType.hi",
-        "build/native-hi-execution/native.tsv",
-        "build/native-hi-execution/io.tsv",
-        "build/native-hi-execution/GHC.Internal.Types.hi"
-      ],
-      "sources": [
-        "t/fixtures/compiler/NativeHiScalar.hs",
-        "t/fixtures/compiler/NativeHiDependency.hs",
-        "t/fixtures/compiler/NativeHiClasses.hs",
-        "t/fixtures/compiler/NativeHiBox.hs",
-        "t/fixtures/compiler/NativeHiBoxType.hs",
-        "t/fixtures/compiler/NativeHiOracle.hs",
-        "cmake/InterfaceFixtures.cmake"
-      ]
-    },
-    "native-hi-reader": {
-      "cmakeTarget": "fixture-native-hi-reader",
-      "ciPlatforms": [
-        "Linux",
-        "Darwin"
-      ],
-      "junit": [
-        "thc.CoreHiReaderTest"
-      ],
-      "commands": [
-        {
-          "argv": [
-            "cmake",
-            "--build",
-            "build/fixtures",
-            "--target",
-            "fixture-native-hi-reader"
-          ]
-        }
-      ],
-      "outputs": [
-        "build/native-hi-reader/normal/NativeHiFixture.hi",
-        "build/native-hi-reader/safe/NativeHiFixture.hi",
-        "build/native-hi-reader/max/NativeHiFixture.hi",
-        "build/native-hi-reader/thin/NativeHiFixture.hi"
-      ],
-      "sources": [
-        "t/fixtures/compiler/NativeHiFixture.hs",
-        "cmake/InterfaceFixtures.cmake"
-      ]
-    },
     "backend-annotations": {
       "requires": ["compact-model"],
       "quarantined": true,

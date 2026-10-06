@@ -42,7 +42,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         for (var module : directory.getModules()) {
             String id = module.unit() + ":" + module.name();
             modules.add(id);
-            if (!module.declarationOnly()) availableModules.add(id);
+            availableModules.add(id);
         }
         try {
             CoreModules.visitUnitConsumers(input, sources, rawModule -> {
