@@ -31,11 +31,13 @@ import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
 /* Indexed frames, selective captures, rooted application and self-tail frame
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. */
 public final class FunctionRoot extends GuestRoot {
+    private static final int[] NO_SCALAR_VOID_INPUTS = new int[0];
     private final String label;
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] environmentSlots;
     @CompilationFinal(dimensions = 1) private final int[] argumentSlots;
     @CompilationFinal(dimensions = 1) private final int[] argumentIndices;
+    @CompilationFinal(dimensions = 1) private int[] scalarVoidIndices = NO_SCALAR_VOID_INPUTS;
     @CompilationFinal(dimensions = 1) private final CoreRepresentation[] argumentProofs;
     @CompilationFinal(dimensions = 2) private final int[][] environmentVectorSlots;
     private final Metrics metrics;
@@ -319,8 +321,21 @@ public final class FunctionRoot extends GuestRoot {
         if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
         return executeBody(frame);
     }
+    /** Scalar State# remains an ABI token even though its local value is erased. */
+    public void configureScalarVoidInputs(List<CoreRepresentation> proofs) {
+        int count = 0;
+        for (var proof : proofs) if (proof.getKind() == CoreKind.VOID) count++;
+        if (count == 0) return;
+        int[] indices = new int[count];
+        int index = 0;
+        for (int i = 0; i < proofs.size(); i++)
+            if (proofs.get(i).getKind() == CoreKind.VOID)
+                indices[index++] = ArgumentLayout.offset(getInputLayout(), i);
+        scalarVoidIndices = indices;
+    }
     @ExplodeLoop public void buildFrame(Object[] arguments, VirtualFrame frame) {
         int offset = captureLayout == null ? 1 : 2;
+        for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(arguments[index + offset]);
         for (int i = 0; i < argumentSlots.length; i++) {
             Object value = arguments[argumentIndices[i] + offset];
             Class<?> reference = i < argumentReferences.length ? argumentReferences[i] : null;
@@ -410,6 +425,7 @@ public final class FunctionRoot extends GuestRoot {
         TypedInputLayout entry = getTypedInput();
         if (entry == null) throw fault("Target does not support typed tuple inputs");
         entry.validateSelfSource(source, frame, node);
+        for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(source.reference(frame, node, null, index));
         for (int i = 0; i < argumentSlots.length; i++) {
             int from = argumentIndices[i], to = argumentSlots[i];
             if (entry.getPacket().isInt(entry.getHeader() + from)) FrameAccess.INSTANCE.writeInt(frame, to, source.readInt(frame, node, null, from));
@@ -432,6 +448,7 @@ public final class FunctionRoot extends GuestRoot {
         if (entry == null) throw fault("Target does not support typed tuple inputs");
         try {
             if (initial) entry.validate(input); else entry.validateTail(input);
+            for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(entry.getPacket().getObject(input, index + entry.getHeader()));
             if (initial) frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(entry.getPacket().getLong(input, 0)));
             for (int i = 0; i < argumentSlots.length; i++) {
                 int from = argumentIndices[i] + entry.getHeader(), to = argumentSlots[i];
@@ -463,6 +480,7 @@ public final class FunctionRoot extends GuestRoot {
                 frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(entry.getArguments().getLong(input, 0)));
             }
             int offset = captureLayout == null ? 1 : 2;
+            for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(entry.getArguments().getObject(input, index + offset));
             for (int i = 0; i < argumentSlots.length; i++) {
                 int position = argumentIndices[i] + offset;
                 if (entry.getArguments().isInt(position)) FrameAccess.INSTANCE.writeInt(frame, argumentSlots[i], entry.getArguments().getInt(input, position));

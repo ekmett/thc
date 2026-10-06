@@ -48,6 +48,8 @@ public final class AstSelfLayout {
         }
         for (int i = 0; i < argumentSlots.length; i++) {
             int destination = argumentSlots[i];
+            if (i < argumentProofs.length && argumentProofs[i].getKind() == CoreKind.VOID)
+                TupleResults.requireVoidCarrier(FrameAccess.INSTANCE.read(frame, temporaries[i]));
             if (destination < 0) continue;
             int source = temporaries[i];
             Class<?> reference = argumentReferences[i];

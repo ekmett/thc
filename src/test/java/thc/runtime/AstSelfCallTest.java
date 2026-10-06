@@ -117,6 +117,28 @@ class AstSelfCallTest {
         }
     }
 
+    @Test void hostSuppliedPartialSelfCallValidatesErasedState() throws Exception {
+        var state = map("kind", "void", "primReps", List.of(), "evaluated", true);
+        var parameters = List.of(map("id", "state", "lifted", false, "rep", state),
+            map("id", "next", "lifted", true, "rep", closure), parameter("remaining"));
+        var body = choose(variable("remaining"), integer(0), apply(variable("next"), integer(0)));
+        var worker = list("lam", parameters, body, map("rep", closure, "resultRep", longRep));
+        withProgram(List.of(binding("worker", worker)), p -> {
+            var function = (Closure) p.entryValue("worker");
+            Object[] goodPrefix = {Unit.INSTANCE, null}, badPrefix = {9L, null};
+            var good = new Closure(function.environment, goodPrefix, 1, function.target);
+            var bad = new Closure(function.environment, badPrefix, 1, function.target);
+            goodPrefix[1] = good; badPrefix[1] = bad;
+            assertEquals(0L, Calls.target(function.target, new Object[]{0L, Unit.INSTANCE, good, 1L}));
+            assertThrows(RuntimeFault.class, () -> Calls.target(function.target, new Object[]{0L, Unit.INSTANCE, bad, 1L}));
+            compile(function.target);
+            long before = count(p, "compiledEntries");
+            assertEquals(0L, Calls.target(function.target, new Object[]{0L, Unit.INSTANCE, good, 1L}));
+            assertTrue(count(p, "compiledEntries") > before, "the first installed call executes valid partial self transfer");
+            assertThrows(RuntimeFault.class, () -> Calls.target(function.target, new Object[]{0L, Unit.INSTANCE, bad, 1L}));
+        });
+    }
+
     @Test void selfTransferSwapsWidePrimitiveArgumentsAndSurvivesColdCompiledRecursion() throws Exception {
         var n = variable("remaining"); var x = variable("x"); var y = variable("y");
         var body = choose(n, primitive("-#", x, y), apply(variable("swap"), primitive("-#", n, integer(1)), y, x));

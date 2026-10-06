@@ -859,6 +859,7 @@ public final class Program implements ExecutableProgram {
             com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(body, AstSameFrameArm.class) == null);
         root.configureInitialClears(scope.layout.initialClears());
         root.configureInputProofs(inputProofs);
+        root.configureScalarVoidInputs(inputProofs);
         root.configureEagerAsyncPolls(eagerAsyncPolls);
         if (reusableCode) root.configureProgramSlot(scope.programSlot, codeIdentity);
         if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {
