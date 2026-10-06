@@ -3,18 +3,19 @@
 {-# LANGUAGE MagicHash #-}
 -- Input: an Int# supplied by NativeHiOracle.
 -- Purpose: retain parameterized lazy fields and a recursive boxed field across modules.
--- Output: Empty for negative input; otherwise a singleton Box with a Payload of the input plus two.
-module NativeHiBoxType (Payload(..), Box(..), box, identity, identityBox) where
+-- Output: Empty for negative input; otherwise a singleton Box with integer and floating-point payload fields.
+module NativeHiBoxType (Payload(..), Box(..), box, payload, identity, identityBox) where
 
-import GHC.Exts (Int#, (+#), (<#))
+import GHC.Exts (Int#, Float#, Double#, (+#), (<#))
+import NativeHiScalar (floatValue, doubleValue)
 
-data Payload = Payload Int#
+data Payload = Payload Int# Float# Double#
 data Box a = Empty | Box a (Box a)
 
 -- Keep a suspended call in the lazy field rather than an already built Payload.
 {-# OPAQUE payload #-}
 payload :: Int# -> Payload
-payload x = Payload (x +# 2#)
+payload x = Payload (x +# 2#) (floatValue x) (doubleValue x)
 
 {-# OPAQUE box #-}
 box :: Int# -> Box Payload
