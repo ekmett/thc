@@ -74,17 +74,20 @@ parsing and caches only prepared code and signature metadata. Executing that
 factory creates fresh program cells and resources. Ordinary cached sources
 continue to construct fresh AST or bytecode programs on every load.
 
-Reusable boxed constructors accept exact scalar, tuple, sum and vector field
-proofs, with fresh per-load allocation ownership. Immutable static byte literals
-and admitted managed byte-array operations are available to pure code. Nonliteral
-strict globals cannot execute during preparation. Global aggregate storage and
-recursive or lifted aggregate lets retain their ordinary rejection. Bytecode and
-diagnostic execution remain outside reusable admission; selected IO, foreign and
-managed-export forms retain their existing explicit admission requirements.
+Reusable lowering uses the ordinary initializer and operation contracts. Preparation
+stores inert typed initializer code; each instance initializes strict values at its
+ordinary load boundary, after native linkage when required. Lazy initializers
+publish fresh closures and CAF thunks without entering their bodies. Guest
+initializer execution uses the existing resumable call ownership protocol outside
+the lowering monitor, retaining sharing and failures without replaying effects.
+Native data/function labels, callback helpers and foreign-language receivers resolve
+against the invoking owner. Implicit exception globals and constructor layouts use
+the same per-instance indexes as explicit references. Shared code retains no
+resolved native or JavaScript receiver.
 
-Prepared `myThreadId#` observes the current guest entry when executed. It retains
-no identity from preparation; each fresh context supplies its own thread state.
-This observation does not admit thread creation, MVar operations or file waits.
+Ordinary malformed proof, ABI, aggregate-storage and unsupported runtime checks
+still apply. Bytecode and diagnostic execution remain outside this prepared AST
+API. Preparation does not prove persisted Native Image execution.
 
 Narrow scalar address indexing (`indexWord8OffAddr#`, `indexInt8OffAddr#`,
 `indexWord16OffAddr#`, `indexInt16OffAddr#`) uses the invoking address and preserves

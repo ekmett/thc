@@ -90,10 +90,10 @@ public final class DelimitedActionSite extends Node {
         } catch (AsyncBlocked blocked) { throw new AsyncDelivery(blocked.getRequest(), this); }
     }
     public Object handle(VirtualFrame frame, DelimitedCut cut, TupleShape shape) {
-        Closure continuation = snapshot(cut, shape);
+        Closure continuation = snapshot(cut, shape, metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame));
         return invoke(frame, cut.getHandler(), new Object[] {continuation, thc.runtime.Unit.INSTANCE}, shape);
     }
-    @TruffleBoundary private Closure snapshot(DelimitedCut cut, TupleShape shape) { return new DelimitedStack(cut, shape).closure(language, metrics); }
+    @TruffleBoundary private Closure snapshot(DelimitedCut cut, TupleShape shape, Metrics invocationMetrics) { return new DelimitedStack(cut, shape).closure(language, invocationMetrics); }
     public Object prompt(VirtualFrame frame, Object tag, Object action, Object state, TupleShape shape) {
         requireVoidCarrier(state);
         PromptTag identity = DelimitedControl.tag(this, tag);

@@ -6,8 +6,11 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 public final class PolyglotExpression extends Expr {
     private final PolyglotOp operation;
     @Children private Expr[] arguments;
-    @Child private PolyglotAccess access = new PolyglotAccess();
-    public PolyglotExpression(PolyglotOp operation, Expr[] arguments) { this.operation = operation; this.arguments = arguments; }
+    @Child private PolyglotAccess access;
+    public PolyglotExpression(PolyglotOp operation, Expr[] arguments) { this(operation, arguments, -1); }
+    public PolyglotExpression(PolyglotOp operation, Expr[] arguments, int programSlot) {
+        this.operation = operation; this.arguments = arguments; access = new PolyglotAccess(programSlot);
+    }
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("Polyglot IO requires a tuple destination"); }
     @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         switch (operation) {
@@ -16,7 +19,7 @@ public final class PolyglotExpression extends Expr {
                 var source = arguments[1].executeRequiredAddress(frame);
                 var name = arguments[2].executeRequiredAddress(frame);
                 var state = arguments[3].execute(frame);
-                FrameAccess.write(frame, slots[offset], access.eval(language, source, name, state));
+                FrameAccess.write(frame, slots[offset], access.eval(frame, language, source, name, state));
             }
             case READ_MEMBER -> {
                 var value = arguments[0].execute(frame);

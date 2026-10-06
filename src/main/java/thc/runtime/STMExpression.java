@@ -49,7 +49,10 @@ public final class STMExpression extends Expr {
                 });
             }
             if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Check failed.");
-            invoke(frame, first, second, nested == null ? null : nested.execute(frame));
+            Object payload;
+            try { payload = nested == null ? null : nested.execute(frame); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> { invoke(saved, first, second, input); return null; }); }
+            invoke(frame, first, second, payload);
         } else {
             var stm = Language.currentState(this).stm;
             Object value = switch (operation) {

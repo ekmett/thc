@@ -38,7 +38,7 @@ public final class GhcBCOExpression extends Expr {
             }
         }
         Object value = name.equals("mkApUpd0#") ? GhcBCO.updating(this, values[0]) :
-            GhcBCO.create(this, language, metrics, values[0], values[1], values[2], (Long) values[3], values[4], values[5]);
+            GhcBCO.create(this, language, metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame), values[0], values[1], values[2], (Long) values[3], values[4], values[5]);
         FrameAccess.write(frame, slots[offset], value);
         return null;
     }

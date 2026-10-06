@@ -356,6 +356,7 @@ public final class Force extends Node {
             }
         }
     }
+    @TruffleBoundary Object executeInitialization(CallSegment segment) { return resumeChain(segment, false, false); }
     @TruffleBoundary public Object drainDelimitedBoundary(Object boundary) { return resumeChain(boundary, true, true); }
     private SavedGuestContinuation continuationOf(Object boundary) {
         return switch (boundary) {
@@ -394,6 +395,7 @@ public final class Force extends Node {
                             else {
                                 continuation = savedGuestContinuation(segment.getValue());
                                 if (continuation == null) throw fault("Suspended call segment has no guest continuation");
+                                segment.enterInitial(SynchronousMasking.current(this));
                                 resumeMask = segment.getLogicalMask();
                                 segment.setValue(null);
                                 segment.setOwner(Thread.currentThread()); segment.setState(1); claimedHere = true; claim = 0;

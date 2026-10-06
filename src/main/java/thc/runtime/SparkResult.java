@@ -9,9 +9,15 @@ public final class SparkResult extends Expr {
     private final String name;
     @Child private Expr state, payload;
     private final DataValue empty;
+    private final int programSlot, constructorIndex;
     public SparkResult(String name, Expr state, Expr payload, DataValue empty, CoreRepresentation proof) {
         this.name = name; this.state = state; this.payload = payload; this.empty = empty;
+        programSlot = constructorIndex = -1;
         setRepresentation(proof.withEvaluated(true));
+    }
+    SparkResult(String name, Expr state, Expr payload, CoreRepresentation proof, int programSlot, int constructorIndex) {
+        this.name = name; this.state = state; this.payload = payload; this.empty = null;
+        this.programSlot = programSlot; this.constructorIndex = constructorIndex; setRepresentation(proof.withEvaluated(true));
     }
     @Override public Object execute(VirtualFrame frame) {
         if (!name.equals("par#")) throw RuntimeFault.fault("Spark result requires a tuple destination");
@@ -30,7 +36,7 @@ public final class SparkResult extends Expr {
         else {
             var thunk = pool.poll();
             FrameAccess.writeLong(frame, slots[offset], thunk == null ? 0L : 1L);
-            FrameAccess.write(frame, slots[offset + 1], thunk == null ? empty : thunk);
+            FrameAccess.write(frame, slots[offset + 1], thunk == null ? programSlot < 0 ? empty : Program.instance(frame, programSlot).constructorLayout(constructorIndex).allocate() : thunk);
         }
         return null;
     }

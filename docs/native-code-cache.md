@@ -1,6 +1,6 @@
 # Experimental native code cache
 
-Compile a selected pure Core entry ahead of time, then run it in a fresh process
+Compile a selected Core entry ahead of time, then run it in a fresh process
 with guest JIT compilation disabled. This produces a native launcher and matching
 code-cache file. Ordinary `thc run` does not use this workflow.
 
@@ -10,27 +10,27 @@ compiler by default, while retaining explicit Vector API intrinsics. Set
 automatic vectorization in both compilers. Use matching settings when comparing
 JVM and native-code-cache runs.
 
-The cache supports the synchronous AST backend: numeric computation, ordinary
-functions and partial applications, lazy data, tuples, sums, vectors and admitted
-managed byte-array operations. Each load gets fresh heap state and CAFs. IO,
-foreign calls, asynchronous exceptions and the bytecode backend are unsupported.
-Pinned/native memory, atomic memory operations and unresolved layouts are also
-outside this workflow. See [reusable code](reusable-code.md) for exact admission
-limits; supplying a complete library does not imply every operation it uses is
-admitted.
+Reusable AST preparation uses ordinary lowering and fresh per-load heap state,
+globals and CAFs. Immutable initializer code and declarations can be shared;
+execution resolves the invoking instance's constructor, native, receiver and
+exception-bridge authority. See [reusable code](reusable-code.md) for the owning
+contracts and ordinary runtime limitations. The bytecode backend has no prepared
+code provider in this workflow.
+
+Persisted Native Image execution is qualified only for the existing checked
+inputs and pinned provider. JVM preparation or execution of another runtime
+operation does not establish a successful provider store and fresh native load.
 
 The command line accepts numeric arguments and results. Functions may use typed
 aggregates internally, but direct tuple/sum/vector host arguments require the
 [JVM embedding API](site/embedding.md), not this CLI.
 
-Native IO/package-FFI preparation is under development: the source loader retains
-immutable declarations and resolves native functions and exception projectors for
-each invoking instance. The experimental `--io-main`/`--shutdown-entry` CLI path
-is not yet qualified by a successful provider store and fresh load. JavaScript,
-Polyglot and explicit interop calls are rejected during reusable preparation until
-their receivers and exception paths are instance-aware; ordinary runtime support
-is unchanged. Exception-text inspection uses the invoking instance's genuine
-Haskell bridge when the foreign metadata accessor itself fails.
+The experimental `--io-main`/`--shutdown-entry` CLI path is not yet qualified by
+a successful provider store and fresh load. JavaScript and Polyglot calls use
+invocation-owned receivers and exception bridges in prepared AST execution;
+persisting their foreign-language/provider state requires separate qualification.
+Exception-text inspection uses the invoking instance's genuine Haskell bridge
+when a foreign metadata accessor itself fails.
 
 ## Build and select a program
 
@@ -171,7 +171,7 @@ Each CLI run starts a fresh process and permits one cache per process.
 
 | Failure | Action |
 | --- | --- |
-| Unsupported entry or dependency | Use an admitted pure AST entry, or run the program through the ordinary runtime. Preparation does not silently substitute another backend. |
+| Unsupported entry or dependency | Check the ordinary lowering/runtime limitation or missing proof reported for this entry. Preparation does not silently substitute another backend. |
 | Missing Core binding | Reacquire the complete selected dependency closure. |
 | Cache miss, incompatible image or missing compiled target | Rebuild the launcher and cache with the same supported toolchain and inputs. `run` does not fall back to JIT compilation. |
 | Existing cache output | Choose a new path. Files are never overwritten; a failed store may leave an incomplete file to inspect or explicitly remove. |

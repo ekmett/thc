@@ -193,7 +193,7 @@ public final class FunctionRoot extends GuestRoot {
         }
         strictSlots = Arrays.copyOf(strict, count);
         entryForce = new Force(metrics, enableAsync);
-        loop = Truffle.getRuntime().createLoopNode(new SelfRepeater(new FunctionBody(body, metrics, resultProof, tuple, tupleSlots), metrics));
+        loop = Truffle.getRuntime().createLoopNode(new SelfRepeater(new FunctionBody(body, metrics, resultProof, tuple, tupleSlots, role == FunctionRootRole.INITIALIZER), metrics));
     }
     private static boolean contains(int[] values, int value) {
         for (int element : values) if (element == value) return true;
@@ -316,7 +316,7 @@ public final class FunctionRoot extends GuestRoot {
     public Object restartTailAnchor(VirtualFrame frame, TailCall transfer) {
         if (role != FunctionRootRole.FUNCTION || !isSelf(transfer.getTarget())) throw new IllegalStateException("Check failed.");
         restoreTail(frame, transfer);
-        if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+        if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
         return executeBody(frame);
     }
     @ExplodeLoop public void buildFrame(Object[] arguments, VirtualFrame frame) {
@@ -590,7 +590,7 @@ public final class FunctionRoot extends GuestRoot {
         if (transfer instanceof TailCall tail) restoreTail(frame, tail);
         else if (transfer instanceof HandoffTailCall tail) restoreHandoff(frame, tail.getArguments(), false);
         else if (transfer != AstSelfCall.INSTANCE) throw transfer;
-        if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+        if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
         // A resumed suffix returns an owned value, not its caller's stale return loan.
         if (handoff != null) handoff.initializeOrdinary(frame);
         try { return executeBody(frame); }
@@ -622,14 +622,14 @@ public final class FunctionRoot extends GuestRoot {
         try { return repeating.once(frame); }
         catch (AstSelfCall ignored) {
             tailCallProfile.enter();
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             return loop.execute(frame);
         } catch (HandoffTailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreHandoff(frame, tail.getArguments(), false);
@@ -637,7 +637,7 @@ public final class FunctionRoot extends GuestRoot {
         } catch (TailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreTail(frame, tail);

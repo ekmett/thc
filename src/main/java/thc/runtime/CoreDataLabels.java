@@ -11,17 +11,28 @@ import static thc.runtime.RuntimeServiceStatus.fault;
  * (at least one), not the number of guest carriers or dynamic GHC -N resizing.
  * Event-manager reconfiguration based on shrinking capabilities is still outside
  * the supported runtime contract. */
-public final class CoreDataLabels {
-    private CoreDataLabels() {}
+public final class CoreDataLabels extends Expr {
+    private final String symbol;
+    private final TargetLayout layout;
+    CoreDataLabels(String symbol, CoreRepresentation proof, TargetLayout layout) {
+        requireProof(proof); this.symbol = symbol; this.layout = layout; setRepresentation(proof);
+    }
+    @Override public ManagedAddress execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+        return fromCore(symbol, getRepresentation(), layout);
+    }
+    @Override public ManagedAddress executeAddress(com.oracle.truffle.api.frame.VirtualFrame frame) { return execute(frame); }
+    private static void requireProof(CoreRepresentation proof) {
+        if (proof == null || !proof.getPresent() || !proof.getEvaluated() || proof.getKind() != CoreKind.ADDRESS ||
+            proof.isAggregate() || proof.isVector() || !List.of("AddrRep").equals(proof.getPrimReps()))
+            throw fault("C data label requires exact evaluated AddrRep proof");
+    }
 
     public static ManagedAddress fromCore(String symbol, CoreRepresentation proof) {
         return fromCore(symbol, proof, null);
     }
 
     public static ManagedAddress fromCore(String symbol, CoreRepresentation proof, TargetLayout layout) {
-        if (proof == null || !proof.getPresent() || !proof.getEvaluated() || proof.getKind() != CoreKind.ADDRESS ||
-            proof.isAggregate() || proof.isVector() || !List.of("AddrRep").equals(proof.getPrimReps()))
-            throw fault("C data label requires exact evaluated AddrRep proof");
+        requireProof(proof);
         var state = Language.currentState(null);
         return switch (symbol) {
             case "enabled_capabilities" -> ManagedAddress.enabledCapabilities(state.getThreads());

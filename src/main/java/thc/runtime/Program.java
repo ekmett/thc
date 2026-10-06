@@ -53,6 +53,7 @@ public final class Program implements ExecutableProgram {
     private final boolean delimited;
     private final boolean containsDelimited;
     private final CoreSources sources;
+    private final Map<String,Object> sourceModule;
     private final class LoweringState {
         CoreSourceLocation source;
         OperandBuilder operands;
@@ -140,6 +141,7 @@ public final class Program implements ExecutableProgram {
         this.containsDelimited = containsDelimited;
         delimited = containsDelimited || demand != null && Boolean.TRUE.equals(moduleData.get("captureDelimited"));
         sources = new CoreSources(moduleData);
+        sourceModule = moduleData;
         diagnosticUnsupported = Boolean.TRUE.equals(moduleData.get("diagnosticUnsupported"));
         if (!(moduleData.get("bindings") instanceof List<?> found)) throw new RuntimeFault("Missing bindings");
         bindings = (List<Map<String, Object>>) found;
@@ -151,7 +153,7 @@ public final class Program implements ExecutableProgram {
             }
         constructors = demand == null ? localConstructors : demand.constructors(localConstructors);
         dataLayouts = demand == null ? Collections.synchronizedMap(new LinkedHashMap<>()) : demand.getLayouts();
-        indexedLayouts = !reusableCode ? null : new DataLayout[prepared == null ? constructors.size() : prepared.layouts.size()];
+        indexedLayouts = prepared == null ? null : new DataLayout[prepared.layouts.size()];
         if (prepared != null) for (DataLayout.Reusable storage : prepared.layouts) {
             int index = constructorIndices.size();
             constructorIndices.put(storage.id, index);
@@ -184,28 +186,18 @@ public final class Program implements ExecutableProgram {
             for (Map<String, Object> binding : bindings) {
                 String id = (String) binding.get("id");
                 CodeValue code = prepared.values.get(id);
-                if (code == null) required(globals, id).defer(preparationLock,
-                    () -> { throw new UnsupportedCore("Binding was not prepared for reusable execution: " + id); });
-                else if (nativeStartup) {
-                    required(globals, id).defer(preparationLock, () -> {
-                        Object value = code.instantiate(this);
-                        initializedBindingCount.incrementAndGet();
-                        return value;
-                    });
-                    pending.add(id);
-                } else { required(globals, id).initialize(code.instantiate(this)); initializedBindingCount.incrementAndGet(); }
+                required(globals, id).defer(preparationLock, () -> {
+                    if (code == null) throw new UnsupportedCore("Binding was not prepared for reusable execution: " + id);
+                    return code.instantiate(this);
+                });
+                if (code != null) pending.add(id);
             }
-            if (nativeStartup) { pendingInitializers = List.copyOf(pending); return; }
-            // The loader has linked these declarations in the current State.
-            // Resolve receivers only for this instance, never in shared nodes
-            // or while preparing the code. Resolution invokes no guest call.
-            for (int i = 0; i < packageFunctions.length; i++) {
-                PackageScalarCall call = prepared.packageCalls.get(i);
-                if (call.getLink().getCallSeeds().containsKey(call.getSignature().getEntry())) continue;
-                packageFunctions[i] = contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
-            }
+            // Every cell exists before effects or native constructors can demand a dependency.
+            pendingInitializers = List.copyOf(pending);
+            if (!nativeStartup) initializeGlobals();
             return;
         }
+        if (reusableCode) return;
         List<Map<String, Object>> eager = new ArrayList<>();
         for (Map<String, Object> binding : bindings) {
             thc.CoreBindingBody source = binding.get("expr") instanceof thc.CoreBindingBody body ? body : null;
@@ -214,25 +206,21 @@ public final class Program implements ExecutableProgram {
                 eager.add(binding);
                 if (!nativeStartup) continue;
             }
-            // Reusable initializers create closed code or literals; they cannot
-            // evaluate other globals. Their cells can therefore prepare independently.
-            required(globals, (String) binding.get("id")).defer(reusableCode ? new Object() : preparationLock, () -> {
-                if (reusableCode) {
-                    List<Object> body = (List<Object>) binding.get("expr");
-                    if (!representation(binding) && !Arrays.asList("lit", "void").contains(body.getFirst()))
-                        throw new UnsupportedCore("Reusable AST preparation cannot execute strict global bodies");
-                    requireReusableBody(body);
-                }
+            required(globals, (String) binding.get("id")).defer(preparationLock, () -> {
                 validateBindings(List.of(binding));
                 Scope scope = new Scope(new FrameLayout());
-                if (reusableCode) scope.programSlot = scope.layout.bind("<program instance>", FrameSlotKind.Object);
-                Expr initializer = initializer(binding, scope);
-                VirtualFrame frame = Truffle.getRuntime().createVirtualFrame(new Object[0], scope.layout.build());
-                if (reusableCode) frame.setObject(scope.programSlot, this);
-                Object value = initializer.execute(frame);
-                CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates);
-                initializedBindingCount.incrementAndGet();
-                return value;
+                Expr body = initializer(binding, scope);
+                // These two owning constructors only publish immutable code/captures.
+                // All other initializers use the guest execution boundary, without rejection.
+                if (body instanceof MakeClosure || body instanceof Delay) {
+                    Object value = body.execute(Truffle.getRuntime().createVirtualFrame(new Object[0], scope.layout.build()));
+                    CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates);
+                    initializedBindingCount.incrementAndGet();
+                    return value;
+                }
+                FunctionSpec plan = initializerPlan(binding, body, scope);
+                return new GlobalBinding.Initializer(plan.target,
+                    new Object[] {0L}, metrics, initializedBindingCount::incrementAndGet);
             });
         }
         if (nativeStartup) {
@@ -258,8 +246,8 @@ public final class Program implements ExecutableProgram {
         pendingInitializers = List.of();
         if (packageFunctions != null) for (int i = 0; i < packageFunctions.length; i++) {
             PackageScalarCall call = packageCalls.get(i);
-            if (call.getLink().getCallSeeds().containsKey(call.getSignature().getEntry())) continue;
-            packageFunctions[i] = contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
+            if (call.getKind() == PackageScalarCall.Kind.STATIC && call.getLink().getCallSeeds().containsKey(call.getSignature().getEntry())) continue;
+            packageFunctions[i] = resolvePackageFunction(call);
         }
     }
 
@@ -273,8 +261,8 @@ public final class Program implements ExecutableProgram {
     public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries, int jobs) {
         if (jobs < 1 || jobs > 64) throw new IllegalArgumentException("Core preparation jobs must be between 1 and 64");
         if (language != LANGUAGES.get(null)) throw new UnsupportedCore("Reusable AST preparation requires the current language");
-        if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("nativeCallbacks")))
-            throw new UnsupportedCore("Reusable AST admission requires detached modules without native callback labels");
+        if (module.containsKey("demandBindings"))
+            throw new UnsupportedCore("Reusable AST preparation requires detached binding bodies");
         // Validate with the real module descriptors, retaining only storage
         // metadata for constructors actually reached during selected lowering.
         Program builder = new Program(language, module, false, false, false, true, null);
@@ -299,6 +287,14 @@ public final class Program implements ExecutableProgram {
                 ManagedExportScalar.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, export.wordBits(), builder::dataLayout);
             ManagedExportScalar.fromNormalizedType(export.result(), ManagedExportScalar.Role.RESULT, export.wordBits(), builder::dataLayout);
         }
+        // Dynamic callback closures come from StablePtr; their boxed scalar converters
+        // still need immutable constructor storage before source descriptors are dropped.
+        for (var callback : builder.nativeCallbacks.values()) {
+            var signature = callback.signature();
+            for (var type : signature.arguments())
+                ManagedExportScalar.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, signature.wordBits(), builder::dataLayout);
+            ManagedExportScalar.fromNormalizedType(signature.result(), ManagedExportScalar.Role.RESULT, signature.wordBits(), builder::dataLayout);
+        }
         builder.prepareBindings(pending, values, jobs);
         List<Map<String, Object>> headers = new ArrayList<>();
         for (Map<String, Object> binding : builder.bindings) {
@@ -312,6 +308,8 @@ public final class Program implements ExecutableProgram {
         declarations.put("foreignLinks", List.copyOf(builder.foreignLinks));
         declarations.put("packageScalarLinks", List.copyOf(builder.packageScalarLinks));
         declarations.put("boxedForeignDeclarations", builder.boxedForeignDeclarations);
+        declarations.put("nativeCallbacks", Map.copyOf(builder.nativeCallbacks));
+        if (builder.stackTargetLayout != null) declarations.put("targetLayout", builder.stackTargetLayout);
         if (module.get("selectedForeignExceptionBridge") instanceof Map<?,?> bridge)
             declarations.put("selectedForeignExceptionBridge", Map.copyOf(bridge));
         return new PreparedCode(Map.copyOf(declarations), Map.copyOf(values), List.copyOf(builder.codeTargets),
@@ -374,31 +372,20 @@ public final class Program implements ExecutableProgram {
     }
 
     private CodeValue prepareBinding(Map<String,Object> binding) {
-        String id = (String) binding.get("id");
-        List<Object> expression = (List<Object>) binding.get("expr");
-        if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("bignat")) {
-            validateBindings(List.of(binding));
-            BigNatLiterals.proof(expression);
-            // Preparation stores inert bytes even when its context selects native guest storage.
-            return new CodeValue(null, null, 0, BigNatLiterals.decode((String) expression.get(2)), -1);
-        }
-        if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("rubbish")) {
-            validateBindings(List.of(binding));
-            var proof = RubbishLiterals.proof(expression);
-            CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
-            CoreRepresentations.requireNoSum(proof, "global binding");
-            checkArgument(proof, false, representation(binding));
-            // A proof is inert; each load creates its own reference filler.
-            return new CodeValue(null, null, 0, proof, -1);
-        }
-        if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("function-addr")) {
-            // Never resolve a native label while preparing the source. The
-            // descriptor has no provider or context; each load resolves its own.
-            return new CodeValue(null, null, 0, new CFinalizerLabels((String) expression.get(2),
-                CoreRepresentations.expression(expression)), -1);
-        }
-        Object value = entryValue(id);
-        return CodeValue.from(value, this, (List<?>) binding.get("expr"));
+        validateBindings(List.of(binding));
+        FunctionSpec plan = initializerPlan(binding);
+        return new CodeValue(plan.target, plan.captureLayout);
+    }
+    private FunctionSpec initializerPlan(Map<String,Object> binding) {
+        return function((String) binding.get("name") + " initializer", List.of(),
+            (List<Object>) binding.get("expr"), new Scope(new FrameLayout()), CoreRepresentations.binder(binding),
+            new boolean[0], FunctionRootRole.INITIALIZER, false, binding);
+    }
+
+    private FunctionSpec initializerPlan(Map<String,Object> binding, Expr body, Scope scope) {
+        return function((String) binding.get("name") + " initializer", List.of(),
+            (List<Object>) binding.get("expr"), scope, CoreRepresentations.binder(binding),
+            new boolean[0], FunctionRootRole.INITIALIZER, false, binding, body);
     }
 
     private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty() || value instanceof Map<?,?> map && map.isEmpty(); }
@@ -442,123 +429,13 @@ public final class Program implements ExecutableProgram {
             }
         }
     }
-    private record CodeValue(RootCallTarget target, CaptureLayout captures, int arity, Object literal, int constructorIndex) {
-        static CodeValue from(Object value, Program builder, List<?> expression) {
-            if (value instanceof Closure closure && closure.suppliedCount == 0 && closure.environment != null &&
-                    closure.environment.getLayout().getStorageSize() == 0)
-                return new CodeValue(closure.target, closure.environment.getLayout(), closure.arity, null, -1);
-            if (value instanceof Thunk thunk && thunk.getState() == 0 && thunk.getEnvironment() != null &&
-                    thunk.getEnvironment().getLayout().getStorageSize() == 0)
-                return new CodeValue(thunk.getTarget(), thunk.getEnvironment().getLayout(), -1, null, -1);
-            if (value instanceof Integer || value instanceof Long || value instanceof Float || value instanceof Double || value == Unit.INSTANCE)
-                return new CodeValue(null, null, 0, value, -1);
-            // Only static bytes and canonical null own context-free address
-            // storage. Other Addr# values may carry native or context authority.
-            if (value instanceof ManagedAddress && expression.size() >= 3 &&
-                    expression.getFirst().equals("lit") && (expression.get(1).equals("string-bytes") ||
-                    expression.get(1).equals("null-addr") && value == ManagedAddress.nullAddress()))
-                return new CodeValue(null, null, 0, value, -1);
-            // Store an immutable constructor index, never the preparation load's
-            // nullary value or its allocation key/cache.
-            if (value instanceof DataValue data && data.getLayout().getArity() == 0 && data.getLayout().reusableStorage() != null)
-                return new CodeValue(null, null, 0, null, required(builder.constructorIndices, data.getLayout().getId()));
-            throw new UnsupportedCore("Reusable AST binding requires closed code, nullary data or an admitted literal");
-        }
+    /** Ordinary initializer code; never a value or authority obtained from preparation. */
+    private record CodeValue(RootCallTarget target, CaptureLayout captures) {
         Object instantiate(Program instance) {
-            if (target == null) {
-                if (literal instanceof CFinalizerLabels label) return label.resolve();
-                if (literal instanceof byte[] bytes) return BigNatLiterals.instantiate(bytes);
-                if (literal instanceof CoreRepresentation proof) return instance.rubbishValue(proof);
-                return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
-            }
-            CapturedFrame environment = captures.captureValues(new Object[0], instance);
-            return arity < 0 ? new Thunk(target, environment) : new Closure(environment, arity, target);
+            return new GlobalBinding.Initializer(target,
+                new Object[] {0L, captures.captureValues(new Object[0], instance)}, instance.metrics,
+                instance.initializedBindingCount::incrementAndGet);
         }
-    }
-    private static void requireReusableBody(List<Object> expression) {
-        List<Object> inline = CoreStateApplications.inline(expression);
-        if (inline != null) { requireReusableBody(inline); return; }
-        switch ((String) expression.getFirst()) {
-            case "var", "void" -> { }
-            case "con" -> { }
-            case "lit" -> {
-                if (expression.get(1).equals("rubbish")) RubbishLiterals.proof(expression);
-                else if (!reusableLiteral((String) expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not admitted");
-            }
-            case "lam" -> {
-                for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
-                    CoreRepresentation proof = CoreRepresentations.binder(argument);
-                    if (!reusableValue(proof) || !proof.hasBoxedPointer() && representationLifted(argument))
-                        throw new UnsupportedCore("Reusable AST input requires an exact supported representation");
-                }
-                requireReusableBody((List<Object>) expression.get(2));
-            }
-            case "app" -> {
-                List<Object> function = (List<Object>) expression.get(1);
-                if ("prim".equals(function.getFirst())) {
-                    String name = (String) function.get(1);
-                    if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null && MutVarOp.named(name) == null &&
-                            StablePointerOp.named(name) == null && WeakOp.named(name) == null && ArrayOp.named(name) == null &&
-                            PinnedMemoryOp.named(name) == null && TupleArithmeticOp.named(name) == null &&
-                            CoreArithmeticExceptions.payload(name) == null &&
-                            !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "minusAddr#", "remAddr#", "addr2Int#", "int2Addr#",
-                            "eqAddr#", "neAddr#", "ltAddr#", "leAddr#", "gtAddr#", "geAddr#", "indexCharOffAddr#",
-                            "indexWord8OffAddr#", "indexInt8OffAddr#", "indexWord16OffAddr#", "indexInt16OffAddr#", "tagToEnum#",
-                            "raise#", "raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#",
-                            "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#", "keepAlive#", "getCurrentCCS#", "myThreadId#",
-                            "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
-                            "+##", "-##", "*##", "/##", "negateDouble#",
-                            "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
-                            "==##", "/=##", "<##", "<=##", ">##", ">=##",
-                            "int2Float#", "int2Double#", "float2Int#", "double2Int#", "float2Double#", "double2Float#").contains(name))
-                        throw new UnsupportedCore("Reusable AST primitive is outside the admitted families: " + name);
-                } else requireReusableBody(function);
-                for (List<Object> argument : (List<List<Object>>) expression.get(2)) requireReusableBody(argument);
-            }
-            case "let" -> {
-                var bindings = (List<Map<String,Object>>) expression.get(2);
-                var joins = CoreJoins.definitions(bindings);
-                if (joins != null) for (var join : joins) {
-                    if (!reusableValue(join.getResult()))
-                        throw new UnsupportedCore("Reusable AST join result requires an exact supported representation");
-                }
-                for (var binding : bindings) {
-                    CoreRepresentation proof = CoreRepresentations.binder(binding);
-                    if (proof.isTypedTransport()) CoreRepresentations.requireInput(proof);
-                    requireReusableBody((List<Object>) binding.get("expr"));
-                }
-                requireReusableBody((List<Object>) expression.get(3));
-            }
-            case "case" -> {
-                CoreRepresentation binder = CoreRepresentations.caseBinder(expression);
-                CoreRepresentation result = CoreRepresentations.caseResult(expression);
-                if (!reusableValue(binder) || !reusableValue(result))
-                    throw new UnsupportedCore("Reusable AST case binder and result require exact supported representations");
-                requireReusableBody((List<Object>) expression.get(1));
-                for (var alternative : (List<List<Object>>) expression.get(3)) {
-                    String kind = (String) alternative.getFirst();
-                    if (kind.equals("data")) {
-                        if (binder.getKind() != CoreKind.DATA && !binder.isAggregate()) throw new UnsupportedCore("Reusable data case requires a data or aggregate binder");
-                    } else if (!(kind.equals("default") || (binder.isLong() || binder.isInt()) && kind.equals("lit") &&
-                            reusableLiteral((String) ((List<?>) alternative.get(1)).getFirst())) || !((List<?>) alternative.get(2)).isEmpty())
-                        throw new UnsupportedCore("Reusable AST case requires data, integral literals or default alternatives");
-                    requireReusableBody((List<Object>) alternative.get(3));
-                }
-            }
-            default -> throw new UnsupportedCore("Reusable AST node is not yet admitted: " + expression.getFirst());
-        }
-    }
-    private static boolean reusableValue(CoreRepresentation proof) {
-        if (!proof.getPresent() || proof.getKind() == CoreKind.UNKNOWN && !proof.isTypedTransport()) return false;
-        CoreRepresentations.requireInput(proof);
-        return true;
-    }
-    private static boolean reusableLiteral(String kind) {
-        return switch (kind) {
-            case "int", "word", "char", "int8", "word8", "int16", "word16", "int32", "word32",
-                 "int64", "word64", "float", "double", "string-bytes", "null-addr", "function-addr", "bignat" -> true;
-            default -> false;
-        };
     }
     private static boolean representationLifted(Map<String, Object> binding) {
         return binding.get("lifted") instanceof Boolean lifted ? lifted :
@@ -573,10 +450,15 @@ public final class Program implements ExecutableProgram {
         // symbols. Do not cache that early receiver: after successful startup,
         // initializeGlobals installs the completed library's canonical handles.
         PackageScalarCall call = packageCalls.get(index);
-        return contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
+        return resolvePackageFunction(call);
     }
     Object readGlobal(int index) { return indexedGlobals[index].read(); }
     Object rubbishValue(CoreRepresentation proof) { return rubbishLiterals.decode(proof); }
+    private PackageScalarFunction resolvePackageFunction(PackageScalarCall call) {
+        return call.getKind() == PackageScalarCall.Kind.STATIC
+            ? contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature())
+            : contextOwner.getNativeCallbacks().function(call);
+    }
     ForeignExceptionBridge foreignExceptionBridge() { return foreignExceptionBridge; }
     DataLayout constructorLayout(int index) { return indexedLayouts[index]; }
     boolean usesCode(Object identity) { return codeIdentity == identity; }
@@ -812,6 +694,16 @@ public final class Program implements ExecutableProgram {
     }
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
                                   CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail) {
+        return function(label, args, expression, outer, resultProof, entryStrict, role, bodyTail, null);
+    }
+    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
+                                  CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail,
+                                  Map<String,Object> initialization) {
+        return function(label, args, expression, outer, resultProof, entryStrict, role, bodyTail, initialization, null);
+    }
+    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
+                                  CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail,
+                                  Map<String,Object> initialization, Expr initializedBody) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
         List<Object> defaultArm = null;
         if (deferDefaultArm && !outlineCaseArms && !delimited &&
@@ -823,7 +715,7 @@ public final class Program implements ExecutableProgram {
                     defaultArm = (List<Object>) alternative.get(3);
             }
         }
-        Scope scope = new Scope(new FrameLayout(), defaultArm);
+        Scope scope = initializedBody == null ? new Scope(new FrameLayout(), defaultArm) : outer;
         if (reusableCode) scope.programSlot = scope.layout.bind("<program instance>", FrameSlotKind.Object);
         Set<String> free = coreFreeVariables(expression);
         Set<String> argumentIds = new LinkedHashSet<>();
@@ -897,6 +789,8 @@ public final class Program implements ExecutableProgram {
                     argumentProofs.add(fields.get(leaf));
                     argumentSlots.add(slots[leaf]);
                 }
+            } else if (proof.getKind() == CoreKind.VOID) {
+                scope.bindVoid((String)arg.get("id"), proof);
             } else if (free.contains(arg.get("id")) || capturesContinuations && entryStrict[i]) {
                 argumentIndices.add(ArgumentLayout.offset(inputLayout, i));
                 argumentProofs.add(proof);
@@ -935,7 +829,12 @@ public final class Program implements ExecutableProgram {
         }
         if (role == FunctionRootRole.FUNCTION) scope.self = new AstSelfLayout(captures, environmentSlots,
             allArgumentSlots, allArgumentProofs, entryStrict.clone(), inputLayout, environmentVectorSlots);
-        Expr body = compile(expression, scope, bodyTail);
+        Expr body = initializedBody != null ? initializedBody : initialization == null ? compile(expression, scope, bodyTail) : initializer(initialization, scope);
+        if (initialization != null) {
+            RootCallTarget ownTarget = body instanceof MakeClosure closure ? closure.target() : body instanceof Delay thunk ? thunk.target() : null;
+            if (ownTarget != null && ownTarget.getRootNode() instanceof GuestRoot ownRoot)
+                ownRoot.configureCoreIdentity(CoreFunctionIdentity.from(sourceModule, initialization));
+        }
         HandoffEntry handoff = null;
         if (!reusableCode && (inputLayout == null || !inputLayout.getRequiresTyped())) {
             List<CoreRepresentation> declared = new ArrayList<>();
@@ -1519,12 +1418,23 @@ public final class Program implements ExecutableProgram {
         if (info == null) throw new RuntimeFault("Missing constructor metadata " + id);
         CoreFields fields = new CoreFields(info);
         if (language == null) throw new RuntimeFault("Constructor layout requires a guest language");
+        return constructorStorage(id, (String) info.get("name"), fields);
+    }
+    private synchronized DataLayout constructorStorage(String id, String name, CoreFields fields) {
+        DataLayout layout = dataLayouts.get(id);
+        if (layout != null) return layout;
         if (reusableCode) {
-            layout = new DataLayout.Reusable(language, id, (String) info.get("name"), fields).instantiate();
-            int index = constructorIndices.size(); constructorIndices.put(id, index); indexedLayouts[index] = layout;
-        } else layout = thc.Language.currentState().constructorLayout(language, id, (String) info.get("name"), fields);
+            layout = new DataLayout.Reusable(language, id, name, fields).instantiate();
+            int index = constructorIndices.size(); constructorIndices.put(id, index); if (indexedLayouts != null) indexedLayouts[index] = layout;
+        } else layout = thc.Language.currentState().constructorLayout(language, id, name, fields);
         dataLayouts.put(id, layout);
         return layout;
+    }
+    private Expr globalRead(String id, Scope scope) {
+        GlobalBinding global = globals.get(id);
+        if (global == null) throw new UnsupportedCore("Unresolved global binding " + id);
+        if (reusableCode) lowering().dependencies.add(id);
+        return reusableCode ? new GlobalRead(required(indices, id), scope.programSlot) : new GlobalRead(global);
     }
     private Expr primitive(String name, Expr[] args, boolean someException) {
         NarrowScalarOp narrow = NarrowScalarOp.named(name);
@@ -1649,16 +1559,19 @@ public final class Program implements ExecutableProgram {
                 }
                 GlobalBinding global = globals.get(id);
                 if (global != null) {
-                    if (reusableCode) lowering().dependencies.add(id);
-                    yield (reusableCode ? new GlobalRead(required(indices, id), scope.programSlot) : new GlobalRead(global))
+                    yield globalRead(id, scope)
                         .proven(proof != null ? proof : required(globalProofs, id));
                 }
                 throw new UnsupportedCore("Unresolved external binding " + id);
             }
             case "lit" -> {
                 String tag = (String) expr.get(1);
-                if (tag.equals("function-addr") && !nativeCallbacks.containsKey(expr.get(2)))
-                    yield new CFinalizerLabels((String) expr.get(2), CoreRepresentations.expression(expr));
+                if (tag.equals("function-addr"))
+                    yield new CFinalizerLabels((String) expr.get(2), CoreRepresentations.expression(expr),
+                        nativeCallbacks.get(expr.get(2)), reusableCode ? scope.programSlot : -1, reusableCode ? null : this, (thc.Language) language);
+                if (tag.equals("data-addr"))
+                    yield new CoreDataLabels((String) expr.get(2), CoreRepresentations.expression(expr),
+                        stackTargetLayout instanceof TargetLayout target ? target : null);
                 if (tag.equals("rubbish")) yield rubbish(RubbishLiterals.proof(expr), scope);
                 Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.expression(expr)), reusableCode && tag.equals("bignat"));
                 if (Arrays.asList("int8", "word8", "int16", "word16", "int32", "word32").contains(tag))
@@ -1990,10 +1903,8 @@ public final class Program implements ExecutableProgram {
         } catch (UnsupportedCore unavailable) {
             // Only the final unknown-symbol fallback is deferred. Known ABI validation above stays eager.
             deferredUnsupported.add(unavailable.getMessage());
-            return new UnsupportedForeignCall(unavailable.getMessage(), metrics);
+            return new UnsupportedForeignCall(unavailable.getMessage(), codeMetrics());
         }
-        if (reusableCode && (javascript != null || polyglot != null))
-            throw new UnsupportedCore("Reusable AST foreign language receivers and exception bridges are not prepared");
         if ((packageScalar != null && packageScalar.executesForeign() || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {
@@ -2061,8 +1972,6 @@ public final class Program implements ExecutableProgram {
                 CorePackageScalarForeign.validateOperand(packageScalar, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             if (reusableCode) {
-                if (packageScalar.getKind() != PackageScalarCall.Kind.STATIC)
-                    throw new UnsupportedCore("Reusable AST native callback/dynamic labels are not prepared");
                 int index;
                 synchronized (packageCalls) { index = packageCalls.size(); packageCalls.add(packageScalar); }
                 return new PackageScalarExpression(packageScalar, operands, tupleProof, scope.programSlot, index);
@@ -2211,26 +2120,26 @@ public final class Program implements ExecutableProgram {
             }
             return new MemcpyExpression(operands, tupleProof, byteArrays);
         }
-        if (javascript != null) return new JavaScriptExpression(javascript, argumentOperands(args, scope, false)).proven(evaluated(tupleProof, true));
+        if (javascript != null) return new JavaScriptExpression(javascript, argumentOperands(args, scope, false), reusableCode ? scope.programSlot : -1).proven(evaluated(tupleProof, true));
         if (polyglot != null) {
             // Every lifted operand in this ABI is an opaque Value consumed by the
             // foreign operation. Demand it at an ordinary resumable guest cut,
             // retaining earlier operands and the not-yet-executed foreign suffix.
             var lowered = argumentOperands(args, scope, false);
             return (polyglot.explicitLibrary() ? new InteropExpression(polyglot, lowered) :
-                new PolyglotExpression(polyglot, lowered)).proven(evaluated(tupleProof, true));
+                new PolyglotExpression(polyglot, lowered, reusableCode ? scope.programSlot : -1)).proven(evaluated(tupleProof, true));
         }
 
         if (primitive && Set.of("newBCO#", "mkApUpd0#").contains(fn.get(1))) {
             String name = (String) fn.get(1);
             GhcBCO.validate(name, argumentProofs(args), flags, tupleProof);
-            return new GhcBCOExpression(name, argumentOperands(args, scope, flags), (thc.Language) language, metrics, tupleProof);
+            return new GhcBCOExpression(name, argumentOperands(args, scope, flags), (thc.Language) language, codeMetrics(), tupleProof);
         }
         if (primitive && Set.of("newPromptTag#", "prompt#", "control0#").contains(fn.get(1))) {
             String name = (String) fn.get(1);
             DelimitedControl.validate(name, argumentProofs(args), flags, tupleProof);
             return new DelimitedPrimitive(name, new TupleShape(tupleProof, (thc.Language) language),
-                argumentOperands(args, scope, flags), (thc.Language) language, metrics);
+                argumentOperands(args, scope, flags), (thc.Language) language, codeMetrics());
         }
         if (primitive && "tagToEnum#".equals(fn.get(1))) {
             if (args.size() != 1) throw new RuntimeFault("tagToEnum#: Exactly one operand required");
@@ -2254,6 +2163,11 @@ public final class Program implements ExecutableProgram {
             var ids = CoreDataTags.validate(expr, operand.getRepresentation(), constructors);
             DataLayout[] layouts = new DataLayout[ids.size()];
             for (int i = 0; i < layouts.length; i++) layouts[i] = dataLayout(ids.get(i));
+            if (reusableCode) {
+                int[] indices = new int[ids.size()];
+                for (int i = 0; i < indices.length; i++) indices[i] = required(constructorIndices, ids.get(i));
+                return new DataToTag(scope.programSlot, indices, operand);
+            }
             return new DataToTag(new DataTagFamily(layouts), operand);
         }
         if (primitive && CoreVectors.operations.contains(fn.get(1))) {
@@ -2306,8 +2220,7 @@ public final class Program implements ExecutableProgram {
             String id = Objects.requireNonNull(CoreArithmeticExceptions.payload(name));
             GlobalBinding payload = globals.get(id);
             if (payload == null) throw new UnsupportedCore("Unresolved implicit exception binding " + id);
-            if (reusableCode) lowering().dependencies.add(id);
-            Expr value = reusableCode ? new GlobalRead(required(indices, id), scope.programSlot) : new GlobalRead(payload);
+            Expr value = globalRead(id, scope);
             return new RaiseArithmeticException(operand, new RaiseException(value, true));
         }
         if (primitive && Set.of("raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#").contains(fn.get(1))) {
@@ -2316,7 +2229,7 @@ public final class Program implements ExecutableProgram {
             Expr[] operands = argumentOperands(args, scope, flags);
             if (name.equals("raiseIO#")) return new RaiseIOException(operands[0], operands[1], tupleProof, CoreExceptionPayload.validate(expr));
             if (delimited && !name.equals("getMaskingState#")) return new DelimitedIOBoundary(name, new TupleShape(tupleProof, (thc.Language) language),
-                operands, (thc.Language) language, metrics);
+                operands, (thc.Language) language, codeMetrics());
             if (name.equals("catch#")) return new CatchException(new TupleShape(tupleProof, (thc.Language) language), operands[0], operands[1], operands[2], codeMetrics());
             if (name.equals("getMaskingState#")) return new GetMaskingState(operands[0], tupleProof);
             MaskingState state = switch (name) {
@@ -2341,12 +2254,10 @@ public final class Program implements ExecutableProgram {
             if (name.equals("setOtherThreadAllocationCounter#")) return new SetThreadAllocationCounter(operands[0], operands[1], operands[2], tupleProof);
             DataValue falseValue = null;
             if (name.equals("getSpark#")) {
-                DataLayout falseLayout = dataLayouts.get(CoreThreadScheduling.FALSE);
-                if (falseLayout == null) {
-                    if (language == null) throw fault("Spark constructor requires a guest language");
-                    falseLayout = thc.Language.currentState().constructorLayout(language, CoreThreadScheduling.FALSE, "False", CoreFields.EMPTY);
-                    dataLayouts.put(CoreThreadScheduling.FALSE, falseLayout);
-                }
+                DataLayout falseLayout = constructors.containsKey(CoreThreadScheduling.FALSE)
+                    ? dataLayout(CoreThreadScheduling.FALSE) : constructorStorage(CoreThreadScheduling.FALSE, "False", CoreFields.EMPTY);
+                if (reusableCode) return new SparkResult(name, operands[operands.length - 1], null, tupleProof,
+                    scope.programSlot, required(constructorIndices, CoreThreadScheduling.FALSE));
                 falseValue = falseLayout.allocate();
             }
             return new SparkResult(name, operands[operands.length - 1], name.equals("spark#") ? operands[0] : null, falseValue, tupleProof);
@@ -2369,7 +2280,7 @@ public final class Program implements ExecutableProgram {
             CoreFileWait.validate(name, loweredProofs(operands), flags, tupleProof);
             GlobalBinding payload = globals.get(CoreFileWait.badFd);
             if (payload == null) throw new UnsupportedCore(name + " requires original blockedOnBadFD payload");
-            return new WaitFileDescriptor(operands[0], operands[1], payload, name.equals("waitWrite#"), enableAsync, tupleProof);
+            return new WaitFileDescriptor(operands[0], operands[1], globalRead(CoreFileWait.badFd, scope), name.equals("waitWrite#"), enableAsync, tupleProof);
         }
         if (primitive && List.of("fork#", "forkOn#", "myThreadId#", "threadStatus#", "killThread#", "labelThread#", "threadLabel#").contains(fn.get(1))) {
             String name = (String) fn.get(1);
@@ -2389,17 +2300,17 @@ public final class Program implements ExecutableProgram {
         if (primitive && "annotateStack#".equals(fn.get(1))) {
             StackAnnotations.validate(argumentProofs(args), flags, tupleProof);
             if (capturesContinuations) return new AnnotatedAction(new TupleShape(tupleProof, (thc.Language) language),
-                argument(args.get(0), scope, true), argument(args.get(1), scope, true), argument(args.get(2), scope, false), metrics, enableAsync);
+                argument(args.get(0), scope, true), argument(args.get(1), scope, true), argument(args.get(2), scope, false), codeMetrics(), enableAsync);
             return new AnnotatedTuple(argument(args.get(0), scope, true), argument(args.get(2), scope, false),
                 new TupleApplication((thc.Language) language, new TupleShape(tupleProof, (thc.Language) language),
                     argument(args.get(1), scope, true), new Expr[]{new Literal(thc.runtime.Unit.INSTANCE).proven(CoreRepresentations.expression(args.get(2)))},
-                    false, metrics, null));
+                    false, codeMetrics(), null));
         }
         if (primitive && "clearCCS#".equals(fn.get(1))) {
             CoreProfileAction.validate(argumentProofs(args), flags, tupleProof);
             return new TupleApplication((thc.Language) language, new TupleShape(tupleProof, (thc.Language) language),
                 argument(args.get(0), scope, true), new Expr[]{new InspectionState(compile(args.get(1), scope, false))},
-                tail, metrics, null).proven(evaluated(tupleProof, true));
+                tail, codeMetrics(), null).proven(evaluated(tupleProof, true));
         }
         if (primitive && ClosureInspectOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(ClosureInspectOp.named((String) fn.get(1)));
@@ -2424,10 +2335,10 @@ public final class Program implements ExecutableProgram {
             if (operation == STMOp.ATOMICALLY) {
                 GlobalBinding payload = globals.get(STMOp.NESTED);
                 if (payload == null) throw new UnsupportedCore("atomically# requires original nestedAtomically payload");
-                nested = new GlobalRead(payload);
+                nested = globalRead(STMOp.NESTED, scope);
             }
             return new STMExpression(operation, tupleProof, operands,
-                operation.getCallback() ? new TupleShape(tupleProof, (thc.Language) language) : null, metrics, nested, enableAsync);
+                operation.getCallback() ? new TupleShape(tupleProof, (thc.Language) language) : null, codeMetrics(), nested, enableAsync);
         }
         if (primitive && MVarOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(MVarOp.named((String) fn.get(1)));
@@ -2445,14 +2356,14 @@ public final class Program implements ExecutableProgram {
         if (primitive && CompactOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(CompactOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
-            List<GlobalBinding> failures = new ArrayList<>();
+            List<Expr> failures = new ArrayList<>();
             if (operation.getAdds()) for (String id : CompactOp.getFailures()) {
                 GlobalBinding failure = globals.get(id);
                 if (failure == null) throw new UnsupportedCore("Compact addition requires original exception payload: " + id);
-                failures.add(failure);
+                failures.add(globalRead(id, scope));
             }
-            return new CompactExpression(operation, argumentOperands(args, scope, flags), metrics,
-                failures.toArray(GlobalBinding[]::new)).proven(evaluated(tupleProof, true));
+            return new CompactExpression(operation, argumentOperands(args, scope, flags), codeMetrics(),
+                failures.toArray(Expr[]::new)).proven(evaluated(tupleProof, true));
         }
         if (primitive && MutVarOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(MutVarOp.named((String) fn.get(1)));

@@ -234,7 +234,7 @@ class ReusableBytesTest {
             }
         }
     }
-    @Test void nonliteralAddressOriginsAreNotPersistedAsStaticBytes() {
+    @Test void computedAndNativeAddressesAreResolvedAtInstanceInitialization() {
         try (var context = Context.newBuilder("thc").build()) {
             context.initialize("thc"); context.enter();
             try {
@@ -244,15 +244,17 @@ class ReusableBytesTest {
                 var nullCode = Program.prepareCode(language, with(module(), "bindings", list(raw)), List.of("address"));
                 assertSame(ManagedAddress.nullAddress(), nullCode.newInstance(language).entryValue("address"));
                 raw.put("expr", list("lit", "data-addr", "unapproved", map("rep", ADDRESS)));
-                assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language,
-                    with(module(), "bindings", list(raw)), List.of("address")));
+                var missingData = Program.prepareCode(language, with(module(), "bindings", list(raw)), List.of("address"));
+                assertThrows(RuntimeFault.class, () -> missingData.newInstance(language));
                 raw.put("expr", list("lit", "function-addr", "unapproved", map("rep", ADDRESS)));
                 var functionCode = Program.prepareCode(language, with(module(), "bindings", list(raw)), List.of("address"));
                 assertThrows(RuntimeFault.class, () -> functionCode.newInstance(language));
                 var computed = map("id", "address", "name", "address", "lifted", false, "rep", ADDRESS,
                     "expr", primitive("plusAddr#", ADDRESS, literal("41"), integer(0)));
-                assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language,
-                    with(module(), "bindings", list(computed)), List.of("address")));
+                var computedCode = Program.prepareCode(language, with(module(), "bindings", list(computed)), List.of("address"));
+                var first = computedCode.newInstance(language); var second = computedCode.newInstance(language);
+                var left = (ManagedAddress)first.entryValue("address"); var right = (ManagedAddress)second.entryValue("address");
+                assertEquals(65L, left.readWord8(0)); assertEquals(65L, right.readWord8(0));
             } finally { context.leave(); }
         }
     }

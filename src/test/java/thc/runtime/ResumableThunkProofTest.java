@@ -106,6 +106,86 @@ class ResumableThunkProofTest {
             assertTrue(thunk.getValue() instanceof ThunkYieldProofRoot.Answer); assertNull(thunk.getOwner());
         }
     }
+    @Test void globalInitializerRunsOutsidePreparationLockAndUsesItsFirstEvaluatorMask() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var lock = new Object(); var answer = new Object(); var evaluations = new AtomicInteger(); var publications = new AtomicInteger();
+                var root = new GuestRoot(language, com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build()) {
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertFalse(Thread.holdsLock(lock));
+                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(this));
+                        evaluations.incrementAndGet(); return answer;
+                    }
+                };
+                SynchronousMasking.set(root, MaskingState.MASKED_INTERRUPTIBLE);
+                var initializer = new GlobalBinding.Initializer(root.getCallTarget(), new Object[]{0L}, new Metrics(false), publications::incrementAndGet);
+                SynchronousMasking.set(root, MaskingState.UNMASKED);
+                var cell = new GlobalBinding("strict"); cell.defer(lock, () -> initializer);
+                assertNull(cell.peek()); assertEquals(0, evaluations.get());
+                assertSame(answer, cell.read()); assertSame(answer, cell.read());
+                assertSame(answer, cell.peek()); assertEquals(1, evaluations.get()); assertEquals(1, publications.get());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void suspendedGlobalReadPublishesItsCompletedValueWithoutReplayingInitializer() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var effects = new AtomicInteger(); var publications = new AtomicInteger(); var marker = new Object();
+                var target = ThunkYieldProofRoot.target(language, effects, new AtomicInteger(), new ThunkYieldProofRoot.Gate(), marker);
+                var cell = new GlobalBinding("yielding");
+                cell.defer(new Object(), () -> new GlobalBinding.Initializer(target, new Object[]{0L}, new Metrics(false), publications::incrementAndGet));
+                var body = new GlobalRead(cell).proven(new CoreRepresentation(CoreKind.OBJECT, false, true, java.util.List.of("BoxedRep (Just Lifted)")));
+                var root = new FunctionRoot(language, new FrameLayout().build(), "global read", null, new int[0], new int[0], new int[0],
+                    body, new Metrics(false), new CoreRepresentation[0], body.getRepresentation(), null, new boolean[0], null,
+                    null, new int[0], null, true, new int[0][], false, FunctionRootRole.INITIALIZER, false);
+                Object result = Calls.target(root.getCallTarget(), new Object[]{0L});
+                assertInstanceOf(SavedGuestContinuation.class, result); assertNull(cell.peek()); assertEquals(0, publications.get());
+                var force = new Force(new Metrics(false), true);
+                for (int i = 0; i < 4 && result instanceof SavedGuestContinuation saved; i++) result = force.drainStack(saved);
+                var answer = assertInstanceOf(ThunkYieldProofRoot.Answer.class, result);
+                assertEquals(42L, answer.number()); assertSame(marker, answer.marker());
+                assertSame(answer, cell.peek()); assertSame(answer, cell.read());
+                assertEquals(1, effects.get()); assertEquals(1, publications.get());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void compactFailurePayloadResumeStillRaisesAfterTheFinalTaskWasConsumed() {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var payload = new Object(); var effects = new AtomicInteger();
+                Expr suspendedPayload = new Expr() {
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects.incrementAndGet();
+                        throw new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> payload);
+                    }
+                };
+                var region = new ManagedCompact(Language.currentState().compactRegions, 4096);
+                var descriptor = com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build();
+                var root = new GuestRoot(language, descriptor) {
+                    @Child private CompactCopyNode copier = new CompactCopyNode(new Metrics(false), new Expr[]{suspendedPayload}, true);
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        try { return copier.execute(frame, region, new Closure(null, 0, getCallTarget()), false); }
+                        catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+                    }
+                };
+                var saved = assertInstanceOf(SavedGuestContinuation.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                var failure = assertThrows(GuestException.class, () -> saved.continueWith(Unit.INSTANCE));
+                assertSame(payload, failure.getPayload()); assertEquals(1, effects.get());
+                assertTrue(region.getObjects().isEmpty()); region.begin(); region.end();
+            } finally { context.leave(); }
+        }
+    }
+
     private record Thunks(Thunk inner, Thunk outer, Driver driver) {}
     @Test void uncapturedCallerUpdateFailsClosedAndWakesItsWaiter() throws Exception {
         try (var context = Main.executionContext()) {

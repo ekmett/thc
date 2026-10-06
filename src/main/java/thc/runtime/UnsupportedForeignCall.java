@@ -15,8 +15,8 @@ public final class UnsupportedForeignCall extends Expr {
         this.metrics = metrics;
     }
 
-    @Override public Object execute(VirtualFrame frame) { return trap(message, metrics); }
-    @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) { return trap(message, metrics); }
+    @Override public Object execute(VirtualFrame frame) { return trap(message, metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame)); }
+    @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) { return trap(message, metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame)); }
 
     @TruffleBoundary(transferToInterpreterOnException = false)
     static Object trap(String message, Metrics metrics) {
