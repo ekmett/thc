@@ -5,6 +5,7 @@ package thc;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.function.Function;
+import thc.runtime.CoreFloatingLiteral;
 
 /** Native retained-Core lowering for pinned GHC 9.14.1. Declarations and RHS
  * syntax are parsed at module admission; unsupported tags fail immediately.
@@ -29,7 +30,7 @@ final class CoreHiModule {
     private record Definition(Binder binder, Expr rhs) {}
     private record Variable(String id, Type type) {}
     private record Lowered(List<Object> expression, Type type) {}
-    private record Literal(String kind, String value, Type type) {}
+    private record Literal(String kind, Object value, Type type) {}
     private final CoreHiReader reader;
     private final Function<String, CoreHiModule> dependencyModules;
     private final Map<Integer,Type> shared = new HashMap<>();
@@ -272,6 +273,7 @@ final class CoreHiModule {
         if (!name.module().equals(new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Prim")) || name.namespace() != 3) return null;
         return switch (name.occurrence()) {
             case "Int#" -> "IntRep"; case "Word#" -> "WordRep"; case "Addr#" -> "AddrRep";
+            case "Float#" -> "FloatRep"; case "Double#" -> "DoubleRep";
             case "Int8#" -> "Int8Rep"; case "Int16#" -> "Int16Rep"; case "Int32#" -> "Int32Rep"; case "Int64#" -> "Int64Rep";
             case "Word8#" -> "Word8Rep"; case "Word16#" -> "Word16Rep"; case "Word32#" -> "Word32Rep"; case "Word64#" -> "Word64Rep";
             default -> null;
@@ -433,15 +435,33 @@ final class CoreHiModule {
             for (int i = 0; i < size; i++) bytes[i] = (byte) c.byteValue();
             return new Literal("string-bytes", HexFormat.of().formatHex(bytes), Type.scalar("AddrRep"));
         }
+        if (tag == 3 || tag == 4) {
+            BigInteger numerator = integer(c), denominator = integer(c);
+            c.require(denominator.signum() >= 0 || numerator.signum() == 0, "negative GHC Rational denominator");
+            long bits = floatingBits(numerator, denominator, tag == 3 ? 24 : 53, tag == 3 ? 8 : 11);
+            return new Literal(tag == 3 ? "float" : "double", tag == 3 ? new CoreFloatingLiteral.Single((int) bits) :
+                    new CoreFloatingLiteral.Double(bits), Type.scalar(tag == 3 ? "FloatRep" : "DoubleRep"));
+        }
         c.require(tag == 6, "unsupported native Core literal tag " + tag);
         int number = c.byteValue(); c.require(number >= 1 && number <= 10, "unsupported numeric literal type " + number);
+        BigInteger value = integer(c);
+        String[] kinds = {"", "int", "int8", "int16", "int32", "int64", "word", "word8", "word16", "word32", "word64"};
+        String[] reps = {"", "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep"};
+        int width = switch (number) { case 2, 7 -> 8; case 3, 8 -> 16; case 4, 9 -> 32; default -> 64; };
+        BigInteger bound = BigInteger.ONE.shiftLeft(number < 6 ? width - 1 : width);
+        c.require(value.compareTo(number < 6 ? bound.negate() : BigInteger.ZERO) >= 0 && value.compareTo(bound) < 0,
+                "out-of-range scalar literal");
+        return new Literal(kinds[number], value.toString(), Type.scalar(reps[number]));
+    }
+
+    private BigInteger integer(CoreHiReader.Cursor c) {
         int integerTag = c.byteValue();
         c.require(integerTag <= 2, "invalid GHC Integer tag");
         BigInteger value;
         if (integerTag == 0) value = BigInteger.valueOf(c.signed());
         else {
             int size = c.count(1);
-            c.require(size > 0 && size <= 8, "scalar literal magnitude exceeds 64 bits");
+            c.require(size > 0, "empty GHC Integer magnitude");
             byte[] magnitude = new byte[size];
             for (int i = size - 1; i >= 0; i--) magnitude[i] = (byte) c.byteValue();
             c.require(magnitude[0] != 0, "noncanonical GHC Integer magnitude");
@@ -450,13 +470,37 @@ final class CoreHiModule {
             c.require(value.compareTo(BigInteger.valueOf(Long.MIN_VALUE)) < 0 || value.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0,
                     "noncanonical large GHC Integer");
         }
-        String[] kinds = {"", "int", "int8", "int16", "int32", "int64", "word", "word8", "word16", "word32", "word64"};
-        String[] reps = {"", "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep"};
-        int width = switch (number) { case 2, 7 -> 8; case 3, 8 -> 16; case 4, 9 -> 32; default -> 64; };
-        BigInteger bound = BigInteger.ONE.shiftLeft(number < 6 ? width - 1 : width);
-        c.require(value.compareTo(number < 6 ? bound.negate() : BigInteger.ZERO) >= 0 && value.compareTo(bound) < 0,
-                "out-of-range scalar literal");
-        return new Literal(kinds[number], value.toString(), Type.scalar(reps[number]));
+        return value;
+    }
+    private static long floatingBits(BigInteger numerator, BigInteger denominator, int precision, int exponentBits) {
+        int fraction = precision - 1, maximum = (1 << (exponentBits - 1)) - 1, minimum = 1 - maximum;
+        long sign = numerator.signum() < 0 ? 1L << (fraction + exponentBits) : 0;
+        long infinity = ((1L << exponentBits) - 1) << fraction;
+        // GHC's rationalToFloat/Double defines denominator zero explicitly; Rational carries no signed zero.
+        if (denominator.signum() == 0) return numerator.signum() == 0 ? infinity | 1L << (fraction - 1) : sign | infinity;
+        if (numerator.signum() == 0) return 0;
+        numerator = numerator.abs();
+        int exponent = numerator.bitLength() - denominator.bitLength();
+        int subnormalUnit = minimum - fraction;
+        // The exact floor exponent is either this bit-length difference or one less. Bound shifts first.
+        if (exponent > maximum + 1) return sign | infinity;
+        if (exponent < subnormalUnit - 1) return sign;
+        int comparison = exponent >= 0 ? numerator.compareTo(denominator.shiftLeft(exponent)) :
+                numerator.shiftLeft(-exponent).compareTo(denominator);
+        if (comparison < 0) exponent--;
+        if (exponent > maximum) return sign | infinity;
+        int unit = Math.max(exponent, minimum) - fraction;
+        BigInteger dividend = unit < 0 ? numerator.shiftLeft(-unit) : numerator;
+        BigInteger divisor = unit < 0 ? denominator : denominator.shiftLeft(unit);
+        var division = dividend.divideAndRemainder(divisor);
+        BigInteger mantissa = division[0];
+        int rounding = division[1].shiftLeft(1).compareTo(divisor);
+        if (rounding > 0 || rounding == 0 && mantissa.testBit(0)) mantissa = mantissa.add(BigInteger.ONE);
+        // Subnormal units encode directly, including rounding into the smallest normal value.
+        if (exponent < minimum) return sign | mantissa.longValueExact();
+        if (mantissa.bitLength() > precision) { mantissa = mantissa.shiftRight(1); exponent++; }
+        if (exponent > maximum) return sign | infinity;
+        return sign | ((long) (exponent + maximum) << fraction) | (mantissa.longValueExact() - (1L << fraction));
     }
 
     private Map<String,Object> binding(Definition definition, Variable variable, Map<String,Variable> scope, Map<String,Type> typeScope) {
@@ -731,6 +775,8 @@ final class CoreHiModule {
         if (type.abstractLifted()) return map("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         if (type.function()) return map("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         if (type.equals(Type.scalar("AddrRep"))) return map("kind", "address", "primReps", List.of("AddrRep"), "evaluated", evaluated);
+        if (type.equals(Type.scalar("FloatRep")) || type.equals(Type.scalar("DoubleRep")))
+            return map("kind", type.name.equals("FloatRep") ? "float" : "double", "primReps", List.of(type.name), "evaluated", evaluated);
         if (scalar(type)) return map("kind", "long", "primReps", List.of(type.name), "evaluated", evaluated);
         if (data(type)) return map("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         throw error(location, "unsupported native Core runtime type " + type.name);
