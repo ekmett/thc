@@ -2,14 +2,17 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE UnliftedFFITypes #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UnboxedTuples #-}
 -- A separately compiled retained module makes native .hi execution resolve a
 -- state-token call and recover an address field. Consumed with NativeHiScalar.hi; no plugin or CBD.
-module NativeHiDependency (marker, exchange, measured, advanceAndMeasure) where
+module NativeHiDependency (marker, exchange, measured, advanceAndMeasure, foreignValue) where
 
-import GHC.Exts (Int(I#), Int#, Addr#, State#, (+#), andI#, indexWord8OffAddr#, word8ToWord#, word2Int#, newMutVar#, writeMutVar#, readMutVar#)
+import GHC.Exts (Int(I#), Int#, Addr#, State#, (+#), andI#, indexWord8OffAddr#, word8ToWord#, word2Int#, newMutVar#, writeMutVar#, readMutVar#, indexIntOffAddr#)
 import GHC.IO (IO(..))
+import GHC.Ptr (Ptr(..))
 import NativeHiClasses (Measure(..), Advance(..), Evidence(..))
 
 data AddrRef = AddrRef Addr#
@@ -51,3 +54,13 @@ advanceAndMeasure :: Advance a => a -> IO Int
 advanceAndMeasure before = case exchange before (advance before) of
   IO step -> IO (\state -> case step state of
     (# next, value #) -> (# next, I# (measuredEvidence Evidence value) #))
+
+-- Ordinary package cbits and a static data label exercise the same native ABI
+-- used by either Core input format, with no THC replacement for the C function.
+foreign import ccall unsafe "native_hi_step" nativeStep :: Int# -> Int#
+foreign import ccall unsafe "&native_hi_constant" nativeConstant :: Ptr ()
+
+{-# OPAQUE foreignValue #-}
+foreignValue :: Int# -> Int#
+foreignValue value = case nativeConstant of
+  Ptr address -> nativeStep value +# indexIntOffAddr# address 0#

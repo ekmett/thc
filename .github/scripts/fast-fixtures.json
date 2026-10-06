@@ -312,6 +312,8 @@
         }
       ],
       "outputs": [
+        "build/native-hi-execution/native-hi-foreign.bc",
+        "build/native-hi-execution/native-hi-foreign.json",
         "build/native-hi-execution/NativeHiScalar.hi",
         "build/native-hi-execution/NativeHiDependency.hi",
         "build/native-hi-execution/NativeHiClasses.hi",
@@ -319,9 +321,12 @@
         "build/native-hi-execution/NativeHiBoxType.hi",
         "build/native-hi-execution/native.tsv",
         "build/native-hi-execution/io.tsv",
-        "build/native-hi-execution/GHC.Internal.Types.hi"
+        "build/native-hi-execution/GHC.Internal.Types.hi",
+        "build/native-hi-execution/GHC.Internal.Ptr.hi"
       ],
       "sources": [
+        "t/fixtures/compiler/native-hi-foreign.c",
+        "t/haskell-fixtures/NativeHiForeignFixtures.hs",
         "t/fixtures/compiler/NativeHiScalar.hs",
         "t/fixtures/compiler/NativeHiDependency.hs",
         "t/fixtures/compiler/NativeHiClasses.hs",

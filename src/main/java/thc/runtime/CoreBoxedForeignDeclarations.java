@@ -3,7 +3,6 @@
 package thc.runtime;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,15 +12,8 @@ import java.util.Objects;
  * Validation retains an archive obligation; it grants no native ABI. */
 public final class CoreBoxedForeignDeclarations {
     private final List<?> calls;
-    private CoreBoxedForeignDeclarations(List<?> calls) { this.calls = (List<?>) freeze(calls); }
-    private static Object freeze(Object value) {
-        if (value instanceof Map<?,?> map) {
-            var copy = new LinkedHashMap<Object,Object>(); map.forEach((key, child) -> copy.put(key, freeze(child)));
-            return Collections.unmodifiableMap(copy);
-        }
-        if (value instanceof List<?> list) return list.stream().map(CoreBoxedForeignDeclarations::freeze).toList();
-        return value;
-    }
+    private CoreBoxedForeignDeclarations(List<?> calls) { this.calls = (List<?>) thc.Json.immutable(calls); }
+
     private static boolean owned(Map<?,?> emitted) {
         return "ghc-internal".equals(emitted.get("unit")) && (ThreadIdForeignOp.named(emitted.get("symbol")) != null ||
             "rts_setMainThread".equals(emitted.get("symbol")) || "reportStackOverflow".equals(emitted.get("symbol")));

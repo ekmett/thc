@@ -1,3 +1,10 @@
+> **2026-10-06 constraint:** Native .hi support must not make the existing CBD
+> decode pass more expensive. Preserving execution speed alone is insufficient.
+> The proposed eager callable/nominal recovery-fact extension is rejected and
+> frozen, entirely unshipped. The plan below records the earlier analysis; its
+> CBD expansion is not authorized to proceed. Reconsider this direction before
+> changing the established format or decoder.
+
 # Native Core loading: representation recovery
 
 Status: proposed design for [#1063](https://github.com/ekmett/thc/issues/1063).

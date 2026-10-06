@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-write-if-simplified-core #-}
 -- Input: ordinary GHC class declarations, consumed by NativeHiDependency/Scalar.
 -- Purpose: thin libraries still define compiler-derived dictionary constructors
@@ -13,6 +14,9 @@ module NativeHiClasses (Measure(..), Advance(..), Evidence(..), opaqueIdentity) 
 
 import Data.Kind (Constraint)
 import GHC.Exts (Int#)
+
+{-# ANN module ("thc:backend=ast" :: String) #-}
+{-# ANN module (["unrelated annotation"] :: [String]) #-}
 
 class Measure a where
   measure :: a -> Int#

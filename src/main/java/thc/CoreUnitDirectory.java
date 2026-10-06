@@ -21,7 +21,8 @@ public final class CoreUnitDirectory {
         public List<ModuleRecord> getModules() { return modules; }
     }
     public record ModuleRecord(String unit, String name, String sha256, Artifact artifact, CoreInterfaceSource interfaceSource, boolean nativeInterface, boolean declarationOnly,
-            boolean containsDelimitedControl, boolean registrationObligations, boolean mainAlias, boolean packageScalarDeclarations) {
+            String annotationProducerUnit, Map<?,?> packageNativeLink, boolean containsDelimitedControl, boolean registrationObligations, boolean mainAlias, boolean packageScalarDeclarations) {
+        public ModuleRecord { packageNativeLink = (Map<?,?>) Json.immutable(packageNativeLink); }
         public String getUnit() { return unit; } public String getName() { return name; } public String getSha256() { return sha256; }
         public Artifact getArtifact() { return artifact; }
         public boolean getContainsDelimitedControl() { return containsDelimitedControl; }
@@ -71,7 +72,7 @@ public final class CoreUnitDirectory {
                 // Parse declaration and startup facts without resolving types or lowering bodies.
                 var admission = new CoreHiModule(reader).admission();
                 var module = new ModuleRecord(unit, name, artifact.sha256(), new Artifact(path, artifact.sha256()),
-                        null, true, admission.declarationOnly(), admission.containsDelimitedControl(), admission.registrationObligations(),
+                        null, true, admission.declarationOnly(), null, null, admission.containsDelimitedControl(), admission.registrationObligations(),
                         admission.mainAlias(), admission.packageScalarDeclarations());
                 added.computeIfAbsent(unit, ignored -> new ArrayList<>()).add(module);
                 snapshots.put(module, reader);
@@ -157,7 +158,7 @@ public final class CoreUnitDirectory {
                     require(dependency != null && dependency.nativeInterface(),
                             "Missing native interface declaration provider: " + id);
                     return nativeInterface(dependency);
-                });
+                }, module.annotationProducerUnit());
                 requireNativeSummary(module, admitted.admission());
                 // Admission resolves no dependencies; publish the reader before demanded lowering can do so.
                 interfaceReaders.put(module, admitted);
@@ -188,7 +189,12 @@ public final class CoreUnitDirectory {
         public synchronized Map<String,Object> metadata(ModuleRecord module) {
             check(!closed, "Core unit sources are closed");
             verifyModule(module);
-            return module.nativeInterface() ? nativeInterface(module).metadata() : compact(module).metadata();
+            if (!module.nativeInterface()) return compact(module).metadata();
+            var metadata = nativeInterface(module).metadata();
+            if (module.packageNativeLink() == null) return metadata;
+            var linked = new LinkedHashMap<>(metadata);
+            linked.put("packageNativeLink", module.packageNativeLink());
+            return linked;
         }
         public synchronized Map<String,Object> binding(String id) {
             check(!closed, "Core unit sources are closed");
@@ -278,11 +284,16 @@ public final class CoreUnitDirectory {
                 if (interfaceSource != null) require(Boolean.FALSE.equals(module.get("containsDelimitedControl")) && Boolean.FALSE.equals(module.get("registrationObligations")) &&
                   Boolean.FALSE.equals(module.get("mainAlias")) && Boolean.FALSE.equals(module.get("packageScalarDeclarations")),
                   "Demand interfaces require checked false startup summaries");
+                Object producer = module.get("annotationProducerUnit"), component = module.get("packageNativeLink");
+                require(producer == null || nativeInterface && producer instanceof String value && !blank(value),
+                        "Invalid native annotation producer unit");
+                require(component == null || nativeInterface && component instanceof Map<?,?>,
+                        "Invalid native package component");
                 CoreHiReader reader = nativeInterface ? nativeSnapshot(artifact, "publication") : null;
                 if (reader != null) reader.requireIdentity(id, name);
-                var admission = reader == null ? null : new CoreHiModule(reader).admission();
+                var admission = reader == null ? null : new CoreHiModule(reader, ignored -> null, (String) producer).admission();
                 var record = new ModuleRecord(id, name, (String) module.get("sha256"), artifact, interfaceSource, nativeInterface,
-                        admission != null && admission.declarationOnly(),
+                        admission != null && admission.declarationOnly(), (String) producer, (Map<?,?>) component,
                         flag(module, "containsDelimitedControl", "Missing delimited-control summary"),
                         flag(module, "registrationObligations", "Missing registration summary"),
                         flag(module, "mainAlias", "Missing main-alias summary"),
@@ -317,7 +328,7 @@ public final class CoreUnitDirectory {
                 module.containsDelimitedControl() == admission.containsDelimitedControl() &&
                 module.registrationObligations() == admission.registrationObligations() &&
                 module.mainAlias() == admission.mainAlias() &&
-                module.packageScalarDeclarations() == admission.packageScalarDeclarations(),
+                module.packageScalarDeclarations() == (admission.packageScalarDeclarations() || module.packageNativeLink() != null),
                 "Native interface startup summary mismatch: " + module.unit() + ":" + module.name());
     }
     private static boolean blank(String value) {

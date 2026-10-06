@@ -7,6 +7,7 @@ module Main (main) where
 
 import GHC.Exts (Int(I#))
 import NativeHiScalar (entry, recursive, goodMain, badMain)
+import NativeHiDependency (foreignValue)
 import Control.Exception (SomeException, try)
 import qualified NativeHiBox as Box
 import System.Environment (getArgs)
@@ -15,7 +16,7 @@ main :: IO ()
 main = do
   [output, ioOutput] <- getArgs
   writeFile output $ unlines
-    [ unwords (map show [x, I# (entry raw), I# (recursive raw), I# (Box.entry raw), I# (Box.floatBits raw), I# (Box.doubleBits raw)])
+    [ unwords (map show [x, I# (entry raw), I# (recursive raw), I# (Box.entry raw), I# (Box.floatBits raw), I# (Box.doubleBits raw), I# (foreignValue raw)])
     | x@(I# raw) <- [-3, 0, 2, 7, 31]
     ]
   outcomes <- mapM (try :: IO () -> IO (Either SomeException ())) [goodMain, badMain]

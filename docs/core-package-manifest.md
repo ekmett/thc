@@ -153,10 +153,26 @@ lazy boxed fields, parameterized newtypes, GADTs, unpacking, nested tuples/sums
 polymorphic IO, class methods, superclass projections and record pattern synonyms.
 It runs both backends and handoff modes, including first-installed-call checks
 for the pure functions and a guest-exception negative control for IO. Process
-creation is disabled and the runtime receives only interfaces.
+creation is disabled; executable Core comes only from interfaces. Native function
+and data-address checks use the package linker's ordinary ABI adapters and the
+same C source as the independent native oracle.
 
-Annotation transport, remaining expression forms, native foreign artifact
-admission and complete offline
+Annotations retain their target, full nominal `TypeRep` and opaque payload bytes.
+Ordinary String backend policies use the same rules as plugin exports. THC-owned
+foreign proofs require the exact `annotationProducerUnit` in the native module
+record, independently obtained from the selected compiler plugin's registered
+unit. A payload cannot declare itself trusted. Unknown annotations stay opaque;
+declaration-only providers do not claim executable foreign provenance.
+
+Foreign calls and function/data addresses retain their GHC types, target unit,
+calling convention and safety. Native module records can include
+`packageNativeLink`, using the existing component format, digest, ownership and
+ABI validation described in [foreign code](interface-foreign.md). The component
+is immutable within a published request. Source annotations, retained foreign
+products and reachable calls still go through the existing admission rules;
+merely supplying bitcode does not satisfy unrelated foreign obligations.
+
+Remaining expression forms and complete offline
 execution auditing still need integration; `--verify-artifacts` rejects native
 modules. The project driver does not yet publish this native format. Remaining work is tracked in
 [#1063](https://github.com/ekmett/thc/issues/1063).

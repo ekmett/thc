@@ -400,6 +400,8 @@ extra-source-files:
   t/fixtures/compiler/ProcessSignalsNative.hs
   t/fixtures/compiler/CBVCoercionAudit.hs
   t/fixtures/compiler/NativeHiFixture.hs
+  t/fixtures/compiler/NativeHiClasses.hs
+  t/fixtures/compiler/native-hi-foreign.c
   t/fixtures/compiler/NativeHiDependency.hs
   t/fixtures/compiler/NativeHiScalar.hs
   t/fixtures/compiler/NativeHiBoxType.hs
@@ -1237,6 +1239,7 @@ executable thc-fixtures
     ExceptionResultLayoutsFixtures
     DeepEvaluationFixtures
     InterfaceFixtures
+    NativeHiForeignFixtures
     InstalledCacheFixtures
     InterfaceForeignFacts
     FixtureSupport

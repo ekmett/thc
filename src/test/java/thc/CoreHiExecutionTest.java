@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
     private static final String UNIT = "thc-native-hi-scalar";
-    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiClasses", "NativeHiBox", "NativeHiBoxType", "GHC.Internal.Types");
+    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiClasses", "NativeHiBox", "NativeHiBoxType", "GHC.Internal.Types", "GHC.Internal.Ptr");
     @TempDir Path directory;
 
     private List<String> interfaces() throws Exception {
@@ -34,17 +34,24 @@ class CoreHiExecutionTest {
         return paths;
     }
 
-    private Path manifest() throws Exception {
+    private Path manifest() throws Exception { return manifest(null); }
+
+    private Path manifest(Map<?,?> nativeLink) throws Exception {
         interfaces();
         var units = new LinkedHashMap<String,List<Object>>();
         for (String module : MODULES) {
             Path file = directory.resolve(module + ".hi");
             String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)));
             var identity = CoreHiReader.read(file).module;
-            units.computeIfAbsent(identity.unit(), ignored -> new ArrayList<>()).add(Map.of("name", identity.name(), "boundary", "optimized-Core-after-Tidy-before-CorePrep", "sha256", hash,
+            var record = new LinkedHashMap<String,Object>(Map.of("name", identity.name(), "boundary", "optimized-Core-after-Tidy-before-CorePrep", "sha256", hash,
                     "interface", Map.of("format", "ghc-hi", "path", file.toString(), "sha256", hash),
                     "containsDelimitedControl", false, "registrationObligations", false,
                     "mainAlias", false, "packageScalarDeclarations", false));
+            if (nativeLink != null && module.equals("NativeHiDependency")) {
+                record.put("packageNativeLink", nativeLink);
+                record.put("packageScalarDeclarations", true);
+            }
+            units.computeIfAbsent(identity.unit(), ignored -> new ArrayList<>()).add(record);
         }
         Path manifest = directory.resolve("packages.json");
         Files.writeString(manifest, Json.stringify(Map.of("format", "thc-core-packages", "schema", 1,
@@ -141,11 +148,62 @@ class CoreHiExecutionTest {
                 var good = actions.get(0);
                 var bad = actions.get(1);
                 assertTrue(good.invokeMember("runIO").asBoolean(), backend + " writes and reads mutable state");
+                context.enter();
+                try {
+                    var program = Language.currentState(null).getCoreUnitPrograms().getFirst();
+                    assertEquals(backend.equals("bytecode") ? "mixed" : "ast", program.diagnostics().get("backend"),
+                            "The thin class provider's String annotation selects its backend");
+                } finally { context.leave(); }
                 var failure = assertThrows(PolyglotException.class, () -> bad.invokeMember("runIO"));
                 assertTrue(failure.isGuestException());
                 assertFalse(failure.isHostException());
                 assertTrue(good.invokeMember("runIO").asBoolean(), backend + " failure preserves later action execution");
             }
+        }
+    }
+
+    @Test void nativeFunctionsAndDataUseThePackageComponentAbi() throws Exception {
+        var component = (Map<?,?>) Json.parse(Files.readString(INPUT.resolve("native-hi-foreign.json")));
+        var rows = Files.readAllLines(INPUT.resolve("native.tsv")).stream()
+                .map(line -> Arrays.stream(line.split(" ")).mapToLong(Long::parseLong).toArray()).toList();
+        var paths = List.of("@" + manifest(component));
+        for (String backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false, false)) {
+            var entry = context.eval("thc", request(paths, "NativeHiDependency", "foreignValue", backend));
+            for (var row : rows) {
+                assertEquals(3 * row[0] + 34, row[6], "independent native function/data model");
+                assertEquals(row[6], entry.execute(row[0]).asLong(), backend);
+            }
+            assertTrue(entry.invokeMember("compile").asBoolean(), backend + " foreign-call compilation");
+            var before = (Map<?,?>) Json.parse(entry.getMember("diagnostics").asString());
+            assertEquals(rows.getFirst()[6], entry.execute(rows.getFirst()[0]).asLong());
+            var after = (Map<?,?>) Json.parse(entry.getMember("diagnostics").asString());
+            assertTrue(((Number) after.get("compiledEntries")).longValue() > ((Number) before.get("compiledEntries")).longValue());
+            Main.installed(after);
+        }
+        // An ordinary .hi cannot invent the package's native implementation.
+        try (var context = Main.executionContext(false, false)) {
+            assertThrows(PolyglotException.class, () -> context.eval("thc",
+                    request(interfaces(), "NativeHiDependency", "foreignValue", "bytecode")).execute(0L));
+        }
+        var document = (Map<?,?>) Json.parse(Files.readString(manifest(component)));
+        var published = CoreUnitDirectory.read(document);
+        var owner = published.owner(UNIT + ":NativeHiDependency.foreignValue");
+        var unit = (Map<?,?>) ((List<?>) document.get("units")).getFirst();
+        for (Object raw : (List<?>) unit.get("modules")) {
+            var module = (Map<?,?>) raw;
+            if (module.get("packageNativeLink") instanceof Map<?,?> link)
+                ((List<?>) link.get("abi")).clear();
+        }
+        assertEquals(2, ((List<?>) owner.packageNativeLink().get("abi")).size(),
+                "Publication snapshots nested component metadata");
+        assertThrows(UnsupportedOperationException.class, () -> ((List<?>) owner.packageNativeLink().get("abi")).clear());
+        var wrongOwner = new LinkedHashMap<Object,Object>(component);
+        wrongOwner.put("unit", "unrelated-package");
+        var wrongPaths = List.of("@" + manifest(wrongOwner));
+        try (var context = Main.executionContext(false, false)) {
+            var failure = assertThrows(PolyglotException.class, () -> context.eval("thc",
+                    request(wrongPaths, "NativeHiDependency", "foreignValue", "bytecode")));
+            assertTrue(failure.getMessage().contains("component owner"), failure.getMessage());
         }
     }
 

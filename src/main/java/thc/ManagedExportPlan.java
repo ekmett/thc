@@ -28,7 +28,7 @@ public final class ManagedExportPlan {
         String backend = backend(input);
         var merger = new CoreModules.Merger(); var admissions = new ArrayList<ManagedExportAdmission>();
         var layout = CoreModules.visitDecodedModules(input, original -> {
-            var module = (Map<String,Object>) immutable(original);
+            var module = (Map<String,Object>) Json.immutable(original);
             require(!module.containsKey("foreignLink"), "Native linked products are not managed export registration");
             var admission = Objects.equals(module.get("schema"), 2L) ? ManagedExportAdmission.read(module) : null;
             if (admission != null) admissions.add(admission);
@@ -80,9 +80,4 @@ public final class ManagedExportPlan {
         return checked;
     }
     private static boolean boxed(CoreRepresentation proof) { return !proof.isAggregate() && !proof.isVector() && Objects.equals(proof.getPrimReps(), List.of("BoxedRep (Just Lifted)")) && (proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.OBJECT); }
-    private static Object immutable(Object value) {
-        if (value instanceof Map<?,?> map) { var copy = new LinkedHashMap<Object,Object>(); map.forEach((key, child) -> copy.put(key, immutable(child))); return Collections.unmodifiableMap(copy); }
-        if (value instanceof List<?> list) { var copy = new ArrayList<Object>(); list.forEach(child -> copy.add(immutable(child))); return Collections.unmodifiableList(copy); }
-        return value;
-    }
 }

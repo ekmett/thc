@@ -14,6 +14,16 @@ public final class Json {
         appendJson(result, value);
         return result.toString();
     }
+    /** Retain a tree independently of mutable caller maps and lists; nulls are values. */
+    public static Object immutable(Object value) {
+        if (value instanceof Map<?,?> fields) {
+            var copy = new LinkedHashMap<Object,Object>();
+            fields.forEach((key, child) -> copy.put(key, immutable(child)));
+            return Collections.unmodifiableMap(copy);
+        }
+        if (value instanceof List<?> values) return values.stream().map(Json::immutable).toList();
+        return value;
+    }
     /** Validate without materializing a second tree, and preserve ASCII transport storage. */
     public static void appendObjectDocument(StringBuilder destination, String text) {
         new Reader(text, false).readDocument(true);
