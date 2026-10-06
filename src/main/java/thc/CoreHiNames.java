@@ -137,6 +137,12 @@ final class CoreHiNames {
         return name.module().unit() + ":" + name.module().name() + "." + occurrence;
     }
 
+    static CoreHiReader.ExternalName knownKey(char tag, int index) {
+        var name = Catalogue.names.get(0x80000000L | (long) tag << 22 | index);
+        if (name == null) throw new IllegalStateException("Missing pinned GHC key " + tag + index);
+        return name;
+    }
+
     static boolean isPrimop(CoreHiReader.ExternalName name) { return Catalogue.primops.contains(name); }
 
     private static Map<?, ?> resource(String path) {
