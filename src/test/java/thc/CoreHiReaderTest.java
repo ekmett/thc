@@ -43,6 +43,13 @@ class CoreHiReaderTest {
         }
     }
 
+    @Test void decodesGhcModifiedUtf8Warnings() throws Exception {
+        for (String mode : List.of("normal", "safe", "max", "thin")) {
+            var file = CoreHiReader.read(path(mode));
+            assertTrue(file.strings.contains("warning\0text \uD800 \uDC00 \uD83D\uDE42 é"));
+        }
+    }
+
     @Test void rejectsThinCoreDemandAndWrongIdentity() throws Exception {
         var file = CoreHiReader.read(path("thin"));
         assertNull(file.simplifiedCore);
@@ -73,6 +80,13 @@ class CoreHiReaderTest {
         byte[] negativeCount = bytes.clone(); negativeCount[fs] = 0x7f; corruptions.add(negativeCount);
         byte[] badUnit = bytes.clone(); badUnit[ns + 1] = 1; corruptions.add(badUnit);
         byte[] badUtf8 = bytes.clone(); badUtf8[fs + 2] = (byte) 255; corruptions.add(badUtf8);
+        String hex = HexFormat.of().formatHex(bytes);
+        int nul = hex.indexOf("7761726e696e67c080"), supplementary = hex.indexOf("f09f9982");
+        assertTrue(nul >= 0 && supplementary >= 0);
+        nul = nul / 2 + 7; supplementary /= 2;
+        byte[] badContinuation = bytes.clone(); badContinuation[nul + 1] = 'A'; corruptions.add(badContinuation);
+        byte[] overlong = bytes.clone(); overlong[nul + 1] = (byte) 0x81; corruptions.add(overlong);
+        byte[] badCodePoint = bytes.clone(); badCodePoint[supplementary] = (byte) 0xf4; corruptions.add(badCodePoint);
         byte[] badTypeEnd = bytes.clone(); Arrays.fill(badTypeEnd, ts + 4, ts + 8, (byte) 255); corruptions.add(badTypeEnd);
         var file = CoreHiReader.read(path("max"));
         byte[] badPublic = bytes.clone(); Arrays.fill(badPublic, file.publicInterface.start(), file.publicInterface.start() + 4, (byte) 255); corruptions.add(badPublic);

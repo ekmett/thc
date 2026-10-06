@@ -4,9 +4,6 @@ package thc;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -230,20 +227,36 @@ final class CoreHiReader {
             var text = new StringBuilder(count);
             for (int i = 0; i < count; i++) {
                 long cp = unsigned(32);
-                require(cp <= Character.MAX_CODE_POINT && !(cp >= 0xd800 && cp <= 0xdfff), "invalid character");
+                require(cp <= Character.MAX_CODE_POINT, "invalid character");
                 text.appendCodePoint((int) cp);
             }
             return text.toString();
         }
+        /** GHC.Internal.Encoding.UTF8 encodes NUL as C0 80, permits surrogate
+         * Char values and uses four bytes for supplementary code points. */
         String utf8(int length) {
             int start = position;
             skip(length);
-            try {
-                return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes, start, length)).toString();
-            } catch (CharacterCodingException failure) {
-                throw new IllegalArgumentException(source + ": " + label + " at byte " + start + ": malformed UTF-8", failure);
+            var encoded = new Cursor(start, position, label + " Modified UTF-8");
+            var text = new StringBuilder(length);
+            while (encoded.remaining() > 0) {
+                int first = encoded.byteValue();
+                if (first < 128) { text.append((char) first); continue; }
+                int extra = first >= 0xc0 && first <= 0xdf ? 1 : first >= 0xe0 && first <= 0xef ? 2 :
+                    first >= 0xf0 && first <= 0xf4 ? 3 : -1;
+                encoded.require(extra >= 0, "invalid leading byte");
+                int cp = first & (127 >>> (extra + 1));
+                for (int i = 0; i < extra; i++) {
+                    int next = encoded.byteValue();
+                    encoded.require((next & 0xc0) == 0x80, "invalid continuation byte");
+                    cp = (cp << 6) | (next & 63);
+                }
+                int minimum = extra == 1 ? 0x80 : extra == 2 ? 0x800 : 0x10000;
+                encoded.require((cp >= minimum || extra == 1 && cp == 0) && cp <= Character.MAX_CODE_POINT,
+                    "invalid code point or overlong encoding");
+                text.appendCodePoint(cp);
             }
+            return text.toString();
         }
         boolean optional() {
             int tag = byteValue();

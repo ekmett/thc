@@ -13,6 +13,7 @@ privateLoop n acc = case n of
   0# -> acc
   _ -> privateLoop (n -# 1#) (acc +# n)
 
+{-# DEPRECATED entry "warning\0text \xD800\& \xDC00\& \x1F642 é" #-}
 {-# NOINLINE entry #-}
 entry :: Int# -> Int#
 entry n = privateLoop n 0#
