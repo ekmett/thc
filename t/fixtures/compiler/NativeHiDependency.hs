@@ -5,8 +5,9 @@
 -- real cross-module call. Consumed with NativeHiScalar.hi; no plugin or CBD.
 module NativeHiDependency (marker) where
 
-import GHC.Exts (Int#, (+#))
+import GHC.Exts (Int#, (+#), andI#, indexWord8OffAddr#, word8ToWord#, word2Int#)
 
 {-# OPAQUE marker #-}
 marker :: Int# -> Int#
-marker x = x +# 7#
+-- Primitive literals accept bytes only: UTF-8 A/NUL/lambda is 65, 0, 206, 187.
+marker x = x +# 7# +# word2Int# (word8ToWord# (indexWord8OffAddr# "A\0\xCE\xBB"# (andI# x 3#)))
