@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE PatternSynonyms #-}
 -- Input: an Int# supplied by NativeHiOracle.
 -- Purpose: force a wrapped lazy payload/tail and call imported record selectors.
 -- Output: -7 for negative input or 3*(x+2), plus Float#/Double# bit patterns.
@@ -12,14 +13,14 @@ import GHC.Exts
   ( Int(I#), Int#, (*#), castFloatToWord32#, castDoubleToWord64#
   , word32ToWord#, word64ToWord#, word2Int#
   )
-import NativeHiBoxType (Payload(..), Box(..), box, payload, unpayload, identityBox)
+import NativeHiBoxType (Payload(..), Box(..), pattern Present, item, remaining, box, payload, unpayload, identityBox)
 
 {-# OPAQUE entry #-}
 entry :: Int# -> Int#
 entry x = case identityBox (box x) of
   Empty -> -7#
-  Box ref rest -> case unpayload ref of
-    Payload (I# y) _ _ -> case rest of
+  current@(Present _ _) -> case unpayload (item current) of
+    Payload (I# y) _ _ -> case remaining current of
       Empty -> y *# 3#
       Box _ _ -> -97#
 

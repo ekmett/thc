@@ -1,13 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UnboxedTuples #-}
 -- A separately compiled retained module makes native .hi execution resolve a
 -- state-token call and recover an address field. Consumed with NativeHiScalar.hi; no plugin or CBD.
-module NativeHiDependency (marker, exchange) where
+module NativeHiDependency (marker, exchange, measured, advanceAndMeasure) where
 
-import GHC.Exts (Int#, Addr#, State#, (+#), andI#, indexWord8OffAddr#, word8ToWord#, word2Int#, newMutVar#, writeMutVar#, readMutVar#)
+import GHC.Exts (Int(I#), Int#, Addr#, State#, (+#), andI#, indexWord8OffAddr#, word8ToWord#, word2Int#, newMutVar#, writeMutVar#, readMutVar#)
 import GHC.IO (IO(..))
+import NativeHiClasses (Measure(..), Advance(..), Evidence(..))
 
 data AddrRef = AddrRef Addr#
 
@@ -31,3 +34,20 @@ exchange before after = IO (\state ->
   case newMutVar# before state of
     (# allocated, cell #) -> case writeMutVar# cell after allocated of
       written -> readMutVar# cell written)
+
+-- Keep imported dictionary selectors and polymorphic values across the module
+-- boundary; the class provider intentionally carries declarations without Core.
+{-# OPAQUE measured #-}
+measured :: Measure a => a -> Int#
+measured = measure
+
+-- A stored constraint tuple keeps superclass projection inside an opaque call.
+{-# OPAQUE measuredEvidence #-}
+measuredEvidence :: Evidence (Measure a, Advance a) -> a -> Int#
+measuredEvidence Evidence value = measured (advance value)
+
+{-# OPAQUE advanceAndMeasure #-}
+advanceAndMeasure :: Advance a => a -> IO Int
+advanceAndMeasure before = case exchange before (advance before) of
+  IO step -> IO (\state -> case step state of
+    (# next, value #) -> (# next, I# (measuredEvidence Evidence value) #))

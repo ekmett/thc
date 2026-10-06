@@ -235,22 +235,23 @@ add_custom_command(OUTPUT "${hi_run_out}/GHC.Internal.Types.hi"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${hi_types_source}" "${hi_run_out}/GHC.Internal.Types.hi"
   DEPENDS "${hi_types_source}" ${toolchain_inputs}
   VERBATIM COMMENT "Provide installed IO declarations to the native interface loader")
-add_custom_command(OUTPUT "${hi_run_out}/NativeHiScalar.hi" "${hi_run_out}/NativeHiDependency.hi"
+add_custom_command(OUTPUT "${hi_run_out}/NativeHiScalar.hi" "${hi_run_out}/NativeHiDependency.hi" "${hi_run_out}/NativeHiClasses.hi"
     "${hi_run_out}/NativeHiBox.hi" "${hi_run_out}/NativeHiBoxType.hi" "${hi_run_out}/native.tsv" "${hi_run_out}/io.tsv"
   BYPRODUCTS "${hi_run_out}/oracle${CMAKE_EXECUTABLE_SUFFIX}" "${hi_run_out}/Main.hi"
-    "${hi_run_out}/Main.o" "${hi_run_out}/NativeHiScalar.o" "${hi_run_out}/NativeHiDependency.o" "${hi_run_out}/NativeHiBox.o" "${hi_run_out}/NativeHiBoxType.o"
+    "${hi_run_out}/Main.o" "${hi_run_out}/NativeHiClasses.o" "${hi_run_out}/NativeHiScalar.o" "${hi_run_out}/NativeHiDependency.o" "${hi_run_out}/NativeHiBox.o" "${hi_run_out}/NativeHiBoxType.o"
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${hi_run_out}"
   COMMAND ${fixture_env} "${GHC}" --make -O1 -fforce-recomp -hide-all-packages -package base
     -this-unit-id thc-native-hi-scalar -fwrite-if-simplified-core
     "-i${PROJECT_SOURCE_DIR}/t/fixtures/compiler" -hidir "${hi_run_out}" -odir "${hi_run_out}"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiOracle.hs" -o "${hi_run_out}/oracle${CMAKE_EXECUTABLE_SUFFIX}"
   COMMAND "${hi_run_out}/oracle${CMAKE_EXECUTABLE_SUFFIX}" "${hi_run_out}/native.tsv" "${hi_run_out}/io.tsv"
-  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiScalar.hs"
+  DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiClasses.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiScalar.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiDependency.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiBox.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiBoxType.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiOracle.hs" ${toolchain_inputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Compile retained interfaces and record native arithmetic and IO results")
-add_custom_target(fixture-native-hi-execution DEPENDS "${hi_run_out}/GHC.Internal.Types.hi" "${hi_run_out}/NativeHiScalar.hi"
+add_custom_target(fixture-native-hi-execution DEPENDS "${hi_run_out}/NativeHiClasses.hi" "${hi_run_out}/GHC.Internal.Types.hi" "${hi_run_out}/NativeHiScalar.hi"
   "${hi_run_out}/NativeHiDependency.hi" "${hi_run_out}/NativeHiBox.hi" "${hi_run_out}/NativeHiBoxType.hi" "${hi_run_out}/native.tsv" "${hi_run_out}/io.tsv")

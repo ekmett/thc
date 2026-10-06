@@ -314,6 +314,7 @@
       "outputs": [
         "build/native-hi-execution/NativeHiScalar.hi",
         "build/native-hi-execution/NativeHiDependency.hi",
+        "build/native-hi-execution/NativeHiClasses.hi",
         "build/native-hi-execution/NativeHiBox.hi",
         "build/native-hi-execution/NativeHiBoxType.hi",
         "build/native-hi-execution/native.tsv",
@@ -323,6 +324,7 @@
       "sources": [
         "t/fixtures/compiler/NativeHiScalar.hs",
         "t/fixtures/compiler/NativeHiDependency.hs",
+        "t/fixtures/compiler/NativeHiClasses.hs",
         "t/fixtures/compiler/NativeHiBox.hs",
         "t/fixtures/compiler/NativeHiBoxType.hs",
         "t/fixtures/compiler/NativeHiOracle.hs",

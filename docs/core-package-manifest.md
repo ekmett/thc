@@ -101,8 +101,8 @@ are content-bound to the host request, and duplicate module identities reject.
 Loose inputs need no package manifest. Their declarations and binding caches
 belong to the execution context; retained file snapshots are immutable. Imported
 native types require native interface providers. A provider may lack retained
-Core when only its declarations are needed; demanding one of its executable
-bindings still requires `-fwrite-if-simplified-core`. CBD and native inputs may
+Core when only declarations or compiler-defined dictionary selectors are needed.
+Ordinary function bodies still require `-fwrite-if-simplified-core`. CBD and native inputs may
 coexist with distinct module identities.
 
 The native JVM reader also accepts a module's `interface` artifact with
@@ -131,6 +131,14 @@ newtype representation makes ordinary `IO a` work through the existing IO
 execution boundary: its definition comes from the installed
 `GHC.Internal.Types.hi`, rather than a loader-specific replacement.
 
+Class declarations supply their dictionary constructor and field order. Method
+and superclass selectors follow GHC's generated selector semantics, even when
+that declaration provider has no retained Core. Unary classes use the same late
+representation erasure as the Core exporter, without treating them as newtypes
+or inferring evaluation evidence. Instance dictionaries and default methods use
+their retained bodies. Pattern-synonym declarations retain matcher, builder and
+record-selector identities; those functions also use their ordinary Core bodies.
+
 Integer, byte and floating literals use the existing runtime representations.
 Raw byte literals preserve embedded NUL and high bytes. Floating rationals round
 directly to their IEEE format with ties to even, including subnormals and
@@ -142,13 +150,13 @@ from their owning interfaces.
 
 The focused execution fixture compares native GHC results for recursive calls,
 lazy boxed fields, parameterized newtypes, GADTs, unpacking, nested tuples/sums
-and polymorphic IO.
+polymorphic IO, class methods, superclass projections and record pattern synonyms.
 It runs both backends and handoff modes, including first-installed-call checks
 for the pure functions and a guest-exception negative control for IO. Process
 creation is disabled and the runtime receives only interfaces.
 
-Class and pattern-synonym declaration providers, annotation transport, remaining
-expression forms, native foreign artifact admission and complete offline
+Annotation transport, remaining expression forms, native foreign artifact
+admission and complete offline
 execution auditing still need integration; `--verify-artifacts` rejects native
 modules. The project driver does not yet publish this native format. Remaining work is tracked in
 [#1063](https://github.com/ekmett/thc/issues/1063).

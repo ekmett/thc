@@ -13,14 +13,15 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Ordinary GHC .hi files execute directly, including retained private RHSs,
  * scalar recursion, raw byte and IEEE literals, erased polymorphism and parameterized
  * recursive boxed fields, parameterized newtypes, GADTs, unpacking and nested
- * tuple/sum results across modules.
+ * tuple/sum results across modules. Class methods and superclass projections use
+ * thin declaration providers; record pattern synonyms use retained Core.
  * Polymorphic IO runs through its real installed declaration and the ordinary runIO
  * boundary. Native results come from the same source build; process creation is denied
  * and the runtime receives no CBD. */
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
     private static final String UNIT = "thc-native-hi-scalar";
-    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiBox", "NativeHiBoxType", "GHC.Internal.Types");
+    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiClasses", "NativeHiBox", "NativeHiBoxType", "GHC.Internal.Types");
     @TempDir Path directory;
 
     private List<String> interfaces() throws Exception {
@@ -145,6 +146,17 @@ class CoreHiExecutionTest {
                 assertFalse(failure.isHostException());
                 assertTrue(good.invokeMember("runIO").asBoolean(), backend + " failure preserves later action execution");
             }
+        }
+    }
+
+    @Test void thinProvidersCannotInventOrdinaryBodies() throws Exception {
+        assertNull(CoreHiReader.read(INPUT.resolve("NativeHiClasses.hi")).simplifiedCore,
+                "This provider must exercise the ordinary library-without-Core case");
+        var paths = interfaces();
+        try (var context = Main.executionContext(false, false)) {
+            var failure = assertThrows(PolyglotException.class, () ->
+                    Main.loadEntry(context, paths, UNIT + ":NativeHiClasses.opaqueIdentity"));
+            assertTrue(failure.getMessage().contains("-fwrite-if-simplified-core"), failure.getMessage());
         }
     }
 

@@ -2,13 +2,14 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE UnboxedSums #-}
 {-# LANGUAGE UnboxedTuples #-}
 -- Input: an Int# supplied by NativeHiOracle.
 -- Purpose: consume imported nested tuple/sum payloads through parameterized newtype casts,
--- GADT equality evidence, an unpacked Int field and lazy record selectors.
+-- GADT equality evidence, an unpacked Int field and lazy record pattern selectors.
 -- Output: Empty for negative input; otherwise a singleton Box with integer and floating-point payload fields.
-module NativeHiBoxType (Payload(..), PayloadRef, Box(..), box, payload, unpayload, identity, identityBox) where
+module NativeHiBoxType (Payload(..), PayloadRef, Box(..), pattern Present, item, remaining, box, payload, unpayload, identity, identityBox) where
 
 import GHC.Exts (Int(I#), Int#, Float#, Double#, (+#), (<#))
 import NativeHiScalar (floatingPair)
@@ -21,6 +22,9 @@ data Payload a where
     } -> Payload ()
 newtype PayloadRef a = PayloadRef a
 data Box a = Empty | Box a (Box a)
+
+pattern Present :: a -> Box a -> Box a
+pattern Present { item, remaining } = Box item remaining
 
 -- Keep a suspended call in the lazy field rather than an already built Payload.
 {-# OPAQUE payload #-}

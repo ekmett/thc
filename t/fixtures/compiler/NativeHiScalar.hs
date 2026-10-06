@@ -13,7 +13,8 @@ import GHC.Exts
   ( Int(I#), Int#, Float#, Double#, (+#), (-#), (*#), (<=#), (<#)
   , divideFloat#, (/##), realWorld#, raise#
   )
-import NativeHiDependency (marker, exchange)
+import NativeHiDependency (marker, measured, advanceAndMeasure)
+import NativeHiClasses (Measure(..), Advance(..))
 import GHC.IO (IO(..))
 
 {-# OPAQUE privateWorker #-}
@@ -23,7 +24,7 @@ privateWorker x = x *# 3# +# 1#
 {-# OPAQUE entry #-}
 entry :: Int# -> Int#
 entry x = case marker x realWorld# of
-  (# _, value #) -> privateWorker x +# value
+  (# _, value #) -> measured (Observation (privateWorker x)) +# value
 
 {-# OPAQUE recursive #-}
 recursive :: Int# -> Int#
@@ -59,6 +60,12 @@ floatingPair x = case x <# 0# of
   _ -> (# (# floatValue x, doubleValue x #), (# | x #) #)
 
 data Observation = Observation Int#
+instance Measure Observation where
+  measure (Observation value) = value
+
+instance Advance Observation where
+  advance (Observation value) = Observation (value +# 1#)
+
 data Failure = WrongEffect
 
 -- Input: no host arguments. Output: boxed unit only after the cross-module
@@ -66,14 +73,14 @@ data Failure = WrongEffect
 -- sibling is a negative control for the assertion, not a supported-language limit.
 {-# OPAQUE observe #-}
 observe :: Int# -> IO ()
-observe expected = case exchange (Observation 0#) (Observation 41#) of
+observe expected = case advanceAndMeasure (Observation 40#) of
   IO step -> IO (\state -> case step state of
-    (# next, Observation actual #) -> case actual -# expected of
+    (# next, I# actual #) -> case actual -# expected of
       0# -> (# next, () #)
       _ -> raise# WrongEffect)
 
 goodMain :: IO ()
-goodMain = observe 41#
+goodMain = observe 42#
 
 badMain :: IO ()
-badMain = observe 42#
+badMain = observe 43#
