@@ -10,15 +10,19 @@ import java.util.function.Function;
  * syntax are parsed at module admission; unsupported tags fail immediately.
  * Supported scalar and monomorphic boxed binding bodies are lowered only when demanded. */
 final class CoreHiModule {
+    // Internal type forms cannot collide with canonical unit:module names.
+    private static final String FORALL = "\u0000hi-forall:", TYPE_VARIABLE = "\u0000hi-type-variable:", ABSTRACT_LIFTED = "\u0000hi-lifted-variable:";
     record Type(String name, List<Type> arguments) {
         static Type scalar(String primitive) { return new Type(primitive, List.of()); }
         static Type fun(Type argument, Type result) { return new Type("->", List.of(argument, result)); }
         boolean function() { return name.equals("->"); }
+        boolean forall() { return name.startsWith(FORALL); }
+        boolean abstractLifted() { return name.startsWith(ABSTRACT_LIFTED); }
         Type result() { return arguments.get(1); }
     }
     private record Constructor(Type result, List<Type> fields, Map<String,Object> metadata) {}
     private record Info(int arity, List<Boolean> marks, Integer join) {}
-    private record Binder(String name, Type type, Info info, int offset) {}
+    private record Binder(String name, Type type, Info info, int offset, boolean typeVariable) {}
     private record Expr(int tag, List<Object> fields, int offset) {}
     private record Alt(int tag, Object discriminator, List<String> binders, Expr rhs) {}
     private record Group(boolean recursive, List<Definition> definitions) {}
@@ -62,7 +66,7 @@ final class CoreHiModule {
             body.expectEnd();
             String id = CoreHiNames.id(name);
             c.require(declarations.putIfAbsent(id, new Binder(name.occurrence(), type,
-                    new Info(info.arity, marks, null), offset)) == null, "duplicate declaration " + id);
+                    new Info(info.arity, marks, null), offset, false)) == null, "duplicate declaration " + id);
         }
         c.expectEnd();
         var annotations = reader.cursor(reader.publicSections.get("annotations"), "Iface annotations");
@@ -113,19 +117,14 @@ final class CoreHiModule {
     Map<String,Object> binding(String id) {
         var definition = definitions.get(id);
         if (definition == null) return null;
-        return lowered.computeIfAbsent(id, ignored -> binding(definition, new Variable(id, definition.binder.type), topScope));
+        return lowered.computeIfAbsent(id, ignored -> binding(definition, new Variable(id, definition.binder.type), topScope, Map.of()));
     }
 
     private void dataDeclaration(CoreHiReader.Cursor c, CoreHiReader.ExternalName name, int offset) {
         c.require(name.namespace() == 3 && dataTypes.add(CoreHiNames.id(name)), "invalid or duplicate data type");
         c.require(c.count(1) == 0, "unsupported data type parameters");
         Type kind = type(c, 0);
-        Type lifted = new Type("ghc-internal:GHC.Internal.Types.Lifted", List.of());
-        Type boxed = new Type("ghc-internal:GHC.Internal.Types.BoxedRep", List.of(lifted));
-        Type liftedRep = new Type("ghc-internal:GHC.Internal.Types.LiftedRep", List.of());
-        c.require(kind.equals(new Type("ghc-internal:GHC.Internal.Types.Type", List.of())) ||
-                kind.equals(new Type("ghc-internal:GHC.Internal.Prim.TYPE", List.of(boxed))) ||
-                kind.equals(new Type("ghc-internal:GHC.Internal.Prim.TYPE", List.of(liftedRep))), "unsupported data result kind " + kind);
+        c.require(liftedKind(kind), "unsupported data result kind " + kind);
         c.require(!c.optional(), "unsupported data C type");
         c.require(c.count(1) == 0 && c.count(1) == 0, "unsupported data roles or context");
         c.require(c.byteValue() == 1, "unsupported data type form (requires ordinary boxed data)");
@@ -192,10 +191,11 @@ final class CoreHiModule {
         return switch (tag) {
             case 0 -> {
                 Binder binder = lambdaBinder(c, depth + 1);
+                c.require(binder.typeVariable, "unsupported coercion forall binder");
                 c.require(c.byteValue() <= 2, "invalid forall visibility");
-                yield new Type("forall:" + binder.name, List.of(binder.type, type(c, depth + 1)));
+                yield new Type(FORALL + binder.name, List.of(binder.type, type(c, depth + 1)));
             }
-            case 1 -> new Type("type-variable:" + reader.fastString(c), List.of());
+            case 1 -> new Type(TYPE_VARIABLE + reader.fastString(c), List.of());
             case 2 -> new Type("type-application", List.of(type(c, depth + 1), type(c, depth + 1)));
             case 3 -> {
                 int flag = c.byteValue(); c.require(flag <= 3, "invalid function type flag");
@@ -305,10 +305,10 @@ final class CoreHiModule {
         if (tag == 0) {
             type(c, depth + 1); // multiplicity
             String name = reader.fastString(c);
-            return new Binder(name, type(c, depth + 1), new Info(0, null, null), offset);
+            return new Binder(name, type(c, depth + 1), new Info(0, null, null), offset, false);
         }
         c.require(tag == 1, "invalid lambda binder tag");
-        return new Binder(reader.fastString(c), type(c, depth + 1), new Info(0, null, null), offset);
+        return new Binder(reader.fastString(c), type(c, depth + 1), new Info(0, null, null), offset, true);
     }
     private Binder bindingBinder(CoreHiReader.Cursor c, boolean top, int depth) {
         int offset = c.position();
@@ -325,9 +325,9 @@ final class CoreHiModule {
         String name = reader.fastString(c);
         Type type = type(c, depth + 1);
         Info info = info(c, depth + 1);
-        if (top) return new Binder(name, type, new Info(info.arity, details(c), null), offset);
+        if (top) return new Binder(name, type, new Info(info.arity, details(c), null), offset, false);
         int join = c.byteValue(); c.require(join <= 1, "invalid join point tag");
-        return new Binder(name, type, new Info(info.arity, null, join == 1 ? c.count(0) : null), offset);
+        return new Binder(name, type, new Info(info.arity, null, join == 1 ? c.count(0) : null), offset, false);
     }
     private Group group(CoreHiReader.Cursor c, boolean top, int depth) {
         int tag = c.byteValue(); c.require(tag <= 1, "invalid binding group tag");
@@ -398,9 +398,9 @@ final class CoreHiModule {
         return new Literal(kinds[number], value.toString(), Type.scalar(reps[number]));
     }
 
-    private Map<String,Object> binding(Definition definition, Variable variable, Map<String,Variable> scope) {
+    private Map<String,Object> binding(Definition definition, Variable variable, Map<String,Variable> scope, Map<String,Type> typeScope) {
         Binder binder = definition.binder;
-        Lowered rhs = lower(definition.rhs, scope);
+        Lowered rhs = lower(definition.rhs, scope, typeScope);
         var record = binder(binder, variable, false);
         record.put("arity", (long) binder.info.arity);
         record.put("expr", rhs.expression);
@@ -417,12 +417,20 @@ final class CoreHiModule {
             metadata.put("entryStrict", List.copyOf(strict)); metadata.put("entryStrictSource", strictSource);
         }
         if (binder.info.join != null) {
-            int join = binder.info.join;
-            if (join > lambdaCount) throw error(definition.rhs, "join arity exceeds value lambda prefix");
-            Type result = binder.type;
-            for (int i = 0; i < join; i++) {
-                if (!result.function()) throw error(definition.rhs, "join prefix has no function type");
-                result = result.result();
+            // GHC JoinArity counts type binders; the runtime contract counts values in that raw prefix.
+            int join = 0; Expr prefix = definition.rhs; Type result = variable.type;
+            for (int i = 0; i < binder.info.join; i++) {
+                if (prefix.tag != 4) throw error(definition.rhs, "join arity exceeds raw lambda prefix");
+                Binder parameter = (Binder) prefix.fields.getFirst();
+                if (parameter.typeVariable) {
+                    if (!result.forall()) throw error(definition.rhs, "join type prefix has no forall");
+                    if (!liftedKind(result.arguments.getFirst())) throw error(definition.rhs, "unsupported join forall kind");
+                    result = replace(result.arguments.get(1), TYPE_VARIABLE + result.name.substring(FORALL.length()), Type.scalar(ABSTRACT_LIFTED + "erased"));
+                } else {
+                    if (!result.function()) throw error(definition.rhs, "join prefix has no function type");
+                    result = result.result(); join++;
+                }
+                prefix = (Expr) prefix.fields.get(1);
             }
             record.put("joinValueArity", (long) join); record.put("joinResultRep", rep(result, false, definition.rhs));
         }
@@ -433,17 +441,17 @@ final class CoreHiModule {
         var information = map("cbvEligible", binder.info.marks != null || binder.info.join != null);
         if (binder.info.marks != null) information.put("cbvMarks", binder.info.marks);
         if (binder.info.join != null) information.put("joinArity", (long) binder.info.join);
-        return map("id", variable.id, "name", binder.name, "lifted", lifted(binder.type), "coercion", false,
-                "rep", rep(binder.type, evaluated || !lifted(binder.type), location), "info", information);
+        return map("id", variable.id, "name", binder.name, "lifted", lifted(variable.type, location), "coercion", false,
+                "rep", rep(variable.type, evaluated || !lifted(variable.type, location), location), "info", information);
     }
     private Variable local(Binder binder) { return new Variable("\u0000hi-local:" + prefix() + localOrdinal++, binder.type); }
-    private Lowered lower(Expr e, Map<String,Variable> scope) {
+    private Lowered lower(Expr e, Map<String,Variable> scope, Map<String,Type> typeScope) {
         return switch (e.tag) {
             case 0 -> {
                 String name = (String) e.fields.getFirst();
                 var variable = scope.get(name);
                 if (variable == null) throw error(e, "unbound retained Core local " + name);
-                yield expression(variable.type, e, "var", variable.id);
+                yield expression(resolve(variable.type, typeScope, e, true), e, "var", variable.id);
             }
             case 11 -> {
                 var name = (CoreHiReader.ExternalName) e.fields.getFirst();
@@ -460,6 +468,7 @@ final class CoreHiModule {
                 var module = owner(id);
                 var constructor = module == null ? null : module.constructors.get(id);
                 type = module == null ? null : module.signature(id);
+                if (type != null) type = resolve(type, Map.of(), e, true);
                 if (constructor != null) yield expression(type, e, "con", id, (long) constructor.fields.size());
                 if (type == null) throw error(e, "missing native Core dependency type " + id);
                 yield expression(type, e, "var", id);
@@ -470,20 +479,36 @@ final class CoreHiModule {
                 yield expression(literal.type, e, "lit", literal.kind, literal.value);
             }
             case 4 -> {
-                var inner = new HashMap<>(scope);
-                var parameters = new ArrayList<Map<String,Object>>();
-                var types = new ArrayList<Type>();
+                var inner = new HashMap<>(scope); var innerTypes = new HashMap<>(typeScope);
+                var parameters = new ArrayList<Map<String,Object>>(); var types = new ArrayList<Type>();
+                var quantifiers = new ArrayList<Binder>(); var abstracts = new ArrayList<Type>();
                 Expr body = e;
                 while (body.tag == 4) {
                     Binder binder = (Binder) body.fields.getFirst();
-                    Variable variable = local(binder);
-                    inner.put(binder.name, variable);
-                    parameters.add(binder(binder, variable, false)); types.add(binder.type);
+                    if (binder.typeVariable) {
+                        if (!parameters.isEmpty()) throw error(e, "unsupported non-prenex type lambda");
+                        if (!liftedKind(binder.type)) throw error(e, "unsupported type binder kind " + binder.type);
+                        Type abstractType = Type.scalar(ABSTRACT_LIFTED + prefix() + localOrdinal++);
+                        innerTypes.put(binder.name, abstractType); quantifiers.add(binder); abstracts.add(abstractType);
+                    } else {
+                        Type type = resolve(binder.type, innerTypes, e, false);
+                        Variable variable = new Variable(local(binder).id, type);
+                        inner.put(binder.name, variable);
+                        parameters.add(binder(binder, variable, false)); types.add(type);
+                    }
                     body = (Expr) body.fields.get(1);
                 }
-                Lowered result = lower(body, inner);
+                Lowered result = lower(body, inner, innerTypes);
                 Type type = result.type;
                 for (int i = types.size() - 1; i >= 0; i--) type = Type.fun(types.get(i), type);
+                for (int i = quantifiers.size() - 1; i >= 0; i--) {
+                    Binder quantifier = quantifiers.get(i);
+                    String fresh = abstracts.get(i).name;
+                    type = replace(type, fresh, Type.scalar(TYPE_VARIABLE + fresh));
+                    type = new Type(FORALL + fresh, List.of(quantifier.type, type));
+                }
+                // Type-only lambdas erase to their body, just as the Core exporter does.
+                if (parameters.isEmpty()) yield new Lowered(result.expression, type);
                 Lowered lambda = expression(type, e, "lam", parameters, result.expression);
                 metadata(lambda.expression).put("resultRep", metadata(result.expression).get("rep"));
                 yield lambda;
@@ -494,20 +519,36 @@ final class CoreHiModule {
                     args.add((Expr) function.fields.get(1)); function = (Expr) function.fields.getFirst();
                 }
                 Collections.reverse(args);
-                Lowered head = lower(function, scope); Type result = head.type;
+                Lowered head = lower(function, scope, typeScope); Type result = head.type;
                 var arguments = new ArrayList<List<Object>>(args.size()); var lifted = new ArrayList<Boolean>(args.size());
                 for (var argument : args) {
+                    if (argument.tag == 1) {
+                        if (!arguments.isEmpty() || !result.forall()) throw error(e, "unsupported type application without a prenex forall");
+                        if (!liftedKind(result.arguments.getFirst())) throw error(e, "unsupported forall kind");
+                        Type supplied = resolve((Type) argument.fields.getFirst(), typeScope, e, false);
+                        if (!lifted(supplied, e)) throw error(e, "unsupported unlifted type argument");
+                        result = replace(result.arguments.get(1), TYPE_VARIABLE + result.name.substring(FORALL.length()), supplied);
+                        continue;
+                    }
                     if (!result.function()) throw error(e, "unsupported application of a non-function scalar type");
-                    Lowered value = lower(argument, scope);
-                    arguments.add(value.expression); lifted.add(lifted(value.type)); result = result.result();
+                    Lowered value = lower(argument, scope, typeScope);
+                    arguments.add(value.expression); lifted.add(lifted(value.type, e)); result = result.result();
+                }
+                if (arguments.isEmpty()) {
+                    // A type-only application preserves the original function value and sharing.
+                    var erased = new ArrayList<>(head.expression); var metadata = new LinkedHashMap<>(metadata(head.expression));
+                    var original = (Map<?,?>) metadata.get("rep");
+                    metadata.put("rep", rep(result, Boolean.TRUE.equals(original.get("evaluated")), e));
+                    erased.set(erased.size() - 1, metadata);
+                    yield new Lowered(erased, result);
                 }
                 // Retained interfaces do not carry Core's speculation predicates.
                 yield expression(result, e, "app", head.expression, arguments, lifted, false, false);
             }
             case 6 -> {
-                Lowered scrutinee = lower((Expr) e.fields.getFirst(), scope);
+                Lowered scrutinee = lower((Expr) e.fields.getFirst(), scope, typeScope);
                 if (scrutinee.type.function()) throw error(e, "unsupported function case scrutinee");
-                Binder binder = new Binder((String) e.fields.get(1), scrutinee.type, new Info(0, null, null), e.offset);
+                Binder binder = new Binder((String) e.fields.get(1), scrutinee.type, new Info(0, null, null), e.offset, false);
                 Variable variable = local(binder); var inner = new HashMap<>(scope); inner.put(binder.name, variable);
                 var alternatives = new ArrayList<List<Object>>(); Type result = null;
                 for (var raw : (List<?>) e.fields.get(2)) {
@@ -524,12 +565,12 @@ final class CoreHiModule {
                         if (alt.binders.size() != constructor.fields.size()) throw error(e, "constructor case field count mismatch " + id);
                         discriminator = id;
                         for (int i = 0; i < alt.binders.size(); i++) {
-                            Binder field = new Binder(alt.binders.get(i), constructor.fields.get(i), new Info(0, null, null), alt.rhs.offset);
+                            Binder field = new Binder(alt.binders.get(i), constructor.fields.get(i), new Info(0, null, null), alt.rhs.offset, false);
                             Variable fieldVariable = local(field); branch.put(field.name, fieldVariable);
                             ids.add(fieldVariable.id); parameters.add(binder(field, fieldVariable, true));
                         }
                     } else if (!alt.binders.isEmpty()) throw error(e, "unexpected scalar alternative binders");
-                    Lowered rhs = lower(alt.rhs, branch); if (result == null) result = rhs.type;
+                    Lowered rhs = lower(alt.rhs, branch, typeScope); if (result == null) result = rhs.type;
                     if (alt.tag == 2) {
                         Literal literal = (Literal) alt.discriminator;
                         if (literal.value == null) throw error(e, "unsupported case literal");
@@ -547,11 +588,11 @@ final class CoreHiModule {
                 var variables = new ArrayList<Variable>(); var names = new HashSet<String>();
                 for (var definition : group.definitions) {
                     if (!names.add(definition.binder.name)) throw error(e, "duplicate local recursive binder " + definition.binder.name);
-                    Variable variable = local(definition.binder); variables.add(variable); inner.put(definition.binder.name, variable);
+                    Variable variable = new Variable(local(definition.binder).id, resolve(definition.binder.type, typeScope, e, true)); variables.add(variable); inner.put(definition.binder.name, variable);
                 }
                 var bindings = new ArrayList<Map<String,Object>>();
-                for (int i = 0; i < group.definitions.size(); i++) bindings.add(binding(group.definitions.get(i), variables.get(i), group.recursive ? inner : scope));
-                Lowered body = lower((Expr) e.fields.get(1), inner);
+                for (int i = 0; i < group.definitions.size(); i++) bindings.add(binding(group.definitions.get(i), variables.get(i), group.recursive ? inner : scope, typeScope));
+                Lowered body = lower((Expr) e.fields.get(1), inner, typeScope);
                 yield expression(body.type, e, "let", group.recursive, bindings, body.expression);
             }
             default -> throw error(e, "unsupported executable expression tag " + e.tag);
@@ -559,9 +600,48 @@ final class CoreHiModule {
     }
     private Lowered expression(Type type, Expr origin, Object... fields) {
         var expression = values(fields);
-        boolean evaluated = fields[0].equals("lam") || fields[0].equals("lit") || fields[0].equals("var") && !lifted(type);
+        boolean evaluated = fields[0].equals("lam") || fields[0].equals("lit") || fields[0].equals("var") && !lifted(type, origin);
         expression.add(map("rep", rep(type, evaluated, origin)));
         return new Lowered(expression, type);
+    }
+    private static boolean liftedKind(Type kind) {
+        Type lifted = Type.scalar("ghc-internal:GHC.Internal.Types.Lifted");
+        return kind.equals(Type.scalar("ghc-internal:GHC.Internal.Types.Type")) ||
+                kind.equals(new Type("ghc-internal:GHC.Internal.Prim.TYPE", List.of(Type.scalar("ghc-internal:GHC.Internal.Types.LiftedRep")))) ||
+                kind.equals(new Type("ghc-internal:GHC.Internal.Prim.TYPE", List.of(new Type("ghc-internal:GHC.Internal.Types.BoxedRep", List.of(lifted)))));
+    }
+    private Type resolve(Type type, Map<String,Type> scope, Expr location, boolean prenex) {
+        if (type.name.startsWith(TYPE_VARIABLE)) {
+            var resolved = scope.get(type.name.substring(TYPE_VARIABLE.length()));
+            if (resolved == null) throw error(location, "unbound type variable " + type.name);
+            return resolved;
+        }
+        if (type.forall()) {
+            if (!prenex) throw error(location, "unsupported higher-rank type");
+            if (!liftedKind(type.arguments.getFirst())) throw error(location, "unsupported forall kind " + type.arguments.getFirst());
+            var inner = new HashMap<>(scope); String name = type.name.substring(FORALL.length());
+            String fresh = ABSTRACT_LIFTED + prefix() + localOrdinal++;
+            inner.put(name, Type.scalar(TYPE_VARIABLE + fresh));
+            return new Type(FORALL + fresh, List.of(type.arguments.getFirst(), resolve(type.arguments.get(1), inner, location, true)));
+        }
+        var arguments = new ArrayList<Type>(type.arguments.size());
+        for (Type argument : type.arguments) arguments.add(resolve(argument, scope, location, false));
+        return new Type(type.name, List.copyOf(arguments));
+    }
+    private static Type replace(Type type, String name, Type supplied) {
+        if (type.name.equals(name)) return supplied;
+        // Reconstructed quantifiers and supplied abstract variables use fresh lexical identities; respect binder shadowing.
+        if (type.forall() && name.equals(TYPE_VARIABLE + type.name.substring(FORALL.length()))) return type;
+        var arguments = new ArrayList<Type>(type.arguments.size());
+        for (Type argument : type.arguments) arguments.add(replace(argument, name, supplied));
+        return new Type(type.name, List.copyOf(arguments));
+    }
+    private Type runtimeType(Type type, Expr location) {
+        while (type.forall()) {
+            if (!liftedKind(type.arguments.getFirst())) throw error(location, "unsupported forall kind " + type.arguments.getFirst());
+            type = replace(type.arguments.get(1), TYPE_VARIABLE + type.name.substring(FORALL.length()), Type.scalar(ABSTRACT_LIFTED + "erased"));
+        }
+        return resolve(type, Map.of(), location, false);
     }
     private static boolean scalar(Type type) {
         return type.arguments.isEmpty() && switch (type.name) {
@@ -574,8 +654,13 @@ final class CoreHiModule {
         var module = owner(type.name);
         return module != null && module.dataTypes.contains(type.name);
     }
-    private boolean lifted(Type type) { return type.function() || data(type); }
+    private boolean lifted(Type type, Expr location) {
+        type = runtimeType(type, location);
+        return type.function() || type.abstractLifted() || data(type);
+    }
     private Map<String,Object> rep(Type type, boolean evaluated, Expr location) {
+        type = runtimeType(type, location);
+        if (type.abstractLifted()) return map("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         if (type.function()) return map("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
         if (scalar(type)) return map("kind", "long", "primReps", List.of(type.name), "evaluated", evaluated);
         if (data(type)) return map("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
