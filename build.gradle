@@ -34,8 +34,6 @@ def windowsHost = System.getProperty("os.name").startsWith("Windows")
 // Existing Python generators remain until their Haskell/Java migrations land.
 def python = providers.environmentVariable("THC_PYTHON").orElse(windowsHost ? "python" : "python3")
 
-// The pinned GHC signature table belongs to fixture/audit tooling, not runtime loading.
-tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
 // The Windows runtime validates HSC receipts against the producer's same pinned catalog.
 tasks.processResources { from("etc/ghc/9.14.1/windows-ghc-internal.json") { into("thc") } }
 tasks.processResources {
