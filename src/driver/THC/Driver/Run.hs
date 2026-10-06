@@ -53,6 +53,7 @@ data RunOptions = RunOptions
   , runDapPort :: Maybe Int
   , runDapSuspend :: Bool
   , runDapWaitAttached :: Bool
+  , runNativeImage :: Bool
   , runArguments :: [String]
   }
 

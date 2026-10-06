@@ -4,6 +4,17 @@ Use `thc build [TARGETS...] [FLAGS]` inside a Cabal project to build components
 and acquire their dependency Core. Omit targets for the current package, use
 `all`, or name libraries and runnable components together. `thc run [TARGET]
 [FLAGS] [-- ARG...]` performs acquisition and executes one component on THC.
+
+Use `thc build --native-image [TARGETS...]` to produce fresh THC Native Images
+for selected executables, `exitcode-stdio-1.0` test suites and benchmarks after
+normal acquisition; libraries still acquire. The current producer requires
+Linux x86_64, the pinned GraalVM and synchronous AST execution. The driver uses
+the qualified `resource-copy` profile by default; override it with
+`THC_NATIVE_IMAGE_VECTOR_PROFILE`. Per-component artifacts and their concrete
+`completion.json` inventory are under `DIST/native-images/<unit-id SHA256>/`.
+Images are built afresh, with no image cache or static-linking guarantee. This
+option is accepted only by `build` and does not execute the application.
+
 `thc acquire` retains the same single-runnable selection as `run` for compatibility.
 Build the driver with
 `cabal build exe:thc`; from the THC checkout, invoke it with `cabal run thc -- ...`.

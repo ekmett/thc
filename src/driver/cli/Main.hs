@@ -59,10 +59,10 @@ main = topHandler $ do
           executing = command == "run"
           commandUsage = if building then buildUsage else if executing then runUsage else acquireUsage
       when (not executing && not (null suffix)) $ die (command ++ " does not accept guest arguments")
-      case getOpt Permute (withHelp (if executing then runOptions else acquireOptions)) driverArgs of
+      case getOpt Permute (withHelp (if building then buildOptions else if executing then runOptions else acquireOptions)) driverArgs of
         (updates, _, []) | any isNothing updates -> putStr commandUsage
         (updates, targets, []) | building || length targets <= 1 -> do
-          let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True guestArgs) (catMaybes updates)
+          let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True False guestArgs) (catMaybes updates)
           thcRoot <- resolveThcRoot (runThcRoot opts)
           let selected = opts {runTarget = case targets of [target] -> target; _ -> "",
                                runThcRoot = thcRoot}
@@ -118,7 +118,7 @@ completionCommands =
   [("plan-package", map void (withHelp options)),
    ("run", map void (withHelp runOptions)),
    ("acquire", map void (withHelp acquireOptions)),
-   ("build", map void (withHelp acquireOptions))]
+   ("build", map void (withHelp buildOptions))]
 
 completionExtensions :: IO [String]
 completionExtensions = do
@@ -212,8 +212,12 @@ acquireOptions :: [OptDescr (RunOptions -> RunOptions)]
 acquireOptions = [option | option@(Option _ names _ _) <- runOptions,
   not (any (`elem` ["runtime", "verify-artifacts", "dap-port", "dap-suspend", "dap-no-suspend", "dap-wait-attached", "dap-no-wait-attached"]) names)]
 
+buildOptions :: [OptDescr (RunOptions -> RunOptions)]
+buildOptions = Option [] ["native-image"] (NoArg (\r -> r {runNativeImage = True}))
+  "Build fresh THC Native Images for selected runnable components (default: off)" : acquireOptions
+
 buildUsage :: String
-buildUsage = usageInfo "Usage: thc build [TARGETS...] [FLAGS]\n\nUse Cabal to build selected components and acquire their dependency Core into DIST/packages.json.\nWith no target, select the current package. Use all for every enabled project component, or pass libraries, executables and multiple Cabal targets.\nModule and file targets acquire their complete owning component.\nStops after atomic manifest publication; no runtime launcher, reachable-Core audit or guest/native application execution.\nAcquisition does not establish runtime support. Native Windows project acquisition is not yet supported.\n" (withHelp acquireOptions)
+buildUsage = usageInfo "Usage: thc build [TARGETS...] [FLAGS]\n\nUse Cabal to build selected components and acquire their dependency Core into DIST/packages.json.\nWith no target, select the current package. Use all for every enabled project component, or pass libraries, executables and multiple Cabal targets.\nModule and file targets acquire their complete owning component.\nBy default, stop after atomic manifest publication. --native-image then builds fresh THC Native Images for selected executables, stdio tests and benchmarks; libraries still acquire.\nNative Images require Linux x86_64, pinned GraalVM and synchronous AST execution. The driver defaults to resource-copy; THC_NATIVE_IMAGE_VECTOR_PROFILE overrides the profile.\nOutputs: DIST/native-images/<unit-id SHA256>/completion.json and its concrete artifact inventory. Images are not cached and do not guarantee static linking.\nNo guest/native application execution. Acquisition does not establish runtime support. Native Windows project acquisition is not yet supported.\n" (withHelp buildOptions)
 
 acquireUsage :: String
 acquireUsage = usageInfo "Usage: thc acquire [TARGET] [FLAGS]\n\nResolve the same Cabal runnable target as run and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native runnable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" (withHelp acquireOptions)

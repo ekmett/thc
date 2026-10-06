@@ -1,7 +1,7 @@
 # Build and run Cabal programs
 
 THC uses Cabal to build selected components and acquires their optimized GHC
-Core. `thc build` stops after acquisition; `thc run` then executes one runnable
+Core. By default, `thc build` stops after acquisition; `thc run` executes one runnable
 component on the JVM. Native GHC still runs Setup programs, preprocessors and
 Template Haskell. THC does not launch the application's native executable.
 
@@ -63,13 +63,29 @@ ambiguities and disabled components. The selected dependency closure is built
 and published once in `DIST/packages.json`; earlier builds of unrelated
 components do not add them to that manifest.
 
-Build does not require a runtime launcher or execute an application. It does
+Ordinary build does not require a runtime launcher or execute an application. It does
 not audit reachable Core, so successful acquisition does not establish runtime
 support. Native Windows project acquisition, foreign-library components and
 detailed-library test suites are not supported; these fail explicitly.
 Backpack executable targets use Cabal's concrete instantiations. Direct Backpack
 library selection, including through `build all`, has not been qualified and
 may be rejected as ambiguous.
+
+Add `--native-image` to `build` to produce a fresh THC Native Image for each
+selected executable, `exitcode-stdio-1.0` test suite or benchmark after normal
+acquisition. Selected libraries still acquire their Core. For example:
+
+```sh
+thc build my-package:exe:my-program --native-image
+```
+
+The producer currently requires Linux x86_64 and the pinned GraalVM, and uses
+synchronous AST execution. The driver defaults to the qualified `resource-copy`
+vector profile; `THC_NATIVE_IMAGE_VECTOR_PROFILE` overrides that choice. Each
+component's final artifacts live under `DIST/native-images/<unit-id SHA256>/`;
+`completion.json` records their concrete inventory. Every explicit image request
+builds afresh: there is no image cache or guarantee of static linking. Image
+production does not execute the application. `run` and `acquire` reject this flag.
 
 `run` accepts executables, `exitcode-stdio-1.0` test suites and benchmarks.
 Use `PACKAGE:exe:NAME`, `PACKAGE:test:NAME`, `PACKAGE:bench:NAME`, or a shorter

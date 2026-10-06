@@ -45,6 +45,11 @@ tests env = TestLabel "driver options and target selection" $ TestList
         demandEquals <- complete 2 ["thc", command, "--installed-core=de"]
         assertSuccess demandEquals
         assertEqual "demand option with equals" "--installed-core=demand\n" (out demandEquals)
+      forM_ ["run", "acquire", "build"] $ \command -> do
+        native <- complete 2 ["thc", command, "--native"]
+        assertSuccess native
+        assertEqual "native image completion is build-only"
+          (if command == "build" then "--native-image\n" else "") (out native)
       dap <- complete 2 ["thc", "run", "--dap-"]
       assertSuccess dap
       forM_ ["--dap-suspend\n", "--dap-wait-attached\n"] $ \option -> assertContains option (out dap)
@@ -109,7 +114,7 @@ tests env = TestLabel "driver options and target selection" $ TestList
       ]
   , TestLabel "DAP JVM options preserve inherited environment" $ TestCase $ do
       let inherited = [("JAVA_OPTS", "-Xmx2g -Dexample=\"two words\""), ("PATH", "unchanged")]
-          options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True []
+          options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False Nothing True True False []
       unchanged <- runtimeDebugEnvironment os options inherited
       assertEqual "debugging is opt-in" inherited unchanged
       configured <- runtimeDebugEnvironment os (options {runDapPort = Just 4711, runDapSuspend = False}) inherited
@@ -122,7 +127,7 @@ tests env = TestLabel "driver options and target selection" $ TestList
         result <- tryIOError (runtimeDebugEnvironment os invalid inherited)
         assertBool "invalid debug options rejected before launch" (case result of Left _ -> True; Right _ -> False)
   , TestLabel "DAP Windows environment keys are case-insensitive" $ TestCase $ do
-      let options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False (Just 4711) True True []
+      let options = RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing False (Just 4711) True True False []
           inherited = [("java_opts", "-Xmx2g"), ("Java_Opts", "-Dduplicate=true"), ("PATH", "unchanged")]
       windows <- runtimeDebugEnvironment "mingw32" options inherited
       assertEqual "one canonical JVM environment key" ["JAVA_OPTS", "PATH"] (map fst windows)
@@ -186,6 +191,21 @@ tests env = TestLabel "driver options and target selection" $ TestList
       guest <- parseOnly ["run", "--", "--verify-artifacts=true"]
       assertFailure guest
       assertContains "THC root directory does not exist" (err guest)
+  , TestLabel "native image is an explicit build-only switch" $ TestCase $ do
+      accepted <- parseOnly ["build", "--native-image"]
+      assertFailure accepted
+      assertContains "THC root directory does not exist" (err accepted)
+      forM_ [["run", "--native-image"], ["acquire", "--native-image"], ["build", "--native-image=true"]] $ \arguments -> do
+        rejected <- parseOnly arguments
+        assertFailure rejected
+        assertNoStdout rejected
+        assertBool "native image rejected before root validation"
+          (not ("THC root directory does not exist" `isInfixOf` err rejected))
+      forM_ ["run", "acquire", "build"] $ \command -> do
+        help <- parseOnly [command, "--help"]
+        assertSuccess help
+        assertEqual "native image help is build-only" (command == "build")
+          ("--native-image" `isInfixOf` out help)
   , TestLabel "ordinary project runs do not require the auditor" $ TestCase $
       -- Windows uses the simple-package backend, which configures Cabal before
       -- checking tools. This prerequisite-only control must not start a build.
