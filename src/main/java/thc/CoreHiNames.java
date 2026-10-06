@@ -10,6 +10,9 @@ import java.util.*;
  * built-in identities come from the compiler-generated, versioned catalogue. */
 final class CoreHiNames {
     private CoreHiNames() {}
+    // Supported common tuple range, pinned GHC.Settings.Constants.mAX_TUPLE_SIZE; special larger tuples are excluded.
+    static final int MAX_UNBOXED_TUPLE_ARITY = 64;
+    private static final CoreHiReader.ModuleId TUPLE_MODULE = new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Types");
 
     static CoreHiReader.ExternalName read(CoreHiReader reader, CoreHiReader.Cursor cursor) {
         long word = cursor.unsigned(32);
@@ -19,8 +22,30 @@ final class CoreHiNames {
         }
         cursor.require((word & 0xc0000000L) == 0x80000000L, "invalid name reference tag");
         var name = Catalogue.names.get(word);
+        if (name == null) {
+            int tag = (int) (word >>> 22) & 255, index = (int) word & 0x3fffff;
+            int arity = -1, namespace = -1;
+            // GHC.Builtin.Uniques: TyCon takes two slots; DataCon takes three, including worker and promoted TypeRep.
+            if (tag == '5' && index % 2 == 0) { arity = index / 2; namespace = 3; }
+            else if (tag == '8' && index % 3 < 2) { arity = index / 3; namespace = index % 3 == 0 ? 1 : 0; }
+            if (arity >= 0) {
+                cursor.require(arity >= 2 && arity <= MAX_UNBOXED_TUPLE_ARITY, "unsupported unboxed tuple arity " + arity);
+                name = unboxedTupleName(arity, namespace);
+            }
+        }
         cursor.require(name != null, "unsupported GHC known-key name 0x" + Long.toHexString(word));
         return name;
+    }
+
+    static CoreHiReader.ExternalName unboxedTupleName(int arity, int namespace) {
+        String occurrence = namespace == 3 ? "Tuple" + arity + "#" : "(#" + ",".repeat(arity - 1) + "#)";
+        return new CoreHiReader.ExternalName(TUPLE_MODULE, namespace, null, occurrence);
+    }
+
+    static int unboxedTupleArity(CoreHiReader.ExternalName name) {
+        if (!name.module().equals(TUPLE_MODULE) || name.namespace() != 0 && name.namespace() != 1) return -1;
+        String occurrence = name.occurrence(); int arity = occurrence.length() - 3;
+        return arity >= 2 && arity <= MAX_UNBOXED_TUPLE_ARITY && occurrence.equals(unboxedTupleName(arity, name.namespace()).occurrence()) ? arity : -1;
     }
 
     static String id(CoreHiReader.ExternalName name) {
@@ -66,8 +91,8 @@ final class CoreHiNames {
                     throw new IllegalStateException("Invalid or duplicate GHC known key: " + word);
                 if (Objects.equals(entry.get("category"), "primop")) primitives.add(name);
             }
-            // Algorithmic tuple/sum/constraint names are not all in knownKeyNames.
-            // Unknown keys fail above until their corresponding Core forms are supported.
+            // Algorithmic families are not all in knownKeyNames. read() handles the supported unboxed tuple slots;
+            // tuple TypeRep, sum and constraint keys remain explicit refusals.
             names = Map.copyOf(identities);
             primops = Set.copyOf(primitives);
         }
