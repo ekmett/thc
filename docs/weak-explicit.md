@@ -1,7 +1,13 @@
 <!-- SPDX-FileCopyrightText: 2026 Edward Kmett -->
 <!-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause -->
 
-# Managed weak registrations (partial)
+# Managed weak registrations
+
+General automatic weak collection and Haskell finalizer scheduling are broken;
+[issue #1065](https://github.com/ekmett/thc/issues/1065) tracks their replacement.
+The carrier-specific retention below describes current behavior. It cannot
+implement the general `System.Mem.Weak` contract by adding more key classes.
+Explicit finalization remains available.
 
 `mkWeak#`, `mkWeakNoFinalizer#`, `deRefWeak#` and `finalizeWeak#` share a
 context-owned implementation in both interpreters. An actionless registration
@@ -89,9 +95,11 @@ promise reclamation of an abandoned, unclosed context; deterministic context
 close remains the resource-lifetime contract.
 Host cancellation is not claimed to guarantee execution of a returned action.
 
-`addCFinalizerToWeak#` admits only [source-certified one-argument C labels
-and owned `free` bases](c-finalizers.md). Explicit `finalizeWeak#` runs their
-callbacks outside the registry lock before returning the Haskell action.
+`addCFinalizerToWeak#` admits [source-certified C labels and owned `free`
+bases](c-finalizers.md). A zero flag calls `f(object)`; every nonzero flag calls
+`f(environment, object)`. The retained function declaration and linked definition
+must agree with that ABI. Explicit `finalizeWeak#` runs callbacks outside the
+registry lock before returning the Haskell action.
 The eligible owned-free path above provides automatic malloc retirement through
 JDK Cleaner; Haskell actions and package callbacks still require explicit
 finalization. There is no general callback executor, ephemeron collection or
