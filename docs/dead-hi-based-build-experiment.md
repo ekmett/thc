@@ -31,3 +31,7 @@ Its CBD codecs/exporter are unchanged from pre-native baseline
 `07fcadc6ea101fe7900e45c285b4a0f36ad58990`. Direct native loading, its fixture
 plumbing, generated runtime catalogues and documentation are being removed from
 main. Independent CBD ownership-safety corrections remain.
+
+Original `native-hi-*` worker branch tips are also preserved as ancestors.
+These retain alternate and superseded implementation attempts without adding
+them to the final source tree. Native Image CBD capture is separate work.
