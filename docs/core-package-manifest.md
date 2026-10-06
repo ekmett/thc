@@ -129,8 +129,8 @@ retaining nominal type identity. Their explicit casts, including function-result
 casts with unchanged arguments, preserve lazy evaluation. Layouts resolve after module admission reserves the
 owner directory, so forward and imported types do not depend on declaration order.
 Constructor applications and cases instantiate parameters while keeping lazy
-fields unevaluated. An actual multi-module program passes `Box Payload` through
-polymorphic identity and its monomorphic alias, then evaluates a suspended payload
+fields unevaluated. An actual multi-module program passes `Box PayloadRef` through
+polymorphic identity and its monomorphic alias, then evaluates and unwraps a suspended payload
 and a recursive lazy tail. It matches native GHC on both backends and handoff modes,
 including the first installed guest call. Process creation is disabled and the
 Core closure contains only `.hi` files.
