@@ -998,7 +998,6 @@ final class CoreHiModule {
                 yield expression(type,e,"app",head.expression,args,componentTypes.stream().map(this::lifted).toList(),false,false);
             }
             case 12->{Lowered body=lower((Expr)e.fields.getFirst(),scope,typeScope);Co co=types.readCo(e.fields.get(1),typeScope);var endpoints=types.endpoints(co);Ty target=endpoints.get(1);
-                if(!types.equal(body.type,endpoints.getFirst()))throw error(e,"cast source type differs from coercion endpoint");
                 var expression=new ArrayList<>(body.expression);var info=new LinkedHashMap<>(metadata(body.expression));boolean evaluated=Boolean.TRUE.equals(((Map<?,?>)info.get("rep")).get("evaluated"));info.put("rep",rep(target,evaluated,e));expression.set(expression.size()-1,info);yield new Lowered(expression,target);
             }
             case 2->{Co co=types.readCo(e.fields.getFirst(),typeScope);yield expression(types.coercionType(co),e,"void");}
