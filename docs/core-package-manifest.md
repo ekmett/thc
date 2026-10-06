@@ -118,7 +118,9 @@ raw byte literals and calls to other native interface modules. `Addr#` values us
 the existing address representation; string bytes preserve embedded NUL and high
 bytes without text decoding. `Float#` and `Double#` literal rationals round directly
 to their IEEE format with ties to even, including subnormal values and overflow;
-nonterminating rationals from excess-precision Core are supported. Prenex type
+nonterminating rationals from excess-precision Core are supported. Flat unboxed
+tuple results with 2–64 scalar primitive components preserve their exact component
+layouts across calls and case matching. Prenex type
 variables of kind `Type` are erased from value parameters and applications; type-only aliases preserve
 the original function value. Ordinary boxed datatypes support nullary constructors,
 integer, floating-point and address fields, lifted datatype parameters and ordinary
@@ -131,10 +133,14 @@ owner directory, so forward and imported types do not depend on declaration orde
 Constructor applications and cases instantiate parameters while keeping lazy
 fields unevaluated. An actual multi-module program passes `Box PayloadRef` through
 polymorphic identity and its monomorphic alias, then evaluates and unwraps a suspended payload
-and a recursive lazy tail. It matches native GHC on both backends and handoff modes,
+and a recursive lazy tail. The floating-point fields arrive through an imported
+unboxed pair with distinct `Float#` and `Double#` components. It matches native
+GHC on both backends and handoff modes,
 including the first installed guest call. Process creation is disabled and the
 Core closure contains only `.hi` files.
-Parameterized or unlifted newtypes, general coercions, higher-rank and
+Nested tuples, lifted or representation-polymorphic tuple components, aggregate
+arguments or constructor fields, State#/IO transport, parameterized or unlifted
+newtypes, general coercions, higher-rank and
 representation-polymorphic types, typeclass dictionaries,
 constructor wrappers, unpacking, GADTs, foreign obligations, annotations
 and further expression forms are not yet supported. Complete offline execution auditing is also unavailable;
