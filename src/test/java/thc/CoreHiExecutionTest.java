@@ -11,7 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Ordinary GHC .hi files execute directly, including retained private RHSs,
- * scalar recursion and a separate module. Native results come from the same
+ * scalar recursion, a separate module and boxed construction/case. Native results come from the same
  * source build; process creation is denied and the runtime receives no CBD. */
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
@@ -20,7 +20,7 @@ class CoreHiExecutionTest {
 
     private Path manifest() throws Exception {
         var modules = new ArrayList<Object>();
-        for (String module : List.of("NativeHiScalar", "NativeHiDependency")) {
+        for (String module : List.of("NativeHiScalar", "NativeHiDependency", "NativeHiBox")) {
             Path file = directory.resolve(module + ".hi");
             Files.copy(INPUT.resolve(module + ".hi"), file, StandardCopyOption.REPLACE_EXISTING);
             String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)));
@@ -36,7 +36,11 @@ class CoreHiExecutionTest {
     }
 
     private String request(Path manifest, String entry, String backend) {
-        return CoreModules.request(List.of("@" + manifest), UNIT + ":NativeHiScalar." + entry,
+        return request(manifest, "NativeHiScalar", entry, backend);
+    }
+
+    private String request(Path manifest, String module, String entry, String backend) {
+        return CoreModules.request(List.of("@" + manifest), UNIT + ":" + module + "." + entry,
                 true, false, backend, true, false, null, false, false);
     }
 
@@ -47,21 +51,24 @@ class CoreHiExecutionTest {
         for (var row : rows) {
             assertEquals(4 * row[0] + 8, row[1], "native result agrees with independent arithmetic");
             assertEquals(row[0] <= 0 ? 0 : row[0] * (row[0] + 1) / 2, row[2], "native recursion agrees with model");
+            assertEquals(3 * (row[0] + 2), row[3], "native constructor/case agrees with model");
         }
         Path manifest = manifest();
         for (String backend : List.of("ast", "bytecode")) {
             try (var context = Main.executionContext(false, false)) {
                 var entry = context.eval("thc", request(manifest, "entry", backend));
                 var recursive = context.eval("thc", request(manifest, "recursive", backend));
+                var boxed = context.eval("thc", request(manifest, "NativeHiBox", "entry", backend));
                 for (var row : rows) {
                     assertEquals(row[1], entry.execute(row[0]).asLong(), backend + " cross-module/private call");
                     assertEquals(row[2], recursive.execute(row[0]).asLong(), backend + " recursive case");
+                    assertEquals(row[3], boxed.execute(row[0]).asLong(), backend + " constructor/case");
                 }
                 assertEquals(rows.getLast()[1], entry.execute(rows.getLast()[0]).asLong(), backend + " repeated call");
             }
         }
         try (var files = Files.list(directory)) {
-            assertEquals(Set.of("NativeHiScalar.hi", "NativeHiDependency.hi", "packages.json"),
+            assertEquals(Set.of("NativeHiScalar.hi", "NativeHiDependency.hi", "NativeHiBox.hi", "packages.json"),
                     files.map(file -> file.getFileName().toString()).collect(java.util.stream.Collectors.toSet()));
         }
     }

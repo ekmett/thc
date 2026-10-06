@@ -221,13 +221,13 @@ foreach(mode normal safe max thin)
 endforeach()
 add_custom_target(fixture-native-hi-reader DEPENDS ${hi_outputs})
 
-# Native .hi execution: one ordinary GHC build owns the two retained modules,
+# Native .hi execution: one ordinary GHC build owns the retained modules,
 # its oracle executable and observed results. No plugin, helper or CBD producer.
 set(hi_run_out "${PROJECT_SOURCE_DIR}/build/native-hi-execution")
 add_custom_command(OUTPUT "${hi_run_out}/NativeHiScalar.hi" "${hi_run_out}/NativeHiDependency.hi"
-    "${hi_run_out}/native.tsv"
+    "${hi_run_out}/NativeHiBox.hi" "${hi_run_out}/native.tsv"
   BYPRODUCTS "${hi_run_out}/oracle${CMAKE_EXECUTABLE_SUFFIX}" "${hi_run_out}/Main.hi"
-    "${hi_run_out}/Main.o" "${hi_run_out}/NativeHiScalar.o" "${hi_run_out}/NativeHiDependency.o"
+    "${hi_run_out}/Main.o" "${hi_run_out}/NativeHiScalar.o" "${hi_run_out}/NativeHiDependency.o" "${hi_run_out}/NativeHiBox.o"
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${hi_run_out}"
   COMMAND ${fixture_env} "${GHC}" --make -O1 -fforce-recomp -hide-all-packages -package base
     -this-unit-id thc-native-hi-scalar -fwrite-if-simplified-core
@@ -236,8 +236,9 @@ add_custom_command(OUTPUT "${hi_run_out}/NativeHiScalar.hi" "${hi_run_out}/Nativ
   COMMAND "${hi_run_out}/oracle${CMAKE_EXECUTABLE_SUFFIX}" "${hi_run_out}/native.tsv"
   DEPENDS "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiScalar.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiDependency.hs"
+    "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiBox.hs"
     "${PROJECT_SOURCE_DIR}/t/fixtures/compiler/NativeHiOracle.hs" ${toolchain_inputs}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
   COMMENT "Compile retained scalar interfaces and record native GHC results")
 add_custom_target(fixture-native-hi-execution DEPENDS "${hi_run_out}/NativeHiScalar.hi"
-  "${hi_run_out}/NativeHiDependency.hi" "${hi_run_out}/native.tsv")
+  "${hi_run_out}/NativeHiDependency.hi" "${hi_run_out}/NativeHiBox.hi" "${hi_run_out}/native.tsv")
