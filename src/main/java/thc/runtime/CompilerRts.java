@@ -28,8 +28,15 @@ public final class CompilerRts {
         return switch (symbol) {
             case "ghc_unique_counter64" -> counter;
             case "ghc_unique_inc" -> increment;
-            default -> throw RuntimeFault.fault("Unknown compiler RTS data label " + symbol);
+            default -> {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw unknownLabel(symbol);
+            }
         };
+    }
+
+    @TruffleBoundary private static RuntimeFault unknownLabel(String symbol) {
+        return new RuntimeFault("Unknown compiler RTS data label " + symbol);
     }
 
     /** Preserve lazy, synchronized publication and retry after initialization failure. */
