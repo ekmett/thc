@@ -4,9 +4,9 @@
 -- Keep generated selector calls in importing modules instead of their unfoldings.
 {-# OPTIONS_GHC -fomit-interface-pragmas #-}
 -- Input: an Int# supplied by NativeHiOracle.
--- Purpose: retain record selectors, parameterized lazy fields and a recursive boxed field across modules.
+-- Purpose: retain record selectors and newtype casts through parameterized lazy fields.
 -- Output: Empty for negative input; otherwise a singleton Box with integer and floating-point payload fields.
-module NativeHiBoxType (Payload(..), Box(..), box, payload, identity, identityBox) where
+module NativeHiBoxType (Payload(..), PayloadRef, Box(..), box, payload, unpayload, identity, identityBox) where
 
 import GHC.Exts (Int#, Float#, Double#, (+#), (<#))
 import NativeHiScalar (floatValue, doubleValue)
@@ -16,15 +16,20 @@ data Payload = Payload
   , payloadFloat :: Float#
   , payloadDouble :: Double#
   }
+newtype PayloadRef = PayloadRef Payload
 data Box a = Empty | Box a (Box a)
 
 -- Keep a suspended call in the lazy field rather than an already built Payload.
 {-# OPAQUE payload #-}
-payload :: Int# -> Payload
-payload x = Payload (x +# 2#) (floatValue x) (doubleValue x)
+payload :: Int# -> PayloadRef
+payload x = PayloadRef (Payload (x +# 2#) (floatValue x) (doubleValue x))
+
+{-# OPAQUE unpayload #-}
+unpayload :: PayloadRef -> Payload
+unpayload (PayloadRef value) = value
 
 {-# OPAQUE box #-}
-box :: Int# -> Box Payload
+box :: Int# -> Box PayloadRef
 box x = case x <# 0# of
   1# -> Empty
   _ -> Box (payload x) (box (-1#))
@@ -34,5 +39,5 @@ identity :: a -> a
 identity x = x
 
 {-# OPAQUE identityBox #-}
-identityBox :: Box Payload -> Box Payload
+identityBox :: Box PayloadRef -> Box PayloadRef
 identityBox = identity

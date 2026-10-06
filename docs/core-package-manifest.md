@@ -123,7 +123,10 @@ variables of kind `Type` are erased from value parameters and applications; type
 the original function value. Ordinary boxed datatypes support nullary constructors,
 integer, floating-point and address fields, lifted datatype parameters and ordinary
 named boxed fields, including recursive fields and ordinary records. Generated record
-selectors execute their retained Core bodies. Layouts resolve after module admission reserves the
+selectors execute their retained Core bodies. Monomorphic lifted newtypes over
+supported representations use their underlying runtime representation while
+retaining nominal type identity. Their explicit casts, including function-result
+casts with unchanged arguments, preserve lazy evaluation. Layouts resolve after module admission reserves the
 owner directory, so forward and imported types do not depend on declaration order.
 Constructor applications and cases instantiate parameters while keeping lazy
 fields unevaluated. An actual multi-module program passes `Box Payload` through
@@ -131,7 +134,8 @@ polymorphic identity and its monomorphic alias, then evaluates a suspended paylo
 and a recursive lazy tail. It matches native GHC on both backends and handoff modes,
 including the first installed guest call. Process creation is disabled and the
 Core closure contains only `.hi` files.
-Higher-rank and representation-polymorphic types, typeclass dictionaries,
+Parameterized or unlifted newtypes, general coercions, higher-rank and
+representation-polymorphic types, typeclass dictionaries,
 constructor wrappers, unpacking, GADTs, foreign obligations, annotations
 and further expression forms are not yet supported. Complete offline execution auditing is also unavailable;
 `--verify-artifacts` rejects these modules. The project driver does not yet
