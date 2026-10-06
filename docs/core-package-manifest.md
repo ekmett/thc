@@ -118,12 +118,14 @@ raw byte literals and calls to other native interface modules. `Addr#` values us
 the existing address representation; string bytes preserve embedded NUL and high
 bytes without text decoding. Prenex type variables of kind `Type`
 are erased from value parameters and applications; type-only aliases preserve
-the original function value. A monomorphic boxed datatype with nullary or
-integer-field constructors can be constructed and matched across native
-interface modules. An actual multi-module program passes a boxed value through
-polymorphic identity and its monomorphic alias, then matches native GHC on both
-backends and handoff modes, including the first installed guest call. Process
-creation is disabled and the Core closure contains only `.hi` files.
+the original function value. Ordinary boxed datatypes support nullary constructors,
+integer fields and fields whose type is a lifted datatype parameter. Constructor
+applications and cases instantiate those parameters while keeping lazy fields
+unevaluated. An actual multi-module program passes `Box Payload` through
+polymorphic identity and its monomorphic alias, then evaluates a suspended call
+in the boxed field. It matches native GHC on both backends and handoff modes,
+including the first installed guest call. Process creation is disabled and the
+Core closure contains only `.hi` files.
 Higher-rank and representation-polymorphic types, typeclass dictionaries,
 constructor wrappers, records, unpacking, GADTs, foreign obligations, annotations
 and further expression forms are not yet supported. Complete offline execution auditing is also unavailable;

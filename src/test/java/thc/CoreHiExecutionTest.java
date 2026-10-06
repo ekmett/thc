@@ -11,8 +11,8 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Ordinary GHC .hi files execute directly, including retained private RHSs,
- * scalar recursion, raw byte literals, erased polymorphism and cross-module boxed construction/case. Native results come from the same
- * source build; process creation is denied and the runtime receives no CBD. */
+ * scalar recursion, raw byte literals, erased polymorphism and parameterized
+ * boxed fields across modules. Native results come from the same source build; process creation is denied and the runtime receives no CBD. */
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
     private static final String UNIT = "thc-native-hi-scalar";
@@ -75,15 +75,18 @@ class CoreHiExecutionTest {
                 assertEquals(rows.getLast()[1], entry.execute(rows.getLast()[0]).asLong(), backend + " repeated call");
                 for (int resultColumn : new int[]{1, 3}) {
                     var function = resultColumn == 1 ? entry : boxed;
+                    // Exercise the suspended boxed field on its very first compiled call.
+                    var first = resultColumn == 1 ? rows.getFirst() : rows.getLast();
+                    var alternative = resultColumn == 1 ? rows.getLast() : rows.getFirst();
                     String label = backend + (resultColumn == 1 ? " raw bytes" : " polymorphic boxed case");
                     assertTrue(function.invokeMember("compile").asBoolean(), label + " native interface compilation");
                     var before = (Map<?, ?>) Json.parse(function.getMember("diagnostics").asString());
-                    assertEquals(rows.getFirst()[resultColumn], function.execute(rows.getFirst()[0]).asLong(), label + " first installed call");
+                    assertEquals(first[resultColumn], function.execute(first[0]).asLong(), label + " first installed call");
                     var after = (Map<?, ?>) Json.parse(function.getMember("diagnostics").asString());
                     assertTrue(((Number) after.get("compiledEntries")).longValue() > ((Number) before.get("compiledEntries")).longValue(),
                             label + " first installed call enters compiled guest code");
                     Main.installed(after);
-                    assertEquals(rows.getLast()[resultColumn], function.execute(rows.getLast()[0]).asLong(), label + " installed alternative");
+                    assertEquals(alternative[resultColumn], function.execute(alternative[0]).asLong(), label + " installed alternative");
                 }
             }
         }
