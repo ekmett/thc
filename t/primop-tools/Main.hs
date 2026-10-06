@@ -291,11 +291,11 @@ cliTests root executable =
       field "ghc" value @?= Right ("9.14.1" :: T.Text)
       digest <- hashFile (dir </> implementationSource)
       field "generatorSha256" value @?= Right digest
-      cases <- ok (field "cases" value :: Either String [Value])
+      oracleCases <- ok (field "cases" value :: Either String [Value])
       catalogue <- ok knownKeyCatalogue
       rules <- ok (field "axiomRules" catalogue :: Either String [Value])
       actual <- Map.fromList <$> traverse (\row -> (,) <$> ok (field "name" row :: Either String T.Text) <*> pure ()) rules
-      observed <- Map.fromList <$> traverse (\row -> (,) <$> ok (field "rule" row :: Either String T.Text) <*> pure ()) cases
+      observed <- Map.fromList <$> traverse (\row -> (,) <$> ok (field "rule" row :: Either String T.Text) <*> pure ()) oracleCases
       observed @?= actual)
   , "CLI stale scalar check leaves contract untouched" ~: isolated (\dir -> do
       BS.appendFile (dir </> scalarPath) " "
