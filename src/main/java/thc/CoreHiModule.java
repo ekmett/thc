@@ -14,6 +14,8 @@ final class CoreHiModule {
     // Internal type forms cannot collide with canonical unit:module names.
     private static final String FORALL = "\u0000hi-forall:", TYPE_VARIABLE = "\u0000hi-type-variable:", ABSTRACT_LIFTED = "\u0000hi-lifted-variable:";
     private static final String UNBOXED_TUPLE = "\u0000hi-unboxed-tuple";
+    private static final String STATE = "ghc-internal:GHC.Internal.Prim.State#";
+    private static final Type REAL_WORLD_STATE = new Type(STATE, List.of(Type.scalar("ghc-internal:GHC.Internal.Prim.RealWorld")));
     record Type(String name, List<Type> arguments) {
         static Type scalar(String primitive) { return new Type(primitive, List.of()); }
         static Type fun(Type argument, Type result) { return new Type("->", List.of(argument, result)); }
@@ -296,7 +298,9 @@ final class CoreHiModule {
                     c.require(c.byteValue() <= 2, "invalid type argument visibility");
                 }
                 String primitive = scalarTyCon(name);
-                yield new Type(primitive != null ? primitive : CoreHiNames.id(name), List.copyOf(arguments));
+                Type result = new Type(primitive != null ? primitive : CoreHiNames.id(name), List.copyOf(arguments));
+                c.require(!result.name.equals(STATE) || realWorldState(result), "unsupported State# parameter; only fixed State# RealWorld is supported");
+                yield result;
             }
             case 8 -> {
                 c.require(c.byteValue() == 1 && !bool(c), "unsupported boxed, constraint or promoted tuple type");
@@ -311,8 +315,8 @@ final class CoreHiModule {
                 var components = List.copyOf(arguments.subList(arity, count));
                 for (int i = 0; i < arity; i++) {
                     Type component = components.get(i);
-                    c.require(scalar(component), "unsupported non-scalar unboxed tuple component " + component);
-                    c.require(arguments.get(i).equals(Type.scalar("ghc-internal:GHC.Internal.Types." + component.name)),
+                    c.require(tupleComponent(component), "unsupported non-scalar unboxed tuple component " + component);
+                    c.require(tupleRuntimeRep(arguments.get(i), component),
                             "unboxed tuple RuntimeRep mismatch at component " + i);
                 }
                 yield new Type(UNBOXED_TUPLE, components);
@@ -509,11 +513,13 @@ final class CoreHiModule {
             case 12 -> values(expr(c, depth + 1), coercion(c, depth + 1, 2));
             case 10 -> throw unsupported(c, "foreign call; native interface foreign transport is not implemented");
             case 11 -> {
+                int nameOffset = c.position();
                 var name = CoreHiNames.read(reader, c);
+                long nameWord = reader.cursor(new CoreHiReader.Section(nameOffset, c.position()), "global name identity").unsigned(32);
                 c.require(!CoreHiNames.id(name).equals(CoreUnitDirectory.MAIN_ALIAS), "unsupported native Core main alias obligations");
                 c.require(!CoreHiNames.isPrimop(name) || !Set.of("prompt#", "control0#").contains(name.occurrence()),
                         "unsupported native Core delimited-control obligations");
-                yield values(name);
+                yield values(name, nameWord);
             }
             default -> throw unsupported(c, "expression tag " + tag);
         };
@@ -682,6 +688,8 @@ final class CoreHiModule {
             }
             case 11 -> {
                 var name = (CoreHiReader.ExternalName) e.fields.getFirst();
+                // GHC.Builtin.Names.realWorldPrimIdKey; table names and other zero-width expressions stay executable.
+                if ((Long) e.fields.get(1) == 0x8c000010L) yield expression(REAL_WORLD_STATE, e, "void");
                 String id = CoreHiNames.id(name);
                 if (CoreHiNames.unboxedTupleArity(name) >= 0) throw error(e, "unsupported partial unboxed tuple constructor");
                 Type type;
@@ -705,7 +713,7 @@ final class CoreHiModule {
                 var arguments = new ArrayList<List<Object>>(); var components = new ArrayList<Type>();
                 for (var raw : (List<?>) e.fields.getFirst()) {
                     Lowered component = lower((Expr) raw, scope, typeScope);
-                    if (!scalar(component.type)) throw error(e, "unsupported non-scalar unboxed tuple component " + component.type);
+                    if (!tupleComponent(component.type)) throw error(e, "unsupported non-scalar unboxed tuple component " + component.type);
                     arguments.add(component.expression); components.add(component.type);
                 }
                 Type type = new Type(UNBOXED_TUPLE, List.copyOf(components)), signature = type;
@@ -946,7 +954,7 @@ final class CoreHiModule {
         }
         type = resolve(type, Map.of(), location, false);
         var seen = new HashSet<String>();
-        while (!type.abstractLifted() && type.name.indexOf(':') >= 0) {
+        while (!type.abstractLifted() && !realWorldState(type) && type.name.indexOf(':') >= 0) {
             var module = owner(type.name);
             if (module == null) throw error(location, "missing native Core type owner " + type.name);
             var constructor = module.newtypes.get(type.name);
@@ -956,6 +964,15 @@ final class CoreHiModule {
             type = resolve(constructor.fields.getFirst(), Map.of(), location, false);
         }
         return type;
+    }
+    private static boolean realWorldState(Type type) { return type.equals(REAL_WORLD_STATE); }
+    private static boolean tupleComponent(Type type) { return scalar(type) || realWorldState(type); }
+    private static boolean tupleRuntimeRep(Type representation, Type component) {
+        if (!realWorldState(component)) return representation.equals(Type.scalar("ghc-internal:GHC.Internal.Types." + component.name));
+        // Pinned ZeroBitRep is the synonym TupleRep '[]; it is not VoidRep or an empty logical tuple.
+        return representation.equals(Type.scalar("ghc-internal:GHC.Internal.Types.ZeroBitRep")) ||
+                representation.equals(new Type("ghc-internal:GHC.Internal.Types.TupleRep", List.of(
+                        new Type("ghc-internal:GHC.Internal.Types.[]", List.of(Type.scalar("ghc-internal:GHC.Internal.Types.RuntimeRep"))))));
     }
     private static boolean scalar(Type type) {
         return type.arguments.isEmpty() && switch (type.name) {
@@ -973,14 +990,15 @@ final class CoreHiModule {
     }
     private boolean lifted(Type type, Expr location) {
         type = runtimeType(type, location);
-        return type.function() || type.abstractLifted() || data(type);
+        return !realWorldState(type) && (type.function() || type.abstractLifted() || data(type));
     }
     private Map<String,Object> rep(Type type, boolean evaluated, Expr location) {
         type = runtimeType(type, location);
+        if (realWorldState(type)) return map("kind", "void", "primReps", List.of(), "evaluated", true);
         if (type.tuple()) {
             var components = new ArrayList<Map<String,Object>>(); var primitives = new ArrayList<Object>();
             for (Type component : type.arguments) {
-                if (!scalar(component)) throw error(location, "unsupported non-scalar unboxed tuple component " + component);
+                if (!tupleComponent(component)) throw error(location, "unsupported non-scalar unboxed tuple component " + component);
                 var proof = rep(component, true, location);
                 components.add(proof); primitives.addAll((List<?>) proof.get("primReps"));
             }
