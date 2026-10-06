@@ -84,29 +84,7 @@ final class CoreHiModule {
         if(reader.simplifiedCore!=null){
             c=reader.cursor(reader.simplifiedCore,"retained Core");count=c.count(2);
             for(int i=0;i<count;i++)groups.add(group(c,true,0,true));
-            Map<String,Object> stubs=null;
-            if(c.optional()){
-                String header=c.string(),source=c.string();
-                var initializers=foreignLabels(c,true);
-                var finalizers=foreignLabels(c,false);
-                stubs=map("header",header,"source",source,"initializers",initializers,"finalizers",finalizers);
-                hasForeignProducts=!header.isEmpty()||!source.isEmpty()||!initializers.isEmpty()||!finalizers.isEmpty();
-                if(!header.isEmpty())foreignObligations.add("foreign header");
-                if(!source.isEmpty())foreignObligations.add("foreign source");
-                for(var label:initializers)foreignObligations.add("initializer "+label.get("name"));
-                for(var label:finalizers)foreignObligations.add("finalizer "+label.get("name"));
-                registration=!initializers.isEmpty()||!finalizers.isEmpty();
-            }
-            count=c.count(3);
-            var files=new ArrayList<Map<String,Object>>();
-            for(int i=0;i<count;i++){
-                int language=c.byteValue();c.require(language<=6,"invalid foreign source language");
-                String[] languages={"LangC","LangCxx","LangObjc","LangObjcxx","LangAsm","LangJs","RawObject"};
-                files.add(map("language",languages[language],"source",c.string(),"extension",c.string()));
-                foreignObligations.add("foreign file "+languages[language]);
-            }
-            hasForeignProducts|=!files.isEmpty();registration|=!files.isEmpty();
-            foreignProducts=map("schema",1L,"execution","not-linked","stubs",stubs,"files",List.copyOf(files));
+            foreignProducts(c);
             c.expectEnd();
             for(Group group:groups)for(Definition definition:group.definitions){
                 Binder b=definition.binder;String id=prefix()+b.name;mainAlias|=id.equals(CoreUnitDirectory.MAIN_ALIAS);
@@ -114,6 +92,31 @@ final class CoreHiModule {
                 topScope.put(b.name,new Variable(id,types.read(b.type,Map.of())));
             }
         }
+    }
+    private void foreignProducts(CoreHiReader.Cursor c) {
+    Map<String,Object> stubs=null;
+    if(c.optional()){
+        String header=c.string(),source=c.string();
+        var initializers=foreignLabels(c,true);
+        var finalizers=foreignLabels(c,false);
+        stubs=map("header",header,"source",source,"initializers",initializers,"finalizers",finalizers);
+        hasForeignProducts=!header.isEmpty()||!source.isEmpty()||!initializers.isEmpty()||!finalizers.isEmpty();
+        if(!header.isEmpty())foreignObligations.add("foreign header");
+        if(!source.isEmpty())foreignObligations.add("foreign source");
+        for(var label:initializers)foreignObligations.add("initializer "+label.get("name"));
+        for(var label:finalizers)foreignObligations.add("finalizer "+label.get("name"));
+        registration=!initializers.isEmpty()||!finalizers.isEmpty();
+    }
+    int count=c.count(3);
+    var files=new ArrayList<Map<String,Object>>();
+    for(int i=0;i<count;i++){
+        int language=c.byteValue();c.require(language<=6,"invalid foreign source language");
+        String[] languages={"LangC","LangCxx","LangObjc","LangObjcxx","LangAsm","LangJs","RawObject"};
+        files.add(map("language",languages[language],"source",c.string(),"extension",c.string()));
+        foreignObligations.add("foreign file "+languages[language]);
+    }
+    hasForeignProducts|=!files.isEmpty();registration|=!files.isEmpty();
+    foreignProducts=map("schema",1L,"execution","not-linked","stubs",stubs,"files",List.copyOf(files));
     }
     private String prefix(){return reader.module.unit()+":"+reader.module.name()+".";}
     boolean hasRetainedCore(){return reader.simplifiedCore!=null;}
@@ -982,7 +985,6 @@ final class CoreHiModule {
                 yield expression(type,e,"app",head.expression,args,componentTypes.stream().map(this::lifted).toList(),false,false);
             }
             case 12->{Lowered body=lower((Expr)e.fields.getFirst(),scope,typeScope);Co co=types.readCo(e.fields.get(1),typeScope);var endpoints=types.endpoints(co);Ty target=endpoints.get(1);
-                if(!types.equal(body.type,endpoints.getFirst()))throw error(e,"cast source type differs from coercion endpoint");
                 var expression=new ArrayList<>(body.expression);var info=new LinkedHashMap<>(metadata(body.expression));boolean evaluated=Boolean.TRUE.equals(((Map<?,?>)info.get("rep")).get("evaluated"));info.put("rep",rep(target,evaluated,e));expression.set(expression.size()-1,info);yield new Lowered(expression,target);
             }
             case 2->{Co co=types.readCo(e.fields.getFirst(),typeScope);yield expression(types.coercionType(co),e,"void");}

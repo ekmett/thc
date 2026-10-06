@@ -75,6 +75,51 @@ class CoreHiReaderTest {
         assertTrue(failure.getCause().getMessage().contains("tick tag 4"));
     }
 
+    @Test void foreignFramingPreservesAdmissionObligations() throws Exception {
+        var reader = CoreHiReader.read(path("normal"));
+        int unit = reader.strings.indexOf(reader.module.unit());
+        int owner = reader.strings.indexOf(reader.module.name());
+        assertTrue(unit >= 0 && owner >= 0);
+        var bytes = new java.io.ByteArrayOutputStream();
+        bytes.writeBytes(new byte[]{1, 0, 0}); // Present stubs, empty header/source.
+        for (boolean initializer : List.of(true, false)) {
+            bytes.write(1); bytes.write(initializer ? 1 : 0);
+            bytes.write(0); unsigned(bytes, unit); unsigned(bytes, owner);
+            unsigned(bytes, owner); // FastString label, not a Name reference.
+        }
+        bytes.write(1); bytes.write(0); // One C file.
+        for (String text : List.of("int x;", ".c")) {
+            bytes.write(text.length());
+            text.codePoints().forEach(point -> unsigned(bytes, point));
+        }
+        byte[] payload = bytes.toByteArray();
+        byte[] encoded = Files.readAllBytes(path("normal"));
+        int start = reader.publicSections.get("declarations").start();
+        System.arraycopy(payload, 0, encoded, start, payload.length);
+        var file = new CoreHiReader(encoded, "foreign-codec.hi");
+        var parse = CoreHiModule.class.getDeclaredMethod("foreignProducts", CoreHiReader.Cursor.class);
+        parse.setAccessible(true);
+        var module = new CoreHiModule(reader);
+        var cursor = file.cursor(new CoreHiReader.Section(start, start + payload.length), "foreign products");
+        parse.invoke(module, cursor);
+        cursor.expectEnd();
+        assertTrue(module.admission().registrationObligations());
+        var foreign = (Map<?,?>) module.metadata().get("foreign");
+        assertEquals("not-linked", foreign.get("execution"));
+        assertEquals(List.of(Map.of("language", "LangC", "source", "int x;", "extension", ".c")), foreign.get("files"));
+        var stubs = (Map<?,?>) foreign.get("stubs");
+        for (String key : List.of("initializers", "finalizers"))
+            assertEquals(List.of(Map.of("isInitializer", key.equals("initializers"), "unit", reader.module.unit(),
+                    "module", reader.module.name(), "name", reader.module.name())), stubs.get(key));
+        for (int length = 0; length < payload.length; length++) {
+            var truncated = file.cursor(new CoreHiReader.Section(start, start + length), "truncated foreign products");
+            var failure = assertThrows(java.lang.reflect.InvocationTargetException.class,
+                    () -> parse.invoke(new CoreHiModule(reader), truncated));
+            assertInstanceOf(IllegalArgumentException.class, failure.getCause());
+            assertTrue(failure.getCause().getMessage().contains("foreign-codec.hi"));
+        }
+    }
+
     private static void unsigned(java.io.ByteArrayOutputStream bytes, long value) {
         do {
             int low = (int) (value & 127); value >>>= 7;
