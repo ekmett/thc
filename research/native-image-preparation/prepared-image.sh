@@ -4,8 +4,8 @@
 # Experimental runtime-graph and selected-code cache preparation.
 # Retain normal compiler checks; separate from the pure-interpreter recipe.
 set -euo pipefail
-if (( $# < 1 || $# > 2 )); then
-    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only]' >&2
+if (( $# < 1 || $# > 3 )); then
+    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only [BUILD_DIR]]' >&2
     exit 2
 fi
 recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -36,6 +36,11 @@ esac
 : "${JAVA_HOME:?Select GraalVM 25.3.4.1}"
 unset JAVA_TOOL_OPTIONS THC_BACKEND JAVA_OPTS THC_OPTS JDK_JAVA_OPTIONS GHC_PACKAGE_PATH GHC_ENVIRONMENT
 [[ "$("$JAVA_HOME/bin/native-image" --version)" == *25.3.4.1* ]] || exit 2
+# Resolve caller-relative output paths before entering the read-only input tree.
+# Each target owns its build directory; repeated builds may reuse its contents.
+build_dir=${3:-$repo_dir/build/native-image}
+mkdir -p -- "$build_dir"
+build_dir=$(cd -- "$build_dir" && pwd)
 cd "$repo_dir"
 classpath=
 for jar in build/install/thc/lib/*.jar; do
@@ -47,8 +52,8 @@ for jar in build/install/thc/lib/*.jar; do
     classpath="${classpath:+$classpath:}$repo_dir/$jar"
 done
 test -f build/install/thc/lib/thc-0.1-experiment.jar
-probe_dir="$repo_dir/build/native-image/reproduction-probe"
-inventory_dir="$repo_dir/build/native-image/reproduction-inventory"
+probe_dir="$build_dir/reproduction-probe"
+inventory_dir="$build_dir/reproduction-inventory"
 mkdir -p "$probe_dir" "$inventory_dir"
 "$JAVA_HOME/bin/javac" -d "$probe_dir" "$recipe_dir/ClassInitializationInventory.java"
 for kind in stateless markers enums; do
@@ -74,7 +79,7 @@ while IFS= read -r prepared; do
 done < "$recipe_dir/prepared-initialization.txt"
 cache_options=()
 main_class=thc.Main
-image_path="$repo_dir/build/native-image/thc-reproduced-prepared"
+image_path="$build_dir/thc-reproduced-prepared"
 if [[ "$mode" == cache* || "$mode" == executable* ]]; then
     # This configuration is qualified only for the pinned Linux AMD64 provider.
     [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
@@ -89,7 +94,7 @@ if [[ "$mode" == cache* || "$mode" == executable* ]]; then
     # normalize it without dropping any instruction feature or installer check.
     cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT -H:+AuxiliaryEngineCache)
     main_class=thc.NativeCache
-    image_path="$repo_dir/build/native-image/thc-native-cache"
+    image_path="$build_dir/thc-native-cache"
 fi
 [[ "$vector_profile" != resource-copy ]] || image_path+=-resource-copy
 executable_options=()
@@ -101,7 +106,7 @@ if [[ "$mode" == executable* ]]; then
     : "${THC_NATIVE_IMAGE_EXECUTABLE_NAME:?Supply the ELF output basename}"
     [[ "$THC_NATIVE_IMAGE_EXECUTABLE_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 2
     test -f "$THC_NATIVE_IMAGE_EXECUTABLE_CONFIG"
-    binding_dir=$(mktemp -d "$repo_dir/build/native-image/executable.XXXXXX")
+    binding_dir=$(mktemp -d "$build_dir/executable.XXXXXX")
     cp -- "$THC_NATIVE_IMAGE_EXECUTABLE_CONFIG" "$binding_dir/thc-native-executable.json"
     "$JAVA_HOME/bin/jar" --create --file "$binding_dir/binding.jar" -C "$binding_dir" thc-native-executable.json
     classpath="$classpath:$binding_dir/binding.jar"
@@ -115,7 +120,7 @@ if [[ "$mode" == executable* ]]; then
     builder_heap=16g
     cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT)
     main_class=thc.NativeExecutable
-    image_path="$repo_dir/build/native-image/$THC_NATIVE_IMAGE_EXECUTABLE_NAME"
+    image_path="$build_dir/$THC_NATIVE_IMAGE_EXECUTABLE_NAME"
 fi
 # Builder memory is separate from the produced executable's runtime limits.
 # Keep overrides within the two resource budgets qualified by this recipe.
@@ -171,7 +176,7 @@ classpath="$probe_dir:$classpath"
 builder_overlays=
 foreign_patch=()
 if [[ "$vector_profile" == intrinsics ]]; then
-    overlay_dir="$repo_dir/build/native-image/shared-arena-vector"
+    overlay_dir="$build_dir/shared-arena-vector"
     bash "$repo_dir/nih/native-image/shared-arena-vector/prepare.sh" "$overlay_dir"
     bash "$recipe_dir/shared-arena-vector/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-shared-arena-vector-foreign.jar"
     bash "$recipe_dir/shared-arena-vector/check-provider.sh" "$overlay_dir/provider-checks" "$overlay_dir"
@@ -183,21 +188,21 @@ if [[ "$vector_profile" == intrinsics ]]; then
 fi
 if [[ -n "${THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS" == 1 ]] || exit 2
-    overlay_dir="$repo_dir/build/native-image/deopt-loop-stamps"
+    overlay_dir="$build_dir/deopt-loop-stamps"
     bash "$recipe_dir/deopt-loop-stamps/prepare.sh" "$overlay_dir"
     bash "$recipe_dir/deopt-loop-stamps/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-deopt-loop-stamps.jar"
     builder_overlays="${builder_overlays:+$builder_overlays:}$overlay_dir/thc-svm-deopt-loop-stamps.jar"
 fi
 if [[ -n "${THC_NATIVE_IMAGE_RUNTIME_SNIPPETS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_RUNTIME_SNIPPETS" == 1 ]] || exit 2
-    overlay_dir="$repo_dir/build/native-image/runtime-snippet-providers"
+    overlay_dir="$build_dir/runtime-snippet-providers"
     bash "$recipe_dir/runtime-snippet-providers/prepare.sh" "$overlay_dir"
     bash "$recipe_dir/runtime-snippet-providers/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-runtime-snippet-providers.jar"
     builder_overlays="${builder_overlays:+$builder_overlays:}$overlay_dir/thc-svm-runtime-snippet-providers.jar"
 fi
 if [[ -n "${THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS" == 1 ]] || exit 2
-    overlay_dir="$repo_dir/build/native-image/runtime-simulated-folds"
+    overlay_dir="$build_dir/runtime-simulated-folds"
     bash "$recipe_dir/runtime-simulated-folds/prepare.sh" "$overlay_dir"
     bash "$recipe_dir/runtime-simulated-folds/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-runtime-simulated-folds.jar"
     builder_overlays="${builder_overlays:+$builder_overlays:}$overlay_dir/thc-svm-runtime-simulated-folds.jar"
@@ -217,6 +222,6 @@ exec "$JAVA_HOME/bin/native-image" -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcess
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
     --features=PreparedInitializationFeature "-J-Dthc.nativeImage.initialization=$initialization_args" "@$foreign_args" \
     -H:+UnlockExperimentalVMOptions "@$vector_args" "${cache_options[@]}" "${executable_options[@]}" -H:+PrintCanonicalGraphStrings \
-    -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
+    -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$build_dir/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \
     -cp "$classpath" "$main_class" "$image_path"

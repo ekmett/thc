@@ -80,9 +80,22 @@ These are the overlay choices used by the demonstrated preparation, not a
 guarantee that another revision builds or compiles guest code. Omitting an opt-in
 retains its original pinned builder behavior for independent diagnostics.
 
-On a shared host, wrap each command in its existing build-directory lease and
-check available host capacity. The script does not acquire a host-specific lock
-itself. Do not run duplicate image builders.
+The recipe accepts an optional third argument, `BUILD_DIR`, resolved relative
+to the caller's working directory. It defaults to `REPO/build/native-image`.
+Use a separate directory for each target; the installed runtime and recipe files
+remain shared read-only inputs. Generated probe classes, argument inventories,
+binding JARs, overlay products, the executable and its emitted sidecars belong to
+that directory. Graph dumps go there too unless `THC_NATIVE_IMAGE_DUMP_PATH`
+explicitly selects another location. Existing contents are reused; an empty
+directory is not required.
+
+```sh
+bash research/native-image-preparation/prepared-image.sh "$PWD" prepare-only "$PWD/build/my-target"
+```
+
+Each build directory needs one writer. On a shared host, hold its existing
+build-directory lease and check available capacity before starting an image
+builder. The script does not acquire a host-specific lock itself.
 
 `THC_NATIVE_IMAGE_BUILDER_HEAP=16g` selects the qualified larger builder budget
 when the default generic/cache 8 GiB is insufficient. Only `8g` and `16g` are
