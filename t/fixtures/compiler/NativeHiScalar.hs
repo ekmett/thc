@@ -1,18 +1,24 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UnboxedSums #-}
 {-# LANGUAGE UnboxedTuples #-}
 -- Retain exact rational literals, including 1/3, to check direct IEEE rounding.
 {-# OPTIONS_GHC -fexcess-precision #-}
 -- Native .hi execution checks private retained RHSs, cross-module calls and
 -- recursive scalar cases and IEEE literal rounding against NativeHiOracle.
-module NativeHiScalar (entry, recursive, floatingPair, goodMain, badMain) where
+module NativeHiScalar (entry, recursive, floatingPair, wired, goodMain, badMain) where
 
 import GHC.Exts
   ( Int(I#), Int#, Float#, Double#, (+#), (-#), (*#), (<=#), (<#)
-  , divideFloat#, (/##), realWorld#, raise#
+  , divideFloat#, (/##), State#, RealWorld, realWorld#, runRW#, raise#
   )
+import GHC.Internal.Magic (lazy, noinline)
+import GHC.Internal.Unsafe.Coerce (UnsafeEquality(..), unsafeEqualityProof)
 import NativeHiDependency (marker, measured, advanceAndMeasure)
 import NativeHiClasses (Measure(..), Advance(..))
 import GHC.IO (IO(..))
@@ -84,3 +90,41 @@ goodMain = observe 42#
 
 badMain :: IO ()
 badMain = observe 43#
+
+-- Mandatory preparation preserves x+3 for each form, including a payload that
+-- must remain unevaluated. The opaque call boundaries keep first-class magic,
+-- application suffixes and the polymorphic proof case in retained Core.
+{-# OPAQUE wiredStep #-}
+wiredStep :: Int# -> Int#
+wiredStep x = x +# 3#
+
+{-# OPAQUE wiredIdentity #-}
+wiredIdentity :: (forall a. a -> a) -> Int# -> Int#
+wiredIdentity identity x = identity wiredStep x
+
+{-# OPAQUE wiredRunner #-}
+wiredRunner :: ((State# RealWorld -> Int#) -> Int#) -> Int# -> Int#
+wiredRunner runner x = runner (\_ -> wiredStep x)
+
+{-# OPAQUE wiredDiscard #-}
+wiredDiscard :: Int -> Int# -> Int#
+wiredDiscard _ x = wiredStep x
+
+{-# OPAQUE wiredBottom #-}
+wiredBottom :: Int# -> Int
+wiredBottom x = wiredBottom x
+
+{-# OPAQUE wiredCoerce #-}
+wiredCoerce :: forall a b. a -> b
+wiredCoerce x = case unsafeEqualityProof @a @b of UnsafeRefl -> x
+
+-- | @wired x = 7 * (x + 3)@, without forcing 'wiredBottom'.
+{-# OPAQUE wired #-}
+wired :: Int# -> Int#
+wired x = lazy (noinline wiredStep) x
+  +# wiredIdentity lazy x
+  +# runRW# (\_ -> wiredStep x)
+  +# wiredRunner runRW# x
+  +# runRW# (\_ -> wiredStep) x
+  +# (wiredCoerce wiredStep :: Int# -> Int#) x
+  +# wiredDiscard (lazy (wiredBottom x)) x

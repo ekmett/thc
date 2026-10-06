@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
     private static final String UNIT = "thc-native-hi-scalar";
-    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiClasses", "NativeHiBox", "NativeHiBoxType", "GHC.Internal.Types");
+    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiClasses", "NativeHiBox", "NativeHiBoxType", "GHC.Internal.Types", "GHC.Internal.Magic");
     @TempDir Path directory;
 
     private List<String> interfaces() throws Exception {
@@ -75,6 +75,7 @@ class CoreHiExecutionTest {
             assertEquals(4 * row[0] + 8 + literalBytes[(int) (row[0] & 3)], row[1], "native result agrees with independent arithmetic and raw bytes");
             assertEquals(row[0] <= 0 ? 0 : row[0] * (row[0] + 1) / 2, row[2], "native recursion agrees with model");
             assertEquals(row[0] < 0 ? -7 : 3 * (row[0] + 2), row[3], "native constructor/case agrees with model");
+            assertEquals(7 * (row[0] + 3), row[6], "native wired preparation agrees with model");
         }
         List<String> paths = interfaces();
         for (String backend : List.of("ast", "bytecode")) {
@@ -84,24 +85,26 @@ class CoreHiExecutionTest {
                 var boxed = context.eval("thc", request(paths, "NativeHiBox", "entry", backend));
                 var floatBits = context.eval("thc", request(paths, "NativeHiBox", "floatBits", backend));
                 var doubleBits = context.eval("thc", request(paths, "NativeHiBox", "doubleBits", backend));
+                var wired = context.eval("thc", request(paths, "NativeHiScalar", "wired", backend));
                 for (var row : rows) {
                     assertEquals(row[1], entry.execute(row[0]).asLong(), backend + " cross-module/private call");
                     assertEquals(row[2], recursive.execute(row[0]).asLong(), backend + " recursive case");
                     assertEquals(row[3], boxed.execute(row[0]).asLong(), backend + " constructor/case");
                     assertEquals(row[4], floatBits.execute(row[0]).asLong(), backend + " float literal bits");
                     assertEquals(row[5], doubleBits.execute(row[0]).asLong(), backend + " double literal bits");
+                    assertEquals(row[6], wired.execute(row[0]).asLong(), backend + " compiler magic preserves results and laziness");
                 }
                 assertEquals(rows.getLast()[1], entry.execute(rows.getLast()[0]).asLong(), backend + " repeated call");
-                for (int resultColumn : new int[]{1, 3, 4, 5}) {
+                for (int resultColumn : new int[]{1, 3, 4, 5, 6}) {
                     var function = switch (resultColumn) {
-                        case 1 -> entry; case 3 -> boxed; case 4 -> floatBits; default -> doubleBits;
+                        case 1 -> entry; case 3 -> boxed; case 4 -> floatBits; case 5 -> doubleBits; default -> wired;
                     };
                     // Exercise the suspended boxed field on its very first compiled call.
                     var first = resultColumn == 3 ? rows.getLast() : rows.getFirst();
                     var alternative = resultColumn == 3 ? rows.getFirst() : rows.getLast();
                     String label = backend + switch (resultColumn) {
                         case 1 -> " raw bytes"; case 3 -> " polymorphic boxed case";
-                        case 4 -> " float literal"; default -> " double literal";
+                        case 4 -> " float literal"; case 5 -> " double literal"; default -> " wired preparation";
                     };
                     assertTrue(function.invokeMember("compile").asBoolean(), label + " native interface compilation");
                     var before = (Map<?, ?>) Json.parse(function.getMember("diagnostics").asString());
