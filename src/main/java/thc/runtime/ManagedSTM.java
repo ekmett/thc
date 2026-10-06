@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.nodes.Node;
@@ -46,6 +47,7 @@ public final class ManagedSTM implements AutoCloseable {
     }
     private final ReentrantLock lock = new ReentrantLock();
     private final ThreadLocal<Transaction> current = new ThreadLocal<>();
+    private final Assumption unused = Assumption.create("THC no transaction has been associated");
     private final WeakHashMap<ManagedTVar, Boolean> cells = new WeakHashMap<>();
     private final LinkedHashSet<RetryWait> waiters = new LinkedHashSet<>();
     private boolean closed;
@@ -104,11 +106,18 @@ public final class ManagedSTM implements AutoCloseable {
     // Package-local log/storage operations let STMCall preserve the former inlined
     // control flow without heap callbacks capturing a VirtualFrame across retry loops.
     @TruffleBoundary Transaction begin() {
-        lock.lock(); try { live(); var tx = new Transaction(); current.set(tx); return tx; } finally { lock.unlock(); }
+        lock.lock(); try { live(); var tx = new Transaction(); restore(tx); return tx; } finally { lock.unlock(); }
     }
-    @TruffleBoundary void restore(Transaction tx) { if (tx == null) current.remove(); else current.set(tx); }
+    @TruffleBoundary void restore(Transaction tx) {
+        if (tx == null) current.remove();
+        else { unused.invalidate(); current.set(tx); }
+    }
     /** Only private one-shot continuations retain this association; external cuts abandon their log. */
-    @TruffleBoundary Transaction currentTransaction() { return current.get(); }
+    Transaction currentTransaction() {
+        // Resumable roots save this association even in programs that never use STM.
+        return unused.isValid() ? null : associatedTransaction();
+    }
+    @TruffleBoundary private Transaction associatedTransaction() { return current.get(); }
     @TruffleBoundary void retire(Transaction tx) { tx.active = false; }
     @TruffleBoundary(transferToInterpreterOnException = false)
     void commit(Transaction tx) {
@@ -169,7 +178,7 @@ public final class ManagedSTM implements AutoCloseable {
     @TruffleBoundary Transaction beginNested(Transaction parent) {
         var entries = new IdentityHashMap<ManagedTVar, Entry>();
         for (var item : parent.entries.entrySet()) entries.put(item.getKey(), item.getValue().copy());
-        var child = new Transaction(entries); current.set(child); return child;
+        var child = new Transaction(entries); restore(child); return child;
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
     void commitNested(Transaction parent, Transaction child) {
