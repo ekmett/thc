@@ -332,10 +332,10 @@ public final class CoreModules {
     }
     private static boolean sameCapability(String supplied, String expected) { return MessageDigest.isEqual(supplied.getBytes(StandardCharsets.US_ASCII), expected.getBytes(StandardCharsets.US_ASCII)); }
     private static MessageDigest digest() { try { return MessageDigest.getInstance("SHA-256"); } catch (NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); } }
-    private static String sha256(byte[] bytes) { return HexFormat.of().formatHex(digest().digest(bytes)); }
+    static String sha256(byte[] bytes) { return HexFormat.of().formatHex(digest().digest(bytes)); }
     public static CoreUnitDirectory unitDirectory(Map<String,Object> input) {
         require(Collections.disjoint(input.keySet(), Set.of("modules", "consumerModules", "detachedBindings", "targetLayout")),
-                "Core runtime inputs must be CBD artifacts, not inline Core");
+                "Core runtime inputs must be declared artifacts, not inline Core");
         require(input.get("verifyArtifacts") == null || input.get("verifyArtifacts") instanceof Boolean, "verifyArtifacts must be a Boolean");
         if (!input.containsKey("packageManifest")) {
             require(input.get("packageManifestSha256") == null && input.get("packageCapability") == null,
@@ -351,8 +351,8 @@ public final class CoreModules {
             byte[] bytes = Files.readAllBytes(Path.of(manifest)); if (verify || !expected.isEmpty()) require(sha256(bytes).equals(expected), "Core package manifest changed after request: " + manifest);
             if (!(Json.parse(new String(bytes, StandardCharsets.UTF_8)) instanceof Map<?,?> document)) throw new IllegalStateException("Invalid Core package manifest");
             var directory = CoreUnitDirectory.read(document);
-            require(!expected.isEmpty() || directory.getModules().stream().noneMatch(module -> module.interfaceSource() != null),
-                    "Interface process source requires a content-bound host request");
+            require(!expected.isEmpty() || directory.getModules().stream().noneMatch(module -> module.interfaceSource() != null || module.nativeInterface()),
+                    "Interface source requires a content-bound host request");
             require(Objects.equals(input.get("foreignExceptionBridgeUnit"), directory.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request"); return directory;
         } catch (Exception failure) { throw rethrow(failure); }
     }
@@ -543,7 +543,7 @@ public final class CoreModules {
         if (manifest != null) {
             byte[] bytes = Files.readAllBytes(Path.of(manifest));
             var directory = CoreUnitDirectory.read((Map<?,?>) Json.parse(new String(bytes, StandardCharsets.UTF_8)));
-            String hash = verify || directory.getModules().stream().anyMatch(module -> module.interfaceSource() != null) ? sha256(bytes) : "";
+            String hash = verify || directory.getModules().stream().anyMatch(module -> module.interfaceSource() != null || module.nativeInterface()) ? sha256(bytes) : "";
             document.put("packageManifest", manifest); document.put("packageManifestSha256", hash);
             document.put("packageCapability", packageCapability(manifest, hash, verify));
             document.put("foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit());

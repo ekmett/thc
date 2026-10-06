@@ -51,7 +51,7 @@ Logical source paths remain relative; executable `compact.path` references are a
 or native-only dependency units may have no Core modules, but a reachable guest
 global must still have an exported definition. The JVM loader checks units,
 module names, boundaries and binding owners, and rejects missing reachable
-globals. File-hash verification is opt-in. The separate auditor accepts
+globals. CBD file-hash verification is opt-in; native interface hashes are always checked. The separate auditor accepts
 `--package-manifest packages.json`. The JVM command-line module argument accepts
 `@packages.json`, including with `--run-io`. Add `--verify-artifacts` before the
 guest `--` separator to check artifact hashes and original source identity.
@@ -84,7 +84,29 @@ Artifact hashes remain verification metadata, not a default whole-unit scan.
 The explicit auditor verifies module hashes and derived facts. ZIP acquisition
 receipts remain in the producer cache, not as runtime execution alternatives.
 
-## Retained interface sources
+## Native interface modules
+
+An experimental native JVM reader accepts a module's `interface` artifact with
+`"format": "ghc-hi"`, an absolute `path` and its raw-file `sha256`. The module's
+`sha256` must match it. Omit `compact` and the helper-backed unit `interfaceSource`.
+The four startup summaries must be false for the currently supported scalar
+subset. The runtime verifies the exact bytes it parses, checks module identity,
+and feeds decoded bindings directly to the existing linker and backends. It
+creates no helper process or intermediate CBD.
+
+GHC 9.14.1 vanilla, 64-bit retained interfaces are supported for non-polymorphic
+integer functions, private bindings, recursion, local bindings, literal/default
+cases and calls to other native interface modules. Numeric literals currently
+require GHC's signed 64-bit encoding; high-bit `Word64#` literals remain unsupported. An actual two-module program
+matches native GHC on both backends and handoff modes with process creation
+disabled and only `.hi` files in its Core closure. Constructor declarations,
+polymorphism, foreign obligations, annotations and further expression forms are
+not yet supported. Complete offline execution auditing is also unavailable;
+`--verify-artifacts` rejects these modules. The project driver does not yet
+publish this native format. Broader coverage remains tracked in
+[#1063](https://github.com/ekmett/thc/issues/1063).
+
+## Helper-backed retained interface sources
 
 `--installed-core demand` may mix ordinary `compact` CBD unit records with
 eligible whole-unit `interfaceSource` records. The latter have format

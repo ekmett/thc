@@ -119,8 +119,10 @@ retained in installed interfaces; missing Core fails without a fallback.
 Acquisition alone does not establish runtime support.
 See [GHC library Core](ghc-core.md) to check or build that installation.
 
-`--installed-core demand` reads the same installation but publishes eligible
-whole units as retained-interface sources. A single selected-GHC inventory probe
+`--installed-core demand` is a helper-backed conversion path, not a native JVM
+`.hi` reader. The [native module path](core-package-manifest.md#native-interface-modules)
+is separate and is not yet published by the driver. Demand reads the same installation but publishes eligible whole units
+as retained-interface sources. A single selected-GHC inventory probe
 checks their exact registered dependency closure, including cold interfaces.
 Every owned module must retain complete Core. Its decoded interface must prove
 no foreign products/calls/labels, delimited control, CLI main alias or

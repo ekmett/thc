@@ -5,9 +5,9 @@ package thc;
 import java.util.*;
 import java.util.function.Function;
 
-/** Native retained-Core lowering for pinned GHC 9.14.1. Cold bindings are
- * indexed without lowering; executable coverage is deliberately scalar and
- * unsupported demanded syntax fails with its interface byte offset. */
+/** Native retained-Core lowering for pinned GHC 9.14.1. Declarations and RHS
+ * syntax are parsed at module admission; unsupported tags fail immediately.
+ * Supported scalar binding bodies are lowered only when demanded. */
 final class CoreHiModule {
     record Type(String name, List<Type> arguments) {
         static Type scalar(String primitive) { return new Type(primitive, List.of()); }

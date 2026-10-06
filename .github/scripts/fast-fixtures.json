@@ -290,6 +290,38 @@
     "thc.runtime.TupleRepresentationTest"
   ],
   "groups": {
+    "native-hi-execution": {
+      "cmakeTarget": "fixture-native-hi-execution",
+      "ciPlatforms": [
+        "Linux",
+        "Darwin"
+      ],
+      "junit": [
+        "thc.CoreHiExecutionTest"
+      ],
+      "commands": [
+        {
+          "argv": [
+            "cmake",
+            "--build",
+            "build/fixtures",
+            "--target",
+            "fixture-native-hi-execution"
+          ]
+        }
+      ],
+      "outputs": [
+        "build/native-hi-execution/NativeHiScalar.hi",
+        "build/native-hi-execution/NativeHiDependency.hi",
+        "build/native-hi-execution/native.tsv"
+      ],
+      "sources": [
+        "t/fixtures/compiler/NativeHiScalar.hs",
+        "t/fixtures/compiler/NativeHiDependency.hs",
+        "t/fixtures/compiler/NativeHiOracle.hs",
+        "cmake/InterfaceFixtures.cmake"
+      ]
+    },
     "native-hi-reader": {
       "cmakeTarget": "fixture-native-hi-reader",
       "ciPlatforms": [

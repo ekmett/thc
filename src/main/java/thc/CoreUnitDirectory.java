@@ -19,7 +19,7 @@ public final class CoreUnitDirectory {
         public String getId() { return id; } public List<String> getDepends() { return depends; }
         public List<ModuleRecord> getModules() { return modules; }
     }
-    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact, CoreInterfaceSource interfaceSource,
+    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact, CoreInterfaceSource interfaceSource, boolean nativeInterface,
             boolean containsDelimitedControl, boolean registrationObligations, boolean mainAlias, boolean packageScalarDeclarations) {
         public String getUnit() { return unit; } public String getName() { return name; } public String getSha256() { return sha256; }
         public Artifact getArtifact() { return artifact; }
@@ -71,6 +71,7 @@ public final class CoreUnitDirectory {
         private Path interfaceDirectory;
         private long interfaceConversions;
         private final Map<ModuleRecord,CoreCompactModule> compactReaders = new HashMap<>();
+        private final Map<ModuleRecord,CoreHiModule> interfaceReaders = new HashMap<>();
         private final List<CoreCompactFile> consumerReaders = new ArrayList<>();
         private final Set<ModuleRecord> verified = new HashSet<>();
         private final Map<String,String> blobs = new HashMap<>();
@@ -93,6 +94,25 @@ public final class CoreUnitDirectory {
                 var reader = new CoreCompactModule(module, directory.targetLayout, verifyArtifacts, blobs, artifact);
                 compactAdmitted.accept(reader.getCounters());
                 return reader;
+            });
+        }
+        private CoreHiModule nativeInterface(ModuleRecord module) {
+            return interfaceReaders.computeIfAbsent(module, ignored -> {
+                try {
+                    var artifact = module.artifact();
+                    byte[] bytes = java.nio.file.Files.readAllBytes(artifact.path());
+                    require(CoreModules.sha256(bytes).equals(artifact.sha256()),
+                            "Native interface changed after publication: " + artifact.path());
+                    var reader = new CoreHiReader(bytes, artifact.path().toString());
+                    reader.requireIdentity(module.unit(), module.name());
+                    return new CoreHiModule(reader, name -> {
+                        String id = CoreHiNames.id(name);
+                        var dependency = directory.owner(id);
+                        require(dependency != null && dependency.nativeInterface(),
+                                "Missing native interface type provider: " + id);
+                        return nativeInterface(dependency).signature(id);
+                    });
+                } catch (Exception failure) { return rethrow(failure); }
             });
         }
         /** Explicit loose inputs retain their readers in this context, just like package modules. */
@@ -119,23 +139,24 @@ public final class CoreUnitDirectory {
         public synchronized Map<String,Object> metadata(ModuleRecord module) {
             check(!closed, "Core unit sources are closed");
             verifyModule(module);
-            return compact(module).metadata();
+            return module.nativeInterface() ? nativeInterface(module).metadata() : compact(module).metadata();
         }
         public synchronized Map<String,Object> binding(String id) {
             check(!closed, "Core unit sources are closed");
             var module = directory.owner(id);
             if (module == null) return null;
-            return compact(module).binding(id);
+            return module.nativeInterface() ? nativeInterface(module).binding(id) : compact(module).binding(id);
         }
         public synchronized boolean containsSymbol(String id) {
             check(!closed, "Core unit sources are closed");
             var module = directory.owner(id);
             if (module == null) return false;
-            return compact(module).containsSymbol(id);
+            return module.nativeInterface() ? nativeInterface(module).containsSymbol(id) : compact(module).containsSymbol(id);
         }
         public synchronized void verifyModule(ModuleRecord module) {
             check(!closed, "Core unit sources are closed");
             if (!verifyArtifacts || verified.contains(module)) return;
+            require(!module.nativeInterface(), "Offline execution audit for native interfaces is not implemented");
             compact(module).verify();
             verified.add(module);
         }
@@ -151,7 +172,7 @@ public final class CoreUnitDirectory {
             closed = true; verified.clear();
             try { compactReaders.values().forEach(CoreCompactModule::close); }
             finally {
-                compactReaders.clear();
+                compactReaders.clear(); interfaceReaders.clear();
                 try { for (var reader : consumerReaders) reader.close(); }
                 catch (Exception failure) { rethrow(failure); }
                 finally {
@@ -186,7 +207,7 @@ public final class CoreUnitDirectory {
             var rawModules = list(unit.get("modules"), "Missing unit modules");
             var interfaceSource = unit.containsKey("interfaceSource") ? CoreInterfaceSource.read(unit.get("interfaceSource"), interfaceInputs) : null;
             require(!unit.containsKey("bundle") && !unit.containsKey("json") && !unit.containsKey("symbols"),
-                    "Core runtime inputs must be CBD modules: " + id);
+                    "Core runtime inputs must be declared CBD or native interface modules: " + id);
             var names = new HashSet<String>();
             var modules = new ArrayList<ModuleRecord>();
             for (Object item : rawModules) {
@@ -197,13 +218,16 @@ public final class CoreUnitDirectory {
                 require(Collections.disjoint(module.keySet(), Set.of("start", "end", "bindingsStart", "bindingsEnd",
                         "metadataStart", "metadataEnd", "sourceMetadataStart", "sourceMetadataEnd", "index")),
                         "CBD module contains JSON storage extents");
-                require(interfaceSource == null ? !module.containsKey("interface") : !module.containsKey("compact"), "Conflicting Core module source");
-                var artifact = interfaceSource == null ? artifact(module.get("compact"), artifactPaths) : interfaceSource.artifact(module.get("interface"), artifactPaths);
-                if (interfaceSource != null) require(module.get("sha256").equals(artifact.sha256()) &&
+                boolean nativeInterface = interfaceSource == null && module.containsKey("interface");
+                require(!module.containsKey("compact") || !module.containsKey("interface"), "Conflicting Core module source");
+                var artifact = nativeInterface ? artifact(module.get("interface"), artifactPaths, "ghc-hi") :
+                        interfaceSource == null ? artifact(module.get("compact"), artifactPaths, CoreCompactFormat.NAME) :
+                        interfaceSource.artifact(module.get("interface"), artifactPaths);
+                if (interfaceSource != null || nativeInterface) require(module.get("sha256").equals(artifact.sha256()) &&
                   Boolean.FALSE.equals(module.get("containsDelimitedControl")) && Boolean.FALSE.equals(module.get("registrationObligations")) &&
                   Boolean.FALSE.equals(module.get("mainAlias")) && Boolean.FALSE.equals(module.get("packageScalarDeclarations")),
                   "Demand interfaces require checked false startup summaries");
-                modules.add(new ModuleRecord(id, name, (String) module.get("sha256"), artifact, interfaceSource,
+                modules.add(new ModuleRecord(id, name, (String) module.get("sha256"), artifact, interfaceSource, nativeInterface,
                         flag(module, "containsDelimitedControl", "Missing delimited-control summary"),
                         flag(module, "registrationObligations", "Missing registration summary"),
                         flag(module, "mainAlias", "Missing main-alias summary"),
@@ -227,12 +251,12 @@ public final class CoreUnitDirectory {
         }
         return true;
     }
-    private static Artifact artifact(Object raw, Set<Path> paths) {
-        require(raw instanceof Map<?,?>, "Missing CBD artifact");
+    private static Artifact artifact(Object raw, Set<Path> paths, String format) {
+        require(raw instanceof Map<?,?>, "Missing Core artifact");
         var record = (Map<?,?>) raw;
         var path = Path.of(text(record.get("path"), "Missing unit artifact path"));
         String hash = text(record.get("sha256"), "Missing unit artifact identity");
-        require(record.keySet().equals(Set.of("path", "sha256", "format")) && Objects.equals(record.get("format"), CoreCompactFormat.NAME) &&
+        require(record.keySet().equals(Set.of("path", "sha256", "format")) && Objects.equals(record.get("format"), format) &&
                 path.isAbsolute() && hash.matches("[0-9a-f]{64}") && paths.add(path.normalize()), "Invalid or duplicate unit artifact reference");
         return new Artifact(path.normalize(), hash);
     }

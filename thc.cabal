@@ -13,6 +13,7 @@ category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
   src/main/resources/thc/core-native-overrides.json
+  src/main/resources/thc/ghc-9.14.1-known-key-names.json
   t/fixtures/core/*.hs
   t/fixtures/core/coverage.json
   t/fixtures/core/README.md
@@ -397,6 +398,10 @@ extra-source-files:
   t/fixtures/compiler/NativeMallocNative.hs
   t/fixtures/compiler/ProcessSignalsNative.hs
   t/fixtures/compiler/CBVCoercionAudit.hs
+  t/fixtures/compiler/NativeHiFixture.hs
+  t/fixtures/compiler/NativeHiDependency.hs
+  t/fixtures/compiler/NativeHiScalar.hs
+  t/fixtures/compiler/NativeHiOracle.hs
   t/fixtures/compiler/InterfaceLibrary.hs
   t/fixtures/compiler/InterfaceCacheRoot.hs
   t/fixtures/compiler/InterfaceCacheDependency.hs

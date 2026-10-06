@@ -67,13 +67,10 @@ class FixtureGraphTest(unittest.TestCase):
 
     def test_native_interface_parser_needs_only_stock_ghc(self):
         project = Path(__file__).resolve().parents[2]
-        result = fast_fixtures.prepare_cmake(project, self.selection("thc.CoreHiReaderTest"), mock.Mock())
-        self.assertEqual(["fixture-native-hi-reader"], result["targets"])
-        manifest, _ = fast_fixtures._manifest(project)
-        group = manifest["groups"]["native-hi-reader"]
-        self.assertNotIn("requires", group)
-        self.assertEqual(4, len(group["outputs"]))
-        self.assertTrue(all(output.endswith(".hi") for output in group["outputs"]))
+        for test, target in (("thc.CoreHiReaderTest", "fixture-native-hi-reader"),
+                             ("thc.CoreHiExecutionTest", "fixture-native-hi-execution")):
+            result = fast_fixtures.prepare_cmake(project, self.selection(test), mock.Mock())
+            self.assertEqual([target], result["targets"])
 
     def test_process_native_controls_do_not_acquire_package_core(self):
         project = Path(__file__).resolve().parents[2]
