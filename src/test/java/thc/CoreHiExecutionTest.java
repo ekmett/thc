@@ -11,7 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Ordinary GHC .hi files execute directly, including retained private RHSs,
- * scalar recursion, erased polymorphism and cross-module boxed construction/case. Native results come from the same
+ * scalar recursion, raw byte literals, erased polymorphism and cross-module boxed construction/case. Native results come from the same
  * source build; process creation is denied and the runtime receives no CBD. */
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
@@ -55,8 +55,9 @@ class CoreHiExecutionTest {
         var rows = Files.readAllLines(INPUT.resolve("native.tsv")).stream()
                 .map(line -> Arrays.stream(line.split(" ")).mapToLong(Long::parseLong).toArray()).toList();
         assertFalse(rows.isEmpty());
+        int[] literalBytes = {65, 0, 206, 187};
         for (var row : rows) {
-            assertEquals(4 * row[0] + 8, row[1], "native result agrees with independent arithmetic");
+            assertEquals(4 * row[0] + 8 + literalBytes[(int) (row[0] & 3)], row[1], "native result agrees with independent arithmetic and raw bytes");
             assertEquals(row[0] <= 0 ? 0 : row[0] * (row[0] + 1) / 2, row[2], "native recursion agrees with model");
             assertEquals(row[0] < 0 ? -7 : 3 * (row[0] + 2), row[3], "native constructor/case agrees with model");
         }
@@ -72,14 +73,18 @@ class CoreHiExecutionTest {
                     assertEquals(row[3], boxed.execute(row[0]).asLong(), backend + " constructor/case");
                 }
                 assertEquals(rows.getLast()[1], entry.execute(rows.getLast()[0]).asLong(), backend + " repeated call");
-                assertTrue(boxed.invokeMember("compile").asBoolean(), backend + " native interface compilation");
-                var before = (Map<?, ?>) Json.parse(boxed.getMember("diagnostics").asString());
-                assertEquals(rows.getFirst()[3], boxed.execute(rows.getFirst()[0]).asLong(), backend + " first installed constructor case");
-                var after = (Map<?, ?>) Json.parse(boxed.getMember("diagnostics").asString());
-                assertTrue(((Number) after.get("compiledEntries")).longValue() > ((Number) before.get("compiledEntries")).longValue(),
-                        backend + " first installed call enters compiled guest code");
-                Main.installed(after);
-                assertEquals(rows.getLast()[3], boxed.execute(rows.getLast()[0]).asLong(), backend + " installed boxed alternative");
+                for (int resultColumn : new int[]{1, 3}) {
+                    var function = resultColumn == 1 ? entry : boxed;
+                    String label = backend + (resultColumn == 1 ? " raw bytes" : " polymorphic boxed case");
+                    assertTrue(function.invokeMember("compile").asBoolean(), label + " native interface compilation");
+                    var before = (Map<?, ?>) Json.parse(function.getMember("diagnostics").asString());
+                    assertEquals(rows.getFirst()[resultColumn], function.execute(rows.getFirst()[0]).asLong(), label + " first installed call");
+                    var after = (Map<?, ?>) Json.parse(function.getMember("diagnostics").asString());
+                    assertTrue(((Number) after.get("compiledEntries")).longValue() > ((Number) before.get("compiledEntries")).longValue(),
+                            label + " first installed call enters compiled guest code");
+                    Main.installed(after);
+                    assertEquals(rows.getLast()[resultColumn], function.execute(rows.getLast()[0]).asLong(), label + " installed alternative");
+                }
             }
         }
         try (var files = Files.list(directory)) {

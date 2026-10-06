@@ -113,8 +113,10 @@ and feeds decoded bindings directly to the existing linker and backends. It
 creates no helper process or intermediate CBD.
 
 GHC 9.14.1 vanilla, 64-bit retained interfaces are supported for integer
-functions, private bindings, recursion, local bindings, literal/default cases and
-calls to other native interface modules. Prenex type variables of kind `Type`
+functions, private bindings, recursion, local bindings, literal/default cases,
+raw byte literals and calls to other native interface modules. `Addr#` values use
+the existing address representation; string bytes preserve embedded NUL and high
+bytes without text decoding. Prenex type variables of kind `Type`
 are erased from value parameters and applications; type-only aliases preserve
 the original function value. A monomorphic boxed datatype with nullary or
 integer-field constructors can be constructed and matched across native

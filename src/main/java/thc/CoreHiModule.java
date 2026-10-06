@@ -490,7 +490,6 @@ final class CoreHiModule {
             }
             case 9 -> {
                 var literal = (Literal) e.fields.getFirst();
-                if (literal.value == null) throw error(e, "unsupported executable literal " + literal.kind);
                 yield expression(literal.type, e, "lit", literal.kind, literal.value);
             }
             case 4 -> {
@@ -588,7 +587,6 @@ final class CoreHiModule {
                     Lowered rhs = lower(alt.rhs, branch, typeScope); if (result == null) result = rhs.type;
                     if (alt.tag == 2) {
                         Literal literal = (Literal) alt.discriminator;
-                        if (literal.value == null) throw error(e, "unsupported case literal");
                         discriminator = values(literal.kind, literal.value);
                     }
                     alternatives.add(values(alt.tag == 0 ? "default" : alt.tag == 1 ? "data" : "lit", discriminator, ids, rhs.expression, map("binders", parameters)));
