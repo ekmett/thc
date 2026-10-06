@@ -12,7 +12,13 @@ Linux x86_64, the pinned GraalVM and synchronous AST execution. The driver uses
 the qualified `resource-copy` profile by default; override it with
 `THC_NATIVE_IMAGE_VECTOR_PROFILE`. Per-component artifacts and their concrete
 `completion.json` inventory are under `DIST/native-images/<unit-id SHA256>/`.
-Images are built afresh, with no image cache or static-linking guarantee. This
+Each runnable has a separate `packages.json` dependency closure and exception
+bridge; the shared `DIST/packages.json` is acquisition inventory. Deployable
+outputs are `artifacts/program` and the runtime files/directories listed in
+`completion.json`, taken from Native Image's own artifact report.
+Use `--installed-core pinned` (default) or `required`; the `demand` provider
+converts interfaces inside a running THC context and cannot supply offline image
+capture. Images are built afresh, with no image cache or static-linking guarantee. This
 option is accepted only by `build` and does not execute the application.
 
 `thc acquire` retains the same single-runnable selection as `run` for compatibility.

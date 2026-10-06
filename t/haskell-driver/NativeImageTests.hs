@@ -20,13 +20,14 @@ import Control.Exception (bracket)
 import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, takeMVar, threadDelay)
 import Control.Exception (finally)
 import System.Posix.Files (createNamedPipe)
+import System.IO (IOMode(ReadWriteMode), hGetLine, withFile)
 import System.Timeout (timeout)
 #endif
 import Control.Monad (forM_)
 import Data.Aeson (toJSON)
-import Data.List (isPrefixOf)
+import Data.List (isInfixOf)
 import System.Directory
-  ( doesDirectoryExist, doesFileExist, getPermissions, listDirectory
+  ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getPermissions, listDirectory
   , removeFile, setPermissions, executable )
 import System.FilePath ((</>))
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -57,6 +58,7 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
         let program = "logical +name \"café\""
             completion = output </> "completion.json"
             image = output </> "artifacts/program"
+        createDirectoryIfMissing True output
         writeText (output </> "unrelated.txt") "keep"
         buildNativeImage root output program manifest
         first <- readJson completion
@@ -78,7 +80,7 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
         assertEqual "repeated production retains the same deployable inventory" (field first "artifacts") (field second "artifacts")
         assertEqual "producer invoked afresh, no image reuse" "build\nbuild\n" =<< readText (root </> "invocations.txt")
         assertEqual "unrelated caller content survives" "keep" =<< readText (output </> "unrelated.txt")
-        assertBool "successful staging is removed" . null . filter (isPrefixOf ".native-image-build-") =<< listDirectory output
+        assertBool "successful staging is removed" . null . filter (isInfixOf ".native-image-build-") =<< listDirectory output
         withEnvironment [("THC_NATIVE_IMAGE_VECTOR_PROFILE", "intrinsics")] $ buildNativeImage root output program manifest
         overridden <- readJson completion
         assertEqual "explicit valid profile survives" (toJSON ("intrinsics" :: String)) (field overridden "profile")
@@ -93,10 +95,11 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
           expectFailure "native image producer failed" (buildNativeImage root output program manifest)
         assertContains "intentional producer failure" =<< readText (failed </> "build.stderr")
         assertBool "next attempt removes the previous failed stage" . not =<< doesFileExist (failed </> "previous-attempt.txt")
-        assertBool "failed staging does not accumulate" . null . filter (isPrefixOf ".native-image-build-") =<< listDirectory output
+        assertBool "failed staging does not accumulate" . null . filter (isInfixOf ".native-image-build-") =<< listDirectory output
         assertEqual "repeated failure preserves unrelated caller content" "keep" =<< readText (output </> "unrelated.txt")
     , TestLabel "zero exit cannot bless missing or invalid artifacts" $ TestCase $ withProducer $ \root output manifest ->
         forM_ ["missing", "invalid", "not-executable", "bad-sidecar", "report-missing", "escape", "symlink-escape", "bad-report"] $ \mode -> do
+          createDirectoryIfMissing True output
           writeText (output </> "completion.json") "stale success"
           withEnvironment [("THC_TEST_NATIVE_MODE", mode)] $
             expectFailure "native image" (buildNativeImage root output "ordinary" manifest)
@@ -112,7 +115,7 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
           finished <- newEmptyMVar
           worker <- forkFinally (buildNativeImage root output "cancelled" manifest) (putMVar finished)
           finally (do
-            handshake <- timeout 5000000 (readText ready)
+            handshake <- timeout 5000000 (withFile ready ReadWriteMode hGetLine)
             assertEqual "actual child is blocked before cancellation" (Just "ready") handshake
             killThread worker
             result <- takeMVar finished
@@ -144,6 +147,8 @@ withProducer action = withScratch $ \scratch -> do
       jdk = root </> "jdk"
       elf = root </> "witness"
       library = root </> "witness.so"
+  forM_ [root, jdk </> "bin", root </> "build/install/thc/lib",
+    root </> "research/native-image-preparation"] $ createDirectoryIfMissing True
   writeText (root </> "witness.c") "int main(void) { return 0; }\n"
   writeText (root </> "library.c") "int producer_witness(void) { return 42; }\n"
   forM_ [[root </> "witness.c", "-o", elf], ["-shared", "-fPIC", root </> "library.c", "-o", library]] $ \arguments -> do
@@ -164,7 +169,7 @@ withProducer action = withScratch $ \scratch -> do
     , "printf '{}' > \"$3/reproduction-inventory/native-libraries.json\""
     , "case \"$THC_TEST_NATIVE_MODE\" in"
     , " fail) echo 'intentional producer failure' >&2; exit 7 ;;"
-    , " cancel) (printf ready > \"$THC_TEST_NATIVE_READY\"; while ! test -f \"$THC_TEST_NATIVE_RELEASE\"; do sleep 0.01; done; printf leaked > \"$THC_TEST_NATIVE_MARKER\") & wait; exit 0 ;;"
+    , " cancel) (printf 'ready\\n' > \"$THC_TEST_NATIVE_READY\"; while ! test -f \"$THC_TEST_NATIVE_RELEASE\"; do sleep 0.01; done; printf leaked > \"$THC_TEST_NATIVE_MARKER\") & wait; exit 0 ;;"
     , " missing) exit 0 ;;"
     , "esac"
     , "cp \"$THC_TEST_NATIVE_ELF\" \"$3/program\""

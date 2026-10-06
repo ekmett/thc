@@ -19,7 +19,7 @@ module THC.Driver.Project
   , prepareInstalledBundle, prepareInstalledBundleWithVerification, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
   , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
-  , selectedPackageTool
+  , selectedPackageTool, componentCoreRecords
   ) where
 
 import Control.Exception (bracket, evaluate, finally, onException)
@@ -75,6 +75,7 @@ import THC.Driver.PackageNative (captureNativeObject, captureConfiguredNativeObj
   finishPackageNativeWithDependencies, linkInstalledNativeWithProduct)
 import THC.Driver.NativeDependencies (readNativeProduct, configuredNativeArchive)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
+import THC.Driver.NativeImage (validateNativeImage, buildNativeImage)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runtimeDebugEnvironment, runResolvedPackage)
@@ -317,18 +318,24 @@ acquireProject = buildProject AcquireOnly
 
 -- | Build arbitrary Cabal components using the same acquisition as run.
 buildTargetsProject :: RunOptions -> [String] -> FilePath -> IO ()
-buildTargetsProject opts targets = buildProject (BuildTargets targets) opts
+buildTargetsProject opts targets = buildProject (BuildTargets (runNativeImage opts) targets) opts
 
-data ProjectAction = AcquireOnly | BuildTargets [String] | RunGuest deriving Eq
+data ProjectAction = AcquireOnly | BuildTargets Bool [String] | RunGuest deriving Eq
+
+buildsNativeImages :: ProjectAction -> Bool
+buildsNativeImages (BuildTargets enabled _) = enabled
+buildsNativeImages _ = False
 
 buildProject :: ProjectAction -> RunOptions -> FilePath -> IO ()
 buildProject action opts target = do
   require (Host.os /= "mingw32") "project acquisition is not yet supported on Windows"
-  let command = case action of AcquireOnly -> "acquire"; BuildTargets _ -> "build"; RunGuest -> "run"
+  let command = case action of AcquireOnly -> "acquire"; BuildTargets _ _ -> "build"; RunGuest -> "run"
   require (action == RunGuest || null (runArguments opts)) (command ++ " does not accept guest arguments")
   require (not (null (runThcRoot opts))) (command ++ " requires --thc-root DIR")
   require (runInstalledCore opts `elem` ["required", "pinned", "demand"])
     "--installed-core must be required, pinned or demand"
+  require (not (buildsNativeImages action) || runInstalledCore opts /= "demand")
+    "Native Image requires acquired CBD inputs; select --installed-core pinned or required. Demand conversion requires a running THC context."
   require (runInstalledCore opts /= "demand" || not (runVerifyArtifacts opts))
     "--installed-core demand does not yet support the offline prelaunch audit (--verify-artifacts). Select required or pinned for that audit; interface demand always verifies its content snapshot."
   require (runGhcSource opts == Nothing || runInstalledCore opts `elem` ["required", "demand"])
@@ -338,6 +345,7 @@ buildProject action opts target = do
   let project = working
       projectOptions = cabalProjectOptions opts
   thcRoot <- canonicalizePath (runThcRoot opts)
+  when (buildsNativeImages action) $ validateNativeImage thcRoot
   runtime <- maybe (pure (thcRoot </> "build/install/thc/bin/thc")) makeAbsolute (runRuntime opts)
   when (action == RunGuest) $ do
     requireFile runtime
@@ -509,7 +517,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
       selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
       cabal = maybe "cabal" id (lookup "CABAL" selectionEnvironment)
   selectedUnits <- case action of
-    BuildTargets targets -> resolveBuildTargets working targets configuration selectionEnvironment native
+    BuildTargets _ targets -> resolveBuildTargets working targets configuration selectionEnvironment native
     _ -> pure <$> resolveRunnable working target configuration selectionEnvironment native
   selectionPlan <- readJson (native </> "cache/plan.json")
   selectionUnits <- mapM readUnit =<< field selectionPlan "install-plan"
@@ -687,18 +695,38 @@ runBuiltProject action project working thcRoot runtime output native target proj
             Map.insert (unitId unit) (replayInterfacePath (bundlePath item)) interfaces) bundle else interfaces
         recordsForUnit = maybe [object fields] (uncurry installedSourceRecords) (Map.lookup (unitId unit) installed)
     pure (keys', interfaces', acc ++ recordsForUnit)) (Map.empty, sourceInterfaces, []) ordered
-  (bridgeUnit, linked) <- linkForeignExceptionRuntime coreContext environment installedPolicy ghcSource
-    registeredLibrary described
   let manifest = output </> "packages.json"
       -- Both providers retain GHC's generated main wrapper and Handle shutdown.
       entry = "main::Main.main"
       shutdown = "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"
       audit = output </> "audit.json"
-  published <- mapM (publishCoreUnit cacheRoot verifyArtifacts) linked
-  atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
-                               "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-                               "foreignExceptionBridgeUnit" .= bridgeUnit,
-                               "interfaceInputs" .= interfaceInputs, "units" .= published])
+      publish path bridge suppliedUnits = do
+        published <- mapM (publishCoreUnit cacheRoot verifyArtifacts) suppliedUnits
+        atomicJson path (object ["format" .= ("thc-core-packages" :: String),
+          "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
+          "foreignExceptionBridgeUnit" .= (bridge :: Maybe String),
+          "interfaceInputs" .= interfaceInputs, "units" .= published])
+      link = linkForeignExceptionRuntime coreContext environment installedPolicy ghcSource registeredLibrary
+  if buildsNativeImages action then do
+    -- This union is acquisition inventory. Only each runnable's own closure
+    -- can select its Main wrapper and exact exception bridge without ambiguity.
+    publish manifest Nothing described
+    let owners = Map.map (installedSourceOwner . snd) installed
+        runnable unit = maybe False ((`elem` ["exe", "test", "bench"]) . takeWhile (/= ':'))
+          (jsonField (unitValue unit) "component-name" :: Maybe String)
+    forM_ (filter runnable selected) $ \unit -> do
+      component <- field (unitValue unit) "component-name"
+      let directory = output </> "native-images" </> shaHex (Text.encodeUtf8 (Text.pack (unitId unit)))
+          packages = directory </> "packages.json"
+          program = reverse (takeWhile (/= ':') (reverse component))
+      componentRecords <- componentCoreRecords owners (unitId unit) described
+      (bridge, linked) <- link componentRecords
+      createDirectoryIfMissing True directory
+      publish packages (Just bridge) linked
+      buildNativeImage thcRoot directory program packages
+  else do
+    (bridge, linked) <- link described
+    publish manifest (Just bridge) linked
   when (action == RunGuest) $ do
     when verifyArtifacts $
       runCommand True "python3" ([thcRoot </> "bin/audit-core.py", "--package-manifest", manifest,
@@ -1443,6 +1471,19 @@ dependencyClosure units target = snd <$> visit Set.empty Set.empty target
               (more, result) <- visit (Set.insert identifier active) found dependency
               pure (more, ordered ++ result)) (seen, []) (unitDepends unit)
             pure (Set.insert identifier visited, dependencies ++ [unit])
+
+-- | Select one component's original acquisition records and their dependency
+-- closure. Installed registration aliases retain their actual Core owners even
+-- when GHC gives the exported unit a different identity. Records are returned
+-- unchanged; owner edges are used only for this selection.
+componentCoreRecords :: Map.Map String String -> String -> [Value] -> IO [Value]
+componentCoreRecords owners target records = do
+  units <- mapM readUnit records
+  let withOwner unit = unit {unitDepends = unitDepends unit ++
+        [owner | Just owner <- [Map.lookup (unitId unit) owners], owner /= unitId unit]}
+      byId = Map.fromList [(unitId unit, withOwner unit) | unit <- units]
+  require (Map.size byId == length units) "Acquisition records have duplicate unit IDs"
+  map unitValue <$> dependencyClosure byId target
 
 -- Cabal's global store ID includes its source/configuration hash. A repository
 -- package built inplace can retain its ID while a project dependency changes.

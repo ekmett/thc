@@ -114,7 +114,7 @@ if [[ "$mode" == executable* ]]; then
     # arguments. Keep VM bounds in the image, separate from opaque guest argv.
     # Original GHC owns HUP/INT/QUIT/TERM in this standalone process. The runtime
     # checks the effective option; do not substitute a trusted-looking property.
-    executable_options=(-J-Dthc.nativeImage.executable=true -H:-ParseRuntimeOptions -R:-EnableSignalHandling
+    executable_options=(-J-Dthc.nativeImage.executable=true -H:+GenerateBuildArtifactsFile -H:-ParseRuntimeOptions -R:-EnableSignalHandling
         -H:MaxHeapSize=17179869184 -H:ActiveProcessorCount=2)
     # The full ordinary-loader image needs room for frame metadata after codegen.
     builder_heap=16g

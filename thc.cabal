@@ -921,6 +921,7 @@ library driver
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
     THC.Driver.NativeCache
+    THC.Driver.NativeImage
     THC.Driver.NativeDependencies
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
@@ -1000,6 +1001,7 @@ test-suite driver-tests
     ScalarBitcodeTests
     PackageNativeTests
     NativeCacheTests
+    NativeImageTests
     NativeRecipeTests
     RuntimeShimTests
     InstalledForeignTests

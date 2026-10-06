@@ -82,10 +82,16 @@ thc build my-package:exe:my-program --native-image
 The producer currently requires Linux x86_64 and the pinned GraalVM, and uses
 synchronous AST execution. The driver defaults to the qualified `resource-copy`
 vector profile; `THC_NATIVE_IMAGE_VECTOR_PROFILE` overrides that choice. Each
-component's final artifacts live under `DIST/native-images/<unit-id SHA256>/`;
-`completion.json` records their concrete inventory. Every explicit image request
-builds afresh: there is no image cache or guarantee of static linking. Image
-production does not execute the application. `run` and `acquire` reject this flag.
+component has its own `DIST/native-images/<unit-id SHA256>/packages.json`,
+containing its dependency closure and selected exception bridge. The shared
+`DIST/packages.json` remains acquisition inventory; it does not choose a main
+entry or bridge for the whole multi-target build. Each component's
+`completion.json` records `artifacts/program` and the runtime files/directories
+declared by Native Image. Every explicit image request builds afresh: there is no image cache or guarantee of static linking. Image
+production does not execute the application. Supply CBD through the `pinned`
+(default) or `required` installed-Core provider; `demand` conversion requires a
+running THC context and is unavailable to offline image capture. `run` and
+`acquire` reject this flag.
 
 `run` accepts executables, `exitcode-stdio-1.0` test suites and benchmarks.
 Use `PACKAGE:exe:NAME`, `PACKAGE:test:NAME`, `PACKAGE:bench:NAME`, or a shorter

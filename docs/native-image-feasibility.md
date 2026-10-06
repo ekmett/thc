@@ -1,8 +1,15 @@
 # Native Image
 
-THC provides two experimental Native Image workflows on the pinned GraalVM
+THC provides three experimental Native Image workflows on the pinned GraalVM
 toolchain:
 
+- [`thc build --native-image`](driver.md) acquires selected
+  Cabal components and produces a fresh application-bound executable for each
+  executable, stdio test or benchmark. It embeds the reachable Core and native
+  providers for synchronous AST execution. This path currently requires Linux
+  x86-64 and the pinned toolchain; it does not enable guest machine-code
+  compilation or static linking. Deploy the files listed in its completion
+  inventory together.
 - The [selected-Core native code cache](native-code-cache.md) compiles selected
   guest code ahead of execution. `bin/native-cache build/store/run` produces a
   native launcher and matching machine-code cache. Each fresh run loads that
@@ -14,11 +21,11 @@ toolchain:
   executable and loads Core at launch. Its explicit guest compilation diagnostic
   remains unsupported.
 
-Neither workflow is a general Haskell executable distribution. The code cache
+These workflows have different execution contracts. The code cache
 does not yet admit bytecode, async delivery, IO or FFI. Its numeric CLI entry
 can exercise typed internal calls; direct typed public-host persistence remains
-to be qualified. Sulong execution and the full executable/resource lifecycle still need native
-image support and validation. See the cache guide for exact admission,
+to be qualified. The application-bound executable has separate IO/FFI evidence
+described below. See the cache guide for exact admission,
 platform requirements and the experimental preparation overlays it uses.
 
 ## Build and run the pure interpreter

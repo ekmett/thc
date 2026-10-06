@@ -33,7 +33,7 @@ import THC.Compact.Module (encodeModuleValue, readModuleMetadata)
 import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.Project (Bundle(..), BundleReceipt(..), readGlobalBundle, readBundle,
   exceptionBridgeModules, projectWindowsWiredBundle, readCapturedStoreBundles,
-  InstalledBundle(..), readCapturedInstalledBundles)
+  InstalledBundle(..), readCapturedInstalledBundles, installedRecords, componentCoreRecords)
 import THC.Driver.Installed (InstalledUnit(InstalledUnit, registeredId, installedDepends, installedInterfaces))
 import THC.Driver.Zip (encodeZip)
 import THC.Driver.NativeDependencies (readNativeProduct)
@@ -118,6 +118,28 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
       assertEqual "retained Core owner may differ from its registered alias"
         (Just ("core-owner", snapshot bundle))
         ((\(_,item) -> (installedOwner item,snapshot (installedBundle item))) <$> Map.lookup "registered-unit" selected)
+      -- Two Main owners share one installed registration whose Core owner
+      -- differs. Selection keeps the original real bundle, never the peer Main.
+      let app name dependencies = object ["id" .= (name :: String),
+            "depends" .= (dependencies :: [String]), "modules" .= ([] :: [Value])]
+          firstApp = app "first:exe:same" [registeredId unit]
+          secondApp = app "second:exe:same" [registeredId unit, "bridge"]
+          bridge = app "bridge" [registeredId unit]
+          suppliedRecords = installedRecords unit (InstalledBundle "core-owner" bundle) ++
+            [firstApp, secondApp, bridge]
+          owners = Map.singleton (registeredId unit) "core-owner"
+          closure target = componentCoreRecords owners target suppliedRecords
+      selectedFirst <- closure "first:exe:same"
+      selectedSecond <- closure "second:exe:same"
+      assertBool "first executable retains both registration and original Core bundle, excludes peer and its bridge"
+        (all (`elem` selectedFirst) (installedRecords unit (InstalledBundle "core-owner" bundle)) &&
+         firstApp `elem` selectedFirst && secondApp `notElem` selectedFirst && bridge `notElem` selectedFirst)
+      assertBool "second executable keeps its own bridge and sharing without acquiring the other Main"
+        (all (`elem` selectedSecond) (installedRecords unit (InstalledBundle "core-owner" bundle)) &&
+         secondApp `elem` selectedSecond && bridge `elem` selectedSecond && firstApp `notElem` selectedSecond)
+      assertBool "missing real owner is an error, not a silently incomplete manifest" . isLeft =<<
+        tryIOError (componentCoreRecords (Map.singleton (registeredId unit) "missing-owner")
+          "first:exe:same" suppliedRecords)
       assertBool "wrong compiler fails before reusing installed inputs" . isLeft =<< tryIOError
         (readCapturedInstalledBundles False (object []) [unit] manifest)
       assertBool "changed dependencies reject original receipt" . isLeft =<< tryIOError
