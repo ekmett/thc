@@ -27,7 +27,7 @@ final class CoreHiModule {
     private record Lowered(List<Object> expression, Type type) {}
     private record Literal(String kind, String value, Type type) {}
     private final CoreHiReader reader;
-    private final Function<CoreHiReader.ExternalName, Type> dependencyTypes;
+    private final Function<String, CoreHiModule> dependencyModules;
     private final Map<Integer,Type> shared = new HashMap<>();
     private final Set<Integer> readingTypes = new HashSet<>();
     private final Set<String> dataTypes = new HashSet<>();
@@ -40,9 +40,9 @@ final class CoreHiModule {
     private long localOrdinal;
 
     CoreHiModule(CoreHiReader reader) { this(reader, ignored -> null); }
-    CoreHiModule(CoreHiReader reader, Function<CoreHiReader.ExternalName, Type> dependencyTypes) {
+    CoreHiModule(CoreHiReader reader, Function<String, CoreHiModule> dependencyModules) {
         this.reader = reader;
-        this.dependencyTypes = Objects.requireNonNull(dependencyTypes);
+        this.dependencyModules = Objects.requireNonNull(dependencyModules);
         var retainedCore = reader.requireRetainedCore();
         var identity = reader.cursor(retainedCore, "retained Core identity");
         identity.require(reader.signatureOf == null && reader.sourceKind == 0, "unsupported signature or boot interface");
@@ -87,6 +87,11 @@ final class CoreHiModule {
         }
     }
 
+    // Dependency resolution occurs only after admission has reserved every local declaration.
+    private CoreHiModule owner(String id) {
+        if (definitions.containsKey(id) || declarations.containsKey(id) || constructors.containsKey(id) || dataTypes.contains(id)) return this;
+        return dependencyModules.apply(id);
+    }
     private String prefix() { return reader.module.unit() + ":" + reader.module.name() + "."; }
     Map<String,Object> metadata() {
         return map("schema", 1L, "ghc", "9.14.1", "unit", reader.module.unit(), "module", reader.module.name(),
@@ -136,8 +141,10 @@ final class CoreHiModule {
         var primitiveReps = new ArrayList<Object>(arity);
         for (int i = 0; i < arity; i++) {
             type(c, 0); // multiplicity
-            Type field = type(c, 0); var proof = rep(field, true, new Expr(-1, List.of(), offset));
-            c.require(Objects.equals(proof.get("kind"), "long"), "unsupported constructor field type " + field);
+            Type field = type(c, 0);
+            // Reject wider fields before owner-aware representation lookup can resolve a dependency.
+            c.require(scalar(field), "unsupported constructor field type " + field);
+            var proof = rep(field, true, new Expr(-1, List.of(), offset));
             fields.add(field); representations.add(proof); primitiveReps.add(proof.get("primReps"));
         }
         c.require(c.count(1) == 0, "unsupported record field labels");
@@ -437,8 +444,6 @@ final class CoreHiModule {
                 var name = (CoreHiReader.ExternalName) e.fields.getFirst();
                 String id = CoreHiNames.id(name);
                 Type type;
-                var constructor = constructors.get(id);
-                if (constructor != null) yield expression(signature(id), e, "con", id, (long) constructor.fields.size());
                 var signature = CoreHiNames.scalarSignature(name);
                 if (CoreHiNames.isPrimop(name)) {
                     if (signature == null) throw error(e, "unsupported scalar primop signature " + id);
@@ -447,8 +452,10 @@ final class CoreHiModule {
                     for (int i = arguments.size() - 1; i >= 0; i--) type = Type.fun(Type.scalar((String) arguments.get(i)), type);
                     yield expression(type, e, "prim", name.occurrence());
                 }
-                type = signature(id);
-                if (type == null) type = dependencyTypes.apply(name);
+                var module = owner(id);
+                var constructor = module == null ? null : module.constructors.get(id);
+                type = module == null ? null : module.signature(id);
+                if (constructor != null) yield expression(type, e, "con", id, (long) constructor.fields.size());
                 if (type == null) throw error(e, "missing native Core dependency type " + id);
                 yield expression(type, e, "var", id);
             }
@@ -506,7 +513,8 @@ final class CoreHiModule {
                     Object discriminator = null;
                     if (alt.tag == 1) {
                         String id = CoreHiNames.id((CoreHiReader.ExternalName) alt.discriminator);
-                        var constructor = constructors.get(id);
+                        var module = owner(id);
+                        var constructor = module == null ? null : module.constructors.get(id);
                         if (constructor == null || !constructor.result.equals(scrutinee.type)) throw error(e, "unsupported data alternative " + id);
                         if (alt.binders.size() != constructor.fields.size()) throw error(e, "constructor case field count mismatch " + id);
                         discriminator = id;
@@ -550,16 +558,23 @@ final class CoreHiModule {
         expression.add(map("rep", rep(type, evaluated, origin)));
         return new Lowered(expression, type);
     }
-    private boolean lifted(Type type) { return type.function() || dataTypes.contains(type.name); }
+    private static boolean scalar(Type type) {
+        return type.arguments.isEmpty() && switch (type.name) {
+            case "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep" -> true;
+            default -> false;
+        };
+    }
+    private boolean data(Type type) {
+        if (!type.arguments.isEmpty() || type.name.indexOf(':') < 0) return false;
+        var module = owner(type.name);
+        return module != null && module.dataTypes.contains(type.name);
+    }
+    private boolean lifted(Type type) { return type.function() || data(type); }
     private Map<String,Object> rep(Type type, boolean evaluated, Expr location) {
         if (type.function()) return map("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
-        if (!type.arguments.isEmpty()) throw error(location, "unsupported native Core runtime type " + type.name);
-        if (dataTypes.contains(type.name)) return map("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
-        String kind = switch (type.name) {
-            case "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep" -> "long";
-            default -> throw error(location, "unsupported native Core runtime type " + type.name);
-        };
-        return map("kind", kind, "primReps", List.of(type.name), "evaluated", evaluated);
+        if (scalar(type)) return map("kind", "long", "primReps", List.of(type.name), "evaluated", evaluated);
+        if (data(type)) return map("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", evaluated);
+        throw error(location, "unsupported native Core runtime type " + type.name);
     }
     @SuppressWarnings("unchecked") private static Map<String,Object> metadata(List<Object> expression) {
         return (Map<String,Object>) expression.getLast();

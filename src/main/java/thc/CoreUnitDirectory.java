@@ -97,23 +97,25 @@ public final class CoreUnitDirectory {
             });
         }
         private CoreHiModule nativeInterface(ModuleRecord module) {
-            return interfaceReaders.computeIfAbsent(module, ignored -> {
-                try {
-                    var artifact = module.artifact();
-                    byte[] bytes = java.nio.file.Files.readAllBytes(artifact.path());
-                    require(CoreModules.sha256(bytes).equals(artifact.sha256()),
-                            "Native interface changed after publication: " + artifact.path());
-                    var reader = new CoreHiReader(bytes, artifact.path().toString());
-                    reader.requireIdentity(module.unit(), module.name());
-                    return new CoreHiModule(reader, name -> {
-                        String id = CoreHiNames.id(name);
-                        var dependency = directory.owner(id);
-                        require(dependency != null && dependency.nativeInterface(),
-                                "Missing native interface type provider: " + id);
-                        return nativeInterface(dependency).signature(id);
-                    });
-                } catch (Exception failure) { return rethrow(failure); }
-            });
+            var cached = interfaceReaders.get(module);
+            if (cached != null) return cached;
+            try {
+                var artifact = module.artifact();
+                byte[] bytes = java.nio.file.Files.readAllBytes(artifact.path());
+                require(CoreModules.sha256(bytes).equals(artifact.sha256()),
+                        "Native interface changed after publication: " + artifact.path());
+                var reader = new CoreHiReader(bytes, artifact.path().toString());
+                reader.requireIdentity(module.unit(), module.name());
+                var admitted = new CoreHiModule(reader, id -> {
+                    var dependency = directory.owner(id);
+                    require(dependency != null && dependency.nativeInterface(),
+                            "Missing native interface declaration provider: " + id);
+                    return nativeInterface(dependency);
+                });
+                // Admission resolves no dependencies; publish the reader before demanded lowering can do so.
+                interfaceReaders.put(module, admitted);
+                return admitted;
+            } catch (Exception failure) { return rethrow(failure); }
         }
         /** Explicit loose inputs retain their readers in this context, just like package modules. */
         public synchronized Map<String,Object> consumer(Path path, String sha256) {
