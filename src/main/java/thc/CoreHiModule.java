@@ -34,12 +34,8 @@ final class CoreHiModule {
     }
     private record Bang(int tag,Co coercion) {}
     private record ClassProvider(Constructor dictionary,List<Parameter> parameters,List<CoreHiReader.ExternalName> selectors,
-                                 boolean unary,Object dependencies,Object minimal,Map<CoreHiReader.ExternalName,Ty> defaults,
-                                 Map<CoreHiReader.ExternalName,Object> methodDefaults) {}
+                                 boolean unary) {}
     private record ImplicitProvider(ClassProvider owner,int selector) {}
-    private record PatternProvider(CoreHiReader.ExternalName name,boolean infix,CoreHiReader.ExternalName matcher,boolean matcherVoid,
-                                   CoreHiReader.ExternalName builder,boolean unliftedBuilder,List<Parameter> universal,List<Parameter> existential,
-                                   List<Ty> provided,List<Ty> required,List<Ty> arguments,Ty result,List<CoreHiReader.ExternalName> fields) {}
     record Admission(boolean containsDelimitedControl,boolean registrationObligations,boolean mainAlias,
                      boolean packageScalarDeclarations,boolean declarationOnly,List<String> foreignObligations) {
         Admission { foreignObligations=List.copyOf(foreignObligations); }
@@ -55,7 +51,7 @@ final class CoreHiModule {
     private final Map<String,Constructor> constructors=new LinkedHashMap<>();
     private final Map<String,ImplicitProvider> implicitProviders=new LinkedHashMap<>();
     private final Map<CoreHiReader.ExternalName,ClassProvider> classes=new LinkedHashMap<>();
-    private final Map<CoreHiReader.ExternalName,PatternProvider> patterns=new LinkedHashMap<>();
+    private final Set<CoreHiReader.ExternalName> patterns=new LinkedHashSet<>();
     private final Map<String,Binder> declarations=new LinkedHashMap<>();
     private final Map<String,Definition> definitions=new LinkedHashMap<>();
     private final Map<String,Variable> topScope=new HashMap<>();
@@ -125,7 +121,7 @@ final class CoreHiModule {
     private String prefix(){return reader.module.unit()+":"+reader.module.name()+".";}
     boolean hasRetainedCore(){return reader.simplifiedCore!=null;}
     Admission admission(){return new Admission(control,registration,mainAlias,scalarDeclarations,!hasRetainedCore(),foreignObligations);}
-    Set<String> declarationIds(){var ids=new LinkedHashSet<String>(declarations.keySet());for(var name:typeDeclarations.keySet())ids.add(CoreHiNames.id(name));ids.addAll(typeAxioms.keySet());ids.addAll(pendingNewtypeAxioms.keySet());ids.addAll(constructors.keySet());ids.addAll(implicitProviders.keySet());for(var name:patterns.keySet())ids.add(CoreHiNames.id(name));return Collections.unmodifiableSet(ids);}
+    Set<String> declarationIds(){var ids=new LinkedHashSet<String>(declarations.keySet());for(var name:typeDeclarations.keySet())ids.add(CoreHiNames.id(name));ids.addAll(typeAxioms.keySet());ids.addAll(pendingNewtypeAxioms.keySet());ids.addAll(constructors.keySet());ids.addAll(implicitProviders.keySet());for(var name:patterns)ids.add(CoreHiNames.id(name));return Collections.unmodifiableSet(ids);}
     boolean containsSymbol(String id){return definitions.containsKey(id)||implicitProviders.containsKey(id);}
     Set<String> bindingIds(){var ids=new LinkedHashSet<>(definitions.keySet());ids.addAll(implicitProviders.keySet());return Collections.unmodifiableSet(ids);}
     private CoreHiModule owner(String id){return implicitProviders.containsKey(id)||declarations.containsKey(id)||typeDeclarations.keySet().stream().anyMatch(name->CoreHiNames.id(name).equals(id))||constructors.containsKey(id)||typeAxioms.containsKey(id)?this:dependencyModules.apply(id);}
@@ -221,7 +217,7 @@ final class CoreHiModule {
             declarations.put(id,new Binder(id.substring(prefix().length()),type,new Info(info.arity,marks,null),offset,false));return name;}
         var scope=new HashMap<>(enclosing);
         if(tag==5||tag==8){classDeclaration(c,name,context,scope,offset,tag==8);return name;}
-        if(tag==7){patternDeclaration(c,name,scope);return name;}
+        if(tag==7){patternDeclaration(c,name);return name;}
         if(tag==6){var tc=(CoreHiReader.ExternalName)binary.tycon(c).getFirst();int role=c.byteValue();c.require(role>=1&&role<=3,"invalid axiom role");typeAxioms.put(id,new Axiom(name,tc,role,branches(c)));return name;}
         List<Integer> roles=tag==3?roles(c):List.of();
         if(tag==4&&c.optional())reader.fastString(c);
@@ -250,29 +246,20 @@ final class CoreHiModule {
         Ty constraint=con(new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Types"),3,null,"Constraint"),false);
         typeDeclarations.put(name,new Declaration(name,parameters,piKind(parameters,constraint),constraint,roles,"abstract-class",null,null));
         int count=c.count(2);
-        var dependencies=new ArrayList<Object>();
-        for(int i=0;i<count;i++)dependencies.add(values(localNames(c),localNames(c)));
+        for(int i=0;i<count;i++){localNames(c);localNames(c);}
         if(abstractClass){
-            classes.put(name,new ClassProvider(null,parameters,List.of(),false,List.copyOf(dependencies),null,Map.of(),Map.of()));
+            classes.put(name,new ClassProvider(null,parameters,List.of(),false));
             return;
         }
-        var defaults=new LinkedHashMap<CoreHiReader.ExternalName,Ty>();
         count=c.count(2);
         for(int i=0;i<count;i++){
-            var associated=declaration(c,scope);
-            if(c.optional()){
-                var declared=typeDeclarations.get(associated);
-                c.require(declared!=null,"associated default has no type declaration");
-                var inner=new HashMap<>(scope);
-                for(var parameter:declared.parameters())inner.put(parameter.variable().spelling(),parameter.variable());
-                defaults.put(associated,types.read(type(c,0),inner));
-            }
+            declaration(c,scope);
+            if(c.optional())type(c,0);
         }
         var fields=new ArrayList<Ty>();
         for(Object raw:context)fields.add(types.read(raw,scope));
         var selectors=new ArrayList<CoreHiReader.ExternalName>();
         for(int i=0;i<context.size();i++)selectors.add(localName(name,0,"$p"+(i+1)+name.occurrence()));
-        var methodDefaults=new LinkedHashMap<CoreHiReader.ExternalName,Object>();
         count=c.count(2);
         for(int i=0;i<count;i++){
             var method=CoreHiNames.read(reader,c);
@@ -280,10 +267,10 @@ final class CoreHiModule {
             fields.add(types.read(type(c,0),scope));
             if(c.optional()){
                 int kind=c.byteValue();c.require(kind<=1,"invalid default method specification");
-                methodDefaults.put(method,kind==0?values(kind):values(kind,types.read(type(c,0),scope)));
+                if(kind==1)type(c,0);
             }
         }
-        Object minimal=formula(c,0);
+        formula(c,0);
         boolean unary=bool(c);
         var variables=parameters.stream().map(Parameter::variable).toList();
         Ty result=con(name,false,variables.stream().map(v->(Ty)new Var(v)).toArray(Ty[]::new));
@@ -293,44 +280,41 @@ final class CoreHiModule {
         constructors.put(CoreHiNames.id(constructorName),dictionary);
         constructors.put(CoreHiNames.id(worker(constructorName)),dictionary);
         typeDeclarations.put(name,new Declaration(name,parameters,piKind(parameters,constraint),constraint,roles,unary?"unary-class":"data",null,null));
-        var provider=new ClassProvider(dictionary,parameters,List.copyOf(selectors),unary,List.copyOf(dependencies),minimal,Collections.unmodifiableMap(defaults),Collections.unmodifiableMap(methodDefaults));
+        var provider=new ClassProvider(dictionary,parameters,List.copyOf(selectors),unary);
         classes.put(name,provider);
         for(int i=0;i<selectors.size();i++)implicitProviders.put(CoreHiNames.id(selectors.get(i)),new ImplicitProvider(provider,i));
         if(unary)implicitProviders.put(CoreHiNames.id(worker(constructorName)),new ImplicitProvider(provider,-1));
     }
-    private List<String> localNames(CoreHiReader.Cursor c) {
-        int count=c.count(1);var names=new ArrayList<String>();for(int i=0;i<count;i++)names.add(reader.fastString(c));return List.copyOf(names);
+    // Source-level class and pattern declarations must be framed, but their
+    // defaults and matcher recipes are not executable Core. Actual matcher and
+    // builder bodies have ordinary binding identities.
+    private void localNames(CoreHiReader.Cursor c) {
+        int count=c.count(1);for(int i=0;i<count;i++)reader.fastString(c);
     }
-    private Object formula(CoreHiReader.Cursor c,int depth) {
+    private void formula(CoreHiReader.Cursor c,int depth) {
         c.require(depth<256,"minimal-definition formula nesting exceeds interface limit");
         int tag=c.byteValue();c.require(tag<=3,"invalid minimal-definition formula");
-        if(tag==0)return values(tag,reader.fastString(c));
-        if(tag==3)return values(tag,formula(c,depth+1));
-        int count=c.count(1);var children=new ArrayList<Object>();for(int i=0;i<count;i++)children.add(formula(c,depth+1));return values(tag,List.copyOf(children));
+        if(tag==0){reader.fastString(c);return;}
+        if(tag==3){formula(c,depth+1);return;}
+        int count=c.count(1);for(int i=0;i<count;i++)formula(c,depth+1);
     }
-    private List<Parameter> specificationBinders(CoreHiReader.Cursor c,Map<String,CoreHiTypes.Variable> scope) {
-        int count=c.count(2);var result=new ArrayList<Parameter>();
+    private void specificationBinders(CoreHiReader.Cursor c) {
+        int count=c.count(2);
         for(int i=0;i<count;i++){
-            var variable=types.binder(binary.binder(c,0),scope);scope.put(variable.spelling(),variable);
+            binary.binder(c,0);
             int specificity=c.byteValue();c.require(specificity<=1,"invalid binder specificity");
-            result.add(new Parameter(variable,List.of(1,specificity==0?1:2)));
         }
-        return List.copyOf(result);
     }
-    private PatternProvider patternDeclaration(CoreHiReader.Cursor c,CoreHiReader.ExternalName name,Map<String,CoreHiTypes.Variable> scope) {
-        boolean infix=bool(c);
-        var matcher=CoreHiNames.read(reader,c);boolean matcherVoid=bool(c);
-        CoreHiReader.ExternalName builder=null;boolean unliftedBuilder=false;
-        if(c.optional()){builder=CoreHiNames.read(reader,c);unliftedBuilder=bool(c);}
-        var universal=specificationBinders(c,scope);
-        var existential=specificationBinders(c,scope);
-        var provided=typeList(c,scope);var required=typeList(c,scope);var arguments=typeList(c,scope);
-        Ty result=types.read(type(c,0),scope);
-        int count=c.count(3);var fields=new ArrayList<CoreHiReader.ExternalName>();
-        for(int i=0;i<count;i++)fields.add(fieldLabel(c,false));
-        var provider=new PatternProvider(name,infix,matcher,matcherVoid,builder,unliftedBuilder,universal,existential,provided,required,arguments,result,List.copyOf(fields));
-        patterns.put(name,provider);
-        return provider;
+    private void patternDeclaration(CoreHiReader.Cursor c,CoreHiReader.ExternalName name) {
+        bool(c);
+        CoreHiNames.read(reader,c);bool(c);
+        if(c.optional()){CoreHiNames.read(reader,c);bool(c);}
+        specificationBinders(c);
+        specificationBinders(c);
+        for(int list=0;list<3;list++){int count=c.count(1);for(int i=0;i<count;i++)type(c,0);}
+        type(c,0);
+        int count=c.count(3);for(int i=0;i<count;i++)fieldLabel(c,false);
+        patterns.add(name);
     }
     private ClassProvider constraintTupleProvider(CoreHiNames.TupleFamily family) {
         var name=CoreHiNames.tupleName(2,family.arity(),3);
@@ -339,7 +323,7 @@ final class CoreHiModule {
         Constructor dictionary=constructor(CoreHiNames.tupleName(2,family.arity(),1));
         var selectors=new ArrayList<CoreHiReader.ExternalName>();
         for(int i=0;i<family.arity();i++)selectors.add(localName(name,0,"$p"+i+name.occurrence()));
-        var provider=new ClassProvider(dictionary,declaration.parameters(),List.copyOf(selectors),false,List.of(),null,Map.of(),Map.of());
+        var provider=new ClassProvider(dictionary,declaration.parameters(),List.copyOf(selectors),false);
         classes.put(name,provider);
         for(int i=0;i<selectors.size();i++)implicitProviders.put(CoreHiNames.id(selectors.get(i)),new ImplicitProvider(provider,i));
         return provider;
@@ -470,7 +454,7 @@ final class CoreHiModule {
             } else {
                 c.require(c.byteValue()==7,"record pattern parent is not a pattern synonym");
                 var name=CoreHiNames.read(reader,c);
-                patternDeclaration(c,name,new HashMap<>());
+                patternDeclaration(c,name);
             }
             var first=CoreHiNames.read(reader,c);
             c.require(first.namespace()==1,"invalid record selector constructor identity");
