@@ -63,11 +63,11 @@ final class CoreHiModule {
             if (tag == 2) { dataDeclaration(c, name, offset); continue; }
             var body = reader.cursor(c.lazy(), "IfaceId " + CoreHiNames.id(name));
             Type type = type(body, 0);
-            List<Boolean> marks = details(body);
+            List<Boolean> marks = details(body, name);
             Info info = info(body, 0);
             body.expectEnd();
             String id = CoreHiNames.id(name);
-            c.require(declarations.putIfAbsent(id, new Binder(name.occurrence(), type,
+            c.require(declarations.putIfAbsent(id, new Binder(id.substring(prefix().length()), type,
                     new Info(info.arity, marks, null), offset, false)) == null, "duplicate declaration " + id);
         }
         c.expectEnd();
@@ -201,7 +201,9 @@ final class CoreHiModule {
             type(c, 0); // multiplicity
             fields.add(type(c, 0));
         }
-        c.require(c.count(1) == 0, "unsupported record field labels");
+        int labels = c.count(3); c.require(labels == 0 || labels == arity, "record field label count mismatch");
+        var selectors = new HashSet<CoreHiReader.ExternalName>();
+        for (int i = 0; i < labels; i++) c.require(selectors.add(fieldLabel(c, false)), "duplicate constructor record field");
         int strictCount = c.count(1); c.require(strictCount == 0 || strictCount == arity, "constructor strictness count mismatch");
         var strict = new ArrayList<Boolean>(arity);
         for (int i = 0; i < arity; i++) {
@@ -279,9 +281,30 @@ final class CoreHiModule {
             default -> null;
         };
     }
-    private List<Boolean> details(CoreHiReader.Cursor c) {
+    private CoreHiReader.ExternalName fieldLabel(CoreHiReader.Cursor c, boolean requireSelector) {
+        bool(c); // DuplicateRecordFields affects name lookup, not retained Core execution.
+        boolean hasSelector = bool(c);
+        c.require(!requireSelector || hasSelector, "record field has no selector");
+        var selector = CoreHiNames.read(reader, c);
+        c.require(selector.namespace() == 4 && selector.module().equals(reader.module), "invalid record field identity");
+        return selector;
+    }
+    private List<Boolean> details(CoreHiReader.Cursor c, CoreHiReader.ExternalName declaration) {
         int tag = c.byteValue();
         if (tag == 0) return null;
+        if (tag == 1) {
+            c.require(c.byteValue() == 0, "unsupported pattern-synonym record selector");
+            var parent = CoreHiNames.read(reader, c);
+            c.require(parent.namespace() == 3 && parent.module().equals(reader.module), "invalid record selector parent");
+            c.require(!bool(c) && c.byteValue() == 0, "unsupported record selector type constructor");
+            var first = CoreHiNames.read(reader, c);
+            c.require(first.namespace() == 1 && first.module().equals(reader.module), "invalid record selector constructor");
+            c.require(!bool(c), "unsupported naughty record selector");
+            var selector = fieldLabel(c, true);
+            c.require(selector.fieldParent().equals(first.occurrence()), "record selector constructor identity mismatch");
+            c.require(declaration == null || declaration.equals(selector), "record selector declaration identity mismatch");
+            return null;
+        }
         if (tag != 2) throw unsupported(c, "IdDetails tag " + tag);
         int count = c.count(1);
         var marks = new ArrayList<Boolean>(count);
@@ -375,7 +398,7 @@ final class CoreHiModule {
         String name = reader.fastString(c);
         Type type = type(c, depth + 1);
         Info info = info(c, depth + 1);
-        if (top) return new Binder(name, type, new Info(info.arity, details(c), null), offset, false);
+        if (top) return new Binder(name, type, new Info(info.arity, details(c, null), null), offset, false);
         int join = c.byteValue(); c.require(join <= 1, "invalid join point tag");
         return new Binder(name, type, new Info(info.arity, null, join == 1 ? c.count(0) : null), offset, false);
     }
