@@ -17,6 +17,7 @@ module THC.Compact.Core where
 import qualified Data.ByteString as BS
 import Data.Int (Int64)
 import Data.Word (Word32, Word64)
+import THC.Compact.Types (TypeTerm)
 
 -- | Preserve absence, an explicitly unknown value, and a known empty value.
 data Presence a = Missing | Unknown | Known a deriving (Eq, Ord, Show)
@@ -80,6 +81,7 @@ data Binding = Binding
   , bindingEntryStrictSource :: !(Presence BS.ByteString)
   , bindingJoinValueArity :: !(Presence Word64)
   , bindingJoinResultRep :: !(Presence Rep)
+  , bindingCallable :: !(Presence TypeTerm)
   , bindingHostSignature :: !(Presence HostSignature)
   , bindingExpr :: !Expr
   } deriving (Eq, Show)

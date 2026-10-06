@@ -37,6 +37,11 @@ public final class CoreCompactCursor {
         position += length;
         return at;
     }
+    /** Borrow a bounded child slice while advancing this cursor past it. */
+    public CoreCompactCursor bounded(long length) {
+        long start = take(length);
+        return new CoreCompactCursor(bytes, start, start + length);
+    }
     public int readByte() { return bytes.get(ValueLayout.JAVA_BYTE, take(1)) & 255; }
     public boolean readBoolean() {
         int value = readByte();

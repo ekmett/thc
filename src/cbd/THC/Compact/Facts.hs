@@ -17,6 +17,7 @@ module THC.Compact.Facts where
 import qualified Data.ByteString as BS
 import Data.Word (Word64)
 import THC.Compact.Core
+import THC.Compact.Types (RecoveryFacts)
 
 data Facts = Facts
   { factsSchema :: !Word64
@@ -33,6 +34,7 @@ data Facts = Facts
   , factsPendingProvenance :: ![Presence ModuleProvenance]
   , factsClosureProvenance :: !(Maybe ClosureProvenance)
   , factsBackendPolicy :: !(Maybe BackendPolicy)
+  , factsRecovery :: !(Maybe RecoveryFacts)
   } deriving (Eq, Show)
 
 -- | Root selection only; GHC workers and inlined copies do not inherit overrides.

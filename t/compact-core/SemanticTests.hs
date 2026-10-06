@@ -48,7 +48,7 @@ semanticTests = TestList
   [ TestLabel "target layout schema selects exact unframed numeric vector" $ TestCase $ do
       let legacyLayout = TargetLayout 1 "same" "same" "same" "same" 1 False 8 LittleEndian "same" True [1..57]
           legacy = Facts 1 "same" "same" "same" "same" Missing (Known legacyLayout) []
-            Missing Missing Missing (replicate 8 Missing) Nothing (Just (BackendPolicy (Just AstBackend) []))
+            Missing Missing Missing (replicate 8 Missing) Nothing (Just (BackendPolicy (Just AstBackend) [])) Nothing
           spanBytes = [0,4]
           manual = BS.pack ([1] ++ concat (replicate 4 spanBytes) ++ [0,2,1] ++
             concat (replicate 4 spanBytes) ++ [1,0,8,0] ++ spanBytes ++ [1] ++ [1..57] ++ replicate 12 0 ++ [2,1,0])
@@ -621,10 +621,10 @@ parameter ordinal = Binder ordinal OtherEntry (Known False) (Known False) (Known
 completeBinding :: Binding
 completeBinding = Binding (Global "main:Typed.all") IOUnit (Known True) 1 (Known tupleCold)
   (Known (IdInfo (Known 0) (Known True) (Known [True]))) (Known [True]) (Known "ghc-cbv")
-  (Known 0) (Known longRep) Missing body
+  (Known 0) (Known longRep) Missing Missing body
   where
     local = Binding (Local 1) OtherEntry (Known True) 0 Unknown Missing (Known []) Missing
-      Missing Missing Missing (Lit emptyMeta (LitInt 41))
+      Missing Missing Missing Missing (Lit emptyMeta (LitInt 41))
     info = emptyMeta
       { metaRep = Known longRep, metaResultRep = Known tupleHot
       , metaEntryStrict = Known [True], metaEntryStrictSource = Known "ghc-cbv"
@@ -665,7 +665,7 @@ completeFacts = Facts 2 "9.14.1" "main" "Typed" "optimized-Core-before-Tidy" (Kn
     [ForeignFile "C" "foreign source" ".c"]))
   (Known (ExceptionBridge 1 "main" "Typed" "main:Typed.box" "main:Typed.project"
     "main:Typed.Payload" "ghc-internal:GHC.Internal.Exception.Type.SomeException"))
-  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing] Nothing Nothing
+  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing] Nothing Nothing Nothing
 
 completeImports :: ImportProof
 completeImports = ImportProof 1 "retained-static-import-products" "not-linked"

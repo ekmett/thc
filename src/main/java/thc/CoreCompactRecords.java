@@ -176,17 +176,11 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> binding(CoreCompactCursor cursor) throws Throwable {
         var origin = origin(cursor.getPosition());
-        int tag = cursor.readByte();
-        Object signature = MISSING;
-        if (tag == 2) {
-            require(file.header().getContainsHostSignatures(), "Compact host signature lacks header flag");
-            signature = presence(cursor, () -> hostSignature(cursor));
-            require(signature != MISSING, "Missing compact host signature extension");
-            tag = cursor.readByte();
-        }
-        String id = id(cursor, tag);
+        BindingFacts facts = bindingPrefix(cursor, false);
+        String id = facts.id;
         var result = map("id", id, "name", id, "compactOrigin", origin);
-        if (signature != MISSING) result.put("hostSignature", signature);
+        if (facts.hasCallable) result.put("callable", facts.callable);
+        if (facts.hasHostSignature) result.put("hostSignature", facts.hostSignature);
         entry(cursor, result);
         field(cursor, result, "lifted", cursor::readBoolean);
         result.put("arity", cursor.unsigned());
@@ -199,11 +193,175 @@ public final class CoreCompactRecords {
         result.put("expr", expression(cursor));
         return result;
     }
-    private Map<String,Object> hostSignature(CoreCompactCursor cursor) throws Throwable {
-        return map("inputs", list(cursor, () -> hostType(cursor)), "result", hostType(cursor));
+    /** Independent callable/host prefix; absence and explicit unknown remain distinct. */
+    public record BindingFacts(String id, boolean hasCallable, Object callable,
+                               boolean hasHostSignature, Object hostSignature) {}
+
+    /** Stops after identity. A legacy unframed host prefix returns null because
+     * even locating its identity can require expression Shape backreferences. */
+    public BindingFacts bindingFacts(long offset) {
+        try {
+            return file.data(offset, cursor -> {
+                BindingFacts facts = bindingPrefix(cursor, true);
+                if (facts != null) require(!facts.id.startsWith("\u0000compact-local:"),
+                        "Compact top-level binding has local identity");
+                return facts;
+            });
+        } catch (Throwable failure) { return rethrow(failure); }
     }
-    private Map<String,Object> hostType(CoreCompactCursor cursor) throws Throwable {
-        return map("rep", rep(cursor), "carriers", list(cursor, () -> switch (cursor.readByte()) {
+    private BindingFacts bindingPrefix(CoreCompactCursor cursor, boolean independent) throws Throwable {
+        int tag = cursor.readByte();
+        Object callable = MISSING, signature = MISSING;
+        if (tag == 2) {
+            if (independent) return null;
+            require(file.header().getContainsHostSignatures(), "Compact host signature lacks header flag");
+            signature = presence(cursor, () -> hostSignature(cursor));
+            require(signature != MISSING, "Missing compact host signature extension");
+            tag = cursor.readByte();
+        } else if (tag == 3) {
+            require(file.header().getContainsRecoveryFacts(), "Compact callable fact lacks header flag");
+            CoreCompactCursor bounded = cursor.bounded(cursor.unsigned());
+            callable = presence(bounded, () -> typeTerm(bounded));
+            signature = presence(bounded, () -> hostSignature(bounded, true));
+            require(callable != MISSING, "Missing compact callable extension");
+            require(signature == MISSING || file.header().getContainsHostSignatures(), "Compact host signature lacks header flag");
+            bounded.expectEnd();
+            tag = cursor.readByte();
+        }
+        return new BindingFacts(id(cursor, tag), callable != MISSING, callable,
+                signature != MISSING, signature);
+    }
+    // Same context-free lexical terms consumed by CoreHiTypes.read/readCo.
+    Object typeName(CoreCompactCursor cursor) throws Throwable {
+        String unit = text(cursor), owner = text(cursor);
+        int namespace = cursor.readByte();
+        require(namespace <= 4, "Invalid recovery Name namespace");
+        Object parent = optional(cursor, () -> text(cursor));
+        return Arrays.asList(unit, owner, namespace, parent, text(cursor));
+    }
+    private static <T> T optional(CoreCompactCursor cursor, Reader<T> read) throws Throwable {
+        return switch (cursor.readByte()) {
+            case 0 -> null;
+            case 1 -> read.read();
+            default -> throw error("Invalid recovery optional tag");
+        };
+    }
+    Object typeBinder(CoreCompactCursor cursor) throws Throwable {
+        return List.of(text(cursor), cursor.readBoolean(), typeTerm(cursor));
+    }
+    private static int typeEnum(CoreCompactCursor cursor, int maximum) {
+        int value = cursor.readByte();
+        require(value <= maximum, "Invalid recovery enumeration");
+        return value;
+    }
+    private Object typeSort(CoreCompactCursor cursor) {
+        return switch (cursor.readByte()) {
+            case 0 -> List.of(0);
+            case 1 -> List.of(1, cursor.unsigned(), typeEnum(cursor, 2));
+            case 2 -> List.of(2, cursor.unsigned());
+            case 3 -> List.of(3);
+            default -> throw error("Invalid recovery TyCon sort");
+        };
+    }
+    private List<?> typeArguments(CoreCompactCursor cursor) throws Throwable {
+        return list(cursor, () -> List.of(typeEnum(cursor, 2), typeTerm(cursor)));
+    }
+    private static long codePoint(CoreCompactCursor cursor) {
+        long value = cursor.unsigned();
+        require(value <= 0x10ffff, "Invalid recovery literal code point");
+        return value;
+    }
+    Object typeTerm(CoreCompactCursor cursor) throws Throwable {
+        return switch (cursor.readByte()) {
+            case 0 -> List.of("var", text(cursor));
+            case 1 -> List.of("con", typeName(cursor), cursor.readBoolean(), typeSort(cursor), typeArguments(cursor));
+            case 2 -> List.of("app", typeTerm(cursor), typeArguments(cursor));
+            case 3 -> List.of("fun", typeEnum(cursor, 3), typeTerm(cursor), typeTerm(cursor), typeTerm(cursor));
+            case 4 -> List.of("forall", typeBinder(cursor), typeEnum(cursor, 2), typeTerm(cursor));
+            case 5 -> List.of("tuple", typeEnum(cursor, 2), cursor.readBoolean(), typeArguments(cursor));
+            case 6 -> {
+                String value = text(cursor);
+                require(new BigInteger(value).toString().equals(value), "Noncanonical recovery integer");
+                yield List.of("lit", 1, value);
+            }
+            case 7 -> List.of("lit", 2, list(cursor, () -> codePoint(cursor)));
+            case 8 -> List.of("lit", 3, codePoint(cursor));
+            case 9 -> List.of("cast", typeTerm(cursor), coTerm(cursor));
+            case 10 -> List.of("coercion", coTerm(cursor));
+            default -> throw error("Unknown recovery type term");
+        };
+    }
+    private int typeRole(CoreCompactCursor cursor) { return typeEnum(cursor, 2) + 1; }
+    private Object coTerm(CoreCompactCursor cursor) throws Throwable {
+        return switch (cursor.readByte()) {
+            case 0 -> List.of("refl", typeTerm(cursor));
+            case 1 -> Arrays.asList("grefl", typeRole(cursor), typeTerm(cursor), optional(cursor, () -> coTerm(cursor)));
+            case 2 -> List.of("funco", typeRole(cursor), coTerm(cursor), coTerm(cursor), coTerm(cursor));
+            case 3 -> List.of("conco", typeRole(cursor), typeName(cursor), cursor.readBoolean(), typeSort(cursor), list(cursor, () -> coTerm(cursor)));
+            case 4 -> List.of("appco", coTerm(cursor), coTerm(cursor));
+            case 5 -> List.of("forallco", typeBinder(cursor), typeEnum(cursor, 2), typeEnum(cursor, 2), coTerm(cursor), coTerm(cursor));
+            case 6 -> List.of("varco", text(cursor));
+            case 7 -> {
+                Object provenance = switch (cursor.readByte()) {
+                    case 0 -> List.of(1);
+                    case 1 -> List.of(2);
+                    case 2 -> List.of(3, text(cursor));
+                    default -> throw error("Invalid recovery coercion provenance");
+                };
+                yield List.of("univ", provenance, typeRole(cursor), typeTerm(cursor), typeTerm(cursor), list(cursor, () -> coTerm(cursor)));
+            }
+            case 8 -> List.of("sym", coTerm(cursor));
+            case 9 -> List.of("trans", coTerm(cursor), coTerm(cursor));
+            case 10 -> {
+                Object selector = switch (cursor.readByte()) {
+                    case 0 -> List.of(0, cursor.unsigned(), typeRole(cursor));
+                    case 1 -> List.of(1);
+                    case 2 -> List.of(2);
+                    case 3 -> List.of(3);
+                    case 4 -> List.of(4);
+                    default -> throw error("Invalid recovery coercion selector");
+                };
+                yield List.of("sel", selector, coTerm(cursor));
+            }
+            case 11 -> List.of("lr", typeEnum(cursor, 1), coTerm(cursor));
+            case 12 -> List.of("inst", coTerm(cursor), coTerm(cursor));
+            case 13 -> List.of("kind", coTerm(cursor));
+            case 14 -> List.of("sub", coTerm(cursor));
+            case 15 -> {
+                Object rule = switch (cursor.readByte()) {
+                    case 0 -> List.of(0, text(cursor));
+                    case 1 -> List.of(1, typeName(cursor));
+                    case 2 -> List.of(2, typeName(cursor), cursor.unsigned());
+                    default -> throw error("Invalid recovery axiom rule");
+                };
+                yield List.of("axiom", rule, list(cursor, () -> coTerm(cursor)));
+            }
+            default -> throw error("Unknown recovery coercion term");
+        };
+    }
+    Object typeParameter(CoreCompactCursor cursor) throws Throwable {
+        Object binder = typeBinder(cursor);
+        Object visibility = switch (cursor.readByte()) {
+            case 0 -> List.of(0);
+            case 1 -> List.of(1, typeEnum(cursor, 2));
+            default -> throw error("Invalid recovery parameter visibility");
+        };
+        return List.of(binder, visibility);
+    }
+    Map<String,Object> typeAxiom(CoreCompactCursor cursor) throws Throwable {
+        return map("name", typeName(cursor), "tycon", typeName(cursor), "role", typeRole(cursor),
+                "branches", list(cursor, () -> map("binders", list(cursor, () -> typeBinder(cursor)),
+                        "roles", list(cursor, () -> typeRole(cursor)), "lhs", list(cursor, () -> typeTerm(cursor)), "rhs", typeTerm(cursor))));
+    }
+
+    private Map<String,Object> hostSignature(CoreCompactCursor cursor) throws Throwable {
+        return hostSignature(cursor, false);
+    }
+    private Map<String,Object> hostSignature(CoreCompactCursor cursor, boolean inline) throws Throwable {
+        return map("inputs", list(cursor, () -> hostType(cursor, inline)), "result", hostType(cursor, inline));
+    }
+    private Map<String,Object> hostType(CoreCompactCursor cursor, boolean inline) throws Throwable {
+        return map("rep", rep(cursor, inline), "carriers", list(cursor, () -> switch (cursor.readByte()) {
             case 0 -> null;
             case 1 -> "object";
             case 2 -> "interop-library";

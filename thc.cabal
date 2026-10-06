@@ -783,6 +783,7 @@ library
     THC.ForeignExports
     THC.ForeignExportProvenance
     THC.ForeignImportProvenance
+    THC.InterfaceTypes
     THC.JSON
     THC.Sources
     THC.Wired
@@ -808,6 +809,8 @@ library compact-core
     THC.Compact.Wire
     THC.Compact.Writer
     THC.Compact.Core
+    THC.Compact.Types
+    THC.Compact.Types.JSON
     THC.Compact.Facts
     THC.Compact.Module
     THC.Compact.JSON

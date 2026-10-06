@@ -122,7 +122,7 @@ getHeader = do
   debug <- getWord32le
   reserved <- getWord32le
   unless (reserved == 0) (fail "Reserved CBD header bits are set")
-  unless (summaries .&. 31 == summaries) (fail "Unknown compact summary bits")
+  unless (summaries .&. 63 == summaries) (fail "Unknown compact summary bits")
   unless (debug .&. 7 == debug) (fail "Unknown compact debug bits")
   pure (Header major minor summaries count debug)
 
@@ -140,7 +140,7 @@ validateContainer header lengths = do
             (if filenames > 0 then 2 else 0) .|.
             (if lineColumns > 0 then 4 else 0)
       unless (headerDebugFlags header == flags) (Left "Compact debug flags differ from segment extents")
-      unless (headerSummaries header .&. 31 == headerSummaries header) (Left "Unknown compact summary bits")
+      unless (headerSummaries header .&. 63 == headerSummaries header) (Left "Unknown compact summary bits")
     _ -> Left "CBD requires six payload members"
 
 -- | Run a bounded field decoder and reject trailing bytes. A caller slices

@@ -12,7 +12,7 @@
 -- Native selected-record decoder for round-trip controls and flat inspection.
 -- Earlier shape definitions are addressed directly; no preceding Core tree is
 -- decoded to find a selected binding. Runtime mmap ownership is independent.
-module THC.Compact.Decode (decodeBindingAt, decodeBindingAtWithHostSignatures, decodeExprAt, decodeRepAt, decodeFacts, decodeMetadata) where
+module THC.Compact.Decode (decodeBindingAt, decodeBindingAtWithHostSignatures, decodeBindingAtWithFeatures, decodeExprAt, decodeRepAt, decodeFacts, decodeMetadata) where
 
 import Control.Monad (replicateM, unless)
 import Data.Binary.Get hiding (Decoder)
@@ -22,8 +22,11 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Int (Int64)
 import qualified Data.Set as Set
 import qualified Data.Text.Encoding as Text
+import qualified Data.Text as TextValue
+import Text.Read (readMaybe)
 import Data.Word (Word64)
 import THC.Compact.Core
+import THC.Compact.Types
 import THC.Compact.Facts
 import THC.Compact.Wire
 
@@ -33,6 +36,7 @@ data Decoder = Decoder
   , recordBase :: !Word64
   , activeShapes :: !(Set.Set Word64)
   , allowHostSignatures :: !Bool
+  , allowRecoveryFacts :: !Bool
   }
 
 -- | Return a selected typed binding and its end-exclusive relative byte offset.
@@ -42,18 +46,22 @@ decodeBindingAt = decodeBindingAtWithHostSignatures True
 -- | Container readers pass the declared feature bit; standalone record tests
 -- can decode the complete current record vocabulary with 'decodeBindingAt'.
 decodeBindingAtWithHostSignatures :: Bool -> BS.ByteString -> BS.ByteString -> Word64 -> Either String (Binding, Word64)
-decodeBindingAtWithHostSignatures allow bytes strings offset =
-  runAt bytes offset (binding (Decoder bytes strings offset Set.empty allow))
+decodeBindingAtWithHostSignatures allow = decodeBindingAtWithFeatures allow True
+
+-- | Container readers validate both independent executable feature bits.
+decodeBindingAtWithFeatures :: Bool -> Bool -> BS.ByteString -> BS.ByteString -> Word64 -> Either String (Binding, Word64)
+decodeBindingAtWithFeatures hosts recovery bytes strings offset =
+  runAt bytes offset (binding (Decoder bytes strings offset Set.empty hosts recovery))
 
 decodeExprAt :: BS.ByteString -> BS.ByteString -> Word64 -> Either String (Expr, Word64)
-decodeExprAt bytes strings offset = runAt bytes offset (expression (Decoder bytes strings offset Set.empty True))
+decodeExprAt bytes strings offset = runAt bytes offset (expression (Decoder bytes strings offset Set.empty True True))
 
 decodeRepAt :: BS.ByteString -> BS.ByteString -> Word64 -> Either String (Rep, Word64)
-decodeRepAt bytes strings offset = runAt bytes offset (representation (Decoder bytes strings offset Set.empty True))
+decodeRepAt bytes strings offset = runAt bytes offset (representation (Decoder bytes strings offset Set.empty True True))
 
 -- | Header facts decode independently of all executable and debug bytes.
 decodeFacts :: BS.ByteString -> BS.ByteString -> Either String Facts
-decodeFacts bytes strings = decodeExact (facts (Decoder bytes strings 0 Set.empty True)) bytes
+decodeFacts bytes strings = decodeExact (facts (Decoder bytes strings 0 Set.empty True True)) bytes
 
 -- | The final header owns its string pool; no facts span refers to DATA's
 -- strings member. The fixed 32-byte container prefix is excluded here.
@@ -71,7 +79,7 @@ facts decoder = do
     <*> list decoder (constructor decoder) <*> present (foreignArtifacts decoder)
     <*> present (exceptionBridge decoder) <*> present (string decoder)
     <*> mapM (present . provenance decoder) [0..length pendingProvenanceNames-1]
-    <*> pure Nothing <*> pure Nothing
+    <*> pure Nothing <*> pure Nothing <*> pure Nothing
   extensions base
   where
     extensions value = do
@@ -90,6 +98,9 @@ facts decoder = do
           unless (and (zipWith (<) (map fst bindings) (drop 1 (map fst bindings))))
             (fail "Compact backend policy bindings must be strictly sorted")
           extensions value {factsBackendPolicy = Just (BackendPolicy def bindings)}
+        3 | Nothing <- factsRecovery value -> do
+          recovery <- framed decoder recoveryFacts
+          extensions value {factsRecovery = Just recovery}
         _ -> fail "Unknown or duplicate compact header extension"
     backend = getWord8 >>= \tag -> case tag of
       1 -> pure AstBackend
@@ -382,20 +393,155 @@ identity decoder = getWord8 >>= \kind -> case kind of
 binding :: Decoder -> Get Binding
 binding decoder = do
   prefix <- lookAhead getWord8
-  signature <- if prefix /= 2 then pure Missing else do
-    unless (allowHostSignatures decoder) (fail "Compact host signature lacks header flag")
-    _ <- getWord8
-    value <- present (hostSignature decoder)
-    unless (value /= Missing) (fail "Empty compact host-signature extension")
-    pure value
+  (callable,signature) <- case prefix of
+    2 -> do
+      unless (allowHostSignatures decoder) (fail "Compact host signature lacks header flag")
+      _ <- getWord8
+      value <- present (hostSignature decoder)
+      unless (value /= Missing) (fail "Empty compact host-signature extension")
+      pure (Missing,value)
+    3 -> do
+      unless (allowRecoveryFacts decoder) (fail "Compact callable fact lacks header flag")
+      _ <- getWord8
+      pair <- framed decoder $ \bounded -> (,) <$> present (typeTerm bounded) <*> present (inlineHostSignature bounded)
+      unless (fst pair /= Missing) (fail "Empty compact callable extension")
+      unless (snd pair == Missing || allowHostSignatures decoder) (fail "Compact host signature lacks header flag")
+      pure pair
+    _ -> pure (Missing,Missing)
   Binding <$> identity decoder <*> enumeration <*> present boolean <*> getUVar
     <*> present (representation decoder) <*> present (idInfo decoder)
     <*> present (list decoder boolean) <*> present (string decoder) <*> present getUVar
-    <*> present (representation decoder) <*> pure signature <*> expression decoder
+    <*> present (representation decoder) <*> pure callable <*> pure signature <*> expression decoder
 
 hostSignature :: Decoder -> Get HostSignature
 hostSignature decoder = HostSignature <$> list decoder hostType <*> hostType
   where hostType = HostType <$> representation decoder <*> list decoder enumeration
+
+inlineHostSignature :: Decoder -> Get HostSignature
+inlineHostSignature decoder = HostSignature <$> list decoder hostType <*> hostType
+  where hostType = HostType <$> inlineRepresentation decoder <*> list decoder enumeration
+
+-- Framed facts decode against their own bounds and shared string pool.
+framed :: Decoder -> (Decoder -> Get a) -> Get a
+framed decoder parser = do
+  size <- getUVar
+  unless (size <= fromIntegral (BS.length (sourceData decoder))) (fail "Recovery frame exceeds record extent")
+  bytes <- getByteString (fromIntegral size)
+  either fail pure (decodeExact (parser decoder {sourceData=bytes,recordBase=0}) bytes)
+
+maybeValue :: Get a -> Get (Maybe a)
+maybeValue parser = getWord8 >>= \kind -> case kind of
+  0 -> pure Nothing
+  1 -> Just <$> parser
+  _ -> fail "Invalid recovery optional tag"
+
+typeName :: Decoder -> Get TypeName
+typeName decoder = do
+  unit <- string decoder
+  owner <- string decoder
+  namespace <- getWord8
+  unless (namespace <= 4) (fail "Invalid recovery Name namespace")
+  TypeName unit owner namespace <$> maybeValue (string decoder) <*> string decoder
+
+typeBinder :: Decoder -> Get TypeBinder
+typeBinder decoder = TypeBinder <$> string decoder <*> boolean <*> typeTerm decoder
+
+tyConSort :: Get TyConSort
+tyConSort = getWord8 >>= \kind -> case kind of
+  0 -> pure NormalTyCon
+  1 -> TupleTyCon <$> getUVar <*> enumeration
+  2 -> SumTyCon <$> getUVar
+  3 -> pure EqualityTyCon
+  _ -> fail "Invalid recovery TyCon sort"
+
+typeArguments :: Decoder -> Get [TypeArgument]
+typeArguments decoder = list decoder (TypeArgument <$> enumeration <*> typeTerm decoder)
+
+typeTerm :: Decoder -> Get TypeTerm
+typeTerm decoder = getWord8 >>= \kind -> case kind of
+  0 -> TypeVar <$> string decoder
+  1 -> TypeCon <$> typeName decoder <*> boolean <*> tyConSort <*> typeArguments decoder
+  2 -> TypeApp <$> child <*> typeArguments decoder
+  3 -> TypeFun <$> enumeration <*> child <*> child <*> child
+  4 -> TypeForall <$> typeBinder decoder <*> enumeration <*> child
+  5 -> TypeTuple <$> enumeration <*> boolean <*> typeArguments decoder
+  6 -> do
+    text <- string decoder
+    case readMaybe (TextValue.unpack (Text.decodeUtf8 text)) of
+      Just integer | text == Text.encodeUtf8 (TextValue.pack (show integer)) -> pure (TypeNat integer)
+      _ -> fail "Noncanonical recovery integer"
+  7 -> TypeSymbol <$> list decoder codePoint
+  8 -> TypeChar <$> codePoint
+  9 -> TypeCast <$> child <*> coTerm decoder
+  10 -> TypeCoercion <$> coTerm decoder
+  _ -> fail "Unknown recovery type term"
+  where child = typeTerm decoder
+        codePoint = do
+          value <- getUVar
+          unless (value <= 0x10ffff) (fail "Invalid recovery literal code point")
+          pure (fromIntegral value)
+
+coTerm :: Decoder -> Get CoTerm
+coTerm decoder = getWord8 >>= \kind -> case kind of
+  0 -> CoRefl <$> typeTerm decoder
+  1 -> CoGRefl <$> enumeration <*> typeTerm decoder <*> maybeValue child
+  2 -> CoFun <$> enumeration <*> child <*> child <*> child
+  3 -> CoCon <$> enumeration <*> typeName decoder <*> boolean <*> tyConSort <*> children
+  4 -> CoApp <$> child <*> child
+  5 -> CoForall <$> typeBinder decoder <*> enumeration <*> enumeration <*> child <*> child
+  6 -> CoVar <$> string decoder
+  7 -> CoUniv <$> evidence <*> enumeration <*> typeTerm decoder <*> typeTerm decoder <*> children
+  8 -> CoSym <$> child
+  9 -> CoTrans <$> child <*> child
+  10 -> CoSelect <$> selector <*> child
+  11 -> getWord8 >>= \side -> case side of
+    0 -> CoLeft <$> child
+    1 -> CoRight <$> child
+    _ -> fail "Invalid recovery coercion side"
+  12 -> CoInst <$> child <*> child
+  13 -> CoKind <$> child
+  14 -> CoSub <$> child
+  15 -> CoAxiom <$> rule <*> children
+  _ -> fail "Unknown recovery coercion term"
+  where child = coTerm decoder
+        children = list decoder child
+        evidence = getWord8 >>= \tag -> case tag of
+          0 -> pure PhantomProvenance
+          1 -> pure ProofIrrelevance
+          2 -> PluginProvenance <$> string decoder
+          _ -> fail "Invalid recovery coercion provenance"
+        selector = getWord8 >>= \tag -> case tag of
+          0 -> TyConSelector <$> getUVar <*> enumeration
+          1 -> pure ForallSelector
+          2 -> pure MultiplicitySelector
+          3 -> pure ArgumentSelector
+          4 -> pure ResultSelector
+          _ -> fail "Invalid recovery coercion selector"
+        rule = getWord8 >>= \tag -> case tag of
+          0 -> BuiltinRule <$> string decoder
+          1 -> UnbranchedRule <$> typeName decoder
+          2 -> BranchedRule <$> typeName decoder <*> getUVar
+          _ -> fail "Invalid recovery axiom rule"
+
+typeParameter :: Decoder -> Get TypeParameter
+typeParameter decoder = TypeParameter <$> typeBinder decoder <*> (getWord8 >>= \tag -> case tag of
+  0 -> pure AnonymousParameter
+  1 -> NamedParameter <$> enumeration
+  _ -> fail "Invalid recovery parameter visibility")
+
+typeAxiom :: Decoder -> Get AxiomFact
+typeAxiom decoder = AxiomFact <$> typeName decoder <*> typeName decoder <*> enumeration
+  <*> list decoder (AxiomBranch <$> list decoder (typeBinder decoder) <*> list decoder enumeration
+    <*> list decoder (typeTerm decoder) <*> typeTerm decoder)
+
+recoveryFacts :: Decoder -> Get RecoveryFacts
+recoveryFacts decoder = RecoveryFacts <$> list decoder nominal <*> list decoder constructorFact <*> list decoder (typeAxiom decoder)
+  where nominal = NominalFact <$> typeName decoder <*> list decoder (typeParameter decoder)
+          <*> typeTerm decoder <*> list decoder enumeration <*> enumeration
+          <*> maybeValue (typeTerm decoder) <*> maybeValue (typeName decoder) <*> list decoder (typeName decoder)
+        constructorFact = ConstructorFact <$> typeName decoder <*> typeName decoder <*> typeName decoder
+          <*> list decoder (typeBinder decoder) <*> list decoder (typeBinder decoder)
+          <*> list decoder (ScaledType <$> typeTerm decoder <*> typeTerm decoder) <*> typeTerm decoder
 
 binder :: Decoder -> Get Binder
 binder decoder = Binder <$> getUVar <*> enumeration <*> present boolean <*> present boolean

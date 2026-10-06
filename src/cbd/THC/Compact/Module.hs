@@ -110,6 +110,7 @@ finalizeModuleMetadata path value = do
     -- origins. Header-only callers never need synthetic executable bindings
     -- merely to carry that immutable provenance ledger through finalization.
     let facts = updated {factsClosureProvenance = factsClosureProvenance oldFacts,
+          factsRecovery = factsRecovery oldFacts,
           factsBackendPolicy = case factsBackendPolicy updated of
             Nothing -> factsBackendPolicy oldFacts
             policy -> policy}
@@ -129,7 +130,8 @@ encoded action = do
       BS.readFile path
 
 factSummaries :: Facts -> Word32
-factSummaries facts = (if registration then 2 else 0) .|. (if declarations then 8 else 0)
+factSummaries facts = (if registration then 2 else 0) .|. (if declarations then 8 else 0) .|.
+  (if factsRecovery facts == Nothing then 0 else 32)
   where
     registration = case factsForeign facts of
       Known (ForeignArtifacts _ _ stubs files) -> not (null files) || case stubs of
@@ -182,8 +184,9 @@ writeModuleRecords policy destination facts bindings catalog = do
         void (appendBytes streams Fingerprints directory)
         control <- containsDelimitedControl encoder
         hostSignatures <- containsHostSignatures encoder
+        recovery <- containsRecoveryFacts encoder
         let summaries = (if control then 1 else 0) .|.
-              factSummaries facts .|. (if alias then 4 else 0) .|. (if hostSignatures then 16 else 0)
+              factSummaries facts .|. (if alias then 4 else 0) .|. (if hostSignatures then 16 else 0) .|. (if recovery then 32 else 0)
         pure (count,summaries)
       binding encoder debug (!count,!alias,rows) (value,annotations) = do
         key <- case bindingIdentity value of

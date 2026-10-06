@@ -13,7 +13,7 @@
 -- One-pass typed executable encoding. Shapes are interned independently of
 -- occurrence states; strings append directly to their private auxiliary stream.
 module THC.Compact.Encode
-  ( Encoder, newEncoder, setRecordObserver, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl, containsHostSignatures ) where
+  ( Encoder, newEncoder, setRecordObserver, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl, containsHostSignatures, containsRecoveryFacts ) where
 
 import Control.Monad (forM_, unless, void, when)
 import Data.Binary.Put
@@ -24,8 +24,10 @@ import qualified Data.ByteString.Lazy as BL
 import Data.IORef
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
+import qualified Data.Text as TextValue
 import Data.Word (Word8, Word32, Word64)
 import THC.Compact.Core
+import THC.Compact.Types
 import THC.Compact.Annotations
 import THC.Compact.Facts
 import THC.Compact.Wire
@@ -58,6 +60,9 @@ containsDelimitedControl (Encoder _ _ _ _ found _) = (/= 0) . (.&. 1) <$> readIO
 
 containsHostSignatures :: Encoder -> IO Bool
 containsHostSignatures (Encoder _ _ _ _ found _) = (/= 0) . (.&. 16) <$> readIORef found
+
+containsRecoveryFacts :: Encoder -> IO Bool
+containsRecoveryFacts (Encoder _ _ _ _ found _) = (/= 0) . (.&. 32) <$> readIORef found
 
 -- | Encode only the bounded known-start record in memory, while appending its
 -- strings to the auxiliary stream. Constructor shapes are inline: admitting
@@ -93,6 +98,7 @@ encodeFacts (Encoder streams strings shapes _ found observer) facts = do
     unless (and (zipWith (<) (map fst bindings) (drop 1 (map fst bindings))))
       (fail "Compact backend policy bindings must be strictly sorted")
     list encoder (\(key,backend) -> string encoder key >> tag encoder (backendTag backend)) bindings
+  forM_ (factsRecovery facts) $ \value -> tag encoder 3 >> framed encoder (\bounded -> recoveryFacts bounded value)
   BL.toStrict . Builder.toLazyByteString <$> readIORef output
   where
     backendTag AstBackend = 1
@@ -505,12 +511,20 @@ identity encoder value = case value of
 encodeBinding :: Encoder -> Binding -> IO Word64
 encodeBinding encoder@(Encoder streams _ _ _ found _) binding = observe encoder (BindingRecord (bindingIdentity binding)) $ do
   start <- streamOffset streams ExecutableData
-  case bindingHostSignature binding of
-    Missing -> pure ()
-    signature -> do
-      modifyIORef' found (.|. 16)
-      tag encoder 2 -- extended binding; old identity tags remain 0 and 1
-      present encoder (hostSignature encoder) signature
+  case bindingCallable binding of
+    Missing -> case bindingHostSignature binding of
+      Missing -> pure ()
+      signature -> do
+        modifyIORef' found (.|. 16)
+        tag encoder 2 -- legacy host-only prefix uses ordinary Shape references
+        present encoder (hostSignature encoder) signature
+    callable -> do
+      modifyIORef' found (.|. 32)
+      unless (bindingHostSignature binding == Missing) (modifyIORef' found (.|. 16))
+      tag encoder 3
+      framed encoder $ \bounded -> do
+        present bounded (typeTerm bounded) callable
+        present bounded (inlineHostSignature bounded) (bindingHostSignature binding)
   identity encoder (bindingIdentity binding)
   enumeration encoder (bindingEntryType binding)
   present encoder (boolean encoder) (bindingLifted binding)
@@ -528,6 +542,141 @@ hostSignature :: Encoder -> HostSignature -> IO ()
 hostSignature encoder (HostSignature inputs result) = list encoder hostType inputs >> hostType result
   where
     hostType (HostType proof carriers) = encodeRep encoder proof >> list encoder (enumeration encoder) carriers
+
+inlineHostSignature :: Encoder -> HostSignature -> IO ()
+inlineHostSignature encoder (HostSignature inputs result) = list encoder hostType inputs >> hostType result
+  where hostType (HostType proof carriers) = inlineRep encoder proof >> list encoder (enumeration encoder) carriers
+
+-- Recovery terms are inline and have no DATA Shape references.
+typeName :: Encoder -> TypeName -> IO ()
+typeName encoder (TypeName unit owner namespace parent occurrence) = do
+  mapM_ (string encoder) [unit,owner]
+  unless (namespace <= 4) (fail "Invalid recovery Name namespace")
+  tag encoder namespace
+  maybeValue encoder (string encoder) parent
+  string encoder occurrence
+
+maybeValue :: Encoder -> (a -> IO ()) -> Maybe a -> IO ()
+maybeValue encoder action value = case value of
+  Nothing -> tag encoder 0
+  Just found -> tag encoder 1 >> action found
+
+typeBinder :: Encoder -> TypeBinder -> IO ()
+typeBinder encoder (TypeBinder name coercion kind) = string encoder name >> boolean encoder coercion >> typeTerm encoder kind
+
+typeArguments :: Encoder -> [TypeArgument] -> IO ()
+typeArguments encoder = list encoder (\(TypeArgument visibility ty) -> enumeration encoder visibility >> typeTerm encoder ty)
+
+tyConSort :: Encoder -> TyConSort -> IO ()
+tyConSort encoder value = case value of
+  NormalTyCon -> tag encoder 0
+  TupleTyCon arity sort -> tag encoder 1 >> number encoder arity >> enumeration encoder sort
+  SumTyCon arity -> tag encoder 2 >> number encoder arity
+  EqualityTyCon -> tag encoder 3
+
+typeTerm :: Encoder -> TypeTerm -> IO ()
+typeTerm encoder value = case value of
+  TypeVar name -> tag encoder 0 >> string encoder name
+  TypeCon name promoted sort args -> tag encoder 1 >> typeName encoder name >> boolean encoder promoted >> tyConSort encoder sort >> typeArguments encoder args
+  TypeApp headType args -> tag encoder 2 >> typeTerm encoder headType >> typeArguments encoder args
+  TypeFun flag multiplicity argument result -> tag encoder 3 >> enumeration encoder flag >> mapM_ (typeTerm encoder) [multiplicity,argument,result]
+  TypeForall quantified visibility body -> tag encoder 4 >> typeBinder encoder quantified >> enumeration encoder visibility >> typeTerm encoder body
+  TypeTuple sort promoted args -> tag encoder 5 >> enumeration encoder sort >> boolean encoder promoted >> typeArguments encoder args
+  TypeNat value' -> tag encoder 6 >> string encoder (Text.encodeUtf8 (TextValue.pack (show value')))
+  TypeSymbol points -> tag encoder 7 >> list encoder codePoint points
+  TypeChar point -> tag encoder 8 >> codePoint point
+  TypeCast ty co -> tag encoder 9 >> typeTerm encoder ty >> coTerm encoder co
+  TypeCoercion co -> tag encoder 10 >> coTerm encoder co
+  where codePoint point = do
+          unless (point <= 0x10ffff) (fail "Invalid recovery literal code point")
+          number encoder (fromIntegral point)
+
+coTerm :: Encoder -> CoTerm -> IO ()
+coTerm encoder value = case value of
+  CoRefl ty -> tag encoder 0 >> typeTerm encoder ty
+  CoGRefl role ty co -> tag encoder 1 >> enumeration encoder role >> typeTerm encoder ty >> maybeValue encoder child co
+  CoFun role mult arg res -> tag encoder 2 >> enumeration encoder role >> mapM_ child [mult,arg,res]
+  CoCon role name promoted sort args -> tag encoder 3 >> enumeration encoder role >> typeName encoder name >> boolean encoder promoted >> tyConSort encoder sort >> children args
+  CoApp a b -> binary 4 a b
+  CoForall quantified vl vr kind body -> tag encoder 5 >> typeBinder encoder quantified >> enumeration encoder vl >> enumeration encoder vr >> child kind >> child body
+  CoVar name -> tag encoder 6 >> string encoder name
+  CoUniv evidence role a b args -> do
+    tag encoder 7
+    case evidence of
+      PhantomProvenance -> tag encoder 0
+      ProofIrrelevance -> tag encoder 1
+      PluginProvenance name -> tag encoder 2 >> string encoder name
+    enumeration encoder role >> typeTerm encoder a >> typeTerm encoder b >> children args
+  CoSym co -> unary 8 co
+  CoTrans a b -> binary 9 a b
+  CoSelect selector co -> do
+    tag encoder 10
+    case selector of
+      TyConSelector index role -> tag encoder 0 >> number encoder index >> enumeration encoder role
+      ForallSelector -> tag encoder 1
+      MultiplicitySelector -> tag encoder 2
+      ArgumentSelector -> tag encoder 3
+      ResultSelector -> tag encoder 4
+    child co
+  CoLeft co -> tag encoder 11 >> tag encoder 0 >> child co
+  CoRight co -> tag encoder 11 >> tag encoder 1 >> child co
+  CoInst a b -> binary 12 a b
+  CoKind co -> unary 13 co
+  CoSub co -> unary 14 co
+  CoAxiom rule args -> do
+    tag encoder 15
+    case rule of
+      BuiltinRule name -> tag encoder 0 >> string encoder name
+      UnbranchedRule name -> tag encoder 1 >> typeName encoder name
+      BranchedRule name branch -> tag encoder 2 >> typeName encoder name >> number encoder branch
+    children args
+  where child = coTerm encoder
+        children = list encoder child
+        unary code co = tag encoder code >> child co
+        binary code a b = tag encoder code >> child a >> child b
+
+typeParameter :: Encoder -> TypeParameter -> IO ()
+typeParameter encoder (TypeParameter quantified visibility) = do
+  typeBinder encoder quantified
+  case visibility of
+    AnonymousParameter -> tag encoder 0
+    NamedParameter flag -> tag encoder 1 >> enumeration encoder flag
+
+typeAxiom :: Encoder -> AxiomFact -> IO ()
+typeAxiom encoder (AxiomFact name tycon role branches) = do
+  typeName encoder name >> typeName encoder tycon >> enumeration encoder role
+  list encoder (\(AxiomBranch binders roles lhs rhs) -> do
+    list encoder (typeBinder encoder) binders
+    list encoder (enumeration encoder) roles
+    list encoder (typeTerm encoder) lhs
+    typeTerm encoder rhs) branches
+
+recoveryFacts :: Encoder -> RecoveryFacts -> IO ()
+recoveryFacts encoder (RecoveryFacts nominal constructors axioms) = do
+  list encoder (\(NominalFact name parameters result roles form rhs axiom selectors) -> do
+    typeName encoder name
+    list encoder (typeParameter encoder) parameters
+    typeTerm encoder result
+    list encoder (enumeration encoder) roles
+    enumeration encoder form
+    maybeValue encoder (typeTerm encoder) rhs
+    maybeValue encoder (typeName encoder) axiom
+    list encoder (typeName encoder) selectors) nominal
+  list encoder (\(ConstructorFact name parent worker universal existential fields workerType) -> do
+    mapM_ (typeName encoder) [name,parent,worker]
+    list encoder (typeBinder encoder) universal
+    list encoder (typeBinder encoder) existential
+    list encoder (\(ScaledType multiplicity ty) -> typeTerm encoder multiplicity >> typeTerm encoder ty) fields
+    typeTerm encoder workerType) constructors
+  list encoder (typeAxiom encoder) axioms
+
+framed :: Encoder -> (Encoder -> IO ()) -> IO ()
+framed encoder@(Encoder streams strings shapes _ found observer) action = do
+  output <- newIORef mempty
+  action (Encoder streams strings shapes (Just output) found observer)
+  bytes <- BL.toStrict . Builder.toLazyByteString <$> readIORef output
+  number encoder (fromIntegral (BS.length bytes))
+  emit encoder (putByteString bytes)
 
 binder :: Encoder -> Binder -> IO ()
 binder encoder value = observe encoder (BinderRecord (binderOrdinal value)) $ do

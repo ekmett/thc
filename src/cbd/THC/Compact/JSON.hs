@@ -36,6 +36,7 @@ import THC.Compact.Core
 import THC.Compact.Annotations
 import THC.Compact.Debug
 import THC.Compact.Facts
+import THC.Compact.Types.JSON ()
 
 type Locals = Map.Map Text.Text Word64
 data ConvertState = ConvertState !Word64 !Bool ![Annotation]
@@ -80,7 +81,7 @@ moduleFacts fields = do
   checked fields (["schema","ghc","unit","module","boundary","providedModules","targetLayout",
     "constructors","bindings","foreign","foreignExceptionBridge","foreignExceptionBridgeUnit",
     "sourceCore","rules","groups","lowering","sourceFiles","sourceSpans",
-    "roots","sourceModules","missingDefinitions","backendPolicy"] ++ map bytesKey pendingProvenanceNames)
+    "roots","sourceModules","missingDefinitions","backendPolicy","recoveryFacts"] ++ map bytesKey pendingProvenanceNames)
   Facts <$> fields .: "schema" <*> bytesAt fields "ghc" <*> bytesAt fields "unit"
     <*> bytesAt fields "module" <*> bytesAt fields "boundary" <*> optional fields "providedModules" (array bytes)
     <*> optional fields "targetLayout" targetLayout <*> (fields .: "constructors" >>= array constructor)
@@ -99,6 +100,7 @@ moduleFacts fields = do
           (KM.toList entries)
         let ordered = Map.toAscList (Map.fromList bindings)
         pure (if def == Nothing && null ordered then Nothing else Just (BackendPolicy def ordered))
+    <*> fields .:? "recoveryFacts"
   where
     backend = choice [("ast",AstBackend),("bytecode",BytecodeBackend)]
 
@@ -287,7 +289,7 @@ binding :: Locals -> Maybe Locals -> Value -> Convert Binding
 binding rhsScope declared value = do
   fields <- lift (object value)
   lift (checked fields ["id","name","type","lifted","arity","expr","rep","info","entryStrict",
-    "entryStrictSource","joinValueArity","joinResultRep","hostSignature","source","origin","originModule"])
+    "entryStrictSource","joinValueArity","joinResultRep","callable","hostSignature","source","origin","originModule"])
   key <- lift (fields .: "id")
   identity <- case declared of
     Nothing -> pure (Global (Text.encodeUtf8 key))
@@ -297,6 +299,7 @@ binding rhsScope declared value = do
     <*> lift (fields .: "arity") <*> lift (optional fields "rep" rep) <*> lift (optional fields "info" idInfo)
     <*> lift (optional fields "entryStrict" (array parseJSON)) <*> lift (optional fields "entryStrictSource" bytes)
     <*> lift (optional fields "joinValueArity" parseJSON) <*> lift (optional fields "joinResultRep" rep)
+    <*> lift (optional fields "callable" parseJSON)
     <*> lift (optional fields "hostSignature" hostSignature)
     <*> (lift (fields .: "expr") >>= expr rhsScope)
 

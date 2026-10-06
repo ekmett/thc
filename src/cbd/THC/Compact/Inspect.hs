@@ -32,6 +32,7 @@ import THC.Compact.Core
 import THC.Compact.Decode
 import THC.Compact.Debug
 import THC.Compact.Facts
+import THC.Compact.Types.JSON ()
 import THC.Compact.Wire
 import THC.Compact.Zip (readZipWithMethods)
 
@@ -46,7 +47,7 @@ inspectContainer bytes = do
       rows <- mapM (\start -> decodeExact ((,) <$> getByteString 16 <*> getWord64le)
         (BS.take 24 (BS.drop start directory))) [0,24..BS.length directory-1]
       let hasSignatures = headerSummaries header .&. 16 /= 0
-      bindings <- mapM (\(_,offset) -> fst <$> decodeBindingAtWithHostSignatures hasSignatures payload strings offset) (sortOn snd rows)
+      bindings <- mapM (\(_,offset) -> fst <$> decodeBindingAtWithFeatures hasSignatures (headerSummaries header .&. 32 /= 0) payload strings offset) (sortOn snd rows)
       pure (moduleJSON facts bindings)
     _ -> Left "Compact container requires six segments"
 

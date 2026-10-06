@@ -31,6 +31,7 @@ public final class CoreCompactFormat {
         public boolean getRegistrationObligations() { return (summaries & 2) != 0; }
         public boolean getMainAlias() { return (summaries & 4) != 0; }
         public boolean getPackageScalarDeclarations() { return (summaries & 8) != 0; }
+        public boolean getContainsRecoveryFacts() { return (summaries & 32) != 0; }
         public boolean getContainsHostSignatures() { return (summaries & 16) != 0; }
     }
     public static Header read(MemorySegment bytes, List<Long> lengths) {
@@ -44,7 +45,7 @@ public final class CoreCompactFormat {
         if (!Arrays.equals(cursor.bytes(8), MAGIC)) throw new IllegalArgumentException("Invalid CBD header magic");
         if (cursor.u16() != 1 || cursor.u16() != 2) throw new IllegalArgumentException("Unsupported CBD version");
         long summaries = cursor.u32(), count = cursor.offset(), debug = cursor.u32();
-        if ((summaries & ~31L) != 0 || (debug & ~7L) != 0 || cursor.u32() != 0) {
+        if ((summaries & ~63L) != 0 || (debug & ~7L) != 0 || cursor.u32() != 0) {
             throw new IllegalArgumentException("Reserved CBD header flags");
         }
         long metadataLength = cursor.offset();
