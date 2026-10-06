@@ -2,14 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
 -- Input: an Int# supplied by NativeHiOracle.
--- Purpose: retain a boxed scalar result across an opaque module boundary.
--- Output: Box containing the input plus two.
+-- Purpose: retain nullary/boxed alternatives across an opaque module boundary.
+-- Output: Empty for negative input; otherwise Box containing the input plus two.
 module NativeHiBoxType (Box(..), box) where
 
-import GHC.Exts (Int#, (+#))
+import GHC.Exts (Int#, (+#), (<#))
 
-data Box = Box Int#
+data Box = Empty | Box Int#
 
 {-# OPAQUE box #-}
 box :: Int# -> Box
-box x = Box (x +# 2#)
+box x = case x <# 0# of
+  1# -> Empty
+  _ -> Box (x +# 2#)

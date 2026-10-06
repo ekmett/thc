@@ -129,7 +129,13 @@ final class CoreHiModule {
         c.require(!c.optional(), "unsupported data C type");
         c.require(c.count(1) == 0 && c.count(1) == 0, "unsupported data roles or context");
         c.require(c.byteValue() == 1, "unsupported data type form (requires ordinary boxed data)");
-        int count = c.count(1); c.require(count == 1, "native data slice requires one constructor");
+        int count = c.count(1); c.require(count > 0, "unsupported empty native data type");
+        // GHC allocates tags by declaration order, starting at fIRST_TAG = 1.
+        for (int i = 0; i < count; i++) dataConstructor(c, name, offset, i + 1);
+        c.require(!bool(c) && c.byteValue() == 0, "unsupported GADT or data family parent");
+    }
+
+    private void dataConstructor(CoreHiReader.Cursor c, CoreHiReader.ExternalName name, int offset, int tag) {
         var con = CoreHiNames.read(reader, c);
         c.require(con.module().equals(reader.module) && con.namespace() == 1, "invalid data constructor identity");
         c.require(!bool(c), "unsupported data constructor wrapper");
@@ -158,9 +164,8 @@ final class CoreHiModule {
         for (int i = 0; i < sourceCount; i++) {
             c.require(c.byteValue() <= 2 && c.byteValue() <= 2, "invalid constructor source bang");
         }
-        c.require(!bool(c) && c.byteValue() == 0, "unsupported GADT or data family parent");
         String id = CoreHiNames.id(con);
-        var metadata = map("id", id, "name", con.occurrence(), "arity", (long) arity, "tag", 1L, "kind", "boxed",
+        var metadata = map("id", id, "name", con.occurrence(), "arity", (long) arity, "tag", (long) tag, "kind", "boxed",
                 "strictFields", List.copyOf(strict), "fieldLifted", Collections.nCopies(arity, false),
                 "fieldReps", primitiveReps, "fieldTypes", representations);
         c.require(constructors.putIfAbsent(id, new Constructor(new Type(CoreHiNames.id(name), List.of()), List.copyOf(fields), metadata)) == null,
