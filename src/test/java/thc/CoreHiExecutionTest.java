@@ -51,7 +51,7 @@ class CoreHiExecutionTest {
         for (var row : rows) {
             assertEquals(4 * row[0] + 8, row[1], "native result agrees with independent arithmetic");
             assertEquals(row[0] <= 0 ? 0 : row[0] * (row[0] + 1) / 2, row[2], "native recursion agrees with model");
-            assertEquals(3 * (row[0] + 2), row[3], "native constructor/case agrees with model");
+            assertEquals(row[0] < 0 ? -7 : 3 * (row[0] + 2), row[3], "native constructor/case agrees with model");
         }
         Path manifest = manifest();
         for (String backend : List.of("ast", "bytecode")) {

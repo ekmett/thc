@@ -97,11 +97,11 @@ creates no helper process or intermediate CBD.
 GHC 9.14.1 vanilla, 64-bit retained interfaces are supported for non-polymorphic
 integer functions, private bindings, recursion, local bindings, literal/default
 cases and calls to other native interface modules. A monomorphic boxed datatype
-with one constructor and integer scalar fields can be constructed and matched
+with nullary or integer-field constructors can be constructed and matched
 across native interface modules. An actual multi-module program
 matches native GHC on both backends and handoff modes with process creation
-disabled and only `.hi` files in its Core closure. Polymorphism, multiple
-constructors, wrappers, records, unpacking, GADTs, foreign
+disabled and only `.hi` files in its Core closure. Polymorphism, constructor
+wrappers, records, unpacking, GADTs, foreign
 obligations, annotations and further expression forms are not yet supported. Complete offline execution auditing is also unavailable;
 `--verify-artifacts` rejects these modules. The project driver does not yet
 publish this native format. Broader coverage remains tracked in
