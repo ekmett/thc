@@ -30,7 +30,7 @@ final class CoreHiNames {
                         new CoreHiReader.ExternalName(base.module(),0,null,(tycon?"$tc":"$tc'")+base.occurrence());
             } else if(tag=='j') {
                 int arity=index>>>8,position=index&255;
-                if(position<arity)name=new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Classes"),0,null,"$p"+(position+1)+tupleName(2,arity,3).occurrence());
+                if(position<arity)name=new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Classes"),0,null,"$p"+position+tupleName(2,arity,3).occurrence());
             } else if(tag=='z') {
                 int arity=index>>>8,low=index&255;
                 boolean tycon=(low&252)==252; int slot=low&3,alt=low>>>2;
@@ -78,6 +78,19 @@ final class CoreHiNames {
     }
 
     record TupleFamily(int sort,int arity) {}
+    record ConstraintSelector(TupleFamily family,int position) {}
+    static ConstraintSelector constraintTupleSelector(CoreHiReader.ExternalName name) {
+        if(name.namespace()!=0||!name.module().equals(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Classes")))return null;
+        String occurrence=name.occurrence();
+        if(!occurrence.startsWith("$p"))return null;
+        int end=2;while(end<occurrence.length()&&Character.isDigit(occurrence.charAt(end)))end++;
+        if(end==2)return null;
+        try{
+            int position=Integer.parseInt(occurrence.substring(2,end));
+            var family=tupleFamily(new CoreHiReader.ExternalName(name.module(),3,null,occurrence.substring(end)));
+            return family!=null&&family.sort==2&&position>=0&&position<family.arity?new ConstraintSelector(family,position):null;
+        }catch(NumberFormatException malformed){return null;}
+    }
     static TupleFamily tupleFamily(CoreHiReader.ExternalName name) {
         String module=name.module().name();
         if(!name.module().unit().equals("ghc-internal"))return null;
