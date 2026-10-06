@@ -755,7 +755,8 @@ final class CoreHiModule {
     }
     private static boolean scalar(Type type) {
         return type.arguments.isEmpty() && switch (type.name) {
-            case "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep" -> true;
+            case "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep",
+                    "FloatRep", "DoubleRep", "AddrRep" -> true;
             default -> false;
         };
     }
