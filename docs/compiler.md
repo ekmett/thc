@@ -113,7 +113,7 @@ Caller-demand lowering is **opt-in** with `-Dthc.callDemands=true`; the default 
 After building the distribution and exported fixtures, opt in for a run with:
 
 ```sh
-JAVA_OPTS='-Dthc.callDemands=true -Dpolyglot.compiler.InliningPolicy=Default' ./bin/run.sh build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd sumLoop 10000 --compile
+JAVA_OPTS='-Dthc.callDemands=true -Dpolyglot.compiler.InliningPolicy=Default' ./bin/run.sh build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd main:Fixtures.sumLoop 10000 --compile
 ```
 
 `JAVA_OPTS` is read by the installed application launcher. Passing `-Dthc.callDemands=true` only to Gradle does not forward it to the test or application JVM. For benchmark comparisons, hold the inlining policy fixed explicitly on both sides and vary only `thc.callDemands`; retain the same Core and runtime. The policy selection in the example is a comparison control, not a requirement for caller-demand semantics. See [the current demand contract](demand-probe.md).
