@@ -122,7 +122,8 @@ nonterminating rationals from excess-precision Core are supported. Prenex type
 variables of kind `Type` are erased from value parameters and applications; type-only aliases preserve
 the original function value. Ordinary boxed datatypes support nullary constructors,
 integer, floating-point and address fields, lifted datatype parameters and ordinary
-named boxed fields, including recursive fields. Layouts resolve after module admission reserves the
+named boxed fields, including recursive fields and ordinary records. Generated record
+selectors execute their retained Core bodies. Layouts resolve after module admission reserves the
 owner directory, so forward and imported types do not depend on declaration order.
 Constructor applications and cases instantiate parameters while keeping lazy
 fields unevaluated. An actual multi-module program passes `Box Payload` through
@@ -131,7 +132,7 @@ and a recursive lazy tail. It matches native GHC on both backends and handoff mo
 including the first installed guest call. Process creation is disabled and the
 Core closure contains only `.hi` files.
 Higher-rank and representation-polymorphic types, typeclass dictionaries,
-constructor wrappers, records, unpacking, GADTs, foreign obligations, annotations
+constructor wrappers, unpacking, GADTs, foreign obligations, annotations
 and further expression forms are not yet supported. Complete offline execution auditing is also unavailable;
 `--verify-artifacts` rejects these modules. The project driver does not yet
 publish this native format. Broader coverage remains tracked in

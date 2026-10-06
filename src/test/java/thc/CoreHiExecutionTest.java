@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Ordinary GHC .hi files execute directly, including retained private RHSs,
  * scalar recursion, raw byte and IEEE literals, erased polymorphism and parameterized
- * recursive boxed fields across modules. Native results come from the same source build; process creation is denied and the runtime receives no CBD. */
+ * recursive boxed fields and record selectors across modules. Native results come from the same source build; process creation is denied and the runtime receives no CBD. */
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
     private static final String UNIT = "thc-native-hi-scalar";
