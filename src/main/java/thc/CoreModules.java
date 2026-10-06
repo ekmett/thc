@@ -341,7 +341,7 @@ public final class CoreModules {
             require(input.get("packageManifestSha256") == null && input.get("packageCapability") == null,
                     "Orphan package manifest identity");
             require(input.get("moduleFiles") instanceof List<?>, "Expected CBD module files or package manifest");
-            return CoreUnitDirectory.read(Map.of("format", "thc-core-packages", "schema", 1L, "ghc", "9.14.1", "units", List.of()));
+            return nativeInputs(input, CoreUnitDirectory.read(Map.of("format", "thc-core-packages", "schema", 1L, "ghc", "9.14.1", "units", List.of())));
         }
         String manifest = text(input.get("packageManifest"), "Invalid package manifest path");
         boolean verify = Objects.equals(input.get("verifyArtifacts"), true);
@@ -353,8 +353,29 @@ public final class CoreModules {
             var directory = CoreUnitDirectory.read(document);
             require(!expected.isEmpty() || directory.getModules().stream().noneMatch(module -> module.interfaceSource() != null || module.nativeInterface()),
                     "Interface source requires a content-bound host request");
-            require(Objects.equals(input.get("foreignExceptionBridgeUnit"), directory.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request"); return directory;
+            require(Objects.equals(input.get("foreignExceptionBridgeUnit"), directory.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request"); return nativeInputs(input, directory);
         } catch (Exception failure) { throw rethrow(failure); }
+    }
+    private static CoreUnitDirectory nativeInputs(Map<String,Object> input, CoreUnitDirectory directory) {
+        Object raw = input.get("nativeInterfaceFiles");
+        if (raw == null) return directory;
+        require(raw instanceof List<?>, "Invalid native interface files");
+        boolean verify = Boolean.TRUE.equals(input.get("verifyArtifacts"));
+        var files = new ArrayList<CoreUnitDirectory.Artifact>();
+        for (Object value : (List<?>) raw) {
+            require(value instanceof Map<?,?>, "Invalid native interface artifact");
+            var artifact = (Map<?,?>) value;
+            require(artifact.keySet().equals(Set.of("path", "sha256", "capability")), "Invalid native interface artifact fields");
+            String path = text(artifact.get("path"), "Missing native interface path");
+            String hash = text(artifact.get("sha256"), "Missing native interface identity");
+            String capability = text(artifact.get("capability"), "Missing native interface capability");
+            require(Path.of(path).isAbsolute() && hash.matches("[0-9a-f]{64}") &&
+                    sameCapability(capability, packageCapability("HI:" + path, hash, verify)), "Invalid native interface request capability");
+            files.add(new CoreUnitDirectory.Artifact(Path.of(path), hash));
+        }
+        require(files.isEmpty() || !verify, "Offline execution audit for native interfaces is not implemented");
+        require(files.isEmpty() || !Boolean.TRUE.equals(input.get("ioMain")), "Unsupported native interface IO main/shutdown obligations");
+        return directory.withNativeInputs(files);
     }
     /** Prepare from CBD through the normal lazy readers. Detach only the selected
      * in-memory values; no JSON Core, mapping or deferred body survives. */
@@ -478,7 +499,7 @@ public final class CoreModules {
             // Selection collects dependencies, not permission to execute them.
             // The ordinary linker still validates every selected original body.
             reachable(merger.finish(), entries, true);
-            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "moduleFiles");
+            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "moduleFiles", "nativeInterfaceFiles");
             result.put("modules", modules);
             if (sources.getTargetLayout() != null) result.put("targetLayout", sources.getTargetLayout().document());
             return (Map<String,Object>) detachedValue(result);
@@ -524,11 +545,19 @@ public final class CoreModules {
         boolean verify = Boolean.TRUE.equals(settings.get("verifyArtifacts"));
         var document = new LinkedHashMap<>(settings);
         var files = new ArrayList<Object>();
+        var interfaces = new ArrayList<Object>();
+        var interfacePaths = new HashSet<String>();
         String manifest = null;
         for (String requested : paths) {
             if (requested.startsWith("@")) {
                 require(manifest == null, "A Core request accepts at most one package manifest");
                 manifest = Path.of(requested.substring(1)).toRealPath().toString();
+            } else if (requested.endsWith(".hi")) {
+                String path = Path.of(requested).toRealPath().toString();
+                require(interfacePaths.add(path), "Duplicate native interface path: " + path);
+                String hash = sha256(Files.readAllBytes(Path.of(path)));
+                interfaces.add(Map.of("path", path, "sha256", hash,
+                        "capability", packageCapability("HI:" + path, hash, verify)));
             } else {
                 String path = (verify ? Path.of(requested).toRealPath() : Path.of(requested).toAbsolutePath().normalize()).toString();
                 String hash = verify ? sha256(Files.readAllBytes(Path.of(path))) : "";
@@ -538,6 +567,10 @@ public final class CoreModules {
                 files.add(Map.of("path", path, "sha256", hash, "request", request,
                         "capability", packageCapability("CBD:" + path, hash + ":" + request, verify)));
             }
+        }
+        if (!interfaces.isEmpty()) {
+            document.put("nativeInterfaceFiles", interfaces);
+            document.put("strictLink", true);
         }
         if (!files.isEmpty() || manifest == null) document.put("moduleFiles", files);
         if (manifest != null) {
