@@ -151,7 +151,7 @@ final class CoreHiReader {
         return List.copyOf(points);
     }
 
-    private ModuleId module(Cursor cursor) {
+    ModuleId module(Cursor cursor) {
         int tag = cursor.byteValue();
         cursor.require(tag == 0, "unsupported unit tag " + tag + " (virtual/hole units require Backpack decoding)");
         return new ModuleId(fastString(cursor), fastString(cursor));

@@ -17,6 +17,7 @@ class CoreHiReaderTest {
         var reader = CoreHiReader.read(path("normal"));
         var module = new CoreHiModule(reader);
         var constructors = module.constructorLayouts();
+        var admission = module.admission();
         int unit = reader.strings.indexOf(reader.module.unit());
         int owner = reader.strings.indexOf(reader.module.name());
         assertTrue(unit >= 0 && owner >= 0);
@@ -52,12 +53,15 @@ class CoreHiReaderTest {
                     unsigned(bytes, owner);
                 }
                 if (tick == 3) {
-                    bytes.write(1); // Captured expressions are decoded, never executed/indexed.
+                    bytes.write(2); // Captured expressions are decoded, never executed/indexed.
                     bytes.writeBytes(new byte[]{3, 1, 0}); // Empty unboxed tuple.
+                    bytes.writeBytes(new byte[]{10, 1, 0, 0, 1}); // Dynamic CCall, unsafe, type variable.
+                    unsigned(bytes, owner);
                 }
                 bytes.writeBytes(literal.toByteArray());
                 assertEquals(plain, nativeExpression(reader, module, bytes.toByteArray()));
                 assertEquals(constructors, module.constructorLayouts());
+                assertEquals(admission, module.admission());
             }
         }
         var invalid = new java.io.ByteArrayOutputStream();

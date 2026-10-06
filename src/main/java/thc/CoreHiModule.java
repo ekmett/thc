@@ -571,6 +571,10 @@ final class CoreHiModule {
     private Expr expr(CoreHiReader.Cursor c, int depth, boolean executionFacts) {
         c.require(depth < 256, "expression nesting exceeds native Core limit");
         int offset = c.position(), tag = c.byteValue();
+        if (tag == 8) {
+            tick(c, depth + 1);
+            return expr(c, depth + 1, executionFacts);
+        }
         List<Object> fields = switch (tag) {
             case 0 -> values(reader.fastString(c));
             case 1 -> values(type(c, depth + 1));
@@ -605,16 +609,16 @@ final class CoreHiModule {
                 yield values(scrutinee, name, List.copyOf(alts));
             }
             case 7 -> values(group(c, false, depth + 1, executionFacts), expr(c, depth + 1, executionFacts));
-            case 8 -> {
-                tick(c, depth + 1);
-                yield values(expr(c, depth + 1, executionFacts));
-            }
             case 9 -> values(literal(c));
             case 12 -> values(expr(c,depth+1,executionFacts),binary.coercion(c,depth+1));
             case 2 -> values(binary.coercion(c,depth+1));
             case 13 -> values(expr(c,depth+1,executionFacts),type(c,depth+1));
             case 14 -> {Object rr=type(c,depth+1);int torc=c.byteValue();c.require(torc<=1,"invalid rubbish type/constraint");yield values(values("con",new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Prim"),3,null,torc==0?"TYPE":"CONSTRAINT"),false,List.of(0),List.of(values(0,rr))));}
-            case 10 -> {String call=foreignCall(c);scalarDeclarations=true;foreignObligations.add(call);yield values(call,type(c,depth+1));}
+            case 10 -> {
+                String call = foreignCall(c);
+                if (executionFacts) { scalarDeclarations = true; foreignObligations.add(call); }
+                yield values(call, type(c, depth + 1));
+            }
             case 11 -> {
                 var name = CoreHiNames.read(reader, c);
 
@@ -930,7 +934,6 @@ final class CoreHiModule {
                 var expression=new ArrayList<>(body.expression);var info=new LinkedHashMap<>(metadata(body.expression));boolean evaluated=Boolean.TRUE.equals(((Map<?,?>)info.get("rep")).get("evaluated"));info.put("rep",rep(target,evaluated,e));expression.set(expression.size()-1,info);yield new Lowered(expression,target);
             }
             case 2->{Co co=types.readCo(e.fields.getFirst(),typeScope);yield expression(types.coercionType(co),e,"void");}
-            case 8 -> lower((Expr) e.fields.getFirst(), scope, typeScope);
             case 9->{Literal literal=(Literal)e.fields.getFirst();yield expression(literal.type,e,"lit",literal.kind,literal.value);}
             case 4 -> {
                 var inner = new HashMap<>(scope);
