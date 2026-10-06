@@ -150,9 +150,9 @@ parameter and lambda-result reps. `CoreCompactRecords.java:153–201` decodes th
 facts. `runtime/CoreInputCalls.java:46–79` and
 `runtime/CoreDemandBindings.java:98–127` follow lambda inputs, aliases and PAP
 suffixes. `runtime/GenericInputCall.java:40–90` uses the actual closure/root
-contract for arguments, PAPs, over-application and results. No missing persisted
-CBD execution fact has been demonstrated by this audit. Its missing full source
-signatures therefore do not justify a schema extension.
+contract for arguments, PAPs, over-application and results. Missing full source
+signatures do not justify a schema extension. The follow-up in A13 identifies a
+specific missing nominal representation fact, separate from these existing facts.
 
 This is not a proof that imported result recovery is complete. The two input
 resolvers above do not recover results. A concrete CBD lambda has `resultRep`,
@@ -166,8 +166,20 @@ Its stored parameters have fixed reps while its CBD result rep can be abstract.
 A native caller instantiates a tuple result and scrutinizes it. The supplied
 callback and caller can contain the needed result facts; the inspected adapter
 has no path connecting them before case lowering demands the imported type.
-This is an information-flow question to resolve, not evidence of a missing full
-interface payload or variable-sized stored layouts.
+The body identifies the formal callback and its tail application; the actual
+callback supplies a concrete result when known. No inspected operation connects
+those facts to native case lowering. This is an information-flow gap, not evidence
+of a missing full interface payload or variable-sized stored layouts. It does not
+prove that body analysis suffices for every abstract-result program.
+
+There is also a distinct runtime boundary. `runtime/TypedInputs.java:174–178`
+rejects an exact call with a concrete tuple destination when the callee root has
+no tuple result shape. `GenericInputCall.java:63,88–90` subsequently consumes the
+root's shape. Thus contextual result recovery alone does not establish aggregate
+tail transport through an abstract root. A result/destination contract must reach
+the actual producer while preserving tail handoff and continuation ownership;
+removing the shape guard alone is not a fix. This is a conditional source finding,
+not a reproduced execution failure.
 
 **A4 — R4/R9/R11: some type machinery has real consumers, and some repeats GHC
 checking.** `CoreHiTypes.java:140–161,186–223` already implements pi application
@@ -242,9 +254,10 @@ the default program and does not enter that check. It is not an established
 ordinary native-loading blocker. `runtime/BytecodeProgram.java:5539–5542`
 rejects a bare unsaturated aggregate-field constructor, while saturated
 applications use `:6203,6248` directly. Reachability of a legal demanded bare
-occurrence after mandatory preparation is unverified. General abstract aggregate
-tail forwarding also remains unverified. Keep these questions explicit; neither
-weaken the guards nor infer failures from their mere existence.
+occurrence after mandatory preparation is unverified. A3 identifies a separate
+fixed-root result check on ordinary input dispatch that an abstract aggregate
+forwarder would encounter. Keep source-established boundaries distinct from
+executed failures; neither weaken the guards nor infer every path is reachable.
 
 **A11 — R9/R13: unused source/optimizer data has concrete retention sites.**
 `CoreHiModule.java:37–43,299–341,365–377` retains class functional dependencies,
@@ -270,15 +283,64 @@ through to ordinary body demand. This is missing shared preparation semantics,
 not a need to find or invent library implementations. Preserve the erasure,
 remaining-argument and demand rules for all uses of the actual compiler identity.
 
+**A13 — R4/R5/R8: nominal representation queries need information that ordinary
+CBD constructor records do not retain.** Consider a native binder `x :: Provider.N`
+where a CBD-only provider declares `newtype N = MkN Int#`. An ordinary `IfaceTyCon`
+occurrence carries its name, promotion and syntax sort, not its kind
+(`GHC/Iface/Type.hs:297–330,416–423`; `CoreHiTypes.java:819–822`). The CBD record is
+keyed by `MkN` and contains its newtype flag and `IntRep` field, but no parent `N`
+identity or equation connecting that identity to the field (`Compact/Core.hs:146–157`,
+`CoreCompactRecords.java:331–347`, producer `Plugin.hs:681–698`). Entry types only
+classify IO-unit/State-RealWorld/Other (`Plugin.hs:575–579`), and tag-family metadata
+excludes newtypes (`:965–967`). No ordinary persisted `Provider.N -> IntRep` mapping
+was found. Guessing a constructor name cannot answer the binder's storage query.
+This establishes a needed nominal kind/representation fact; it does not establish
+a need for full source signatures or select a serializer.
+
+Constructor alternative binders raise a related, bounded question. `IfaceAlt`
+stores names without binder types (`GHC/Iface/Syntax.hs:706`, `CoreToIface.hs:622`).
+Their order is existential TyCoVars then worker arguments
+(`IfaceToCore.hs:1770–1778`, `Core/Utils.hs:2433–2466`). CBD worker field reps derive
+from `dataConRepArgTys`, whereas value arity includes existential CoVars and the
+exporter only erases TyVars (`Plugin.hs:681–698,909–918`). Counts and field reps do
+not by themselves identify each omitted existential's TyVar/CoVar category or
+its dependent kind. A coercion is a zero-width logical value once classified;
+source field transformations need not be reconstructed to obtain stored layout.
+Determine which binder/kind facts a demanded RHS can supply before persisting
+anything extra. Parameterized nominal queries and coercion uses remain to be
+traced; the closed newtype example is evidence of a gap, not the proposed limit.
+
+### Execution-fact sources traced in plan step 1
+
+This follow-up inspected production code at `f1fe15703` with the same integration
+WIP. It changed no runtime or fixture code and ran no builds.
+
+| Query | Existing source | Remaining work |
+| --- | --- | --- |
+| Concrete value and worker field storage | CBD binder/field `Rep`; native local kinds and representation queries | Consume the existing facts directly; do not reconstruct source field types. |
+| Saturated concrete function result | Lambda `resultRep`: `Plugin.hs:883`, `CoreCompactRecords.java:244`, `CoreRepresentations.java:263` | Expose a result query; current alias/PAP helpers recover only inputs. |
+| PAP and returned closure | Remaining lambda inputs; a literal returned lambda's own result metadata; actual runtime closure/root | Keep static facts distinct from facts available only after executing the call. Trace recursive aliases without demanding entire dependency bodies. |
+| Abstract tail result | Caller context or explicit instantiation, callback/body relation where available, eventual producing call | Connect lowering facts and transport the aggregate destination through abstract roots (A3); general sufficiency is unresolved. |
+| Nominal imported type representation | Native declaration kind/representation when that format is selected | CBD lacks the demonstrated `N` association (A13). Establish the smallest general binder-aware representation fact before choosing encoding. |
+| Alternative binders and representation-relevant coercions | Worker layouts already persist; native RHS/type/coercion syntax supplies some local facts | Establish missing existential categories, dependent kinds and necessary coercion endpoints; no full declaration requirement follows yet. |
+| Joins | Existing join arity/result metadata and local lexical context | Preserve outer abstract results; distinguish ordinary execution from opt-in reusable-code guards (A10). |
+
+Fact recovery must preserve demand behavior. `CoreDemandBindings.java:10–11,36–87`
+reserves a cold cell without decoding its body and checks occurrence facts when
+that definition is demanded. Walking every imported body to recover source-like
+signatures would trade the current format restriction for an eager dependency
+walk and violate R13. Prefer existing metadata and local/context facts; any
+necessary demanded analysis must retain the existing owner and cycle handling.
+
 ### Requirement disposition
 
 | Requirements | Source-audit conclusion |
 | --- | --- |
 | R1, R12 | Direct reader present; default discovery/publication and legacy helper retirement incomplete (A1, A9). |
-| R2, R8 | Native ownership/signature contract conflicts; a CBD schema deficit is not established (A2, A3). |
+| R2, R8 | Native ownership/signature contract conflicts; a nominal kind/rep fact is missing, but full declarations are not justified (A2, A3, A13). |
 | R3 | Partial legal-form support; character/tick holes, remainder not fully qualified (A5). |
 | R4 | Useful substitution/recovery exists alongside redundant source-type checking (A4). |
-| R5 | Existing stored shape model is appropriate; all native recovery paths unverified (A3, A4). |
+| R5 | Existing storage facts cover concrete workers; nominal and existential recovery remains incomplete (A3, A4, A13). |
 | R6, R7 | Shared runtime mechanisms present; imported abstract-result flow and specific boundaries need proof; preparation laws are missing (A3, A8, A10, A12). |
 | R9, R13 | Independent sections can be skipped, but eager materialization, unused retention and mutable publication conflict with the target (A6, A7, A11). |
 | R10 | Shared boundary ownership is present and should be preserved (A8). |
@@ -294,7 +356,7 @@ change. No implementation edits or new fixture work were made in this design tas
 
 ### 1. Resolve execution-fact flow at the existing lowering boundary
 
-Addresses A2–A4; R2/R4–R8. Work in `CoreHiModule`, `CoreHiTypes`,
+Addresses A2–A4/A13; R2/R4–R8/R13. Work in `CoreHiModule`, `CoreHiTypes`,
 `CoreUnitDirectory.Sources` and the existing representation/call consumers.
 For each lowering query, identify its source: local binder kind, expression or
 lambda-result rep, constructor layout, explicit application information, enclosing
@@ -309,6 +371,15 @@ check is not a proof of result recovery. If existing facts are insufficient,
 record the precise missing execution fact and its consumer. Do not answer that
 question by embedding a complete `.hi` inside CBD.
 
+The fact-source table above completes the first bounded trace. Next resolve the
+remaining general questions: parameterized TyCon kind/representation queries,
+existential binder classification and dependent kinds, and abstract-result
+propagation through recursive aliases/PAPs. Specify only the information each
+consumer needs. Trace aggregate destinations through ordinary call/return,
+tail handoff and resumable continuations before changing the fixed-root checks.
+The closed nominal gap warrants designing a representation fact, not committing
+to full GHC declarations or an eager body-analysis engine.
+
 **Done when:** every required query at global application, case, constructor and
 join lowering has an identified information source, including recursive aliases,
 PAP suffixes and tail results. Any unresolved query is explicit and bounded; no
@@ -316,7 +387,7 @@ schema extension is justified merely by the absence of source signatures.
 
 ### 2. Make dependency recovery independent of the source format
 
-Addresses A2/A3/A7/A8; R2/R5–R8/R10/R13. Use the existing owner and binding/metadata
+Addresses A2/A3/A7/A8/A13; R2/R5–R8/R10/R13. Use the existing owner and binding/metadata
 lookup. Change native lowering to consume the execution facts identified in step
 1, supplying contextual result facts where necessary. Decode native types only
 for native facts that need them; consume CBD's existing facts directly. Keep one
@@ -422,6 +493,8 @@ coverage.
 ## Deferred deliberately
 
 Debugger-grade source types, source presentation and full coercion proof retention
-are optional future work. A new CBD schema, full GHC declaration payload, a new
-linker and arbitrary layout specialization are not selected by this plan. They
-must not be introduced as prerequisites without a demonstrated execution need.
+are optional future work. A13 establishes a need for a nominal representation
+fact; its general form and encoding are still undecided. A full GHC declaration
+payload, a new linker and arbitrary layout specialization are not selected by
+this plan. They must not be introduced as prerequisites without a demonstrated
+execution need.
