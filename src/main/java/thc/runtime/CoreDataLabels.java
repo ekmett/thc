@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import java.util.List;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
@@ -18,7 +19,7 @@ public final class CoreDataLabels extends Expr {
         requireProof(proof); this.symbol = symbol; this.layout = layout; setRepresentation(proof);
     }
     @Override public ManagedAddress execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
-        return fromCore(symbol, getRepresentation(), layout);
+        return resolve(symbol, layout);
     }
     @Override public ManagedAddress executeAddress(com.oracle.truffle.api.frame.VirtualFrame frame) { return execute(frame); }
     private static void requireProof(CoreRepresentation proof) {
@@ -31,8 +32,13 @@ public final class CoreDataLabels extends Expr {
         return fromCore(symbol, proof, null);
     }
 
-    public static ManagedAddress fromCore(String symbol, CoreRepresentation proof, TargetLayout layout) {
+    @TruffleBoundary public static ManagedAddress fromCore(String symbol, CoreRepresentation proof, TargetLayout layout) {
         requireProof(proof);
+        return resolve(symbol, layout);
+    }
+
+    // Lowering validates the representation; each instance resolves its own runtime authority.
+    private static ManagedAddress resolve(String symbol, TargetLayout layout) {
         var state = Language.currentState(null);
         return switch (symbol) {
             case "enabled_capabilities" -> ManagedAddress.enabledCapabilities(state.getThreads());

@@ -65,7 +65,7 @@ public final class GuestThreads {
     }
     public CpuAffinity getCpuAffinity() { return cpuAffinity; }
     public boolean isLoom() { return loom != null; }
-    public boolean needsHosting() {
+    @TruffleBoundary public boolean needsHosting() {
         var foreign = foreignActivations.get();
         return loom != null && !loom.isCurrent() && (foreign == null || foreign.top() == null);
     }

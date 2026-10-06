@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import thc.Language;
@@ -49,7 +50,7 @@ public final class CompilerRts {
     }
 
     /** The selected GHC headers prove the original TraceFlags.user byte getter. */
-    public ManagedAddress flagsAddress(TargetLayout layout) {
+    @TruffleBoundary public ManagedAddress flagsAddress(TargetLayout layout) {
         requireCurrent();
         if (layout == null || !layout.hasRtsFlags())
             throw RuntimeFault.fault("RtsFlags requires selected-GHC RTS flag layout metadata");
