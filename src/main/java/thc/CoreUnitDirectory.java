@@ -16,6 +16,7 @@ public final class CoreUnitDirectory {
         public Path getPath() { return path; } public String getSha256() { return sha256; }
     }
     public record UnitRecord(String id, List<String> depends, List<ModuleRecord> modules) {
+        public UnitRecord { depends = List.copyOf(depends); modules = List.copyOf(modules); }
         public String getId() { return id; } public List<String> getDepends() { return depends; }
         public List<ModuleRecord> getModules() { return modules; }
     }
@@ -42,10 +43,10 @@ public final class CoreUnitDirectory {
     private CoreUnitDirectory(List<UnitRecord> units, String foreignExceptionBridgeUnit, TargetLayout targetLayout,
             Map<ModuleRecord,CoreHiReader> nativeInputs) {
         this.nativeInputs = Map.copyOf(nativeInputs);
-        this.units = units; this.foreignExceptionBridgeUnit = foreignExceptionBridgeUnit; this.targetLayout = targetLayout;
-        modules = new ArrayList<>();
-        for (var unit : units) for (var module : unit.modules) {
-            modules.add(module); owners.put(module.getPrefix(), module);
+        this.units = List.copyOf(units); this.foreignExceptionBridgeUnit = foreignExceptionBridgeUnit; this.targetLayout = targetLayout;
+        modules = this.units.stream().flatMap(unit -> unit.modules.stream()).toList();
+        for (var module : modules) {
+            owners.put(module.getPrefix(), module);
             if (module.mainAlias) aliases.computeIfAbsent(MAIN_ALIAS, ignored -> new ArrayList<>()).add(module);
         }
     }
