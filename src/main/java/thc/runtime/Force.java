@@ -569,7 +569,7 @@ public final class Force extends Node {
             if (result instanceof Thunk) throw fault("Thunk target violated WHNF convention");
             synchronized (thunk.getMonitor()) {
                 thunk.setValue(result); thunk.setTarget(null); thunk.setEnvironment(null);
-                thunk.setOwner(null); thunk.setState(2); thunk.getMonitor().notifyAll();
+                thunk.setOwner(null); thunk.setState(2); thunk.notifyUpdate();
             }
             return result;
         } catch (DelimitedCut cut) {
@@ -601,7 +601,7 @@ public final class Force extends Node {
         try {
             synchronized (thunk.getMonitor()) {
                 thunk.setValue(continuation.getIdentity()); thunk.setTarget(null); thunk.setEnvironment(null);
-                thunk.setOwner(null); thunk.setState(5); thunk.getMonitor().notifyAll();
+                thunk.setOwner(null); thunk.setState(5); thunk.notifyUpdate();
             }
         } finally { safepoint.setAllowSideEffects(previous); }
     }
@@ -609,13 +609,13 @@ public final class Force extends Node {
     @TruffleBoundary private void publishFailure(Thunk thunk, Object failure) {
         synchronized (thunk.getMonitor()) {
             thunk.setValue(failure); thunk.setTarget(null); thunk.setEnvironment(null);
-            thunk.setOwner(null); thunk.setState(3); thunk.getMonitor().notifyAll();
+            thunk.setOwner(null); thunk.setState(3); thunk.notifyUpdate();
         }
     }
     @TruffleBoundary private void suspendOwned(Thunk thunk) {
         synchronized (thunk.getMonitor()) {
             if (thunk.getState() != 1 || thunk.getOwner() != Thread.currentThread()) return;
-            thunk.setOwner(null); thunk.setState(4); thunk.getMonitor().notifyAll();
+            thunk.setOwner(null); thunk.setState(4); thunk.notifyUpdate();
         }
     }
     private RuntimeException rethrowFailure(Thunk thunk) {
@@ -639,7 +639,7 @@ public final class Force extends Node {
                         if (request != null) throw new AsyncBlocked(request, this);
                     }
                     blocked = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE);
-                    waiting.getMonitor().wait();
+                    waiting.awaitUpdate();
                 }
             } } finally { if (blocked != null) blocked.close(); }
         }, thunk);
