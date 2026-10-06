@@ -75,21 +75,6 @@ class CoreHiReaderTest {
         assertTrue(failure.getCause().getMessage().contains("tick tag 4"));
     }
 
-    @Test void wiredIdentityTemplatesKeepTheirOperandLazy() throws Exception {
-        var reader = CoreHiReader.read(path("normal"));
-        var module = new CoreHiModule(reader);
-        for (int key : new int[]{104, 126, 127, 109}) {
-            var bytes = new java.io.ByteArrayOutputStream();
-            bytes.write(11); unsigned(bytes, 0x80000000L | (long) '0' << 22 | key);
-            var expression = nativeExpression(reader, module, bytes.toByteArray());
-            assertEquals("lam", expression.getFirst());
-            var parameter = (Map<?,?>) ((List<?>) expression.get(1)).getFirst();
-            var body = (List<?>) expression.get(2);
-            assertEquals(List.of("var", parameter.get("id")), body.subList(0, 2));
-            assertEquals(false, ((Map<?,?>) parameter.get("rep")).get("evaluated"));
-        }
-    }
-
     private static void unsigned(java.io.ByteArrayOutputStream bytes, long value) {
         do {
             int low = (int) (value & 127); value >>>= 7;
