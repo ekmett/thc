@@ -947,6 +947,133 @@ final class CoreHiModule {
         return map("id",variable.id,"name",binder.name,"type",entryType(variable.type),"lifted",lifted(variable.type),"coercion",coercionType(variable.type),"rep",rep(variable.type,evaluated,new Expr(-1,List.of(),binder.offset)),"info",info);
     }
     private String local(){return "\u0000hi-local:"+prefix()+localOrdinal++;}
+    private static final CoreHiReader.ExternalName REAL_WORLD = CoreHiNames.knownKey('0',16);
+    private static final CoreHiReader.ExternalName RUN_RW = CoreHiNames.knownKey('0',107);
+    private static final CoreHiReader.ExternalName UNSAFE_EQUALITY = CoreHiNames.knownKey('0',570);
+    private static final CoreHiReader.ExternalName UNSAFE_REFL = CoreHiNames.knownKey('6',3*116);
+    private static final Set<CoreHiReader.ExternalName> IDENTITY_MAGIC = Set.of(
+            CoreHiNames.knownKey('0',104), CoreHiNames.knownKey('0',126),
+            CoreHiNames.knownKey('0',127), CoreHiNames.knownKey('0',109));
+
+    /** THC.Wired's first-class template uses the genuine signature's binders.
+     * Its argument remains lazy; no case is inserted around identity payloads. */
+    private Lowered wiredTemplate(CoreHiReader.ExternalName name, Ty signature, Expr origin) {
+        Ty rho = types.view(signature,false);
+        var quantifiers = new ArrayList<ForAll>();
+        while (rho instanceof ForAll forall) {
+            quantifiers.add(forall);
+            rho = types.view(forall.body(),false);
+        }
+        if (!(rho instanceof Fun arrow)) throw error(origin,"wired operation lacks a value arrow");
+        Binder formal = new Binder("$wired",arrow.argument(),new Info(0,null,null),origin.offset,false);
+        Variable argument = new Variable(local(),arrow.argument());
+        Lowered value = expression(argument.type,origin,"var",argument.id);
+        Lowered result = value;
+        if (name.equals(RUN_RW)) {
+            Ty stateType = types.read(CoreHiNames.signature(REAL_WORLD),Map.of());
+            Lowered state = expression(stateType,origin,"void");
+            result = expression(types.piApply(argument.type,List.of(stateType)),origin,
+                    "app",value.expression,List.of(state.expression),List.of(false),false,false);
+        }
+        Ty type = types.function(arrow.multiplicity(),arrow.argument(),result.type);
+        for (int i = quantifiers.size()-1; i >= 0; i--) {
+            ForAll forall = quantifiers.get(i);
+            type = new ForAll(forall.variable(),forall.visibility(),type);
+        }
+        Lowered lambda = expression(type,origin,"lam",List.of(binder(formal,argument,false)),result.expression);
+        metadata(lambda.expression).put("resultRep",metadata(result.expression).get("rep"));
+        return lambda;
+    }
+
+    /** Substitute only free value occurrences. Global realWorld# has no local
+     * variables to capture; the same lexical walk proves case-binder deadness. */
+    private Expr replaceLocal(Expr e, String name, Expr replacement) {
+        switch (e.tag) {
+            case 0: return e.fields.getFirst().equals(name) ? replacement : e;
+            case 4: {
+                Binder binder = (Binder) e.fields.getFirst();
+                if (binder.name.equals(name)) return e;
+                Expr body = (Expr) e.fields.get(1), changed = replaceLocal(body,name,replacement);
+                return changed == body ? e : new Expr(4,values(binder,changed),e.offset);
+            }
+            case 3: {
+                var before = (List<?>) e.fields.get(1);
+                var after = new ArrayList<Expr>(); boolean changed = false;
+                for (Object raw : before) {
+                    Expr child = (Expr) raw, next = replaceLocal(child,name,replacement);
+                    after.add(next); changed |= child != next;
+                }
+                return changed ? new Expr(3,values(e.fields.getFirst(),List.copyOf(after)),e.offset) : e;
+            }
+            case 5: {
+                Expr function = (Expr) e.fields.getFirst(), argument = (Expr) e.fields.get(1);
+                Expr f = replaceLocal(function,name,replacement), a = replaceLocal(argument,name,replacement);
+                return f == function && a == argument ? e : new Expr(5,values(f,a),e.offset);
+            }
+            case 6: {
+                Expr scrutinee = (Expr) e.fields.getFirst(), next = replaceLocal(scrutinee,name,replacement);
+                var alternatives = new ArrayList<Alt>(); boolean changed = next != scrutinee;
+                for (Object raw : (List<?>) e.fields.get(2)) {
+                    Alt alt = (Alt) raw;
+                    Expr rhs = e.fields.get(1).equals(name) || alt.binders.contains(name)
+                            ? alt.rhs : replaceLocal(alt.rhs,name,replacement);
+                    alternatives.add(new Alt(alt.tag,alt.discriminator,alt.binders,rhs));
+                    changed |= rhs != alt.rhs;
+                }
+                return changed ? new Expr(6,values(next,e.fields.get(1),List.copyOf(alternatives)),e.offset) : e;
+            }
+            case 7: {
+                Group group = (Group) e.fields.getFirst();
+                boolean bound = group.definitions.stream().anyMatch(d -> d.binder.name.equals(name));
+                var definitions = new ArrayList<Definition>(); boolean changed = false;
+                for (Definition definition : group.definitions) {
+                    Expr rhs = group.recursive && bound ? definition.rhs : replaceLocal(definition.rhs,name,replacement);
+                    definitions.add(new Definition(definition.binder,rhs)); changed |= rhs != definition.rhs;
+                }
+                Expr body = (Expr) e.fields.get(1), next = bound ? body : replaceLocal(body,name,replacement);
+                changed |= next != body;
+                return changed ? new Expr(7,values(new Group(group.recursive,List.copyOf(definitions)),next),e.offset) : e;
+            }
+            case 12,13: {
+                Expr body = (Expr) e.fields.getFirst(), next = replaceLocal(body,name,replacement);
+                return next == body ? e : new Expr(e.tag,values(next,e.fields.get(1)),e.offset);
+            }
+            default: return e; // Types/coercions/literals/globals contain no value locals.
+        }
+    }
+
+    // Preparation follows tick erasure: debugger captures are not executed
+    // value uses. Actual RHS uses and lexical shadowing still govern deadness.
+    private Lowered unsafeEqualityCase(Expr e, Map<String,Variable> scope,
+                                        Map<String,CoreHiTypes.Variable> typeScope) {
+        var alternatives = (List<?>) e.fields.get(2);
+        if (alternatives.size() != 1) return null;
+        Alt alt = (Alt) alternatives.getFirst();
+        if (alt.tag != 1 || !UNSAFE_REFL.equals(alt.discriminator)) return null;
+        Expr proof = (Expr) e.fields.getFirst();
+        var arguments = new ArrayList<Expr>();
+        while (proof.tag == 5) {
+            arguments.add((Expr) proof.fields.get(1)); proof = (Expr) proof.fields.getFirst();
+        }
+        if (proof.tag != 11 || !UNSAFE_EQUALITY.equals(proof.fields.getFirst()) || arguments.size() != 3) return null;
+        Collections.reverse(arguments);
+        if (arguments.stream().anyMatch(a -> a.tag != 1)) return null;
+        if (replaceLocal(alt.rhs,(String)e.fields.get(1),proof) != alt.rhs) return null;
+        if (alt.binders.size() != 1) throw error(e,"unsafe equality alternative lacks its coercion binder");
+        Ty kind = types.read(arguments.get(0).fields.getFirst(),typeScope);
+        Ty left = types.read(arguments.get(1).fields.getFirst(),typeScope);
+        Ty right = types.read(arguments.get(2).fields.getFirst(),typeScope);
+        // UnsafeRefl's EqSpec is b ~# a; a cast from a to b uses Sym co.
+        Ty equality = con(new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Prim"),3,null,"~#"),
+                false,kind,kind,right,left);
+        var branchTypes = new HashMap<>(typeScope);
+        String spelling = alt.binders.getFirst();
+        branchTypes.put(spelling,new CoreHiTypes.Variable(spelling,equality,true));
+        Lowered rhs = lower(alt.rhs,scope,branchTypes);
+        metadata(rhs.expression).put("unsafeEqualityCase","GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg");
+        return rhs;
+    }
+
     private boolean unaryIdentity(Expr head) {
         if(head.tag!=11)return false;
         var name=(CoreHiReader.ExternalName)head.fields.getFirst();
@@ -973,6 +1100,15 @@ final class CoreHiModule {
                         yield new Lowered(body,implicitSignature(implicit));
                     }
                     yield expression(implicitSignature(implicit),e,"var",id);
+                }
+                if (IDENTITY_MAGIC.contains(name) || name.equals(RUN_RW)) {
+                    Ty signature = wired == null ? null : types.read(wired,Map.of());
+                    if (signature == null) {
+                        CoreHiModule provider = owner(id);
+                        signature = provider == null ? null : provider.signature(id);
+                    }
+                    if (signature == null) throw error(e,"missing declaration of "+id);
+                    yield wiredTemplate(name,signature,e);
                 }
                 if(wired!=null){Ty type=types.read(wired,Map.of());
                     if(name.equals(new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Prim"),0,null,"realWorld#"))||name.equals(new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("ghc-internal","GHC.Internal.Prim"),0,null,"proxy#")))yield expression(type,e,"void");
@@ -1062,6 +1198,25 @@ final class CoreHiModule {
                     headExpr=(Expr)headExpr.fields.getFirst();
                 }
                 Collections.reverse(rawArgs);
+                if (headExpr.tag == 11) {
+                    var name = (CoreHiReader.ExternalName) headExpr.fields.getFirst();
+                    int first = 0;
+                    while (first < rawArgs.size() && rawArgs.get(first).tag == 1) first++;
+                    if (first < rawArgs.size() && (IDENTITY_MAGIC.contains(name) || name.equals(RUN_RW))) {
+                        Expr operand = rawArgs.get(first);
+                        Expr prepared = operand;
+                        if (name.equals(RUN_RW)) {
+                            Expr state = new Expr(11,values(REAL_WORLD),e.offset);
+                            if (operand.tag == 4) {
+                                Binder binder = (Binder) operand.fields.getFirst();
+                                prepared = replaceLocal((Expr)operand.fields.get(1),binder.name,state);
+                            } else prepared = new Expr(5,values(operand,state),e.offset);
+                        }
+                        for (int i = first+1; i < rawArgs.size(); i++)
+                            prepared = new Expr(5,values(prepared,rawArgs.get(i)),e.offset);
+                        yield lower(prepared,scope,typeScope);
+                    }
+                }
                 Lowered head=lower(headExpr,scope,typeScope);
                 Ty result=head.type;
                 var args=new ArrayList<List<Object>>();
@@ -1103,6 +1258,8 @@ final class CoreHiModule {
                 yield application;
             }
             case 6->{
+                Lowered prepared = unsafeEqualityCase(e,scope,typeScope);
+                if (prepared != null) yield prepared;
                 Lowered scrutinee=lower((Expr)e.fields.getFirst(),scope,typeScope);
                 Binder b=new Binder((String)e.fields.get(1),scrutinee.type,new Info(0,null,null),e.offset,false);
                 Variable v=new Variable(local(),scrutinee.type);
