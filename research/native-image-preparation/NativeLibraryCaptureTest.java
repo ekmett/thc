@@ -96,9 +96,39 @@ public final class NativeLibraryCaptureTest {
         check(library.get("sha256").equals(originalLibrary.get("sha256")) && library.get("hex").equals(originalLibrary.get("hex")),
             "Companion bytes or identity changed");
         check(!((Map<?,?>) original.get("nativeLibrary")).containsKey("bundledLibraries"), "Capture mutated original metadata");
-        var observations = (List<Map<String,Object>>) ((Map<String,Object>) Json.parse(Files.readString(receipt))).get("providers");
+        var recorded = (Map<String,Object>) Json.parse(Files.readString(receipt));
+        var observations = (List<Map<String,Object>>) recorded.get("providers");
         check(observations.stream().map(value -> value.get("path")).toList().equals(List.of(leaf.toRealPath().toString(), root.toRealPath().toString())),
             "Receipt must identify the selected source providers");
+        var companions = (List<Map<String,Object>>) recorded.get("companions");
+        check(companions != null && companions.size() == 1, "Receipt must identify the original companion");
+        var originalObservation = companions.getFirst();
+        check(originalObservation.get("sha256").equals(originalLibrary.get("sha256")),
+            "Receipt must use the original companion digest");
+        var needed = (List<String>) originalObservation.get("needed");
+        check(needed.contains(root.getFileName().toString()) && !needed.contains(leaf.getFileName().toString()),
+            "Receipt must connect the companion to its direct native dependency");
+        var selected = (List<Map<String,Object>>) originalObservation.get("providers");
+        var selectedNames = selected.stream().map(value -> (String) value.get("name")).toList();
+        check(selectedNames.equals(selectedNames.stream().sorted().toList()), "Companion selection must have stable name order");
+        for (var observation : observations) check(selected.contains(Map.of("name", observation.get("name"),
+            "path", observation.get("path"), "sha256", observation.get("sha256"))),
+            "Companion selection must retain transitive provider paths and digests");
+        var systemProviders = (Map<String,Map<String,Object>>) recorded.get("systemProviders");
+        for (var entry : systemProviders.entrySet()) check(selected.contains(Map.of("name", entry.getKey(),
+            "path", entry.getValue().get("path"), "sha256", entry.getValue().get("sha256"))),
+            "Companion selection must retain external system providers");
+        for (var observation : selected) {
+            var path = Path.of((String) observation.get("path"));
+            check(path.equals(path.toRealPath()) && digest(Files.readAllBytes(path)).equals(observation.get("sha256")),
+                "Companion selection must refer to actual canonical provider bytes");
+        }
+        check(!Files.readString(receipt).contains("thc-native-capture-"), "Receipt must not contain capture staging paths");
+        var repeatedReceipt = output.resolve("repeated.json");
+        new NativeLibraryCapture(repeatedReceipt).capture(input(original,
+            Map.of("dependencies", List.of(original))));
+        check(((Map<String,Object>) Json.parse(Files.readString(repeatedReceipt))).get("companions").equals(companions),
+            "Repeated and nested references must retain one stable companion observation");
         check(!Files.exists(marker), "Capture executed native constructors");
 
         var origin = output.resolve("origin.so");

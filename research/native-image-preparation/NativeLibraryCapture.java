@@ -31,6 +31,7 @@ public final class NativeLibraryCapture {
     private final Map<String, Map<String,Object>> providers = new LinkedHashMap<>();
     private final Map<String, Map<String,Object>> companions = new LinkedHashMap<>();
     private final List<Object> observations = new ArrayList<>();
+    private final List<Object> companionObservations = new ArrayList<>();
     private final Map<String,Object> tools = new LinkedHashMap<>(), systemProviders = new LinkedHashMap<>();
     private Path temporary;
     private String loader;
@@ -50,7 +51,7 @@ public final class NativeLibraryCapture {
             }
             var result = new LinkedHashMap<>(input); result.put("modules", List.copyOf(modules));
             Files.writeString(receipt, Json.stringify(Map.of("selection", "image-host-dynamic-loader",
-                "systemLibraries", SYSTEM.stream().sorted().toList(), "providers", observations,
+                "systemLibraries", SYSTEM.stream().sorted().toList(), "providers", observations, "companions", companionObservations,
                 "tools", tools, "systemProviders", systemProviders, "ldLibraryPath", System.getenv().getOrDefault("LD_LIBRARY_PATH", ""))) + "\n");
             return java.util.Collections.unmodifiableMap(result);
         } catch (IOException error) { throw new IllegalStateException("Cannot capture native library deployment", error); }
@@ -88,6 +89,17 @@ public final class NativeLibraryCapture {
                 captured = new LinkedHashMap<>(library);
                 captured.put("bundledLibraries", List.copyOf(ordered.values()));
                 companions.put(hash, captured);
+                // Per-companion paths matter even when two selections have identical provider bytes.
+                // Original digests and canonical loader selections never expose capture staging names.
+                var resolved = new ArrayList<Map<String,Object>>();
+                for (String name : selected.keySet().stream().sorted().toList()) {
+                    var path = selected.get(name);
+                    var provider = providers.get(name);
+                    var system = (Map<String,Object>) systemProviders.get(name);
+                    var selectedHash = provider != null ? provider.get("sha256") : system != null ? system.get("sha256") : digest(Files.readAllBytes(path));
+                    resolved.add(Map.of("name", name, "path", path.toString(), "sha256", selectedHash));
+                }
+                companionObservations.add(Map.of("sha256", hash, "needed", needed(elf), "providers", List.copyOf(resolved)));
             }
             result.put("nativeLibrary", captured);
         }
