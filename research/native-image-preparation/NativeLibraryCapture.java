@@ -96,7 +96,9 @@ public final class NativeLibraryCapture {
                     var path = selected.get(name);
                     var provider = providers.get(name);
                     var system = (Map<String,Object>) systemProviders.get(name);
-                    var selectedHash = provider != null ? provider.get("sha256") : system != null ? system.get("sha256") : digest(Files.readAllBytes(path));
+                    var selectedHash = digest(Files.readAllBytes(path));
+                    require(provider == null || provider.get("sha256").equals(selectedHash), "Native provider changed during capture: " + path);
+                    require(system == null || system.get("sha256").equals(selectedHash), "System provider changed during capture: " + path);
                     resolved.add(Map.of("name", name, "path", path.toString(), "sha256", selectedHash));
                 }
                 companionObservations.add(Map.of("sha256", hash, "needed", needed(elf), "providers", List.copyOf(resolved)));
