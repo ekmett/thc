@@ -20,7 +20,7 @@ final class CoreHiModule {
         boolean abstractLifted() { return name.startsWith(ABSTRACT_LIFTED); }
         Type result() { return arguments.get(1); }
     }
-    private record Constructor(Type result, List<Binder> parameters, List<Type> fields, Map<String,Object> metadata) {}
+    private record Constructor(Type result, List<Binder> parameters, List<Type> fields, Map<String,Object> metadata, int offset) {}
     private record Info(int arity, List<Boolean> marks, Integer join) {}
     private record Binder(String name, Type type, Info info, int offset, boolean typeVariable) {}
     private record Expr(int tag, List<Object> fields, int offset) {}
@@ -100,7 +100,33 @@ final class CoreHiModule {
     private String prefix() { return reader.module.unit() + ":" + reader.module.name() + "."; }
     Map<String,Object> metadata() {
         return map("schema", 1L, "ghc", "9.14.1", "unit", reader.module.unit(), "module", reader.module.name(),
-                "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", List.of(), "constructors", constructors.values().stream().map(Constructor::metadata).toList());
+                "boundary", "optimized-Core-after-Tidy-before-CorePrep", "bindings", List.of(), "constructors", constructors.values().stream().map(this::constructorMetadata).toList());
+    }
+    private Map<String,Object> constructorMetadata(Constructor constructor) {
+        // Sources reserves the parsed module before this lookup; layout never follows other constructor fields.
+        var scope = new HashMap<String,Type>();
+        for (int i = 0; i < constructor.parameters.size(); i++)
+            scope.put(constructor.parameters.get(i).name, Type.scalar(ABSTRACT_LIFTED + constructor.result.name + "." + i));
+        var representations = new ArrayList<Map<String,Object>>(constructor.fields.size());
+        var primitiveReps = new ArrayList<Object>(constructor.fields.size());
+        var fieldLifted = new ArrayList<Boolean>(constructor.fields.size());
+        Expr location = new Expr(-1, List.of(), constructor.offset);
+        for (int i = 0; i < constructor.fields.size(); i++) {
+            try {
+                Type field = resolve(constructor.fields.get(i), scope, location, false);
+                boolean lifted = field.abstractLifted() || data(field);
+                if (!scalar(field) && !lifted) throw new IllegalArgumentException("unsupported constructor field type " + field);
+                var proof = rep(field, !lifted, location);
+                fieldLifted.add(lifted); representations.add(proof); primitiveReps.add(proof.get("primReps"));
+            } catch (IllegalArgumentException failure) {
+                throw error(location, "constructor " + constructor.metadata.get("id") + " field " + i + ": " + failure.getMessage());
+            }
+        }
+        var metadata = new LinkedHashMap<>(constructor.metadata);
+        metadata.put("fieldLifted", List.copyOf(fieldLifted));
+        metadata.put("fieldReps", List.copyOf(primitiveReps));
+        metadata.put("fieldTypes", List.copyOf(representations));
+        return metadata;
     }
     boolean containsSymbol(String id) { return definitions.containsKey(id); }
     Set<String> bindingIds() { return Collections.unmodifiableSet(definitions.keySet()); }
@@ -161,27 +187,18 @@ final class CoreHiModule {
         c.require(c.count(1) == 0, "unsupported existential constructor binders");
         var parameters = dataTypes.get(CoreHiNames.id(name));
         int universals = c.count(2); c.require(universals == parameters.size(), "unsupported constructor type binders");
-        var fieldScope = new HashMap<String,Type>();
         for (int i = 0; i < universals; i++) {
             Binder parameter = lambdaBinder(c, 0), expected = parameters.get(i);
             c.require(parameter.typeVariable && parameter.name.equals(expected.name) && parameter.type.equals(expected.type),
                     "unsupported reordered or refined constructor type binder");
             c.require(c.byteValue() <= 2, "invalid constructor forall visibility");
-            fieldScope.put(parameter.name, Type.scalar(ABSTRACT_LIFTED + CoreHiNames.id(name) + "." + i));
         }
         c.require(c.count(1) == 0 && c.count(1) == 0, "unsupported constructor equalities or context");
         int arity = c.count(2);
-        var fields = new ArrayList<Type>(arity); var representations = new ArrayList<Map<String,Object>>(arity);
-        var primitiveReps = new ArrayList<Object>(arity); var fieldLifted = new ArrayList<Boolean>(arity);
+        var fields = new ArrayList<Type>(arity);
         for (int i = 0; i < arity; i++) {
             type(c, 0); // multiplicity
-            Type field = type(c, 0);
-            // Reject wider fields before owner-aware representation lookup can resolve a dependency.
-            Type storage = fieldScope.get(field.name.startsWith(TYPE_VARIABLE) ? field.name.substring(TYPE_VARIABLE.length()) : "");
-            c.require(scalar(field) || storage != null && field.arguments.isEmpty(), "unsupported constructor field type " + field);
-            boolean lifted = storage != null;
-            var proof = rep(lifted ? storage : field, !lifted, new Expr(-1, List.of(), offset));
-            fields.add(field); fieldLifted.add(lifted); representations.add(proof); primitiveReps.add(proof.get("primReps"));
+            fields.add(type(c, 0));
         }
         c.require(c.count(1) == 0, "unsupported record field labels");
         int strictCount = c.count(1); c.require(strictCount == 0 || strictCount == arity, "constructor strictness count mismatch");
@@ -196,9 +213,8 @@ final class CoreHiModule {
         }
         String id = CoreHiNames.id(con);
         var metadata = map("id", id, "name", con.occurrence(), "arity", (long) arity, "tag", (long) tag, "kind", "boxed",
-                "strictFields", List.copyOf(strict), "fieldLifted", List.copyOf(fieldLifted),
-                "fieldReps", primitiveReps, "fieldTypes", representations);
-        c.require(constructors.putIfAbsent(id, new Constructor(new Type(CoreHiNames.id(name), parameters.stream().map(p -> Type.scalar(TYPE_VARIABLE + p.name)).toList()), parameters, List.copyOf(fields), metadata)) == null,
+                "strictFields", List.copyOf(strict));
+        c.require(constructors.putIfAbsent(id, new Constructor(new Type(CoreHiNames.id(name), parameters.stream().map(p -> Type.scalar(TYPE_VARIABLE + p.name)).toList()), parameters, List.copyOf(fields), metadata, offset)) == null,
                 "duplicate data constructor " + id);
     }
 
