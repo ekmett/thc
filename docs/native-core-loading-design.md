@@ -116,7 +116,8 @@ native-foreign integration changes in `CoreUnitDirectory`, `Json`,
 changed for this audit. The audit inspected source consumers and the pinned GHC
 serialization/semantics; it did not inspect fixture behavior or run builds.
 Line numbers below refer to that snapshot. “Present” describes inspected code,
-not successful end-to-end qualification.
+not successful end-to-end qualification. Implementation checkpoints below record
+subsequent repairs without rewriting the audit's original evidence.
 
 ### Findings against the requirements
 
@@ -368,6 +369,15 @@ signatures would trade the current format restriction for an eager dependency
 walk and violate R13. Prefer existing metadata and local/context facts; any
 necessary demanded analysis must retain the existing owner and cycle handling.
 
+### Implementation checkpoints
+
+- A7: published unit/dependency/module lists now snapshot their inputs; owner lookup
+  and enumeration cannot diverge through mutable getters. Commit `91351ab91`.
+  The new fixture-free regression failed on the original mutable dependency list;
+  all six directory checks passed after the change (53 ms test execution, 1.22 s
+  targeted compilation). Existing foreign integration WIP was excluded from the
+  commit. No complete runtime qualification is implied by these directory checks.
+
 ### Requirement disposition
 
 | Requirements | Source-audit conclusion |
@@ -384,9 +394,57 @@ necessary demanded analysis must retain the existing owner and cycle handling.
 | R14 | This task used source inspection only. Execution, memory and timing claims remain unverified; implementation evidence must follow the requirements. |
 
 
+### Selected recovery contract
+
+Reuse the existing `CoreHiTypes.Ty` lexical algebra for callable projections;
+do not build a second symbolic Shape calculus. Preserve ordered `ForAll` slots
+(including unused slots), binder category/dependent kind, value `Fun` boundaries,
+variables and residual returned-function structure. Keep application/nominal
+structure wherever substitution can expose a function or logical aggregate.
+For a closed, exact, non-callable subtree, a constant kind/Shape leaf can replace
+source syntax. This is an optimization, never a restriction to closed programs.
+Keep evaluation state separate. Such a leaf is noninvertible: nominal identity
+checks and coercion endpoint selection must receive their own demanded facts,
+not inspect it as a source type. Do not compute a projection merely to immediately
+query the original type again.
+
+The adapter operations remain `piApply`, capture-avoiding substitution, kind and
+representation queries, and the existing concrete alias/PAP resolver. Native and
+CBD adapters supply these facts through `CoreUnitDirectory.Sources`, under the
+selected module owner. Nominal facts retain quantified kinds, needed logical
+views and ordered constructor alternative binder categories/kinds. Retain an
+axiom endpoint structure only when a representation-relevant projection consumes
+it; foreign nominal/provenance checks remain at their existing boundary.
+
+Persist a callable projection in a leading binding extension beside the existing
+host signature. Add a prefix-only fact read using the existing symbol index and
+cursor; stop before the expression and keep the full-body cache cold. The reader
+must still validate binding identity and module ownership. Define a canonical
+extension order or reject duplicates in a prefix loop; index offsets continue to
+point at the first prefix byte. Use existing **inline** Shape encoding for these
+facts: ordinary expression Shape backreferences can point into prior bodies and
+would defeat an independent prefix read. Put module-owned nominal facts in the
+existing header-extension mechanism. Update codec capability/reserved-bit checks
+with the new encoding. Do not add a linker, index or generic schema framework.
+
+New readers continue accepting older CBD for its existing execution facts. If a
+native consumer requires a fact the selected older artifact erased, report that
+specific missing fact and require build-time republication or an independently
+selected genuine `.hi`. Never fetch a same-module companion or run a helper in
+execution. Reuse available retained interfaces when republishing; a metadata
+change does not itself justify recompiling unchanged GHC libraries.
+
+This contract specifies fact recovery. Aggregate destinations through abstract
+roots remain a separate runtime change preserving ordinary returns, tail handoff
+and resumable continuation ownership. A constant layout on every root is not the
+replacement contract, and simply deleting its checks is insufficient.
+
 ## 4. Plan of attack
 
-Execute in this order. Each step preserves the general contract; none establishes
+Complete the dependent recovery/transport steps in this order. Independent codec
+coverage and publication-immutability repairs identified by the audit may proceed
+in parallel: they need no decision about the projected schema. Each step preserves
+the general contract; none establishes
 a permanent “only these examples work” subset. Validation accompanies the owning
 change. No implementation edits or new fixture work were made in this design task.
 
