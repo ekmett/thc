@@ -169,7 +169,14 @@ This catalogue covers only `GHC.Builtin.Utils.knownKeyNames`.
 tuples (tags `4`, `5`, `7`, `8`), constraint tuples/selectors (`j`, `k`, `m`)
 and unboxed sums (`z`). Those families require algorithmic decoding in the
 reader; absence from the finite resource does not make a family name invalid.
-The catalogue supplies identity, not complete types or executable Core.
+The same resource carries compiler-owned `tycons`, full `primops` and `wiredIds`
+type signatures. Types retain forall binders, kinds, application visibility,
+coercions and multiplicities; tycons retain their roles, constructors and any
+synonym/newtype RHS or axiom branches. GHC tidies lexical binder names before
+serialization so distinct compiler variables cannot capture one another.
+The JVM uses these declarations with its ordinary type substitution rules.
+Ordinary library definitions, including `IO`, come from their owning `.hi`
+files. The catalogue supplies no executable Core.
 
 ## Generated instruction metadata
 

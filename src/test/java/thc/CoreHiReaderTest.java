@@ -13,6 +13,84 @@ class CoreHiReaderTest {
     private static final Path FIXTURE = Path.of("build/native-hi-reader");
     private static Path path(String mode) { return FIXTURE.resolve(mode).resolve("NativeHiFixture.hi"); }
 
+    @Test void typeSubstitutionPreservesLexicalBinding() {
+        var kind = CoreHiTypes.con(new CoreHiReader.ExternalName(
+                new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Types"), 3, null, "Type"), false);
+        var free = new CoreHiTypes.Variable("a", kind, false);
+        var bound = new CoreHiTypes.Variable("b", kind, false);
+        var renamed = new CoreHiTypes.Variable("b", kind, false);
+        var body = new CoreHiTypes.Var(free);
+        var type = new CoreHiTypes.ForAll(bound, 1, body);
+        assertTrue(CoreHiTypes.alphaEquals(type, CoreHiTypes.substitute(type, Map.of())));
+        var substituted = CoreHiTypes.substitute(type, Map.of(free, new CoreHiTypes.Var(bound)));
+        assertTrue(CoreHiTypes.alphaEquals(new CoreHiTypes.ForAll(renamed, 1, new CoreHiTypes.Var(bound)), substituted),
+                "An inserted free variable stays free under a same-named binder");
+        assertFalse(CoreHiTypes.alphaEquals(new CoreHiTypes.ForAll(bound, 1, new CoreHiTypes.Var(bound)), substituted),
+                "Substitution must not capture the inserted variable");
+        var identity = new CoreHiTypes.ForAll(free, 1, body);
+        assertTrue(CoreHiTypes.alphaEquals(identity, CoreHiTypes.substitute(identity, Map.of(free, new CoreHiTypes.Var(bound)))),
+                "A forall shadows substitution for its own variable");
+        assertFalse(CoreHiTypes.alphaEquals(identity, new CoreHiTypes.ForAll(bound, 1, body)),
+                "Sharing the body node does not make free and bound occurrences equal");
+        assertFalse(CoreHiTypes.alphaEquals(new CoreHiTypes.ForAll(free, 1, new CoreHiTypes.Var(bound)),
+                new CoreHiTypes.ForAll(bound, 1, new CoreHiTypes.Var(bound))),
+                "An opposing binder cannot capture a free occurrence during alpha comparison");
+    }
+
+    @Test void representationRespectsUnknownLevityAndCoercionQuantification() {
+        var declarations = new HashMap<CoreHiReader.ExternalName, CoreHiTypes.Declaration>();
+        CoreHiTypes[] engine = new CoreHiTypes[1];
+        engine[0] = new CoreHiTypes(name -> {
+            var declaration = declarations.get(name);
+            if (declaration == null) {
+                var raw = CoreHiNames.typeDeclaration(name);
+                if (raw != null) {
+                    declaration = engine[0].declaration(raw);
+                    declarations.put(name, declaration);
+                }
+            }
+            return declaration;
+        }, name -> null);
+        var types = engine[0];
+        var primitive = new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Prim");
+        var runtimeRep = CoreHiTypes.con(new CoreHiReader.ExternalName(
+                new CoreHiReader.ModuleId("ghc-internal", "GHC.Internal.Types"), 3, null, "RuntimeRep"), false);
+        var family = new CoreHiReader.ExternalName(new CoreHiReader.ModuleId("example", "Kinds"), 3, null, "R");
+        declarations.put(family, new CoreHiTypes.Declaration(family, List.of(), runtimeRep, runtimeRep,
+                List.of(), "family", null, null));
+        var unknownKind = CoreHiTypes.con(new CoreHiReader.ExternalName(primitive, 3, null, "TYPE"), false,
+                CoreHiTypes.con(family, false));
+        var value = new CoreHiTypes.Var(new CoreHiTypes.Variable("a", unknownKind, false));
+        var unknown = types.representation(value, false);
+        assertNull(unknown.get("primReps"));
+        assertNull(types.lifted(value));
+        assertEquals(false, unknown.get("evaluated"), "An opaque representation may still contain a thunk");
+
+        var repVariable = new CoreHiTypes.Var(new CoreHiTypes.Variable("r", runtimeRep, false));
+        var componentKind = CoreHiTypes.con(new CoreHiReader.ExternalName(primitive, 3, null, "TYPE"), false, repVariable);
+        var component = new CoreHiTypes.Var(new CoreHiTypes.Variable("b", componentKind, false));
+        var tuple = new CoreHiTypes.Tuple(1, false, List.of(new CoreHiTypes.Arg(repVariable, 1), new CoreHiTypes.Arg(component, 0)));
+        assertEquals(false, types.lifted(tuple), "A known tuple is unlifted even with unknown component storage");
+
+        var integer = CoreHiTypes.con(new CoreHiReader.ExternalName(primitive, 3, null, "Int#"), false);
+        var evidence = new CoreHiTypes.Variable("co", types.nominalEquality(integer, integer), true);
+        var quantified = new CoreHiTypes.ForAll(evidence, 1, integer);
+        assertEquals(List.of("IntRep"), types.representation(integer, false).get("primReps"));
+        assertEquals(List.of("BoxedRep (Just Lifted)"), types.representation(quantified, false).get("primReps"),
+                "A coercion function is lifted even when its result is unboxed");
+    }
+
+    @Test void symbolsPreserveGhcCharSequences() throws Exception {
+        for (String mode : List.of("normal", "safe", "max", "thin")) {
+            var module = new CoreHiModule(CoreHiReader.read(path(mode)));
+            String owner = "thc-native-hi-fixture:NativeHiFixture.";
+            assertEquals(new CoreHiTypes.Lit(2, List.of(0xd800, 0xdc00)),
+                    module.declaration(owner + "SeparateSurrogates").rhs());
+            assertEquals(new CoreHiTypes.Lit(2, List.of(0x10000)),
+                    module.declaration(owner + "Supplementary").rhs());
+        }
+    }
+
     @Test void indexesActualCompilerInterfaces() throws Exception {
         for (String mode : List.of("normal", "safe", "max", "thin")) {
             var file = CoreHiReader.read(path(mode));

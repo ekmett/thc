@@ -316,7 +316,9 @@
         "build/native-hi-execution/NativeHiDependency.hi",
         "build/native-hi-execution/NativeHiBox.hi",
         "build/native-hi-execution/NativeHiBoxType.hi",
-        "build/native-hi-execution/native.tsv"
+        "build/native-hi-execution/native.tsv",
+        "build/native-hi-execution/io.tsv",
+        "build/native-hi-execution/GHC.Internal.Types.hi"
       ],
       "sources": [
         "t/fixtures/compiler/NativeHiScalar.hs",

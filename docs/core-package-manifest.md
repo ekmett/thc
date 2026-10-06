@@ -99,53 +99,58 @@ Use the exact unit identity recorded by GHC, and compile these modules with
 the loader performs no directory search. Paths are canonicalized, their bytes
 are content-bound to the host request, and duplicate module identities reject.
 Loose inputs need no package manifest. Their declarations and binding caches
-belong to the execution context; retained file snapshots are immutable. Explicit
-foreign, delimited-control and main/shutdown obligations are unsupported and
-reject during admission. Imported native types require native interface providers;
-CBD and native inputs may otherwise coexist with distinct module identities.
+belong to the execution context; retained file snapshots are immutable. Imported
+native types require native interface providers. A provider may lack retained
+Core when only its declarations are needed; demanding one of its executable
+bindings still requires `-fwrite-if-simplified-core`. CBD and native inputs may
+coexist with distinct module identities.
 
-An experimental native JVM reader accepts a module's `interface` artifact with
+The native JVM reader also accepts a module's `interface` artifact with
 `"format": "ghc-hi"`, an absolute `path` and its raw-file `sha256`. The module's
 `sha256` must match it. Omit `compact` and the helper-backed unit `interfaceSource`.
-The four startup summaries must be false for the currently supported subset;
-native admission checks the corresponding absence of startup obligations. The runtime verifies the exact bytes it parses, checks module identity,
-and feeds decoded bindings directly to the existing linker and backends. It
-creates no helper process or intermediate CBD.
+The runtime verifies the exact bytes it parses, checks module identity and
+startup summaries against the interface, and feeds decoded bindings directly
+to the existing linker and backends. It creates no helper process or
+intermediate CBD. A declaration-only provider cannot stand in for a complete
+executable module's provenance.
 
-GHC 9.14.1 vanilla, 64-bit retained interfaces support integer and
-floating-point functions, private bindings, recursion, local bindings, literal/default cases,
-raw byte literals and calls to other native interface modules. `Addr#` values use
-the existing address representation; string bytes preserve embedded NUL and high
-bytes without text decoding. `Float#` and `Double#` literal rationals round directly
-to their IEEE format with ties to even, including subnormal values and overflow;
-nonterminating rationals from excess-precision Core are supported. Flat unboxed
-tuple results with 2–64 scalar primitive components preserve their exact component
-layouts across calls and case matching. Prenex type
-variables of kind `Type` are erased from value parameters and applications; type-only aliases preserve
-the original function value. Ordinary boxed datatypes support nullary constructors,
-integer, floating-point and address fields, lifted datatype parameters and ordinary
-named boxed fields, including recursive fields and ordinary records. Generated record
-selectors execute their retained Core bodies. Monomorphic lifted newtypes over
-supported representations use their underlying runtime representation while
-retaining nominal type identity. Their explicit casts, including function-result
-casts with unchanged arguments, preserve lazy evaluation. Layouts resolve after module admission reserves the
-owner directory, so forward and imported types do not depend on declaration order.
-Constructor applications and cases instantiate parameters while keeping lazy
-fields unevaluated. An actual multi-module program passes `Box PayloadRef` through
-polymorphic identity and its monomorphic alias, then evaluates and unwraps a suspended payload
-and a recursive lazy tail. The floating-point fields arrive through an imported
-unboxed pair with distinct `Float#` and `Double#` components. It matches native
-GHC on both backends and handoff modes,
-including the first installed guest call. Process creation is disabled and the
-Core closure contains only `.hi` files.
-Nested tuples, lifted or representation-polymorphic tuple components, aggregate
-arguments or constructor fields, State#/IO transport, parameterized or unlifted
-newtypes, general coercions, higher-rank and
-representation-polymorphic types, typeclass dictionaries,
-constructor wrappers, unpacking, GADTs, foreign obligations, annotations
-and further expression forms are not yet supported. Complete offline execution auditing is also unavailable;
-`--verify-artifacts` rejects these modules. The project driver does not yet
-publish this native format. Broader coverage remains tracked in
+The reader targets GHC 9.14.1 vanilla, 64-bit interfaces. Types retain lexical
+binder identity, kinds, roles, multiplicities, applications and coercions.
+Capture-avoiding substitution drives polymorphic applications, constructor
+instantiation, synonyms, parameterized newtypes and coercion axioms. Runtime
+layouts follow the type's `RuntimeRep`; unknown representation and levity remain
+unknown. Type variables erase from value arguments, while coercion and `State#`
+arguments preserve their value arity with zero-width storage. Casts change type
+and representation metadata without evaluating or copying their expression.
+
+Boxed constructors use their worker fields, including GADT equality evidence,
+existential binders and unpacked payloads. Layouts resolve after admission
+reserves the module owner, so forward and imported declarations do not depend
+on file or declaration order. Lazy fields keep their suspended values. General
+newtype representation makes ordinary `IO a` work through the existing IO
+execution boundary: its definition comes from the installed
+`GHC.Internal.Types.hi`, rather than a loader-specific replacement.
+
+Integer, byte and floating literals use the existing runtime representations.
+Raw byte literals preserve embedded NUL and high bytes. Floating rationals round
+directly to their IEEE format with ties to even, including subnormals and
+overflow. Type-level `Symbol` literals preserve GHC's sequence of `Char` values,
+including the distinction between two surrogate characters and one
+supplementary character. Compiler-owned declarations and built-in coercion rules
+come from the pinned generated catalogue; ordinary library declarations come
+from their owning interfaces.
+
+The focused execution fixture compares native GHC results for recursive calls,
+lazy boxed fields, parameterized newtypes, GADTs, unpacking, nested tuples/sums
+and polymorphic IO.
+It runs both backends and handoff modes, including first-installed-call checks
+for the pure functions and a guest-exception negative control for IO. Process
+creation is disabled and the runtime receives only interfaces.
+
+Class and pattern-synonym declaration providers, annotation transport, remaining
+expression forms, native foreign artifact admission and complete offline
+execution auditing still need integration; `--verify-artifacts` rejects native
+modules. The project driver does not yet publish this native format. Remaining work is tracked in
 [#1063](https://github.com/ekmett/thc/issues/1063).
 
 ## Helper-backed retained interface sources

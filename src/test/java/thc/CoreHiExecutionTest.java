@@ -12,11 +12,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Ordinary GHC .hi files execute directly, including retained private RHSs,
  * scalar recursion, raw byte and IEEE literals, erased polymorphism and parameterized
- * recursive boxed fields and record selectors across modules. Native results come from the same source build; process creation is denied and the runtime receives no CBD. */
+ * recursive boxed fields, parameterized newtypes, GADTs, unpacking and nested
+ * tuple/sum results across modules.
+ * Polymorphic IO runs through its real installed declaration and the ordinary runIO
+ * boundary. Native results come from the same source build; process creation is denied
+ * and the runtime receives no CBD. */
 class CoreHiExecutionTest {
     private static final Path INPUT = Path.of("build/native-hi-execution");
     private static final String UNIT = "thc-native-hi-scalar";
-    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiBox", "NativeHiBoxType");
+    private static final List<String> MODULES = List.of("NativeHiScalar", "NativeHiDependency", "NativeHiBox", "NativeHiBoxType", "GHC.Internal.Types");
     @TempDir Path directory;
 
     private List<String> interfaces() throws Exception {
@@ -31,18 +35,20 @@ class CoreHiExecutionTest {
 
     private Path manifest() throws Exception {
         interfaces();
-        var modules = new ArrayList<Object>();
+        var units = new LinkedHashMap<String,List<Object>>();
         for (String module : MODULES) {
             Path file = directory.resolve(module + ".hi");
             String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)));
-            modules.add(Map.of("name", module, "boundary", "optimized-Core-after-Tidy-before-CorePrep", "sha256", hash,
+            var identity = CoreHiReader.read(file).module;
+            units.computeIfAbsent(identity.unit(), ignored -> new ArrayList<>()).add(Map.of("name", identity.name(), "boundary", "optimized-Core-after-Tidy-before-CorePrep", "sha256", hash,
                     "interface", Map.of("format", "ghc-hi", "path", file.toString(), "sha256", hash),
                     "containsDelimitedControl", false, "registrationObligations", false,
                     "mainAlias", false, "packageScalarDeclarations", false));
         }
         Path manifest = directory.resolve("packages.json");
         Files.writeString(manifest, Json.stringify(Map.of("format", "thc-core-packages", "schema", 1,
-                "ghc", "9.14.1", "units", List.of(Map.of("id", UNIT, "depends", List.of(), "modules", modules)))));
+                "ghc", "9.14.1", "units", units.entrySet().stream().map(unit ->
+                    Map.of("id", unit.getKey(), "depends", List.of(), "modules", unit.getValue())).toList())));
         return manifest;
     }
 
@@ -108,13 +114,37 @@ class CoreHiExecutionTest {
             }
         }
         try (var files = Files.list(directory)) {
-            assertEquals(Set.of("NativeHiScalar.hi", "NativeHiDependency.hi", "NativeHiBox.hi", "NativeHiBoxType.hi"),
+            assertEquals(MODULES.stream().map(module -> module + ".hi").collect(java.util.stream.Collectors.toSet()),
                     files.map(file -> file.getFileName().toString()).collect(java.util.stream.Collectors.toSet()));
         }
         // Published native manifests retain the same input route and ownership.
         try (var context = Main.executionContext(false, false)) {
             var entry = context.eval("thc", request(List.of("@" + manifest()), "NativeHiScalar", "entry", "bytecode"));
             assertEquals(rows.getLast()[1], entry.execute(rows.getLast()[0]).asLong());
+        }
+    }
+
+    @Test void polymorphicIoExecutesEffectsThroughTheOrdinaryRuntime() throws Exception {
+        assertEquals(List.of("completed", "throws"), Files.readAllLines(INPUT.resolve("io.tsv")));
+        var paths = interfaces();
+        for (String backend : List.of("ast", "bytecode")) {
+            try (var context = Main.executionContext(false, false)) {
+                var actions = new ArrayList<org.graalvm.polyglot.Value>();
+                for (String entry : List.of("goodMain", "badMain")) {
+                    var action = context.eval("thc", CoreModules.request(paths, UNIT + ":NativeHiScalar." + entry,
+                            true, false, backend, true, true, null, false, false));
+                    assertFalse(action.canExecute());
+                    assertTrue(action.canInvokeMember("runIO"));
+                    actions.add(action);
+                }
+                var good = actions.get(0);
+                var bad = actions.get(1);
+                assertTrue(good.invokeMember("runIO").asBoolean(), backend + " writes and reads mutable state");
+                var failure = assertThrows(PolyglotException.class, () -> bad.invokeMember("runIO"));
+                assertTrue(failure.isGuestException());
+                assertFalse(failure.isHostException());
+                assertTrue(good.invokeMember("runIO").asBoolean(), backend + " failure preserves later action execution");
+            }
         }
     }
 
@@ -143,6 +173,16 @@ class CoreHiExecutionTest {
             var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", duplicate));
             assertTrue(failure.getMessage().contains("Duplicate or invalid GHC module"), failure.getMessage());
         }
+
+        Path manifest = manifest();
+        var document = (Map<?,?>) Json.parse(Files.readString(manifest));
+        var unit = (Map<?,?>) ((List<?>) document.get("units")).getFirst();
+        var module = (Map<String,Object>) ((List<?>) unit.get("modules")).getFirst();
+        module.put("containsDelimitedControl", true);
+        Files.writeString(manifest, Json.stringify(document));
+        var summary = assertThrows(IllegalArgumentException.class,
+                () -> request(List.of("@" + manifest), "NativeHiScalar", "entry", "bytecode"));
+        assertTrue(summary.getMessage().contains("Native interface startup summary mismatch"), summary.getMessage());
 
         var forged = new LinkedHashMap<Object,Object>((Map<?, ?>) Json.parse(request(paths, "NativeHiScalar", "entry", "bytecode")));
         var artifact = new LinkedHashMap<Object,Object>((Map<?, ?>) ((List<?>) forged.get("nativeInterfaceFiles")).getFirst());

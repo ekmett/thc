@@ -374,7 +374,6 @@ public final class CoreModules {
             files.add(new CoreUnitDirectory.Artifact(Path.of(path), hash));
         }
         require(files.isEmpty() || !verify, "Offline execution audit for native interfaces is not implemented");
-        require(files.isEmpty() || !Boolean.TRUE.equals(input.get("ioMain")), "Unsupported native interface IO main/shutdown obligations");
         return directory.withNativeInputs(files);
     }
     /** Prepare from CBD through the normal lazy readers. Detach only the selected
@@ -471,7 +470,11 @@ public final class CoreModules {
                 // Retain original complete-module provenance of interface fragments,
                 // without selecting any unrelated binding body.
                 if (module.get("providedModules") instanceof List<?> provided) for (var original : directory.getModules())
-                    if (provided.contains(original.unit() + ":" + original.name())) selection.admit(original);
+                    if (provided.contains(original.unit() + ":" + original.name())) {
+                        require(!original.declarationOnly(), "Interface closure requires retained Core from its original provider: " +
+                                original.unit() + ":" + original.name());
+                        selection.admit(original);
+                    }
             }
             for (var module : directory.getModules()) if (module.registrationObligations()) selection.admit(module);
             var dependencies = new Dependencies(pending::add, selection::constructor,

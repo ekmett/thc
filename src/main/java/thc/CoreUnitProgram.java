@@ -38,14 +38,18 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         this.language = language; this.directory = directory; this.input = input; this.entry = entry;
         this.backend = backend; this.async = async; this.owner = owner;
         sources = directory.open(Objects.equals(input.get("verifyArtifacts"), true), !Objects.equals(input.get("sourceNotesEnabled"), false), compactTotals::add);
-        for (var module : directory.getModules()) availableModules.add(module.unit() + ":" + module.name());
         var modules = new HashSet<String>();
+        for (var module : directory.getModules()) {
+            String id = module.unit() + ":" + module.name();
+            modules.add(id);
+            if (!module.declarationOnly()) availableModules.add(id);
+        }
         try {
             CoreModules.visitUnitConsumers(input, sources, rawModule -> {
                 var module = (Map<String,Object>) rawModule;
                 String unit = requiredText(module.get("unit"), "Missing loose consumer unit"), name = requiredText(module.get("module"), "Missing loose consumer module");
                 boolean fragment = unit.equals("dependency-closure") && name.equals("THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings");
-                if (!fragment) require(modules.add(unit + ":" + name) && !availableModules.contains(unit + ":" + name), "Duplicate GHC module: " + unit + ":" + name);
+                if (!fragment) require(modules.add(unit + ":" + name), "Duplicate GHC module: " + unit + ":" + name);
                 if (Objects.equals(module.get("boundary"), "optimized-Core-after-Tidy-before-CorePrep")) availableModules.add(unit + ":" + name);
                 for (var binding : (List<Map<String,Object>>) module.get("bindings")) {
                     String id = (String) binding.get("id"); require(consumerBindings.putIfAbsent(id, binding) == null, "Duplicate binding: " + id);

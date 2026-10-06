@@ -1,18 +1,20 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnboxedSums #-}
 {-# LANGUAGE UnboxedTuples #-}
 -- Retain exact rational literals, including 1/3, to check direct IEEE rounding.
 {-# OPTIONS_GHC -fexcess-precision #-}
 -- Native .hi execution checks private retained RHSs, cross-module calls and
 -- recursive scalar cases and IEEE literal rounding against NativeHiOracle.
-module NativeHiScalar (entry, recursive, floatingPair) where
+module NativeHiScalar (entry, recursive, floatingPair, goodMain, badMain) where
 
 import GHC.Exts
-  ( Int#, Float#, Double#, (+#), (-#), (*#), (<=#)
-  , divideFloat#, (/##)
+  ( Int(I#), Int#, Float#, Double#, (+#), (-#), (*#), (<=#), (<#)
+  , divideFloat#, (/##), realWorld#, raise#
   )
-import NativeHiDependency (marker)
+import NativeHiDependency (marker, exchange)
+import GHC.IO (IO(..))
 
 {-# OPAQUE privateWorker #-}
 privateWorker :: Int# -> Int#
@@ -20,7 +22,8 @@ privateWorker x = x *# 3# +# 1#
 
 {-# OPAQUE entry #-}
 entry :: Int# -> Int#
-entry x = privateWorker x +# marker x
+entry x = case marker x realWorld# of
+  (# _, value #) -> privateWorker x +# value
 
 {-# OPAQUE recursive #-}
 recursive :: Int# -> Int#
@@ -47,7 +50,30 @@ doubleValue x = case x of
   7# -> -4.0e-324##
   _ -> 1.7976931348623159e308##
 
--- Keep an actual cross-module unboxed result with distinct Float#/Double# lanes.
+-- Cross-module transport mixes nested aggregates, boxed/unboxed alternatives
+-- and distinct Float#/Double# lanes. Every payload contributes to oracle results.
 {-# OPAQUE floatingPair #-}
-floatingPair :: Int# -> (# Float#, Double# #)
-floatingPair x = (# floatValue x, doubleValue x #)
+floatingPair :: Int# -> (# (# Float#, Double# #), (# Int | Int# #) #)
+floatingPair x = case x <# 0# of
+  1# -> (# (# floatValue x, doubleValue x #), (# I# x | #) #)
+  _ -> (# (# floatValue x, doubleValue x #), (# | x #) #)
+
+data Observation = Observation Int#
+data Failure = WrongEffect
+
+-- Input: no host arguments. Output: boxed unit only after the cross-module
+-- polymorphic IO action has written and read the replacement value. The failing
+-- sibling is a negative control for the assertion, not a supported-language limit.
+{-# OPAQUE observe #-}
+observe :: Int# -> IO ()
+observe expected = case exchange (Observation 0#) (Observation 41#) of
+  IO step -> IO (\state -> case step state of
+    (# next, Observation actual #) -> case actual -# expected of
+      0# -> (# next, () #)
+      _ -> raise# WrongEffect)
+
+goodMain :: IO ()
+goodMain = observe 41#
+
+badMain :: IO ()
+badMain = observe 42#

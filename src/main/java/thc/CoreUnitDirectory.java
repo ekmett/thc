@@ -7,8 +7,8 @@ import java.util.*;
 import java.util.function.Consumer;
 import thc.runtime.TargetLayout;
 
-/** Small package directory owns module names, never binding names. Unit files
- * remain unopened until a binding or the module's metadata is requested. */
+/** Package directory owns module names, never binding names. CBD files open on
+ * demand; native interfaces are snapshotted and checked before publication. */
 public final class CoreUnitDirectory {
     // GHC keeps this CLI wrapper identity even with a non-Main -main-is module.
     static final String MAIN_ALIAS = "main::Main.main";
@@ -19,7 +19,7 @@ public final class CoreUnitDirectory {
         public String getId() { return id; } public List<String> getDepends() { return depends; }
         public List<ModuleRecord> getModules() { return modules; }
     }
-    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact, CoreInterfaceSource interfaceSource, boolean nativeInterface,
+    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact, CoreInterfaceSource interfaceSource, boolean nativeInterface, boolean declarationOnly,
             boolean containsDelimitedControl, boolean registrationObligations, boolean mainAlias, boolean packageScalarDeclarations) {
         public String getUnit() { return unit; } public String getName() { return name; } public String getSha256() { return sha256; }
         public Artifact getArtifact() { return artifact; }
@@ -63,17 +63,15 @@ public final class CoreUnitDirectory {
             for (var artifact : files) {
                 Path path = artifact.path().toRealPath();
                 require(paths.add(path), "Duplicate native interface path: " + path);
-                byte[] bytes = java.nio.file.Files.readAllBytes(path);
-                require(CoreModules.sha256(bytes).equals(artifact.sha256()), "Native interface changed after request: " + path);
-                var reader = new CoreHiReader(bytes, path.toString());
+                var reader = nativeSnapshot(new Artifact(path, artifact.sha256()), "request");
                 String unit = reader.module.unit(), name = reader.module.name();
                 require(!unit.isEmpty() && !name.isEmpty() && identities.add(unit + ":" + name + "."),
                         "Duplicate or invalid GHC module: " + unit + ":" + name);
-                // Accepted syntax proves no native/control/main startup obligations.
-                // This admission resolves no dependencies and lowers no bodies.
-                new CoreHiModule(reader);
+                // Parse declaration and startup facts without resolving types or lowering bodies.
+                var admission = new CoreHiModule(reader).admission();
                 var module = new ModuleRecord(unit, name, artifact.sha256(), new Artifact(path, artifact.sha256()),
-                        null, true, false, false, false, false);
+                        null, true, admission.declarationOnly(), admission.containsDelimitedControl(), admission.registrationObligations(),
+                        admission.mainAlias(), admission.packageScalarDeclarations());
                 added.computeIfAbsent(unit, ignored -> new ArrayList<>()).add(module);
                 snapshots.put(module, reader);
             }
@@ -150,10 +148,7 @@ public final class CoreUnitDirectory {
                 var artifact = module.artifact();
                 var reader = directory.nativeInputs.get(module);
                 if (reader == null) {
-                    byte[] bytes = java.nio.file.Files.readAllBytes(artifact.path());
-                    require(CoreModules.sha256(bytes).equals(artifact.sha256()),
-                            "Native interface changed after publication: " + artifact.path());
-                    reader = new CoreHiReader(bytes, artifact.path().toString());
+                    reader = nativeSnapshot(artifact, "publication");
                 }
                 reader.requireIdentity(module.unit(), module.name());
                 var admitted = new CoreHiModule(reader, id -> {
@@ -162,6 +157,7 @@ public final class CoreUnitDirectory {
                             "Missing native interface declaration provider: " + id);
                     return nativeInterface(dependency);
                 });
+                requireNativeSummary(module, admitted.admission());
                 // Admission resolves no dependencies; publish the reader before demanded lowering can do so.
                 interfaceReaders.put(module, admitted);
                 return admitted;
@@ -244,6 +240,7 @@ public final class CoreUnitDirectory {
         var artifactPaths = new HashSet<Path>();
         TargetLayout layout = null;
         var units = new ArrayList<UnitRecord>();
+        var nativeInputs = new HashMap<ModuleRecord,CoreHiReader>();
         for (Object raw : rawUnits) {
             var unit = record(raw, "Invalid package unit");
             String id = text(unit.get("id"), "Missing GHC unit ID");
@@ -275,15 +272,25 @@ public final class CoreUnitDirectory {
                 var artifact = nativeInterface ? artifact(module.get("interface"), artifactPaths, "ghc-hi") :
                         interfaceSource == null ? artifact(module.get("compact"), artifactPaths, CoreCompactFormat.NAME) :
                         interfaceSource.artifact(module.get("interface"), artifactPaths);
-                if (interfaceSource != null || nativeInterface) require(module.get("sha256").equals(artifact.sha256()) &&
-                  Boolean.FALSE.equals(module.get("containsDelimitedControl")) && Boolean.FALSE.equals(module.get("registrationObligations")) &&
+                if (interfaceSource != null || nativeInterface) require(module.get("sha256").equals(artifact.sha256()),
+                  "Interface module hash differs from its artifact: " + id + ":" + name);
+                if (interfaceSource != null) require(Boolean.FALSE.equals(module.get("containsDelimitedControl")) && Boolean.FALSE.equals(module.get("registrationObligations")) &&
                   Boolean.FALSE.equals(module.get("mainAlias")) && Boolean.FALSE.equals(module.get("packageScalarDeclarations")),
                   "Demand interfaces require checked false startup summaries");
-                modules.add(new ModuleRecord(id, name, (String) module.get("sha256"), artifact, interfaceSource, nativeInterface,
+                CoreHiReader reader = nativeInterface ? nativeSnapshot(artifact, "publication") : null;
+                if (reader != null) reader.requireIdentity(id, name);
+                var admission = reader == null ? null : new CoreHiModule(reader).admission();
+                var record = new ModuleRecord(id, name, (String) module.get("sha256"), artifact, interfaceSource, nativeInterface,
+                        admission != null && admission.declarationOnly(),
                         flag(module, "containsDelimitedControl", "Missing delimited-control summary"),
                         flag(module, "registrationObligations", "Missing registration summary"),
                         flag(module, "mainAlias", "Missing main-alias summary"),
-                        flag(module, "packageScalarDeclarations", "Missing package declaration summary")));
+                        flag(module, "packageScalarDeclarations", "Missing package declaration summary"));
+                if (reader != null) {
+                    requireNativeSummary(record, admission);
+                    nativeInputs.put(record, reader);
+                }
+                modules.add(record);
             }
             if (unit.get("targetLayout") != null) {
                 var candidate = TargetLayout.fromDocument(unit.get("targetLayout"));
@@ -294,7 +301,23 @@ public final class CoreUnitDirectory {
         }
         Object bridge = document.get("foreignExceptionBridgeUnit");
         require(bridge == null || bridge instanceof String name && !blank(name), "Invalid foreign exception bridge unit");
-        return new CoreUnitDirectory(units, (String) bridge, layout);
+        return new CoreUnitDirectory(units, (String) bridge, layout, nativeInputs);
+    }
+    private static CoreHiReader nativeSnapshot(Artifact artifact, String phase) {
+        try {
+            byte[] bytes = java.nio.file.Files.readAllBytes(artifact.path());
+            require(CoreModules.sha256(bytes).equals(artifact.sha256()),
+                    "Native interface changed after " + phase + ": " + artifact.path());
+            return new CoreHiReader(bytes, artifact.path().toString());
+        } catch (Exception failure) { return rethrow(failure); }
+    }
+    private static void requireNativeSummary(ModuleRecord module, CoreHiModule.Admission admission) {
+        require(module.declarationOnly() == admission.declarationOnly() &&
+                module.containsDelimitedControl() == admission.containsDelimitedControl() &&
+                module.registrationObligations() == admission.registrationObligations() &&
+                module.mainAlias() == admission.mainAlias() &&
+                module.packageScalarDeclarations() == admission.packageScalarDeclarations(),
+                "Native interface startup summary mismatch: " + module.unit() + ":" + module.name());
     }
     private static boolean blank(String value) {
         for (int i = 0; i < value.length(); i++) {
