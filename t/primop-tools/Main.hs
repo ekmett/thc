@@ -15,11 +15,18 @@
 module Main (main) where
 
 import Control.Exception (bracket, try)
-import Control.Monad (forM_, unless)
+import Control.Monad (filterM, forM_, unless, when)
 import Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
+import Data.IORef (newIORef)
 import Data.List (isInfixOf)
+import Data.Word (Word32)
+import GHC.Builtin.Utils (knownKeyNames)
+import GHC.Data.FastMutInt (newFastMutInt)
+import GHC.Iface.Binary (BinSymbolTable(..), putName)
+import GHC.Types.Unique.FM (emptyUFM)
+import qualified GHC.Utils.Binary as Binary
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -241,6 +248,32 @@ cliTests root executable =
       forM_ (Map.toList inputs) $ \(input, digest) -> hashFile (dir </> input) >>= (@?= digest)
       digest <- hashFile executable
       field "executableSha256" proof @?= Right digest)
+  , "CLI finite known-key catalogue is deterministic and checked" ~: isolated (\dir -> do
+      let path = dir </> "src/main/resources/thc/ghc-9.14.1-known-key-names.json"
+      run dir ["known-keys", "--write"] >>= expectSuccess
+      before <- BS.readFile path
+      run dir ["known-keys", "--write"] >>= expectSuccess
+      BS.readFile path >>= (@?= before)
+      run dir ["known-keys"] >>= expectSuccess
+      value <- readJson path
+      field "ghc" value @?= Right ("9.14.1" :: T.Text)
+      names <- ok (field "names" value :: Either String [Value])
+      nameWords <- traverse (ok . field "nameWord") names :: IO [Word32]
+      nameWords @?= Map.keys (Map.fromList [(word, ()) | word <- nameWords])
+      forM_ names $ \row -> when (field "namespace" row == Right (4 :: Int)) $ do
+        parent <- ok (field "fieldParent" row :: Either String T.Text)
+        assertBool "Missing canonical field parent" (not (T.null parent))
+      primops <- filterM (fmap (== ("primop" :: T.Text)) . ok . field "category") names
+      length primops @?= 1491
+      plus <- case [row | row <- primops, field "occurrence" row == Right ("+#" :: T.Text)] of
+        [row] -> pure row
+        _ -> assertFailure "Missing or duplicate +# primop identity" >> fail "primop"
+      field "module" plus @?= Right ("GHC.Internal.Prim" :: T.Text)
+      field "namespace" plus @?= Right (0 :: Int)
+      BS.appendFile path " "
+      stale <- BS.readFile path
+      run dir ["known-keys"] >>= expectFailure "Known-key catalogue differs"
+      BS.readFile path >>= (@?= stale))
   , "CLI stale scalar check leaves contract untouched" ~: isolated (\dir -> do
       BS.appendFile (dir </> scalarPath) " "
       stale <- BS.readFile (dir </> scalarPath)
@@ -286,5 +319,16 @@ main = do
         let names = map fst scalarRows
         assertBool "Tuple/vector/polymorphic scalar leak" (all (`notElem` names) ["packInt64X2#", "tagToEnum#", "newMVar#"])
         assertBool "Pointer scalar omitted" ("plusAddr#" `elem` names)
-  counts <- runTestTT (TestList (coverageTests ++ scalarTests ++ [apiTest] ++ cliTests root executable))
+  let knownKeysTest = "known-key words agree with actual GHC interface serialization" ~: do
+        _ <- ok knownKeyCatalogue
+        table <- BinSymbolTable <$> newFastMutInt 0 <*> newIORef emptyUFM
+        writer <- Binary.openBinMem 4096
+        forM_ knownKeyNames (putName table writer)
+        Binary.withBinBuffer writer $ \bytes -> do
+          reader <- Binary.unsafeUnpackBinBuffer bytes
+          forM_ knownKeyNames $ \name -> do
+            actual <- Binary.get reader :: IO Word32
+            expected <- ok (knownKeyWord name)
+            actual @?= expected
+  counts <- runTestTT (TestList (coverageTests ++ scalarTests ++ [apiTest, knownKeysTest] ++ cliTests root executable))
   unless (errors counts == 0 && failures counts == 0) exitFailure
