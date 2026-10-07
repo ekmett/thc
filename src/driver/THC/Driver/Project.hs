@@ -216,7 +216,7 @@ prepareWindowsRuntimeWithVerification verify repository selectedCompiler selecte
   withLock (native </> "acquire.lock") $ do
     cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
     let selection = ["--disable-shared", "--with-compiler=" ++ compiler, "--with-hc-pkg=" ++ pkg]
-    runCommand True cabal (["build", "lib:thc", "--offline"] ++ selection) root
+    runCommand True cabal (["build", "lib:thc"] ++ selection) root
     plan <- readJson (root </> "dist-newstyle/cache/plan.json")
     compilerId <- field plan "compiler-id"
     abi <- field plan "compiler-abi"
@@ -868,7 +868,7 @@ prepareInterfaceHelper context root = do
   buildDirectory <- lookupEnv "THC_CABAL_BUILD_DIR"
   let ghc = contextGhc context
       pkg = maybe (takeDirectory ghc </> "ghc-pkg") id (contextGhcPkg context)
-      selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
+      selection = ["exe:thc-interface", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
         ["--disable-shared" | Host.os == "mingw32"] ++
         ["--builddir=" ++ directory | Just directory <- [buildDirectory]]
       tools = root </> "build/compiler"
