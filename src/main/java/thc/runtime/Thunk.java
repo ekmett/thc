@@ -3,9 +3,16 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 
 /** A shared lazy update cell; state publishes the answer and ownership release. */
 public final class Thunk {
+    private static final VarHandle STATE;
+    static {
+        try { STATE = MethodHandles.lookup().findVarHandle(Thunk.class, "state", int.class); }
+        catch (ReflectiveOperationException failure) { throw new ExceptionInInitializerError(failure); }
+    }
     private RootCallTarget target;
     private final boolean asynchronousExceptions;
     private CapturedFrame environment;
@@ -26,8 +33,10 @@ public final class Thunk {
     public void setTarget(RootCallTarget target) { this.target = target; }
     public CapturedFrame getEnvironment() { return environment; }
     public void setEnvironment(CapturedFrame environment) { this.environment = environment; }
-    public int getState() { return state; }
-    public void setState(int state) { this.state = state; }
+    /** Acquire the answer, failure or continuation published with this state. */
+    public int getState() { return (int) STATE.getAcquire(this); }
+    /** The owner holds the monitor and writes the payload before releasing state. */
+    public void setState(int state) { STATE.setRelease(this, state); }
     public Object getValue() { return value; }
     public void setValue(Object value) { this.value = value; }
     public Thread getOwner() { return owner; }
