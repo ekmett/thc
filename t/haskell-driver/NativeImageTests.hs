@@ -47,6 +47,12 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
   else TestList
     [ TestLabel "prerequisites fail before acquisition" $ TestCase $ withProducer $ \root output manifest -> do
         validateNativeImage root
+        let inspector = root </> "readobj"
+        compatible <- readText inspector
+        -- LLVM 18 accepts JSON mode but appends a plain-text dynamic table.
+        writeExecutable inspector "#!/bin/sh\nprintf '%s\\n' '[{\"FileSummary\":{}}DynamicSection []}]'\n"
+        expectFailure "requires JSON ELF metadata" (validateNativeImage root)
+        writeExecutable inspector compatible
         removeFile (root </> "build/install/thc/lib/thc-0.1-experiment.jar")
         expectFailure "installed THC runtime" (validateNativeImage root)
         writeText (root </> "build/install/thc/lib/thc-0.1-experiment.jar") "stub distribution"
@@ -65,12 +71,12 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
         assertEqual "qualified default profile" (toJSON ("resource-copy" :: String)) (field first "profile")
         let artifactPaths = [field artifact "path" | artifact <- array (field first "artifacts")]
         forM_ ["artifacts/program", "artifacts/libproducer-witness.bin", "artifacts/diagnostics/nested/resource.txt",
-              "artifacts/program.jam/runtime-libraries.txt", "artifacts/program.jam/libjam_vm.so",
+              "artifacts/program.jam/runtime-libraries.txt", "artifacts/program.jam/libjam-vm.so",
               "artifacts/program.jam/legal/COPYING"] $ \path ->
           assertBool "producer report owns output membership" (elem (toJSON (path :: String)) artifactPaths)
         assertEqual "runtime diagnostics name is not reserved by producer logs" "payload" =<<
           readText (output </> "artifacts/diagnostics/nested/resource.txt")
-        assertEqual "JAM producer declaration survives publication" "libjam_vm.so\n" =<<
+        assertEqual "JAM producer declaration survives publication" "libjam-vm.so\n" =<<
           readText (output </> "artifacts/program.jam/runtime-libraries.txt")
         assertEqual "collector notices survive publication" "runtime notice" =<<
           readText (output </> "artifacts/program.jam/legal/COPYING")
@@ -113,7 +119,7 @@ tests = TestLabel "native image producer boundary" $ if os /= "linux" || arch /=
         result <- readJson (output </> "completion.json")
         let paths = [field artifact "path" | artifact <- array (field result "artifacts")]
         assertEqual "overlapping producer and JAM membership is deduplicated" (nub paths) paths
-        forM_ ["artifacts/program.jam/runtime-libraries.txt", "artifacts/program.jam/libjam_vm.so",
+        forM_ ["artifacts/program.jam/runtime-libraries.txt", "artifacts/program.jam/libjam-vm.so",
           "artifacts/program.jam/legal/COPYING"] $ \path ->
           assertBool "reported runtime bundle survives" (elem (toJSON (path :: String)) paths)
     , TestLabel "zero exit cannot bless missing or invalid artifacts" $ TestCase $ withProducer $ \root output manifest ->
@@ -175,8 +181,8 @@ withProducer action = withScratch $ \scratch -> do
   forM_ [[root </> "witness.c", "-o", elf], ["-shared", "-fPIC", root </> "library.c", "-o", library]] $ \arguments -> do
     (status, _, diagnostic) <- readProcessWithExitCode "cc" arguments ""
     assertEqual ("actual C ELF fixture: " ++ diagnostic) ExitSuccess status
-  copyFileWithMetadata library (jdk </> "lib/jam/libjam_vm.so")
-  writeText (jdk </> "lib/jam/runtime-libraries.txt") "libjam_vm.so\n"
+  copyFileWithMetadata library (jdk </> "lib/jam/libjam-vm.so")
+  writeText (jdk </> "lib/jam/runtime-libraries.txt") "libjam-vm.so\n"
   writeText (jdk </> "legal/jam-vm/COPYING") "runtime notice"
   writeText manifest "{}"
   writeText (root </> "build/install/thc/lib/thc-0.1-experiment.jar") "stub distribution"
@@ -199,7 +205,7 @@ withProducer action = withScratch $ \scratch -> do
     , "cp \"$THC_TEST_NATIVE_ELF\" \"$3/program\""
     , "cp \"$THC_TEST_NATIVE_LIBRARY\" \"$3/libproducer-witness.bin\""
     , "mkdir -p \"$3/program.jam\""
-    , "cp \"$JAVA_HOME/lib/jam/runtime-libraries.txt\" \"$JAVA_HOME/lib/jam/libjam_vm.so\" \"$3/program.jam/\""
+    , "cp \"$JAVA_HOME/lib/jam/runtime-libraries.txt\" \"$JAVA_HOME/lib/jam/libjam-vm.so\" \"$3/program.jam/\""
     , "cp -R \"$JAVA_HOME/legal/jam-vm\" \"$3/program.jam/legal\""
     , "mkdir -p \"$3/diagnostics/nested\""
     , "printf payload > \"$3/diagnostics/nested/resource.txt\""
@@ -214,21 +220,23 @@ withProducer action = withScratch $ \scratch -> do
     , " bad-report) printf '{\"executables\":null}' > \"$3/build-artifacts.json\" ;;"
     , " reported-jam) printf '{\"executables\":[\"program\"],\"shared_libraries\":[\"libproducer-witness.bin\"],\"language_resources\":[\"diagnostics\",\"program.jam\"]}' > \"$3/build-artifacts.json\" ;;"
     , " jam-missing-manifest) rm \"$3/program.jam/runtime-libraries.txt\" ;;"
-    , " jam-missing-library) rm \"$3/program.jam/libjam_vm.so\" ;;"
+    , " jam-missing-library) rm \"$3/program.jam/libjam-vm.so\" ;;"
     , " jam-escape-manifest) printf '../escape.so\\n' > \"$3/program.jam/runtime-libraries.txt\" ;;"
-    , " jam-duplicate-manifest) printf 'libjam_vm.so\\nlibjam_vm.so\\n' > \"$3/program.jam/runtime-libraries.txt\" ;;"
-    , " jam-symlink-escape) rm \"$3/program.jam/libjam_vm.so\"; ln -s \"$THC_TEST_NATIVE_LIBRARY\" \"$3/program.jam/libjam_vm.so\" ;;"
-    , " jam-library-mismatch) printf changed >> \"$3/program.jam/libjam_vm.so\" ;;"
+    , " jam-duplicate-manifest) printf 'libjam-vm.so\\nlibjam-vm.so\\n' > \"$3/program.jam/runtime-libraries.txt\" ;;"
+    , " jam-symlink-escape) rm \"$3/program.jam/libjam-vm.so\"; ln -s \"$THC_TEST_NATIVE_LIBRARY\" \"$3/program.jam/libjam-vm.so\" ;;"
+    , " jam-library-mismatch) printf changed >> \"$3/program.jam/libjam-vm.so\" ;;"
     , " jam-missing-legal) rm -r \"$3/program.jam/legal\" ;;"
     , " jam-notice-mismatch) printf changed > \"$3/program.jam/legal/COPYING\" ;;"
-    , " jam-input-change) printf changed >> \"$JAVA_HOME/lib/jam/libjam_vm.so\" ;;"
+    , " jam-input-change) printf changed >> \"$JAVA_HOME/lib/jam/libjam-vm.so\" ;;"
     , "esac"
     ]
+  writeExecutable (root </> "readobj")
+    "#!/bin/sh\nprintf '%s\\n' '[{\"DynamicSection\":[],\"ProgramHeaders\":[],\"DynamicSymbols\":[],\"Sections\":[]}]'\n"
   permissions <- getPermissions recipe
   setPermissions recipe permissions {executable = True}
   bracket (lookupEnv "THC_NATIVE_IMAGE_VECTOR_PROFILE")
     (maybe (unsetEnv "THC_NATIVE_IMAGE_VECTOR_PROFILE") (setEnv "THC_NATIVE_IMAGE_VECTOR_PROFILE")) $ \_ -> do
       unsetEnv "THC_NATIVE_IMAGE_VECTOR_PROFILE"
-      withEnvironment [("JAVA_HOME", jdk), ("THC_LLVM_READOBJ", "/bin/true"),
+      withEnvironment [("JAVA_HOME", jdk), ("THC_LLVM_READOBJ", root </> "readobj"),
         ("THC_TEST_NATIVE_MODE", "success"), ("THC_TEST_NATIVE_ELF", elf),
         ("THC_TEST_NATIVE_LIBRARY", library)] $ action root output manifest

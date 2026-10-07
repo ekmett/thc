@@ -32,6 +32,8 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlphaNum, isAscii)
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import Numeric (showHex)
 import System.Directory
   ( canonicalizePath, copyFileWithMetadata, createDirectory, createDirectoryIfMissing
@@ -75,10 +77,22 @@ validateNativeImage root = do
     found <- findExecutable tool
     maybe (fail ("native image tool missing: " ++ tool)) requireExecutable found
   readobj <- maybe "llvm-readobj" id <$> lookupEnv "THC_LLVM_READOBJ"
-  found <- findExecutable readobj
-  maybe (fail ("native image inspection tool missing: " ++ readobj)) requireExecutable found
+  inspector <- findExecutable readobj >>= maybe (fail ("native image inspection tool missing: " ++ readobj)) pure
+  requireExecutable inspector
+  -- Older llvm-readobj accepts JSON mode but emits plain-text dynamic tables.
+  -- Check the metadata modes used by both hosted capture helpers before acquisition.
+  (inspectionStatus, inspection, inspectionDiagnostic) <- readCreateProcessWithExitCode
+    (proc inspector ["--dynamic-table", "--program-headers", "--dyn-symbols", "--sections",
+      "--elf-output-style=JSON", jdk </> "bin/java"]) ""
+  require (inspectionStatus == ExitSuccess) ("native image ELF inspection failed: " ++ inspectionDiagnostic)
+  case eitherDecodeStrict' (Text.encodeUtf8 (Text.pack inspection)) of
+    Right [Object metadata]
+      | all (hasArray metadata) ["DynamicSection", "ProgramHeaders", "DynamicSymbols", "Sections"] -> pure ()
+    _ -> fail ("native image inspection requires JSON ELF metadata; set THC_LLVM_READOBJ to a compatible llvm-readobj (LLVM 20 is supported): " ++ inspector)
   _ <- nativeProfile
   pure ()
+  where
+    hasArray metadata key = case KM.lookup key metadata of Just (Array _) -> True; _ -> False
 
 -- | Build afresh from an already published component manifest. The caller owns
 -- this component's output directory and manifest closure. Unrelated contents

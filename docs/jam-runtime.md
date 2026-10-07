@@ -13,6 +13,15 @@ The VM, Graal compiler, SubstrateVM, `jam.vm.Weak` API and native collector
 libraries form one versioned dependency. `etc/jam-graalvm.json` records the
 producer revision, upstream source pins, transport digest and unpacked package
 identities. A release/version string alone does not establish compatibility.
+
+The upstream owner is now [ekmett/jam](https://github.com/ekmett/jam), including
+its managed-runtime sources under `vm/`. Its GraalVM CI archive contains the
+complete JVM and Native Image toolchain. THC retains its currently recorded
+package until the consolidated producer and matching runtime checks pass; then
+repository, archive and installation identities move together. The new native
+adapter filenames use `jam-vm` rather than `jam_vm`; runtime library manifests
+continue to determine deployment membership. Durable distribution must preserve
+the qualified package bytes beyond temporary CI artifact retention.
 Ordinary builds consume a prebuilt package through `JAVA_HOME`; they do not
 build a JDK or compiler. Toolchain caching depends on platform and package
 identity, independently of THC sources and Cabal's project file.

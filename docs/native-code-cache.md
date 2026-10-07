@@ -156,8 +156,12 @@ execution: the `resource-copy` profile still uses Java arithmetic fallbacks.
 
 The hosted feature also captures the transitive shared-library dependencies of
 retained package companions. The image host's glibc
-loader selects providers; pinned `llvm-readobj` (or `THC_LLVM_READOBJ`) checks ELF
-metadata. This records image-build selection, not the original acquisition link.
+loader selects providers; `THC_LLVM_READOBJ` (default `llvm-readobj`) checks ELF
+metadata. This inspection needs complete JSON dynamic-table, program-header,
+symbol and section output. LLVM 20 supplies it; LLVM 18 emits mixed text/JSON for
+dynamic tables and is rejected before acquisition. This does not change the
+LLVM 18 tools used to produce package bitcode. Capture records image-build
+selection, not the original acquisition link.
 Provider names, paths and SHA-256 hashes, inspection tools and the system ABI
 libraries appear in `reproduction-inventory/native-libraries.json`. The recipe
 adds provider bytes to detached metadata without rewriting CBD archives.
