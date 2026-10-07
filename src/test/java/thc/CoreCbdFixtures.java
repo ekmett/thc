@@ -69,14 +69,16 @@ public final class CoreCbdFixtures {
             return (Map<String,Object>) snapshot(module);
         } catch (Throwable failure) { return rethrow(failure); }
     }
-    /** Select two genuine roots after the caller verifies the complete fixture inventory. */
+    /** Select genuine roots after the caller verifies the complete fixture inventory. */
     public static Map<String,Object> selectedRoots(List<String> paths, String entry, String secondRoot) {
         var request = (Map<String,Object>) Json.parse(CoreModules.request(paths, entry, false, false,
             "ast", false, true, secondRoot, null, false));
         var selected = CoreModules.selectedModules(request, entry);
         var merger = new CoreModules.Merger();
         for (var module : (List<Map<String,Object>>) selected.get("modules")) merger.addDetached(module);
-        return merger.finish();
+        var linked = merger.finish();
+        linked.put("foreignExceptionBridgeUnit", selected.get("foreignExceptionBridgeUnit"));
+        return linked;
     }
     public record Corpus(TargetLayout targetLayout, List<Map<String,Object>> modules) {
         public TargetLayout getTargetLayout() { return targetLayout; }

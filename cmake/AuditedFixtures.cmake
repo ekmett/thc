@@ -11,7 +11,7 @@ set(audit_inputs ${audit_modules}
   "${PROJECT_SOURCE_DIR}/src/main/resources/thc/core-native-overrides.json"
   "${PROJECT_SOURCE_DIR}/src/test/resources/thc/polyglot-abi.json")
 function(audited_fixture name modules)
-  cmake_parse_arguments(F "" "" "SOURCES;OUTPUTS;OBJECT_DIRS;BYPRODUCTS" ${ARGN})
+  cmake_parse_arguments(F "" "" "SOURCES;OUTPUTS;OBJECT_DIRS;BYPRODUCTS;DEPENDS" ${ARGN})
   set(out "${PROJECT_SOURCE_DIR}/build/${name}")
   set(inputs)
   foreach(source IN LISTS F_SOURCES)
@@ -36,7 +36,7 @@ function(audited_fixture name modules)
   endforeach()
   add_custom_command(OUTPUT ${outputs} BYPRODUCTS ${objects}
     COMMAND ${fixture_env} "${fixtures_exe}" "${name}"
-    DEPENDS ${inputs} ${audit_inputs} ${tool_sources} ${cabal_inputs}
+    DEPENDS ${F_DEPENDS} ${inputs} ${audit_inputs} ${tool_sources} ${cabal_inputs}
       "${fixtures_exe}" "${compact_exe}" ${plugin_outputs} ${toolchain_inputs}
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
     COMMENT "Generate ${name}: named Core, native and audit outputs")
@@ -240,13 +240,72 @@ audited_fixture(thread-label ThreadLabelAudit
   OUTPUTS manifest.json oracle.txt native/oracle pre/core/ThreadLabelAudit.cbd
     post/core/ThreadLabelAudit.cbd ${label_reports})
 
-# 082: explicit weak operations; this does not test GC scheduling.
+# 082: acquire the original runtime library once; both stages consume its
+# declared CBD closure. The production driver owns source/native acquisition.
+set(weak_support "${PROJECT_SOURCE_DIR}/build/weak-explicit/runtime-support")
+file(GLOB_RECURSE weak_runtime_sources CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/src/runtime/*.hs" "${PROJECT_SOURCE_DIR}/src/runtime/*.c"
+  "${PROJECT_SOURCE_DIR}/src/runtime/*.h")
+foreach(package base ghc-internal ghc-prim ghc-bignum)
+  set(pinned "${PROJECT_SOURCE_DIR}/nih/pinned/ghc-9.14.1/libraries/${package}")
+  file(GLOB_RECURSE package_sources CONFIGURE_DEPENDS
+    "${pinned}/*.hs" "${pinned}/*.hs-boot" "${pinned}/*.hsc" "${pinned}/*.cabal"
+    "${pinned}/*.c" "${pinned}/*.h" "${pinned}/*.S" "${pinned}/*.cmm" "${pinned}/*.in")
+  list(APPEND weak_pinned_sources ${package_sources})
+endforeach()
+file(GLOB_RECURSE weak_generated_sources CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/nih/pinned/ghc-9.14.1-generated/*.json"
+  "${PROJECT_SOURCE_DIR}/nih/pinned/ghc-9.14.1-generated/*.hs")
+list(APPEND weak_pinned_sources ${weak_generated_sources})
+foreach(selection THC_CLANG:clang THC_LLVM_LINK:llvm-link THC_LLVM_OPT:opt THC_LLVM_NM:llvm-nm THC_LLVM_OBJCOPY:llvm-objcopy)
+  string(REPLACE ":" ";" selection "${selection}")
+  list(GET selection 0 variable)
+  list(GET selection 1 fallback)
+  if(DEFINED ENV{${variable}})
+    set(fallback "$ENV{${variable}}")
+  endif()
+  unset(selected_tool)
+  if(variable STREQUAL "THC_LLVM_OBJCOPY" AND NOT DEFINED ENV{THC_LLVM_OBJCOPY} AND weak_clang_directory)
+    find_program(selected_tool NAMES llvm-objcopy HINTS "${weak_clang_directory}" NO_DEFAULT_PATH NO_CACHE)
+  endif()
+  if(NOT selected_tool)
+    unset(selected_tool)
+    find_program(selected_tool NAMES "${fallback}" NO_CACHE)
+  endif()
+  if(variable STREQUAL "THC_CLANG" AND selected_tool)
+    get_filename_component(weak_clang_directory "${selected_tool}" DIRECTORY)
+  endif()
+  if(selected_tool)
+    list(APPEND weak_native_tools "${selected_tool}")
+  endif()
+endforeach()
+add_custom_command(OUTPUT "${weak_support}/manifest.json" "${weak_support}/packages.json"
+  COMMAND ${fixture_env} "THC_FIXTURE_DRIVER=${driver_exe}" "${fixtures_exe}" weak-runtime-support
+  DEPFILE "${weak_support}/runtime.d"
+  BYPRODUCTS "${weak_support}/runtime.d"
+    "${weak_support}/logs/runtime-acquisition.stdout"
+    "${weak_support}/logs/runtime-acquisition.stderr"
+    "${weak_support}/logs/runtime-acquisition.command.json"
+  DEPENDS ${weak_runtime_sources} ${weak_pinned_sources} ${weak_native_tools}
+    ${tool_sources} ${cabal_inputs} ${toolchain_inputs} ${plugin_outputs}
+    "${driver_exe}" "${fixtures_exe}" "${interface_exe}"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" VERBATIM
+  COMMENT "Acquire genuine THC weak runtime and retain its declared CBD artifacts")
+set(weak_logs)
+foreach(label ghc-version native-build native-oracle pre-export pre-audit post-export post-audit)
+  foreach(suffix stdout stderr command.json)
+    list(APPEND weak_logs "logs/${label}.${suffix}")
+  endforeach()
+endforeach()
+# Explicit weak operations retain their independent native oracle. GC timing is
+# not inferred from the deterministic composite.
 audited_fixture(weak-explicit WeakAudit
   SOURCES t/fixtures/compiler/WeakAudit.hs
+  DEPENDS "${weak_support}/packages.json" "${weak_support}/manifest.json"
   OBJECT_DIRS native pre/ghc post/ghc
-  OUTPUTS manifest.json NativeWeak.hs oracle.tsv native/weak-oracle
-    pre/core/WeakAudit.cbd pre/core/THC.InterfaceClosure.cbd pre/audit.json
-    post/core/WeakAudit.cbd post/core/THC.InterfaceClosure.cbd post/audit.json)
+  BYPRODUCTS pre/core/THC.InterfaceClosure.cbd post/core/THC.InterfaceClosure.cbd
+  OUTPUTS manifest.json NativeWeak.hs oracle.tsv native/weak-oracle native/inputs.txt ${weak_logs}
+    pre/core/WeakAudit.cbd pre/audit.json post/core/WeakAudit.cbd post/audit.json)
 
 # 083: stable-name equality follows sharing, not native hash values.
 set(stable_reports)

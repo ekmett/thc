@@ -1032,9 +1032,9 @@ class ManagedWeakTest {
         throw new NoSuchElementException("Missing primitive " + name);
     }
     private Map<String, Object> merge(List<String> paths) throws Exception {
-        var modules = new ArrayList<Map<String, Object>>();
-        for (var path : paths) modules.add(thc.CoreCbdFixtures.read(new File(root, path).toPath()));
-        return CoreModules.merge(modules);
+        var inputs = paths.stream().map(path -> path.startsWith("@")
+            ? "@" + new File(root, path.substring(1)).getPath() : new File(root, path).getPath()).toList();
+        return thc.CoreCbdFixtures.selectedRoots(inputs, "main:WeakAudit.weakComposite", null);
     }
     private ExecutableProgram load(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);

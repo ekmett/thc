@@ -624,15 +624,31 @@
     },
     "weak-explicit": {
       "cmakeTarget": "fixture-weak-explicit",
-      "junit": ["thc.runtime.ManagedWeakTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "weak-explicit"]}],
-      "outputs": ["build/weak-explicit"],
+      "junit": [
+        "thc.runtime.ManagedWeakTest"
+      ],
+      "commands": [
+        {
+          "argv": [
+            "sh",
+            "-c",
+            "set -e; \"${CABAL:-cabal}\" build exe:thc exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; THC_FIXTURE_DRIVER=$(\"${CABAL:-cabal}\" list-bin exe:thc --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"); export THC_FIXTURE_DRIVER; fixtures=$(\"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"); \"$fixtures\" weak-runtime-support; \"$fixtures\" weak-explicit"
+          ]
+        }
+      ],
+      "outputs": [
+        "build/weak-explicit"
+      ],
       "sources": [
         "t/fixtures/compiler/WeakAudit.hs",
         "t/haskell-fixtures/WeakFixtures.hs",
         "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs",
-        "thc.cabal"
+        "thc.cabal",
+        "src/runtime/THC/Internal/Weak.hs",
+        "src/runtime/THC/Internal/Exception.hs",
+        "cmake/AuditedFixtures.cmake",
+        "cmake/FixtureTools.cmake"
       ]
     },
     "stable-names": {

@@ -2496,28 +2496,56 @@ Consumer reads receipts/oracle/Core/audits; executable not hashed, no command lo
 Old manifest removed; unexpected old CBDs cause exact directory inventory failure.
 
 082  weak-explicit
-Fixture rationale (082 weak-explicit)
-Purpose: Check explicit weak-pointer/finalizer operations preserve documented state
-  transitions.
-Produces/consumed result: CBDs and oracle.tsv from a bounded model/native comparison.
-Cost and overlap: Keep explicit operations; do not pretend a deterministic arithmetic
-  oracle validates nondeterministic garbage-collection timing. Avoid expanding this into
-  GC scheduling assertions.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
-
+Purpose: Check original explicit weak operations against native GHC; retain the
+  genuine runtime-entered finalizer ABI and its original GHC handler closure.
 Producer: t/haskell-fixtures/WeakFixtures.hs. Consumer: thc.runtime.ManagedWeakTest.
-IN: t/fixtures/compiler/WeakAudit.hs; producer/shared tools/native GHC9.14.1.
+Graph: cmake/AuditedFixtures.cmake owns two operations. Shared fixture tools
+  include the production exe:thc; no separate acquisition framework.
+IN: WeakAudit.hs, thc.cabal/Setup/project configuration, runtime Haskell/C/header
+  sources, driver/compiler/codec/plugin/helper tools, selected GHC9.14.1/Cabal3.16
+  registrations/interfaces/native libraries/headers, native LLVM tools, and pinned
+  base/ghc-internal/ghc-prim/ghc-bignum source/generated inputs.
 Under build/weak-explicit/:
-  NativeWeak.hs -> native/weak-oracle: IN producer template then audit source/native
-    packages; OUT driver,binary,objects. oracle.tsv: IN binary/eight in-memory
-    inputs; OUT native results checked against signed input+58 model.
-  <pre|post>/core/WeakAudit.cbd, THC.InterfaceClosure.cbd: IN source/exporter/
-    weakComposite closure/stage; OUT exact pair/ghc intermediates.
-  <stage>/audit.json: IN pair/auditor; OUT report.
-  manifest.json: IN driver/TSV/CBD/audits/source receipt; OUT hashes; old removed.
-Consumer reads receipts/oracle/CBDs/reports. Executable not hashed; no command logs.
-Explicit weak operations only; this fixture does not demonstrate GC finalization.
+  runtime-support/acquisition/*: normal THC acquisition owns
+    `thc build thc:lib:runtime --installed-core pinned --verify-artifacts`, including
+    its Cabal/native products. Source-keyed bundles reuse the ordinary production
+    cache resolved by THC.Driver.Cache (including an explicit THC_CACHE_HOME). They are not
+    fixture transfer inputs and are never enumerated to discover executable CBDs.
+  runtime-support/modules/<declared-unit>/<declared-module>.cbd: IN freshly
+    acquired packages.json records; OUT unchanged hash-checked original CBD copies.
+  runtime-support/packages.json: IN original acquired manifest; OUT same exact
+    runtime selection/dependency metadata with declared retained compact paths.
+  runtime-support/logs/runtime-acquisition.{stdout,stderr,command.json}: OUT command
+    evidence. runtime-support/manifest.json: IN runtime/producer source hashes,
+    selected compiler ABI, driver/acquisition identity, package records and every
+    retained/log/depfile artifact; OUT exact artifact inventory. runtime.d declares the
+    retained CBD and exact receipt source dependencies so deletion/change causes
+    producer regeneration. Log triplets are declared CMake byproducts.
+  NativeWeak.hs -> native/weak-oracle: IN original template/source/native GHC;
+    OUT driver/binary/objects. native/inputs.txt contains eight fixed inputs;
+    oracle.tsv checks independent signed input+58 observations.
+  <pre|post>/core/WeakAudit.cbd: IN original source/plugin/stage options; OUT genuine
+    CBD. THC.InterfaceClosure.cbd remains an exporter byproduct and is not loaded.
+  <stage>/audit.json: IN WeakAudit.cbd plus declared runtime-support/packages.json;
+    OUT strict report for weakComposite and the exact selected runWeakFinalizer
+    root. Original GHC dependencies come from this package closure, avoiding
+    duplicate interface-closure owners. logs/* records version/native/export/audit
+    commands and failures. manifest.json is removed after support verification,
+    before native/export operations, and hashes
+    all consumed products, including the native oracle and retained runtime CBDs.
+Consumer verifies receipt/native observations and selects genuine reachable roots
+  through the normal package loader; selectedRoots preserves the runtime owner.
+Transfer accepts only the stable output set and each manifest-declared unit/module
+  CBD with matching hash; it rejects cache discovery, missing and extra files.
+  The existing cache identity includes the canonical workspace. Original package
+  paths and runtime.d are preserved byte-for-byte; a moved checkout is a cache
+  miss before any restore writes. Cross-root rebasing/portability is not supported.
+Cost: One production runtime acquisition for both stages reuses the ordinary
+  content-keyed cache; a cold pinned provider can rebuild full boot libraries.
+  Current component selection and retention cover whole dependency units, and
+  the auditor decodes every supplied module. This cost is not execution-qualified.
+  Acquisition is not runtime/compilation/GC
+  evidence, and the arithmetic oracle does not demonstrate GC finalization.
 
 083  stable-names
 Fixture rationale (083 stable-names)

@@ -82,6 +82,44 @@ class FastInputTests(unittest.TestCase):
             self.assertEqual(0o755, cache.safe_mode(0o755, native))
             self.assertFalse(cache.allowed_payload(native + "-unknown"))
 
+    def test_weak_runtime_inventory_follows_declared_cbd_owners(self):
+        root = Path('/fixture-workspace')
+        folder = 'build/weak-explicit/runtime-support'
+        unit = 'thc-0.1.0.0-runtime-inplace'
+        modules = ['THC.Internal.Exception', 'THC.Internal.Weak']
+        refs = [{'name': name, 'compact': {'path': str(root / folder / 'modules' / unit / (name + '.cbd')),
+                  'sha256': 'a' * 64, 'format': 'thc-cbd-v1'}} for name in modules]
+        artifacts = {name: 'a' * 64 for name in cache.WEAK_RUNTIME_OUTPUTS - {folder + '/manifest.json'}}
+        artifacts.update({str(Path(ref['compact']['path']).relative_to(root)): 'a' * 64 for ref in refs})
+        receipt = dict(schema=1, ghc='9.14.1', runtimeUnit=unit,
+                       packages=dict(format='thc-core-packages', schema=1, ghc='9.14.1',
+                                     foreignExceptionBridgeUnit=unit, units=[dict(id=unit, depends=[], modules=refs)]),
+                       artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.weak_runtime_artifact_hashes(receipt, root))
+        for name in artifacts:
+            self.assertTrue(cache.allowed_payload(name), name)
+        for changes in (dict(runtimeUnit='wrong-owner'), dict(artifactHashes={}),
+                        dict(artifactHashes=dict(artifacts, **{folder + '/modules/' + unit + '/Cold.cbd': 'a' * 64}))):
+            with self.assertRaises(cache.CacheMiss):
+                cache.weak_runtime_artifact_hashes(dict(receipt, **changes), root)
+        for product in cache.WEAK_RUNTIME_OUTPUTS - {folder + '/manifest.json'}:
+            incomplete = dict(artifacts)
+            del incomplete[product]
+            with self.assertRaises(cache.CacheMiss, msg=product):
+                cache.weak_runtime_artifact_hashes(dict(receipt, artifactHashes=incomplete), root)
+        forged = copy.deepcopy(receipt)
+        forged['packages']['units'][0]['modules'][0]['compact']['path'] = str(root / 'build/discovered/THC.Internal.Exception.cbd')
+        with self.assertRaises(cache.CacheMiss):
+            cache.weak_runtime_artifact_hashes(forged, root)
+        duplicated = copy.deepcopy(receipt)
+        duplicated['packages']['units'][0]['modules'].append(refs[0])
+        with self.assertRaises(cache.CacheMiss):
+            cache.weak_runtime_artifact_hashes(duplicated, root)
+        for name in (folder + '/cache/warmed.cbd', folder + '/modules/' + unit + '/Cold.json'):
+            self.assertFalse(cache.allowed_payload(name), name)
+        with self.assertRaises(cache.CacheMiss):
+            cache.allowed_payload(folder + '/modules/../Cold.cbd')
+
     def test_publication_receipt_keeps_zip_members_inside_the_hashed_source(self):
         receipt = {"source": {"path": "build/interface-core/installed/bundles/unit.zip", "sha256": "a" * 64},
                    "modules": [{"path": "core/Original.cbd", "sha256": "b" * 64}],
@@ -1299,6 +1337,30 @@ class FastInputTests(unittest.TestCase):
         p = self.root / "build/data-to-tag/oracle.tsv"; before = p.stat().st_mtime_ns
         cache.restore(self.root, self.current, self.bundle)
         self.assertEqual(before, p.stat().st_mtime_ns)
+
+    def test_weak_depfile_restore_requires_original_canonical_workspace(self):
+        depfile = 'build/weak-explicit/runtime-support/runtime.d'
+        original = (str(self.root / 'build/weak-explicit/runtime-support/manifest.json') + ': ' +
+                    str(self.root / 'CMakeLists.txt') + '\n').encode()
+        self.put(depfile, original)
+        self.manifest['artifactHashes'][depfile] = cache.sha(original)
+        self.write_manifest()
+        manifest = self.pack()
+        self.remove_payload(manifest)
+        moved = self.temp_root / 'moved-workspace'
+        self.root.rename(moved)
+        current = cache.identity(moved)
+        self.assertEqual(self.current['sources'], current['sources'])
+        self.assertNotEqual(cache.cache_key(self.current), cache.cache_key(current))
+        before = {str(path.relative_to(moved)): path.read_bytes() for path in moved.rglob('*') if path.is_file()}
+        with self.assertRaisesRegex(cache.CacheMiss, 'workspace identity mismatch'):
+            cache.restore(moved, current, self.bundle)
+        after = {str(path.relative_to(moved)): path.read_bytes() for path in moved.rglob('*') if path.is_file()}
+        self.assertEqual(before, after)
+        self.assertFalse((moved / depfile).exists())
+        moved.rename(self.root)
+        cache.restore(self.root, self.current, self.bundle)
+        self.assertEqual(original, (self.root / depfile).read_bytes())
 
     def test_compiled_primop_source_changes_invalidate_fixture_identity(self):
         name = "src/tools/primops/PrimopTools.hs"

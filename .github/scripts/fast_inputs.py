@@ -145,10 +145,17 @@ IO_MAIN_PAP_OUTPUTS = frozenset("build/io-main-pap/" + name for name in (
     *(f"{stage}/core/{module}.{extension}" for stage in ("pre", "post")
       for module in ("IoMainPapAudit", "THC.InterfaceClosure") for extension in ("cbd",)),
     *(f"{stage}/{entry}-audit.json" for stage in ("pre", "post") for entry in ("goodMain", "badMain"))))
+WEAK_RUNTIME_OUTPUTS = frozenset("build/weak-explicit/runtime-support/" + name for name in (
+    "packages.json", "manifest.json", "runtime.d",
+    *(f"logs/runtime-acquisition.{suffix}" for suffix in ("stdout", "stderr", "command.json"))))
 WEAK_OUTPUTS = frozenset("build/weak-explicit/" + name for name in (
-    "manifest.json", "oracle.tsv", "NativeWeak.hs",
+    "manifest.json", "oracle.tsv", "NativeWeak.hs", "native/weak-oracle", "native/inputs.txt",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/WeakAudit.cbd", "core/THC.InterfaceClosure.cbd", "audit.json"))))
+      for suffix in ("core/WeakAudit.cbd", "audit.json")),
+    *(f"logs/{label}.{suffix}" for label in
+      ("ghc-version", "native-build", "native-oracle", "pre-export", "pre-audit", "post-export", "post-audit")
+      for suffix in ("stdout", "stderr", "command.json")))) | WEAK_RUNTIME_OUTPUTS
+WEAK_RUNTIME_CBD = re.compile(r"build/weak-explicit/runtime-support/modules/[A-Za-z0-9_.+-]+/[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*\.cbd\Z")
 MASK_FUNCTION_ENTRIES = ("maskedFunction", "unmaskedFunction", "uninterruptibleFunction", "lazyFunctions", "bareMasks")
 MASK_FUNCTION_OUTPUTS = frozenset("build/mask-functions/" + name for name in (
     "manifest.json", "native/oracle",
@@ -1147,6 +1154,51 @@ def original_fstatat_artifact_hashes(manifest):
     return artifacts
 
 
+def weak_runtime_artifact_hashes(manifest, root):
+    """Retain only the original CBDs declared by this runtime acquisition."""
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1", "Invalid weak runtime receipt")
+    packages = manifest.get("packages")
+    runtime = manifest.get("runtimeUnit")
+    require(isinstance(packages, dict) and packages.get("format") == "thc-core-packages" and
+            type(packages.get("schema")) is int and packages["schema"] == 1 and packages.get("ghc") == "9.14.1" and isinstance(runtime, str) and
+            packages.get("foreignExceptionBridgeUnit") == runtime, "Invalid weak runtime package selection")
+    units = packages.get("units")
+    require(isinstance(units, list), "Missing weak runtime units")
+    names, owners, expected = {}, set(), {}
+    for unit in units:
+        require(isinstance(unit, dict) and isinstance(unit.get("id"), str) and unit["id"] not in ("", ".", "..") and unit["id"] not in owners and
+                not any(key in unit for key in ("bundle", "interfaceSource", "json", "symbols")),
+                "Invalid or duplicate retained runtime unit")
+        owners.add(unit["id"])
+        modules = unit.get("modules")
+        require(isinstance(modules, list), "Missing declared runtime modules")
+        names[unit["id"]] = set()
+        for module in modules:
+            require(isinstance(module, dict) and isinstance(module.get("name"), str) and
+                    module["name"] not in names[unit["id"]], "Invalid or duplicate retained runtime module")
+            names[unit["id"]].add(module["name"])
+            ref = module.get("compact")
+            require(isinstance(ref, dict) and ref.get("format") == "thc-cbd-v1" and
+                    isinstance(ref.get("sha256"), str) and HEX.fullmatch(ref["sha256"]), "Invalid retained runtime CBD")
+            path = "build/weak-explicit/runtime-support/modules/" + unit["id"] + "/" + module["name"] + ".cbd"
+            require(WEAK_RUNTIME_CBD.fullmatch(path) and ref.get("path") == str(root / path),
+                    "Runtime CBD is not owned by its declared unit/module")
+            expected[path] = ref["sha256"]
+    require({"THC.Internal.Exception", "THC.Internal.Weak"} <= names.get(runtime, set()),
+            "Selected runtime lacks its original bridge or finalizer ABI module")
+    for unit in units:
+        require(isinstance(unit.get("depends"), list) and all(dependency in owners for dependency in unit["depends"]),
+                "Retained runtime has an unowned dependency")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == set(expected) |
+            (WEAK_RUNTIME_OUTPUTS - {"build/weak-explicit/runtime-support/manifest.json"}),
+            "Incomplete/unreviewed weak runtime artifact inventory")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()) and
+            all(artifacts[path] == value for path, value in expected.items()), "Invalid weak runtime artifact hashes")
+    return artifacts
+
+
 def command(argv, root):
     return subprocess.check_output(list(map(str, argv)), cwd=root, text=True).strip()
 
@@ -1219,7 +1271,7 @@ def toolchain(root):
 
 def identity(root):
     tracked = tracked_files(root)
-    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/core/", "t/fixtures/retained-core/", "t/fixtures/package-roots/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
+    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/core/", "t/fixtures/retained-core/", "t/fixtures/package-roots/", "nih/pinned/", "etc/", "src/core-symbols/", "src/runtime/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
     sources.update(name for name in tracked if name.startswith("cmake/"))
     sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS,
                     "CMakeLists.txt", ".github/scripts/fast_fixtures.py", ".github/scripts/fast-fixtures.json",
@@ -1490,7 +1542,7 @@ def allowed_payload(name):
     if parts[1] == "io-main-pap":
         return name in IO_MAIN_PAP_OUTPUTS
     if parts[1] == "weak-explicit":
-        return name in WEAK_OUTPUTS
+        return name in WEAK_OUTPUTS or WEAK_RUNTIME_CBD.fullmatch(name) is not None
     if parts[1] == "mask-functions":
         return name in MASK_FUNCTION_OUTPUTS
     if parts[1] == "proxy-void":
@@ -1647,6 +1699,11 @@ def hashes_in(value, tc):
                 else:
                     yield from hashes_in(unit.get("modules", []), tc)
             return
+        if isinstance(value.get("compact"), dict):
+            # Ready CBD records retain an original ZIP-member path for provenance;
+            # only their concrete compact reference is a filesystem dependency.
+            yield from hashes_in(value["compact"], tc)
+            return
         if "path" in value and "sha256" in value:
             yield value["path"], value["sha256"]
         for stem in ("ghcBinary", "ghcLauncher"):
@@ -1728,6 +1785,13 @@ def inventory(root, current, read, core_files, verified=None):
             paths = [record.get("path") for record in records]
             require(len(paths) == len(set(paths)) and set(paths) == IO_MAIN_PAP_OUTPUTS - {name},
                     "Incomplete/unreviewed IO-main PAP artifacts")
+        if name == "build/weak-explicit/runtime-support/manifest.json":
+            weak_runtime_artifact_hashes(doc, root)
+        if name == "build/weak-explicit/manifest.json":
+            artifacts = doc.get("artifactHashes")
+            require(isinstance(artifacts, dict) and WEAK_OUTPUTS - {name} <= set(artifacts) and
+                    all(path in WEAK_OUTPUTS or WEAK_RUNTIME_CBD.fullmatch(path) for path in artifacts),
+                    "Incomplete/unreviewed weak fixture artifacts")
         if name == "build/mask-functions/manifest.json":
             artifacts = doc.get("artifactHashes")
             require(isinstance(artifacts, dict) and set(artifacts) == MASK_FUNCTION_OUTPUTS - {name},
