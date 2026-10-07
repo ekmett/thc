@@ -1031,9 +1031,12 @@ class ManagedWeakTest {
         throw new NoSuchElementException("Missing primitive " + name);
     }
     private Map<String, Object> merge(List<String> paths) throws Exception {
+        return merge(paths, "main:WeakAudit.weakComposite");
+    }
+    private Map<String, Object> merge(List<String> paths, String entry) throws Exception {
         var inputs = paths.stream().map(path -> path.startsWith("@")
             ? "@" + new File(root, path.substring(1)).getPath() : new File(root, path).getPath()).toList();
-        return thc.CoreCbdFixtures.selectedRoots(inputs, "main:WeakAudit.weakComposite", null);
+        return thc.CoreCbdFixtures.selectedRoots(inputs, entry, null);
     }
     private ExecutableProgram load(Language language, Map<String, Object> module, String backend) {
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
@@ -1141,6 +1144,35 @@ class ManagedWeakTest {
                     }
                 }
         }
+    }
+    @Test
+    void publicWeakAutomaticFinalizerWithBackedgesAndDroppedHandleAgreesWithNativeGhc() throws Exception {
+        var manifest = json(new File(directory, "manifest.json"));
+        for (var kind : List.of("inputHashes", "artifactHashes"))
+            for (var item : ((Map<String, String>) manifest.get(kind)).entrySet())
+                assertEquals(item.getValue(), digest(new File(root, item.getKey())),
+                    "Stale automatic weak fixture: " + item.getKey());
+        long input = ((Number) manifest.get("automaticInput")).longValue();
+        long expected = ((Number) manifest.get("automaticResult")).longValue();
+        assertEquals(42L, input);
+        assertEquals(input, expected);
+        var entry = "main:WeakAudit.weakAutomatic";
+        var paths = ((Map<String, List<String>>) manifest.get("stages")).get("post");
+        var merged = merge(paths, entry);
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+                context.initialize("thc");
+                context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var module = CoreModules.reachable(merged, entry, true);
+                    var program = load(language, module, backend);
+                    var function = context.asValue(new EntryValue(program, entry, 1));
+                    assertEquals(expected, function.execute(input).asLong(), "post/" + backend + " automatic finalizer");
+                    assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
+                } finally {
+                    context.leave();
+                }
+            }
     }
     @Test
     void genuineNativeCompositeAgreesOnTheFirstInstalledAstAndBytecodeCalls() throws Exception {

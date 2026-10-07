@@ -2,11 +2,11 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 -- Fixture rationale (082 weak-explicit)
--- Purpose: Check explicit weak-pointer/finalizer operations against native GHC.
+-- Purpose: Check weak-pointer/finalizer laws against independent native GHC.
 -- Consumes: Original WeakAudit, genuine thc:runtime and its GHC dependency CBDs.
 -- Produces: Declared runtime support, pre/post CBDs, audits and native observations.
 -- Cost: Acquire runtime support once for both stages through the production driver.
---   The deterministic oracle does not establish GC scheduling behavior.
+--   Explicit results and one bounded automatic-finalizer law share the oracle.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 082.
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -50,7 +50,9 @@ nativeDriver = unlines
   ["{-# LANGUAGE MagicHash #-}", "module Main where", "import GHC.Exts (Int(I#))",
    "import qualified WeakAudit as P", "emit :: Int -> IO ()",
    "emit input@(I# raw) = putStrLn (show input ++ \"\\t\" ++ show (I# (P.weakComposite raw)))",
-   "main :: IO ()", "main = getContents >>= mapM_ (emit . read) . lines"]
+   "main :: IO ()", "main = do",
+   "  getContents >>= mapM_ (emit . read) . lines",
+   "  putStrLn (\"automatic\\t42\\t\" ++ show (I# (P.weakAutomatic 42#)))"]
 
 -- Source traversal only. Executable artifact inventories come from the producer
 -- manifest, never a listing of cache or export directories.
@@ -124,7 +126,7 @@ prepareWeakRuntime root = do
     ownerId _ = Nothing
 
 -- | Compile the original weak source, audit its real runtime closure, and compare
--- explicit operation results with the independent native GHC oracle.
+-- explicit and automatic operation results with the independent native GHC oracle.
 prepareWeaks :: FilePath -> IO ()
 prepareWeaks root = do
   let output = root </> directory
@@ -155,14 +157,23 @@ prepareWeaks root = do
   observed <- runLoggedWithInput requests 30 root (directory </> "logs") "native-oracle" []
     (root </> executable) []
   let observations = BS.unpack (commandStdout observed)
-      rows = map words (lines observations)
+      observationLines = lines observations
+      explicitLines = take (length values) observationLines
+      rows = map words explicitLines
+      automatic = case drop (length values) observationLines of
+        [line] -> case words line of
+          ["automatic", input, result] -> (,) <$> readInteger input <*> readInteger result
+          _ -> Nothing
+        _ -> Nothing
       parsed = traverse (\fields -> case fields of
         [input, result] -> (,) <$> readInteger input <*> readInteger result
         _ -> Nothing) rows
       signed n = (n + 2 ^ (63 :: Int)) `mod` 2 ^ (64 :: Int) - 2 ^ (63 :: Int)
   unless (parsed == Just [(input, signed (input + 58)) | input <- values]) $
     die ("Native explicit weak contract mismatch: " ++ observations)
-  writeFile (root </> oracle) observations
+  unless (automatic == Just (42, 42)) $
+    die ("Native automatic weak contract mismatch: " ++ observations)
+  writeFile (root </> oracle) (unlines explicitLines)
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
@@ -170,9 +181,10 @@ prepareWeaks root = do
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-        ["-fplugin-opt=THC.Plugin:closure=weakComposite", source])
+        ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- ["weakComposite", "weakAutomatic"]] ++ [source])
     audited <- execute (stage ++ "-audit") [] "python3" ["bin/audit-core.py", "--package-manifest", supportPackages,
-      "--entry", "main:WeakAudit.weakComposite", "--entry", runtime ++ ":THC.Internal.Weak.runWeakFinalizer",
+      "--entry", "main:WeakAudit.weakComposite", "--entry", "main:WeakAudit.weakAutomatic",
+      "--entry", runtime ++ ":THC.Internal.Weak.runWeakFinalizer",
       "--output", stageDir </> "audit.json", core </> "WeakAudit.cbd"]
     pure (stage, modules, [exported, audited])
   plugin <- listDirectory (root </> "src/compiler/THC")
@@ -192,5 +204,6 @@ prepareWeaks root = do
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entry" .= ("weakComposite" :: String), "stages" .= Map.fromList [(stage, modules) | (stage, modules, _) <- stages],
     "runtimeSupport" .= supportManifest, "runtimeUnit" .= runtime, "nativeRows" .= length rows,
+    "automaticInput" .= (42 :: Int), "automaticResult" .= (42 :: Int),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn ("weak-explicit: " ++ show (length rows) ++ " native observations, original runtime closure, pre/post strict audits; no GC timing oracle")
+  putStrLn ("weak-explicit: " ++ show (length rows) ++ " explicit observations and one bounded automatic-finalizer law, original runtime closure, pre/post strict audits")

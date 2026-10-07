@@ -14,7 +14,13 @@
 -- Compiler fixture for weak audit Core and metadata.
 module WeakAudit where
 
+import Control.Concurrent (MVar, newEmptyMVar, putMVar, threadDelay, tryTakeMVar)
+import Control.Exception (evaluate)
+import Data.IORef (IORef, newIORef, readIORef)
 import GHC.Exts
+import GHC.IO (IO(..))
+import System.Mem (performGC)
+import qualified System.Mem.Weak as Weak
 
 {-# OPAQUE bottom #-}
 bottom :: a
@@ -52,3 +58,49 @@ weakComposite input = runRW# (\s0 ->
     (dead *# 1013#) +# (repeated *# 1019#) +# (independent *# 7#) +# (unlifted *# 11#) +#
     (absent *# 1021#) +# (plainDead *# 1031#) +# (lazyLive *# 13#) +# (lazyClaimed *# 17#)
   } } } } } } } } } } } } } } } } } } } })
+
+-- A boxed key is independently unreachable after registration returns. Both
+-- conditional value and finalizer retain it, and the weak handle is discarded.
+-- The caller retains only the signal. OPAQUE prevents projecting the IORef out
+-- of the finalizer's key capture. WHNF here keeps this law separate from the
+-- completed-thunk retargeting regression.
+data WeakKey = WeakKey (IORef Int)
+
+{-# OPAQUE readWeakKey #-}
+readWeakKey :: WeakKey -> IO Int
+readWeakKey (WeakKey cell) = readIORef cell
+
+{-# OPAQUE registerAutomaticWeak #-}
+registerAutomaticWeak :: Int -> MVar Int -> IO ()
+registerAutomaticWeak input signal = do
+  cell <- newIORef input
+  key <- evaluate (WeakKey cell)
+  _ <- Weak.mkWeak key (key, ()) (Just (readWeakKey key >>= putMVar signal))
+  pure ()
+
+-- Collection and scheduling need not finish in one pass. A bounded sequence
+-- gives both native GHC and Jam the same observable law and a visible failure.
+{-# OPAQUE awaitAutomaticWeak #-}
+awaitAutomaticWeak :: Int -> MVar Int -> IO Int
+awaitAutomaticWeak remaining signal
+  | remaining == 0 = error "automatic weak finalizer did not signal"
+  | otherwise = do
+      performGC
+      result <- tryTakeMVar signal
+      case result of
+        Just value -> pure value
+        Nothing -> threadDelay 10000 >> awaitAutomaticWeak (remaining - 1) signal
+
+{-# OPAQUE automaticWeakLaw #-}
+automaticWeakLaw :: Int -> IO Int
+automaticWeakLaw input = do
+  signal <- newEmptyMVar
+  registerAutomaticWeak input signal
+  awaitAutomaticWeak 2000 signal
+
+{-# OPAQUE weakAutomatic #-}
+weakAutomatic :: Int# -> Int#
+weakAutomatic input = runRW# $ \state ->
+  case automaticWeakLaw (I# input) of
+    IO action -> case action state of
+      (# _, I# result #) -> result
