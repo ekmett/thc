@@ -230,7 +230,8 @@ if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then
 fi
 # Jam owns a fixed runtime heap per isolate. Keep its supported defaults; the
 # builder heap above is independent of the executable's collector capacity.
-exec "$JAVA_HOME/bin/native-image" --gc=jam -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcessorCount=2 --parallelism=2 \
+# Native Image sanitizes its builder environment; preserve the selected inspector.
+exec "$JAVA_HOME/bin/native-image" "-ETHC_LLVM_READOBJ=${THC_LLVM_READOBJ:-llvm-readobj}" --gc=jam -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcessorCount=2 --parallelism=2 \
     "${builder_patch[@]}" "${foreign_patch[@]}" "${vector_feature_exports[@]}" \
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
