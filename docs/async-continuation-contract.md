@@ -152,8 +152,12 @@ does not make an arbitrary AST caller or opaque Java frame resumable.
 BCO instruction positions, operand stacks and pending applications survive
 one-shot asynchronous and stack cuts; see [GHC bytecode objects](ghc-bco.md).
 Explicit delimited capture through BCO frames and opaque foreign execution
-remain barriers. A new delimited capture across a parked one-shot caller chain
-also rejects; ordinary saved-suffix recapture has a different contract.
+remain barriers. A fresh AST capture traverses the exact saved caller scopes,
+allowing a matching inner prompt to handle it before a thunk update. Reaching a
+thunk update rejects capture and publishes the failure through its parked
+parents without replaying their suffixes. The driver validates each parked
+caller's identity before forwarding capture. A yielded capture marker is not
+an AST resume point; parked bytecode invocation recapture remains unsupported.
 
 Internal stack cuts preserve the active [STM](stm.md) attempt. External
 interruption retires its old transaction log before propagating the original

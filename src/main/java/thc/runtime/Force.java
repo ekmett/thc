@@ -169,8 +169,9 @@ public final class Force extends Node {
     }
 
     private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics) {
+        boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;
         while (true) {
-            switch (original.getState()) {
+            if (!capturing) switch (original.getState()) {
                 case 2 -> { if (metrics.getEnabled()) metrics.incrementThunkHits(); return original.getValue(); }
                 case 3 -> throw rethrowFailure(original);
                 case 4 -> throw fault("Interrupted thunk has no resumable continuation");
@@ -180,6 +181,8 @@ public final class Force extends Node {
             try {
                 int claim;
                 synchronized (original.getMonitor()) {
+                    if (capturing && (observed == null || original.getState() != 5 || original.getValue() != observed.getIdentity()))
+                        throw fault("Delimited capture lost its exact parked caller");
                     switch (original.getState()) {
                         case 0 -> {
                             original.setOwner(Thread.currentThread()); original.setState(1); claimedHere = true; claim = 0;
@@ -269,13 +272,13 @@ public final class Force extends Node {
                         throw suspension;
                     }
                 } catch (DelimitedCut cut) {
-                    if (!delimitedInvocation) throw cut;
-                    if (!(current instanceof CallSegment) || !(expected instanceof AstContinuation || expected instanceof AstStackContinuation))
+                    if (delimitedInvocation && (!(current instanceof CallSegment) || !(expected instanceof AstContinuation || expected instanceof AstStackContinuation)))
                         throw new UnsupportedCore("control0# cannot recapture this parked invocation");
+                    if (parked.isEmpty()) throw cut;
                     // Abort through each exact private caller, leaf first. Its
                     // consumed child edge throws before running the saved suffix.
                     outcome = new ChildResume(null, cut);
-                } catch (GuestException | STMRetry | STMConflict | STMRestart failure) {
+                } catch (GuestException | RuntimeFault | STMRetry | STMConflict | STMRestart failure) {
                     outcome = new ChildResume(null, failure);
                 } catch (AsyncDelivery failure) {
                     if (!drainSpills) throw failure;

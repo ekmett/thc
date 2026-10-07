@@ -186,6 +186,161 @@ class ResumableThunkProofTest {
         }
     }
 
+    @Test void resumedCallCapturePublishesFailureThroughParkedThunkParents() throws Exception {
+        for (boolean bytecodeParent : new boolean[]{false, true}) {
+            try (var context = Main.executionContext(false)) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var effects = new AtomicInteger(); var suffixes = new AtomicInteger();
+                    var shape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, false, false, java.util.List.of(),
+                        java.util.List.of(new CoreRepresentation(CoreKind.VOID, false, false, java.util.List.of())),
+                        null, null, null, null), language);
+                    var leaf = new GuestRoot(language, new FrameLayout().build()) {
+                        @Override public long bloom(VirtualFrame frame) { return 0; }
+                        @Override public Object execute(VirtualFrame frame) {
+                            effects.incrementAndGet();
+                            return new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> {
+                                assertSame(Unit.INSTANCE, input);
+                                assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this));
+                                throw new DelimitedCut(new PromptTag(Language.currentState(this)), null, shape,
+                                    SynchronousMasking.current(this), this);
+                            }).freeze(this, frame.materialize());
+                        }
+                    };
+                    class Caller extends GuestRoot {
+                        private final RootCallTarget child;
+                        Caller(RootCallTarget child) { super(language, new FrameLayout().build()); this.child = child; }
+                        @Override public long bloom(VirtualFrame frame) { return 0; }
+                        @Override public Object execute(VirtualFrame frame) {
+                            effects.incrementAndGet();
+                            try { return AstControl.completeCallback(this, Calls.target(child, new Object[]{0L}), child, null, false); }
+                            catch (AstCapture cut) { return cut.append((saved, input) -> { suffixes.incrementAndGet(); return input; }).freeze(this, frame.materialize()); }
+                        }
+                    }
+                    var middle = new Caller(leaf.getCallTarget());
+                    var inner = new Thunk(new Caller(middle.getCallTarget()).getCallTarget(), null);
+                    var driver = new Driver();
+                    var gate = new ThunkYieldProofRoot.Gate();
+                    var astParent = new GuestRoot(language, new FrameLayout().build()) {
+                        @Child private Force force = new Force(new Metrics(false));
+                        @Override public long bloom(VirtualFrame frame) { return 0; }
+                        @Override public Object execute(VirtualFrame frame) {
+                            effects.incrementAndGet();
+                            try { return AstControl.forceCallback(frame, this, force, inner); }
+                            catch (AstCapture cut) {
+                                return cut.enclose(steps -> (saved, input) -> {
+                                    try { return AstContinuations.resumeAstSteps(saved, steps, input); }
+                                    catch (RuntimeFault failure) {
+                                        gate.entered.countDown();
+                                        try { assertTrue(gate.release.await(5, TimeUnit.SECONDS)); }
+                                        catch (InterruptedException interrupted) { throw new AssertionError(interrupted); }
+                                        throw failure;
+                                    }
+                                }).append((saved, input) -> { suffixes.incrementAndGet(); return input; }).freeze(this, frame.materialize());
+                            }
+                        }
+                    };
+                    var outerEffects = new AtomicInteger();
+                    var outer = new Thunk(bytecodeParent ? ThunkYieldProofRoot.caller(language, inner, outerEffects) : astParent.getCallTarget(), null);
+                    SynchronousMasking.set(leaf, MaskingState.MASKED_INTERRUPTIBLE);
+                    assertSame(outer, assertThrows(ThunkSuspended.class, () -> driver.force(outer)).getThunk());
+                    assertEquals(5, inner.getState()); assertEquals(5, outer.getState());
+                    var outerSaved = SavedGuestContinuations.savedGuestContinuation(outer.getValue());
+                    var innerSaved = SavedGuestContinuations.savedGuestContinuation(inner.getValue());
+                    int before = effects.get();
+                    SynchronousMasking.set(leaf, MaskingState.MASKED_UNINTERRUPTIBLE);
+                    RuntimeFault failure;
+                    if (bytecodeParent) failure = assertThrows(RuntimeFault.class, () -> driver.force(outer));
+                    else try (var pool = Executors.newFixedThreadPool(2)) {
+                        var evaluator = pool.submit(() -> entered(context, () -> {
+                            SynchronousMasking.set(leaf, MaskingState.MASKED_UNINTERRUPTIBLE);
+                            var result = assertThrows(RuntimeFault.class, () -> driver.force(outer));
+                            assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(leaf));
+                            return result;
+                        }));
+                        assertTrue(gate.entered.await(5, TimeUnit.SECONDS));
+                        assertEquals(1, outer.getState());
+                        var waiting = new CountDownLatch(1);
+                        var reader = pool.submit(() -> entered(context, () -> {
+                            waiting.countDown(); return assertThrows(RuntimeFault.class, () -> driver.force(outer));
+                        }));
+                        assertTrue(waiting.await(5, TimeUnit.SECONDS));
+                        try { assertThrows(TimeoutException.class, () -> reader.get(50, TimeUnit.MILLISECONDS)); }
+                        finally { gate.release.countDown(); }
+                        failure = evaluator.get(5, TimeUnit.SECONDS);
+                        assertSame(failure, reader.get(5, TimeUnit.SECONDS));
+                    }
+                    assertEquals("control0# cannot capture across a thunk update", failure.getMessage());
+                    assertEquals(3, inner.getState()); assertEquals(3, outer.getState());
+                    assertSame(failure, inner.getValue()); assertSame(failure, outer.getValue());
+                    assertNull(inner.getOwner()); assertNull(outer.getOwner());
+                    if (!bytecodeParent) assertThrows(RuntimeFault.class, () -> outerSaved.continueWith(Unit.INSTANCE));
+                    assertThrows(RuntimeFault.class, () -> innerSaved.continueWith(Unit.INSTANCE));
+                    assertSame(failure, assertThrows(RuntimeFault.class, () -> driver.force(outer)));
+                    assertEquals(before, effects.get()); assertEquals(bytecodeParent ? 1 : 0, outerEffects.get());
+                    assertEquals(0, suffixes.get());
+                    assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(leaf));
+                    assertEquals(0, AstStacks.astStackScope(leaf).getDepth());
+                    try (var pool = Executors.newSingleThreadExecutor()) {
+                        assertSame(failure, pool.submit(() -> entered(context,
+                            () -> assertThrows(RuntimeFault.class, () -> driver.force(outer)))).get(5, TimeUnit.SECONDS));
+                    }
+                } finally { context.leave(); }
+            }
+        }
+    }
+
+    @Test void promptInsideResumedThunkHandlesCaptureBeforeItsUpdate() {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var marker = new Object(); var effects = new AtomicInteger(); var handlers = new AtomicInteger();
+                var state = new CoreRepresentation(CoreKind.VOID, false, false, java.util.List.of());
+                var value = new CoreRepresentation(CoreKind.OBJECT, false, false, java.util.List.of("BoxedRep (Just Lifted)"));
+                var shape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, false, false, value.getPrimReps(),
+                    java.util.List.of(state, value), null, null, null, null), language);
+                var answer = shape.getLayout().create(); shape.getLayout().setObject(answer, 0, marker);
+                var handler = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false, false}, false); configureTupleResult(shape); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) { handlers.incrementAndGet(); return answer; }
+                };
+                var tag = new PromptTag(Language.currentState());
+                var action = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false}, false); configureTupleResult(shape); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects.incrementAndGet();
+                        return new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> {
+                            assertSame(Unit.INSTANCE, input);
+                            throw new DelimitedCut(tag, new Closure(null, 2, handler.getCallTarget()), shape,
+                                SynchronousMasking.current(this), this);
+                        }).freeze(this, frame.materialize());
+                    }
+                };
+                var body = new GuestRoot(language, new FrameLayout().build()) {
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        return new AstCapture(Unit.INSTANCE, SynchronousMasking.current(this)).append((saved, input) ->
+                            shape.getLayout().getObject((HandoffStorage) site.prompt(saved, tag,
+                                new Closure(null, 1, action.getCallTarget()), Unit.INSTANCE, shape), 0))
+                            .freeze(this, frame.materialize());
+                    }
+                };
+                var thunk = new Thunk(body.getCallTarget(), null); var driver = new Driver();
+                assertThrows(ThunkSuspended.class, () -> driver.force(thunk));
+                assertSame(marker, driver.force(thunk)); assertSame(marker, driver.force(thunk));
+                assertEquals(2, thunk.getState()); assertNull(thunk.getOwner());
+                assertEquals(1, effects.get()); assertEquals(1, handlers.get());
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(body));
+                assertEquals(0, AstStacks.astStackScope(body).getDepth());
+            } finally { context.leave(); }
+        }
+    }
+
     private record Thunks(Thunk inner, Thunk outer, Driver driver) {}
     @Test void uncapturedCallerUpdateFailsClosedAndWakesItsWaiter() throws Exception {
         try (var context = Main.executionContext()) {
