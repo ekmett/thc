@@ -35,7 +35,7 @@ def windowsHost = System.getProperty("os.name").startsWith("Windows")
 // Artifact provenance is separate from the measured unpacked runtime identity.
 def jamPinFile = file("etc/jam-graalvm.json")
 def jamPin = new JsonSlurper().parse(jamPinFile)
-def jamHome = file(providers.environmentVariable("JAVA_HOME").orElse(System.getProperty("java.home")).get())
+def jamHome = file(providers.environmentVariable("JAVA_HOME").orElse(System.getProperty("java.home")).get()).canonicalFile
 def jamApi = new File(jamHome, "lib/jam/jam-vm.jar")
 def jamNativeDirectory = new File(jamHome, windowsHost ? "bin" : "lib/jam")
 def jamJava = new File(jamHome, windowsHost ? "bin/java.exe" : "bin/java")
@@ -178,6 +178,7 @@ apply(from: "src/gradle/java-build-tests.gradle")
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
 tasks.withType(JavaCompile).configureEach {
     dependsOn(verifyJamToolchain)
+    inputs.property("jamInstallation", jamSelected?.runtime?.installation?.sha256 ?: "unavailable")
     doFirst {
         checkBuild(javaCompiler.get().metadata.installationPath.asFile.canonicalFile == jamHome.canonicalFile) {
             "Java compilation must use the selected JAM JAVA_HOME"
@@ -267,6 +268,7 @@ def defaultRuntimeOptions = { JavaForkOptions options ->
 }
 tasks.withType(JavaExec).configureEach { task ->
     dependsOn(verifyJamToolchain)
+    inputs.property("jamInstallation", jamSelected?.runtime?.installation?.sha256 ?: "unavailable")
     executable(jamJava)
     jvmArgs(jamJvmOptions)
     systemProperty("java.library.path", jamNativeDirectory.absolutePath)
@@ -275,6 +277,7 @@ tasks.withType(JavaExec).configureEach { task ->
 }
 tasks.withType(Test).configureEach { task ->
     dependsOn(verifyJamToolchain)
+    inputs.property("jamInstallation", jamSelected?.runtime?.installation?.sha256 ?: "unavailable")
     executable(jamJava)
     jvmArgs(jamJvmOptions)
     systemProperty("java.library.path", jamNativeDirectory.absolutePath)
