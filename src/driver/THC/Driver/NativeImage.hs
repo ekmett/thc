@@ -29,7 +29,8 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.List (isInfixOf, nub, sort)
+import Data.Char (isAlphaNum, isAscii)
+import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.Map.Strict as Map
 import Numeric (showHex)
 import System.Directory
@@ -133,6 +134,7 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
             ("THC_NATIVE_IMAGE_EXECUTABLE_NAME", "program"), ("THC_NATIVE_IMAGE_VECTOR_PROFILE", profile),
             ("JAVA_HOME", jdk), ("THC_LLVM_READOBJ", inspector)]
           environment = overrides ++ filter (\(key, _) -> notElem key (map fst overrides)) inherited
+      jam@(libraries, jamInputs) <- jamRuntimeInputs jdk
       hPutStrLn stderr ("Building native image for " ++ program ++ " in " ++ stage)
       status <- withFile (stage </> "build.stdout") WriteMode $ \stdoutLog ->
         withFile (stage </> "build.stderr") WriteMode $ \stderrLog ->
@@ -141,7 +143,10 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
             create_group = True, use_process_jobs = True} $ \_ _ _ process ->
               waitProducer process
       require (status == ExitSuccess) ("native image producer failed: " ++ show status)
-      groups <- artifactReport (stage </> "build-artifacts.json")
+      reported <- artifactReport (stage </> "build-artifacts.json")
+      validateJamRuntime stage jam
+      let groups = reported ++ [("jam_runtime", ["program.jam"]),
+            ("shared_libraries", map ("program.jam" </>) libraries)]
       require (elem "program" [normalise path | ("executables", paths) <- groups, path <- paths])
         "native image artifact report does not declare program as an executable"
       entries <- fmap concat $ forM groups $ \(kind, paths) ->
@@ -167,6 +172,7 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
           digest <- hashFile destination
           size <- getFileSize destination
           pure (object (identity ++ ["type" .= ("file" :: String), "sha256" .= digest, "size" .= size]))
+      validateJamRuntime deploy jam
       native <- BS.readFile (stage </> "reproduction-inventory/native-libraries.json")
         >>= either (fail . ("invalid native image input receipt: " ++)) pure . eitherDecodeStrict'
       currentManifest <- hashFile manifest
@@ -183,7 +189,9 @@ buildNativeImage suppliedRoot suppliedOutput program suppliedManifest = do
       let result = object ["format" .= ("thc-native-image" :: String), "schema" .= (1 :: Int),
             "program" .= program, "profile" .= profile, "binding" .= binding,
             "manifest" .= object ["path" .= manifest, "sha256" .= manifestHash],
-            "nativeLibraries" .= (native :: Value), "artifacts" .= inventory]
+            "nativeLibraries" .= (native :: Value), "artifacts" .= inventory,
+            "jamRuntimeInputs" .= [object ["path" .= source, "sha256" .= digest,
+              "output" .= ("artifacts" </> relative)] | (relative, source, digest) <- jamInputs]]
       atomicJson completion result
       ) report
     cleaned <- tryIOError (removeDirectoryRecursive stage)
@@ -196,6 +204,57 @@ nativeProfile = do
   selected <- maybe "resource-copy" id <$> lookupEnv "THC_NATIVE_IMAGE_VECTOR_PROFILE"
   require (elem selected ["resource-copy", "intrinsics"]) "native image profile must be resource-copy or intrinsics"
   pure selected
+
+-- JAM currently emits its bundle outside BuildArtifacts. The packaged manifest
+-- owns library membership; the original package also owns the copied notices.
+jamRuntimeInputs :: FilePath -> IO ([FilePath], [(FilePath, FilePath, String)])
+jamRuntimeInputs jdk = do
+  manifest <- ownedFile "lib/jam/runtime-libraries.txt"
+  libraries <- runtimeManifest manifest
+  legal <- artifactTree jdk "legal/jam-vm"
+  let notices = [("program.jam/legal" </> makeRelative "legal/jam-vm" relative, source)
+        | (relative, source, False) <- legal, takeDirectory relative == "legal/jam-vm"]
+  require (not (null notices)) "native image JAM package has no runtime notices"
+  native <- forM libraries $ \name -> do
+    source <- ownedFile ("lib/jam" </> name)
+    pure ("program.jam" </> name, source)
+  inputs <- forM (("program.jam/runtime-libraries.txt", manifest) : native ++ notices) $ \(relative, source) -> do
+    digest <- hashFile source
+    pure (relative, source, digest)
+  pure (libraries, inputs)
+  where
+    ownedFile relative = do
+      tree <- artifactTree jdk relative
+      case tree of
+        [(_, source, False)] -> pure source
+        _ -> fail ("native image JAM package input is not a file: " ++ relative)
+
+runtimeManifest :: FilePath -> IO [FilePath]
+runtimeManifest path = do
+  requireFile "native image JAM runtime manifest" path
+  names <- map stripCR . lines <$> readFile path
+  require (not (null names) && nub names == names && all valid names)
+    ("native image JAM runtime manifest has invalid library names: " ++ path)
+  pure names
+  where
+    stripCR name = case reverse name of '\r' : rest -> reverse rest; _ -> name
+    valid name = "lib" `isPrefixOf` name && length name > 3 &&
+      all (\c -> isAscii c && (isAlphaNum c || elem c ['_', '+', '.', '-'])) name
+
+validateJamRuntime :: FilePath -> ([FilePath], [(FilePath, FilePath, String)]) -> IO ()
+validateJamRuntime stage (libraries, inputs) = do
+  tree <- artifactTree stage "program.jam"
+  let files = Map.fromList [(relative, source) | (relative, source, False) <- tree]
+      manifest = "program.jam/runtime-libraries.txt"
+  declared <- runtimeManifest (stage </> manifest)
+  require (declared == libraries) "native image JAM runtime manifest differs from its package"
+  forM_ inputs $ \(relative, source, digest) -> do
+    current <- hashFile source
+    require (current == digest) ("native image JAM package input changed during construction: " ++ source)
+    emitted <- maybe (fail ("native image JAM runtime output missing: " ++ relative)) pure (Map.lookup relative files)
+    unless (relative == manifest) $ do
+      actual <- hashFile emitted
+      require (actual == digest) ("native image JAM runtime output differs from its package: " ++ relative)
 
 -- The pinned producer report owns output membership, including non-library
 -- resource trees. Unknown categories are retained rather than silently lost.
