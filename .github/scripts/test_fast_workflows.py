@@ -415,9 +415,9 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("release['GRAALVM_VERSION']", common)
         self.assertIn("timeout-minutes: 18", WORKFLOW.read_text())
         action = (project / ".github/actions/jam/action.yml").read_text()
-        self.assertIn("-- ./gradlew --no-daemon -q verifyJamToolchain", action)
+        self.assertIn('fast_ci.py verify-jam --report-dir "$THC_JAM_REPORT"', action)
         self.assertNotIn("restore-keys:", action)
-        self.assertLess(action.index("verifyJamToolchain"), action.index("actions/cache/save@"))
+        self.assertLess(action.index("fast_ci.py verify-jam"), action.index("actions/cache/save@"))
 
     def test_title_skip_preserves_normal_pr_gate(self):
         workflow = WORKFLOW.read_text()

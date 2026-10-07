@@ -235,6 +235,43 @@ class FastRunnerTest(unittest.TestCase):
         path.write_text(json.dumps(pin))
         return pin
 
+    def test_jam_verifier_selects_the_native_gradle_launcher(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        for system, launcher in (("Linux", "gradlew"), ("Darwin", "gradlew"), ("Windows", "gradlew.bat")):
+            with self.subTest(system=system), patch.object(ci.platform, "system", return_value=system), \
+                 patch.object(recorder, "command") as command:
+                ci.verify_jam(recorder, self.root / "jdk")
+                argv = command.call_args.args[1]
+                self.assertEqual(str(self.root / launcher), argv[0])
+                self.assertEqual("verifyJamToolchain", argv[-1])
+                self.assertEqual(str(self.root / "jdk"), command.call_args.kwargs["env"]["JAVA_HOME"])
+
+    def test_jam_release_identity_requires_the_exact_pin_and_verifier_receipt(self):
+        java = self.root / "jdk"
+        java.mkdir()
+        release = java / "release"
+        release.write_text('GRAALVM_VERSION="25.3.4.1-dev"\nJAVA_VERSION="25"\n')
+        runtime = {"installation": {"algorithm": "sha256-path-manifest-v1", "sha256": "a" * 64},
+                   "sha256": {"release": hashlib.sha256(release.read_bytes()).hexdigest()}}
+        self.jam_pin(runtime=runtime)
+        receipt = self.root / "build/toolchain/jam-verified.json"
+        receipt.parent.mkdir(parents=True)
+        verified = {"javaHome": str(java.resolve()), "installation": "a" * 64}
+        receipt.write_text(json.dumps(verified))
+        with patch.dict(os.environ, JAVA_HOME=str(java)), \
+             patch.object(ci.platform, "system", return_value="Linux"), \
+             patch.object(ci.platform, "machine", return_value="x86_64"):
+            self.assertEqual(runtime["sha256"]["release"], ci.jam_release_identity(self.root))
+            verified["installation"] = "b" * 64
+            receipt.write_text(json.dumps(verified))
+            with self.assertRaisesRegex(RuntimeError, "Run verifyJamToolchain"):
+                ci.jam_release_identity(self.root)
+            receipt.write_text(json.dumps(verified | {"installation": "a" * 64}))
+            release.write_text('GRAALVM_VERSION="25.3.4.1"\nJAVA_VERSION="25"\n')
+            with self.assertRaisesRegex(RuntimeError, "Pinned JAM release"):
+                ci.jam_release_identity(self.root)
+
     def test_jam_identity_uses_exact_package_and_checks_platform_floor(self):
         pin = self.jam_pin()
         with patch.dict(os.environ, THC_TOOLS=str(self.root / "tools")), \
@@ -480,6 +517,14 @@ class FastRunnerTest(unittest.TestCase):
         java = self.root / "jdk"
         java.mkdir()
         (java / "release").write_text('GRAALVM_VERSION="25.3.4.1"\nJAVA_VERSION="25"\n')
+        pin = self.jam_pin(runtime={"installation": {"algorithm": "sha256-path-manifest-v1", "sha256": "a" * 64},
+                                   "sha256": {"release": hashlib.sha256((java / "release").read_bytes()).hexdigest()}})
+        host = ci.platform.system() + "-" + {"aarch64": "arm64"}.get(ci.platform.machine(), ci.platform.machine())
+        pin["platforms"][host] = pin["platforms"].pop("Linux-x86_64")
+        (self.root / "etc/jam-graalvm.json").write_text(json.dumps(pin))
+        receipt = self.root / "build/toolchain/jam-verified.json"
+        receipt.parent.mkdir(parents=True)
+        receipt.write_text(json.dumps({"javaHome": str(java.resolve()), "installation": "a" * 64}))
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.dict(os.environ, {"JAVA_HOME": str(java), "GITHUB_OUTPUT": ""}), \

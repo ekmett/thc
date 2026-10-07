@@ -30,14 +30,7 @@ runs:
         THC_BUILD_TRACE_DIR: ${{ steps.package.outputs.report-dir }}/traces
         THC_JAM_REPORT: ${{ steps.package.outputs.report-dir }}
       run: |
-        python3 .github/scripts/fast_ci.py check-command --report-dir "$THC_JAM_REPORT" -- ./gradlew --no-daemon -q verifyJamToolchain
-        python3 - <<'PY'
-        import os, sys
-        from pathlib import Path
-        sys.path.insert(0, ".github/scripts")
-        from fast_ci import merge_traces
-        merge_traces(Path(os.environ["THC_BUILD_TRACE_DIR"]), Path(os.environ["THC_JAM_REPORT"]) / "build-trace.json")
-        PY
+        python3 .github/scripts/fast_ci.py verify-jam --report-dir "$THC_JAM_REPORT"
     - uses: actions/cache/save@v4
       if: steps.cache.outputs.cache-hit != 'true'
       with:

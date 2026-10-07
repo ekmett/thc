@@ -77,13 +77,6 @@ jobs:
           test "$(ghc --numeric-version)" = 9.14.1
           test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
           case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-          release = dict(line.split('=', 1) for line in (Path(os.environ['JAVA_HOME']) / 'release').read_text().splitlines() if '=' in line)
-          assert release['GRAALVM_VERSION'].strip('"') == '25.3.4.1', release.get('GRAALVM_VERSION')
-          assert release['JAVA_VERSION'].strip('"').split('.')[0] == '25', release.get('JAVA_VERSION')
-          PY
           java --version
       - name: Resolve Cabal driver dependencies
         run: cabal build exe:thc

@@ -33,12 +33,24 @@ class LibraryBundleTest(unittest.TestCase):
                         "user.email=test@example.invalid", "commit", "-qm", "fixture"], check=True)
         java = self.root.parent / "jdk"
         java.mkdir()
-        (java / "release").write_text('JAVA_VERSION="25.0.4.1"\nGRAALVM_VERSION="25.3.4.1"\n')
+        (java / "release").write_text('JAVA_VERSION="25.0.4.1"\nGRAALVM_VERSION="25.3.4.1-dev"\n')
         self.env = {"GITHUB_REPOSITORY": "ekmett/thc", "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1",
                     "GITHUB_SHA": bundle.git(self.root, "rev-parse", "HEAD"), "GITHUB_WORKSPACE": str(self.root),
                     "RUNNER_OS": {"Linux": "Linux", "Darwin": "macOS"}[platform.system()],
                     "RUNNER_ARCH": {"x86_64": "X64", "arm64": "ARM64", "aarch64": "ARM64"}[platform.machine()],
                     "JAVA_HOME": str(java)}
+        pin = {"schema": 1, "platforms": {platform.system() + "-" + {"aarch64": "arm64"}.get(platform.machine(), platform.machine()): {
+            "transport": {"tarSha256": "b" * 64}, "runtime": {
+                "installation": {"algorithm": "sha256-path-manifest-v1", "sha256": "a" * 64},
+                "sha256": {"release": bundle.digest(java / "release")}}}}}
+        pin_path = self.root / "etc/jam-graalvm.json"
+        pin_path.parent.mkdir()
+        pin_path.write_text(json.dumps(pin))
+        subprocess.run(["git", "-C", str(self.root), "add", "etc"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "-c", "user.name=Test", "-c",
+                        "user.email=test@example.invalid", "commit", "-qm", "pin toolchain"], check=True)
+        self.env["GITHUB_SHA"] = bundle.git(self.root, "rev-parse", "HEAD")
+        self.verified_jam(java)
         self.environ = patch.dict(os.environ, self.env)
         self.environ.start()
         self.addCleanup(self.environ.stop)
@@ -67,6 +79,18 @@ class LibraryBundleTest(unittest.TestCase):
         self.write_cases()
         self.archive = self.root.parent / "bundle.tar.gz"
 
+    def verified_jam(self, java):
+        receipt = self.root / "build/toolchain/jam-verified.json"
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text(json.dumps({"javaHome": str(java.resolve()), "installation": "a" * 64}))
+
+    def assert_no_restored_payload(self):
+        build = self.root / "build"
+        self.assertEqual(["toolchain", "toolchain/jam-verified.json"],
+                         sorted(path.relative_to(build).as_posix() for path in build.rglob("*")))
+        verified = json.loads((build / "toolchain/jam-verified.json").read_text())
+        self.assertEqual({"javaHome": str(Path(os.environ["JAVA_HOME"]).resolve()), "installation": "a" * 64}, verified)
+
     def write_cases(self):
         (self.root / bundle.CASES).write_text(json.dumps(self.cases))
 
@@ -94,6 +118,7 @@ class LibraryBundleTest(unittest.TestCase):
     def clear_payload(self):
         shutil.rmtree(self.root / "build")
         shutil.rmtree(self.root / "vendor")
+        self.verified_jam(Path(os.environ["JAVA_HOME"]))
 
     def rewrite(self, manifest_change=None, payload_change=None, extra=None):
         output = self.root.parent / "changed.tar.gz"
@@ -161,7 +186,7 @@ class LibraryBundleTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "checkout is dirty"):
             bundle.restore(self.root, self.archive)
         self.assertEqual(source.read_bytes(), b"changed pinned source\n")
-        self.assertFalse((self.root / "build").exists())
+        self.assert_no_restored_payload()
 
     def test_run_attempt_platform_source_and_jdk_mismatches_fail_closed(self):
         self.pack()
@@ -171,7 +196,7 @@ class LibraryBundleTest(unittest.TestCase):
                 path = self.rewrite(lambda m: m["identity"].update({key: "other"}))
                 with self.assertRaisesRegex(RuntimeError, "mismatch; rerun all"):
                     bundle.restore(self.root, path)
-                self.assertFalse((self.root / "build").exists())
+                self.assert_no_restored_payload()
 
     def test_failed_job_only_rerun_cannot_use_prior_attempt_bundle(self):
         self.pack()
@@ -186,7 +211,7 @@ class LibraryBundleTest(unittest.TestCase):
                             if name.endswith("thc-test.jar") else data)
         with self.assertRaisesRegex(RuntimeError, "payload hash mismatch"):
             bundle.restore(self.root, path)
-        self.assertFalse((self.root / "build").exists())
+        self.assert_no_restored_payload()
         self.assertFalse((self.root / "vendor").exists())
 
     def test_missing_or_extra_declared_artifact_is_rejected(self):
@@ -204,12 +229,12 @@ class LibraryBundleTest(unittest.TestCase):
                                if name == "files/" + bundle.TOOLS else data)
         with self.assertRaisesRegex(RuntimeError, "payload hash mismatch"):
             bundle.restore(self.root, corrupt)
-        self.assertFalse((self.root / "build").exists())
+        self.assert_no_restored_payload()
         for tools in ({}, {"build/other-tools.jar": "0" * 64}):
             with self.subTest(tools=tools):
                 with self.assertRaisesRegex(RuntimeError, "Invalid diagnostics JAR"):
                     bundle.restore(self.root, self.rewrite(lambda m: m.update(toolsJars=tools)))
-        self.assertFalse((self.root / "build").exists())
+        self.assert_no_restored_payload()
 
     def test_producer_requires_separate_diagnostics_jar(self):
         (self.root / bundle.TOOLS).unlink()
@@ -271,14 +296,14 @@ class LibraryBundleTest(unittest.TestCase):
             bundle.restore(self.root, self.archive)
         release = Path(os.environ["JAVA_HOME"]) / "release"
         release.write_text('JAVA_VERSION="25"\nGRAALVM_VERSION="other"\n')
-        with self.assertRaisesRegex(RuntimeError, "pinned GraalVM"):
+        with self.assertRaisesRegex(RuntimeError, "Pinned JAM release"):
             bundle.restore(self.root, self.archive)
 
     def test_receipt_link_or_nonregular_destination_cannot_modify_verified_source(self):
         self.pack()
         self.clear_payload()
         receipt = self.root / bundle.RECEIPT
-        receipt.parent.mkdir()
+        receipt.parent.mkdir(exist_ok=True)
         receipt.symlink_to(self.source)
         with self.assertRaisesRegex(RuntimeError, "traverses a link"):
             bundle.restore(self.root, self.archive)

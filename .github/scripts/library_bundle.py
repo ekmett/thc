@@ -19,6 +19,8 @@ import re
 import subprocess
 import tarfile
 
+from fast_ci import jam_release_identity
+
 CASES = "build/libraries/cases.json"
 LIB = "build/install/thc/lib"
 TOOLS = "build/diagnostics/thc-tools.jar"
@@ -64,14 +66,11 @@ def identity(root):
             "Runner OS/architecture does not match this host")
     release = Path(os.environ["JAVA_HOME"]) / "release"
     require(release.is_file(), "JDK release is not a regular file")
-    values = dict(line.split("=", 1) for line in release.read_text().splitlines() if "=" in line)
-    require(values.get("GRAALVM_VERSION", "").strip('"') == "25.3.4.1"
-            and values.get("JAVA_VERSION", "").strip('"').split(".")[0] == "25",
-            "Library jobs require pinned GraalVM 25.3.4.1 / Java 25")
+    release_digest = jam_release_identity(root)
     return {"repository": os.environ["GITHUB_REPOSITORY"], "runId": os.environ["GITHUB_RUN_ID"],
             "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"], "sourceSha": sha,
             "sourceTree": git(root, "rev-parse", "HEAD^{tree}"), "workspace": str(root),
-            "runnerOS": host, "runnerArch": arch, "javaReleaseSha256": digest(release)}
+            "runnerOS": host, "runnerArch": arch, "javaReleaseSha256": release_digest}
 
 
 def relative(name):

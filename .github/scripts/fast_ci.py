@@ -333,7 +333,7 @@ def jam_package(root):
         digests.append(transport["zipSha256"])
     require(all(re.fullmatch(r"[0-9a-f]{64}", digest) for digest in digests), "Invalid JAM package digest")
     identity = hashlib.sha256((host + "\n" + "\n".join(digests)).encode()).hexdigest()
-    home = Path(os.environ["THC_TOOLS"]).expanduser() / ("jam-" + identity) / "graalvm"
+    home = Path(os.environ.get("THC_TOOLS", "~/.cache/thc-toolchains")).expanduser() / ("jam-" + identity) / "graalvm"
     return package, home, "installed-jam-" + host + "-" + identity
 
 
@@ -341,6 +341,28 @@ def jam_identity(root):
     _, home, key = jam_package(root)
     with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
         stream.write(f"jam-home={home.as_posix()}\njam-key={key}\n")
+
+
+def verify_jam(recorder, java_home):
+    launcher = "gradlew.bat" if platform.system() == "Windows" else "gradlew"
+    env = dict(os.environ, JAVA_HOME=str(java_home), GRAALVM_HOME=str(java_home))
+    recorder.command("verify-jam", [str(recorder.root / launcher), "--no-daemon", "-q", "verifyJamToolchain"], env=env)
+
+
+def jam_release_identity(root):
+    """Match the selected release and the existing complete-verifier receipt."""
+    package, _, _ = jam_package(root)
+    home = Path(os.environ["JAVA_HOME"]).resolve()
+    with (home / "release").open("rb") as stream:
+        release = hashlib.file_digest(stream, "sha256").hexdigest()
+    require(release == package["runtime"]["sha256"]["release"], "Pinned JAM release differs from JAVA_HOME")
+    receipt = root / "build/toolchain/jam-verified.json"
+    require(receipt.is_file(), "Run verifyJamToolchain before consuming the JAM package")
+    verified = json.loads(receipt.read_text())
+    require(Path(verified["javaHome"]).resolve() == home
+            and verified["installation"] == package["runtime"]["installation"]["sha256"],
+            "Run verifyJamToolchain on the selected pinned JAM package")
+    return release
 
 
 def install_jam(recorder):
@@ -494,8 +516,7 @@ fi
                 stream.write(f"{name}-cache-hit={hit}\n")
     else:
         recorder.parallel(commands)
-    env = dict(os.environ, JAVA_HOME=str(java_home), GRAALVM_HOME=str(java_home))
-    recorder.command("verify-jam", [str(recorder.root / "gradlew"), "--no-daemon", "-q", "verifyJamToolchain"], env=env)
+    verify_jam(recorder, java_home)
     with open(os.environ["GITHUB_ENV"], "a") as stream:
         stream.write(f"JAVA_HOME={java_home}\nGRAALVM_HOME={java_home}\n")
         stream.write(f"GHC={os.environ['THC_GHCUP_ROOT']}/ghc/9.14.1/bin/ghc\n"
@@ -717,10 +738,7 @@ def run_polyglot(recorder, selection):
 def identify(recorder, identity_path):
     root = recorder.root
     release = Path(os.environ["JAVA_HOME"]) / "release"
-    values = dict(line.split("=", 1) for line in release.read_text().splitlines() if "=" in line)
-    require(values.get("GRAALVM_VERSION", "").strip('"') == "25.3.4.1"
-            and values.get("JAVA_VERSION", "").strip('"').split(".")[0] == "25",
-            "Fast checks require pinned GraalVM25.3.4.1 / Java25")
+    jam_release_identity(root)
     _, output = recorder.command("input-identity", [sys.executable, ".github/scripts/fast_inputs.py",
                                 "key", "--output", str(identity_path)], capture=True)
     keys = [line for line in output.splitlines() if re.fullmatch(r"thc-fast-inputs-v1-[0-9a-f]{64}", line)]
@@ -733,7 +751,7 @@ def identify(recorder, identity_path):
     paths.extend(sorted(path for path in (root / "src/build").rglob("*")
                         if path.is_file() and path.suffix in (".java", ".gradle")
                         and not any(part in ("build", ".gradle") for part in path.relative_to(root / "src/build").parts)))
-    paths.extend([release, Path(__file__), root / ".github/scripts/fast_ci.init.gradle"])
+    paths.extend([root / "etc/jam-graalvm.json", release, Path(__file__), root / ".github/scripts/fast_ci.init.gradle"])
     h = hashlib.sha256()
     for path in paths:
         h.update(path.name.encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest())
@@ -1030,7 +1048,7 @@ def main(argv=None):
         split = argv.index("--")
         argv, execution = argv[:split], argv[split + 1:]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain", "jam-identity", "install-jam", "commit-checks", "jvm-group", "check-command"))
+    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain", "jam-identity", "install-jam", "verify-jam", "commit-checks", "jvm-group", "check-command"))
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
@@ -1057,6 +1075,8 @@ def main(argv=None):
             recorder.save()
         elif args.command == "jam-identity":
             jam_identity(ROOT)
+        elif args.command == "verify-jam":
+            verify_jam(recorder, Path(os.environ["JAVA_HOME"]))
         elif args.command == "install-jam":
             install_jam(recorder)
         elif args.command == "setup-toolchain":
@@ -1100,7 +1120,7 @@ def main(argv=None):
     finally:
         # Nested check-command/jvm-group processes own fragments only. Their
         # coordinator merges after all children exit, including failed builds.
-        if args.command in ("install-jam", "setup-toolchain", "commit-checks", "run", "group", "compile-common", "compile-test-support"):
+        if args.command in ("verify-jam", "install-jam", "setup-toolchain", "commit-checks", "run", "group", "compile-common", "compile-test-support"):
             merge_traces(recorder.trace_directory, recorder.directory / "build-trace.json")
     return 0
 
