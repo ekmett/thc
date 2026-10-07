@@ -117,6 +117,13 @@ uses the ordinary linker's dependency graph for runtime-entered guest code.
 This qualifies synchronous callback execution and the release call, not leak
 freedom, post-release rejection or every callback lifetime.
 
+The unchanged `run-binary-buffers` application also passes this isolated Linux
+execution. Its original binary Handle operations preserve NUL and high-bit bytes,
+short reads, EOF and untouched buffer regions. A synchronous `IOException` crosses
+`bracket` cleanup, which frees the native buffer before the Haskell handler runs;
+normal shutdown flushes the final output without a newline. Output and file bytes
+match the independent native GHC executable from the same Cabal component.
+
 The ordinary `thc build --native-image` path also produces a checked concurrent
 application using platform threads and adaptive async admission. In the same
 isolated deployment, `LiveAsyncNative`/`LiveAsyncAudit` match the native GHC
