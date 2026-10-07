@@ -217,7 +217,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         // demanding the source Haskell wrapper or any unrelated binding body.
         var foreignUnits = new LinkedHashSet<String>();
         if (admitted.getPackageLink() != null) foreignUnits.add((String) admitted.getModule().get("unit"));
-        for (var call : PackageNativeArchive.calls(binding)) {
+        for (var call : CoreCallInventory.mapCalls(binding)) {
             if (call.get("target") instanceof Map<?, ?> target && "static".equals(target.get("kind"))
                     && target.get("unit") instanceof String unit) foreignUnits.add(unit);
         }

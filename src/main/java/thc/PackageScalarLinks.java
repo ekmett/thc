@@ -38,14 +38,6 @@ public final class PackageScalarLinks {
         }
         return true;
     }
-    private static List<Object> calls(Object value) {
-        var result = new ArrayList<Object>();
-        if (value instanceof Map<?,?> fields) {
-            if (fields.get("foreignCall") != null) result.add(fields.get("foreignCall"));
-            fields.values().forEach(child -> result.addAll(calls(child)));
-        } else if (value instanceof List<?> fields) fields.forEach(child -> result.addAll(calls(child)));
-        return result;
-    }
     public static Map<?,?> archiveIdentity(Object value) {
         var fields = record(value, "unit module occurrence namespace"); fields.values().forEach(PackageScalarLinks::text);
         check(in(fields.get("namespace"), "value", "type", "data"), "name namespace"); return fields;
@@ -377,7 +369,7 @@ public final class PackageScalarLinks {
             // A callable import is not authority to publish a typed CLabel finalizer.
             if (!finalizers.contains(signature.entry())) proved.add(signature.entry());
         }
-        CoreCallInventory.check(proof.get("expectedCalls"), calls(module.get("bindings")), completeBindings);
+        CoreCallInventory.check(proof.get("expectedCalls"), CoreCallInventory.calls(module.get("bindings")), completeBindings);
         var admittedEntries = new ArrayList<String>();
         for (var signature : link.getAbi()) admittedEntries.add(signature.entry());
         proved.retainAll(admittedEntries); return new PackageScalarAdmission(link, proved);

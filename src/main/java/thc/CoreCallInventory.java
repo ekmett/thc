@@ -3,10 +3,33 @@
 package thc;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 /** Compare descriptors with multiplicity; binding traversal order is not an ABI contract. */
 public final class CoreCallInventory {
     private CoreCallInventory() {}
+    /** Keep non-null descriptors, including malformed values for admission to reject. */
+    public static List<Object> calls(Object value) {
+        var result = new ArrayList<Object>();
+        collect(value, fields -> {
+            if (fields.get("foreignCall") != null) result.add(fields.get("foreignCall"));
+        });
+        return result;
+    }
+    /** Archive and CAPI scans inspect only map-valued descriptors. */
+    public static List<Map<?,?>> mapCalls(Object value) {
+        var result = new ArrayList<Map<?,?>>();
+        collect(value, fields -> {
+            if (fields.get("foreignCall") instanceof Map<?,?> call) result.add(call);
+        });
+        return result;
+    }
+    private static void collect(Object value, Consumer<Map<?,?>> accept) {
+        if (value instanceof Map<?,?> fields) {
+            accept.accept(fields);
+            for (Object child : fields.values()) collect(child, accept);
+        } else if (value instanceof List<?> fields) for (Object child : fields) collect(child, accept);
+    }
     public static void check(Object expected, List<?> actual, boolean complete) {
         if (!(expected instanceof List<?> inventory)) throw new IllegalArgumentException("Missing original Core foreign-call inventory");
         if (complete && inventory.size() != actual.size())

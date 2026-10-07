@@ -16,14 +16,6 @@ public final class CoreForeignArtifacts {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
         catch (NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); }
     }
-    private static List<Map<?,?>> calls(Object value) {
-        var result = new ArrayList<Map<?,?>>();
-        if (value instanceof Map<?,?> map) {
-            if (map.get("foreignCall") instanceof Map<?,?> call) result.add(call);
-            for (Object child : map.values()) result.addAll(calls(child));
-        } else if (value instanceof List<?> list) for (Object child : list) result.addAll(calls(child));
-        return result;
-    }
     private static Map<String,Object> scalar(String primitive, boolean evaluated) {
         return Map.of("kind", primitive == null ? "void" : primitive.equals("AddrRep") ? "address" : "long",
                 "primReps", primitive == null ? List.of() : List.of(primitive), "evaluated", evaluated);
@@ -139,7 +131,7 @@ public final class CoreForeignArtifacts {
         String unit = link.unit();
         boolean time = link.module().equals("Data.Time.Clock.Internal.CTimespec");
         var actual = new LinkedHashSet<String>();
-        for (var descriptor : calls(bindings)) {
+        for (var descriptor : CoreCallInventory.mapCalls(bindings)) {
             if (time && !(descriptor.get("target") instanceof Map<?,?> fields && Objects.equals(fields.get("unit"), unit))) continue;
             var callTarget = record(descriptor.get("target"), "Invalid foreign call target");
             String symbol = text(callTarget.get("symbol"), "Invalid foreign call symbol");

@@ -431,7 +431,7 @@ public final class CoreModules {
                 void provenance(CoreModuleAdmission admitted, Map<String,Object> binding) {
                     var units = new LinkedHashSet<String>();
                     if (admitted.getPackageLink() != null) units.add((String) admitted.getModule().get("unit"));
-                    for (var call : PackageNativeArchive.calls(binding)) if (call.get("target") instanceof Map<?,?> target &&
+                    for (var call : CoreCallInventory.mapCalls(binding)) if (call.get("target") instanceof Map<?,?> target &&
                             "static".equals(target.get("kind")) && target.get("unit") instanceof String unit) units.add(unit);
                     for (String unit : units) if (foreignUnits.add(unit)) for (var module : directory.getModules())
                         if (module.unit().equals(unit) && module.packageScalarDeclarations()) admit(module);

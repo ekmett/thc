@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import thc.PackageNativeArchive;
+import thc.CoreCallInventory;
 
 /** Explicit synthetic admission controls, not a substitute for stock producer fixtures. */
 final class BoxedForeignProofFixtures {
@@ -20,7 +20,7 @@ final class BoxedForeignProofFixtures {
         return Map.of("kind", "function", "multiplicity", named("GHC.Internal.Types", "Many", "data"), "argument", argument, "result", result);
     }
     static Map<String,Object> withProof(Map<String,Object> raw) {
-        var module = new LinkedHashMap<>(raw); var calls = PackageNativeArchive.calls(raw.get("bindings"));
+        var module = new LinkedHashMap<>(raw); var calls = CoreCallInventory.mapCalls(raw.get("bindings"));
         var declarations = new ArrayList<Object>();
         for (var call : calls) {
             var target = (Map<?,?>) call.get("target"); var symbol = (String) target.get("symbol");

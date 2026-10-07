@@ -83,6 +83,8 @@ class ManagedImportTypeTest {
         assertNotNull(read((Map<?, ?>) Json.parse(Json.stringify(original))));
         assertNotNull(read(module(pointerFunction(tycon("Unit")))));
         assertNotNull(ManagedImportAdmission.read(without(original, "bindings"), false));
+        assertThrows(IllegalArgumentException.class, () -> read(with(original,
+                "bindings", list(map("foreignCall", "malformed")))));
     }
     @Test void nestedBindersScopeTheirBodyButNotTheirOwnKind() {
         assertNotNull(read(module(forall(forall(pointerFunction(variable(1L)))))));

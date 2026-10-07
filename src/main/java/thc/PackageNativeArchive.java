@@ -18,7 +18,7 @@ public final class PackageNativeArchive {
     public List<Map<?,?>> getExcluded() { return excluded; }
     public boolean blocks(Object binding) {
         if (wholeModule) return true;
-        for (var call : calls(binding)) {
+        for (var call : CoreCallInventory.mapCalls(binding)) {
             if (!(call.get("target") instanceof Map<?,?> target) || !Objects.equals(target.get("unit"), unit)) continue;
             // Archive obligations forbid native execution, not an existing
             // context-owned operation. Both lowerers still validate the exact
@@ -30,13 +30,5 @@ public final class PackageNativeArchive {
                     CoreForeignOverride.select(Map.of("foreignCall", call)) == null) return true;
         }
         return false;
-    }
-    public static List<Map<?,?>> calls(Object value) {
-        var calls = new ArrayList<Map<?,?>>();
-        if (value instanceof Map<?,?> fields) {
-            if (fields.get("foreignCall") instanceof Map<?,?> call) calls.add(call);
-            for (Object child : fields.values()) calls.addAll(calls(child));
-        } else if (value instanceof List<?> fields) for (Object child : fields) calls.addAll(calls(child));
-        return calls;
     }
 }
