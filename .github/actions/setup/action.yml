@@ -39,6 +39,7 @@ runs:
         with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
             out.write('index=' + states[0] + '\n')
         PY
+        THC_TOOLS="$HOME/.cache/thc-toolchains" python3 .github/scripts/fast_ci.py jam-identity --report-dir build/ci/setup-results
     # The cache action remains an explicit dependency below. The runner fetches
     # its bundle before this composite starts. github-script passes its Node
     # runtime and cache-service environment to our existing setup coordinator.
@@ -46,6 +47,7 @@ runs:
       id: setup
       uses: actions/github-script@v8
       env:
+        GH_TOKEN: ${{ github.token }}
         THC_CACHE_LAYERS: |
           {
             "ghc": {
@@ -54,8 +56,8 @@ runs:
               "enabled": ${{ runner.os == 'macOS' }}
             },
             "graalvm": {
-              "path": "${{ env.THC_TOOLS }}/graalvm-community-25.3.4.1+1.1",
-              "key": "installed-graalvm-${{ runner.os }}-${{ runner.arch }}-25.3.4.1"
+              "path": "${{ steps.identity.outputs.jam-home }}",
+              "key": "${{ steps.identity.outputs.jam-key }}"
             },
             "llvm": {
               "path": "/opt/homebrew/Cellar/llvm@18/18.1.8",

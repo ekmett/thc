@@ -26,6 +26,16 @@ Ordinary builds consume a prebuilt package through `JAVA_HOME`; they do not
 build a JDK or compiler. Toolchain caching depends on platform and package
 identity, independently of THC sources and Cabal's project file.
 
+CI selects the host platform from this pin and checks its recorded OS/libc floor
+before running Java. It restores only the exact platform, archive and installation
+digests, verifies the downloaded archive, then runs `verifyJamToolchain` before
+saving the installed cache. A `github-release-asset` transport uses a versioned
+GitHub release URL and `tarSha256`; an optional `zipSha256` preserves a qualified
+Actions ZIP containing that tar archive. Temporary `github-actions-artifact`
+transport also requires an unexpired artifact and a `GH_TOKEN` with read access
+to the producer's Actions artifacts. It supplies qualification while release
+publication is pending; expired downloads fail without choosing another JVM.
+
 `verifyJamToolchain` checks the selected package. The JVM application and test
 forks select `UseJamGC`, ordinary object headers, disabled CDS and equal initial
 and maximum heap capacities. Existing THC Truffle API/runtime/Sulong patches

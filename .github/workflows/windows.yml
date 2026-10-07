@@ -17,6 +17,7 @@ on:
         required: true
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: native-windows-${{ inputs.testGroup }}-${{ github.ref }}
   cancel-in-progress: false
@@ -40,6 +41,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
+      - uses: ./.github/actions/jam
       - name: Build and test on native Windows
         shell: pwsh
         run: |
@@ -63,6 +65,7 @@ jobs:
           name: native-windows-evidence-${{ inputs.testGroup }}
           if-no-files-found: warn
           path: |
+            build/ci/setup-results/
             build/windows-ci.log
             build/windows-native-link.tar
             build/generated/stdio-abi/

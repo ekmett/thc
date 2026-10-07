@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: Pinned prebuilt JAM toolchain
+description: Restore the exact platform package and verify it with the existing Gradle verifier.
+runs:
+  using: composite
+  steps:
+    - name: Identify the pinned package and validate its platform floor
+      id: package
+      shell: bash
+      run: |
+        echo "THC_TOOLS=~/.cache/thc-toolchains" >> "$GITHUB_ENV"
+        report_dir="$(python3 -c 'from pathlib import Path; print(Path.cwd().as_posix())')/build/ci/setup-results/run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+        echo "report-dir=$report_dir" >> "$GITHUB_OUTPUT"
+        THC_TOOLS='~/.cache/thc-toolchains' python3 .github/scripts/fast_ci.py jam-identity --report-dir "$report_dir"
+    - uses: actions/cache/restore@v4
+      id: cache
+      with:
+        path: ${{ steps.package.outputs.jam-home }}
+        key: ${{ steps.package.outputs.jam-key }}
+    - name: Acquire the pinned prebuilt package
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        THC_BUILD_TRACE_DIR: ${{ steps.package.outputs.report-dir }}/traces
+      run: python3 .github/scripts/fast_ci.py install-jam --report-dir "${{ steps.package.outputs.report-dir }}"
+    - name: Verify the complete installed package
+      shell: bash
+      env:
+        THC_BUILD_TRACE_DIR: ${{ steps.package.outputs.report-dir }}/traces
+        THC_JAM_REPORT: ${{ steps.package.outputs.report-dir }}
+      run: |
+        python3 .github/scripts/fast_ci.py check-command --report-dir "$THC_JAM_REPORT" -- ./gradlew --no-daemon -q verifyJamToolchain
+        python3 - <<'PY'
+        import os, sys
+        from pathlib import Path
+        sys.path.insert(0, ".github/scripts")
+        from fast_ci import merge_traces
+        merge_traces(Path(os.environ["THC_BUILD_TRACE_DIR"]), Path(os.environ["THC_JAM_REPORT"]) / "build-trace.json")
+        PY
+    - uses: actions/cache/save@v4
+      if: steps.cache.outputs.cache-hit != 'true'
+      with:
+        path: ${{ steps.package.outputs.jam-home }}
+        key: ${{ steps.package.outputs.jam-key }}

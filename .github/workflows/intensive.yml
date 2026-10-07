@@ -33,7 +33,7 @@ jobs:
     name: macOS ordinary tests
     uses: ./.github/workflows/test-groups.yml
     with:
-      os: macos-latest
+      os: macos-26
       expected_sha: ${{ inputs.expected_sha || github.sha }}
       cadence: nightly
   build:
@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-26]
     runs-on: ${{ matrix.os }}
     # Keep the existing cold preparation budget; test and compiler limits are unchanged.
     timeout-minutes: 360
@@ -205,7 +205,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-26]
         backend: [ast, bytecode]
         handoff: ['false', 'true']
     runs-on: ${{ matrix.os }}
@@ -225,13 +225,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
-        with:
-          version: '25.3.4.1'
-          java-version: '25'
-          distribution: 'graalvm-community'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          check-for-updates: false
+      - uses: ./.github/actions/jam
       - name: Download only this platform and workflow attempt
         uses: actions/download-artifact@v8
         with:

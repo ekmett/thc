@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 import importlib.util
+import hashlib
+import io
+import tarfile
+import zipfile
 import json
 import os
 from pathlib import Path
@@ -183,7 +187,9 @@ class FastRunnerTest(unittest.TestCase):
             recorder = ci.Recorder(self.root, self.root / "setup")
         tools = self.root / "tools"
         ghcup = self.root / ".ghcup"
-        java = tools / "graalvm-community-25.3.4.1+1.1"
+        self.jam_pin()
+        with patch.dict(os.environ, THC_TOOLS=str(tools)), patch.object(ci.platform, "system", return_value="Linux"), patch.object(ci.platform, "machine", return_value="x86_64"):
+            _, java, _ = ci.jam_package(self.root)
         for path, value in ((ghcup / "ghc/9.14.1/bin/ghc", "9.14.1"),
                             (ghcup / "ghc/9.14.1/bin/ghc-pkg", "GHC package manager version 9.14.1"),
                             (ghcup / "cabal/3.16.0.0/cabal", "3.16.0.0"),
@@ -195,17 +201,146 @@ class FastRunnerTest(unittest.TestCase):
         (java / "release").write_text('GRAALVM_VERSION="25.3.4.1"\nJAVA_VERSION="25.0.4.1"\n')
         def installed_commands(commands):
             for name, argv in commands:
-                if name in ("haskell-toolchain", "graalvm-toolchain"):
+                if name == "haskell-toolchain":
                     recorder.command(name, argv)
+                elif name == "graalvm-toolchain":
+                    ci.install_jam(recorder)
         env = {"GITHUB_ACTIONS": "true", "THC_TOOLS": str(tools), "THC_GHCUP_ROOT": str(ghcup),
                "GITHUB_ENV": str(self.root / "env"), "GITHUB_PATH": str(self.root / "path"),
                "PATH": str(self.root / "bin") + os.pathsep + os.environ["PATH"]}
         with patch.dict(os.environ, env), patch.object(ci.platform, "system", return_value="Linux"), \
                 patch.object(ci.platform, "machine", return_value="x86_64"), \
-                patch.object(recorder, "parallel", side_effect=installed_commands):
+                patch.object(recorder, "parallel", side_effect=installed_commands), \
+                patch.object(recorder, "command", wraps=recorder.command) as command:
+            original = recorder.command
+            def run(name, argv, **kwargs):
+                if name == "verify-jam":
+                    self.assertEqual([str(self.root / "gradlew"), "--no-daemon", "-q", "verifyJamToolchain"], argv)
+                    self.assertEqual(str(java), kwargs["env"]["JAVA_HOME"])
+                    return (0, "")
+                return original._mock_wraps(name, argv, **kwargs)
+            command.side_effect = run
             ci.setup_toolchain(recorder)
         self.assertIn("JAVA_HOME=" + str(java), (self.root / "env").read_text())
         self.assertIn(str(ghcup / "ghc/9.14.1/bin"), (self.root / "path").read_text())
+
+    def jam_pin(self, transport=None, runtime=None):
+        pin = {"schema": 1, "producer": {"repository": "ekmett/jam", "commit": "a" * 40},
+               "platforms": {"Linux-x86_64": {
+                   "transport": transport or {"kind": "github-release-asset",
+                       "url": "https://github.com/ekmett/jam/releases/download/package/linux.tar.gz", "tarSha256": "b" * 64},
+                   "runtime": runtime or {"installation": {"algorithm": "sha256-path-manifest-v1", "sha256": "a" * 64}}}}}
+        path = self.root / "etc/jam-graalvm.json"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps(pin))
+        return pin
+
+    def test_jam_identity_uses_exact_package_and_checks_platform_floor(self):
+        pin = self.jam_pin()
+        with patch.dict(os.environ, THC_TOOLS=str(self.root / "tools")), \
+             patch.object(ci.platform, "system", return_value="Linux"), \
+             patch.object(ci.platform, "machine", return_value="x86_64"), \
+             patch.object(ci.platform, "libc_ver", return_value=("glibc", "2.38")):
+            _, home, key = ci.jam_package(self.root)
+            self.assertIn("installed-jam-Linux-x86_64-", key)
+            (self.root / "cabal.project").write_text("irrelevant source change")
+            self.assertEqual((home, key), ci.jam_package(self.root)[1:])
+            pin["platforms"]["Linux-x86_64"]["runtime"]["minimumGlibc"] = "2.39"
+            (self.root / "etc/jam-graalvm.json").write_text(json.dumps(pin))
+            with self.assertRaisesRegex(RuntimeError, "requires glibc 2.39"):
+                ci.jam_package(self.root)
+            pin["platforms"]["Linux-x86_64"]["runtime"]["minimumGlibc"] = "2.38"
+            pin["platforms"]["Linux-x86_64"]["transport"]["tarSha256"] = "c" * 64
+            (self.root / "etc/jam-graalvm.json").write_text(json.dumps(pin))
+            self.assertNotEqual(key, ci.jam_package(self.root)[2])
+            pin["platforms"]["Darwin-arm64"] = pin["platforms"].pop("Linux-x86_64")
+            pin["platforms"]["Darwin-arm64"]["runtime"].pop("minimumGlibc")
+            pin["platforms"]["Darwin-arm64"]["runtime"]["minimumMacOS"] = "26"
+            (self.root / "etc/jam-graalvm.json").write_text(json.dumps(pin))
+            with patch.object(ci.platform, "system", return_value="Darwin"), \
+                 patch.object(ci.platform, "machine", return_value="arm64"), \
+                 patch.object(ci.platform, "mac_ver", return_value=("15.7", "", "")):
+                with self.assertRaisesRegex(RuntimeError, "requires macOS 26"):
+                    ci.jam_package(self.root)
+
+    def test_jam_acquisition_checks_archives_and_reuses_exact_cache(self):
+        for zipped, corrupt in ((False, ""), (True, ""), (False, "tar"), (True, "tar"), (True, "zip")):
+            with self.subTest(zipped=zipped, corrupt=corrupt), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                tools = Path(directory) / "tools"
+                payload = Path(directory) / "package.tar.gz"
+                with tarfile.open(payload, "w:gz") as tar:
+                    item = tarfile.TarInfo("graalvm/release")
+                    item.size = 3
+                    tar.addfile(item, io.BytesIO(b"jam"))
+                transport = {"kind": "github-release-asset", "url": "https://github.com/ekmett/jam/releases/download/package/linux.tar.gz",
+                             "tarSha256": hashlib.sha256(payload.read_bytes()).hexdigest()}
+                source = payload
+                if zipped:
+                    source = Path(directory) / "package.zip"
+                    with zipfile.ZipFile(source, "w") as outer:
+                        outer.write(payload, "jam-graal-ci.tar.gz")
+                    transport["zipSha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
+                if corrupt:
+                    transport["zipSha256" if corrupt == "zip" else "tarSha256"] = "f" * 64
+                self.jam_pin(transport)
+                fake = Path(directory) / "bin/curl"
+                fake.parent.mkdir()
+                fake.write_text("#!" + sys.executable + "\nimport shutil,sys\nshutil.copyfile(" + repr(str(source)) + ", sys.argv[sys.argv.index('--output')+1])\n")
+                fake.chmod(0o755)
+                with patch.object(ci, "git", return_value="a" * 40):
+                    recorder = ci.Recorder(self.root, Path(directory) / "report")
+                with patch.dict(os.environ, THC_TOOLS=str(tools), GITHUB_ENV=str(self.root / "env"), GITHUB_PATH=str(self.root / "path"),
+                                PATH=str(fake.parent) + os.pathsep + os.environ["PATH"]), \
+                     patch.object(ci.platform, "system", return_value="Linux"), \
+                     patch.object(ci.platform, "machine", return_value="x86_64"):
+                    if corrupt:
+                        with self.assertRaisesRegex(RuntimeError, "archive digest differs"):
+                            ci.install_jam(recorder)
+                        self.assertFalse(ci.jam_package(self.root)[1].exists())
+                    else:
+                        home = ci.install_jam(recorder)
+                        self.assertEqual(b"jam", (home / "release").read_bytes())
+                        fake.unlink()
+                        self.assertEqual(home, ci.install_jam(recorder))
+                        self.assertEqual(str(home), recorder.data["jamPackage"]["javaHome"])
+                        self.assertGreater(recorder.data["phases"][0]["seconds"], 0)
+                        self.assertEqual(0, recorder.data["phases"][0]["exitCode"])
+
+    def test_jam_acquisition_refuses_escaping_tar_paths(self):
+        payload = self.root / "unsafe.tar.gz"
+        with tarfile.open(payload, "w:gz") as tar:
+            item = tarfile.TarInfo("../../outside")
+            item.size = 3
+            tar.addfile(item, io.BytesIO(b"bad"))
+        self.jam_pin({"kind": "github-release-asset", "url": "https://github.com/ekmett/jam/releases/download/package/linux.tar.gz",
+                      "tarSha256": hashlib.sha256(payload.read_bytes()).hexdigest()})
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        def download(name, argv):
+            self.assertEqual("download-jam", name)
+            ci.shutil.copyfile(payload, argv[-1])
+        with patch.dict(os.environ, THC_TOOLS=str(self.root / "tools")), \
+             patch.object(ci.platform, "system", return_value="Linux"), \
+             patch.object(ci.platform, "machine", return_value="x86_64"), \
+             patch.object(recorder, "command", side_effect=download):
+            with self.assertRaises(tarfile.OutsideDestinationError):
+                ci.install_jam(recorder)
+            self.assertFalse(ci.jam_package(self.root)[1].exists())
+            self.assertFalse((self.root / "outside").exists())
+
+    def test_jam_acquisition_refuses_expired_and_unauthenticated_actions_artifacts(self):
+        self.jam_pin({"kind": "github-actions-artifact", "url": "https://api.github.com/repos/ekmett/jam/actions/artifacts/1/zip",
+                      "expiresAt": "2000-01-01T00:00:00Z", "tarSha256": "a" * 64, "zipSha256": "b" * 64})
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "setup")
+        with patch.dict(os.environ, THC_TOOLS=str(self.root / "tools"), GH_TOKEN=""), \
+             patch.object(ci.platform, "system", return_value="Linux"), \
+             patch.object(ci.platform, "machine", return_value="x86_64"):
+            with self.assertRaisesRegex(RuntimeError, "require GH_TOKEN"):
+                ci.install_jam(recorder)
+            with patch.dict(os.environ, GH_TOKEN="private"):
+                with self.assertRaisesRegex(RuntimeError, "has expired"):
+                    ci.install_jam(recorder)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

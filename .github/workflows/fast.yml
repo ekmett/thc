@@ -133,7 +133,7 @@ jobs:
   fast-check:
     needs: automation
     runs-on: ${{ fromJSON(needs.automation.outputs.runner) }}
-    timeout-minutes: 60
+    timeout-minutes: 18
     env:
       GRADLE_USER_HOME: ${{ needs.automation.outputs.persistent == 'true' && '/home/ekmett/ai/thc-fast/cache/gradle' || format('{0}/.gradle-user-home', github.workspace) }}
       EXPECTED_SHA: ${{ inputs.expected_sha }}
@@ -194,14 +194,7 @@ jobs:
           ghc-version: '9.14.1'
           cabal-version: '3.16.0.0'
           cabal-update: false
-      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
-        if: needs.automation.outputs.persistent != 'true'
-        with:
-          version: '25.3.4.1'
-          java-version: '25'
-          distribution: graalvm-community
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          check-for-updates: false
+      - uses: ./.github/actions/jam
       - name: Ensure the frozen Hackage snapshot is available
         run: |
           python3 - <<'HACKAGE'

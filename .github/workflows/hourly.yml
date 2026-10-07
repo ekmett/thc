@@ -36,7 +36,7 @@ jobs:
     name: macOS ordinary tests
     uses: ./.github/workflows/test-groups.yml
     with:
-      os: macos-latest
+      os: macos-26
       expected_sha: ${{ inputs.expected_sha || github.sha }}
       cadence: hourly
   windows:

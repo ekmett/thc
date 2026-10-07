@@ -17,6 +17,9 @@ import json
 import io
 import platform
 import tarfile
+import tempfile
+import zipfile
+from urllib.parse import urlparse
 import os
 import shutil
 from pathlib import Path
@@ -307,18 +310,118 @@ def cache_restores(recorder, layers):
     return commands, environments, outputs
 
 
+def jam_package(root):
+    """Select one binary pin; source edits cannot change its cache identity."""
+    pin = json.loads((root / "etc/jam-graalvm.json").read_text())
+    require(pin["schema"] == 1, "Unsupported JAM package pin schema")
+    machine = {"AMD64": "x86_64", "aarch64": "arm64"}.get(platform.machine(), platform.machine())
+    host = platform.system() + "-" + machine
+    require(host in pin["platforms"], f"No JAM GraalVM package is pinned for {host}")
+    package = pin["platforms"][host]
+    runtime, transport = package["runtime"], package["transport"]
+    version = lambda value: tuple(int(part) for part in value.split("."))
+    if "minimumMacOS" in runtime:
+        require(version(platform.mac_ver()[0]) >= version(runtime["minimumMacOS"]),
+                f"Pinned JAM package requires macOS {runtime['minimumMacOS']} or newer")
+    if "minimumGlibc" in runtime:
+        libc, found = platform.libc_ver()
+        require(libc == "glibc" and version(found) >= version(runtime["minimumGlibc"]),
+                f"Pinned JAM package requires glibc {runtime['minimumGlibc']} or newer; found {libc} {found}")
+    require(runtime["installation"]["algorithm"] == "sha256-path-manifest-v1", "Unsupported JAM installation digest")
+    digests = [runtime["installation"]["sha256"], transport["tarSha256"]]
+    if "zipSha256" in transport:
+        digests.append(transport["zipSha256"])
+    require(all(re.fullmatch(r"[0-9a-f]{64}", digest) for digest in digests), "Invalid JAM package digest")
+    identity = hashlib.sha256((host + "\n" + "\n".join(digests)).encode()).hexdigest()
+    home = Path(os.environ["THC_TOOLS"]).expanduser() / ("jam-" + identity) / "graalvm"
+    return package, home, "installed-jam-" + host + "-" + identity
+
+
+def jam_identity(root):
+    _, home, key = jam_package(root)
+    with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+        stream.write(f"jam-home={home.as_posix()}\njam-key={key}\n")
+
+
+def install_jam(recorder):
+    started = time.monotonic()
+    package, home, key = jam_package(recorder.root)
+    transport = package["transport"]
+    require(not home.is_symlink(), "JAM cache home must be a directory, not a symbolic link")
+    if not home.is_dir():
+        kind, url = transport["kind"], transport["url"]
+        parsed = urlparse(url)
+        require(parsed.scheme == "https" and not parsed.username and not parsed.password,
+                "JAM transport requires an HTTPS URL without credentials")
+        require(kind in ("github-actions-artifact", "github-release-asset"), "Unsupported JAM package transport")
+        token = ""
+        if kind == "github-actions-artifact":
+            require(parsed.netloc == "api.github.com" and "/actions/artifacts/" in parsed.path,
+                    "JAM artifact transport requires the GitHub artifact API")
+            token = os.environ.get("GH_TOKEN", "")
+            require(bool(token), "Temporary JAM Actions artifacts require GH_TOKEN with producer Actions read access")
+            require(datetime.fromisoformat(transport["expiresAt"].replace("Z", "+00:00")) > datetime.now(timezone.utc),
+                    "Pinned JAM Actions artifact has expired; publish retained package bytes")
+        else:
+            require(parsed.netloc == "github.com" and "/releases/download/" in parsed.path,
+                    "JAM release transport requires a versioned GitHub release asset URL")
+        home.parent.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="jam-acquire-", dir=home.parent.parent) as temporary:
+            stage = Path(temporary)
+            archive = stage / "package"
+            # curl drops Authorization on cross-host redirects. Keep credentials
+            # out of process arguments and CI receipts; remove the private config
+            # with the temporary staging directory on success or failure.
+            config = stage / "curl.conf"
+            config.touch(mode=0o600)
+            require(not any(char in token for char in '\n\r"'), "Invalid GitHub credential")
+            config.write_text(f'header = "Authorization: Bearer {token}"\n' if token else "")
+            recorder.command("download-jam", ["curl", "--config", str(config), "--fail", "--location", "--silent", "--show-error",
+                                              "--connect-timeout", "30", "--max-time", "600", url, "--output", str(archive)])
+            def check_digest(path, expected):
+                with path.open("rb") as stream:
+                    require(hashlib.file_digest(stream, "sha256").hexdigest() == expected, "Pinned JAM archive digest differs")
+            if "zipSha256" in transport:
+                check_digest(archive, transport["zipSha256"])
+                with zipfile.ZipFile(archive) as outer:
+                    files = [item for item in outer.infolist() if not item.is_dir()]
+                    require(len(files) == 1 and files[0].filename.endswith(".tar.gz"), "JAM ZIP must contain one tar.gz")
+                    payload = stage / "payload.tar.gz"
+                    with outer.open(files[0]) as source, payload.open("wb") as target:
+                        shutil.copyfileobj(source, target)
+            else:
+                payload = archive
+            check_digest(payload, transport["tarSha256"])
+            unpacked = stage / "unpacked"
+            unpacked.mkdir()
+            with tarfile.open(payload) as tar:
+                tar.extractall(unpacked, filter="data")
+            require((unpacked / "graalvm/release").is_file(), "JAM package must contain graalvm/release")
+            require(not home.parent.exists(), f"Incomplete JAM cache exists: {home.parent}; preserve it for inspection")
+            unpacked.rename(home.parent)
+    recorder.data["jamPackage"] = {"cacheKey": key, "javaHome": home.as_posix(), "transport": transport,
+                                   "acquisitionSeconds": round(time.monotonic() - started, 6),
+                                   "installation": package["runtime"]["installation"]}
+    recorder.data["passed"] = True
+    recorder.save()
+    with open(os.environ["GITHUB_ENV"], "a") as stream:
+        stream.write(f"JAVA_HOME={home.as_posix()}\nGRAALVM_HOME={home.as_posix()}\n")
+    with open(os.environ["GITHUB_PATH"], "a") as stream:
+        stream.write(f"{home.as_posix()}/bin\n")
+    return home
+
+
 def setup_toolchain(recorder):
     """Restore independent caches and check out sources, then install misses."""
     host = (platform.system(), platform.machine())
     releases = {
-        ("Darwin", "arm64"): ("aarch64-apple-darwin", "4e521e008fe0813db6db4b91cfeebd0c44c80c68afb458ea32a1c94cf5c7cc1d",
-                               "macos-aarch64", "ebfab1d74420f355a459076162012d6835fa6068bd9d2f230f1fcaf7ee0dd923"),
-        ("Linux", "x86_64"): ("x86_64-linux", "9ed5da5449b48043a0d17e767c05d2ef585e25a639bb934329496c6d2fad9cf8",
-                               "linux-x64", "b2bc38d0c4141426eb44d0eefa3cc172c96faf92727d703b61541699128b6fc7"),
+        ("Darwin", "arm64"): ("aarch64-apple-darwin", "4e521e008fe0813db6db4b91cfeebd0c44c80c68afb458ea32a1c94cf5c7cc1d"),
+        ("Linux", "x86_64"): ("x86_64-linux", "9ed5da5449b48043a0d17e767c05d2ef585e25a639bb934329496c6d2fad9cf8"),
     }
     require(os.environ.get("GITHUB_ACTIONS") == "true" and host in releases,
             "Toolchain setup requires a hosted Linux x64 or macOS ARM64 Actions runner")
-    ghcup_arch, ghcup_sha, java_arch, java_sha = releases[host]
+    ghcup_arch, ghcup_sha = releases[host]
+    _, java_home, _ = jam_package(recorder.root)
     # Upstream release SHA256SUMS / asset digests. Installed tools are a separate
     # cache layer; source and dependency edits never change their cache keys.
     download = r'''
@@ -348,16 +451,6 @@ test "$("$ghc_bin/ghc-pkg" --version)" = 'GHC package manager version 9.14.1'
 test "$("$cabal_bin/cabal" --numeric-version)" = 3.16.0.0
 '''
     haskell = haskell.replace("GHCUP_ARCH", ghcup_arch).replace("GHCUP_SHA", ghcup_sha)
-    java = download + r'''
-java_root="$THC_TOOLS/graalvm-community-25.3.4.1+1.1"
-if [ ! -d "$java_root" ]; then
-  archive="$RUNNER_TEMP/thc-graalvm.tar.gz"
-  download "https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.3.4.1/graalvm-community-jdk-25i3-25.0.4.1_JAVA_ARCH_bin.tar.gz" "$archive" JAVA_SHA
-  tar -xzf "$archive" -C "$THC_TOOLS"
-  rm "$archive"
-fi
-'''
-    java = java.replace("JAVA_ARCH", java_arch).replace("JAVA_SHA", java_sha)
     if host[0] == "Darwin":
         native = r'''
 set -euo pipefail
@@ -368,7 +461,6 @@ ln -sfn /opt/homebrew/Cellar/llvm@18/18.1.8 /opt/homebrew/opt/llvm@18
 command -v cmake && command -v ninja || brew install cmake ninja
 /opt/homebrew/opt/llvm@18/bin/clang --version
 '''
-        java_home = Path(os.environ["THC_TOOLS"]) / "graalvm-community-25.3.4.1+1.1/Contents/Home"
         llvm_bin = "/opt/homebrew/opt/llvm@18/bin"
     else:
         native = r'''
@@ -379,12 +471,12 @@ if ! dpkg-query -W -f='${Status}\n' clang-18 llvm-18 libgmp-dev cmake ninja-buil
 fi
 /usr/lib/llvm-18/bin/clang --version
 '''
-        java_home = Path(os.environ["THC_TOOLS"]) / "graalvm-community-25.3.4.1+1.1"
         llvm_bin = "/usr/lib/llvm-18/bin"
     commands = [
         ("source-submodules", ["git", "-c", "core.autocrlf=false", "submodule", "update", "--init", "--depth", "1", "--jobs", "4"]),
         ("haskell-toolchain", ["bash", "-c", haskell]),
-        ("graalvm-toolchain", ["bash", "-c", java]),
+        ("graalvm-toolchain", [sys.executable, str(recorder.root / ".github/scripts/fast_ci.py"),
+                               "install-jam", "--report-dir", str(recorder.directory / "jam-acquisition")]),
         ("native-toolchain", ["bash", "-c", native]),
     ]
     layers = json.loads(os.environ.get("THC_CACHE_LAYERS", "{}"))
@@ -402,10 +494,8 @@ fi
                 stream.write(f"{name}-cache-hit={hit}\n")
     else:
         recorder.parallel(commands)
-    release = dict(line.split("=", 1) for line in (java_home / "release").read_text().splitlines() if "=" in line)
-    require(release["GRAALVM_VERSION"].strip('"') == "25.3.4.1"
-            and release["JAVA_VERSION"].strip('"').split(".")[0] == "25", "Unexpected cached GraalVM")
-    recorder.command("verify-graalvm", [str(java_home / "bin/java"), "--version"])
+    env = dict(os.environ, JAVA_HOME=str(java_home), GRAALVM_HOME=str(java_home))
+    recorder.command("verify-jam", [str(recorder.root / "gradlew"), "--no-daemon", "-q", "verifyJamToolchain"], env=env)
     with open(os.environ["GITHUB_ENV"], "a") as stream:
         stream.write(f"JAVA_HOME={java_home}\nGRAALVM_HOME={java_home}\n")
         stream.write(f"GHC={os.environ['THC_GHCUP_ROOT']}/ghc/9.14.1/bin/ghc\n"
@@ -940,7 +1030,7 @@ def main(argv=None):
         split = argv.index("--")
         argv, execution = argv[:split], argv[split + 1:]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain", "commit-checks", "jvm-group", "check-command"))
+    parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish", "group", "pack-common", "restore-common", "compile-common", "compile-test-support", "setup-toolchain", "jam-identity", "install-jam", "commit-checks", "jvm-group", "check-command"))
     parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
     parser.add_argument("--identity", type=Path)
     parser.add_argument("--group")
@@ -965,6 +1055,10 @@ def main(argv=None):
             expected = os.environ.get("EXPECTED_SHA", "")
             require(not expected or expected == git(ROOT, "rev-parse", "HEAD"), "Dispatched revision mismatch")
             recorder.save()
+        elif args.command == "jam-identity":
+            jam_identity(ROOT)
+        elif args.command == "install-jam":
+            install_jam(recorder)
         elif args.command == "setup-toolchain":
             setup_toolchain(recorder)
         elif args.command == "compile-common":
@@ -998,7 +1092,7 @@ def main(argv=None):
             print("Trusted-main cache publication: " + str(allowed).lower())
         else:
             finish(recorder)
-    except (RuntimeError, OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
+    except (RuntimeError, OSError, ValueError, KeyError, subprocess.CalledProcessError, tarfile.TarError, zipfile.BadZipFile) as error:
         recorder.data["driverError"] = str(error)
         recorder.save()
         print("Fast checks failed: " + str(error), file=sys.stderr)
@@ -1006,7 +1100,7 @@ def main(argv=None):
     finally:
         # Nested check-command/jvm-group processes own fragments only. Their
         # coordinator merges after all children exit, including failed builds.
-        if args.command in ("setup-toolchain", "commit-checks", "run", "group", "compile-common", "compile-test-support"):
+        if args.command in ("install-jam", "setup-toolchain", "commit-checks", "run", "group", "compile-common", "compile-test-support"):
             merge_traces(recorder.trace_directory, recorder.directory / "build-trace.json")
     return 0
 

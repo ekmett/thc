@@ -336,6 +336,9 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("hashFiles", immutable)
         self.assertNotIn("github.sha", immutable)
         self.assertIn("steps.identity.outputs.index", immutable)
+        self.assertEqual("${{ steps.identity.outputs.jam-key }}", layers["graalvm"]["key"])
+        self.assertEqual("${{ steps.identity.outputs.jam-home }}", layers["graalvm"]["path"])
+        self.assertIn('THC_TOOLS="$HOME/.cache/thc-toolchains" python3 .github/scripts/fast_ci.py jam-identity', setup)
         self.assertIn("if: steps.setup.outputs.index-cache-hit != 'true'", setup)
         self.assertEqual(1, setup.count("run: cabal update"))
         self.assertIn('run: cabal update "hackage.haskell.org,$INDEX_STATE"', setup)
@@ -401,6 +404,21 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         codepages = (project / 't/haskell-fixtures/WindowsCodePageFixtures.hs').read_text()
         self.assertIn('lookupEnv "GHC_PKG"', codepages)
 
+    def test_normal_jvm_jobs_acquire_jam_and_keep_commit_failure_caps_proportionate(self):
+        project = WORKFLOW.parents[2]
+        for filename in ("fast.yml", "intensive.yml", "windows.yml"):
+            text = (WORKFLOW.parent / filename).read_text()
+            self.assertIn("uses: ./.github/actions/jam", text)
+            self.assertNotIn("graalvm/setup-graalvm", text)
+        common = (WORKFLOW.parent / "test-common.yml").read_text()
+        self.assertIn("inputs.cadence == 'commit' && 18 || 60", common)
+        self.assertNotIn("release['GRAALVM_VERSION']", common)
+        self.assertIn("timeout-minutes: 18", WORKFLOW.read_text())
+        action = (project / ".github/actions/jam/action.yml").read_text()
+        self.assertIn("-- ./gradlew --no-daemon -q verifyJamToolchain", action)
+        self.assertNotIn("restore-keys:", action)
+        self.assertLess(action.index("verifyJamToolchain"), action.index("actions/cache/save@"))
+
     def test_title_skip_preserves_normal_pr_gate(self):
         workflow = WORKFLOW.read_text()
         self.assertIn("!contains(github.event.pull_request.title, '[ci skip]')", workflow)
@@ -439,7 +457,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("persistent: ${{ steps.route.outputs.persistent }}", workflow)
         self.assertIn("python3 .github/scripts/fast_runner.py", workflow)
         self.assertIn('if [ "$TRUSTED_EVENT" != true ]; then', workflow)
-        self.assertEqual(workflow.count("if: needs.automation.outputs.persistent != 'true'"), 3)
+        self.assertEqual(workflow.count("if: needs.automation.outputs.persistent != 'true'"), 2)
         self.assertIn("Run fresh smoke plus affected tests", workflow)
         self.assertIn("needs: automation", workflow)
 
