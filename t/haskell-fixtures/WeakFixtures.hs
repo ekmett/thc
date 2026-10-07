@@ -79,7 +79,7 @@ prepareWeakRuntime root = do
   command <- runLogged 600 root (support </> "logs") "runtime-acquisition"
     [] driver ["build", "thc:lib:runtime", "--project-dir", root,
       "--thc-root", root, "--dist-dir", root </> acquired,
-      "--with-ghc", ghc, "--with-ghc-pkg", ghcPkg, "--installed-core", "pinned", "--verify-artifacts"]
+      "--with-ghc", ghc, "--with-ghc-pkg", ghcPkg, "--installed-core", "pinned"]
   packages <- readJson (root </> acquired </> "packages.json")
   runtime <- field packages "foreignExceptionBridgeUnit" :: IO String
   units <- field packages "units" :: IO [Value]

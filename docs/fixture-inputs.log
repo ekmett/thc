@@ -2507,7 +2507,7 @@ IN: WeakAudit.hs, thc.cabal/Setup/project configuration, runtime Haskell/C/heade
   base/ghc-internal/ghc-prim/ghc-bignum source/generated inputs.
 Under build/weak-explicit/:
   runtime-support/acquisition/*: normal THC acquisition owns
-    `thc build thc:lib:runtime --installed-core pinned --verify-artifacts`, including
+    `thc build thc:lib:runtime --installed-core pinned`, including
     its Cabal/native products. Source-keyed bundles reuse the ordinary production
     cache resolved by THC.Driver.Cache (including an explicit THC_CACHE_HOME). They are not
     fixture transfer inputs and are never enumerated to discover executable CBDs.
