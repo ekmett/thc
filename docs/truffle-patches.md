@@ -1,8 +1,8 @@
 # Truffle patches and shared hosts
 
-THC uses the stock GraalVM 25.3.4.1 / JDK 25 distribution, but its default
-distribution replaces three Truffle/Sulong dependency JARs with locally built
-variants. **These replacements affect every language using those loaded classes,
+THC selects [JAM-patched GraalVM 25.3.4.1 / JDK 25](jam-runtime.md). Its
+default distribution additionally replaces three Truffle/Sulong dependency
+JARs with locally built variants. **These replacements affect every language using those loaded classes,
 not just THC.** A separate Polyglot `Context` or `Engine` does not select a
 different implementation of a shared runtime class.
 

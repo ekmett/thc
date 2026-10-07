@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "graalVersion": "25.3.4.1",
+  "producer": {
+    "repository": "ekmett/jam-vm",
+    "commit": "3fe0fe9aeacfcb0f57debe5e94b8596b82a73240",
+    "graalCommit": "7b025988a922a73286d1326e1eddc1ca39d3f569",
+    "labsJdkCommit": "f471c3eca82192dcdb1078687723652cf2ed63e7"
+  },
+  "platforms": {
+    "Linux-x86_64": {
+      "transport": {
+        "kind": "github-actions-artifact",
+        "runId": 37617738085,
+        "artifactId": 11483949089,
+        "url": "https://api.github.com/repos/ekmett/jam-vm/actions/artifacts/11483949089/zip",
+        "zipSha256": "012a793459ef1a7d30c72efd1ee1dc1b9a3d5bfe042168255e22b5111152dd46",
+        "tarSha256": "b13fb15818d2dea526ab6ccf4bbf6e518938e146d632803fb035d0cccf1f7b60",
+        "expiresAt": "2026-10-10T13:14:36Z"
+      },
+      "qualification": "pending",
+      "runtime": {
+        "implementor": "Jam VM",
+        "graalVersion": "25.3.4.1-dev",
+        "javaRuntimeVersion": "25.0.4.1+1-jvmci-25.3-b22",
+        "minimumGlibc": "2.38",
+        "installation": {
+          "algorithm": "sha256-path-manifest-v1",
+          "sha256": "f3dd2772ba6ffd9ed1917d2490049e2dc06afb37e0dfeef01e0a5ebe227938e6",
+          "regularFiles": 619,
+          "bytes": 961572568,
+          "symlinks": 5
+        },
+        "launcherIdentity": [
+          "release",
+          "lib/jam/runtime-libraries.txt",
+          "lib/jam/libjam_bridge.so",
+          "lib/jam/libjam_vm.so"
+        ],
+        "sha256": {
+          "release": "9680685261e90095cb90625e692e3ff7f2c8bf9d164147a640a0bd6547c2de56",
+          "bin/java": "e075b378cd68e4b40cc951e08ba8a4541ab9078c4ab2d64a2177662675e8e0dd",
+          "bin/native-image": "4e9093597b7ee2729d6d2af9bb9883b944a4e2459894db406236cde0938db418",
+          "lib/jam/jam-vm.jar": "5a58b0e1938f3457c5f8344d6ce425f510c7fc650f85de0a30e4925cc2a1aad7",
+          "lib/jam/runtime-libraries.txt": "4788e4357aad2e8da98d814dd442cdde127a585b50e5193ad4e4423d985567c2",
+          "lib/jam/libjam_bridge.so": "2b10cee5f59adad1b9c4c4551b87cb040fc9e4756e69a2eb55881e41690e6f9d",
+          "lib/jam/libjam_vm.so": "c0510a3656dc744fcd7ebb8b096940f4203fdf263e4e902f361040d1a37ad03b",
+          "lib/jam/libc++.so.1": "b30168af9dcb27890c8ee3b73208d2b72ae78834263c2bc79c531eb85faea7be",
+          "lib/jam/libc++abi.so.1": "920c01faf64c9a286968eff3bfaeb4aee04fcf3cef261ae9a62c1110912d2579",
+          "lib/jam/libunwind.so.1": "2e0e94b237e97cfb3679180d8c88df71890b222d4d616e0f3877ac4fc37d172c",
+          "lib/server/libjvm.so": "9a1b2b71ddef661537cda4fbd43f87d2ecde1198efaf996913a65df5c1347b77",
+          "lib/libjvmcicompiler.so": "f844075c6fc5842f06e806787f0c056e7553ff22eb797f767dd7d8c8d8e9ed86",
+          "lib/svm/builder/svm.jar": "5e205aead4cb63abdc00ed57822c4659fe940292b9d01fab1e1fda78f2b85ff3"
+        }
+      }
+    },
+    "Darwin-arm64": {
+      "transport": {
+        "kind": "github-actions-artifact",
+        "runId": 37617738085,
+        "artifactId": 11485552035,
+        "url": "https://api.github.com/repos/ekmett/jam-vm/actions/artifacts/11485552035/zip",
+        "zipSha256": "75b8e535a24468ff197d404f44bb23362aef644901d9b4ae3684b99740f9d4fa",
+        "tarSha256": "a904df3cf7f91911e267f3bb5877eab0009c44e9b709734f32606412d09cc987",
+        "expiresAt": "2026-10-10T13:30:03Z"
+      },
+      "qualification": "pending",
+      "runtime": {
+        "implementor": "Jam VM",
+        "graalVersion": "25.3.4.1-dev",
+        "javaRuntimeVersion": "25.0.4.1+1-jvmci-25.3-b22",
+        "minimumMacOS": "26",
+        "installation": {
+          "algorithm": "sha256-path-manifest-v1",
+          "sha256": "34d7be13f256fa29e8e0ef11de08aa828ab4282c52799faa15de7e5c7aca806b",
+          "regularFiles": 618,
+          "bytes": 762685326,
+          "symlinks": 5
+        },
+        "launcherIdentity": [
+          "release",
+          "lib/jam/runtime-libraries.txt",
+          "lib/jam/libjam_bridge.dylib",
+          "lib/jam/libjam_vm.dylib"
+        ],
+        "sha256": {
+          "release": "1c9393b14e6f3cabd7a2eaa85c3c1e10c8137e7bf346849bd4e0d524ae34a9d0",
+          "bin/java": "f1f1ae3e49cfedea8ed15bb2c6434b06691688ba1623ef7e8a02376d9e805246",
+          "bin/native-image": "b194e83c9b58f9762483f4d359851197883b41d651eeb866dc8fb30da7c31a34",
+          "lib/jam/jam-vm.jar": "829329ca8c8ffa182f29485152d865794b2cdd7cf8a5ad0c1a1503ea8648c0e3",
+          "lib/jam/runtime-libraries.txt": "b7e25da641ba713b2a5bea340209b70cdb54c1b9d006acee7bb144ed9d099480",
+          "lib/svm/builder/svm.jar": "1aab9414eeee65a0deebcfaf2506e29c2fd08045385faf8cc63a939bb45f065f",
+          "lib/server/libjvm.dylib": "f36a541ddcb370339df40e0c69304130a7bff0f46fbf6dec5a608011bf47a50e",
+          "lib/libjvmcicompiler.dylib": "864a7210291034c59756f4b5bbd6d6c7e794cd536467e96076a1c1088ecf523c",
+          "lib/jam/libc++.1.dylib": "885b3cca93c79bd7af090dc5205182b8954386fb87f24d421921505dec7bbd57",
+          "lib/jam/libc++abi.1.dylib": "9244b62f02409e7b05468e7bb15f3b17f17ece3379b7e7bbefa2f523309e3479",
+          "lib/jam/libjam_bridge.dylib": "9b31773a549e5b53cdfae17402406c3683f5d7c0d0484e935bd88bdc0ce64ed1",
+          "lib/jam/libjam_vm.dylib": "3b752bf520b51dc493d93043fc8b230b07c9244531a863be62996763d31df8f1",
+          "lib/jam/libunwind.1.dylib": "6468c57b9a9a9a2660e3bff1a6b7a8dd9c6584f6cd5730ead1be4965dacf433c"
+        }
+      }
+    },
+    "Windows-x86_64": {
+      "transport": {
+        "kind": "github-actions-artifact",
+        "runId": 37617738085,
+        "artifactId": 11486716811,
+        "url": "https://api.github.com/repos/ekmett/jam-vm/actions/artifacts/11486716811/zip",
+        "zipSha256": "8024993fc12d1a4a81448fb64fa98539fd7310a7c0548fd944643d4caa77ef30",
+        "tarSha256": "9328c41d3e88e378a92b8d60fb4f1a2d68170f16ddbc4c5bf7be0ffa47cbddd9",
+        "expiresAt": "2026-10-10T13:54:33Z"
+      },
+      "qualification": "pending",
+      "runtime": {
+        "implementor": "Jam VM",
+        "graalVersion": "25.3.4.1-dev",
+        "javaRuntimeVersion": "25.0.4.1+1-jvmci-25.3-b22",
+        "installation": {
+          "algorithm": "sha256-path-manifest-v1",
+          "sha256": "a0c719887e4f10937ce67be2a3d9c9aa2151457b2094fe9e7c51d44c91229462",
+          "regularFiles": 690,
+          "bytes": 832125582,
+          "symlinks": 0
+        },
+        "launcherIdentity": [
+          "release",
+          "lib/jam/runtime-libraries.txt",
+          "bin/jam_bridge.dll",
+          "bin/jam_vm.dll"
+        ],
+        "sha256": {
+          "release": "ad1db16a9d70c83fe303e23d064abcaea9ad6aa6415ecfc082a994c6d1f5f756",
+          "bin/java.exe": "f52ddec93eb4e46dec023f64dbfecbcf0639a7562b9f890c9b5067b07d9cbc46",
+          "bin/native-image.cmd": "472afa5e9cd591f63d9a45a16d4a8d8c4d35735bfd21b74269c3dbac240259ff",
+          "lib/jam/jam-vm.jar": "032e401893d25d8dab5a176bd75b0ccd99d134c19b0836ae31630f6d7d29e06f",
+          "lib/jam/runtime-libraries.txt": "08f712dd530eda3156ca2ca40823517f7afe1b779aee019b10a84aae7ddcda81",
+          "lib/svm/builder/svm.jar": "159e4d0c7b3c85429ad7b023ba1eae713ec1df6b8ea9b085919aa485573f7bc6",
+          "bin/server/jvm.dll": "1dca5e098e07b1a3ef506a1e90c7244c9feca6203868dfa5c813bccd6c4294ba",
+          "bin/jvmcicompiler.dll": "7735ae15f8e2a47b953254dafe8bec70ede4698893bd5b676480f63421183f2c",
+          "bin/jam_bridge.dll": "7312eb0d3b87f3f278c51d5639dd51e3694550bf05ae45638dfc1e06b005712b",
+          "bin/jam_vm.dll": "41622e7ff911a26012e5b620bd1ff6353494b2896ca4a0e6ccb0226a5ea192ab",
+          "lib/jam/jam_bridge.dll": "7312eb0d3b87f3f278c51d5639dd51e3694550bf05ae45638dfc1e06b005712b",
+          "lib/jam/jam_vm.dll": "41622e7ff911a26012e5b620bd1ff6353494b2896ca4a0e6ccb0226a5ea192ab",
+          "lib/jam/msvcp140.dll": "0f885b509a685d2bbfa652fed26b5fb31d88fbdab0a978c641d1c7b8aa460aa9",
+          "lib/jam/msvcp140_atomic_wait.dll": "640b2aefced484d0368eea5bdd06addd0658a3a70a49256e560d6923b404a479",
+          "lib/jam/vcruntime140.dll": "d5e4d9a3e835fa679450145d6a7d94e36573a509317111904d9b3712c30d9066",
+          "lib/jam/vcruntime140_1.dll": "1f2d41c4aa5db0bc33ebf7b66d72943a817d7ce6cbe880502a9403823633093f"
+        }
+      }
+    }
+  }
+}

@@ -68,14 +68,17 @@ function Get-ThcGhc {
 }
 
 function Assert-ThcJava {
-    if (!$env:JAVA_HOME -or !(Test-Path "$env:JAVA_HOME/bin/java.exe")) {
-        throw 'Set JAVA_HOME to GraalVM 25.3.4.1 / JDK 25 for Windows'
+    if (!$env:JAVA_HOME -or !(Test-Path -LiteralPath "$env:JAVA_HOME/bin/java.exe" -PathType Leaf) -or
+        !(Test-Path -LiteralPath "$env:JAVA_HOME/release" -PathType Leaf)) {
+        throw 'Set JAVA_HOME to the pinned Windows JAM package from etc/jam-graalvm.json, with bin/java.exe and release'
     }
-    $release = @{}
-    Get-Content "$env:JAVA_HOME/release" | ForEach-Object {
-        if ($_ -match '^([^=]+)="(.*)"$') { $release[$Matches[1]] = $Matches[2] }
+    $pin = Get-Content -LiteralPath (Join-Path (Split-Path $PSScriptRoot) 'etc/jam-graalvm.json') -Raw | ConvertFrom-Json
+    $package = $pin.platforms.'Windows-x86_64'
+    if ($pin.schema -ne 1 -or !$package.runtime.sha256.release) {
+        throw 'No supported Windows JAM package identity in etc/jam-graalvm.json'
     }
-    if ($release['GRAALVM_VERSION'] -ne '25.3.4.1' -or $release['JAVA_VERSION'].Split('.')[0] -ne '25') {
-        throw 'THC requires exactly GraalVM 25.3.4.1 on JDK 25'
+    # Cheap setup preflight; the runtime Gradle build verifies the complete package.
+    if ((Get-FileHash -LiteralPath "$env:JAVA_HOME/release" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $package.runtime.sha256.release) {
+        throw 'JAVA_HOME release differs from the pinned Windows JAM package; select the matching package from etc/jam-graalvm.json'
     }
 }

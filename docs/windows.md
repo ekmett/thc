@@ -8,9 +8,13 @@ of this quarantine change has not yet been verified.
 
 The Windows path builds the JVM runtime, the GHC plugin, the driver, and native
 fixtures with **GHC 9.14.1**, **cabal-install 3.16.0.0**, and
-**GraalVM 25.3.4.1 / JDK 25**. Run it in native PowerShell, not WSL.
-The current bootstrap selects GraalVM **Community** 25.3.4.1 (JDK 25.0.4.1)
-and the stock x64 Windows GHC bindist.
+**JAM-patched GraalVM 25.3.4.1 / JDK 25**. Run it in native PowerShell, not WSL.
+Select the separately acquired pinned Windows JAM package before bootstrap.
+Bootstrap preserves `JAVA_HOME`, checks its release identity, and installs the
+x64 Windows GHC bindist and Cabal. Runtime builds verify the complete JAM package;
+stock GraalVM fails these checks. Full JAM runtime execution remains unqualified
+on Windows. Package identities and remaining distribution
+requirements are documented in [JAM runtime integration](jam-runtime.md).
 Python 3.12+ is still needed by existing generators and strict Core audits.
 
 ## Select tools and build
@@ -23,7 +27,8 @@ It selects its own `CABAL_CONFIG` under the prefix and uses HTTPS Hackage with
 signed repository metadata and Cabal's standard Hackage trust keys. Existing
 default HTTP configurations are upgraded without replacing other repositories
 or explicit trust keys; disabled Hackage verification is rejected. A fresh CI
-runner therefore uses the same acquisition path as a local cold cache.
+runner still needs immutable JAM package acquisition before the CI migration can
+use this setup; the currently retained producer artifacts are qualification inputs.
 Install a real Python interpreter first; the Microsoft Store alias does not work.
 Bootstrap selects the first interpreter on PATH outside the user App Execution
 Alias directory; `THC_PYTHON` overrides discovery. It checks Python 3.12+ afterward.
@@ -39,6 +44,7 @@ with line-ending conversion disabled; the root attributes do not apply inside th
 ~~~powershell
 git -c core.autocrlf=false submodule update --init --depth 1
 $env:THC_PYTHON = 'C:\path\to\python.exe'
+$env:JAVA_HOME = 'C:\path\to\jam-package\graalvm'
 . ./bin/bootstrap-windows.ps1 -Prefix 'C:\path\to\thc-tools'
 Invoke-ThcTool $env:CABAL @('update')
 ./bin/windows.ps1 -Action Build -Jobs 4

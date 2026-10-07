@@ -18,9 +18,9 @@ For native Windows, use the [PowerShell build and test guide](docs/windows.md).
 It lists the required tools and current platform limits.
 
 You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16**,
-**GraalVM Community Edition 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
-point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
-directory. The Gradle wrapper downloads its dependencies on the first build.
+**JAM-patched GraalVM 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
+point `JAVA_HOME` at the extracted JAM package's `graalvm` directory, including
+on macOS. The Gradle wrapper downloads its dependencies on the first build.
 The driver checks for cabal-install 3.16. Use the pinned GraalVM release
 above: incompatible Graal and Truffle compiler versions can disable runtime
 compilation and leave execution in the interpreter.
@@ -34,8 +34,9 @@ libraries such as `ghc-internal` to LLVM bitcode. CI uses Homebrew's keg-only
 directory on `PATH` or set the
 [LLVM tool variables](docs/interface-foreign.md#run-a-package-with-native-imports).
 
-The JDK is stock, but THC's default distribution includes **patched Truffle API,
-runtime and Sulong JARs**. Their [patch inventory and shared-host effects](docs/truffle-patches.md)
+The JAM package is pinned in [`etc/jam-graalvm.json`](etc/jam-graalvm.json);
+see [migration status and platform requirements](docs/jam-runtime.md). THC's
+default distribution also includes **patched Truffle API, runtime and Sulong JARs**. Their [patch inventory and shared-host effects](docs/truffle-patches.md)
 are part of the embedding contract: some changes affect other languages using
 the same runtime, including across separate contexts and engines.
 

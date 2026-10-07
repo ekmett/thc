@@ -24,7 +24,7 @@ CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v 
 
 all: runtime haskell
 
-runtime: check-java
+runtime:
 	./gradlew installDist $(GRADLE_FLAGS)
 
 haskell:
@@ -70,7 +70,7 @@ docs-haskell:
 	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/src/runtime/%{MODULE/.//}.hs#L%L'
 	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/runtime.revision
 
-docs-jvm: check-java
+docs-jvm:
 	./gradlew javadoc $(GRADLE_FLAGS) --max-workers=2 -Pthc.docsRevision='$(DOCS_REVISION)'
 	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/jvm.revision
 
@@ -80,7 +80,7 @@ docs-check:
 check-pandoc:
 	@command -v '$(PANDOC)' >/dev/null || { printf '%s\n' 'Install Pandoc 3.x (or set PANDOC) to render the documentation guides.' >&2; exit 1; }
 
-jar: check-java
+jar:
 	./gradlew jar $(GRADLE_FLAGS)
 
 fixtures:
@@ -105,7 +105,7 @@ foreign-exception-fixtures:
 foreign-exception-test-modes: foreign-exception-fixtures
 	./gradlew $(GRADLE_FLAGS) --continue foreignExceptionTest foreignExceptionDenseTest
 
-probe: check-java
+probe:
 	./gradlew probe $(GRADLE_FLAGS) --args='$(ARGS)'
 
 clean:
@@ -116,7 +116,7 @@ distclean: clean
 
 check-java:
 	@test -n "$${JAVA_HOME:-}" && test -x "$$JAVA_HOME/bin/java" && test -x "$$JAVA_HOME/bin/javac" || { \
-		printf '%s\n' 'Set JAVA_HOME to a GraalVM 25.3.4.1 installation (JDK 25), with bin/java and bin/javac.' \
-		  'For example: export JAVA_HOME=/path/to/graalvm-jdk-25' >&2; \
+		printf '%s\n' 'Set JAVA_HOME to the pinned JAM GraalVM package, with bin/java and bin/javac.' >&2; \
 		exit 1; \
 	}
+	@./gradlew verifyJamToolchain $(GRADLE_FLAGS)

@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT' -or [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') {
     throw 'This bootstrap supplies native Windows x64 tools'
 }
+Assert-ThcJava
 $Prefix = [IO.Path]::GetFullPath($Prefix)
 New-Item -ItemType Directory -Force $Prefix, "$Prefix/downloads" | Out-Null
 function Get-ThcArchive([string]$Name, [string]$Url, [string]$Sha256) {
@@ -24,18 +25,11 @@ $ghcDownload = @('ghc.tar.xz',
 $cabalDownload = @('cabal.zip',
     'https://downloads.haskell.org/~cabal/cabal-install-3.16.0.0/cabal-install-3.16.0.0-x86_64-windows.zip',
     '572c1eba3da3aa7754790e14462d301df208dd0c4f183a6507ffd86f71595349')
-$javaDownload = @('graalvm-ce.zip',
-    'https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.3.4.1/graalvm-community-jdk-25i3-25.0.4.1_windows-x64_bin.zip',
-    '770a0d78aba4c19bd40ee410ec82afbbee8e33fdd762e509006ac64e1007b4ce')
 $ghcArchive = Get-ThcArchive @ghcDownload
 $cabalArchive = Get-ThcArchive @cabalDownload
-$javaArchive = Get-ThcArchive @javaDownload
 $ghcRoot = Join-Path $Prefix 'ghc-9.14.1-x86_64-unknown-mingw32'
-$javaRoot = Join-Path $Prefix 'graalvm-community-25.3.4.1+1.1'
 if (!(Test-Path -LiteralPath $ghcRoot)) { Invoke-ThcTool 'tar.exe' @('-xf', $ghcArchive, '-C', $Prefix) }
 if (!(Test-Path -LiteralPath "$Prefix/cabal")) { Expand-Archive -LiteralPath $cabalArchive -DestinationPath "$Prefix/cabal" }
-if (!(Test-Path -LiteralPath $javaRoot)) { Expand-Archive -LiteralPath $javaArchive -DestinationPath $Prefix }
-$env:JAVA_HOME = $javaRoot
 # The unversioned bindist launchers narrow Unicode argv through the host code
 # page. Select the actual pinned binaries, which preserve Windows wide argv.
 $env:GHC = Join-Path $ghcRoot 'bin/ghc-9.14.1.exe'
@@ -45,7 +39,7 @@ $env:THC_CLANG = Join-Path $ghcRoot 'mingw/bin/clang.exe'
 $env:CABAL_DIR = Join-Path $Prefix 'cabal-home'
 $env:CABAL_CONFIG = Join-Path $env:CABAL_DIR 'config'
 $env:GRADLE_USER_HOME = Join-Path $Prefix 'gradle-home'
-$env:PATH = "$javaRoot/bin;$ghcRoot/bin;$ghcRoot/mingw/bin;$Prefix/cabal;$env:PATH"
+$env:PATH = "$env:JAVA_HOME/bin;$ghcRoot/bin;$ghcRoot/mingw/bin;$Prefix/cabal;$env:PATH"
 # Cabal runs the pinned libraries' genuine configure scripts through sh.
 # Reuse Git for Windows' MSYS utilities without changing the machine PATH.
 if (!(Get-Command sh.exe -CommandType Application -ErrorAction SilentlyContinue)) {
@@ -54,9 +48,8 @@ if (!(Get-Command sh.exe -CommandType Application -ErrorAction SilentlyContinue)
     if (!(Test-Path -LiteralPath "$shellBin/sh.exe")) {
         throw 'Pinned library configure requires sh.exe and its Unix utilities on PATH (for example Git for Windows usr/bin)'
     }
-    $env:PATH = "$javaRoot/bin;$ghcRoot/bin;$ghcRoot/mingw/bin;$Prefix/cabal;$shellBin;$env:PATH"
+    $env:PATH = "$env:JAVA_HOME/bin;$ghcRoot/bin;$ghcRoot/mingw/bin;$Prefix/cabal;$shellBin;$env:PATH"
 }
-Assert-ThcJava
 $null = Get-ThcGhc
 $cabalVersion = Invoke-ThcTool $env:CABAL @('--numeric-version')
 if ($cabalVersion -ne '3.16.0.0') { throw "Unexpected Cabal: $cabalVersion" }
@@ -68,4 +61,4 @@ if ($pythonVersion -notmatch '^Python (\d+)\.(\d+)\.' -or [int]$Matches[1] -ne 3
     throw 'Select Python 3.12+ using THC_PYTHON; the Microsoft Store alias is not an interpreter'
 }
 Write-Host "Selected native Windows tools in $Prefix"
-Write-Host 'GraalVM Community 25.3.4.1 / JDK 25; GHC 9.14.1 stock vanilla bindist (not complete installed Core).'
+Write-Host 'Selected pinned JAM GraalVM; GHC 9.14.1 stock vanilla bindist (not complete installed Core).'
