@@ -6,7 +6,7 @@ toolchain:
 - [`thc build --native-image`](driver.md) acquires selected
   Cabal components and produces a fresh application-bound executable for each
   executable, stdio test or benchmark. It embeds the reachable Core and native
-  providers for synchronous AST execution. This path currently requires Linux
+  providers for AST execution. This path currently requires Linux
   x86-64 and the pinned toolchain; it does not enable guest machine-code
   compilation or static linking. Deploy the files listed in its completion
   inventory together.
@@ -122,9 +122,13 @@ application using platform threads and adaptive async admission. In the same
 isolated deployment, `LiveAsyncNative`/`LiveAsyncAudit` match the native GHC
 oracle for `forkIO`/`throwTo`, interrupted shared-CAF resumption, a once-only
 prefix effect, strict/PAP action heads and finite loop completion. The executable
-receives ordinary argv and runs the normal startup/shutdown entries. This checks
-prepared AST execution; it does not establish disabled guest JIT compilation,
-Loom hosting, every masking/foreign-call case or blocked-child shutdown.
+receives ordinary argv and runs the normal startup/shutdown entries. Its
+`shutdown` mode waits until a child is blocked on an MVar, keeps that MVar
+reachable through the final output, then returns from main without releasing or
+killing the child. A fresh image exits successfully in the isolated deployment,
+matching native GHC with empty stderr. This checks prepared AST execution and
+blocked platform-child shutdown; it does not establish disabled guest JIT
+compilation, Loom hosting or every masking/foreign-call case.
 
 Sulong and package native libraries are extracted at runtime. System C, math,
 zlib and the dynamic loader remain external dependencies. This qualifies captured

@@ -80,7 +80,7 @@ thc build my-package:exe:my-program --native-image
 ```
 
 The producer currently requires Linux x86_64 and the pinned GraalVM, and uses
-synchronous AST execution. The driver defaults to the qualified `resource-copy`
+AST execution. The driver defaults to the qualified `resource-copy`
 vector profile; `THC_NATIVE_IMAGE_VECTOR_PROFILE` overrides that choice. Each
 component has its own `DIST/native-images/<unit-id SHA256>/packages.json`,
 containing its dependency closure and selected exception bridge. The shared
