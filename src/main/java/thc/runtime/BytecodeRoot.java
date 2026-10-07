@@ -3985,10 +3985,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class MakeWeak {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                Object key, Object value, Object action, Object state, @Bind("$node") Node node) {
+                Object key, Object value, Object action, Object state, Object runner, @Bind("$node") Node node) {
             TupleResults.requireVoidCarrier(state);
             if (action == null) throw fail("mkWeak# requires a finalizer carrier");
-            Object weak = ManagedWeaks.current(node).make(key, value, action);
+            Object weak = ManagedWeaks.current(node).make(key, value, action, runner);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, weak);
         }
     }
@@ -3998,7 +3998,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 Object key, Object value, Object state, @Bind("$node") Node node) {
             TupleResults.requireVoidCarrier(state);
-            Object weak = ManagedWeaks.current(node).make(key, value, null);
+            Object weak = ManagedWeaks.current(node).make(key, value, null, null);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, weak);
         }
     }

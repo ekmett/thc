@@ -67,6 +67,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private final Map<String, Map<String, Object>> constructors;
     private final Map<String, DataLayout> dataLayouts;
     private final Map<String, GlobalBinding> globals;
+    private final String weakFinalizer;
     private final Map<String, Integer> indices = new LinkedHashMap<>();
     private final Map<String, List<Integer>> names = new LinkedHashMap<>();
     private final Map<String, CoreRepresentation> globalProofs = new LinkedHashMap<>();
@@ -114,6 +115,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         boxedForeignDeclarations = CoreBoxedForeignDeclarations.admissions(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings value ? value : null;
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
+        weakFinalizer = moduleData.get("selectedWeakFinalizer") instanceof String id ? id : null;
         rubbishLiterals = new RubbishLiterals(language);
         foreignLinks = moduleData.get("foreignLinks") instanceof List<?> value
             ? (List<thc.ForeignBitcode>) value : List.of();
@@ -7819,7 +7821,15 @@ public final class BytecodeProgram implements ExecutableProgram {
             var proofs = argumentProofs(args);
             operation.validate(proofs, flags, tupleProof);
             operation.validateBindings(proofs, lexicalProofs(args, scope));
-            if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.knownFunctionSignature(args.get(2), bindings));
+            GlobalBinding runner = null;
+            if (operation == WeakOp.MAKE) {
+                operation.validateAction(CoreRepresentations.knownFunctionSignature(args.get(2), bindings));
+                if (weakFinalizer == null || weakFinalizer.isBlank())
+                    throw new UnsupportedCore("mkWeak# requires a selected runtime finalizer ABI binding");
+                runner = globals.get(weakFinalizer);
+                if (runner == null) throw new UnsupportedCore("Unresolved global binding " + weakFinalizer);
+            }
+            var finalizer = runner;
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             operation.validate(loweredProofs(operands), flags, tupleProof);
@@ -7832,6 +7842,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     default -> b.beginObserveWeak(destination.get(0), destination.get(1), operation == WeakOp.FINALIZE);
                 }
                 for (var operand : operands) operand.emit(e);
+                if (finalizer != null) b.emitReadGlobal(finalizer);
                 switch (operation) {
                     case MAKE -> b.endMakeWeak(); case MAKE_PLAIN -> b.endMakeWeakPlain();
                     case ADD_C_FINALIZER -> b.endAddCFinalizerToWeak(); default -> b.endObserveWeak();

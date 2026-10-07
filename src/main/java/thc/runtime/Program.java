@@ -74,6 +74,7 @@ public final class Program implements ExecutableProgram {
     private final Map<String, Integer> constructorIndices = Collections.synchronizedMap(new LinkedHashMap<>());
     private final DataLayout[] indexedLayouts;
     private final Map<String, GlobalBinding> globals;
+    private final String weakFinalizer;
     private final GlobalBinding[] indexedGlobals;
     private final Map<String, CoreRepresentation> globalProofs = new LinkedHashMap<>();
     private final Map<String, Integer> indices = new LinkedHashMap<>();
@@ -121,6 +122,7 @@ public final class Program implements ExecutableProgram {
         boxedForeignDeclarations = CoreBoxedForeignDeclarations.admissions(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings found ? found : null;
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
+        weakFinalizer = moduleData.get("selectedWeakFinalizer") instanceof String id ? id : null;
         rubbishLiterals = new RubbishLiterals(language);
         foreignLinks = moduleData.get("foreignLinks") instanceof List<?> found ? (List<thc.ForeignBitcode>) found : List.of();
         packageScalarLinks = moduleData.get("packageScalarLinks") instanceof List<?> found ? (List<thc.PackageScalarLink>) found : List.of();
@@ -267,10 +269,12 @@ public final class Program implements ExecutableProgram {
         // metadata for constructors actually reached during selected lowering.
         if (module.containsKey("asyncExceptions") && !(module.get("asyncExceptions") instanceof Boolean))
             throw new IllegalArgumentException("asyncExceptions must be a Boolean");
-        Program builder = new Program(language, module, Boolean.TRUE.equals(module.get("asyncExceptions")), false, false, true, null);
-        Map<String, CodeValue> values = new LinkedHashMap<>();
         // The linker includes runtime-entered service roots as well as explicit Core references.
         var linked = thc.CoreModules.reachable(module, entries);
+        var preparation = new LinkedHashMap<>(module);
+        preparation.put("selectedWeakFinalizer", linked.get("selectedWeakFinalizer"));
+        Program builder = new Program(language, preparation, Boolean.TRUE.equals(module.get("asyncExceptions")), false, false, true, null);
+        Map<String, CodeValue> values = new LinkedHashMap<>();
         var selected = (List<Map<String,Object>>) linked.get("bindings");
         ArrayDeque<String> pending = new ArrayDeque<>();
         for (var binding : selected) pending.add((String) binding.get("id"));
@@ -2394,7 +2398,13 @@ public final class Program implements ExecutableProgram {
             if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.knownFunctionSignature(args.get(2), bindings));
             Expr[] operands = argumentOperands(args, scope, flags);
             operation.validate(loweredProofs(operands), flags, tupleProof);
-            return new WeakExpression(operation, operands).proven(evaluated(tupleProof, true));
+            Expr runner = null;
+            if (operation == WeakOp.MAKE) {
+                if (weakFinalizer == null || weakFinalizer.isBlank())
+                    throw new UnsupportedCore("mkWeak# requires a selected runtime finalizer ABI binding");
+                runner = globalRead(weakFinalizer, scope);
+            }
+            return new WeakExpression(operation, operands, runner).proven(evaluated(tupleProof, true));
         }
         if (primitive && StableNameOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(StableNameOp.named((String) fn.get(1)));
