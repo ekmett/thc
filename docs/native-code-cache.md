@@ -145,8 +145,17 @@ prerequisites. See the
 Build inputs use a compact package manifest selected with `@packages.json`, not
 loose CBD paths. The saved factory still executes through the AST runtime.
 
-For Linux x86-64 executables, the hosted feature also captures the transitive
-shared-library dependencies of retained package companions. The image host's glibc
+Linux x86-64 executable builds statically link the pinned JDK's `libjsvml.a`
+instead of shipping its `libjsvml.so` sidecar. The preparation feature derives
+and retains the provider's complete exported ABI from the matching shared and
+static libraries. The existing Native Image per-isolate startup hook registers
+it for ordinary JDK loading; no native library is loaded during hosted capture.
+`native-libraries.json` records the archive, shared-library, inspection-tool and
+recipe identities and the retained exports. This does not change vector
+execution: the `resource-copy` profile still uses Java arithmetic fallbacks.
+
+The hosted feature also captures the transitive shared-library dependencies of
+retained package companions. The image host's glibc
 loader selects providers; pinned `llvm-readobj` (or `THC_LLVM_READOBJ`) checks ELF
 metadata. This records image-build selection, not the original acquisition link.
 Provider names, paths and SHA-256 hashes, inspection tools and the system ABI

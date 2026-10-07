@@ -171,7 +171,8 @@ fi
 # CLI eager initialization can create LanguageCache entries before Truffle's
 # optional resource registry is populated. Apply the SAME finite class policy
 # during setup, after all features' registration hooks have completed.
-"$JAVA_HOME/bin/javac" -cp "$classpath" -d "$probe_dir" "$recipe_dir/PreparedInitializationFeature.java" "$recipe_dir/NativeLibraryCapture.java"
+"$JAVA_HOME/bin/javac" -cp "$classpath:$JAVA_HOME/lib/svm/builder/*" -d "$probe_dir" \
+    "$recipe_dir/PreparedInitializationFeature.java" "$recipe_dir/NativeLibraryCapture.java" "$recipe_dir/StaticVectorLibrary.java"
 classpath="$probe_dir:$classpath"
 if [[ "$mode" == executable-inputs ]]; then
     # Reuse hosted selection on the JVM before paying for image construction.
@@ -218,16 +219,23 @@ builder_patch=()
 if [[ -n "$builder_overlays" ]]; then
     builder_patch=("-J--patch-module=org.graalvm.nativeimage.builder=$builder_overlays")
 fi
+vector_feature_exports=()
+if [[ "$mode" == executable* ]]; then
+    for package in core core.jdk hosted hosted.c; do
+        vector_feature_exports+=("-J--add-exports=org.graalvm.nativeimage.builder/com.oracle.svm.$package=ALL-UNNAMED")
+    done
+    vector_feature_exports+=("-J--add-exports=org.graalvm.nativeimage.guest.staging/com.oracle.svm.guest.staging.jdk=ALL-UNNAMED")
+fi
 diagnostics=()
 if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then
     diagnostics=(-H:Dump=:2 -H:MethodFilter="$THC_NATIVE_IMAGE_METHOD_FILTER")
 fi
 exec "$JAVA_HOME/bin/native-image" -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcessorCount=2 --parallelism=2 \
-    "${builder_patch[@]}" "${foreign_patch[@]}" \
+    "${builder_patch[@]}" "${foreign_patch[@]}" "${vector_feature_exports[@]}" \
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
-    --features=PreparedInitializationFeature "-J-Dthc.nativeImage.initialization=$initialization_args" "@$foreign_args" \
+    --features=PreparedInitializationFeature "-J-Dthc.nativeImage.vectorRecipe=$recipe_dir" "-J-Dthc.nativeImage.initialization=$initialization_args" "@$foreign_args" \
     -H:+UnlockExperimentalVMOptions "@$vector_args" "${cache_options[@]}" "${executable_options[@]}" -H:+PrintCanonicalGraphStrings \
     -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$build_dir/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \

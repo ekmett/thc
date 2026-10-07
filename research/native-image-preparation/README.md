@@ -115,6 +115,37 @@ and it does not enable image cache reuse. A complete image cache still needs the
 builder/toolchain and remaining recipe inputs, verified outputs, and a check that
 provider selection stayed the same between discovery and image construction.
 
+Application-bound builds also select the pinned Linux AMD64 JDK's static
+`libjsvml.a`. `StaticVectorLibrary` derives the full exported ABI from its
+matching `libjsvml.so`, retains those archive symbols in the executable, and
+registers the builtin through the existing per-isolate startup hook. It checks
+the pinned linker script before merging exports. Archive, shared-library, tool,
+recipe and builder identities are recorded under `staticLibraries` in the native
+receipt. JVM `executable-inputs` discovery does not perform this builder step.
+The ordinary JVM and the separate runtime/cache image recipes are unchanged.
+
+The metadata and linker-script check runs without constructing an image. From
+the repository root, with the pinned Linux JDK and built runtime classes:
+
+```sh
+vector_check=build/static-vector-check
+mkdir -p "$vector_check/classes"
+"${THC_LLVM_READOBJ:-llvm-readobj}" --dyn-symbols --dynamic-table --sections \
+  --elf-output-style=JSON "$JAVA_HOME/lib/libjsvml.so" > "$vector_check/shared.json"
+"${THC_LLVM_READOBJ:-llvm-readobj}" --symbols --elf-output-style=JSON \
+  "$JAVA_HOME/lib/static/linux-amd64/glibc/libjsvml.a" > "$vector_check/archive.json"
+vector_cp="build/classes/java/main:$JAVA_HOME/lib/svm/builder/*"
+"$JAVA_HOME/bin/javac" -cp "$vector_cp" -d "$vector_check/classes" \
+  research/native-image-preparation/StaticVectorLibrary{,Test}.java
+"$JAVA_HOME/bin/java" -cp "$vector_check/classes:$vector_cp" StaticVectorLibraryTest \
+  "$vector_check/shared.json" "$vector_check/archive.json"
+```
+
+These explicit inputs check export preservation and reject missing exports,
+incompatible ELF markers and linker scripts. Actual linkage and JDK symbol
+lookup need an isolated image run; numeric vector results alone can conceal a
+failed provider load because the JDK falls back to Java.
+
 Each build directory needs one writer. On a shared host, hold its existing
 build-directory lease and check available capacity before starting an image
 builder. The script does not acquire a host-specific lock itself.
