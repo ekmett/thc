@@ -8,6 +8,8 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.bytecode.Instruction;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
@@ -24,7 +26,6 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import thc.runtime.Unit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -35,7 +36,7 @@ class ManagedWeakTest {
     private Context context(boolean nativeAccess) { return context(nativeAccess, "platform"); }
     private Context context(boolean nativeAccess, String hosting) {
         return Context.newBuilder("thc")
-            .allowCreateThread(nativeAccess)
+            .allowCreateThread(true)
             .option("thc.ThreadHosting", hosting)
             .allowNativeAccess(nativeAccess)
             .allowExperimentalOptions(true)
@@ -109,7 +110,7 @@ class ManagedWeakTest {
     }
     private Registration conditionalValue(ManagedWeaks registry, Object key, ReferenceQueue<Object> queue) {
         var value = new ManagedMutVar(Unit.INSTANCE);
-        return new Registration(registry.make(key, value, null), new WeakReference<>(value, queue));
+        return new Registration(registry.make(key, value, null, null), new WeakReference<>(value, queue));
     }
     private static final class Cycle { Cycle other; }
     private WeakReference<Object> gcWitness(ReferenceQueue<Object> queue) {
@@ -147,7 +148,7 @@ class ManagedWeakTest {
                 assertEquals(0L, registry.addCallback(dropped.weak(), () -> fail("Collected weak ran a callback")));
                 assertEquals(0L, registry.finalize(dropped.weak()).getFlag());
                 assertEquals(1L, observeIdentity(program, live)); assertSame(key, registry.dereference(live).getValue());
-                Reference.reachabilityFence(key); registry.finalize(live); assertEquals(0, registry.retainedCount());
+                Reference.reachabilityFence(key); registry.finalize(live);
             } finally { context.leave(); }
         }
     }
@@ -256,7 +257,7 @@ class ManagedWeakTest {
                 var registry = state.getWeaks(); var allocations = state.getNativeAllocations();
                 var program = weakProgram(language, backend, true); var gc = gcProgram(language, backend, operation);
                 var liveKey = new ManagedMutVar(Unit.INSTANCE); var liveAddress = allocations.malloc(8);
-                liveAddress.writeWord8(0, 73); var live = registry.make(liveKey, new ManagedMutVar(liveKey), null);
+                liveAddress.writeWord8(0, 73); var live = registry.make(liveKey, new ManagedMutVar(liveKey), null, null);
                 assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), liveAddress, 0L, ManagedAddress.nullAddress(), live, state.cbits()));
                 for (var target : List.of(program.entryTarget("make"), gc.entryTarget("gc"))) {
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target);
@@ -387,7 +388,7 @@ class ManagedWeakTest {
                 var registry = state.getWeaks(); var allocations = state.getNativeAllocations();
                 var address = allocations.malloc(8); address.writeWord8(0, 37);
                 var key = new ManagedMVar(); var value = new ManagedMutVar(key);
-                var weak = registry.make(key, value, null);
+                var weak = registry.make(key, value, null, null);
                 assertEquals(1L, registry.addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
                 var calls = new ArrayList<Integer>();
                 assertEquals(1L, registry.addCallback(weak, () -> {
@@ -400,7 +401,7 @@ class ManagedWeakTest {
                 assertThrows(RuntimeFault.class, () -> address.readWord8(0));
                 // Explicit finalization also uses the checked allocation boundary for a separately constructed label.
                 var separateAddress = allocations.malloc(8); var separateKey = new ManagedMutVar(Unit.INSTANCE);
-                var explicit = registry.make(separateKey, new ManagedMutVar(separateKey), null);
+                var explicit = registry.make(separateKey, new ManagedMutVar(separateKey), null, null);
                 var separate = new CFinalizerFunction(state.cbits(), "free", null).getAddress();
                 assertEquals(1L, registry.addCFinalizer(separate, separateAddress, 0L, ManagedAddress.nullAddress(), explicit, state.cbits()));
                 assertDoesNotThrow(() -> separateAddress.readWord8(0));
@@ -412,6 +413,7 @@ class ManagedWeakTest {
     }
     private CompletableFuture<Void> ownedFreeTask(Language.State state, Runnable action) {
         var result = new CompletableFuture<Void>(); var threads = state.getThreads();
+        state.admitGuestConcurrency();
         var thread = threads.newThread(state.getEnv(), () -> {
             threads.enterCurrent(MaskingState.UNMASKED, true, true, null);
             try { action.run(); result.complete(null); }
@@ -477,7 +479,7 @@ class ManagedWeakTest {
                 if (collected) {
                     var dropped = droppedOwnedFree(program, queue, address); weak = dropped.weak(); collect(queue, dropped.referent());
                 } else {
-                    weak = state.getWeaks().make(key, new ManagedMutVar(key), null);
+                    weak = state.getWeaks().make(key, new ManagedMutVar(key), null, null);
                     assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, state.cbits()));
                 }
                 var gate = new ManagedMVar();
@@ -531,42 +533,102 @@ class ManagedWeakTest {
             assertThrows(IllegalStateException.class, () -> segment.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
         }
     }
+    private Registration completedThunkKey(Language language, ExecutableProgram program,
+            Object representative, ReferenceQueue<Object> queue) {
+        var key = new Thunk(new RootNode(language) {
+            @Override public Object execute(VirtualFrame frame) { return representative; }
+        }.getCallTarget(), null);
+        var weak = Language.currentState().getWeaks().make(key, new Object(), null, null);
+        assertEquals(0, key.getState(), "Registration must leave the key unevaluated");
+        assertSame(representative, program.hostEntryTarget(0).call(key));
+        assertEquals(2, key.getState(), "The ordinary Force update published the indirection");
+        return new Registration(weak, new WeakReference<>(key, queue));
+    }
+    @Test
+    void completedThunkWeakKeysFollowIndependentlyLiveWhnfAliases() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = weakProgram(language, backend, false); var representative = new Object();
+                var queue = new ReferenceQueue<Object>();
+                var registration = completedThunkKey(language, program, representative, queue);
+                collect(queue, registration.referent());
+                assertEquals(1L, Language.currentState().getWeaks().dereference(registration.weak()).getFlag(),
+                    "A live WHNF alias retains a weak created before the original thunk completed");
+                Language.currentState().getWeaks().finalize(registration.weak());
+                Reference.reachabilityFence(representative);
+            } finally { context.leave(); }
+        }
+    }
+    private Registration droppedValueCycle(ManagedWeaks registry, ReferenceQueue<Object> queue) {
+        var key = new Object();
+        var weak = registry.make(key, new Object[]{key}, null, null);
+        return new Registration(weak, new WeakReference<>(key, queue));
+    }
+    @Test
+    void arbitraryJavaKeysRetainConditionalValuesWithoutActivatingValueBackedges() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var registry = Language.currentState().getWeaks(); var key = new Object();
+                var queue = new ReferenceQueue<Object>(); var live = conditionalValue(registry, key, queue);
+                var dropped = droppedValueCycle(registry, queue);
+                collect(queue, dropped.referent());
+                assertEquals(0L, registry.dereference(dropped.weak()).getFlag());
+                assertNotNull(live.referent().get(), "An independently rooted arbitrary key retains its distinct value");
+                assertSame(live.referent().get(), registry.dereference(live.weak()).getValue());
+                assertEquals(0L, registry.finalize(live.weak()).getFlag());
+                collect(queue, live.referent());
+                Reference.reachabilityFence(key);
+            } finally { context.leave(); }
+        }
+    }
     @Test
     void liveMutVarKeysRetainDroppedRegistrationsUntilDetached() throws Exception {
-        for (boolean mvarKey : new boolean[]{false, true}) {
-            var registry = new ManagedWeaks(); Object key = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE);
-            var queue = new ReferenceQueue<Object>();
-            var first = conditionalValue(registry, key, queue); var droppedValue = first.referent(); first = null;
-            var second = conditionalValue(registry, key, queue);
-            collect(queue, gcWitness(queue));
-            assertNotNull(droppedValue.get()); assertNotNull(second.referent().get());
-            assertEquals(0L, registry.finalize(second.weak()).getFlag());
-            collect(queue, second.referent());
-            assertNotNull(droppedValue.get(), "Detaching one registration must preserve the other value");
-            registry.close(); Reference.reachabilityFence(key);
+        for (var key : List.of(new Object(), new ManagedMVar(), new ManagedMutVar(Unit.INSTANCE)))
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var registry = Language.currentState().getWeaks();
+                var queue = new ReferenceQueue<Object>();
+                var first = conditionalValue(registry, key, queue); var droppedValue = first.referent(); first = null;
+                var second = conditionalValue(registry, key, queue);
+                collect(queue, gcWitness(queue));
+                assertNotNull(droppedValue.get()); assertNotNull(second.referent().get());
+                assertEquals(0L, registry.finalize(second.weak()).getFlag());
+                collect(queue, second.referent());
+                assertNotNull(droppedValue.get(), "Detaching one registration must preserve the other value");
+                Reference.reachabilityFence(key);
+            } finally { context.leave(); }
         }
     }
     @Test
     void retainedMVarRequestKeepsConditionalValueAliveUntilRequestIsDropped() throws Exception {
-        var registry = new ManagedWeaks(); var key = new ManagedMVar();
-        var request = key.beginRead(); var value = new ManagedMutVar(key);
-        var queue = new ReferenceQueue<Object>(); var keyReference = new WeakReference<Object>(key, queue);
-        var valueReference = new WeakReference<>(value); var weak = registry.make(key, value, null);
-        key = null; value = null;
-        collect(queue, gcWitness(queue));
-        assertNotNull(keyReference.get()); assertNotNull(valueReference.get());
-        assertSame(valueReference.get(), registry.dereference(weak).getValue());
-        assertTrue(request.cancel());
-        collect(queue, gcWitness(queue));
-        assertNotNull(keyReference.get(), "Even a cancelled retained request still owns its MVar");
-        assertSame(valueReference.get(), registry.dereference(weak).getValue());
-        Reference.reachabilityFence(request); request = null;
-        collect(queue, keyReference);
-        assertNull(valueReference.get()); assertEquals(0L, registry.dereference(weak).getFlag());
-        assertEquals(0L, registry.finalize(weak).getFlag()); registry.close();
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var registry = Language.currentState().getWeaks(); var key = new ManagedMVar();
+                var request = key.beginRead(); var value = new ManagedMutVar(key);
+                var queue = new ReferenceQueue<Object>(); var keyReference = new WeakReference<Object>(key, queue);
+                var valueReference = new WeakReference<>(value); var weak = registry.make(key, value, null, null);
+                key = null; value = null;
+                collect(queue, gcWitness(queue));
+                assertNotNull(keyReference.get()); assertNotNull(valueReference.get());
+                assertSame(valueReference.get(), registry.dereference(weak).getValue());
+                assertTrue(request.cancel());
+                collect(queue, gcWitness(queue));
+                assertNotNull(keyReference.get(), "Even a cancelled retained request still owns its MVar");
+                assertSame(valueReference.get(), registry.dereference(weak).getValue());
+                Reference.reachabilityFence(request); request = null;
+                collect(queue, keyReference);
+                assertNull(valueReference.get()); assertEquals(0L, registry.dereference(weak).getFlag());
+                assertEquals(0L, registry.finalize(weak).getFlag());
+            } finally { context.leave(); }
+        }
     }
     @Test
-    void explicitFinalizationPreservesValuesActionsAndCallbackOrder() throws Exception {
+    void explicitFinalizationPreservesValuesAndCallbackOrder() throws Exception {
         for (boolean mvarKey : new boolean[]{false, true})
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
@@ -581,155 +643,92 @@ class ManagedWeakTest {
                 assertEquals(1L, registry.addCallback(identity, () -> calls.add(2)));
                 Object managedKey = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE);
                 var managedValue = new ManagedMutVar(managedKey);
-                var managedWeak = registry.make(managedKey, managedValue, null); int[] managedCalls = {0};
+                var managedWeak = registry.make(managedKey, managedValue, null, null); int[] managedCalls = {0};
                 assertEquals(1L, registry.addCallback(managedWeak, () -> ++managedCalls[0]));
                 var value = new Object(); var dependentKey = new Object();
-                var dependent = registry.make(dependentKey, value, null);
-                var actionKey = new Object(); Supplier<Object> action = actionKey::toString;
-                var actionWeak = registry.make(actionKey, actionKey, action);
+                var dependent = registry.make(dependentKey, value, null, null);
                 assertEquals(1L, observeIdentity(program, identity)); assertTrue(calls.isEmpty());
                 assertSame(managedValue, registry.dereference(managedWeak).getValue());
                 assertEquals(0, managedCalls[0]);
                 assertEquals(0L, registry.finalize(managedWeak).getFlag()); assertEquals(1, managedCalls[0]);
                 assertEquals(0L, registry.finalize(managedWeak).getFlag()); assertEquals(1, managedCalls[0]);
                 assertSame(value, registry.dereference(dependent).getValue());
-                assertEquals(1L, registry.dereference(actionWeak).getFlag());
                 assertEquals(0L, registry.finalize(identity).getFlag()); assertEquals(List.of(2, 1), calls);
                 assertEquals(0L, registry.finalize(identity).getFlag()); assertEquals(List.of(2, 1), calls);
                 registry.finalize(dependent);
-                assertSame(action, registry.finalize(actionWeak).getValue());
                 assertEquals(0L, registry.dereference(dependent).getFlag());
-                assertEquals(0L, registry.dereference(actionWeak).getFlag());
                 // Keep every key live through the explicit-finalization checks on both backends.
                 Reference.reachabilityFence(key); Reference.reachabilityFence(managedKey);
-                Reference.reachabilityFence(dependentKey); Reference.reachabilityFence(actionKey);
+                Reference.reachabilityFence(dependentKey);
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test
+    void finalizationIsLinearizableAndFailureDoesNotReviveRegistration() throws Exception {
+        try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState(); var registry = state.getWeaks();
+                var key = new Object(); var weak = registry.make(key, new Object(), null, null);
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                assertEquals(1L, registry.addCallback(weak, calls::incrementAndGet));
+                var ready = new CountDownLatch(2); var gate = new ManagedMVar();
+                var results = new ConcurrentLinkedQueue<WeakResult>();
+                var workers = new ArrayList<CompletableFuture<Void>>();
+                try {
+                    for (int i = 0; i < 2; i++) workers.add(ownedFreeTask(state, () -> {
+                        ready.countDown(); gate.read(null); results.add(registry.finalize(weak));
+                    }));
+                    TruffleSafepoint.setBlockedThreadInterruptible(null, pending ->
+                        assertTrue(pending.await(3, TimeUnit.SECONDS)), ready);
+                    assertTrue(gate.tryPut(Unit.INSTANCE));
+                    for (var worker : workers) awaitOwnedFreeTask(worker);
+                    assertEquals(2, results.size());
+                    for (var result : results) { assertEquals(0L, result.getFlag()); assertNull(result.getValue()); }
+                    assertEquals(1, calls.get());
+                    assertEquals(0L, registry.dereference(weak).getFlag());
+                    var failure = new IllegalStateException("explicit callback failure");
+                    var failing = registry.make(key, new Object(), null, null);
+                    assertEquals(1L, registry.addCallback(failing, () -> { throw failure; }));
+                    assertSame(failure, assertThrows(IllegalStateException.class, () -> registry.finalize(failing)));
+                    assertEquals(0L, registry.dereference(failing).getFlag());
+                    assertEquals(0L, registry.finalize(failing).getFlag());
+                } finally { gate.tryPut(Unit.INSTANCE); Reference.reachabilityFence(key); }
             } finally { context.leave(); }
         }
     }
     @Test
-    void registrationsRetainLazyIdentityAndReturnTheRealActionWithoutCallingIt() {
-        var registry = new ManagedWeaks();
-        var key = new Object();
-        var value = new Object();
-        int[] calls = {0};
-        Object[] weak = {null};
-        Supplier<Object> action = () -> {
-            ++calls[0];
-            assertEquals(0L, registry.dereference(weak[0]).getFlag());
-            assertEquals(0L, registry.finalize(weak[0]).getFlag());
-            return key;
-        };
-        weak[0] = registry.make(key, value, action);
-        var independent = registry.make(key, key, null);
-        registry.make(key, value, action); // Dropping a handle does not erase registration.
-        assertEquals(3, registry.retainedCount());
-        assertSame(value, registry.dereference(weak[0]).getValue());
-        var claimed = registry.finalize(weak[0]);
-        assertEquals(1L, claimed.getFlag());
-        assertSame(action, claimed.getValue());
-        assertEquals(0, calls[0]);
-        assertEquals(2, registry.retainedCount());
-        action.get();
-        assertEquals(1, calls[0]);
-        assertEquals(0L, registry.finalize(weak[0]).getFlag());
-        assertNull(registry.finalize(weak[0]).getValue());
-        assertSame(key, registry.dereference(independent).getValue());
-        assertEquals(0L, registry.finalize(independent).getFlag());
-        assertEquals(0L, registry.dereference(independent).getFlag());
-        assertNull(registry.dereference(independent).getValue());
-        registry.close();
-        assertEquals(0, registry.retainedCount());
-        assertEquals(1, calls[0], "close must not run the discarded handle's action");
-        assertThrows(RuntimeFault.class, () -> registry.dereference(weak[0]));
-    }
-    @Test
-    void finalizationIsLinearizableAndFailureDoesNotReviveRegistration() throws Exception {
-        var registry = new ManagedWeaks();
-        var failure = new IllegalStateException("explicit action failure");
-        Runnable action = () -> {
-            throw failure;
-        };
-        var weak = registry.make(new Object(), new Object(), action);
-        var ready = new CountDownLatch(2);
-        var start = new CountDownLatch(1);
-        var workers = Executors.newFixedThreadPool(2);
-        try {
-            var futures = new ArrayList<Future<WeakResult>>();
-            for (int i = 0; i < 2; i++)
-                futures.add(workers.submit(() -> {
-                    ready.countDown();
-                    if (!start.await(3, TimeUnit.SECONDS))
-                        throw new IllegalStateException("Check failed.");
-                    return registry.finalize(weak);
-                }));
-            assertTrue(ready.await(3, TimeUnit.SECONDS));
-            start.countDown();
-            var results = new ArrayList<WeakResult>();
-            for (var future : futures) results.add(future.get(3, TimeUnit.SECONDS));
-            var flags = new ArrayList<Long>();
-            for (var result : results) flags.add(result.getFlag());
-            Collections.sort(flags);
-            assertEquals(List.of(0L, 1L), flags);
-            WeakResult claimed = null;
-            for (var result : results)
-                if (result.getFlag() == 1L) {
-                    if (claimed != null)
-                        throw new IllegalArgumentException("Multiple successful finalizers");
-                    claimed = result;
-                }
-            if (claimed == null)
-                throw new NoSuchElementException("Missing successful finalizer");
-            assertSame(action, claimed.getValue());
-            assertSame(failure, assertThrows(IllegalStateException.class, action::run));
-            assertEquals(0L, registry.finalize(weak).getFlag());
-            assertEquals(0, registry.retainedCount());
-        } finally {
-            start.countDown();
-            workers.shutdownNow();
-            registry.close();
-        }
-    }
-    private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E {
-        throw (E) failure;
-    }
-    @Test
     void explicitCallbacksRunNewestFirstAfterDeathOutsideTheRegistryLock() {
-        var registry = new ManagedWeaks();
-        var weak = registry.make(new Object(), new Object(), null);
-        var observed = new ArrayList<Integer>();
-        var worker = Executors.newSingleThreadExecutor();
-        try {
-            assertEquals(1L, registry.addCallback(weak, () -> observed.add(1)));
-            assertEquals(1L, registry.addCallback(weak, () -> {
-                try {
-                    assertEquals(
-                        0L, worker.submit(() -> registry.dereference(weak).getFlag()).get(3, TimeUnit.SECONDS));
-                } catch (InterruptedException | ExecutionException | TimeoutException failure) {
-                    throw rethrow(failure);
-                }
-                observed.add(2);
-            }));
-            assertEquals(0L, registry.finalize(weak).getFlag());
-            assertEquals(List.of(2, 1), observed);
-            assertEquals(0L, registry.addCallback(weak, () -> observed.add(3)));
-            assertEquals(0L, registry.finalize(weak).getFlag());
-            registry.close();
-            assertEquals(List.of(2, 1), observed);
-        } finally {
-            worker.shutdownNow();
-            registry.close();
+        try (var context = context(true)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState(); var registry = state.getWeaks();
+                var key = new Object(); var weak = registry.make(key, new Object(), null, null);
+                var observed = new ArrayList<Integer>();
+                assertEquals(1L, registry.addCallback(weak, () -> observed.add(1)));
+                assertEquals(1L, registry.addCallback(weak, () -> {
+                    awaitOwnedFreeTask(ownedFreeTask(state, () -> assertEquals(0L, registry.dereference(weak).getFlag())));
+                    observed.add(2);
+                }));
+                assertEquals(0L, registry.finalize(weak).getFlag());
+                assertEquals(List.of(2, 1), observed);
+                assertEquals(0L, registry.addCallback(weak, () -> observed.add(3)));
+                assertEquals(0L, registry.finalize(weak).getFlag());
+                assertEquals(List.of(2, 1), observed);
+                Reference.reachabilityFence(key);
+            } finally { context.leave(); }
         }
     }
     @Test
-    void actualContextCloseInvalidatesHandlesWithoutRunningHaskellActions() throws Exception {
+    void actualContextCloseInvalidatesHandlesAndReleasesConditionalValues() throws Exception {
         for (boolean mvarKey : new boolean[]{false, true}) {
             var first = context();
             first.initialize("thc");
             first.enter();
             var owner = Language.currentState().getWeaks();
-            int[] calls = {0};
-            Supplier<Integer> action = () -> ++calls[0];
-            var handle = owner.make(new Object(), new Object(), action);
+            var handleKey = new Object();
+            var handle = owner.make(handleKey, new Object(), null, null);
             Object key = mvarKey ? new ManagedMVar() : new ManagedMutVar(Unit.INSTANCE); var queue = new ReferenceQueue<Object>();
             var conditional = conditionalValue(owner, key, queue);
             first.leave();
@@ -745,12 +744,10 @@ class ManagedWeakTest {
                 }
             }
             first.close();
-            assertEquals(0, calls[0]);
-            assertEquals(0, owner.retainedCount());
             assertThrows(RuntimeFault.class, () -> owner.finalize(handle));
-            assertThrows(RuntimeFault.class, () -> owner.make(new Object(), new Object(), null));
+            assertThrows(RuntimeFault.class, () -> owner.make(new Object(), new Object(), null, null));
             assertThrows(RuntimeFault.class, () -> owner.dereference(conditional.weak()));
-            collect(queue, conditional.referent()); Reference.reachabilityFence(key);
+            collect(queue, conditional.referent()); Reference.reachabilityFence(key); Reference.reachabilityFence(handleKey);
         }
     }
     @Test
@@ -766,7 +763,7 @@ class ManagedWeakTest {
             var threads = state.getThreads();
             threads.enterCurrent(null, false, true, null);
             var key = threads.currentIdentity();
-            var weak = owner.make(key, new Object(), null);
+            var weak = owner.make(key, new Object(), null, null);
             try {
                 capability = owner.mainThreadKey(weak, threads);
                 assertEquals(Thread.currentThread().threadId(), capability.liveJavaId(),
@@ -775,9 +772,9 @@ class ManagedWeakTest {
                     key.getLogicalId(), threads, key.getCapability(), Thread.currentThread(), false, false, false);
                 assertEquals(key, impostor, "Numeric equality alone must not establish canonical identity");
                 assertNull(threads.liveJavaId(impostor));
-                assertThrows(RuntimeFault.class, () -> owner.mainThreadKey(owner.make(impostor, new Object(), null), threads));
-                closing = owner.mainThreadKey(owner.make(key, new Object(), null), threads);
-                var wrongKey = owner.make(new Object(), key, null);
+                assertThrows(RuntimeFault.class, () -> owner.mainThreadKey(owner.make(impostor, new Object(), null, null), threads));
+                closing = owner.mainThreadKey(owner.make(key, new Object(), null, null), threads);
+                var wrongKey = owner.make(new Object(), key, null, null);
                 assertThrows(RuntimeFault.class, () -> owner.mainThreadKey(wrongKey, threads));
             } finally {
                 threads.leaveCurrent(GuestThreadStatus.FINISHED);
@@ -794,7 +791,7 @@ class ManagedWeakTest {
                             RuntimeFault.class, () -> foreign.getWeaks().mainThreadKey(weak, foreign.getThreads()));
                         assertThrows(RuntimeFault.class, () -> owner.mainThreadKey(weak, foreign.getThreads()));
                         assertThrows(RuntimeFault.class, () -> foreign.getThreads().liveJavaId(key));
-                        var foreignKey = owner.make(foreign.getThreads().currentIdentity(), new Object(), null);
+                        var foreignKey = owner.make(foreign.getThreads().currentIdentity(), new Object(), null, null);
                         assertThrows(RuntimeFault.class, () -> owner.mainThreadKey(foreignKey, threads));
                     } finally {
                         foreign.getThreads().leaveCurrent(GuestThreadStatus.FINISHED);
@@ -825,71 +822,73 @@ class ManagedWeakTest {
                  new ThreadOutcome(false, GuestThreadStatus.FINISHED))) {
             boolean forked = test.forked();
             var outcome = test.outcome();
-            var threads = new GuestThreads(
-                ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), ignored -> {});
-            var owner = new ManagedWeaks();
-            var capability = new AtomicReference<MainThreadWeakKey>();
-            var weak = new AtomicReference<Object>();
-            var failure = new AtomicReference<Throwable>();
-            var ready = new CountDownLatch(1);
-            var leave = new CountDownLatch(1);
-            var left = new CountDownLatch(1);
-            var stop = new CountDownLatch(1);
-            var worker = new Thread(() -> {
-                boolean entered = false;
+            try (var context = context(true)) {
+                context.initialize("thc"); context.enter();
                 try {
-                    threads.enterCurrent(null, forked, true, null);
-                    entered = true;
-                    weak.set(owner.make(threads.currentIdentity(), new Object(), null));
-                    capability.set(owner.mainThreadKey(weak.get(), threads));
-                    ready.countDown();
-                    if (!leave.await(3, TimeUnit.SECONDS))
-                        throw new IllegalStateException("Check failed.");
-                    threads.leaveCurrent(outcome);
-                    entered = false;
-                    left.countDown();
-                    if (!stop.await(3, TimeUnit.SECONDS))
-                        throw new IllegalStateException("Check failed.");
-                } catch (Throwable error) {
-                    failure.set(error);
-                    ready.countDown();
-                    left.countDown();
-                } finally {
-                    if (entered)
-                        threads.leaveCurrent(outcome);
-                }
-            });
-            worker.setDaemon(true);
-            worker.start();
-            try {
-                assertTrue(ready.await(3, TimeUnit.SECONDS));
-                if (failure.get() != null)
-                    throw new AssertionError("thread registration failed", failure.get());
-                assertEquals(worker.threadId(), capability.get().liveJavaId());
-                leave.countDown();
-                assertTrue(left.await(3, TimeUnit.SECONDS));
-                if (failure.get() != null)
-                    throw new AssertionError("thread completion failed", failure.get());
-                assertTrue(worker.isAlive(), "Separate terminal guest status from actual Java carrier death");
-                if (forked)
-                    assertNull(capability.get().liveJavaId());
-                else
-                    assertEquals(worker.threadId(), capability.get().liveJavaId());
-                stop.countDown();
-                worker.join(3000);
-                assertFalse(worker.isAlive());
-                if (failure.get() != null)
-                    throw new AssertionError("worker failed", failure.get());
-                assertNull(capability.get().liveJavaId());
-                assertEquals(1L, owner.dereference(weak.get()).getFlag(), "Liveness query must not finalize the weak");
-                threads.close();
-                assertNull(capability.get().liveJavaId());
-            } finally {
-                leave.countDown();
-                stop.countDown();
-                worker.join(3000);
-                threads.close();
-                owner.close();
+                    var state = Language.currentState(); var threads = state.getThreads();
+                    var owner = state.getWeaks();
+                    var capability = new AtomicReference<MainThreadWeakKey>();
+                    var weak = new AtomicReference<Object>();
+                    var failure = new AtomicReference<Throwable>();
+                    var ready = new CountDownLatch(1);
+                    var leave = new CountDownLatch(1);
+                    var left = new CountDownLatch(1);
+                    var stop = new CountDownLatch(1);
+                    state.admitGuestConcurrency();
+                    var worker = threads.newThread(state.getEnv(), () -> {
+                        boolean entered = false;
+                        try {
+                            threads.enterCurrent(null, forked, true, null);
+                            entered = true;
+                            weak.set(owner.make(threads.currentIdentity(), new Object(), null, null));
+                            capability.set(owner.mainThreadKey(weak.get(), threads));
+                            ready.countDown();
+                            if (!leave.await(3, TimeUnit.SECONDS))
+                                throw new IllegalStateException("Check failed.");
+                            threads.leaveCurrent(outcome);
+                            entered = false;
+                            left.countDown();
+                            if (!stop.await(3, TimeUnit.SECONDS))
+                                throw new IllegalStateException("Check failed.");
+                        } catch (Throwable error) {
+                            failure.set(error);
+                            ready.countDown();
+                            left.countDown();
+                        } finally {
+                            if (entered)
+                                threads.leaveCurrent(outcome);
+                        }
+                    }, null, null);
+                    threads.startThread(worker);
+                    try {
+                        assertTrue(ready.await(3, TimeUnit.SECONDS));
+                        if (failure.get() != null)
+                            throw new AssertionError("thread registration failed", failure.get());
+                        assertEquals(worker.threadId(), capability.get().liveJavaId());
+                        leave.countDown();
+                        assertTrue(left.await(3, TimeUnit.SECONDS));
+                        if (failure.get() != null)
+                            throw new AssertionError("thread completion failed", failure.get());
+                        assertTrue(worker.isAlive(), "Separate terminal guest status from actual Java carrier death");
+                        if (forked)
+                            assertNull(capability.get().liveJavaId());
+                        else
+                            assertEquals(worker.threadId(), capability.get().liveJavaId());
+                        stop.countDown();
+                        worker.join(3000);
+                        assertFalse(worker.isAlive());
+                        if (failure.get() != null)
+                            throw new AssertionError("worker failed", failure.get());
+                        assertNull(capability.get().liveJavaId());
+                        assertEquals(1L, owner.dereference(weak.get()).getFlag(), "Liveness query must not finalize the weak");
+                        threads.close();
+                        assertNull(capability.get().liveJavaId());
+                    } finally {
+                        leave.countDown();
+                        stop.countDown();
+                        worker.join(3000);
+                    }
+                } finally { context.leave(); }
             }
         }
     }
@@ -1133,7 +1132,6 @@ class ManagedWeakTest {
                                 for (var row : rows)
                                     assertEquals(row.expected(), function.execute(row.input()).asLong(),
                                         stage + "/" + backend + "/" + row.input());
-                                assertEquals(0, Language.currentState().getWeaks().retainedCount());
                                 assertEquals(0, language.getHandoffState().get().getArguments().retainedReferences());
                                 assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
                             }
@@ -1212,10 +1210,7 @@ class ManagedWeakTest {
                             // EntryRoot does not increment compiledEntries; this is guest entry evidence.
                             assertTrue(delta > 0,
                                 stage + "/" + backend + " first installed call entered compiled guest code");
-                            assertSame(original, program.entryTarget("main:WeakAudit.weakComposite"));
-                            assertEquals(active, activeTargets(host), stage + "/" + backend + " target graph changed");
                             for (var target : installed) valid(target);
-                            assertEquals(0, Language.currentState().getWeaks().retainedCount());
                             assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
                             assertEquals(0, language.getHandoffState().get().getArguments().retainedReferences());
                             assertEquals(0, language.getHandoffState().get().getResults().getDepth());

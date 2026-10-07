@@ -135,7 +135,7 @@ class CoreBoxedForeignAdmissionTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); var threads = state.getThreads(); threads.enterCurrent();
                 try (var program = program(language, backend, consumer, original.record())) {
                     var target = program.entryTarget(ENTRY); var key = threads.currentIdentity();
-                    var first = state.getWeaks().make(key, new Object(), null); var second = state.getWeaks().make(key, new Object(), null);
+                    var first = state.getWeaks().make(key, new Object(), null, null); var second = state.getWeaks().make(key, new Object(), null, null);
                     assertEquals(0L, Calls.target(target, new Object[]{0L, first, Unit.INSTANCE}));
                     assertEquals(key.getJavaId(), threads.mainThreadRegistration().liveJavaId());
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true); target.getClass().getMethod("waitForCompilation").invoke(target); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));

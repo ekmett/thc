@@ -110,7 +110,7 @@ class PackagePointerCellsTest {
         return new PackageScalarSignature(name, name, List.of(arguments), result);
     }
     private Context context() {
-        return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+        return Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true).allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").build();
     }
@@ -210,12 +210,12 @@ class PackagePointerCellsTest {
                 assertArrayEquals(fixture.compressed(), out.copyBytesOut(0, fixture.compressed().length));
                 assertTrue(stream.readAddressByteOffset(0).sameLocation(input.plus(original.length)));
                 assertTrue(stream.readAddressByteOffset(24).sameLocation(output.plus(fixture.compressed().length)));
-                var action = new Object();
-                var weak = state.getWeaks().make(new Object(), new Object(), action);
+                var key = new Object();
+                var weak = state.getWeaks().make(key, new Object(), null, null);
                 assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("end_stream"), address, 0, ManagedAddress.nullAddress(), weak, state.cbits()));
                 var finalized = state.getWeaks().finalize(weak);
-                assertEquals(1L, finalized.getFlag());
-                assertSame(action, finalized.getValue(), "flag reports the unforced Haskell action, not the C callback");
+                assertEquals(0L, finalized.getFlag()); assertNull(finalized.getValue());
+                java.lang.ref.Reference.reachabilityFence(key);
                 assertEquals(1L, call(fixture, "count"));
                 assertSame(ManagedAddress.nullAddress(), stream.readAddressByteOffset(56), "deflateEnd clears native state");
                 assertEquals(0L, state.getWeaks().finalize(weak).getFlag());

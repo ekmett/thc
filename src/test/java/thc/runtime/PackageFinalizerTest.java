@@ -34,7 +34,7 @@ class PackageFinalizerTest {
         unsigned long token_count(void) { return tokens; }
         """;
     private Context context() {
-        return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+        return Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true).allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").build();
     }
@@ -71,13 +71,14 @@ class PackageFinalizerTest {
                 var first = provider.finalizerLabel("first"); var second = provider.finalizerLabel("second");
                 assertTrue(first.sameLocation(provider.finalizerLabel("first"))); assertFalse(first.sameLocation(second));
                 byte[] bytes = {71, 0, 93}; var pointer = ManagedAddress.fromByteArray(bytes).plus(1);
-                Object action = new Object(); var weak = state.getWeaks().make(new Object(), new Object(), action);
+                var key = new Object(); var weak = state.getWeaks().make(key, new Object(), null, null);
                 assertEquals(1L, state.getWeaks().addCFinalizer(first, pointer, 0, ManagedAddress.nullAddress(), weak, provider));
                 assertEquals(1L, state.getWeaks().addCFinalizer(second, pointer, 0, ManagedAddress.nullAddress(), weak, provider));
                 assertEquals(1L, state.getWeaks().addCallback(weak, () ->
                     assertEquals(0L, state.getWeaks().dereference(weak).getFlag(), "DEAD is visible before C")));
                 var result = state.getWeaks().finalize(weak);
-                assertSame(action, result.getValue()); assertEquals(1L, result.getFlag());
+                assertNull(result.getValue()); assertEquals(0L, result.getFlag());
+                java.lang.ref.Reference.reachabilityFence(key);
                 assertArrayEquals(new byte[]{71, 21, 93}, bytes, "C visits the actual interior pointer, newest first");
                 assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
                 assertEquals(0L, state.getWeaks().addCFinalizer(first, pointer, 0, ManagedAddress.nullAddress(), weak, provider));
@@ -121,7 +122,7 @@ class PackageFinalizerTest {
                     try {
                         var other = Language.currentState(null); other.getPackageCbits().link(link);
                         assertThrows(RuntimeFault.class, () -> callback.finalizerFunction().invoke(pointer));
-                        var weak = other.getWeaks().make(new Object(), new Object(), null);
+                        var weak = other.getWeaks().make(new Object(), new Object(), null, null);
                         assertThrows(RuntimeFault.class, () -> other.getWeaks().addCFinalizer(callback, pointer, 0, ManagedAddress.nullAddress(), weak, other.cbits()));
                     } finally { second.leave(); }
                 }
@@ -139,7 +140,7 @@ class PackageFinalizerTest {
                 var state = Language.currentState(null); state.getPackageCbits().link(link);
                 var provider = state.cbits(); var function = provider.finalizerLabel("first");
                 var pointer = state.getNativeAllocations().malloc(8);
-                var key = new Object(); var weak = state.getWeaks().make(key, key, null);
+                var key = new Object(); var weak = state.getWeaks().make(key, key, null, null);
                 assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(function, pointer, 1, ManagedAddress.nullAddress(), weak, provider));
                 assertEquals(1L, state.getWeaks().addCFinalizer(function, pointer, 0, ManagedAddress.nullAddress(), weak, provider));
                 java.lang.ref.Reference.reachabilityFence(key);
@@ -189,7 +190,7 @@ class PackageFinalizerTest {
                 for (long flag : new long[]{1, -7, Long.MIN_VALUE}) {
                     byte[] bytes = {91, 4, 2, 93}; var storage = ManagedAddress.fromByteArray(bytes);
                     var env = storage.plus(1); var object = storage.plus(2);
-                    var key = new Object(); var weak = state.getWeaks().make(key, key, null);
+                    var key = new Object(); var weak = state.getWeaks().make(key, key, null, null);
                     var function = state.cbits().finalizerLabel("environment");
                     assertEquals(1L, ScalarTestCalls.callScalarTestTarget(program.entryTarget("add"),
                         new Object[]{0L, function, object, flag, env, weak, Unit.INSTANCE}));
@@ -204,7 +205,7 @@ class PackageFinalizerTest {
                 function.invoke(alias, alias); assertArrayEquals(new byte[]{77}, aliasBytes);
                 byte[] nullBytes = {2}; function.invoke(ManagedAddress.nullAddress(), ManagedAddress.fromByteArray(nullBytes));
                 assertArrayEquals(new byte[]{27}, nullBytes); function.invoke(ManagedAddress.nullAddress(), ManagedAddress.nullAddress());
-                var key = new Object(); var weak = state.getWeaks().make(key, key, null);
+                var key = new Object(); var weak = state.getWeaks().make(key, key, null, null);
                 assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(function.getAddress(), alias,
                     0, ManagedAddress.nullAddress(), weak, state.cbits()));
                 assertEquals(1L, state.getWeaks().dereference(weak).getFlag(), "wrong arity cannot claim the weak");
@@ -225,7 +226,7 @@ class PackageFinalizerTest {
             try {
                 var state = Language.currentState(null); state.getPackageCbits().link(link);
                 var token = state.getStablePointers().make(new Object()); var key = new Object();
-                var weak = state.getWeaks().make(key, key, null);
+                var weak = state.getWeaks().make(key, key, null, null);
                 assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("token_object"), token,
                     0L, ManagedAddress.nullAddress(), weak, state.cbits()));
                 assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel("token_environment"), token,

@@ -203,7 +203,7 @@ public class PackageNativeForeignTest {
         }
     }
     private Context globalContext() {
-        return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+        return Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true).allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").build();
     }
@@ -241,12 +241,13 @@ public class PackageNativeForeignTest {
                             } finally { release.call(resized); }
                         }
                         case "finalizer" -> {
-                            var weak = state.getWeaks().make(new Object(), new Object(), null);
+                            var key = new Object(); var weak = state.getWeaks().make(key, key, null, null);
                             var provider = state.cbits();
                             assertEquals(1L, state.getWeaks().addCFinalizer(provider.finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, provider));
                             state.getWeaks().finalize(weak);
                             consumed = true;
                             assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
+                            java.lang.ref.Reference.reachabilityFence(key);
                         }
                         default -> throw new AssertionError(operation);
                     }

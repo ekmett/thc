@@ -104,8 +104,8 @@ class CoreMainThreadForeignTest {
                 threads.enterCurrent(null, false, true, null);
                 try {
                     var target = program.entryTarget("register"); var key = threads.currentIdentity(); var wrongValue = new Object();
-                    var first = runtime.getWeaks().make(key, wrongValue, null);
-                    var second = runtime.getWeaks().make(key, new Object(), null);
+                    var first = runtime.getWeaks().make(key, wrongValue, null, null);
+                    var second = runtime.getWeaks().make(key, new Object(), null, null);
                     var resultShape = new TupleShape(CoreRepresentations.parse(tuple(false)), language);
                     var destination = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
                     class Caller {
@@ -155,10 +155,10 @@ class CoreMainThreadForeignTest {
                 var runtime = Language.currentState(); var threads = runtime.getThreads(); threads.enterCurrent();
                 try {
                     var self = threads.currentIdentity();
-                    CoreMainThreadForeign.register(null, runtime.getWeaks().make(self, new Object(), null));
+                    CoreMainThreadForeign.register(null, runtime.getWeaks().make(self, new Object(), null, null));
                     var original = threads.mainThreadRegistration();
                     var impostor = new GuestThreadId(self.getLogicalId(), threads, 0, Thread.currentThread(), false);
-                    var weak = runtime.getWeaks().make(impostor, new Object(), null);
+                    var weak = runtime.getWeaks().make(impostor, new Object(), null, null);
                     assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.register(null, weak));
                     assertSame(original, threads.mainThreadRegistration());
                 } finally { threads.leaveCurrent(); }

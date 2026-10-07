@@ -18,7 +18,6 @@ import thc.Language;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ContextOwnershipTest {
@@ -36,7 +35,8 @@ class ContextOwnershipTest {
                         var address = ManagedAddress.fromHex("616263");
                         var stable = state.getStablePointers().make(address);
                         state.getStablePointers().getOrSetSharedCAF(SharedCAFStore.EVENT_MANAGER, stable);
-                        var weak = state.getWeaks().make(address, stable, (Supplier<Integer>) () -> ++finalizerCalls);
+                        var weak = state.getWeaks().make(address, stable, null, null);
+                        assertEquals(1L, state.getWeaks().addCallback(weak, () -> ++finalizerCalls));
                         long bits = state.getNativeAddresses().project(address);
                         return new Roots(state, weak, stable, address, bits, Objects.requireNonNull(state.getNativeAddresses().transport(address)));
                     } finally { context.leave(); }
@@ -44,7 +44,6 @@ class ContextOwnershipTest {
                 void live(Context context, Roots roots) throws Exception {
                     context.enter();
                     try {
-                        assertEquals(1, roots.state.getWeaks().retainedCount());
                         assertSame(roots.stable, roots.state.getWeaks().dereference(roots.weak).getValue());
                         assertSame(roots.address, roots.state.getStablePointers().dereference(roots.stable));
                         assertTrue(interop.isPointer(roots.pointer));
@@ -53,7 +52,6 @@ class ContextOwnershipTest {
                     } finally { context.leave(); }
                 }
                 void retired(Roots roots) {
-                    assertEquals(0, roots.state.getWeaks().retainedCount());
                     assertThrows(RuntimeFault.class, () -> roots.state.getWeaks().dereference(roots.weak));
                     assertThrows(RuntimeFault.class, () -> roots.state.getStablePointers().dereference(roots.stable));
                     assertThrows(RuntimeFault.class, () -> roots.state.getStablePointers().getOrSetSharedCAF(
@@ -65,8 +63,8 @@ class ContextOwnershipTest {
                 }
             }
             var checks = new Checks();
-            try (var first = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build();
-                 var second = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build()) {
+            try (var first = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).allowCreateThread(true).build();
+                 var second = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).allowCreateThread(true).build()) {
                 var firstRoots = checks.capture(first);
                 var secondRoots = checks.capture(second);
                 checks.live(first, firstRoots); checks.live(second, secondRoots);
