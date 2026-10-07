@@ -92,15 +92,20 @@ final class GenericTupleCaller extends Node {
                 offset += count;
                 continue;
             }
-            entry.execute(frame, function.target, packet);
-            if (metrics.getEnabled()) metrics.incrementIndirectCalls();
-            if (tail) {
-                tailCheck.check(frame, function.target, packet);
-                destination.consume(frame, this, Calls.indirect(call, function.target, packet), root.getTupleResult());
-            } else {
-                packet[0] = 0L;
-                try { destination.consume(frame, this, Calls.indirect(call, function.target, packet), root.getTupleResult()); }
-                catch (TailCall transfer) { bounce.execute(frame, transfer); }
+            try {
+                entry.execute(frame, function.target, packet);
+                if (metrics.getEnabled()) metrics.incrementIndirectCalls();
+                if (tail) {
+                    tailCheck.check(frame, function.target, packet);
+                    destination.consume(frame, this, Calls.indirect(call, function.target, packet), root.getTupleResult());
+                } else {
+                    packet[0] = 0L;
+                    try { destination.consume(frame, this, Calls.indirect(call, function.target, packet), root.getTupleResult()); }
+                    catch (TailCall transfer) { bounce.execute(frame, transfer); }
+                }
+            } catch (DelimitedCut cut) {
+                if (!DelimitedControl.enabled(this)) throw cut;
+                throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this, root.getTupleResult());
             }
             return;
         }
@@ -113,11 +118,7 @@ final class GenericTupleCaller extends Node {
             @Override public Object resume(MaterializedFrame resumed, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
                 try { resumeOverapplication(resumed, input.get(), savedArguments.clone(), next); }
                 catch (DelimitedCut nested) {
-                    var frames = nested.getFrames();
-                    DelimitedStep last = frames.isEmpty() ? null : frames.get(frames.size() - 1).getStep();
-                    if (destination instanceof AstTupleDestination &&
-                        (!(last instanceof DelimitedPendingApplication pending) || pending.getDestination() != destination))
-                        nested.append(resumed, new DelimitedTupleStep(destination, GenericTupleCaller.this));
+                    DelimitedControl.tupleCut(nested, resumed, destination, GenericTupleCaller.this);
                     throw nested;
                 }
                 return destination.delimitedResult(resumed, GenericTupleCaller.this);

@@ -256,7 +256,7 @@ Details: [compact regions and serialization](compact-regions.md),
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `prompt#` | Reusable/multi-shot IO continuations support saved catch/mask scopes, async delivery and invocation-local scheduling owners. Capturing applications with unboxed tuple/vector inputs and new capture across a parked one-shot caller chain are not yet supported. |
+| `prompt#` | Reusable/multi-shot IO continuations support saved catch/mask scopes, async delivery and invocation-local scheduling owners. AST typed calls retain their remaining logical arguments and authenticated aggregate result descriptors across capture. Bytecode aggregate-input capture remains unqualified; new capture across a parked one-shot caller chain retains the limits described in the delimited-continuation guide. |
 | `control0#` | Same supported control slice and composition/input restrictions as `prompt#`; saved frames share heap effects rather than rolling them back. |
 | `annotateStack#` | Real lazy annotations follow dynamic stack extent and supported saved continuations. Snapshots are managed metadata, not raw GHC `ANN_FRAME` memory. Mixed async/delimited composition has the restriction above. |
 | `keepAlive#` | Retains the reference through actual completion, including supported AST and bytecode suspension, with reachability fences on ordinary and exceptional exits. Continuations preserve scalar, direct vector, tuple and supported sum result representations; they may throw without producing any result carrier. Exact reference, State and continuation input requirements remain. |

@@ -50,6 +50,10 @@ public final class TupleBounce extends Node {
                 destination.consume(frame, this, result instanceof SavedGuestContinuation continuation ? new AstTailYield(continuation, next.getTarget()) : result, root.getTupleResult());
                 return;
             } catch (TailCall transfer) { next = transfer; }
+            catch (DelimitedCut cut) {
+                if (!DelimitedControl.enabled(this)) throw cut;
+                throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this, root.getTupleResult());
+            }
         }
     }
 }

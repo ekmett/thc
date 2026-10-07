@@ -5,6 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
@@ -102,6 +103,8 @@ final class InputCallArm extends Node {
             CompilerDirectives.transferToInterpreter();
             Object[] savedValues = values == null ? null : values.clone();
             throw cut.append((saved, value) -> finish(saved, value, savedValues));
+        } catch (DelimitedCut cut) {
+            throw captureCall(frame, cut, values);
         }
         return finish(frame, result, values);
     }
@@ -113,6 +116,8 @@ final class InputCallArm extends Node {
                 CompilerDirectives.transferToInterpreter();
                 Object[] savedValues = values == null ? null : values.clone();
                 throw cut.append((saved, value) -> remainder.execute(saved, requireClosure(value), savedValues));
+            } catch (DelimitedCut cut) {
+                throw captureCall(frame, cut, values);
             }
             InputDispatch rest = remainder;
             if (rest == null) CompilerDirectives.transferToInterpreter();
@@ -120,5 +125,23 @@ final class InputCallArm extends Node {
         }
         if (destination != null) { destination.consume(frame, this, result, root.getTupleResult()); return null; }
         return result;
+    }
+    private DelimitedCut captureCall(VirtualFrame frame, DelimitedCut cut, Object[] values) {
+        if (!DelimitedControl.enabled(this)) return cut;
+        if (arity == count) return destination == null ? cut : DelimitedControl.tupleCut(cut, frame.materialize(), destination, this, root.getTupleResult());
+        Object[] savedValues = values == null ? null : values.clone();
+        return cut.append(frame, new DelimitedPendingApplication() {
+            @Override public TupleDestination getDestination() { return destination; }
+            @Override public Object resume(MaterializedFrame saved, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
+                Object[] arguments = savedValues == null ? null : savedValues.clone();
+                Object result;
+                try { result = InputCallArm.this.finish(saved, input.get(), arguments); }
+                catch (DelimitedCut nested) {
+                    if (destination != null) DelimitedControl.tupleCut(nested, saved, destination, InputCallArm.this);
+                    throw nested;
+                }
+                return destination == null ? result : destination.delimitedResult(saved, InputCallArm.this);
+            }
+        });
     }
 }

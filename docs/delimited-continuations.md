@@ -53,11 +53,13 @@ Saved function and lexical-join owners also handle tail/self/join transfers
 without discarding the remaining caller suffix or restarting the original action. A resumed dense-ABI function detaches its old result destination
 before reentering its body.
 
-Scalar-argument overapplications retain the not-yet-consumed arguments and
-resume the existing dispatcher at that offset, after the suspended callee has
-returned its function. Both scalar and tuple results work through direct and
-megamorphic calls. The captured tuple consumer runs once; bytecode receives an
-owned result at its saved call site. Neither path reruns the callee prefix.
+Overapplications retain the not-yet-consumed arguments and resume the existing
+dispatcher at that logical offset, after the suspended callee has returned its
+function. AST typed calls preserve flattened operand fields and the final
+callee's result descriptor, including tail bounces and independently prepared
+compatible layouts. Direct and generic calls use the same saved-completion
+protocol. The captured tuple consumer runs once; bytecode receives an owned
+result at its saved call site. Neither path reruns the callee prefix.
 
 Fresh `control0#` inside an internally parked AST invocation translates its
 remaining AST callers into reusable frame steps, innermost first. The consumed
@@ -67,9 +69,8 @@ image still separates the captured suffix from its once-only outer continuation.
 An interrupted operand records its pending write and remaining preparation;
 saved scalar/tuple application prefixes copy their private argument arrays on
 resume, while the referenced guest values remain shared across invocations.
-Applications with unboxed tuple/vector inputs remain unestablished. Bytecode
-parked caller conversion and arbitrary hand-built yielded capture markers remain
-unsupported; ordinary bytecode saved delimited suffixes are separate and supported.
+Bytecode aggregate-input capture remains unqualified. Bytecode parked caller
+conversion and arbitrary hand-built yielded capture markers remain unsupported; ordinary bytecode saved delimited suffixes are separate and supported.
 Caught delivery abandons its interrupted child, rather than resuming it.
 This is not complete delimited-continuation support. Capturing through a thunk
 update rejects explicitly; GHC also excludes update/STM/foreign stack barriers
