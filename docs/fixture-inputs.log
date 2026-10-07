@@ -3393,13 +3393,12 @@ This shared owner exports pre-Tidy Core; no post-Tidy qualification is implied.
 115 live-async
 Fixture rationale (115 live-async)
 Purpose: Check async delivery during live/strict execution preserves sharing and
-  continuation state.
-Produces/consumed result: CBDs, oracle.txt and strict-oracle.txt.
+  continuation state; executable shutdown terminates a blocked child.
+Produces/consumed result: CBDs, oracle.txt, strict-oracle.txt and shutdown-oracle.txt.
 Cost and overlap: Keep synchronized live-delivery regressions distinct from static
   exception tests. One shared thread/native setup is enough; no timing-dependent success
   criteria.
-Build status: Value review only; admission still requires explicit inputs and single-
-  owner outputs.
+Build status: CMake owns the declared Core, oracle and audit outputs.
 
 Producer: t/haskell-fixtures/LiveAsyncFixtures.hs.
 Consumers: thc.runtime.AsyncStrictEntryNativeTest, LiveAsyncNativeTest.
@@ -3409,7 +3408,8 @@ Under build/live-async/:
   stage/<entry>-audit.json: IN CBD/auditor; forceShared,strictWorker,strictCall,
     strictEntry,takeReady,takeRunning,releaseGate,prefixCount,warmLoop,asyncPayload.
   native/oracle and intermediates: IN native/audit sources/GHC.
-  oracle.txt, strict-oracle.txt: IN binary default/strict, both +RTS -N2.
+  oracle.txt, strict-oracle.txt, shutdown-oracle.txt: IN binary default/strict/shutdown,
+    all +RTS -N2. Shutdown observes ThreadBlocked BlockedOnMVar before main returns.
   manifest.json: IN sources/observations/CBDs/audits; old receipt removed.
 Consumers read receipt/all hashes/their oracle/CBDs/audits.
 

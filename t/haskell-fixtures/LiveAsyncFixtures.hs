@@ -3,13 +3,12 @@
 
 -- Fixture rationale (115 live-async)
 -- Purpose: Check async delivery during live/strict execution preserves sharing and
---   continuation state.
--- Produces/consumed result: CBDs, oracle.txt and strict-oracle.txt.
+--   continuation state; native executable shutdown terminates a blocked child.
+-- Produces/consumed result: CBDs, oracle.txt, strict-oracle.txt and shutdown-oracle.txt.
 -- Cost and overlap: Keep synchronized live-delivery regressions distinct from static
 --   exception tests. One shared thread/native setup is enough; no timing-dependent success
 --   criteria.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: CMake owns the declared Core, oracle and audit outputs.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 115.
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -75,6 +74,11 @@ prepareLiveAsync root = do
   unless (strictActual == actual)
     (die "Live async strict-callee native oracle disagreed with interrupted-thunk resumption")
   writeFile (output </> "strict-oracle.txt") strictActual
+  shutdownActual <- runWithTimeout (Just (15 * 1000000)) root [] (native </> "oracle")
+    ["shutdown", "+RTS", "-N2", "-RTS"] ""
+  unless (shutdownActual == "blocked child shutdown\n")
+    (die "Live async native oracle did not complete blocked-child shutdown")
+  writeFile (output </> "shutdown-oracle.txt") shutdownActual
   pluginFiles <- listDirectory (root </> "src/compiler/THC")
   coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source, driver, "thc.cabal", "t/haskell-fixtures/Main.hs",
@@ -83,7 +87,7 @@ prepareLiveAsync root = do
         "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
         ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
-      artifacts = [directory </> "oracle.txt", directory </> "strict-oracle.txt"] ++ [directory </> stage </> suffix |
+      artifacts = [directory </> "oracle.txt", directory </> "strict-oracle.txt", directory </> "shutdown-oracle.txt"] ++ [directory </> stage </> suffix |
         stage <- stages,
         suffix <- "core/LiveAsyncAudit.cbd" : [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources
