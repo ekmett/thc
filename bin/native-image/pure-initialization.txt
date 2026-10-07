@@ -86,6 +86,9 @@ thc.runtime.DispatchThunkTargetNodeGen
 thc.runtime.DispatchCallTargetNodeGen$Uncached
 thc.runtime.DispatchThunkTargetNodeGen$Uncached
 thc.runtime.BytecodeRootGen
+# Generated tag-mask ClassValue: no fields or class initializer; its owning
+# BytecodeRootGen initializer already constructs it. SVM owns cache migration.
+thc.runtime.BytecodeRootGen$1
 thc.runtime.BytecodeRootGen$Bytecode
 thc.runtime.BytecodeRootGen$IsTypedSelf_Node
 thc.runtime.BytecodeRootGen$IsSelf_Node

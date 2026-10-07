@@ -12,7 +12,7 @@ image=${THC_NATIVE_CACHE_IMAGE:-$repo_dir/build/native-image/thc-native-cache$im
 case "${1:---help}" in
     build)
         [[ $# == 1 ]] || exit 2
-        export THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS=1 THC_NATIVE_IMAGE_RUNTIME_SNIPPETS=1 THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS=1 THC_NATIVE_IMAGE_PROCESS_IDENTITY=1
+        export THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS=1 THC_NATIVE_IMAGE_RUNTIME_SNIPPETS=1 THC_NATIVE_IMAGE_PROCESS_IDENTITY=1
         exec bash "$repo_dir/research/native-image-preparation/prepared-image.sh" "$repo_dir" cache ;;
     store)
         [[ $# -ge 4 ]] || { echo 'Usage: bin/native-cache store CACHE MODULES ENTRY [--io-main] [--shutdown-entry=ID] [--verify-artifacts]' >&2; exit 2; }

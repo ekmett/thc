@@ -33,9 +33,9 @@ case "$vector_profile" in
         vector_options+=(-H:-VectorAPISupport -H:+SharedArenaSupport -Dthc.nativeImage.resourceCopies=true) ;;
     *) echo 'THC_NATIVE_IMAGE_VECTOR_PROFILE must be intrinsics or resource-copy' >&2; exit 2 ;;
 esac
-: "${JAVA_HOME:?Select GraalVM 25.3.4.1}"
+: "${JAVA_HOME:?Select the pinned JAM GraalVM package}"
 unset JAVA_TOOL_OPTIONS THC_BACKEND JAVA_OPTS THC_OPTS JDK_JAVA_OPTIONS GHC_PACKAGE_PATH GHC_ENVIRONMENT
-[[ "$("$JAVA_HOME/bin/native-image" --version)" == *25.3.4.1* ]] || exit 2
+"$repo_dir/gradlew" -p "$repo_dir" --offline -q verifyJamToolchain
 # Resolve caller-relative output paths before entering the read-only input tree.
 # Each target owns its build directory; repeated builds may reuse its contents.
 build_dir=${3:-$repo_dir/build/native-image}
@@ -115,7 +115,7 @@ if [[ "$mode" == executable* ]]; then
     # Original GHC owns HUP/INT/QUIT/TERM in this standalone process. The runtime
     # checks the effective option; do not substitute a trusted-looking property.
     executable_options=(-J-Dthc.nativeImage.executable=true -H:+GenerateBuildArtifactsFile -H:-ParseRuntimeOptions -R:-EnableSignalHandling
-        -H:MaxHeapSize=17179869184 -H:ActiveProcessorCount=2)
+        -H:ActiveProcessorCount=2)
     # The full ordinary-loader image needs room for frame metadata after codegen.
     builder_heap=16g
     cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT)
@@ -208,13 +208,11 @@ if [[ -n "${THC_NATIVE_IMAGE_RUNTIME_SNIPPETS:-}" ]]; then
     bash "$recipe_dir/runtime-snippet-providers/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-runtime-snippet-providers.jar"
     builder_overlays="${builder_overlays:+$builder_overlays:}$overlay_dir/thc-svm-runtime-snippet-providers.jar"
 fi
-if [[ -n "${THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS:-}" ]]; then
-    [[ "$THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS" == 1 ]] || exit 2
-    overlay_dir="$build_dir/runtime-simulated-folds"
-    bash "$recipe_dir/runtime-simulated-folds/prepare.sh" "$overlay_dir"
-    bash "$recipe_dir/runtime-simulated-folds/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-runtime-simulated-folds.jar"
-    builder_overlays="${builder_overlays:+$builder_overlays:}$overlay_dir/thc-svm-runtime-simulated-folds.jar"
-fi
+# Runtime graph encoding requires host-backed constants. Prepare the shared
+# eligibility correction; its behavioral checks belong to the test phase.
+overlay_dir="$build_dir/runtime-simulated-folds"
+bash "$recipe_dir/runtime-simulated-folds/prepare.sh" "$overlay_dir"
+builder_overlays="${builder_overlays:+$builder_overlays:}$overlay_dir/thc-svm-runtime-simulated-folds.jar"
 builder_patch=()
 if [[ -n "$builder_overlays" ]]; then
     builder_patch=("-J--patch-module=org.graalvm.nativeimage.builder=$builder_overlays")
@@ -230,7 +228,9 @@ diagnostics=()
 if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then
     diagnostics=(-H:Dump=:2 -H:MethodFilter="$THC_NATIVE_IMAGE_METHOD_FILTER")
 fi
-exec "$JAVA_HOME/bin/native-image" -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcessorCount=2 --parallelism=2 \
+# Jam owns a fixed runtime heap per isolate. Keep its supported defaults; the
+# builder heap above is independent of the executable's collector capacity.
+exec "$JAVA_HOME/bin/native-image" --gc=jam -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcessorCount=2 --parallelism=2 \
     "${builder_patch[@]}" "${foreign_patch[@]}" "${vector_feature_exports[@]}" \
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \

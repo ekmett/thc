@@ -72,7 +72,6 @@ source revision being investigated, and use that checkout's installed JARs:
 bash research/native-image-preparation/prepared-image.sh "$PWD" prepare-only
 THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS=1 \
 THC_NATIVE_IMAGE_RUNTIME_SNIPPETS=1 \
-THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS=1 \
   bash research/native-image-preparation/prepared-image.sh "$PWD" build
 ```
 

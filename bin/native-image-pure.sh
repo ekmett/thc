@@ -19,11 +19,7 @@ if [[ ! -f "$lib_dir/thc-0.1-experiment.jar" ]]; then
     echo "Run ./gradlew installDist with the pinned toolchain first." >&2
     exit 2
 fi
-native_version=$("$native_image" --version)
-if [[ "$native_version" != *25.3.4.1* ]]; then
-    echo "This probe requires the pinned GraalVM 25.3.4.1 Native Image." >&2
-    exit 2
-fi
+"$repo_root/gradlew" -p "$repo_root" --offline -q verifyJamToolchain
 
 image_classpath=
 for image_jar in "$lib_dir"/*.jar; do
@@ -40,7 +36,12 @@ while IFS= read -r prepared_class; do
     initialization="${initialization:+$initialization,}$prepared_class"
 done < "$repo_root/bin/native-image/pure-initialization.txt"
 mkdir -p -- "$(dirname -- "$output")"
-exec "$native_image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --parallelism=2 \
+# Runtime graphs cannot encode simulated objects with no host backing. Reuse
+# the prepared-image path's general field-folding eligibility correction.
+overlay_dir="$(dirname -- "$output")/runtime-simulated-folds"
+bash "$repo_root/research/native-image-preparation/runtime-simulated-folds/prepare.sh" "$overlay_dir"
+exec "$native_image" --gc=jam \
+    "-J--patch-module=org.graalvm.nativeimage.builder=$overlay_dir/thc-svm-runtime-simulated-folds.jar" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --parallelism=2 \
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \

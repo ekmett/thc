@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 set -euo pipefail
 [[ $# == 1 ]] || { echo 'Usage: JAVA_HOME=PINNED_JDK bash prepare.sh OUTPUT_DIR' >&2; exit 2; }
-: "${JAVA_HOME:?Select GraalVM 25.3.4.1}"
+: "${JAVA_HOME:?Select pinned JAM GraalVM 25.3.4.1}"
 recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 mkdir -p "$1"
 output_dir=$(cd -- "$1" && pwd)
@@ -14,16 +14,23 @@ check_hash() {
     actual=$(sha256sum "$1")
     [[ "${actual%% *}" == "$2" ]] || { echo "Pinned builder input hash mismatch: $1" >&2; exit 1; }
 }
-check_hash "$builder_dir/svm.src.zip" b10b638d654121fd60923fa86d10f17aaaa82ecd3c48628be885c2b83e006ee0
-check_hash "$builder_dir/svm.jar" 7558a5c20e347c0aa5af411472c76c908d15b2601d029b1a0b7d8ed15f5e086c
+# JAM 3fe0fe9 Linux-x86_64 package, Graal source 7b025988a922a73286d1326e1eddc1ca39d3f569.
+# The two patched sources are unchanged from that upstream revision.
+check_hash "$JAVA_HOME/release" 9680685261e90095cb90625e692e3ff7f2c8bf9d164147a640a0bd6547c2de56
+check_hash "$builder_dir/svm.src.zip" 7185749fcd6c646dd5ded9accf1af839e4a7d9003e44df758aa3c37402556021
+check_hash "$builder_dir/svm.jar" 5e205aead4cb63abdc00ed57822c4659fe940292b9d01fab1e1fda78f2b85ff3
 work_dir=$(mktemp -d "$output_dir/work.XXXXXX")
 source_file=com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.java
 late_source=com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport.java
 late_class='com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport$RuntimeCompilationReflectionProvider.class'
 mkdir -p "$work_dir/source/$(dirname "$source_file")" "$work_dir/source/$(dirname "$late_source")" \
     "$work_dir/compiled" "$work_dir/classes"
-unzip -p "$builder_dir/svm.src.zip" "$source_file" > "$work_dir/source/$source_file"
-unzip -p "$builder_dir/svm.src.zip" "$late_source" > "$work_dir/source/$late_source"
+(
+    cd "$work_dir/source"
+    "$JAVA_HOME/bin/jar" --extract --file "$builder_dir/svm.src.zip" "$source_file" "$late_source"
+)
+check_hash "$work_dir/source/$source_file" b07ac55986c4884da329d2472e5778056f7c69010355f3770a8379d51ca9eab5
+check_hash "$work_dir/source/$late_source" a15d74a6c497dc979512a2024c4b32cbe330616f7b87dc14382ac4202db1215f
 (
     cd "$work_dir/source"
     GIT_CEILING_DIRECTORIES="$work_dir" git apply --no-index "$recipe_dir/hosted-constant-eligibility.patch"
@@ -48,7 +55,7 @@ cp "$JAVA_HOME/LICENSE.txt" "$work_dir/classes/META-INF/upstream-toolchain-LICEN
 "$JAVA_HOME/bin/jar" --create --file "$work_dir/thc-svm-runtime-simulated-folds.jar" \
     --date=2026-01-01T00:00:00Z -C "$work_dir/classes" .
 cp "$work_dir/thc-svm-runtime-simulated-folds.jar" "$output_dir/thc-svm-runtime-simulated-folds.jar"
-sha256sum "$builder_dir/svm.src.zip" "$builder_dir/svm.jar" "$JAVA_HOME/LICENSE.txt" \
+sha256sum "$JAVA_HOME/release" "$builder_dir/svm.src.zip" "$builder_dir/svm.jar" "$JAVA_HOME/LICENSE.txt" \
     "$recipe_dir/hosted-constant-eligibility.patch" "$work_dir/source/$source_file" "$work_dir/source/$late_source" \
     "$output_dir/thc-svm-runtime-simulated-folds.jar" > "$output_dir/provenance.sha256"
 printf 'Prepared isolated builder overlay: %s\n' "$output_dir/thc-svm-runtime-simulated-folds.jar"

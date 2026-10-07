@@ -1,6 +1,6 @@
 # Runtime graph simulated-field eligibility
 
-This opt-in experiment patches the pinned Native Image builder, not THC's runtime.
+Both Native Image recipes apply this correction to the pinned JAM builder. It changes builder field folding; THC's runtime classes are unchanged.
 The runtime graph encoder converts `ImageHeapConstant` values into runtime constants
 by unwrapping their hosted objects. Class-initializer simulation can instead produce
 references with no hosted object. Those values are useful for ordinary image
@@ -28,7 +28,7 @@ reflection provider or the ordinary/deoptimization compilation providers.
 ```sh
 JAVA_HOME=/path/to/pinned-graalvm bash research/native-image-preparation/runtime-simulated-folds/prepare.sh build/simulated-folds
 JAVA_HOME=/path/to/pinned-graalvm bash research/native-image-preparation/runtime-simulated-folds/check.sh build/simulated-folds/checks build/simulated-folds/thc-svm-runtime-simulated-folds.jar
-THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS=1 bash research/native-image-preparation/prepared-image.sh "$PWD" build
+bash research/native-image-preparation/prepared-image.sh "$PWD" build
 ```
 
 Use the existing host resource leases. The preparation pins both builder source
@@ -36,7 +36,7 @@ and binary hashes, preserves upstream source/license notices, and emits a separa
 two-class module overlay. The enclosing `RuntimeCompiledMethodSupport` and all
 its other nested classes stay pinned and unmodified. The overlay never modifies
 an installed JDK or dependency cache.
-The opt-in composes with the other experimental overlays.
+The correction composes with the other experimental overlays. Its focused checks run separately from image preparation.
 
 `SimulatedFoldTest.java` inspects the actual javac output through the pinned JDK
 ClassFile API and executes its small branch sequence with strict compiler-service
