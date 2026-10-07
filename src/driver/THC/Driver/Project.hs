@@ -741,13 +741,14 @@ runBuiltProject action project working thcRoot runtime output native target proj
     runCommandWithEnv False runtime (["--allow-interface-helper" | installedPolicy == "demand"] ++ runtimeLaunchArguments verifyArtifacts
       ["--run-executable", '@' : manifest, entry, shutdown] programName guestArguments) working (Just launchEnvironment)
 
--- | Select the two original exception bridge modules. The flag requests full
--- artifact verification rather than replaying an unchanged successful read.
+-- | Select the original exception bridge and optional weak finalizer ABI modules.
+-- The flag requests full artifact verification rather than replaying an
+-- unchanged successful read.
 exceptionBridgeModules :: Bool -> [Value] -> IO [Value]
 exceptionBridgeModules verify units = fmap concat $ forM units $ \unit -> do
   references <- optionalField unit "modules" ([] :: [Value])
   let selected = [ref | ref <- references, jsonField ref "name" `elem`
-        map Just (["THC.Exception", "THC.Internal.Exception"] :: [String])]
+        map Just (["THC.Exception", "THC.Internal.Exception", "THC.Internal.Weak"] :: [String])]
   if null selected then pure [] else do
     bundle <- field unit "bundle"
     path <- field bundle "path"
@@ -853,7 +854,11 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
           linked = described ++ dependencies ++ [record]
           identities = [identifier | item <- linked, Just identifier <- [jsonField item "id" :: Maybe String]]
       require (length identities == length (nub identities)) "runtime sidecar collides with an existing Core owner"
-      selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules (contextVerifyArtifacts context) linked
+      services <- exceptionBridgeModules (contextVerifyArtifacts context) linked
+      require (any (\value -> jsonField value "unit" == Just (unitId runtime) &&
+        jsonField value "module" == Just ("THC.Internal.Weak" :: String)) services)
+        "runtime sidecar did not export its weak finalizer ABI module"
+      selected <- either fail pure (foreignExceptionBridgeUnit services)
       require (selected == Just (unitId runtime)) "runtime sidecar did not export its genuine exception bridge"
       pure (unitId runtime, linked)
 

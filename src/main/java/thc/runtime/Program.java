@@ -270,7 +270,8 @@ public final class Program implements ExecutableProgram {
         Program builder = new Program(language, module, Boolean.TRUE.equals(module.get("asyncExceptions")), false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
         // The linker includes runtime-entered service roots as well as explicit Core references.
-        var selected = (List<Map<String,Object>>) thc.CoreModules.reachable(module, entries).get("bindings");
+        var linked = thc.CoreModules.reachable(module, entries);
+        var selected = (List<Map<String,Object>>) linked.get("bindings");
         ArrayDeque<String> pending = new ArrayDeque<>();
         for (var binding : selected) pending.add((String) binding.get("id"));
         if (selected.stream().anyMatch(binding -> CoreSignalForeign.dispatcher.equals(binding.get("id"))))
@@ -320,6 +321,8 @@ public final class Program implements ExecutableProgram {
         if (builder.stackTargetLayout != null) declarations.put("targetLayout", builder.stackTargetLayout);
         if (module.get("selectedForeignExceptionBridge") instanceof Map<?,?> bridge)
             declarations.put("selectedForeignExceptionBridge", Map.copyOf(bridge));
+        if (linked.get("selectedWeakFinalizer") instanceof String finalizer)
+            declarations.put("selectedWeakFinalizer", finalizer);
         return new PreparedCode(Map.copyOf(declarations), Map.copyOf(values), List.copyOf(builder.codeTargets),
             builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(),
             List.copyOf(builder.packageCalls), registrations, List.copyOf(checkedExports), builder.codeIdentity, language);

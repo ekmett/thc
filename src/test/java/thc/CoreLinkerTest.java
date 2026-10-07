@@ -16,6 +16,40 @@ class CoreLinkerTest {
         var live = CoreModules.reachable(map("bindings", bindings), "root", false);
         return ((List<?>) live.get("bindings")).stream().map(it -> ((Map<?, ?>) it).get("id")).toList();
     }
+    private Map<String,Object> runtimeBridge(String unit) {
+        String prefix = unit + ":THC.Internal.Exception.";
+        return map("schema", 1, "unit", unit, "module", "THC.Internal.Exception",
+            "box", prefix + "boxForeign", "project", prefix + "projectForeign", "payloadType", prefix + "ForeignException",
+            "exceptionType", "ghc-internal:GHC.Internal.Exception.Type.SomeException");
+    }
+    @Test void weakRegistrationSelectsItsRuntimeAbiAndTransitiveDependencies() {
+        String unit = "selected-runtime", adapter = unit + ":THC.Internal.Weak.runWeakFinalizer";
+        String original = "ghc-internal:GHC.Internal.Weak.Finalize.runFinalizerBatch";
+        String box = unit + ":THC.Internal.Exception.boxForeign", project = unit + ":THC.Internal.Exception.projectForeign";
+        // Graph witnesses only: no guest body or replacement finalizer is executed.
+        var module = map("bindings", list(binding("root", list("prim", "mkWeak#")),
+            binding(adapter, variable(original)), binding(original, literal()), binding(box, literal()), binding(project, literal()),
+            binding("unused", literal())), "foreignExceptionBridges", list(runtimeBridge(unit)), "foreignExceptionBridgeUnit", unit);
+        var linked = CoreModules.reachable(module, "root", true);
+        assertEquals(adapter, linked.get("selectedWeakFinalizer"));
+        assertEquals(list("root", adapter, original), ((List<?>) linked.get("bindings")).stream()
+            .map(it -> ((Map<?,?>) it).get("id")).toList());
+        assertTrue(assertThrows(IllegalArgumentException.class,
+            () -> CoreModules.reachable(with(module, "bindings", list(binding("root", list("prim", "mkWeak#")))), "root", true))
+            .getMessage().contains("selected runtime finalizer ABI binding"));
+        assertTrue(assertThrows(IllegalArgumentException.class,
+            () -> CoreModules.reachable(with(module, "foreignExceptionBridges", list(runtimeBridge("another-runtime")),
+                "foreignExceptionBridgeUnit", "another-runtime"), "root", true))
+            .getMessage().contains("another-runtime:THC.Internal.Weak.runWeakFinalizer"));
+    }
+    @Test void programsWithoutHaskellWeakRegistrationDoNotRequireTheRuntimeAdapter() {
+        var linked = CoreModules.reachable(map("bindings", list(binding("root", list("prim", "mkWeakNoFinalizer#")))), "root", true);
+        assertNull(linked.get("selectedWeakFinalizer"));
+        assertEquals(1, ((List<?>) linked.get("bindings")).size());
+        assertTrue(assertThrows(IllegalArgumentException.class,
+            () -> CoreModules.reachable(map("bindings", list(binding("root", list("prim", "mkWeak#")))), "root", true))
+            .getMessage().contains("selected THC runtime unit"));
+    }
     private Map<String, Object> sourceModule(String id, Map<String, Object> source, Map<String, Object> span) {
         return map("schema", 1, "ghc", "9.14.1", "bindings", list(binding(id, literal())), "constructors", List.of(), "sourceFiles", list(source), "sourceSpans", list(span));
     }

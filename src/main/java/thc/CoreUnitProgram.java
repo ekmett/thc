@@ -227,7 +227,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
             boxedProvenance.get(unit).forEach(merger::addBoxedProvenance);
         }
         var provenance = CoreCapiProvenance.supplement(merger.finish(), binding, this::capiProvenance);
-        var linked = new LinkedHashMap<>(CoreModules.demanded(provenance, id, demand, this::bridge));
+        var linked = new LinkedHashMap<>(CoreModules.demanded(provenance, id, demand, this::bridge, directory.getForeignExceptionBridgeUnit()));
         linked.put("instrument", !Objects.equals(input.get("instrument"), false)); linked.put("diagnosticUnsupported", Objects.equals(input.get("diagnosticUnsupported"), true));
         linked.put("sourceNotesEnabled", !Objects.equals(input.get("sourceNotesEnabled"), false)); linked.put("demandBindings", demand); linked.put("captureDelimited", captureDelimited);
         if (getTargetLayout() != null) linked.put("targetLayout", getTargetLayout());

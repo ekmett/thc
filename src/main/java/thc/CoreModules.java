@@ -176,9 +176,9 @@ public final class CoreModules {
     public static Map<String,Object> reachable(Map<String,Object> module, String entry) { return reachable(module, entry, false); }
     public static Map<String,Object> reachable(Map<String,Object> module, String entry, boolean strictLink) { return reachable(module, List.of(entry), strictLink); }
     public static Map<String,Object> reachable(Map<String,Object> module, List<String> entries) { return reachable(module, entries, false); }
-    public static Map<String,Object> reachable(Map<String,Object> module, List<String> entries, boolean strictLink) { return linkedBindings(module, entries, strictLink, null, null); }
-    public static Map<String,Object> demanded(Map<String,Object> module, String entry, CoreDemandBindings demand, Supplier<Map<String,Object>> bridge) { return linkedBindings(module, List.of(entry), true, demand, bridge); }
-    private static Map<String,Object> linkedBindings(Map<String,Object> module, List<String> entries, boolean strictLink, CoreDemandBindings demand, Supplier<Map<String,Object>> bridge) {
+    public static Map<String,Object> reachable(Map<String,Object> module, List<String> entries, boolean strictLink) { return linkedBindings(module, entries, strictLink, null, null, null); }
+    public static Map<String,Object> demanded(Map<String,Object> module, String entry, CoreDemandBindings demand, Supplier<Map<String,Object>> bridge, String runtimeUnit) { return linkedBindings(module, List.of(entry), true, demand, bridge, runtimeUnit); }
+    private static Map<String,Object> linkedBindings(Map<String,Object> module, List<String> entries, boolean strictLink, CoreDemandBindings demand, Supplier<Map<String,Object>> bridge, String runtimeUnit) {
         if (module.containsKey("archiveBindings")) CoreForeignArtifacts.validateArchive(module); else CoreForeignArtifacts.requireExecutableInput(module);
         var bindings = (List<Map<String,Object>>) module.get("bindings"); var byId = new LinkedHashMap<String,Map<String,Object>>(); bindings.forEach(binding -> byId.put((String) binding.get("id"), binding));
         var constructorIds = new HashSet<String>(); if (module.get("constructors") instanceof List<?> constructors) for (Object raw : constructors) constructorIds.add((String) ((Map<?,?>) raw).get("id"));
@@ -198,6 +198,7 @@ public final class CoreModules {
             id -> { if (strictLink && !constructorIds.contains(id) && (demand == null || !demand.constructors(Map.of()).containsKey(id))) missingConstructors.computeIfAbsent(id, ignored -> new LinkedHashSet<>()).add(linker.owner); },
             (id, foreign) -> byId.containsKey(id) || demand != null && (foreign ? demand.isDefined(id) : demand.contains(id)),
             () -> bridge != null ? bridge.get() : CoreForeignExceptionBridge.select(module),
+            () -> runtimeUnit != null ? runtimeUnit : module.get("foreignExceptionBridgeUnit") instanceof String unit ? unit : null,
             () -> module.get("packageScalarLinks") instanceof List<?> links ? (List<PackageScalarLink>) links : List.of());
         var roots = new LinkedHashSet<>(entries);
         if (module.get("managedRegistrations") instanceof List<?> registrations) for (Object raw : registrations) for (var export : ((ManagedExportAdmission) raw).getExports()) roots.add(export.binder());
@@ -217,19 +218,22 @@ public final class CoreModules {
         var result = without(module, "archiveBindings");
         var selected = new ArrayList<Map<String,Object>>();
         for (var binding : bindings) if (reachable.contains(binding.get("id"))) selected.add(binding);
-        result.put("bindings", Collections.unmodifiableList(selected)); result.put("selectedForeignExceptionBridge", dependencies.exceptionBridge); return result;
+        result.put("bindings", Collections.unmodifiableList(selected)); result.put("selectedForeignExceptionBridge", dependencies.exceptionBridge);
+        result.put("selectedWeakFinalizer", dependencies.weakFinalizer); return result;
     }
     /** The same semantic edges govern ordinary linking and detached cache input. */
     private static final class Dependencies {
         private final Consumer<String> reference, constructor;
         private final BiPredicate<String,Boolean> defined;
         private final Supplier<Map<String,Object>> bridge;
+        private final Supplier<String> runtimeUnit;
         private final Supplier<List<PackageScalarLink>> packageLinks;
         private Map<String,Object> exceptionBridge;
+        private String weakFinalizer;
         Dependencies(Consumer<String> reference, Consumer<String> constructor, BiPredicate<String,Boolean> defined,
-                Supplier<Map<String,Object>> bridge, Supplier<List<PackageScalarLink>> packageLinks) {
+                Supplier<Map<String,Object>> bridge, Supplier<String> runtimeUnit, Supplier<List<PackageScalarLink>> packageLinks) {
             this.reference = reference; this.constructor = constructor; this.defined = defined;
-            this.bridge = bridge; this.packageLinks = packageLinks;
+            this.bridge = bridge; this.runtimeUnit = runtimeUnit; this.packageLinks = packageLinks;
         }
         void binding(Map<String,Object> binding) {
             var body = (List<Object>) binding.get("expr");
@@ -245,6 +249,18 @@ public final class CoreModules {
                         String payload = CoreArithmeticExceptions.payload(name); if (payload != null) reference.accept(payload);
                         var compact = CompactOp.named(name); if (compact != null && compact.getAdds()) for (String failure : CompactOp.getFailures()) reference.accept(failure);
                         if (name.equals("atomically#")) reference.accept(STMOp.NESTED);
+                        if (name.equals("mkWeak#")) {
+                            // Runtime-entered Haskell actions use this same linked unit
+                            // and its current original GHC finalizer handler CAF.
+                            if (weakFinalizer == null) {
+                                String unit = runtimeUnit.get();
+                                require(unit != null && !blank(unit), "mkWeak# requires a selected THC runtime unit");
+                                weakFinalizer = unit + ":THC.Internal.Weak.runWeakFinalizer";
+                                require(defined.test(weakFinalizer, true),
+                                    "mkWeak# requires the selected runtime finalizer ABI binding: " + weakFinalizer);
+                            }
+                            reference.accept(weakFinalizer);
+                        }
                     }
                     case "lam" -> {
                         var body = (List<Object>) expression.get(2);
@@ -457,7 +473,7 @@ public final class CoreModules {
             for (var module : directory.getModules()) if (module.registrationObligations()) selection.admit(module);
             var dependencies = new Dependencies(pending::add, selection::constructor,
                 (id, foreign) -> consumerBindings.containsKey(id) || (foreign ? sources.containsSymbol(id) : directory.owner(id) != null),
-                selection::bridge, selection::packageLinks);
+                selection::bridge, directory::getForeignExceptionBridgeUnit, selection::packageLinks);
             while (!pending.isEmpty()) {
                 String id = pending.removeFirst();
                 if (!visited.add(id)) continue;
@@ -479,9 +495,10 @@ public final class CoreModules {
             });
             // Selection collects dependencies, not permission to execute them.
             // The ordinary linker still validates every selected original body.
-            reachable(merger.finish(), entries, true);
+            reachable(with(merger.finish(), "foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit()), entries, true);
             var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "moduleFiles");
             result.put("modules", modules);
+            if (directory.getForeignExceptionBridgeUnit() != null) result.put("foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit());
             if (sources.getTargetLayout() != null) result.put("targetLayout", sources.getTargetLayout().document());
             return (Map<String,Object>) detachedValue(result);
         }

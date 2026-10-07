@@ -198,15 +198,16 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
       assertBool "corrupt receipt falls back to actual archive validation" . isNothing =<< readSelected
       removeFile path
       assertBool "missing payload is not satisfied by metadata" . isLeft =<< tryIOError readSelected
-  , TestCase $ scratch "bridge" $ \directory -> do
+  , TestCase $ forM_ [False, True] $ \withWeak -> scratch "bridge" $ \directory -> do
       let path = directory </> "bridge.zip"
-          values = [(name, core "test-unit" name) | name <- ["THC.Exception", "THC.Internal.Exception", "Cold"]]
+          values = [(name, core "test-unit" name) | name <-
+            ["THC.Exception", "THC.Internal.Exception"] ++ ["THC.Internal.Weak" | withWeak] ++ ["Cold"]]
       bundle <- archive path "test-unit" values Nothing []
       let record = unitRecord "test-unit" bundle
       first <- exceptionBridgeModules False [record]
       expected <- mapM (\(_, value) -> encodeModuleValue value >>= either fail (pure . snd) . readModuleMetadata)
-        (take 2 values)
-      assertEqual "only the two actual bridge modules are selected" expected first
+        (take (if withWeak then 3 else 2) values)
+      assertEqual "only the declared original runtime service modules are selected" expected first
       corruptUnobserved path
       assertEqual "unchanged bridge selection preserves original metadata" first =<< exceptionBridgeModules False [record]
       assertBool "explicit bridge verification reads original bundle" . isLeft
