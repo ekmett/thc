@@ -716,10 +716,11 @@ library runtime
     THC.Internal.JIT
     THC.Exception
     THC.Internal.Exception
+    THC.Internal.Weak
   other-modules: THC.Runtime.Types, THC.Internal.RuntimeABI
   c-sources: src/runtime/cpu-affinity.c, src/runtime/runtime-services.c, src/runtime/exception.c
   x-thc-runtime-shim: v1
-  build-depends: base >= 4.22 && < 4.23
+  build-depends: base >= 4.22 && < 4.23, ghc-internal == 9.1401.0
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)

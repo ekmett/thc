@@ -15,14 +15,18 @@ module Main (main) where
 
 import Control.Exception
   ( AsyncException(ThreadKilled), Exception, MaskingState(..), getMaskingState
-  , mask_, throwIO, try )
+  , bracket, evaluate, fromException, mask_, throwIO, try )
 import Control.Monad (unless)
+import Data.IORef (modifyIORef', newIORef, readIORef)
 import Data.Word (Word8)
 import Foreign.C.Types (CInt(..), CLLong(..))
 import Foreign.Ptr (Ptr, nullPtr)
+import GHC.IO (IO(..))
+import GHC.Weak (getFinalizerExceptionHandler, setFinalizerExceptionHandler)
 import qualified THC
 import qualified THC.GC as GC
 import qualified THC.Internal.JIT as JIT
+import qualified THC.Internal.Weak as Weak
 import qualified THC.Memory as Memory
 import THC.Runtime
 import qualified THC.Thread as Thread
@@ -42,8 +46,33 @@ foreign import ccall unsafe "thc_runtime_v1_trace"
 check :: Bool -> String -> IO ()
 check condition message = unless condition (fail message)
 
+checkWeakFinalizer :: IO ()
+checkWeakFinalizer = bracket getFinalizerExceptionHandler setFinalizerExceptionHandler $ \_ -> do
+  calls <- newIORef ([] :: [String])
+  let run (IO action) = Weak.runWeakFinalizer action
+      record label = modifyIORef' calls (++ [label])
+      pending = run (throwIO ProbeFailure :: IO Bool)
+  run (record "normal" >> pure (error "Finalizer result was forced" :: Int))
+  run (record "polymorphic" >> pure ("result" :: String))
+  setFinalizerExceptionHandler (\_ -> record "stale handler")
+  _ <- evaluate pending
+  setFinalizerExceptionHandler (\exception -> do
+    check (fromException exception == Just ProbeFailure) "original finalizer exception"
+    record "current handler")
+  pending
+  pending
+  setFinalizerExceptionHandler (\exception -> do
+    check (fromException exception == Just ProbeFailure) "original exception in throwing handler"
+    record "throwing handler"
+    throwIO ProbeFailure)
+  run (throwIO ProbeFailure :: IO ())
+  observed <- readIORef calls
+  check (observed == ["normal", "polymorphic", "current handler", "current handler", "throwing handler"])
+    "finalizer ABI preserves effects, lazy results, reuse and the current GHC handler"
+
 main :: IO ()
 main = do
+  checkWeakFinalizer
   malformed <- sequence
     [rawQuery 999 0 0, rawQuery 0 1 0, rawQuery 301 (-1) 0,
      rawQuery 5 0 (-2), rawControl 400 2, rawControl 500 4,
@@ -105,4 +134,4 @@ main = do
   check (fmap (+ (1 :: Int)) Disabled == Disabled && fmap (+ (1 :: Int)) Denied == Denied
     && fmap (+ (1 :: Int)) Unavailable == Unavailable && fmap (+ (1 :: Int)) (Available 0) == Available 1)
     "availability statuses remain distinct from successful zero"
-  putStrLn "runtime-services-api: native compatibility, statuses, Unicode bounds, tracing masks/results/exceptions passed"
+  putStrLn "runtime-services-api: native compatibility, statuses, Unicode bounds, tracing masks/results/exceptions and finalizer ABI passed"
