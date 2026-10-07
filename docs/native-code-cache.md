@@ -123,8 +123,11 @@ its separate 8 GiB builder limit.
 
 The hosted feature captures the reachable entry and shutdown Core and prepares
 its AST factory through Truffle context preinitialization. The binding retains
-`thc.asyncExceptions=true|false` as the prepared polling policy; this does not
-establish persisted-image qualification for concurrent programs. Preparation
+`thc.asyncExceptions=true|false` as the prepared polling policy. A checked
+platform-thread application now passes isolated deployment with adaptive polling,
+external delivery and shared-CAF resumption; the
+[native qualification boundary](native-image-feasibility.md#preinitialized-runtime-state)
+remains narrower than all concurrent programs. Preparation
 uses one worker, evaluates no guest body, and releases the Core after lowering.
 At startup the same language receives fresh runtime state and the saved factory
 creates fresh guest values. A missing factory or different language is an error;

@@ -117,6 +117,15 @@ uses the ordinary linker's dependency graph for runtime-entered guest code.
 This qualifies synchronous callback execution and the release call, not leak
 freedom, post-release rejection or every callback lifetime.
 
+The ordinary `thc build --native-image` path also produces a checked concurrent
+application using platform threads and adaptive async admission. In the same
+isolated deployment, `LiveAsyncNative`/`LiveAsyncAudit` match the native GHC
+oracle for `forkIO`/`throwTo`, interrupted shared-CAF resumption, a once-only
+prefix effect, strict/PAP action heads and finite loop completion. The executable
+receives ordinary argv and runs the normal startup/shutdown entries. This checks
+prepared AST execution; it does not establish disabled guest JIT compilation,
+Loom hosting, every masking/foreign-call case or blocked-child shutdown.
+
 Sulong and package native libraries are extracted at runtime. System C, math,
 zlib and the dynamic loader remain external dependencies. This qualifies captured
 native providers for the selected Linux x86-64 programs, not static linking or
