@@ -177,8 +177,14 @@ public final class CoreModules {
     public static Map<String,Object> reachable(Map<String,Object> module, String entry, boolean strictLink) { return reachable(module, List.of(entry), strictLink); }
     public static Map<String,Object> reachable(Map<String,Object> module, List<String> entries) { return reachable(module, entries, false); }
     public static Map<String,Object> reachable(Map<String,Object> module, List<String> entries, boolean strictLink) { return linkedBindings(module, entries, strictLink, null, null, null); }
-    public static Map<String,Object> demanded(Map<String,Object> module, String entry, CoreDemandBindings demand, Supplier<Map<String,Object>> bridge, String runtimeUnit) { return linkedBindings(module, List.of(entry), true, demand, bridge, runtimeUnit); }
-    private static Map<String,Object> linkedBindings(Map<String,Object> module, List<String> entries, boolean strictLink, CoreDemandBindings demand, Supplier<Map<String,Object>> bridge, String runtimeUnit) {
+    /** A declared runtime wins; otherwise the original bridge proofs own inference. */
+    static String runtimeUnit(Map<String,?> module) {
+        if (module.get("foreignExceptionBridgeUnit") instanceof String unit) return unit;
+        if (!(module.get("foreignExceptionBridges") instanceof List<?> proofs) || proofs.isEmpty()) return null;
+        return (String) CoreForeignExceptionBridge.select(module).get("unit");
+    }
+    public static Map<String,Object> demanded(Map<String,Object> module, String entry, CoreDemandBindings demand, Supplier<Map<String,Object>> bridge, Supplier<String> runtimeUnit) { return linkedBindings(module, List.of(entry), true, demand, bridge, runtimeUnit); }
+    private static Map<String,Object> linkedBindings(Map<String,Object> module, List<String> entries, boolean strictLink, CoreDemandBindings demand, Supplier<Map<String,Object>> bridge, Supplier<String> runtimeUnit) {
         if (module.containsKey("archiveBindings")) CoreForeignArtifacts.validateArchive(module); else CoreForeignArtifacts.requireExecutableInput(module);
         var bindings = (List<Map<String,Object>>) module.get("bindings"); var byId = new LinkedHashMap<String,Map<String,Object>>(); bindings.forEach(binding -> byId.put((String) binding.get("id"), binding));
         var constructorIds = new HashSet<String>(); if (module.get("constructors") instanceof List<?> constructors) for (Object raw : constructors) constructorIds.add((String) ((Map<?,?>) raw).get("id"));
@@ -198,7 +204,7 @@ public final class CoreModules {
             id -> { if (strictLink && !constructorIds.contains(id) && (demand == null || !demand.constructors(Map.of()).containsKey(id))) missingConstructors.computeIfAbsent(id, ignored -> new LinkedHashSet<>()).add(linker.owner); },
             (id, foreign) -> byId.containsKey(id) || demand != null && (foreign ? demand.isDefined(id) : demand.contains(id)),
             () -> bridge != null ? bridge.get() : CoreForeignExceptionBridge.select(module),
-            () -> runtimeUnit != null ? runtimeUnit : module.get("foreignExceptionBridgeUnit") instanceof String unit ? unit : null,
+            () -> runtimeUnit != null ? runtimeUnit.get() : runtimeUnit(module),
             () -> module.get("packageScalarLinks") instanceof List<?> links ? (List<PackageScalarLink>) links : List.of());
         var roots = new LinkedHashSet<>(entries);
         if (module.get("managedRegistrations") instanceof List<?> registrations) for (Object raw : registrations) for (var export : ((ManagedExportAdmission) raw).getExports()) roots.add(export.binder());
@@ -473,7 +479,7 @@ public final class CoreModules {
             for (var module : directory.getModules()) if (module.registrationObligations()) selection.admit(module);
             var dependencies = new Dependencies(pending::add, selection::constructor,
                 (id, foreign) -> consumerBindings.containsKey(id) || (foreign ? sources.containsSymbol(id) : directory.owner(id) != null),
-                selection::bridge, directory::getForeignExceptionBridgeUnit, selection::packageLinks);
+                selection::bridge, () -> directory.runtimeUnit(sources::metadata, consumers), selection::packageLinks);
             while (!pending.isEmpty()) {
                 String id = pending.removeFirst();
                 if (!visited.add(id)) continue;
@@ -495,10 +501,11 @@ public final class CoreModules {
             });
             // Selection collects dependencies, not permission to execute them.
             // The ordinary linker still validates every selected original body.
-            reachable(with(merger.finish(), "foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit()), entries, true);
+            String runtimeUnit = dependencies.weakFinalizer == null ? directory.getForeignExceptionBridgeUnit() : directory.runtimeUnit(sources::metadata, consumers);
+            reachable(with(merger.finish(), "foreignExceptionBridgeUnit", runtimeUnit), entries, true);
             var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "moduleFiles");
             result.put("modules", modules);
-            if (directory.getForeignExceptionBridgeUnit() != null) result.put("foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit());
+            if (runtimeUnit != null) result.put("foreignExceptionBridgeUnit", runtimeUnit);
             if (sources.getTargetLayout() != null) result.put("targetLayout", sources.getTargetLayout().document());
             return (Map<String,Object>) detachedValue(result);
         }

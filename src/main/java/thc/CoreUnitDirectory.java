@@ -5,6 +5,7 @@ package thc;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import thc.runtime.TargetLayout;
 
 /** Package directory owns module names, never binding names. CBD files open on demand. */
@@ -45,6 +46,22 @@ public final class CoreUnitDirectory {
     }
     public List<UnitRecord> getUnits() { return units; }
     public String getForeignExceptionBridgeUnit() { return foreignExceptionBridgeUnit; }
+    /** Discover an implicit runtime from original metadata without admitting helper bodies. */
+    String runtimeUnit(Function<ModuleRecord,Map<String,Object>> metadata, Collection<Map<String,Object>> consumers) {
+        if (foreignExceptionBridgeUnit != null) return foreignExceptionBridgeUnit;
+        var proofs = new ArrayList<Map<?,?>>();
+        for (var module : modules) if (module.name().equals("THC.Internal.Exception")) runtimeProof(metadata.apply(module), proofs);
+        for (var module : consumers) if (Objects.equals(module.get("module"), "THC.Internal.Exception")) runtimeProof(module, proofs);
+        return CoreModules.runtimeUnit(Map.of("foreignExceptionBridges", proofs));
+    }
+    private static void runtimeProof(Map<String,Object> module, List<Map<?,?>> proofs) {
+        if (module.get("foreignExceptionBridge") == null) return;
+        require(module.get("foreignExceptionBridge") instanceof Map<?,?>, "Invalid runtime bridge metadata");
+        var proof = (Map<?,?>) module.get("foreignExceptionBridge");
+        require(Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")),
+            "Runtime bridge metadata belongs to a different module");
+        proofs.add(proof);
+    }
     public TargetLayout getTargetLayout() { return targetLayout; }
     public List<ModuleRecord> getModules() { return modules; }
     public ModuleRecord owner(String id) {

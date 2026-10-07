@@ -30,10 +30,17 @@ class CoreLinkerTest {
         var module = map("bindings", list(binding("root", list("prim", "mkWeak#")),
             binding(adapter, variable(original)), binding(original, literal()), binding(box, literal()), binding(project, literal()),
             binding("unused", literal())), "foreignExceptionBridges", list(runtimeBridge(unit)), "foreignExceptionBridgeUnit", unit);
-        var linked = CoreModules.reachable(module, "root", true);
-        assertEquals(adapter, linked.get("selectedWeakFinalizer"));
-        assertEquals(list("root", adapter, original), ((List<?>) linked.get("bindings")).stream()
-            .map(it -> ((Map<?,?>) it).get("id")).toList());
+        for (var input : List.of(module, with(module, "foreignExceptionBridgeUnit", null))) {
+            var linked = CoreModules.reachable(input, "root", true);
+            assertEquals(adapter, linked.get("selectedWeakFinalizer"));
+            assertEquals(list("root", adapter, original), ((List<?>) linked.get("bindings")).stream()
+                .map(it -> ((Map<?,?>) it).get("id")).toList());
+        }
+        var ambiguous = with(module, "foreignExceptionBridges", list(runtimeBridge(unit), runtimeBridge("another-runtime")));
+        assertEquals(adapter, CoreModules.reachable(ambiguous, "root", true).get("selectedWeakFinalizer"));
+        assertTrue(assertThrows(RuntimeException.class,
+            () -> CoreModules.reachable(with(ambiguous, "foreignExceptionBridgeUnit", null), "root", true))
+            .getMessage().contains("ambiguous"));
         assertTrue(assertThrows(IllegalArgumentException.class,
             () -> CoreModules.reachable(with(module, "bindings", list(binding("root", list("prim", "mkWeak#")))), "root", true))
             .getMessage().contains("selected runtime finalizer ABI binding"));
@@ -42,10 +49,31 @@ class CoreLinkerTest {
                 "foreignExceptionBridgeUnit", "another-runtime"), "root", true))
             .getMessage().contains("another-runtime:THC.Internal.Weak.runWeakFinalizer"));
     }
+    @Test void looseRuntimeOwnerDiscoveryUsesMetadataWithoutExceptionBodies() {
+        var directory = CoreUnitDirectory.read(map("format", "thc-core-packages", "schema", 1L, "ghc", "9.14.1", "units", List.of()));
+        var metadata = map("unit", "runtime", "module", "THC.Internal.Exception", "foreignExceptionBridge", runtimeBridge("runtime"));
+        assertEquals("runtime", directory.runtimeUnit(ignored -> { throw new AssertionError("No package module is present"); }, List.of(metadata)));
+        assertNull(directory.runtimeUnit(ignored -> { throw new AssertionError("No package module is present"); }, List.of()));
+        var other = with(metadata, "unit", "other-runtime", "foreignExceptionBridge", runtimeBridge("other-runtime"));
+        assertTrue(assertThrows(RuntimeException.class,
+            () -> directory.runtimeUnit(ignored -> { throw new AssertionError("No package module is present"); }, List.of(metadata, other)))
+            .getMessage().contains("ambiguous"));
+        var selected = CoreUnitDirectory.read(map("format", "thc-core-packages", "schema", 1L, "ghc", "9.14.1",
+            "foreignExceptionBridgeUnit", "runtime", "units", List.of()));
+        assertEquals("runtime", selected.runtimeUnit(ignored -> { throw new AssertionError("Explicit selection needs no metadata"); }, List.of(metadata, other)));
+        assertThrows(IllegalArgumentException.class,
+            () -> directory.runtimeUnit(ignored -> metadata, List.of(with(metadata, "unit", "wrong-owner"))));
+    }
     @Test void programsWithoutHaskellWeakRegistrationDoNotRequireTheRuntimeAdapter() {
         var linked = CoreModules.reachable(map("bindings", list(binding("root", list("prim", "mkWeakNoFinalizer#")))), "root", true);
         assertNull(linked.get("selectedWeakFinalizer"));
         assertEquals(1, ((List<?>) linked.get("bindings")).size());
+        var ambiguous = map("bindings", list(binding("root", literal())),
+            "foreignExceptionBridges", list(runtimeBridge("first"), runtimeBridge("second")));
+        assertNull(CoreModules.reachable(ambiguous, "root", true).get("selectedWeakFinalizer"));
+        assertNull(CoreModules.demanded(ambiguous, "root", null,
+            () -> { throw new AssertionError("No exception body is needed"); },
+            () -> { throw new AssertionError("No runtime owner is needed"); }).get("selectedWeakFinalizer"));
         assertTrue(assertThrows(IllegalArgumentException.class,
             () -> CoreModules.reachable(map("bindings", list(binding("root", list("prim", "mkWeak#")))), "root", true))
             .getMessage().contains("selected THC runtime unit"));
