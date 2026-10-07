@@ -124,7 +124,7 @@ receipt. JVM `executable-inputs` discovery does not perform this builder step.
 The ordinary JVM and the separate runtime/cache image recipes are unchanged.
 
 The metadata and linker-script check runs without constructing an image. From
-the repository root, with the pinned Linux JDK and built runtime classes:
+the repository root, with the pinned Linux JDK and installed runtime distribution:
 
 ```sh
 vector_check=build/static-vector-check
@@ -132,8 +132,8 @@ mkdir -p "$vector_check/classes"
 "${THC_LLVM_READOBJ:-llvm-readobj}" --dyn-symbols --dynamic-table --sections \
   --elf-output-style=JSON "$JAVA_HOME/lib/libjsvml.so" > "$vector_check/shared.json"
 "${THC_LLVM_READOBJ:-llvm-readobj}" --symbols --elf-output-style=JSON \
-  "$JAVA_HOME/lib/static/linux-amd64/glibc/libjsvml.a" > "$vector_check/archive.json"
-vector_cp="build/classes/java/main:$JAVA_HOME/lib/svm/builder/*"
+  "$JAVA_HOME/lib/libjsvml.a" > "$vector_check/archive.json"
+vector_cp="build/install/thc/lib/*:$JAVA_HOME/lib/svm/builder/*"
 "$JAVA_HOME/bin/javac" -cp "$vector_cp" -d "$vector_check/classes" \
   research/native-image-preparation/StaticVectorLibrary{,Test}.java
 "$JAVA_HOME/bin/java" -cp "$vector_check/classes:$vector_cp" StaticVectorLibraryTest \

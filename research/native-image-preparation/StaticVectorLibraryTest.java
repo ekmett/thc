@@ -16,7 +16,7 @@ import thc.Json;
  * "$LLVM_READOBJ" --dyn-symbols --dynamic-table --sections --elf-output-style=JSON \
  *   "$JAVA_HOME/lib/libjsvml.so" > "$SHARED_METADATA"
  * "$LLVM_READOBJ" --symbols --elf-output-style=JSON \
- *   "$JAVA_HOME/lib/static/linux-amd64/glibc/libjsvml.a" > "$ARCHIVE_METADATA"
+ *   "$JAVA_HOME/lib/libjsvml.a" > "$ARCHIVE_METADATA"
  * java StaticVectorLibraryTest "$SHARED_METADATA" "$ARCHIVE_METADATA"
  * </pre>
  * Compile against the production StaticVectorLibrary, thc.Json and pinned SVM jars.
@@ -38,6 +38,11 @@ public final class StaticVectorLibraryTest {
 
     private static List<Map<String,Object>> read(Path path) throws Exception {
         return (List<Map<String,Object>>) Json.parse(Files.readString(path));
+    }
+
+    private static Map<String,Object> symbol(String name, String type, String section, long value, long size) {
+        return new java.util.LinkedHashMap<>(Map.of("Name", Map.of("Name", name), "Type", Map.of("Name", type),
+            "Section", Map.of("Name", section), "Binding", Map.of("Name", "Global"), "Value", value, "Size", size));
     }
 
     public static void main(String[] args) throws Exception {
@@ -63,14 +68,24 @@ public final class StaticVectorLibraryTest {
                 missing.equals(((Map<?,?>) ((Map<?,?>) row.get("Symbol")).get("Name")).get("Name")));
         rejected(() -> StaticVectorLibrary.exports(shared, archive, new TreeSet<>()), "missing real export " + missing);
 
-        var validArchive = read(Path.of(args[1]));
-        check(markers.contains("_init"), "Provider lacks the independently checked DT_INIT marker control");
-        var symbols = (List<Map<String,Object>>) shared.getFirst().get("DynamicSymbols");
-        var marker = symbols.stream().map(row -> (Map<String,Object>) row.get("Symbol"))
-            .filter(row -> "_init".equals(((Map<?,?>) row.get("Name")).get("Name")))
-            .findFirst().orElseThrow();
-        marker.put("Value", ((Number) marker.get("Value")).longValue() + 1);
-        rejected(() -> StaticVectorLibrary.exports(shared, validArchive, new TreeSet<>()), "incompatible marker address");
+        // Independent ELF model: a callable export plus a zero-sized linker
+        // initializer at 0x1000. A real JDK need not export lifecycle markers.
+        var callable = symbol("vector_function", "Function", ".text", 0x2000, 8);
+        var marker = symbol("_init", "Function", ".init", 0x1000, 0);
+        var markerProvider = Map.<String,Object>of(
+            "FileSummary", Map.of("Format", "elf64-x86-64"),
+            "DynamicSymbols", List.of(Map.of("Symbol", callable), Map.of("Symbol", marker)),
+            "Sections", List.of(Map.of("Section", Map.of("Name", Map.of("Name", ".init"), "Address", 0x1000L))),
+            "DynamicSection", List.of(Map.of("Type", "INIT", "Value", 0x1000L)));
+        var markerArchive = Map.<String,Object>of("FileSummary", Map.of("Format", "elf64-x86-64"),
+            "Symbols", List.of(Map.of("Symbol", callable)));
+        var modelMarkers = new TreeSet<String>();
+        check(StaticVectorLibrary.exports(List.of(markerProvider), List.of(markerArchive), modelMarkers)
+            .equals(List.of("vector_function")) && modelMarkers.equals(java.util.Set.of("_init")),
+            "linker marker must agree with its ELF section and dynamic tag");
+        marker.put("Value", 0x1001L);
+        rejected(() -> StaticVectorLibrary.exports(List.of(markerProvider), List.of(markerArchive), new TreeSet<>()),
+            "incompatible marker address");
         System.out.println("PASS provider exports retained; missing export, incompatible marker/script rejected; script policy preserved");
     }
 }

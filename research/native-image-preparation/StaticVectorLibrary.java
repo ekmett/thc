@@ -29,7 +29,12 @@ public final class StaticVectorLibrary {
             "Static vector library requires the pinned Linux AMD64 JDK");
         this.receipt = receipt;
         var jdk = Path.of(System.getProperty("java.home")).toRealPath();
-        archive = jdk.resolve("lib/static/linux-amd64/glibc/libjsvml.a").toRealPath();
+        var libraries = NativeLibraries.singleton();
+        libraries.addStaticNonJniLibrary("jsvml");
+        archive = libraries.getStaticLibraries().stream()
+            .filter(path -> path.getFileName().toString().equals("libjsvml.a")).findFirst()
+            .orElseThrow(() -> new IllegalStateException("Selected JDK has no static vector library")).toRealPath();
+        require(archive.startsWith(jdk), "Vector archive is outside the selected JDK: " + archive);
         shared = jdk.resolve("lib/libjsvml.so").toRealPath();
         tool = tool(System.getenv().getOrDefault("THC_LLVM_READOBJ", "llvm-readobj"));
         var sharedMetadata = records(inspect("--dyn-symbols", "--dynamic-table", "--sections", shared.toString()));
@@ -52,8 +57,6 @@ public final class StaticVectorLibrary {
         RuntimeClassInitialization.initializeAtBuildTime(MarkLoaded.class);
         RuntimeSupport.getRuntimeSupport().addInitializationHook(new MarkLoaded());
     }
-
-    public void select() { NativeLibraries.singleton().addStaticNonJniLibrary("jsvml"); }
 
     /** The existing per-isolate hook runs after native platform initialization, before user entry. */
     private static final class MarkLoaded implements RuntimeSupport.Hook {

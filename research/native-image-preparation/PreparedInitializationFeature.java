@@ -27,10 +27,6 @@ public final class PreparedInitializationFeature implements Feature {
         thc.NativeExecutable.captureForImage(new NativeLibraryCapture(receipt)::capture);
     }
 
-    @Override public void beforeAnalysis(BeforeAnalysisAccess access) {
-        if (vectorLibrary != null) vectorLibrary.select();
-    }
-
     @Override public void beforeImageWrite(BeforeImageWriteAccess access) {
         if (vectorLibrary != null)
             ((com.oracle.svm.hosted.FeatureImpl.BeforeImageWriteAccessImpl) access)
