@@ -32,9 +32,11 @@ closure. This does not change State# or TVar# argument and result shapes.
 
 Retry validates and registers its read dependencies under the commit lock,
 then releases it and blocks through Truffle's interruptible safepoint API.
-Changed dependencies wake the waiter; unrelated or identical-pointer writes
-do not. Both branches' dependencies survive an `orElse` retry. An empty read
-set really waits. Context disposal releases waiters and payload references;
+Each TVar retains the waiters registered on it; the context keeps only a weak
+shutdown inventory. A commit visits waiters of changed TVars, without scanning
+unrelated transactions. Identical-pointer writes do not wake them. Cancellation
+removes the waiter from every dependency under the same lock. Both branches'
+dependencies survive an `orElse` retry. An empty read set really waits. Context disposal releases waiters and payload references;
 foreign-context, disposed and wrong-carrier TVars fail before mutation.
 
 ## Asynchronous interruption

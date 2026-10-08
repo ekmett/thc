@@ -49,7 +49,7 @@ public final class ManagedSTM implements AutoCloseable {
     private final ThreadLocal<Transaction> current = new ThreadLocal<>();
     private final Assumption unused = Assumption.create("THC no transaction has been associated");
     private final WeakHashMap<ManagedTVar, Boolean> cells = new WeakHashMap<>();
-    private final LinkedHashSet<RetryWait> waiters = new LinkedHashSet<>();
+    private final WeakHashMap<RetryWait, Boolean> waiters = new WeakHashMap<>();
     private boolean closed;
     private static final TruffleSafepoint.InterruptibleFunction<RetryWait, Object> AWAIT_RETRY = RetryWait::await;
 
@@ -124,14 +124,13 @@ public final class ManagedSTM implements AutoCloseable {
         lock.lock();
         try {
             validate(tx);
-            boolean changed = false;
             for (var item : tx.entries.entrySet()) {
                 var cell = item.getKey(); var entry = item.getValue();
                 if (entry.written && cell.value != entry.value) {
-                    cell.value = entry.value; cell.revision = new Object(); changed = true;
+                    cell.value = entry.value; cell.revision = new Object();
+                    if (cell.waiters != null) for (var waiter : cell.waiters) waiter.changedLocked();
                 }
             }
-            if (changed) for (var waiter : waiters) waiter.changedLocked();
         } finally { lock.unlock(); }
     }
     @TruffleBoundary boolean validException(Transaction tx) {
@@ -192,7 +191,7 @@ public final class ManagedSTM implements AutoCloseable {
         catch (Throwable failure) { abort(parent, child); throw failure; }
         finally { restore(parent); }
     }
-    private final class RetryWait {
+    final class RetryWait {
         private final Node checkpoint;
         private final IdentityHashMap<ManagedTVar, Object> versions = new IdentityHashMap<>();
         private final Condition ready = lock.newCondition();
@@ -203,6 +202,7 @@ public final class ManagedSTM implements AutoCloseable {
             for (var item : tx.entries.entrySet()) versions.put(item.getKey(), item.getValue().revision);
         }
         void changedLocked() {
+            if (changed) return;
             for (var item : versions.entrySet()) if (item.getKey().revision != item.getValue()) {
                 changed = true; ready.signalAll(); break;
             }
@@ -212,11 +212,21 @@ public final class ManagedSTM implements AutoCloseable {
             lock.lockInterruptibly();
             try {
                 live();
-                if (!submitted) { submitted = true; changedLocked(); if (!changed) waiters.add(this); }
+                if (!submitted) {
+                    submitted = true; changedLocked();
+                    if (!changed) {
+                        // The read dependencies own the wait; the context only inventories it for shutdown.
+                        for (var cell : versions.keySet()) {
+                            if (cell.waiters == null) cell.waiters = new LinkedHashSet<>();
+                            cell.waiters.add(this);
+                        }
+                        waiters.put(this, true);
+                    }
+                }
                 while (!changed) {
                     live();
                     var request = checkpoint == null ? null : GuestThreads.pollCurrentWithoutYield(checkpoint, true);
-                    if (request != null) { waiters.remove(this); versions.clear(); throw new AsyncBlocked(request, checkpoint); }
+                    if (request != null) { cancelLocked(); throw new AsyncBlocked(request, checkpoint); }
                     var blocked = GuestThreads.blocking(GuestThreadStatus.STM);
                     try { ready.await(); }
                     finally {
@@ -229,7 +239,15 @@ public final class ManagedSTM implements AutoCloseable {
                 return thc.runtime.Unit.INSTANCE;
             } finally { lock.unlock(); }
         }
-        void cancel() { lock.lock(); try { waiters.remove(this); versions.clear(); } finally { lock.unlock(); } }
+        void cancelLocked() {
+            waiters.remove(this);
+            for (var cell : versions.keySet()) if (cell.waiters != null) {
+                cell.waiters.remove(this);
+                if (cell.waiters.isEmpty()) cell.waiters = null;
+            }
+            versions.clear();
+        }
+        void cancel() { lock.lock(); try { cancelLocked(); } finally { lock.unlock(); } }
         void closeLocked() { ready.signalAll(); }
     }
     public int pendingWaiters() { lock.lock(); try { return waiters.size(); } finally { lock.unlock(); } }
@@ -240,7 +258,7 @@ public final class ManagedSTM implements AutoCloseable {
             closed = true;
             for (var cell : cells.keySet()) cell.value = null;
             cells.clear();
-            for (var waiter : waiters) waiter.closeLocked();
+            for (var waiter : waiters.keySet()) waiter.closeLocked();
         } finally { lock.unlock(); }
     }
     @SuppressWarnings("unchecked")
