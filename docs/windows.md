@@ -559,6 +559,40 @@ fixtures prepared, run the owning checks directly:
 ./gradlew.bat --no-daemon --max-workers=4 --continue testDefault --tests thc.runtime.TupleArithmeticTest --tests thc.runtime.WordCarryTest testDense --tests thc.runtime.TupleArithmeticTest --tests thc.runtime.WordCarryTest
 ~~~
 
+The configured-source foreign producer also supports the Windows vanilla
+nominal profile. It recompiles the original TopHandler and Conc.Sync sources
+with the actual registered THC plugin archive, then checks retained source/CPP
+inputs, genuine stock-import annotations and unchanged native package fields.
+It uses an existing complete interface view; it does not rebuild boot libraries
+or change the native compiler's library registration.
+
+For this bounded check, `THC_TEST_GHC_SOURCE` is the retained Cabal producer
+directory containing `source/`, `dist/setup-config`, and `dist/build/`.
+`THC_TEST_CORE_GLOBAL_DB` selects its complete `view/lib/package.conf.d`.
+Select the matching GHC 9.14.1 compiler/package tool with `GHC` and `GHC_PKG`,
+and set `THC_TEST_INTERFACE_HELPER` and `THC_TEST_DRIVER` to the current Cabal
+executables. Resolve the real plugin registry with
+`bin/plugin.py --root . --ghc-pkg "$env:GHC_PKG" --registry-only`; set
+`THC_TEST_PLUGIN_DB` and `THC_TEST_PLUGIN_UNIT` from that result, and
+`THC_TEST_PLUGIN_LIBRARY` to its registered vanilla archive. Use a short
+`THC_TEST_SCRATCH` path: native copies of deep interface paths can exceed
+Windows path limits. With these existing inputs selected:
+
+~~~powershell
+$flags = @('--offline', '--disable-shared', "--with-compiler=$env:GHC", "--with-hc-pkg=$env:GHC_PKG")
+cabal build lib:thc exe:thc-interface test:driver-tests @flags
+cabal test driver-tests @flags --test-options=--installed-foreign-source-only --test-show-details=direct
+~~~
+
+The existing test checks genuine annotations, original native objects for the
+selected way, unchanged inputs/registration, cache reuse and repair after
+corrupting its own output. Failed producer generations retain their arguments
+and artifacts; only validated generations get cache receipts. This producer
+qualification does not by itself qualify canonical executable entry semantics,
+compiled guest execution or general Windows IO.
+The ordinary Windows simple-package driver currently rejects `--ghc-source`;
+its pinned acquisition route does not yet consume this nominal interface view.
+
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see
   [complete Core](ghc-core.md) when it is unavailable.

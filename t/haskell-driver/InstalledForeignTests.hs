@@ -28,7 +28,7 @@ import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMis
   copyFile, removeFile, removePathForcibly)
 import System.Environment (getEnv, lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeDirectory, replaceExtension)
+import System.FilePath ((</>), takeDirectory, replaceExtension, addTrailingPathSeparator)
 import System.IO (openTempFile, hClose)
 import System.IO.Error (tryIOError)
 import qualified System.Info as Host
@@ -113,6 +113,14 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
       assertBool "introducing a CPP dependency during regeneration must reject"
         (not (matchUsageFiles ("/source/ghcversion.h", "/installed/ghcversion.h") [] []
           [("/source/new-header.h", "changed")]))
+  , TestCase $ forM_ ["C:\\configured source\\rts\\include\\ghcversion.h",
+                     "\\\\server\\configured source\\rts\\include\\ghcversion.h"] $ \path -> do
+      let retained = unlines ["Self-Recomp", "  src hash: 999feb32988468f8fe569d95fc0f673f",
+            "  usages: [import  -/  ghc-internal:GHC.Internal.Base 012345",
+            "           addDependentFile \"" ++ path ++ "\" 012345]",
+            "  orphan hash: 0"]
+      assertEqual "GHC's raw quoted Windows UsageFile keeps backslashes"
+        (Right [(path, "012345")]) (retainedUsageFiles retained)
   , TestCase $ do
       let original = [("/source/HsBaseConfig.h", "old"), ("/source/ghcversion.h", "version")]
           generated = [("/source/HsBaseConfig.h", "old"), ("/installed/ghcversion.h", "version")]
@@ -134,30 +142,42 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
 
 -- Explicit opt-in: this needs an intact matching configured GHC tree and the
 -- real published plugin/helper, not the synthetic decision controls above.
--- Only Unix and directory are requested: no compiler-library or whole-project
--- capture occurs. Directory must preserve the preceding Unix acquisition view.
+-- Windows selects the existing nominal ghc-internal profile; Unix selects
+-- Unix/directory. No compiler-library or whole-project capture occurs.
 sourceTests :: Env -> Test
-sourceTests env = TestLabel "original Unix/directory configured-source provenance" $ TestCase $ do
+sourceTests env = TestLabel "original configured-source foreign provenance" $ TestCase $ do
   source <- getEnv "THC_TEST_GHC_SOURCE"
   helper <- getEnv "THC_TEST_INTERFACE_HELPER"
   ghc <- getEnv "GHC"
   pkg <- getEnv "GHC_PKG"
-  plugin <- readJson (thcRoot env </> "build/compiler/plugin.json")
+  (pluginDb, pluginUnit, published, registered) <- if Host.os == "mingw32" then do
+    database <- getEnv "THC_TEST_PLUGIN_DB"
+    owner <- getEnv "THC_TEST_PLUGIN_UNIT"
+    archive <- getEnv "THC_TEST_PLUGIN_LIBRARY"
+    pure (database, owner, archive, archive)
+    else do
+      plugin <- readJson (thcRoot env </> "build/compiler/plugin.json")
+      pure (string (field plugin "packageDb"), string (field plugin "unitId"),
+        string (field plugin "sharedLibrary"), string (field plugin "cabalSharedLibrary"))
   driverBytes <- BS.readFile (driver env)
   let digest = concatMap (\byte -> let hex = showHex byte "" in replicate (2 - length hex) '0' ++ hex)
         (BS.unpack (SHA.hash driverBytes))
-      producer = ForeignCompiler ghc (string (field plugin "packageDb"))
-        (string (field plugin "unitId")) (string (field plugin "sharedLibrary"))
-        (string (field plugin "cabalSharedLibrary")) digest
-  context <- installedContext ghc pkg helper [] (object ["platform" .= (Host.arch ++ "-" ++ Host.os)])
-  originals <- forM [("unix", unixModules), ("directory", [directoryModule])] $ \(package, names) -> do
+      producer = ForeignCompiler ghc pluginDb pluginUnit published registered digest
+      windows = Host.os == "mingw32"
+  native <- installedContext ghc pkg helper []
+    (object ["platform" .= (Host.arch ++ "-" ++ if windows then "windows" else Host.os)])
+  global <- lookupEnv "THC_TEST_CORE_GLOBAL_DB"
+  let context = native { installedGlobalDb = maybe (installedGlobalDb native) id global }
+      profiles = if windows then [("ghc-internal", ["GHC.Internal.TopHandler", "GHC.Internal.Conc.Sync"])]
+        else [("unix", unixModules), ("directory", [directoryModule])]
+  originals <- forM profiles $ \(package, names) -> do
     result <- runExe env (root env) Nothing 30 pkg
       ["--global", "--no-user-package-db", "field", package, "id", "--simple-output"]
     assertSuccess result
     identifier <- case words (out result) of [value] -> pure value; _ -> fail ("ambiguous " ++ package ++ " installation")
     original <- discoverInstalled context identifier
     hashes <- forM [(replaceExtension path suffix) | (_, path) <- installedInterfaces original,
-                    suffix <- ["hi", "dyn_hi"]] $ \path -> (,) path <$> getFileHash path
+                    suffix <- if windows then ["hi"] else ["hi", "dyn_hi"]] $ \path -> (,) path <$> getFileHash path
     before <- forM names $ \name -> do
       core <- readOriginal context original name
       assertEqual (name ++ " original stock interface lacks typed import provenance") (Right True)
@@ -176,11 +196,11 @@ sourceTests env = TestLabel "original Unix/directory configured-source provenanc
     -- Corrupt only this test's produced artifacts. Unix exercises a replaced
     -- interface; directory exercises an object not read by the Core helper.
     -- Both must invalidate the receipt and produce a fresh verified generation.
-    let (name, suffix) = if directoryModule `elem` map fst before
+    let (name, suffix) = if windows then ("GHC.Internal.TopHandler", "hi") else if directoryModule `elem` map fst before
           then (directoryModule, "dyn_o") else ("System.Posix.Directory.PosixPath", "dyn_hi")
     path <- maybe (fail "missing generated corruption target") pure (lookup name (installedInterfaces regenerated))
     cacheRoot <- canonicalizePath cache
-    assertBool "corruption target belongs to this test's acquisition cache" ((cacheRoot ++ "/") `isPrefixOf` path)
+    assertBool "corruption target belongs to this test's acquisition cache" (addTrailingPathSeparator cacheRoot `isPrefixOf` path)
     BS.appendFile (replaceExtension path suffix) "corrupted-test-output"
     repaired <- acquire
     assertBool "corrupt outputs cannot reuse the same acquisition view" (repaired /= cold)
@@ -202,8 +222,13 @@ sourceTests env = TestLabel "original Unix/directory configured-source provenanc
           (missingForeignProof name core)
         forM_ ["foreign", "unit", "module"] $ \key ->
           assertEqual (name ++ " retains " ++ key) (field previous key) (field core key)
-        let proof = field core "staticForeignImportStubs"
-        assertEqual (name ++ " proof retains the actual native stubs") (field core "foreign") (field proof "expectedForeign")
+        let nominal = name `elem` ["GHC.Internal.TopHandler", "GHC.Internal.Conc.Sync"]
+            proof = field core (if nominal then "staticForeignImports" else "staticForeignImportStubs")
+        when (not nominal) $
+          assertEqual (name ++ " proof retains the actual native stubs") (field core "foreign") (field proof "expectedForeign")
+        when nominal $ forM_ (array (field proof "imports")) $ \entry ->
+          assertBool "nominal proof retains the original declared and normalized types"
+            (all ((/= Null) . field entry) ["declaredType", "normalizedType"])
         assertEqual (name ++ " provenance does not claim native linking") (String "not-linked") (field proof "execution")
         forM_ (lookup name expectedCapi) $ \expected -> do
           let declarations = [entry | entry <- array (field proof "imports"), field entry "convention" == String "capi"]
@@ -240,8 +265,14 @@ sourceTests env = TestLabel "original Unix/directory configured-source provenanc
                 [[], [String "Int32Rep"]]
                 (map (array . (`field` "primReps")) (array (field (field call "resultRep") "components")))
         path <- maybe (fail "missing regenerated interface") pure (lookup name (installedInterfaces regenerated))
-        forM_ ["o", "dyn_o"] $ \suffix -> do
-          bytes <- BS.readFile (replaceExtension path suffix)
+        -- Unix resolves the interface link to its producer. Windows copies
+        -- only interfaces into the view; real objects stay in that same
+        -- producer generation and never replace registered native libraries.
+        let generation = takeDirectory (takeDirectory (takeDirectory (installedGlobalDb context)))
+            nativeObject = if Host.os == "mingw32" then generation </> "interfaces" </>
+              map (\c -> if c == '.' then '/' else c) name else path
+        forM_ (if installedInterfaceWay context == VanillaInterfaces then ["o"] else ["o", "dyn_o"]) $ \suffix -> do
+          bytes <- BS.readFile (replaceExtension nativeObject suffix)
           assertBool (name ++ " compiled original native object: " ++ suffix) (not (BS.null bytes))
     expectedCapi =
       [("System.Posix.Directory.PosixPath", [("opendir", "HsUnix.h", "unsafe")]),
