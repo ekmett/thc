@@ -773,9 +773,11 @@ class FastRunnerTest(unittest.TestCase):
                                 ["example.Test"], ["example.Test.works"])
 
     def test_python_runs_normal_and_optimized_without_shell(self):
-        selected = {"python": {"commands": [["python3", "odd name/test_me.py"]]}}
+        selected = {"python": {"commands": [["python3", path] for path in (
+            "odd name/test_me.py", "bin/test-javascript-ffi.py")]}}
         self.assertEqual(list(ci.python_commands(selected, "/python")),
-                         [["/python", "odd name/test_me.py"], ["/python", "-O", "odd name/test_me.py"]])
+                         [["/python", "odd name/test_me.py"], ["/python", "-O", "odd name/test_me.py"],
+                          ["/python", "-O", "bin/test-javascript-ffi.py"]])
         with self.assertRaises(RuntimeError):
             list(ci.python_commands({"python": {"commands": [["bash", "-c", "exit 0"]]}}, "/python"))
 

@@ -647,7 +647,9 @@ def python_commands(selection, executable, automation_checked=False):
                 "Invalid Python argv from selector")
         if automation_checked and re.fullmatch(r"\.github/scripts/test_[A-Za-z0-9_]+\.py", command[1]):
             continue  # The required automation job ran these in both modes.
-        yield [executable, *command[1:]]
+        # GHC frontend exports are unchanged by Python optimization; check them once.
+        if command[1] != "bin/test-javascript-ffi.py":
+            yield [executable, *command[1:]]
         yield [executable, "-O", *command[1:]]
 
 

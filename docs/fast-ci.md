@@ -93,8 +93,11 @@ ordering-dependent rotation is used.
 
 The existing source ownership selector chooses affected Python and Haskell checks
 and patch controls. Unknown changes or an unavailable comparison base retain the
-full admitted checks. Runtime per-commit coverage remains unchanged. The selection,
-individual command timings, Ninja log and Gradle profiles accompany the job logs.
+full admitted checks. The JavaScript frontend suite runs once under Python `-O`:
+its assertions remain active through `unittest`, and both Python modes otherwise
+repeat the same GHC exports and CBD decoder. Python auditor checks retain both
+modes. Runtime per-commit coverage remains unchanged. The selection, individual
+command timings, Ninja log and Gradle profiles accompany the job logs.
 Scheduled jobs still share common compilation before distributing their groups.
 The job's Gradle worker is stopped on success or failure.
 
