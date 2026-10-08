@@ -680,6 +680,69 @@ class ManagedWeakTest {
             } finally { release.tryPut(Unit.INSTANCE); context.leave(); }
         }
     }
+    private record FinalizerObservation(Thread carrier, WeakReference<Object> captured) {}
+    private Object droppedFinalizerAction(Language language, ManagedWeaks registry,
+            ReferenceQueue<Object> queue, CompletableFuture<FinalizerObservation> entered, CompletableFuture<Integer> result, ManagedMVar release) {
+        var state = Map.of("kind", "void", "primReps", List.of(), "evaluated", true);
+        var boxed = Map.of("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
+        var closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
+        var io = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "primReps", List.of("BoxedRep (Just Lifted)"),
+            "components", List.of(state, boxed), "evaluated", true);
+        var pair = List.of("app", List.of("con", "Pair", 2),
+            List.of(List.of("void", Map.of("rep", state)), List.of("var", "saved", Map.of("rep", boxed))),
+            List.of(false, true), false, false, Map.of("rep", io));
+        var apply = List.of("app", List.of("var", "action", Map.of("rep", closure)),
+            List.of(List.of("var", "s", Map.of("rep", state))), List.of(false), false, false, Map.of("rep", io));
+        var program = new Program(language, Map.of("constructors", List.of(
+            Map.of("id", "Pair", "name", "(#,#)", "arity", 2, "kind", "unboxed-tuple")),
+            "bindings", List.of(
+                Map.of("id", "done", "name", "done", "arity", 2, "lifted", true, "expr", List.of("lam",
+                    List.of(Map.of("id", "saved", "rep", boxed, "lifted", true), Map.of("id", "s", "rep", state, "lifted", false)), pair, Map.of("rep", closure, "resultRep", io))),
+                Map.of("id", "run", "name", "run", "arity", 2, "lifted", true, "expr", List.of("lam",
+                    List.of(Map.of("id", "action", "rep", closure, "lifted", true), Map.of("id", "s", "rep", state, "lifted", false)),
+                    apply, Map.of("rep", closure, "resultRep", io))))));
+        var captured = new byte[]{3, 5, 7};
+        var closureAction = ((Closure) program.entryValue("done")).pap(new Object[]{captured});
+        var action = new Thunk(new RootNode(language) {
+            @Override public Object execute(VirtualFrame frame) {
+                // Observe after automatic dispatch: a witness made before key death
+                // can clear during weak processing before the finalizer is rescued.
+                entered.complete(new FinalizerObservation(Thread.currentThread(), new WeakReference<>(captured, queue)));
+                release.take(null);
+                result.complete((int) captured[0] + captured[1] + captured[2]);
+                Reference.reachabilityFence(captured);
+                return closureAction;
+            }
+        }.getCallTarget(), null);
+        return registry.make(new Object(), new Object(), action, program.entryValue("run"));
+    }
+    @Test
+    void completedFinalizerReleasesActionDespiteRetainedCarrier() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter(); var release = new ManagedMVar();
+            try {
+                var state = Language.currentState(); var registry = state.getWeaks();
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var queue = new ReferenceQueue<Object>(); var entered = new CompletableFuture<FinalizerObservation>();
+                var result = new CompletableFuture<Integer>();
+                var weak = droppedFinalizerAction(language, registry, queue, entered, result, release);
+                var activeQueue = new ReferenceQueue<Object>(); collect(activeQueue, gcWitness(activeQueue));
+                awaitOwnedFreeTask(entered); var observation = entered.getNow(null); assertNotNull(observation);
+                var carrier = observation.carrier();
+                collect(activeQueue, gcWitness(activeQueue));
+                assertTrue(carrier.isAlive(), "The guest finalizer is still blocked");
+                assertFalse(result.isDone(), "The captured bytes have not been consumed");
+                assertNotNull(observation.captured().get(), "A running finalizer retains its captured value");
+                assertEquals(0L, registry.finalize(weak).getFlag(), "The automatic claim already owns the action");
+                release.tryPut(Unit.INSTANCE);
+                TruffleSafepoint.setBlockedThreadInterruptible(null, Thread::join, carrier);
+                assertFalse(carrier.isAlive());
+                assertEquals(15, result.getNow(null));
+                collect(queue, observation.captured());
+                Reference.reachabilityFence(carrier);
+            } finally { release.tryPut(Unit.INSTANCE); context.leave(); }
+        }
+    }
     @Test
     void claimedBootstrapWaitsCooperativelyUntilAnotherGuestSettlesTheHandoff() throws Exception {
         for (var backend : List.of("ast", "bytecode"))

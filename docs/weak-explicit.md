@@ -52,6 +52,10 @@ replace that policy with a Java catch-and-discard adapter. A claim completes
 only after the real carrier terminates, unfinished work transfers to its context,
 or shutdown proves abandonment. A start operation can fail after the carrier
 has started; THC still joins that carrier before completing the claim.
+After terminal completion or explicit action transfer, the old claim releases its
+action, runner and dispatch tree. Retaining the terminated Java carrier does not
+keep those completed cleanup captures alive. Untouched setup failures retain them
+until explicit settlement or context shutdown.
 Automatic Haskell actions and attached C callbacks require guest thread
 permission.
 

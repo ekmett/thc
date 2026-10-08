@@ -30,19 +30,28 @@ public final class ManagedWeaks {
         Throwable failure;
         Work(Handle handle) { this.handle = handle; }
         abstract Finalizer release();
+        void discard() {
+            Finalizer finalizer = release();
+            failure = null;
+            if (finalizer != null) finalizer.clear();
+        }
     }
     // The finalizer deliberately has no edge to this payload: claiming F must not retain V.
     private record Payload(Object value, Finalizer finalizer) { }
     private static final class Finalizer extends Work {
         boolean begun;
         Throwable entryFailure;
-        final Object action, runner;
-        final CallTarget root;
+        Object action, runner;
+        CallTarget root;
         final ArrayDeque<Runnable> callbacks = new ArrayDeque<>();
         Finalizer(Handle handle, Object action, Object runner, CallTarget root) {
             super(handle); this.action = action; this.runner = runner; this.root = root;
         }
         @Override Finalizer release() { return this; }
+        void clear() {
+            action = null; runner = null; root = null;
+            entryFailure = null; failure = null; callbacks.clear();
+        }
         void callbacks() {
             try {
                 for (Runnable callback; (callback = callbacks.pollFirst()) != null;) {
@@ -213,7 +222,7 @@ public final class ManagedWeaks {
         handle.bootstrap = false; notifyAll();
     }
     private synchronized void failed(Work work, Throwable failure) {
-        if (closed) { work.release(); retire(work.handle); return; }
+        if (closed) { work.discard(); retire(work.handle); return; }
         if (work instanceof Finalizer) retire(work.handle);
         // ponytail: linear failed-work search; index only if exceptional backlog
         // matters. Retention itself must not allocate after OOME.
@@ -244,7 +253,7 @@ public final class ManagedWeaks {
     private synchronized Finalizer handoff(Bootstrap bootstrap) {
         var handle = bootstrap.handle;
         if (handle.retired) return bootstrap.release();
-        if (stopping) { retire(handle); bootstrap.release(); return null; }
+        if (stopping) { retire(handle); bootstrap.discard(); return null; }
         try {
             Object replacement = LiftedValues.resolveBoxed(bootstrap.key);
             if (replacement == bootstrap.key) {
@@ -379,7 +388,7 @@ public final class ManagedWeaks {
                 token = handle.token; // Complete the claim, never a later successor.
                 var failed = failure(handle, true);
                 if (failed != null) {
-                    retire(handle); finalizer = failed.release(); break;
+                    retire(handle); finalizer = failed.release(); failed.failure = null; break;
                 }
                 if (handle.retired) return DEAD;
                 Runnable claimed = Weak.finalizeNow(token);
@@ -396,12 +405,14 @@ public final class ManagedWeaks {
         try {
             finalizer.callbacks();
             return finalizer.action == null ? DEAD : new WeakResult(1L, finalizer.action);
-        } finally { Weak.complete(token); }
+        } finally { finalizer.discard(); Weak.complete(token); }
     }
     private void run(Finalizer finalizer) {
         synchronized (this) {
             retire(finalizer.handle);
-            if (stopping || finalizer.action == null && finalizer.callbacks.isEmpty()) return;
+            if (stopping || finalizer.action == null && finalizer.callbacks.isEmpty()) {
+                finalizer.discard(); return;
+            }
             running++;
         }
         boolean interrupted = false;
@@ -432,15 +443,17 @@ public final class ManagedWeaks {
                 }
             }
             synchronized (this) {
-                if (!finalizer.begun) {
-                    Throwable unentered = failure == null ? finalizer.entryFailure : failure;
-                    if (unentered != null) failed(finalizer, unentered);
+                if (failure == null) failure = finalizer.entryFailure;
+                if (!finalizer.begun && failure != null) failed(finalizer, failure);
+                else {
+                    // A terminated Java carrier can retain its original task. Its
+                    // completed claim must no longer own guest cleanup captures.
+                    finalizer.discard();
                 }
                 running--; notifyAll();
             }
             if (interrupted) Thread.currentThread().interrupt();
         }
-        if (failure == null) failure = finalizer.entryFailure;
         if (failure != null) {
             reportFailure(state, failure);
             throw propagate(failure);
@@ -532,7 +545,7 @@ public final class ManagedWeaks {
             closed = true;
             while (failedWork != null) {
                 var failed = failedWork; failedWork = failed.nextFailed;
-                failed.nextFailed = null; retire(failed.handle); failed.release();
+                failed.nextFailed = null; retire(failed.handle); failed.discard();
             }
             notifyAll();
         }
@@ -545,7 +558,7 @@ public final class ManagedWeaks {
                     token = handle.token; retire(handle);
                 }
                 Runnable claimed = Weak.finalizeNow(token);
-                if (claimed instanceof Bootstrap bootstrap) bootstrap.release();
+                if (claimed instanceof Work work) work.discard();
                 if (claimed != null) Weak.complete(token);
             }
         } finally { if (interrupted) Thread.currentThread().interrupt(); }
