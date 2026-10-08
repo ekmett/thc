@@ -19,9 +19,10 @@ public final class IoMainRoot extends ContextRoot {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
         if (!(force.execute(frame, frame.getArguments()[0]) instanceof Closure action)) throw fault("IO main is not a state transformer");
         if (action.arity != 1 || !(action.target.getRootNode() instanceof GuestRoot root) ||
-                root.getInputProofs() == null || root.getInputProofs().size() != action.suppliedCount + 1 ||
-                root.getInputProofs().getLast().getKind() != CoreKind.VOID ||
-                !java.util.List.of().equals(root.getInputProofs().getLast().getPrimReps()))
+                root.getInputProofs() == null || root.getInputProofs().size() != action.suppliedCount + 1)
+            throw fault("IO main requires one exact erased state input");
+        var state = root.getInputProofs().get(action.suppliedCount);
+        if (state.getKind() != CoreKind.VOID || state.getPrimReps() == null || !state.getPrimReps().isEmpty())
             throw fault("IO main requires one exact erased state input");
         dispatch.execute(frame, action, new Object[] { thc.runtime.Unit.INSTANCE });
         return thc.runtime.Unit.INSTANCE;
