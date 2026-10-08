@@ -1055,6 +1055,57 @@ class ManagedWeakTest {
         assertNull(closing.liveJavaId());
         assertNull(capability.liveJavaId());
     }
+    @Test
+    void weakThreadIdentityFollowsGuestLifetimeRatherThanRetainedCarrier() throws Exception {
+        for (var hosting : List.of("platform", "loom"))
+        for (boolean forked : hosting.equals("loom") ? new boolean[]{false, true} : new boolean[]{true})
+        try (var context = context(true, hosting)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState(); var threads = state.getThreads();
+                var owner = state.getWeaks(); var queue = new ReferenceQueue<Object>();
+                var registration = new AtomicReference<Registration>();
+                var retained = new AtomicReference<GuestThreadId>();
+                var failure = new AtomicReference<Throwable>();
+                var ready = new CountDownLatch(1); var finish = new CountDownLatch(1);
+                state.admitGuestConcurrency();
+                var worker = threads.newThread(state.getEnv(), () -> {
+                    threads.enterCurrent(null, forked, true, null);
+                    try {
+                        retained.set(threads.currentIdentity());
+                        registration.set(new Registration(
+                            owner.make(threads.currentIdentity(), threads.currentIdentity(), null, null),
+                            new WeakReference<>(threads.currentIdentity(), queue)));
+                        ready.countDown();
+                        if (!finish.await(10, TimeUnit.SECONDS)) throw new AssertionError("Guest was not released");
+                    } catch (Throwable caught) {
+                        failure.set(caught); ready.countDown();
+                    } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
+                }, null, null);
+                threads.startThread(worker);
+                try {
+                    assertTrue(ready.await(3, TimeUnit.SECONDS));
+                    if (failure.get() != null) throw new AssertionError("Guest failed", failure.get());
+                    var weak = registration.get().weak();
+                    retained.set(null);
+                    var activeQueue = new ReferenceQueue<Object>();
+                    collect(activeQueue, gcWitness(activeQueue));
+                    assertEquals(1L, owner.dereference(weak).getFlag(), "The active guest roots its ThreadId#");
+                    retained.set((GuestThreadId) owner.dereference(weak).getValue());
+                    finish.countDown(); worker.join(3000); assertFalse(worker.isAlive());
+                    if (failure.get() != null) throw new AssertionError("Guest failed", failure.get());
+                    assertEquals(GuestThreadStatus.FINISHED, threads.status(retained.get()));
+                    var retainedQueue = new ReferenceQueue<Object>();
+                    collect(retainedQueue, gcWitness(retainedQueue));
+                    assertSame(retained.get(), owner.dereference(weak).getValue(), "A Java-held ThreadId# is a root");
+                    retained.set(null);
+                    collect(queue, registration.get().referent());
+                    assertEquals(0L, owner.dereference(weak).getFlag(), "Retaining a finished carrier does not root its guest identity");
+                    Reference.reachabilityFence(worker);
+                } finally { finish.countDown(); worker.join(3000); }
+            } finally { context.leave(); }
+        }
+    }
     private record ThreadOutcome(boolean forked, GuestThreadStatus outcome) {}
     @Test
     void mainThreadCapabilityDoesNotResurrectTerminalIdentitiesOrDeadOriginalCarriers() throws Exception {
