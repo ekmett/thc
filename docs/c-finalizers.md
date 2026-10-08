@@ -32,9 +32,8 @@ see [the weak guide](weak-explicit.md) for current evidence and failures.
 
 The reserved owned `free` uses the existing allocation retirement latch. Busy
 borrows or free/realloc reservations defer retirement until completion without
-blocking or requiring another collection. Already retired owners consume stale
-automatic tokens without replay; ordinary explicit free preserves freed-alias
-errors. Callback captures and native borrows cover their actual use; C captures
+blocking or requiring another collection. Ordinary explicit free preserves
+freed-alias errors. Callback captures and native borrows cover their actual use; C captures
 are cleared before the Haskell action can suspend. Context shutdown joins
 admitted guest carriers before disposing providers and remaining allocations.
 Uncertain native effects remain terminal and are not replayed. This does not

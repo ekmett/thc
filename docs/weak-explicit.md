@@ -72,9 +72,8 @@ provider and arguments. Each callback capture and native borrow lasts through
 its real use; remaining C captures are cleared before the Haskell action can
 suspend. The reserved owned `free` uses the existing allocation retirement latch: busy
 borrows or free/realloc reservations defer retirement until their completion
-without blocking the finalizer carrier or requiring another collection. An
-already retired owner consumes a stale automatic token without replaying free;
-ordinary explicit free still rejects freed aliases. Arena invalidation precedes
+without blocking the finalizer carrier or requiring another collection.
+Explicit free rejects freed aliases. Arena invalidation precedes
 raw free. An uncertain native effect is terminal and is never replayed; failures
 remain visible through the allocation's existing error paths.
 
