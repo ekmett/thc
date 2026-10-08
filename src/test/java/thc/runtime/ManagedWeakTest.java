@@ -544,30 +544,158 @@ class ManagedWeakTest {
         }
     }
     private Registration completedThunkKey(Language language, ExecutableProgram program,
-            Object representative, ReferenceQueue<Object> queue) {
+            Object representative, ReferenceQueue<Object> queue, Object value, Runnable callback, boolean completed) {
         var key = new Thunk(new RootNode(language) {
             @Override public Object execute(VirtualFrame frame) { return representative; }
         }.getCallTarget(), null);
-        var weak = Language.currentState().getWeaks().make(key, new Object(), null, null);
-        assertEquals(0, key.getState(), "Registration must leave the key unevaluated");
-        assertSame(representative, program.hostEntryTarget(0).call(key));
+        var registry = Language.currentState().getWeaks();
+        var registrationKey = key;
+        if (completed) {
+            var wrapper = new Thunk(key.getTarget(), null);
+            assertSame(representative, program.hostEntryTarget(0).call(key));
+            wrapper.setValue(key); wrapper.setState(2); registrationKey = wrapper;
+        }
+        var weak = registry.make(registrationKey, value, null, null);
+        assertEquals(1L, registry.addCallback(weak, callback));
+        assertEquals(completed ? 2 : 0, key.getState(), "Registration must leave thunk state unchanged");
+        if (!completed) assertSame(representative, program.hostEntryTarget(0).call(key));
         assertEquals(2, key.getState(), "The ordinary Force update published the indirection");
         return new Registration(weak, new WeakReference<>(key, queue));
     }
     @Test
     void completedThunkWeakKeysFollowIndependentlyLiveWhnfAliases() throws Exception {
-        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+        for (var backend : List.of("ast", "bytecode"))
+        for (boolean completed : new boolean[]{false, true}) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = weakProgram(language, backend, false); var representative = new Object();
                 var queue = new ReferenceQueue<Object>();
-                var registration = completedThunkKey(language, program, representative, queue);
+                var value = new ManagedMutVar(representative); var calls = new ArrayList<Integer>();
+                var registration = completedThunkKey(language, program, representative, queue, value, () -> calls.add(1), completed);
                 collect(queue, registration.referent());
-                assertEquals(1L, Language.currentState().getWeaks().dereference(registration.weak()).getFlag(),
-                    "A live WHNF alias retains a weak created before the original thunk completed");
-                Language.currentState().getWeaks().finalize(registration.weak());
+                var registry = Language.currentState().getWeaks();
+                assertSame(value, registry.dereference(registration.weak()).getValue(),
+                    "A live WHNF alias retains the original distinct value through bootstrap handoff");
+                assertTrue(calls.isEmpty(), "Transferring a registration must not execute its real finalizer");
+                assertEquals(1L, registry.addCallback(registration.weak(), () -> calls.add(2)));
+                assertEquals(0L, registry.finalize(registration.weak()).getFlag());
+                assertEquals(List.of(2, 1), calls);
+                assertEquals(0L, registry.finalize(registration.weak()).getFlag());
+                assertEquals(List.of(2, 1), calls);
                 Reference.reachabilityFence(representative);
+            } finally { context.leave(); }
+        }
+    }
+    @Test
+    void explicitBootstrapFinalizationUnwrapsTheOriginalActionWithoutForcingOpaqueStates() {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = Language.currentState().getWeaks();
+                for (int state : new int[]{0, 1, 2, 3, 4, 5}) {
+                    var key = new Thunk(new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Weak operation forced its key"); }
+                    }.getCallTarget(), null);
+                    key.setValue(state == 2 ? key : new IllegalStateException("opaque failure"));
+                    key.setOwner(state == 1 ? Thread.currentThread() : null); key.setState(state);
+                    var value = new Object[]{key}; var action = new Object(); var calls = new ArrayList<Integer>();
+                    var weak = registry.make(key, value, action, new Object());
+                    assertEquals(1L, registry.addCallback(weak, () -> calls.add(1)));
+                    assertEquals(1L, registry.addCallback(weak, () -> calls.add(2)));
+                    assertSame(value, registry.dereference(weak).getValue());
+                    assertSame(action, registry.finalize(weak).getValue());
+                    assertEquals(List.of(2, 1), calls); assertEquals(state, key.getState());
+                    assertEquals(0L, registry.dereference(weak).getFlag());
+                    assertEquals(0L, registry.addCallback(weak, () -> fail("Retired bootstrap acquired a callback")));
+                    assertEquals(0L, registry.finalize(weak).getFlag());
+                    assertEquals(List.of(2, 1), calls); Reference.reachabilityFence(key);
+                }
+            } finally { context.leave(); }
+        }
+    }
+    private Registration droppedBootstrap(Language language, ManagedWeaks registry, boolean cyclic,
+            ReferenceQueue<Object> queue, CompletableFuture<Void> started, ManagedMVar release) {
+        var key = new Thunk(new RootNode(language) {
+            @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Bootstrap forced a dead key"); }
+        }.getCallTarget(), null);
+        if (cyclic) {
+            var other = new Thunk(key.getTarget(), null);
+            other.setValue(key); other.setState(2); key.setValue(other); key.setState(2);
+        }
+        var value = new Object(); var weak = registry.make(key, value, null, null);
+        assertEquals(1L, registry.addCallback(weak, () -> { started.complete(null); release.take(null); }));
+        return new Registration(weak, new WeakReference<>(value, queue));
+    }
+    @Test
+    void automaticBootstrapDeathClearsBackingBeforeARealFinalizerBlocks() throws Exception {
+        for (var hosting : List.of("platform", "loom"))
+        for (boolean cyclic : new boolean[]{false, true}) try (var context = context(false, hosting)) {
+            context.initialize("thc"); context.enter(); var release = new ManagedMVar();
+            try {
+                var state = Language.currentState(); state.getThreads().setCapabilityCount(1);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var registry = state.getWeaks(); var queue = new ReferenceQueue<Object>();
+                var started = new CompletableFuture<Void>();
+                var dropped = droppedBootstrap(language, registry, cyclic, queue, started, release);
+                var gcQueue = new ReferenceQueue<Object>();
+                collect(gcQueue, gcWitness(gcQueue)); awaitOwnedFreeTask(started);
+                collect(queue, dropped.referent());
+                assertEquals(0L, registry.dereference(dropped.weak()).getFlag());
+                assertEquals(0L, registry.addCallback(dropped.weak(), () -> fail("Dead bootstrap acquired a callback")));
+                assertEquals(0L, registry.finalize(dropped.weak()).getFlag(),
+                    "Operations must finish while the already-claimed real finalizer is blocked");
+            } finally { release.tryPut(Unit.INSTANCE); context.leave(); }
+        }
+    }
+    @Test
+    void claimedBootstrapWaitsCooperativelyUntilAnotherGuestSettlesTheHandoff() throws Exception {
+        for (var backend : List.of("ast", "bytecode"))
+        for (var operation : List.of("dereference", "attach", "finalize")) try (var context = context(false, "loom")) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState(); state.getThreads().setCapabilityCount(1);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = weakProgram(language, backend, false); var registry = state.getWeaks();
+                var representative = new Object(); var value = new Object(); var calls = new CopyOnWriteArrayList<Integer>();
+                var key = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { return representative; }
+                }.getCallTarget(), null);
+                var weak = registry.make(key, value, null, null);
+                assertEquals(1L, registry.addCallback(weak, () -> calls.add(1)));
+                assertSame(representative, program.hostEntryTarget(0).call(key));
+                // The ordinary native claim seam holds a retired bootstrap before
+                // its Runnable enters. Reflection exposes no new runtime/test API.
+                var tokenField = weak.getClass().getDeclaredField("token"); tokenField.setAccessible(true);
+                long token = tokenField.getLong(weak);
+                var bootstrap = jam.vm.Weak.finalizeNow(token); assertNotNull(bootstrap);
+                var settled = new java.util.concurrent.atomic.AtomicBoolean();
+                try {
+                    var entered = new CompletableFuture<Void>();
+                    var waiting = ownedFreeTask(state, () -> {
+                        entered.complete(null);
+                        switch (operation) {
+                            case "dereference" -> assertSame(value, registry.dereference(weak).getValue());
+                            case "attach" -> assertEquals(1L, registry.addCallback(weak, () -> calls.add(2)));
+                            case "finalize" -> assertEquals(0L, registry.finalize(weak).getFlag());
+                            default -> throw new AssertionError(operation);
+                        }
+                    });
+                    awaitOwnedFreeTask(entered);
+                    awaitOwnedFreeTask(ownedFreeTask(state, () -> {
+                        assertFalse(waiting.isDone(), "A claimed bootstrap is pending, not dead");
+                        settled.set(true); bootstrap.run();
+                    }));
+                    awaitOwnedFreeTask(waiting);
+                    assertEquals(0L, registry.finalize(weak).getFlag());
+                    assertEquals(operation.equals("attach") ? List.of(2, 1) : List.of(1), calls);
+                    assertEquals(0L, registry.finalize(weak).getFlag());
+                } finally {
+                    try { if (!settled.getAndSet(true)) bootstrap.run(); }
+                    finally { jam.vm.Weak.complete(token); }
+                }
+                Reference.reachabilityFence(key); Reference.reachabilityFence(representative);
             } finally { context.leave(); }
         }
     }

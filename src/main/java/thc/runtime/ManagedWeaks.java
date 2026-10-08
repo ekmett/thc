@@ -3,13 +3,15 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import jam.vm.Weak;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
@@ -18,9 +20,10 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 public final class ManagedWeaks {
     private static final class Handle {
         final ManagedWeaks owner;
-        final WeakReference<Object> key;
+        WeakReference<Object> key;
         long token;
-        Handle(ManagedWeaks owner, Object key) { this.owner = owner; this.key = new WeakReference<>(key); }
+        boolean bootstrap, retired;
+        Handle(ManagedWeaks owner) { this.owner = owner; }
     }
     // The finalizer deliberately has no edge to this payload: claiming F must not retain V.
     private record Payload(Object value, Finalizer finalizer) { }
@@ -40,6 +43,31 @@ public final class ManagedWeaks {
         // carrier has terminated, including cancellation before its Runnable entered.
         @Override public void run() { handle.owner.run(this); }
     }
+    /** Only the conditional/native finalizer root owns these handoff captures. */
+    private static final class Bootstrap implements Runnable {
+        final Handle handle;
+        Object key, value;
+        Finalizer finalizer;
+        Bootstrap nextFailed;
+        Throwable failure;
+        Bootstrap(Handle handle, Object key, Object value, Finalizer finalizer) {
+            this.handle = handle; this.key = key; this.value = value; this.finalizer = finalizer;
+        }
+        Finalizer release() {
+            Finalizer result = finalizer;
+            key = null; value = null; finalizer = null;
+            return result;
+        }
+        @Override public void run() {
+            Finalizer result;
+            try { result = handle.owner.handoff(this); }
+            catch (Throwable failure) {
+                GuestThreadOps.reportHostFailure(handle.owner.state, failure);
+                throw propagate(failure);
+            }
+            if (result != null) result.run();
+        }
+    }
     /** A host-only drainer: neither one blocked guest nor thread construction stalls other contexts. */
     private static final class Drainer {
         static final Thread THREAD = Thread.ofPlatform().daemon().name("THC weak finalizers").start(() -> {
@@ -57,6 +85,12 @@ public final class ManagedWeaks {
                         finally { Weak.complete(claimed); }
                     });
                 } catch (Throwable failure) {
+                    if (finalizer instanceof Bootstrap bootstrap) {
+                        bootstrap.handle.owner.failed(bootstrap, failure);
+                        Weak.complete(claimed);
+                        GuestThreadOps.reportHostFailure(bootstrap.handle.owner.state, failure);
+                        continue;
+                    }
                     Weak.complete(claimed);
                     throw failure;
                 }
@@ -67,8 +101,11 @@ public final class ManagedWeaks {
     private static final WeakResult DEAD = new WeakResult(0L, null);
     private final Language.State state;
     private final Language language;
-    // No context root points at active V or F. Handles carry only native tokens and a weak key projection.
-    private final HashMap<Long, Handle> live = new HashMap<>();
+    // No context root points at active K, V or F. Membership follows the logical lifetime.
+    private final HashSet<Handle> live = new HashSet<>();
+    // Failed installation is unfinished work, not evidence of key death. Explicit
+    // finalize/close settles it; normal active handles never reach these captures.
+    private Bootstrap failedBootstraps;
     private boolean stopping, closed;
     private int running;
 
@@ -89,22 +126,149 @@ public final class ManagedWeaks {
             if (runner == null) throw fault("Missing original Haskell weak finalizer runner");
         }
         Drainer.start();
-        var handle = new Handle(this, key);
+        Object referent = resolvedKey(key);
+        var handle = new Handle(this);
         var finalizer = new Finalizer(handle, action, runner,
             action == null ? null : new ForkActionRoot(language, null, true, 2).getCallTarget());
         // Never force K, V or F. Jam's conditional association is the only root of this payload.
-        handle.token = Weak.create(key, new Payload(value, finalizer), finalizer);
-        try { live.put(handle.token, handle); }
+        install(handle, referent, value, finalizer);
+        try { live.add(handle); }
         catch (Throwable failure) {
-            if (Weak.finalizeNow(handle.token) != null) Weak.complete(handle.token);
+            Runnable claimed = Weak.finalizeNow(handle.token);
+            if (claimed instanceof Bootstrap bootstrap) bootstrap.release();
+            if (claimed != null) Weak.complete(handle.token);
             throw failure;
         }
         Reference.reachabilityFence(key);
         return handle;
     }
-    @TruffleBoundary public synchronized WeakResult dereference(Object value) {
-        var handle = handle(value);
-        var payload = (Payload) Weak.deref(handle.token);
+    /** State 2 publishes the answer; every other thunk state is opaque here. */
+    private static Object resolvedKey(Object key) {
+        Object current = key;
+        IdentityHashMap<Object, Boolean> seen = null;
+        while (current instanceof Thunk thunk && thunk.getState() == 2) {
+            if (seen == null) seen = new IdentityHashMap<>();
+            if (seen.put(current, Boolean.TRUE) != null) return key;
+            current = ManagedMutVar.completedBoxedIdentity(current);
+        }
+        return current;
+    }
+    private void install(Handle handle, Object key, Object value, Finalizer finalizer) {
+        boolean bootstrap = key instanceof Thunk;
+        Runnable callback = bootstrap ? new Bootstrap(handle, key, value, finalizer) : finalizer;
+        var projection = new WeakReference<>(key);
+        var payload = new Payload(value, finalizer);
+        long token = Weak.create(key, payload, callback);
+        handle.key = projection;
+        handle.token = token;
+        handle.bootstrap = bootstrap;
+        Reference.reachabilityFence(key);
+    }
+    private void retire(Handle handle) {
+        handle.retired = true; handle.bootstrap = false; live.remove(handle); notifyAll();
+    }
+    private synchronized void failed(Bootstrap bootstrap, Throwable failure) {
+        if (closed) { bootstrap.release(); retire(bootstrap.handle); return; }
+        // ponytail: linear failed-work search; index only if exceptional backlog
+        // matters. Retention itself must not allocate after OOME.
+        bootstrap.failure = failure;
+        bootstrap.nextFailed = failedBootstraps;
+        failedBootstraps = bootstrap;
+        notifyAll();
+    }
+    private Bootstrap failure(Handle handle, boolean remove) {
+        Bootstrap previous = null;
+        for (Bootstrap current = failedBootstraps; current != null; current = current.nextFailed) {
+            if (current.handle == handle) {
+                if (remove) {
+                    if (previous == null) failedBootstraps = current.nextFailed;
+                    else previous.nextFailed = current.nextFailed;
+                    current.nextFailed = null;
+                }
+                return current;
+            }
+            previous = current;
+        }
+        return null;
+    }
+    /** No forcing or guest action: installation and publication precede capture release. */
+    private synchronized Finalizer handoff(Bootstrap bootstrap) {
+        var handle = bootstrap.handle;
+        if (handle.retired) return bootstrap.release();
+        if (stopping) { retire(handle); bootstrap.release(); return null; }
+        try {
+            Object replacement = resolvedKey(bootstrap.key);
+            if (replacement == bootstrap.key) {
+                retire(handle);
+                return bootstrap.release();
+            }
+            install(handle, replacement, bootstrap.value, bootstrap.finalizer);
+            bootstrap.release();
+            notifyAll();
+            return null;
+        } catch (Throwable failure) {
+            failed(bootstrap, failure);
+            throw propagate(failure);
+        }
+    }
+    private synchronized void waitHandoff(Handle handle, long token) throws InterruptedException {
+        while (!closed && handle.bootstrap && handle.token == token && failure(handle, false) == null) wait();
+    }
+    private void awaitHandoff(Handle handle, long token) {
+        if (!state.getEnv().getContext().isEntered()) {
+            boolean interrupted = false;
+            try {
+                for (;;) {
+                    try { waitHandoff(handle, token); return; }
+                    catch (InterruptedException ignored) { interrupted = true; }
+                }
+            } finally { if (interrupted) Thread.currentThread().interrupt(); }
+        }
+        // Suspension/reacquisition is outside the registry monitor. Native claims
+        // arbitrate helpers; only a claimed bootstrap may need this short wait.
+        try (var admission = LoomScheduler.suspendCurrentGuest()) {
+            TruffleSafepoint.setBlockedThreadInterruptible(null, waiting -> waitHandoff(waiting, token), handle);
+        }
+    }
+    private Payload payload(Handle handle) {
+        for (;;) {
+            Bootstrap bootstrap;
+            long token;
+            synchronized (this) {
+                handle(handle);
+                var failed = failure(handle, false);
+                if (failed != null) throw propagate(failed.failure);
+                if (handle.retired) return null;
+                var payload = (Payload) Weak.deref(handle.token);
+                if (payload != null || !handle.bootstrap) return payload;
+                token = handle.token;
+                bootstrap = (Bootstrap) Weak.finalizeNow(token);
+            }
+            if (bootstrap == null) { awaitHandoff(handle, token); continue; }
+            Finalizer finalizer;
+            try { finalizer = handoff(bootstrap); }
+            catch (Throwable failure) { Weak.complete(token); throw propagate(failure); }
+            if (finalizer == null) { Weak.complete(token); continue; }
+            // A helper must not block on a real guest finalizer (which can in
+            // turn wait for the helper). Retain the captured old claim until
+            // its independently dispatched real carrier has terminated.
+            try {
+                Thread.ofVirtual().name("THC weak finalizer").start(() -> {
+                    try { finalizer.run(); }
+                    finally { Weak.complete(token); }
+                });
+            } catch (Throwable failure) {
+                bootstrap.finalizer = finalizer;
+                failed(bootstrap, failure);
+                Weak.complete(token);
+                throw propagate(failure);
+            }
+        }
+    }
+    @TruffleBoundary public WeakResult dereference(Object value) {
+        Handle handle;
+        synchronized (this) { handle = handle(value); }
+        var payload = payload(handle);
         return payload == null ? DEAD : new WeakResult(1L, payload.value());
     }
     /** A nonzero flag selects the environment/object C ABI; zero ignores the environment. */
@@ -117,34 +281,55 @@ public final class ManagedWeaks {
         if (callback.getSymbol().equals("free")) state.getNativeAllocations().requireFreeTarget(address);
         return addCallback(weak, flag == 0L ? () -> callback.invoke(address) : () -> callback.invoke(environment, address));
     }
-    @TruffleBoundary public synchronized long addCallback(Object value, Runnable callback) {
-        var handle = handle(value);
-        var payload = (Payload) Weak.deref(handle.token);
-        if (payload == null) return 0L;
-        requireThreads();
-        // RTS prepends. Native dereference roots the payload across the mutation.
-        payload.finalizer().callbacks.addFirst(java.util.Objects.requireNonNull(callback));
-        Reference.reachabilityFence(payload);
-        return 1L;
+    @TruffleBoundary public long addCallback(Object value, Runnable callback) {
+        Handle handle;
+        synchronized (this) { handle = handle(value); }
+        for (;;) {
+            var payload = payload(handle);
+            if (payload == null) return 0L;
+            synchronized (this) {
+                handle(handle);
+                if (Weak.deref(handle.token) != payload) { payload = null; continue; }
+                requireThreads();
+                // RTS prepends. Native dereference roots the payload across the mutation.
+                payload.finalizer().callbacks.addFirst(java.util.Objects.requireNonNull(callback));
+                Reference.reachabilityFence(payload);
+                return 1L;
+            }
+        }
     }
     @TruffleBoundary public WeakResult finalize(Object value) {
         Finalizer finalizer;
-        synchronized (this) {
-            var handle = handle(value);
-            finalizer = (Finalizer) Weak.finalizeNow(handle.token);
-            if (finalizer == null) return DEAD;
-            live.remove(handle.token);
+        long token;
+        for (;;) {
+            Handle handle;
+            synchronized (this) {
+                handle = handle(value);
+                token = handle.token; // Complete the claim, never a later successor.
+                var failed = failure(handle, true);
+                if (failed != null) {
+                    retire(handle); finalizer = failed.release(); break;
+                }
+                if (handle.retired) return DEAD;
+                Runnable claimed = Weak.finalizeNow(token);
+                if (claimed != null) {
+                    retire(handle);
+                    finalizer = claimed instanceof Bootstrap bootstrap ? bootstrap.release() : (Finalizer) claimed;
+                    break;
+                }
+                if (!handle.bootstrap) return DEAD;
+            }
+            awaitHandoff(handle, token);
         }
-        // The native claim made the registration dead before any effect. Explicit
-        // finalize returns the original reusable action; GHC decides when to run it.
+        // Explicit claim unwraps a bootstrap without re-registering or forcing.
         try {
             finalizer.callbacks();
             return finalizer.action == null ? DEAD : new WeakResult(1L, finalizer.action);
-        } finally { Weak.complete(finalizer.handle.token); }
+        } finally { Weak.complete(token); }
     }
     private void run(Finalizer finalizer) {
         synchronized (this) {
-            live.remove(finalizer.handle.token);
+            retire(finalizer.handle);
             if (stopping || finalizer.action == null && finalizer.callbacks.isEmpty()) return;
             running++;
         }
@@ -223,7 +408,7 @@ public final class ManagedWeaks {
         return threads.liveJavaId((GuestThreadId) key);
     }
     /** Fence admission before GuestThreads stops and joins the actual carriers. */
-    public synchronized void requestStop() { stopping = true; }
+    public synchronized void requestStop() { stopping = true; notifyAll(); }
     /** Called after the guest join, before any native provider is disposed. */
     public void close() {
         ArrayList<Handle> abandoned;
@@ -234,10 +419,21 @@ public final class ManagedWeaks {
                 try { wait(); } catch (InterruptedException ignored) { interrupted = true; }
             }
             closed = true;
-            abandoned = new ArrayList<>(live.values()); live.clear();
+            abandoned = new ArrayList<>(live); live.clear();
+            while (failedBootstraps != null) {
+                var failed = failedBootstraps; failedBootstraps = failed.nextFailed;
+                failed.nextFailed = null; retire(failed.handle); failed.release();
+            }
+            notifyAll();
         }
         try {
-            for (var handle : abandoned) if (Weak.finalizeNow(handle.token) != null) Weak.complete(handle.token);
+            for (var handle : abandoned) {
+                long token = handle.token;
+                synchronized (this) { retire(handle); }
+                Runnable claimed = Weak.finalizeNow(token);
+                if (claimed instanceof Bootstrap bootstrap) bootstrap.release();
+                if (claimed != null) Weak.complete(token);
+            }
         } finally { if (interrupted) Thread.currentThread().interrupt(); }
     }
     public static ManagedWeaks current(Node node) { return Language.currentState(node).getWeaks(); }
