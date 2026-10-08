@@ -16,7 +16,7 @@ module THC.Driver.Installed
   ( InstalledContext(..), InterfaceWay(..), interfaceWayName, packageGlobalArguments, helperDatabases, installedViewIdentity
   , InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
-  , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe, probeClosure
+  , installedProvenance, installedLayoutHeaders, helperCommand, prepareInstalledDemand, probeInstalled, prepareInstalledProbe, probeClosure
   , emptyRegistration, modulelessRegistration
   , boundedInterfaceProcess, boundedInterfaceProcessIn, boundedInterfaceProcessInput
   ) where
@@ -33,6 +33,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Char (isAlphaNum, isHexDigit)
 import Data.List (nub, sort)
+import Numeric (showHex)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
@@ -274,6 +275,63 @@ helperCommand context unit (name, path) =
      "--module", name, "--interface", path, "--way", interfaceWayName (installedInterfaceWay context), "--source-notes"] ++
     concatMap (\db -> ["--package-db", db]) (helperDatabases context)
 
+-- | Publish an interface-backed whole unit only when the selected GHC reader
+-- proves every owned module free of startup/native/control obligations. Thin
+-- requested modules fail here; native-bearing units keep ordinary acquisition.
+-- The descriptor snapshots actual helper, interface and package-state bytes.
+-- Conversion is context-private on the JVM, so this is not a conversion cache.
+prepareInstalledDemand :: InstalledContext -> [InstalledUnit] -> IO ([Value], Map.Map String Value)
+prepareInstalledDemand _ [] = pure ([], Map.empty)
+prepareInstalledDemand context requested = do
+  units <- probeClosures context requested
+  helper <- canonicalizePath (installedHelper context)
+  libdir <- canonicalizePath (installedLibdir context)
+  dbs <- mapM canonicalizePath (helperDatabases context)
+  global <- canonicalizePath (installedLibdirGlobalDb context)
+  let databases = nub (global : dbs)
+      paths = nub ([helper, libdir </> "settings"] ++
+        map (</> "package.cache") databases ++ concatMap (map snd . installedInterfaces) units)
+      observe = forM paths $ \path -> do
+        -- Snapshot the path the helper consumes. Resolving a linked settings
+        -- or package.cache file loses both view membership and later retargets.
+        absolute <- makeAbsolute path
+        bytes <- withBinaryFile absolute ReadMode $ \handle ->
+          evaluate . SHA.hashlazy =<< BL.hGetContents handle
+        let digest = concatMap (\byte -> let value = showHex byte "" in replicate (2 - length value) '0' ++ value) (BS.unpack bytes)
+        pure (object ["path" .= absolute, "sha256" .= digest])
+  before <- observe
+  probe <- probeInstalledInventory context (map registeredId requested) units
+  rows <- required probe "interfaces" :: IO [Value]
+  after <- observe
+  unless (before == after) (fail "installed inputs changed during demand inventory")
+  checkProbeRegistrations context units
+  records <- fmap concat $ forM requested $ \unit -> do
+    let selected = [row | row <- rows, valueAt row "unit" == Just (registeredId unit)]
+    if null selected || any (\row -> valueAt row "demandEligible" /= Just True) selected
+      then pure []
+      else do
+        owners <- mapM (\row -> required row "owner") selected :: IO [String]
+        owner <- case nub owners of
+          [value] -> pure value
+          _ -> fail "installed interfaces disagree on their original Core owner"
+        modules <- forM selected $ \row -> do
+          name <- required row "module" :: IO String
+          path <- canonicalizePath =<< (required row "interface" :: IO FilePath)
+          artifact <- case [item | item <- before, valueAt item "path" == Just path] of
+            [item] -> pure item
+            _ -> fail "demand interface is outside its checked snapshot"
+          digest <- required artifact "sha256" :: IO String
+          pure $ object ["name" .= name, "boundary" .= ("optimized-Core-after-Tidy-before-CorePrep" :: String),
+            "sha256" .= digest, "interface" .= artifact,
+            "containsDelimitedControl" .= False, "registrationObligations" .= False,
+            "mainAlias" .= False, "packageScalarDeclarations" .= False]
+        pure [(registeredId unit, object ["id" .= owner, "depends" .= installedDepends unit, "modules" .= modules,
+          "interfaceSource" .= object ["format" .= ("thc-ghc-interfaces-v1" :: String),
+            "registeredUnit" .= registeredId unit, "helper" .= helper,
+            "libdir" .= libdir, "way" .= interfaceWayName (installedInterfaceWay context),
+            "packageDatabases" .= dbs, "implicitGlobalDatabase" .= global, "compiler" .= installedCompiler context]])]
+  pure (if null records then [] else before, Map.fromList records)
+
 -- Exact registered dependency closure, including mutable boot/-inplace units.
 -- This is an acceleration hint, never a substitute for ordinary acquisition:
 -- callers discard it on any discovery, protocol, identity or read failure.
@@ -349,10 +407,14 @@ registrationSnapshot context = do
     stripNewlines = reverse . dropWhile (`elem` ("\r\n" :: String)) . reverse
 
 probeClosure :: InstalledContext -> InstalledUnit -> IO [InstalledUnit]
-probeClosure context requested = do
+probeClosure context requested = probeClosures context [requested]
+
+probeClosures :: InstalledContext -> [InstalledUnit] -> IO [InstalledUnit]
+probeClosures context requested = do
   discover <- registrationSnapshot context
-  units <- Map.elems <$> visit discover Set.empty Map.empty (registeredId requested)
-  unless (lookup (registeredId requested) [(registeredId unit, unit) | unit <- units] == Just requested)
+  units <- Map.elems <$> foldM (visit discover Set.empty) Map.empty (map registeredId requested)
+  forM_ requested $ \unit -> unless
+    (lookup (registeredId unit) [(registeredId item, item) | item <- units] == Just unit)
     (fail "installed registration changed before interface probe")
   validateReexports units
   pure units
@@ -374,13 +436,17 @@ checkProbeRegistrations context units = do
 -- The caller rechecks registrations after consuming the response and any
 -- additional raw-input snapshots, immediately before returning the evidence.
 probeInstalledUnits :: InstalledContext -> InstalledUnit -> [InstalledUnit] -> IO Value
-probeInstalledUnits context requested units = do
+probeInstalledUnits context requested = probeInstalledInventory context [registeredId requested]
+
+probeInstalledInventory :: InstalledContext -> [String] -> [InstalledUnit] -> IO Value
+probeInstalledInventory _ [] _ = fail "installed probe requires a requested unit"
+probeInstalledInventory context requested@(requestedUnit : _) units = do
   let entries = [(registeredId unit, name, path) | unit <- units,
                    (name, path) <- installedInterfaces unit]
       request = object ["units" .= map registeredId units,
         "interfaces" .= [object ["unit" .= identifier, "module" .= name, "interface" .= path]
                          | (identifier, name, path) <- entries]]
-      arguments = ["--libdir", installedLibdir context, "--unit", registeredId requested,
+      arguments = ["--libdir", installedLibdir context, "--unit", requestedUnit,
                    "--way", interfaceWayName (installedInterfaceWay context), "--probe-inventory"] ++
         concatMap (\db -> ["--package-db", db]) (helperDatabases context)
   (status, output, diagnostic) <- boundedProcessInput (installedHelper context) arguments
@@ -397,10 +463,12 @@ probeInstalledUnits context requested units = do
     owner <- required row "owner" :: IO String
     digest <- required row "fingerprint" :: IO String
     complete <- required row "completeCore" :: IO Bool
+    unless (identifier `notElem` requested || complete) $
+      fail ("complete-interface-core unavailable for " ++ identifier ++ ":" ++ name ++ " (" ++ path ++
+        "). Build the libraries with -fwrite-if-simplified-core or select --installed-core pinned.")
     unless (valueAt row "unit" == Just identifier && valueAt row "module" == Just name &&
             valueAt row "interface" == Just path && not (null owner) &&
-            length digest == 32 && all isHexDigit digest &&
-            (identifier /= registeredId requested || complete))
+            length digest == 32 && all isHexDigit digest)
       (fail "inconsistent interface probe identity/payload")
   pure (object ["registrations" .= map (installedProvenance context) units, "interfaces" .= rows])
 

@@ -35,7 +35,7 @@ class ManagedExportAsyncPolicyTest {
             java.util.function.Consumer<com.oracle.truffle.api.nodes.Node> onEntry) {
         context.initialize("thc"); context.enter();
         try {
-            var owner = Language.currentState(null); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            var owner = Language.currentState(null); owner.getRuntimeTrace().control(500, 1); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
             var body = list("case", list("app", list("prim", "traceEvent#"), list(list("lit", "string-bytes", "706f6c696379"), list("void", map("rep", stateRep))),
                 list(false, false), false, false, map("rep", stateRep)), "traced", list(list("default", null, list(), list("var", "x", map("rep", dataRep)))),
                 map("rep", dataRep, "binder", map("id", "traced", "lifted", false, "rep", stateRep)));
@@ -154,7 +154,7 @@ class ManagedExportAsyncPolicyTest {
     private List<Object> variable(String id, Map<String, Object> proof) { return list("var", id, map("rep", proof)); }
     private ManagedExportValue selfDeliveryExport(String backend, boolean async, AtomicReference<AsyncRequest> request,
             AtomicReference<GuestThreadId> identity) {
-        var owner = Language.currentState();
+        var owner = Language.currentState(); owner.getRuntimeTrace().control(500, 1);
         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
         var threadRep = map("kind", "object", "primReps", list("BoxedRep (Just Unlifted)"), "evaluated", true);
         var threadTuple = map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(stateRep, threadRep),

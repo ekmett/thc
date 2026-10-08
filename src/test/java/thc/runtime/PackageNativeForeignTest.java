@@ -63,6 +63,8 @@ public class PackageNativeForeignTest {
               a[1] = 197;
               return b[0];
             }
+            float identity_float(float value) { return value; }
+            double identity_double(double value) { return value; }
             uint32_t complement32(uint32_t value) { return ~value; }
             uint8_t complement8(uint8_t value) { return (uint8_t) ~value; }
             static uint64_t scalar_state;
@@ -116,6 +118,8 @@ public class PackageNativeForeignTest {
         var abi = List.of(new PackageScalarSignature("sum_bytes", "sum_bytes", List.of("ByteArray#", "Word64Rep"), "Word64Rep", "capi"),
             new PackageScalarSignature("update", "update", List.of("MutableByteArray#", "ByteArray#", "Word64Rep"), "void", "capi"),
             new PackageScalarSignature("alias", "alias", List.of("AddrRep", "AddrRep"), "Word32Rep"),
+            new PackageScalarSignature("identity_float", "identity_float", List.of("FloatRep"), "FloatRep"),
+            new PackageScalarSignature("identity_double", "identity_double", List.of("DoubleRep"), "DoubleRep"),
             new PackageScalarSignature("complement32", "complement32", List.of("Word32Rep"), "Word32Rep"),
             new PackageScalarSignature("complement8", "complement8", List.of("Word8Rep"), "Word8Rep"),
             new PackageScalarSignature("advance", "advance", List.of("Word64Rep"), "void"),
@@ -155,6 +159,8 @@ public class PackageNativeForeignTest {
             var arguments = frame.getArguments();
             if (operation.getResult().equals("void") && !forceIntegerResult) { access.executeVoid(arguments, thc.runtime.Unit.INSTANCE); return thc.runtime.Unit.INSTANCE; }
             if (operation.getResult().equals("AddrRep")) return access.executeAddress(arguments, thc.runtime.Unit.INSTANCE);
+            if (operation.getResult().equals("FloatRep")) return access.executeFloat(arguments, thc.runtime.Unit.INSTANCE);
+            if (operation.getResult().equals("DoubleRep")) return access.executeDouble(arguments, thc.runtime.Unit.INSTANCE);
             if (NarrowInteger.fromRep(operation.getResult()) != null) return access.executeInt(arguments, thc.runtime.Unit.INSTANCE);
             return access.executeLong(arguments, thc.runtime.Unit.INSTANCE);
         }
@@ -237,7 +243,7 @@ public class PackageNativeForeignTest {
                         case "finalizer" -> {
                             var weak = state.getWeaks().make(new Object(), new Object(), null);
                             var provider = state.cbits();
-                            assertEquals(1L, state.getWeaks().addCFinalizer(provider.finalizerLabel("free"), address, 0L, weak, provider));
+                            assertEquals(1L, state.getWeaks().addCFinalizer(provider.finalizerLabel("free"), address, 0L, ManagedAddress.nullAddress(), weak, provider));
                             state.getWeaks().finalize(weak);
                             consumed = true;
                             assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
@@ -388,6 +394,46 @@ public class PackageNativeForeignTest {
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
         return target;
+    }
+    @Test public void nativeFloatingIdentitySurvivesFirstCompiledCalls() throws Exception {
+        var link = library();
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language.currentState().getPackageCbits().link(link);
+                for (boolean single : new boolean[]{true, false}) {
+                    var entry = globalEntry(link, single ? "identity_float" : "identity_double");
+                    var target = entry.getCallTarget();
+                    // Compare representations where the value is exact. A C value
+                    // identity does not establish a NaN-payload preservation contract.
+                    long[] patterns = single
+                        ? new long[]{0, 0x80000000L, 1, 0x007fffffL, 0x00800000L, 0x7f800000L, 0xff800000L, 0x7fc01234L}
+                        : new long[]{0, Long.MIN_VALUE, 1, 0x000fffffffffffffL, 0x0010000000000000L,
+                            0x7ff0000000000000L, 0xfff0000000000000L, 0x7ff8000000005678L};
+                    for (boolean compiled : new boolean[]{false, true}) {
+                        if (compiled) compileEntry(entry);
+                        for (int index = 0; index < patterns.length; index++) {
+                            long bits = patterns[compiled ? patterns.length - 1 - index : index];
+                            Object argument;
+                            if (single) argument = Float.intBitsToFloat((int) bits);
+                            else argument = Double.longBitsToDouble(bits);
+                            long before = entry.compiledEntries;
+                            var result = target.call(argument);
+                            long actual = single
+                                ? Integer.toUnsignedLong(Float.floatToRawIntBits(assertInstanceOf(Float.class, result)))
+                                : Double.doubleToRawLongBits(assertInstanceOf(Double.class, result));
+                            if (single && Float.isNaN((Float) argument)) assertTrue(Float.isNaN((Float) result));
+                            else if (!single && Double.isNaN((Double) argument)) assertTrue(Double.isNaN((Double) result));
+                            else assertEquals(bits, actual, (single ? "Float/" : "Double/") + Long.toUnsignedString(bits, 16));
+                            if (compiled) {
+                                assertTrue(entry.compiledEntries > before, "The first call after compilation must enter installed code");
+                                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                            }
+                        }
+                    }
+                }
+            } finally { context.leave(); }
+        }
     }
     private void assertInstalled(Entry entry, RootCallTarget target, long before) throws Exception {
         assertSame(target, entry.getCallTarget());

@@ -23,6 +23,7 @@ final class MakeClosure extends Expr {
         // Closed immutable code needs no per-entry allocation.
         constantClosure = captureLayout == null ? new Closure(null, arity, target) : null;
     }
+    RootCallTarget target() { return target; }
     @Override public Closure execute(VirtualFrame frame) {
         return constantClosure != null ? constantClosure : new Closure(captureLayout.capture(frame, captures,
             programSlot < 0 ? null : Program.instance(frame, programSlot)), arity, target);

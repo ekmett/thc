@@ -5,5 +5,5 @@ package thc.runtime;
 /** Provider boundary keeps optional JFR availability and denied controls testable. */
 public interface RuntimeTraceJfr {
     long support();
-    long emit(long contextId, String phase, long token, String name, long elapsedNanos);
+    long emit(long contextId, String phase, long token, String name, long elapsedNanos, String payloadHex);
 }

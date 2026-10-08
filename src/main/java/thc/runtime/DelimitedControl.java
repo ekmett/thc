@@ -32,10 +32,13 @@ public final class DelimitedControl {
         throw new UnsupportedCore("Delimited continuation encountered a non-delivery asynchronous scheduling cut");
     }
     @TruffleBoundary public static DelimitedCut tupleCut(DelimitedCut cut, MaterializedFrame frame, TupleDestination destination, Node node) {
+        return tupleCut(cut, frame, destination, node, destination.getShape());
+    }
+    @TruffleBoundary public static DelimitedCut tupleCut(DelimitedCut cut, MaterializedFrame frame, TupleDestination destination, Node node, TupleShape producer) {
         DelimitedFrame pending = cut.getFrames().isEmpty() ? null : cut.getFrames().getLast();
         if (destination instanceof AstTupleDestination && !(pending != null && pending.getFrame() == frame &&
             pending.getStep() instanceof DelimitedPendingApplication application && application.getDestination() == destination))
-            cut.append(frame, new DelimitedTupleStep(destination, node));
+            cut.append(frame, new DelimitedTupleStep(destination, node, producer));
         return cut;
     }
     public static boolean enabled(Node node) { return node.getRootNode() instanceof GuestRoot root && root.getDelimitedControlEnabled(); }

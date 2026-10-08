@@ -12,38 +12,15 @@ import thc.Language;
 /** Context stderr diagnostics, not native GHC TSO allocation or binary eventlog records. */
 public final class RtsDiagnostics {
     private RtsDiagnostics() {}
-    private static final String HEX = "0123456789abcdef";
-    @TruffleBoundary public static void trace(Node node, TraceOp operation, ManagedAddress address, long count) {
+    public static void trace(Node node, TraceOp operation, ManagedAddress address, long count) {
         var context = Language.currentState(node);
+        if (context.getRuntimeTrace().isPrimopDisabled()) return;
+        traceEnabled(context, operation, address, count);
+    }
+    @TruffleBoundary private static void traceEnabled(Language.State context, TraceOp operation, ManagedAddress address, long count) {
         var previous = context.getThreads().enterForeign(ForeignSafety.UNSAFE);
-        try {
-            byte[] bytes;
-            if (operation == TraceOp.BINARY) {
-                if (count < 0 || count > Integer.MAX_VALUE) throw RuntimeFault.fault("Invalid binary trace length");
-                bytes = count == 0 ? new byte[0] : address.withNativeBorrow(() -> {
-                    address.requireByteRegion(count, false);
-                    byte[] result = new byte[(int) count];
-                    for (int i = 0; i < result.length; i++) result[i] = (byte) address.readWord8(i);
-                    return result;
-                });
-            } else bytes = address.withNativeBorrow(() -> cstring(address));
-            var output = context.getEnv().err();
-            synchronized (output) {
-                try {
-                    output.write(("[thc trace " + operation.getLabel() + "] ").getBytes(StandardCharsets.US_ASCII));
-                    for (byte item : bytes) {
-                        int value = item & 255;
-                        if (operation == TraceOp.BINARY) { output.write(HEX.charAt(value >>> 4)); output.write(HEX.charAt(value & 15)); }
-                        else if (value == 92) { output.write(92); output.write(92); }
-                        else if (value < 32 || value == 127) {
-                            output.write(92); output.write(120); output.write(HEX.charAt(value >>> 4)); output.write(HEX.charAt(value & 15));
-                        } else output.write(value);
-                    }
-                    output.write(10);
-                } catch (IOException ignored) { /* Void RTS hooks do not raise guest IO errors. */ }
-                try { output.flush(); } catch (IOException ignored) { /* Same void hook contract. */ }
-            }
-        } finally { context.getThreads().leaveForeign(previous); }
+        try { context.getRuntimeTrace().emitPrimop(operation, address, count); }
+        finally { context.getThreads().leaveForeign(previous); }
     }
     @TruffleBoundary public static void report(Node node, RtsDiagnosticOp operation, Object first, Object second) {
         var context = Language.currentState(node);
@@ -73,7 +50,7 @@ public final class RtsDiagnostics {
             }
         } finally { context.getThreads().leaveForeign(previous); }
     }
-    private static byte[] cstring(ManagedAddress address) {
+    static byte[] cstring(ManagedAddress address) {
         long available = address.availableBytes();
         long length = 0;
         while (length < available && address.readWord8(length) != 0) length++;

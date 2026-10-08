@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Live Truffle frames with synthetic metadata/layouts, not native GHC frame equivalence. */
 public class ManagedStackRuntimeTest {
-    private final String platform = (Set.of("arm64", "aarch64").contains(System.getProperty("os.arch").toLowerCase(Locale.ROOT)) ? "aarch64" : "x86_64") + (System.getProperty("os.name").startsWith("Mac") ? "-osx" : "-linux");
+    private final String platform = (Set.of("arm64", "aarch64").contains(System.getProperty("os.arch").toLowerCase(Locale.ROOT)) ? "aarch64" : "x86_64") + (System.getProperty("os.name").startsWith("Mac") ? "-osx" : System.getProperty("os.name").startsWith("Windows") ? "-windows" : "-linux");
     private final String endian = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? "little" : "big";
     private TargetLayout layout() { return layout(Map.of(), "stack-service-test"); }
     private TargetLayout layout(Map<String, ?> changes) { return layout(changes, "stack-service-test"); }
@@ -38,7 +38,7 @@ public class ManagedStackRuntimeTest {
             {"stackRetFunSizeBytes",8},{"stackRetFunFunBytes",16},{"stackRetFunPayloadBytes",24},{"stackRetFunFrameBytes",24},{"stackAnnPayloadBytes",8},{"stackAnnFrameBytes",16},{"stackClosurePayloadBytes",8}
         };
         for (var field : offsets) fields.put((String) field[0], field[1]); fields.putAll(changes);
-        return TargetLayout.fromDocument(Map.of("format", "thc-target-layout", "schema", 1, "compiler", Map.of("id", "ghc-9.14.1", "abi", abi, "platform", platform, "way", "dynamic-nonprofiling"), "layout", fields));
+        return TargetLayout.fromDocument(Map.of("format", "thc-target-layout", "schema", 1, "compiler", Map.of("id", "ghc-9.14.1", "abi", abi, "platform", platform, "way", platform.endsWith("-windows") ? "vanilla-nonprofiling" : "dynamic-nonprofiling"), "layout", fields));
     }
     private static final class Capture extends GuestRoot {
         @Child Expr body;

@@ -9,15 +9,10 @@ set(ci_runner "${Python3_EXECUTABLE}" .github/scripts/fast_ci.py)
 set(ci_reports "${PROJECT_SOURCE_DIR}/build/ci/check-results")
 add_custom_target(ci-commit)
 
+# Keep Java preparation in one Gradle invocation; its task graph orders compilation.
 add_custom_target(ci-runtime
   COMMAND ${ci_env} ${ci_runner} check-command --report-dir "${ci_reports}/runtime-build" --
-    ./gradlew --daemon "--max-workers=${THC_BUILD_JOBS}" --build-cache --profile installDist
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" JOB_POOL gradle VERBATIM)
-add_custom_target(ci-test-classes
-  COMMAND ${ci_env} ${ci_runner} check-command --report-dir "${ci_reports}/test-classes" --
-    ./gradlew --daemon "--max-workers=${THC_BUILD_JOBS}" --build-cache --profile testClasses toolsJar
-  # Tests and diagnostics compile against the application classes.
-  DEPENDS ci-runtime
+    ./gradlew --daemon "--max-workers=${THC_BUILD_JOBS}" --build-cache --profile installDist testClasses toolsJar
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" JOB_POOL gradle VERBATIM)
 add_custom_target(ci-driver-help
   COMMAND ${ci_env} ${ci_runner} check-command --report-dir "${ci_reports}/driver-help" --
@@ -91,7 +86,7 @@ if(check_protocol)
   add_dependencies(ci-commit ci-truffle-protocol)
 endif()
 
-set(runtime_inputs ci-runtime ci-test-classes)
+set(runtime_inputs ci-runtime)
 string(JSON fixture_count LENGTH "${ci_selection}" fixtures)
 if(fixture_count GREATER 0)
   math(EXPR fixture_last "${fixture_count} - 1")

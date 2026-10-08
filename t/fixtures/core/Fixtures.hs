@@ -7,11 +7,11 @@
 -- Produces/consumed result: Fixtures/THC.Prim.Test CBDs and build/native/oracle.tsv.
 -- Cost and overlap: This is the natural shared semantic smoke corpus. Extend it for
 --   ordinary behavior instead of adding a new exporter/native harness for each primop.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build: cmake/CoreFixtures.cmake declares the shared runtime CBD and native oracle
+--   inputs/outputs; fixture-runtime-core-native builds their owning rules.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 113.
 
-{-# LANGUAGE MagicHash, NoImplicitPrelude #-}
+{-# LANGUAGE MagicHash, NoImplicitPrelude, UnliftedNewtypes #-}
 
 -- |
 -- Module      : Fixtures
@@ -27,10 +27,26 @@ module Fixtures
   , lazyArgument, lazyField, recursiveCaf, caseList, multiModule
   , cacheSaturation, mutualTail, selfMutualTail, blackhole, fibonacciBox
   , capturedChangingEnv, localMutualClosures, nestedCaptureThunk
+  , wrapRaw, unwrapRaw, scalarCastEntry
   ) where
 
 import GHC.Exts (Int#, (+#), (-#), (*#), (<=#))
 import THC.Prim.Test
+
+-- Genuine erased newtype casts retain the full Int# carrier at each boundary.
+newtype RawInt = RawInt Int#
+
+{-# OPAQUE wrapRaw #-}
+wrapRaw :: Int# -> RawInt
+wrapRaw x = RawInt x
+
+{-# OPAQUE unwrapRaw #-}
+unwrapRaw :: RawInt -> Int#
+unwrapRaw (RawInt x) = x
+
+{-# OPAQUE scalarCastEntry #-}
+scalarCastEntry :: Int# -> Int#
+scalarCastEntry x = unwrapRaw (wrapRaw x)
 
 sumLoop :: Int# -> Int#
 sumLoop n = go n 0# where

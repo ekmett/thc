@@ -9,6 +9,8 @@ import java.util.List;
 import thc.Language;
 /** Exact program-owned Ptr/Int32 layouts preserve constructor case identity. */
 public final class SignalDispatchRoot extends ContextRoot {
+    private static final String POINTER = "ghc-internal:GHC.Internal.Ptr.Ptr";
+    private static final String SIGNAL = "ghc-internal:GHC.Internal.Int.I32#";
     private final Object action;
     private final DataLayout pointer, signal;
     private final CoreRepresentation result;
@@ -19,13 +21,19 @@ public final class SignalDispatchRoot extends ContextRoot {
     public SignalDispatchRoot(Language language, ExecutableProgram program) {
         super(language, new FrameLayout().build());
         action = program.entryValue(CoreSignalForeign.dispatcher);
-        pointer = program.constructorLayout("ghc-internal:GHC.Internal.Ptr.Ptr");
-        signal = program.constructorLayout("ghc-internal:GHC.Internal.Int.I32#");
+        prepareLayouts(program);
+        pointer = program.constructorLayout(POINTER);
+        signal = program.constructorLayout(SIGNAL);
         result = new CoreRepresentation(CoreKind.UNKNOWN, false, true, List.of("BoxedRep (Just Lifted)"), List.of(
             new CoreRepresentation(CoreKind.VOID, true, true, List.of(), null, null, null, null, null),
             new CoreRepresentation(CoreKind.DATA, false, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null)), null, null, null, null);
         shape = new TupleShape(result, language);
         dispatch = new TupleDispatch(new IoUnitDestination(shape, language), new Metrics(false), 3, false);
+    }
+    /** The service boxes these arguments even when the guest dispatcher ignores them. */
+    static void prepareLayouts(ExecutableProgram program) {
+        var pointer = program.constructorLayout(POINTER);
+        var signal = program.constructorLayout(SIGNAL);
         if (pointer.getArity() != 1 || !pointer.hasFieldRepresentation(0, "AddrRep") || signal.getArity() != 1 || !signal.hasFieldRepresentation(0, "Int32Rep"))
             throw RuntimeFault.fault("Original signal dispatcher requires exact Ptr/Int32 constructor layouts");
     }

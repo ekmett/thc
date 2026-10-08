@@ -57,7 +57,12 @@ class CoreUnitAsyncPolicyTest {
         var pending = CompletableFuture.supplyAsync(() -> threads.send(id, "pending demand")).get(5, TimeUnit.SECONDS);
         assertFalse(pending.getForceSelf()); return pending;
     }
-    private Context context(ByteArrayOutputStream output) { return Context.newBuilder("thc").err(output).build(); }
+    private Context context(ByteArrayOutputStream output) {
+        var context = Context.newBuilder("thc").err(output).build();
+        context.initialize("thc"); context.enter();
+        try { Language.currentState().getRuntimeTrace().control(500, 1); } finally { context.leave(); }
+        return context;
+    }
     private CoreUnitProgram program(Language.State owner) { var programs = owner.getCoreUnitPrograms(); assertEquals(1, programs.size()); return programs.getFirst(); }
     @Test void defaultOffAndExplicitOverridesRetainCaptureOnBothBackends() throws Exception {
         var manifest = fixture(false);

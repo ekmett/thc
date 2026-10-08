@@ -32,20 +32,9 @@ witnessed (Witness n) tree = case tree of
 coercionEntry :: Int# -> Int#
 coercionEntry n = case witnessed (Witness n) (More 7# Done) of I# result -> result
 
--- Legal erased scalar casts preserve IntRep across the newtype boundary.
+-- Scalar identity lives in the admitted shared runtime corpus; these casts
+-- retain the separate primitive arithmetic/conversion controls.
 newtype RawInt = RawInt Int#
-
-{-# OPAQUE wrapRaw #-}
-wrapRaw :: Int# -> RawInt
-wrapRaw x = RawInt x
-
-{-# OPAQUE unwrapRaw #-}
-unwrapRaw :: RawInt -> Int#
-unwrapRaw (RawInt x) = x
-
-{-# OPAQUE scalarCastEntry #-}
-scalarCastEntry :: Int# -> Int#
-scalarCastEntry x = unwrapRaw (wrapRaw x)
 
 -- These casts surround primitive applications themselves. Signature validation
 -- must see their unchanged primitive representations after newtype erasure.

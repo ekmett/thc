@@ -2,8 +2,11 @@
 
 An evaluated thunk releases its own references to the entry target and captured
 environment. It retains the answer, or a memoized guest exception/runtime fault.
-An unexpected host exception resets the thunk for retry and retains the original
-entry and environment. Blackhole detection and sharing remain unchanged.
+An unexpected host unwind leaves the update interrupted; it never resets the
+thunk and replays possible effects. Later demand fails if no resumable
+continuation was captured. Supported async capture instead parks a continuation
+that a later owner can resume through the same update protocol. Blackhole
+detection and sharing remain unchanged.
 
 Forcing a known local binding also replaces that binding's thunk reference with
 the answer. A subsequent read of the same binding can therefore skip the thunk's

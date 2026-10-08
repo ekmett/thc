@@ -2,19 +2,12 @@
   "schema": 1,
   "quarantinedJunitTags": ["foreign-exceptions-full-core"],
   "quarantinedJunit": [
-    "thc.runtime.OriginalTimeClockTest",
-    "thc.runtime.RtsEventNativeTest",
-    "thc.runtime.GcStatsNativeTest",
     "thc.runtime.AggregateHeapNativeTest",
     "thc.runtime.FourWayAggregateNativeTest",
     "thc.runtime.FourWayAggregateStorageTest",
     "thc.runtime.FourWayAggregateProtocolTest",
     "thc.runtime.NarrowIntegerTransportTest",
     "thc.runtime.GenericSumTransportTest",
-    "thc.runtime.TupleJoinNativeTest",
-    "thc.runtime.SumInputNativeTest",
-    "thc.runtime.TupleCaptureNativeTest",
-    "thc.runtime.SumJoinInputNativeTest",
     "thc.GraphWorkloadTest",
     "thc.runtime.OriginalIconvNativeTest",
     "thc.runtime.FileWaitFullCoreTest",
@@ -24,9 +17,6 @@
     "thc.runtime.StablePtrFfiFullCoreTest",
     "thc.runtime.PackageScalarCbitsTest",
     "thc.runtime.PackageNativeOriginalsTest",
-    "thc.runtime.LibyamlNativeProductsTest",
-    "thc.runtime.WcwidthTest",
-    "thc.runtime.GetEntropyTest",
     "thc.runtime.HashableFfiFullCoreTest",
     "thc.runtime.PackageNativeArchiveFullCoreTest",
     "thc.runtime.WindowsCodePagesTest",
@@ -74,7 +64,6 @@
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.PosixStatAbiTest",
     "thc.runtime.OriginalUnixBatchTest",
-    "thc.runtime.NativeFileProviderTest",
     "thc.runtime.NativeDirectoryFileSystemTest",
     "thc.runtime.NativeDirectoryStreamsTest",
     "thc.runtime.NativeFileBuffersTest",
@@ -297,7 +286,8 @@
     "thc.runtime.WindowsSulongLibraryLookupTest",
     "thc.runtime.Word32VectorMemoryProofTest",
     "thc.runtime.Word32VectorStorageTest",
-    "thc.runtime.WordArrayTest"
+    "thc.runtime.WordArrayTest",
+    "thc.runtime.TupleRepresentationTest"
   ],
   "groups": {
     "backend-annotations": {
@@ -310,10 +300,21 @@
     },
     "compact-model": {
       "cmakeTarget": "fixture-compact-model",
-      "junit": ["thc.runtime.BigNatLiteralTest", "thc.StaticExportStartupTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnlinkTest"],
+      "junit": ["thc.AggregateFrontierTest", "thc.runtime.BigNatLiteralTest", "thc.StaticExportStartupTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdConsumersTest", "thc.CoreCbdModelTest", "thc.CoreCbdSlabsTest", "thc.CoreCompactDebugTest", "thc.CoreCompactDirectoryTest", "thc.CoreCompactFileTest", "thc.CoreCompactFormatTest", "thc.CoreCompactLoadTest", "thc.CoreCompactRecordsTest", "thc.CoreRequestTest", "thc.CoreUnitAsyncPolicyTest", "thc.CoreUnitCafLifetimeTest", "thc.CoreUnitLoadTest", "thc.JsonWriterTest", "thc.LauncherDiagnosticsTest", "thc.ManagedImportTypeTest", "thc.NarrowPublicEntryTest", "thc.NativeCacheTest", "thc.PackageScalarLinksTest", "thc.ReusableLoaderTest", "thc.runtime.CoreBoxedForeignAdmissionTest", "thc.runtime.CoreManagedFilesTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.CoreThreadIdForeignTest", "thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest", "thc.runtime.OriginalUnlinkTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; \"${CABAL:-cabal}\" build exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\"; mkdir -p build; \"${CABAL:-cabal}\" list-bin exe:thc-fixtures --offline --with-compiler=\"${GHC:-ghc}\" --with-hc-pkg=\"${GHC_PKG:-ghc-pkg}\" > build/thc-fixtures.path"]}],
       "outputs": ["build/thc-fixtures.path"],
       "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
+    },
+    "native-open-request": {
+      "cmakeTarget": "fixture-native-open-request",
+      "ciPlatforms": ["Linux", "Darwin"],
+      "junit": ["thc.runtime.NativeFileProviderTest"],
+      "commands": [
+        {"argv": ["cmake", "-S", ".", "-B", "build/fixtures", "-G", "Ninja"]},
+        {"argv": ["cmake", "--build", "build/fixtures", "--parallel", "2", "--target", "fixture-native-open-request"]}
+      ],
+      "outputs": ["build/native-open-request/native/oracle"],
+      "sources": ["cmake/ProcessFixtures.cmake", "t/fixtures/compiler/OriginalOpenRequestNative.hs", "src/main/c/native-open-request.c"]
     },
     "process-lifecycle-native": {
       "cmakeTarget": "fixture-process-lifecycle-native",
@@ -521,13 +522,6 @@
       "sources": ["t/fixtures/compiler/NativeAddressNative.hs", "t/fixtures/compiler/NativeMallocNative.hs",
         "src/test/resources/core/original-malloc-descriptors.json", "t/haskell-fixtures/NativeAddressFixtures.hs",
         "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
-    },
-    "original-open": {
-      "quarantined": true,
-      "junit": ["thc.runtime.LoomOriginalOpenTest", "thc.runtime.OriginalOpenTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-open"]}],
-      "outputs": ["build/original-open"],
-      "sources": ["t/fixtures/compiler/OriginalOpenAudit.hs", "t/fixtures/compiler/OriginalOpenNative.hs", "t/fixtures/compiler/OriginalOpenRequestNative.hs", "src/main/c/native-open-request.c", "src/driver/THC/Driver/NativeCache.hs", "t/haskell-fixtures/OriginalOpenFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "rts-diagnostics": {
       "cmakeTarget": "fixture-rts-diagnostics",
@@ -751,18 +745,13 @@
       "sources": ["t/haskell-fixtures/WordFloatingFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "bin/export-core.ps1", "bin/windows-common.ps1", "t/fixtures/compiler/WordFloatingAudit.hs", "t/fixtures/compiler/WordFloatingNative.hs"]
     },
     "floating-tuples": {
-      "quarantined": true,
+      "cmakeTarget": "fixture-floating-tuples",
+      "ciPlatforms": ["Linux", "Darwin"],
+      "requires": ["compact-model"],
       "junit": ["thc.runtime.FloatingTupleTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-floating-tuples.py"]}],
-      "outputs": ["build/floating-tuple"],
-      "sources": ["bin/prepare-floating-tuples.py", "t/fixtures/compiler/FloatingTupleAudit.hs", "t/fixtures/compiler/FloatingTupleAuditNative.hs"]
-    },
-    "sqrt": {
-      "quarantined": true,
-      "junit": ["thc.runtime.SqrtPrimitiveTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "sqrt"]}],
-      "outputs": ["build/sqrt"],
-      "sources": ["t/haskell-fixtures/SqrtFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/SqrtAudit.hs", "t/fixtures/compiler/SqrtAuditNative.hs"]
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-floating-tuples"]}],
+      "outputs": ["build/floating-tuple/pre-core/FloatingTupleAudit.cbd", "build/floating-tuple/post-core/FloatingTupleAudit.cbd", "build/floating-tuple/pre-ghc/FloatingTupleAudit.hi", "build/floating-tuple/pre-ghc/FloatingTupleAudit.o", "build/floating-tuple/post-ghc/FloatingTupleAudit.hi", "build/floating-tuple/post-ghc/FloatingTupleAudit.o", "build/floating-tuple/native/oracle", "build/floating-tuple/native/Main.hi", "build/floating-tuple/native/Main.o", "build/floating-tuple/native/FloatingTupleAudit.hi", "build/floating-tuple/native/FloatingTupleAudit.o", "build/floating-tuple/oracle.tsv", "build/floating-tuple/bits.tsv"],
+      "sources": ["cmake/CoreFixtures.cmake", "cmake/CaptureOutput.cmake", "t/fixtures/compiler/FloatingTupleAudit.hs", "t/fixtures/compiler/FloatingTupleAuditNative.hs", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
     },
     "pinned-addresses": {
       "cmakeTarget": "fixture-pinned-addresses",
@@ -809,13 +798,30 @@
       "outputs": ["build/scalar-bitcasts"],
       "sources": ["t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.ps1", "bin/windows-common.ps1", "t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs"]
     },
+    "aggregate-layout": {
+      "cmakeTarget": "fixture-aggregate-layout",
+      "ciPlatforms": ["Linux", "Darwin"],
+      "junit": ["thc.AggregateLayoutTest", "thc.runtime.UnknownBoxedNativeTest"],
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-aggregate-layout"]}],
+      "outputs": ["build/aggregate-layout/pre-core/AggregateLayoutAudit.cbd", "build/aggregate-layout/post-core/AggregateLayoutAudit.cbd", "build/aggregate-layout/pre-ghc/AggregateLayoutAudit.hi", "build/aggregate-layout/pre-ghc/AggregateLayoutAudit.o", "build/aggregate-layout/post-ghc/AggregateLayoutAudit.hi", "build/aggregate-layout/post-ghc/AggregateLayoutAudit.o"],
+      "sources": ["cmake/CoreFixtures.cmake", "t/fixtures/compiler/AggregateLayoutAudit.hs", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
+    },
+    "sum-layout": {
+      "cmakeTarget": "fixture-sum-layout",
+      "ciPlatforms": ["Linux", "Darwin"],
+      "junit": ["thc.SumLayoutMetadataTest"],
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-sum-layout"]}],
+      "outputs": ["build/sum-layout/pre-core/SumLayoutAudit.cbd", "build/sum-layout/post-core/SumLayoutAudit.cbd", "build/sum-layout/pre-ghc/SumLayoutAudit.hi", "build/sum-layout/pre-ghc/SumLayoutAudit.o", "build/sum-layout/post-ghc/SumLayoutAudit.hi", "build/sum-layout/post-ghc/SumLayoutAudit.o", "build/sum-layout/native/sum-layout-oracle", "build/sum-layout/native/Main.hi", "build/sum-layout/native/Main.o", "build/sum-layout/native/SumLayoutAudit.hi", "build/sum-layout/native/SumLayoutAudit.o", "build/sum-layout/oracle.tsv"],
+      "sources": ["cmake/CoreFixtures.cmake", "cmake/CaptureOutput.cmake", "t/fixtures/compiler/SumLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAuditNative.hs", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
+    },
     "sum-results": {
-      "requires": ["compact-model"],
-      "quarantined": true,
-      "junit": ["thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest", "thc.runtime.TupleRepresentationTest", "thc.runtime.UnknownBoxedNativeTest"],
-      "commands": [{"argv": ["sh", "bin/prepare-aggregate-frontier.sh"]}, {"argv": ["python3", "bin/check-sum-layout.py", "--prepare"]}, {"argv": ["python3", "bin/prepare-sum-result-audit.py"]}],
-      "outputs": ["build/aggregate-core", "build/aggregate-post-core", "build/aggregate-native", "build/aggregate-frontier.json", "build/aggregate-layout", "build/sum-layout", "build/sum-result"],
-      "sources": ["bin/prepare-aggregate-frontier.sh", "bin/check-aggregate-frontier.py", "bin/check-aggregate-layout.py", "bin/check-sum-layout.py", "bin/sum_layout_model.py", "bin/test-sum-layout.py", "bin/prepare-sum-result-audit.py", "t/fixtures/compiler/AggregateFrontier.hs", "t/fixtures/compiler/AggregateFrontierNative.hs", "t/fixtures/compiler/AggregateLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAudit.hs", "t/fixtures/compiler/SumLayoutAuditNative.hs", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs"]
+      "cmakeTarget": "fixture-sum-results",
+      "ciPlatforms": ["Linux", "Darwin"],
+      "requires": ["compact-model", "sum-layout"],
+      "junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"],
+      "commands": [{"argv": ["cmake", "--build", "build/fixtures", "--target", "fixture-sum-results"]}],
+      "outputs": ["build/sum-result/pre-core/SumResultAudit.cbd", "build/sum-result/post-core/SumResultAudit.cbd", "build/sum-result/pre-ghc/SumResultAudit.hi", "build/sum-result/pre-ghc/SumResultAudit.o", "build/sum-result/post-ghc/SumResultAudit.hi", "build/sum-result/post-ghc/SumResultAudit.o", "build/sum-result/native/oracle", "build/sum-result/native/Main.hi", "build/sum-result/native/Main.o", "build/sum-result/native/SumResultAudit.hi", "build/sum-result/native/SumResultAudit.o", "build/sum-result/oracle.tsv", "build/sum-result/oracle-pairs.tsv"],
+      "sources": ["cmake/CoreFixtures.cmake", "cmake/CaptureOutput.cmake", "t/fixtures/compiler/SumResultAudit.hs", "t/fixtures/compiler/SumResultAuditNative.hs", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
     },
     "simd-floatx4": {
       "cmakeTarget": "fixture-simd-floatx4",
@@ -1019,19 +1025,6 @@
         "t/fixtures/compiler/PinnedPointerCellsNative.hs"
       ]
     },
-    "aligned-scalar-memory": {
-      "quarantined": true,
-      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "aligned-scalar-memory"]}],
-      "outputs": ["build/aligned-scalar-memory"],
-      "sources": [
-        "t/haskell-fixtures/Main.hs",
-        "t/haskell-fixtures/AlignedScalarMemoryFixtures.hs",
-        "t/fixtures/compiler/AlignedScalarMemoryAudit.hs",
-        "t/fixtures/compiler/AlignedScalarMemoryNative.hs",
-        "t/fixtures/core/StableWideCells.hs"
-      ]
-    },
     "wide-char-address": {
       "cmakeTarget": "fixture-wide-char-address",
       "junit": ["thc.runtime.WideCharAddressTest"],
@@ -1222,19 +1215,6 @@
         "t/fixtures/compiler/Explicit64PrimopsAudit.hs"
       ]
     },
-    "tuple-input": {
-      "quarantined": true,
-      "junit": ["thc.runtime.TupleInputNativeTest"],
-      "commands": [
-        {"argv": ["python3", "bin/prepare-tuple-input-audit.py"]}
-      ],
-      "outputs": ["build/tuple-input"],
-      "sources": [
-        "bin/prepare-tuple-input-audit.py",
-        "t/fixtures/compiler/TupleInputAudit.hs",
-        "t/fixtures/compiler/TupleInputAuditNative.hs"
-      ]
-    },
     "integer-primops": {
       "nativeOracle": "independent-ghc",
       "requires": ["compact-model"],
@@ -1293,9 +1273,9 @@
     "cbv-coercion": {
       "quarantined": true,
       "junit": ["thc.RealCoreCallDemandTest", "thc.RealCoreEntryContractTest", "thc.runtime.BoxedLexicalProofTest", "thc.runtime.BoxedValueCacheTest", "thc.runtime.ScalarLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest"],
-      "commands": [{"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "bin/export-core.sh", "t/fixtures/compiler/TupleArithmeticAudit.hs"]}, {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "bin/export-core.sh", "t/fixtures/compiler/Explicit64PrimopsAudit.hs"]}, {"argv": ["bin/export-core.sh", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs"]}, {"argv": ["python3", "bin/check-demand-metadata.py", "--ghc-api"]}, {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs"]}, {"argv": ["python3", "bin/check-cbv-metadata.py"]}],
-      "outputs": ["build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd", "build/explicit64-primops/core/Explicit64PrimopsAudit.cbd", "build/core/CBVAudit.cbd", "build/core/CBVJoinAudit.cbd", "build/core/CBVCoercionAudit.cbd", "build/core/DemandAudit.cbd", "build/cbv-post-core/CBVAudit.cbd", "build/cbv-post-core/CBVJoinAudit.cbd", "build/cbv-post-core/CBVCoercionAudit.cbd"],
-      "sources": ["t/fixtures/compiler/TupleArithmeticAudit.hs", "t/fixtures/compiler/Explicit64PrimopsAudit.hs", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs", "bin/check-demand-metadata.py", "bin/check-cbv-metadata.py"]
+      "commands": [{"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "bin/export-core.sh", "t/fixtures/compiler/TupleArithmeticAudit.hs"]}, {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "bin/export-core.sh", "t/fixtures/compiler/Explicit64PrimopsAudit.hs"]}, {"argv": ["bin/export-core.sh", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs"]}, {"argv": ["python3", "bin/check-demand-metadata.py", "--ghc-api"]}, {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs"]}, {"argv": ["python3", "bin/check-cbv-metadata.py"]}],
+      "outputs": ["build/tuple-arithmetic/pre-core/TupleArithmeticAudit.cbd", "build/explicit64-primops/core/Explicit64PrimopsAudit.cbd", "build/core/CBVAudit.cbd", "build/core/CBVCoercionAudit.cbd", "build/core/DemandAudit.cbd", "build/cbv-post-core/CBVAudit.cbd", "build/cbv-post-core/CBVCoercionAudit.cbd"],
+      "sources": ["t/fixtures/compiler/TupleArithmeticAudit.hs", "t/fixtures/compiler/Explicit64PrimopsAudit.hs", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs", "bin/check-demand-metadata.py", "bin/check-cbv-metadata.py"]
     },
     "data-to-tag": {
       "quarantined": true,
@@ -1472,13 +1452,6 @@
       "outputs": ["build/cstring/boot-core", "build/cstring/boot-provenance.json"],
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
-    "empty-join-input": {
-      "quarantined": true,
-      "junit": ["thc.runtime.EmptyJoinInputTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-empty-join-input.py"]}],
-      "outputs": ["build/empty-join-input"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
     "truffle-strings": {
       "cmakeTarget": "fixture-truffle-strings",
       "junit": ["thc.runtime.IntrinsicOperandContinuationTest", "thc.runtime.TruffleStringTest"],
@@ -1504,13 +1477,6 @@
       "sources": ["t/haskell-fixtures/AggregateFixtures.hs",
         "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
-    "tuple-join": {
-      "quarantined": true,
-      "junit": ["thc.runtime.TupleJoinResultTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-tuple-join-audit.py"]}],
-      "outputs": ["build/tuple-join"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
     "vector-api": {
       "cmakeTarget": "fixture-vector-api",
       "junit": ["thc.runtime.VectorApiTest"],
@@ -1520,25 +1486,11 @@
         "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json",
         "src/examples/VectorLoops.hs", "src/runtime/THC/Prim.hs"]
     },
-    "empty-tuple-input": {
-      "quarantined": true,
-      "junit": ["thc.runtime.EmptyTupleInputNativeTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-empty-tuple-input-audit.py"]}],
-      "outputs": ["build/empty-tuple-input"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
     "show-word-list": {
       "quarantined": true,
       "junit": ["thc.runtime.ShowWordListTest"],
       "commands": [{"argv": ["python3", "bin/prepare-show-word-list.py"]}],
       "outputs": ["build/show-word-list"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
-    "state-tuple": {
-      "quarantined": true,
-      "junit": ["thc.runtime.StateTupleTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-state-tuple-audit.py"]}],
-      "outputs": ["build/state-tuple"],
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "short-bytes-slices": {
@@ -1548,14 +1500,6 @@
       "outputs": ["build/short-bytes-slices"],
       "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
-    "tuple-return": {
-      "quarantined": true,
-      "junit": ["thc.runtime.TupleResultTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-tuple-return-audit.py"]}],
-      "outputs": ["build/tuple-return"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"],
-      "requires": ["sum-results"]
-    },
     "process-signals": {
       "cmakeTarget": "fixture-process-signals",
       "requires": ["compact-model"],
@@ -1563,6 +1507,17 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "process-signals"]}],
       "outputs": ["build/process-signals"],
       "sources": ["t/haskell-fixtures/ProcessSignalFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"]
+    },
+    "record-fields-demand": {
+      "cmakeTarget": "fixture-record-fields-demand",
+      "requires": ["compact-model"],
+      "ciPlatforms": ["Linux", "Darwin"],
+      "junit": ["thc.CoreInterfaceLoadTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "record-fields-demand"]}],
+      "outputs": ["build/record-fields-demand"],
+      "sources": ["src/test/java/thc/CoreCbdTestSupport.java", "t/haskell-fixtures/GhcApiFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/RecordFieldLibrary.hs", "t/fixtures/compiler/RecordFieldClient.hs", "t/fixtures/compiler/RecordFieldCold.hs", "t/fixtures/compiler/RecordFieldNative.hs",
+        "src/compiler/THC/Interface.hs", "src/compiler/THC/Plugin.hs", "src/compiler/THC/Sources.hs", "src/compiler/interface/Main.hs", "src/driver/THC/Driver/Installed.hs", "thc.cabal"]
     },
     "record-fields": {
       "cmakeTarget": "fixture-record-fields",
@@ -1600,21 +1555,6 @@
       "commands": [{"argv": ["python3", "bin/prepare-address-fields.py"]}],
       "outputs": ["build/address-fields"],
       "sources": ["t/fixtures/compiler/AddressFieldAudit.hs", "bin/prepare-address-fields.py"]
-    },
-    "sum-join": {
-      "quarantined": true,
-      "junit": ["thc.runtime.SumJoinResultTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "sum-join"]}],
-      "outputs": ["build/sum-join"],
-      "sources": ["t/haskell-fixtures/SumJoinFixtures.hs",
-        "t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
-    },
-    "narrow-literal-proofs": {
-      "quarantined": true,
-      "junit": ["thc.runtime.NarrowLiteralProofTest"],
-      "commands": [{"argv": ["python3", "bin/prepare-narrow-literal-proofs.py"]}],
-      "outputs": ["build/narrow-literal-proofs"],
-      "sources": ["t/fixtures/**/*.hs", "t/fixtures/**/*.c", "bin/*.py", "bin/*.sh", "bin/*.json"]
     },
     "simd-int64x2": {
       "cmakeTarget": "fixture-simd-int64x2",

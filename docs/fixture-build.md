@@ -18,14 +18,14 @@ cmake --build build/fixtures --parallel 2
 cmake --build build/fixtures --parallel 2 --target fixture-integer-primops
 ```
 
-[CMakeLists.txt](../CMakeLists.txt) includes the rules in `cmake/`. All 84 admitted
-groups have a `fixture-<group>` target, covering 125 mapped JUnit classes.
+[CMakeLists.txt](../CMakeLists.txt) includes the rules in `cmake/`. Every admitted
+group has a `fixture-<group>` target and names its consuming tests.
 The `fixtures` aggregate is the default build target. The selection inventory is
 [fast-fixtures.json](../.github/scripts/fast-fixtures.json); configure rejects an
 admitted group without a rule or a quarantined group with one. Make and CI use
 this same graph. Exact class and method selectors build only their dependencies;
 fixture-free classes invoke no fixture tools. Unknown selectors and wildcards
-fail before generation. The 49 [quarantined groups](fixture-quarantine.log) have
+fail before generation. The [quarantined groups](fixture-quarantine.log) have
 no targets and are excluded from test execution, including direct Gradle runs.
 
 Each file has one producer. Commands that generate related CBDs, interfaces,
@@ -65,6 +65,13 @@ Gradle is not invoked by fixture generation. Acquisition fixtures still in
 quarantine need explicit package/archive products before admission. The production
 pinned-source and installed-Core providers remain available; fixture generation
 does not establish runtime support for either provider.
+
+`native-open-request` compiles its existing Haskell observer and THC C bridge
+with the installed GHC packages on Linux x86_64 and Darwin x86_64/arm64. It needs
+no Core export or fixture-tool build. `NativeFileProviderTest` executes the child
+fresh, with private scratch and a timeout, to contain process-global signal
+controls. The proof covers native request ownership and cancellation, not Core
+wrapper admission or installed guest execution.
 
 Verification on macOS arm64, GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25:
 

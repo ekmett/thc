@@ -41,18 +41,21 @@ public final class Main {
             .option("engine.CompilationFailureAction", "Print")
             .option("engine.CompilerThreads", System.getProperty("polyglot.engine.CompilerThreads", LAUNCHER_COMPILER_THREADS))
             .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
-            .option("engine.SingleTierCompilationThreshold", "10000")
-            .option("compiler.CompilationTimeout", "30")
-            .option("compiler.MaximumGraalGraphSize", "100000");
+            .option("engine.SingleTierCompilationThreshold", System.getProperty("polyglot.engine.SingleTierCompilationThreshold", "10000"))
+            .option("compiler.CompilationTimeout", System.getProperty("polyglot.compiler.CompilationTimeout", "30"))
+            .option("compiler.MaximumGraalGraphSize", System.getProperty("polyglot.compiler.MaximumGraalGraphSize", "100000"));
     }
 
     /** Values and native resources must not outlive or cross this owning context. */
     public static Context executionContext() { return executionContext(false); }
-    public static Context executionContext(boolean fileIO) {
+    public static Context executionContext(boolean fileIO) { return executionContext(fileIO, false); }
+    static Context executionContext(boolean fileIO, boolean interfaceHelper) {
+        if (fileIO && interfaceHelper && System.getProperty("os.name").startsWith("Windows"))
+            throw new IllegalArgumentException("Interface-demand IO launching currently requires macOS or Linux");
         if (fileIO && NativeIO.supportedHost())
-            return NativeIO.commandLineContext();
+            return NativeIO.commandLineContext(interfaceHelper);
         return withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
-            .allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER).build();
+            .allowCreateProcess(interfaceHelper).allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER).build();
     }
 
     /**
@@ -92,7 +95,12 @@ public final class Main {
 
     /** Ordinary package users invoke the Haskell thc run driver. */
     public static void main(String[] args) {
-        try { launch(args); }
+        processExit(() -> launch(args));
+    }
+
+    /** Owning contexts close before either launcher terminates the process. */
+    static void processExit(Runnable launch) {
+        try { launch.run(); }
         catch (PolyglotException exit) {
             if (!exit.isExit()) throw exit;
             // All owning contexts have closed before process termination.
@@ -105,7 +113,7 @@ public final class Main {
         public String getProgramName() { return programName; }
         public String[] getArguments() { return arguments; }
     }
-    public record VerifiedArguments(String[] arguments, boolean verifyArtifacts) {
+    public record VerifiedArguments(String[] arguments, boolean verifyArtifacts, boolean interfaceHelper) {
         public String[] getArguments() { return arguments; }
         public boolean getVerifyArtifacts() { return verifyArtifacts; }
     }
@@ -124,35 +132,43 @@ public final class Main {
 
     public static VerifiedArguments launcherArtifactVerification(String[] arguments) {
         var selected = new ArrayList<String>();
-        boolean verify = false, guest = false;
+        boolean verify = false, guest = false, interfaceHelper = false;
         for (String argument : arguments) {
             if (argument.equals("--")) guest = true;
             require(guest || !argument.equals("--json-sidecar"), "JSON .idx sidecars are no longer supported");
             if (!guest && argument.equals("--verify-artifacts")) { require(!verify, "Duplicate --verify-artifacts"); verify = true; }
+            else if (!guest && argument.equals("--allow-interface-helper")) { require(!interfaceHelper, "Duplicate --allow-interface-helper"); interfaceHelper = true; }
             else selected.add(argument);
         }
-        return new VerifiedArguments(selected.toArray(String[]::new), verify);
+        return new VerifiedArguments(selected.toArray(String[]::new), verify, interfaceHelper);
+    }
+
+    /** Shared command-line authority, argv and one-shot entry/shutdown lifecycle. */
+    static void runExecutable(ProgramArguments guest, boolean interfaceHelper, java.util.function.Function<Context,Value> load) {
+        try (Context context = executionContext(true, interfaceHelper)) {
+            initializeArguments(context, guest);
+            var action = load.apply(context);
+            check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
+            if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
+        }
     }
 
     public static void launch(String[] arguments) {
         var withVerification = launcherArtifactVerification(arguments);
         String[] args = withVerification.arguments();
         boolean verifyArtifacts = withVerification.verifyArtifacts();
+        boolean interfaceHelper = withVerification.interfaceHelper();
         if (args.length > 0 && args[0].equals("--run-executable")) {
             require(args.length >= 4, "Usage: thc --run-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 4);
-            try (Context context = executionContext(true)) {
-                initializeArguments(context, guest);
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts);
-                check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
-                if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
-            }
+            runExecutable(guest, interfaceHelper, context -> loadEntry(context, modules(args[1]), args[2], true,
+                defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts));
             return;
         }
         if (args.length > 0 && args[0].equals("--run-io")) {
             require(args.length >= 3, "Usage: thc --run-io MODULE.cbd[,MODULE.cbd...] ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 3);
-            try (Context context = executionContext(true)) {
+            try (Context context = executionContext(true, interfaceHelper)) {
                 initializeArguments(context, guest);
                 var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "IO main did not complete");
@@ -162,7 +178,7 @@ public final class Main {
         }
         require(args.length >= 3, "Usage: thc MODULE.cbd[,MODULE.cbd...] ENTRY INTEGER [--compile]");
         long input = Long.parseLong(args[2]);
-        try (Context context = executionContext(false)) {
+        try (Context context = executionContext(false, interfaceHelper)) {
             var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), verifyArtifacts);
             Long before = null;
             if (Arrays.asList(args).subList(3, args.length).contains("--compile")) {

@@ -31,11 +31,13 @@ import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
 /* Indexed frames, selective captures, rooted application and self-tail frame
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. */
 public final class FunctionRoot extends GuestRoot {
+    private static final int[] NO_SCALAR_VOID_INPUTS = new int[0];
     private final String label;
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] environmentSlots;
     @CompilationFinal(dimensions = 1) private final int[] argumentSlots;
     @CompilationFinal(dimensions = 1) private final int[] argumentIndices;
+    @CompilationFinal(dimensions = 1) private int[] scalarVoidIndices = NO_SCALAR_VOID_INPUTS;
     @CompilationFinal(dimensions = 1) private final CoreRepresentation[] argumentProofs;
     @CompilationFinal(dimensions = 2) private final int[][] environmentVectorSlots;
     private final Metrics metrics;
@@ -193,7 +195,7 @@ public final class FunctionRoot extends GuestRoot {
         }
         strictSlots = Arrays.copyOf(strict, count);
         entryForce = new Force(metrics, enableAsync);
-        loop = Truffle.getRuntime().createLoopNode(new SelfRepeater(new FunctionBody(body, metrics, resultProof, tuple, tupleSlots), metrics));
+        loop = Truffle.getRuntime().createLoopNode(new SelfRepeater(new FunctionBody(body, metrics, resultProof, tuple, tupleSlots, role == FunctionRootRole.INITIALIZER), metrics));
     }
     private static boolean contains(int[] values, int value) {
         for (int element : values) if (element == value) return true;
@@ -310,17 +312,30 @@ public final class FunctionRoot extends GuestRoot {
             getTupleResult() == null && AstTailResult.supports(getScalarResultProof());
     }
     /** The driver runs the saved suffix, not the original body. */
-    public Object drainTailChild(SavedGuestContinuation saved) {
-        return entryForce.drainStack(saved, saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, true);
+    public Object drainTailChild(VirtualFrame frame, SavedGuestContinuation saved) {
+        return entryForce.drainStack(saved, saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, true, invocationMetrics(frame));
     }
     public Object restartTailAnchor(VirtualFrame frame, TailCall transfer) {
         if (role != FunctionRootRole.FUNCTION || !isSelf(transfer.getTarget())) throw new IllegalStateException("Check failed.");
         restoreTail(frame, transfer);
-        if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+        if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
         return executeBody(frame);
+    }
+    /** Scalar State# remains an ABI token even though its local value is erased. */
+    public void configureScalarVoidInputs(List<CoreRepresentation> proofs) {
+        int count = 0;
+        for (var proof : proofs) if (proof.getKind() == CoreKind.VOID) count++;
+        if (count == 0) return;
+        int[] indices = new int[count];
+        int index = 0;
+        for (int i = 0; i < proofs.size(); i++)
+            if (proofs.get(i).getKind() == CoreKind.VOID)
+                indices[index++] = ArgumentLayout.offset(getInputLayout(), i);
+        scalarVoidIndices = indices;
     }
     @ExplodeLoop public void buildFrame(Object[] arguments, VirtualFrame frame) {
         int offset = captureLayout == null ? 1 : 2;
+        for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(arguments[index + offset]);
         for (int i = 0; i < argumentSlots.length; i++) {
             Object value = arguments[argumentIndices[i] + offset];
             Class<?> reference = i < argumentReferences.length ? argumentReferences[i] : null;
@@ -410,6 +425,7 @@ public final class FunctionRoot extends GuestRoot {
         TypedInputLayout entry = getTypedInput();
         if (entry == null) throw fault("Target does not support typed tuple inputs");
         entry.validateSelfSource(source, frame, node);
+        for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(source.reference(frame, node, null, index));
         for (int i = 0; i < argumentSlots.length; i++) {
             int from = argumentIndices[i], to = argumentSlots[i];
             if (entry.getPacket().isInt(entry.getHeader() + from)) FrameAccess.INSTANCE.writeInt(frame, to, source.readInt(frame, node, null, from));
@@ -432,6 +448,7 @@ public final class FunctionRoot extends GuestRoot {
         if (entry == null) throw fault("Target does not support typed tuple inputs");
         try {
             if (initial) entry.validate(input); else entry.validateTail(input);
+            for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(entry.getPacket().getObject(input, index + entry.getHeader()));
             if (initial) frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(entry.getPacket().getLong(input, 0)));
             for (int i = 0; i < argumentSlots.length; i++) {
                 int from = argumentIndices[i] + entry.getHeader(), to = argumentSlots[i];
@@ -463,6 +480,7 @@ public final class FunctionRoot extends GuestRoot {
                 frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(entry.getArguments().getLong(input, 0)));
             }
             int offset = captureLayout == null ? 1 : 2;
+            for (int index : scalarVoidIndices) TupleResults.requireVoidCarrier(entry.getArguments().getObject(input, index + offset));
             for (int i = 0; i < argumentSlots.length; i++) {
                 int position = argumentIndices[i] + offset;
                 if (entry.getArguments().isInt(position)) FrameAccess.INSTANCE.writeInt(frame, argumentSlots[i], entry.getArguments().getInt(input, position));
@@ -496,7 +514,8 @@ public final class FunctionRoot extends GuestRoot {
             try { result = executeInitial(frame, stack.getDepth() >= AstStackScope.MAX_DEPTH); }
             finally { stack.setDepth(stack.getDepth() - 1); }
             SavedGuestContinuation saved = result instanceof AstTailYield tail ? tail.getContinuation() : savedGuestContinuation(result);
-            if (driver && saved != null && saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved);
+            if (driver && saved != null && saved.stackSpill() && saved.asyncRequest() == null) return entryForce.drainStack(saved,
+                saved.getSourceRoot() instanceof GuestRoot root ? root.getTupleResult() : null, false, false, invocationMetrics(frame));
             return result;
         } finally { if (driver) stack.setDriving(false); }
     }
@@ -580,7 +599,7 @@ public final class FunctionRoot extends GuestRoot {
     }
     public Object resumeDelimited(VirtualFrame frame, ControlFlowException transfer, DelimitedActionSite site) {
         if (role == FunctionRootRole.PASS_THROUGH) throw transfer;
-        if (transfer instanceof TailCall tail && !isSelf(tail.getTarget())) return site.tail(tail);
+        if (transfer instanceof TailCall tail && !isSelf(tail.getTarget())) return site.tail(frame, tail);
         if (transfer instanceof HandoffTailCall tail && !isSelf(tail.getTarget())) {
             HandoffEntry entry = handoff;
             if (entry == null) throw fault("Missing saved handoff entry");
@@ -590,12 +609,12 @@ public final class FunctionRoot extends GuestRoot {
         if (transfer instanceof TailCall tail) restoreTail(frame, tail);
         else if (transfer instanceof HandoffTailCall tail) restoreHandoff(frame, tail.getArguments(), false);
         else if (transfer != AstSelfCall.INSTANCE) throw transfer;
-        if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+        if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
         // A resumed suffix returns an owned value, not its caller's stale return loan.
         if (handoff != null) handoff.initializeOrdinary(frame);
         try { return executeBody(frame); }
         catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedRootStep(this)); }
-        catch (TailCall tail) { return site.tail(tail); }
+        catch (TailCall tail) { return site.tail(frame, tail); }
         catch (HandoffTailCall tail) {
             HandoffEntry entry = handoff;
             if (entry == null) throw fault("Missing saved handoff entry");
@@ -622,14 +641,14 @@ public final class FunctionRoot extends GuestRoot {
         try { return repeating.once(frame); }
         catch (AstSelfCall ignored) {
             tailCallProfile.enter();
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             return loop.execute(frame);
         } catch (HandoffTailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreHandoff(frame, tail.getArguments(), false);
@@ -637,7 +656,7 @@ public final class FunctionRoot extends GuestRoot {
         } catch (TailCall tail) {
             tailCallProfile.enter();
             if (!isSelf(tail.getTarget())) throw tail;
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            if (invocationMetrics(frame).getEnabled()) invocationMetrics(frame).incrementSelfTailReentries();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             hasSelfTail = true;
             restoreTail(frame, tail);

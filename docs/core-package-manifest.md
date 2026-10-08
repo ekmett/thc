@@ -51,7 +51,7 @@ Logical source paths remain relative; executable `compact.path` references are a
 or native-only dependency units may have no Core modules, but a reachable guest
 global must still have an exported definition. The JVM loader checks units,
 module names, boundaries and binding owners, and rejects missing reachable
-globals. File-hash verification is opt-in. The separate auditor accepts
+globals. CBD file-hash verification is opt-in. The separate auditor accepts
 `--package-manifest packages.json`. The JVM command-line module argument accepts
 `@packages.json`, including with `--run-io`. Add `--verify-artifacts` before the
 guest `--` separator to check artifact hashes and original source identity.
@@ -83,6 +83,35 @@ the acquisition receipt. Missing layout is not replaced by a host assumption.
 Artifact hashes remain verification metadata, not a default whole-unit scan.
 The explicit auditor verifies module hashes and derived facts. ZIP acquisition
 receipts remain in the producer cache, not as runtime execution alternatives.
+
+## Helper-backed retained interface sources
+
+`--installed-core demand` may mix ordinary `compact` CBD unit records with
+eligible whole-unit `interfaceSource` records. The latter have format
+`thc-ghc-interfaces-v1`, exact `registeredUnit`, absolute selected `helper` and
+`libdir`, `implicitGlobalDatabase`, `way` (`vanilla` or `dynamic`), ordered absolute `packageDatabases`, and
+recorded `compiler`. Their module rows replace `compact` and logical `path`
+with `interface: {"path": "/absolute/Module.hi", "sha256": "<raw input hash>"}`;
+the row's `sha256` is that same raw hash. All four summary facts must be false.
+An interface source never stands in for a native-bearing CBD product.
+
+One shared top-level `interfaceInputs` list contains exact `{path, sha256}`
+records for the helper, selected `settings`, package-cache files and every
+interface in the checked registered hydration closure. This includes cold and
+thin dependency interfaces; it does not invent missing executable providers.
+Production acquisition still publishes each resolved runtime dependency through
+its selected provider. Unit and module identities remain GHC's original ones.
+
+Because these descriptors authorize a helper process, the host request always
+binds the manifest's complete bytes, regardless of `verifyArtifacts`. Demand
+requires an entered context with explicit process permission. The helper's
+successful CBD is context-private, reuses existing admission and binding demand,
+and is deleted after its readers close. Every conversion verifies the complete
+input snapshot before and after helper execution. Retained file identities and
+line/column spans remain available; source text and derived UTF-16 offsets are
+omitted, avoiding unsnapshotted source-text reads. Offline CBD readers and the
+prelaunch auditor reject this initial mode; use `required` or `pinned` for those
+consumers. See [the driver limits](driver.md#installed-library-core).
 
 ## Typed lazy loading
 

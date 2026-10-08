@@ -75,16 +75,17 @@ and retain first-installed-call checks rather than warming away a failure.
 
 ## Eventlog primops through Java Flight Recorder
 
-- [ ] Wire `traceEvent#`, `traceMarker#` and `traceBinaryEvent#` into Java Flight
-  Recorder, reusing the existing `THC.Trace` JFR machinery. Configure events to
-  be ignored by default. Guard the disabled path with a context-owned Graal/Truffle
-  assumption so compiled code can omit payload copying and output work; invalidate
-  it when configuration enables tracing so already-compiled code starts emitting
-  events. Make the tracing-enabled queries reflect that configuration. Verify the
-  first event after enabling in both backends, context isolation and disabling
-  again, and inspect compiler graphs to establish the cost of the disabled path.
-  The [current primop behavior](../docs/hints-and-tracing.md) is still synchronous
-  stderr output; this item describes planned work.
+The original `traceEvent#`, `traceMarker#` and `traceBinaryEvent#` now share the
+context-local `THC.Trace` sinks and JFR provider. They start off; enabling tracing
+invalidates the initial disabled Graal/Truffle assumption, and disabling or
+re-enabling applies to subsequent emissions. The user-tracing flag reflects sink
+selection. JFR retains exact payload bytes and context identity without starting
+or reconfiguring recordings. See [the tracing contract](../docs/hints-and-tracing.md).
+
+- [ ] Inspect compiler graphs and measure the disabled path's cost before claiming
+  that compiled tracing overhead has disappeared. Keep graph capture separate
+  from timing and compare the same workload with tracing enabled and disabled.
+  Track this performance qualification in [#1058](https://github.com/ekmett/thc/issues/1058).
 
 ## Native Image beyond pure interpretation
 

@@ -87,14 +87,19 @@ final class DirectTupleCaller extends Node {
             remainingCall.execute(frame, closure, Arrays.copyOfRange(arguments, physicalCount, arguments.length));
             return;
         }
-        entry.execute(frame, packet);
-        if (tail) {
-            tailCheck.check(frame, target, packet);
-            destination.consume(frame, this, Calls.direct(call, packet), resultShape);
-        } else {
-            packet[0] = 0L;
-            try { destination.consume(frame, this, Calls.direct(call, packet), resultShape); }
-            catch (TailCall transfer) { bounce.execute(frame, transfer); }
+        try {
+            entry.execute(frame, packet);
+            if (tail) {
+                tailCheck.check(frame, target, packet);
+                destination.consume(frame, this, Calls.direct(call, packet), resultShape);
+            } else {
+                packet[0] = 0L;
+                try { destination.consume(frame, this, Calls.direct(call, packet), resultShape); }
+                catch (TailCall transfer) { bounce.execute(frame, transfer); }
+            }
+        } catch (DelimitedCut cut) {
+            if (!DelimitedControl.enabled(this)) throw cut;
+            throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this, resultShape);
         }
     }
     private DelimitedCut captureOverapplication(VirtualFrame frame, DelimitedCut cut, Object[] arguments, int physicalCount) {

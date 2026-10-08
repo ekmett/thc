@@ -48,9 +48,9 @@ public class ProcessSignalsTest {
         return List.of("app", variable("original-signal-fcall", closure), operands, Collections.nCopies(4, false), false, false, with(metadata, "foreignCall", original));
     }
     private Map<String, Object> binder(String id, Map<String, Object> proof, boolean lifted) { return Map.of("id", id, "rep", proof, "lifted", lifted); }
-    private Map<String, Object> constructor(String id, String name, List<String> fields) {
-        var reps = new ArrayList<List<String>>(); for (var field : fields) reps.add(List.of(field));
-        return Map.of("id", id, "name", name, "kind", "boxed", "arity", fields.size(), "tag", 1, "fieldReps", reps,
+    private Map<String, Object> constructor(String id, String name, List<Map<String, Object>> fields) {
+        var reps = fields.stream().map(field -> field.get("primReps")).toList();
+        return Map.of("id", id, "name", name, "kind", "boxed", "arity", fields.size(), "tag", 1, "fieldReps", reps, "fieldTypes", fields,
             "strictFields", Collections.nCopies(fields.size(), false), "fieldLifted", Collections.nCopies(fields.size(), false));
     }
     private Map<String, Object> module(boolean recordSignal, Map<String, Object> original) {
@@ -79,8 +79,8 @@ public class ProcessSignalsTest {
             "expr", List.of("lam", List.of(Map.of("id", "pointer", "lifted", true, "rep", boxed), Map.of("id", "signal", "lifted", true, "rep", boxed),
                 Map.of("id", "token", "lifted", false, "rep", state)), body, Map.of("rep", closure, "resultRep", ioResult)));
         return Map.of("bindings", List.of(binding, dispatcher), "instrument", true, "constructors", List.of(
-            constructor("ghc-internal:GHC.Internal.Ptr.Ptr", "Ptr", List.of("AddrRep")),
-            constructor("ghc-internal:GHC.Internal.Int.I32#", "I32#", List.of("Int32Rep")), constructor(unitId, "()", List.of()),
+            constructor("ghc-internal:GHC.Internal.Ptr.Ptr", "Ptr", List.of(arguments.get(2))),
+            constructor("ghc-internal:GHC.Internal.Int.I32#", "I32#", List.of(arguments.get(0))), constructor(unitId, "()", List.of()),
             Map.of("id", "tuple2", "name", "(#,#)", "kind", "unboxed-tuple", "arity", 2, "tag", 1)));
     }
     @FunctionalInterface private interface BackendAction { void run(Language language, String backend) throws Exception; }
@@ -276,6 +276,22 @@ public class ProcessSignalsTest {
             var failure = assertThrows(RuntimeFault.class, () -> service.install(usr2, -4L, ManagedAddress.nullAddress())); assertTrue(failure.getMessage().contains("_JAVA_SR_SIGNUM=64"));
             assertThrows(RuntimeFault.class, () -> service.install(64L, -4L, ManagedAddress.nullAddress())); service.close();
         });
+    }
+    @Test public void preparedCodeRetainsDispatcherReachedThroughSignalInstallation() {
+        for (boolean recordSignal : new boolean[] {false, true}) try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var code = Program.prepareCode(language, module(recordSignal, descriptor), List.of("install"));
+                var target = new SignalDispatchRoot(language, code.newInstance(language)).getCallTarget();
+                var owner = Language.currentState();
+                var address = owner.getNativeAllocations().malloc(4L);
+                address.writeWord8(0, 0L);
+                owner.getThreads().enterCurrent();
+                try { target.call(address, 2L); assertEquals(recordSignal ? 2L : 0L, address.readWord8(0)); }
+                finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
+            } finally { context.leave(); }
+        }
     }
     @Test public void dispatcherPassesEachActualSignalThroughTheOriginalBoxedCIntShape() throws Exception {
         onBackends((language, backend) -> {

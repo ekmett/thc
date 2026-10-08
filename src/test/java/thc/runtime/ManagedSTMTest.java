@@ -33,6 +33,32 @@ class ManagedSTMTest {
         assertEquals(1, stm.pendingWaiters(), "retry did not register");
     }
 
+    @Test void restoredTransactionRemainsThreadAndContextLocal() throws Exception {
+        try (var stm = new ManagedSTM(); var other = new ManagedSTM();
+             var worker = Executors.newSingleThreadExecutor()) {
+            assertNull(stm.currentTransaction());
+            var saved = new ManagedSTM.Transaction();
+            var ready = new CountDownLatch(1); var release = new CountDownLatch(1);
+            var result = worker.submit(() -> {
+                stm.restore(saved);
+                try {
+                    ready.countDown();
+                    assertSame(saved, stm.currentTransaction());
+                    assertNull(other.currentTransaction());
+                    await(release);
+                    return stm.currentTransaction();
+                } finally { stm.restore(null); }
+            });
+            try {
+                await(ready);
+                assertNull(stm.currentTransaction());
+                assertNull(other.currentTransaction());
+            } finally { release.countDown(); }
+            assertSame(saved, result.get(5, TimeUnit.SECONDS));
+            assertNull(stm.currentTransaction());
+        }
+    }
+
     @Test void bufferedWritesRollbackAndPayloadsStayLazy() {
         var stm = new ManagedSTM();
         var old = new Object() { @Override public boolean equals(Object other) { throw new IllegalStateException("must not compare payloads"); } };

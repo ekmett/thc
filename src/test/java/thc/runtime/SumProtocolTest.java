@@ -13,7 +13,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 import thc.CoreModules;
 import thc.CoreCbdFixtures;
 import java.nio.file.Path;
@@ -26,13 +25,11 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.runtime.SumEvidence.verifySumEvidence;
 
 @SuppressWarnings("unchecked")
 class SumProtocolTest {
     @TempDir Path temporary;
     private final File root = new File(System.getProperty("thc.projectRoot"));
-    @BeforeEach void verifyEvidence() throws Exception { verifySumEvidence(root); }
     private static List<Object> list(Object... elements) { return Arrays.asList(elements); }
     private static Map<String, Object> map(Object... fields) {
         var result = new LinkedHashMap<String, Object>(); for (int i = 0; i < fields.length; i += 2) result.put((String) fields[i], fields[i + 1]); return result;

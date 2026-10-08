@@ -11,9 +11,9 @@ final class CompactExpression extends Expr {
     private final CompactOp operation;
     @Children private Expr[] operands;
     @Child private CompactCopyNode copier;
-    CompactExpression(CompactOp operation, Expr[] operands, Metrics metrics, GlobalBinding[] failures) {
+    CompactExpression(CompactOp operation, Expr[] operands, Metrics metrics, Expr[] failures) {
         this.operation = operation; this.operands = operands;
-        copier = operation.getAdds() ? new CompactCopyNode(metrics, failures) : null;
+        copier = operation.getAdds() ? new CompactCopyNode(metrics, failures, true) : null;
     }
     @Override public Object execute(VirtualFrame frame) {
         if (operation != CompactOp.RESIZE) throw fault("Compact primitive requires tuple destination");

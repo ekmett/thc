@@ -18,9 +18,12 @@ For native Windows, use the [PowerShell build and test guide](docs/windows.md).
 It lists the required tools and current platform limits.
 
 You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16**,
-**GraalVM Community 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
+**GraalVM Community Edition 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
 point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
 directory. The Gradle wrapper downloads its dependencies on the first build.
+The driver checks for cabal-install 3.16. Use the pinned GraalVM release
+above: incompatible Graal and Truffle compiler versions can disable runtime
+compilation and leave execution in the interpreter.
 Linux x86_64 setup includes clang and GMP development headers and libraries
 (for example, `libgmp-dev` on Debian/Ubuntu) for native package dependencies.
 Run `cabal update` once so Cabal has a package index.
@@ -31,6 +34,13 @@ Use the exact GraalVM Community build from the
 including Oracle GraalVM 25.0.x, start but fail at runtime because the bundled
 Truffle 25.3.4.1 rejects their compiler version. Check `$JAVA_HOME/release` for
 `GRAALVM_VERSION="25.3.4.1"`.
+
+`thc run` also needs LLVM 18's `clang`, `llvm-link`, `opt` and `llvm-nm`, even
+for pure Haskell programs: acquisition compiles the native imports of boot
+libraries such as `ghc-internal` to LLVM bitcode. CI uses Homebrew's keg-only
+`llvm@18` on macOS and `clang-18` and `llvm-18` on Linux. Put that `bin`
+directory on `PATH` or set the
+[LLVM tool variables](docs/interface-foreign.md#run-a-package-with-native-imports).
 
 The JDK is stock, but THC's default distribution includes **patched Truffle API,
 runtime and Sulong JARs**. Their [patch inventory and shared-host effects](docs/truffle-patches.md)
@@ -147,7 +157,7 @@ thunks retain their unfinished work. Ordinary evaluation bounds nested calls
 and forcing through saved continuations. Load requests and ordinary executable
 launches default to async off on both backends: off speculates on a single guest
 admission origin until guest concurrency is admitted. Explicit async opt-in
-enables polling immediately. Delimited capture across STM, automatic weak finalization and GC-driven
+enables polling immediately. Delimited capture across STM, general automatic weak finalization and GC-driven
 deadlock detection remain unsupported.
 
 The public [`thc:runtime` API](docs/runtime-services.md) exposes permissions,
@@ -173,13 +183,13 @@ checks that code was installed:
 
 ```sh
 bin/try.sh
-bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
+bin/run.sh build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd main:Fixtures.sumLoop 100000 --compile
 ```
 
 The [bytecode backend](docs/bytecode.md) is the default. To use the AST backend:
 
 ```sh
-THC_BACKEND=ast bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
+THC_BACKEND=ast bin/run.sh build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd main:Fixtures.sumLoop 100000 --compile
 ```
 
 THC launchers disable Graal's automatic loop vectorization by default. Explicit JDK

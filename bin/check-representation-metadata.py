@@ -69,15 +69,5 @@ strict_field = nodes(strict, 'data')[0][4]['binders'][0]
 rep(strict_field['rep'], 'data', True)
 uses = [v for v in nodes(strict, 'var') if v[1] == strict_field['id']]
 assert uses and all(v[2]['rep']['evaluated'] for v in uses)
-done, = [b for b in walk(bindings['main:RepresentationAudit.polyJoin'])
-         if isinstance(b, dict) and 'joinValueArity' in b]
-assert done['info']['joinArity'] == 2
-assert done['joinValueArity'] == 1
-rep(done['joinResultRep'], 'long')
-returned, = [b for b in walk(bindings['main:RepresentationAudit.functionJoin'])
-             if isinstance(b, dict) and 'joinValueArity' in b]
-assert returned['info']['joinArity'] == 2 and returned['joinValueArity'] == 1
-assert len(returned['expr'][1]) == 2, 'The join prefix must leave a returned value lambda'
-rep(returned['joinResultRep'], 'closure', True)
-rep(returned['expr'][3]['resultRep'], 'long')
-print('PASS: primitive/boxed/newtype/family proofs, case and strict-field WHNF, erased type join prefix, function-returning join')
+# RealCoreJoinTest owns boxed join prefix and returned-function semantics.
+print('PASS: primitive/boxed/newtype/family proofs, case and strict-field WHNF')

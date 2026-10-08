@@ -51,8 +51,10 @@ jobs:
             .gradle-user-home/wrapper
             .gradle
           key: docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-${{ hashFiles('thc.cabal', 'cabal.project', 'build.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-${{ github.sha }}
+          # Cabal and Gradle validate restored inputs; make docs regenerates this revision.
           restore-keys: |
             docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-${{ hashFiles('thc.cabal', 'cabal.project', 'build.gradle', 'gradle.properties', 'nih/gradle/wrapper/gradle-wrapper.properties') }}-
+            docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-
       - name: Install Markdown renderer
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends pandoc
       - name: Generate and validate documentation only

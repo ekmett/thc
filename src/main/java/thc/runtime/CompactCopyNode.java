@@ -16,7 +16,7 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 /** Cold graph traversal with an explicit work stack. Cyclic shells stay private
  * until their final fields are initialized and the entire operation succeeds. */
 public final class CompactCopyNode extends Node {
-    private final GlobalBinding[] failures;
+    @Children private Expr[] failures;
     @Child private Force force;
     private record Copy(Object value, Consumer<Object> store) {}
     private static final class Traversal {
@@ -34,6 +34,9 @@ public final class CompactCopyNode extends Node {
     }
     public CompactCopyNode(Metrics metrics, GlobalBinding[] failures) { this(metrics, failures, false); }
     public CompactCopyNode(Metrics metrics, GlobalBinding[] failures, boolean async) {
+        this(metrics, java.util.Arrays.stream(failures).map(GlobalRead::new).toArray(Expr[]::new), async);
+    }
+    public CompactCopyNode(Metrics metrics, Expr[] failures, boolean async) {
         force = new Force(metrics, async); this.failures = failures;
     }
     public Object execute(VirtualFrame frame, ManagedCompact region, Object root, boolean sharing) {
@@ -53,6 +56,12 @@ public final class CompactCopyNode extends Node {
         // on every cut and reacquire it for the next one-shot resume segment.
         region.begin();
         try {
+            // A payload read can suspend after its rejected Copy was consumed.
+            // Its remaining throw must run even when no traversal work remains.
+            if (task == null && steps != null) {
+                AstContinuations.resumeAstSteps(frame, steps, input);
+                throw fault("Compact failure continuation returned");
+            }
             while (task != null || !pending.isEmpty()) {
                 TruffleSafepoint.poll(this);
                 if (task == null) {
@@ -83,7 +92,7 @@ public final class CompactCopyNode extends Node {
                         else layout.copyCompactScalar(data, copy, index);
                     }
                 } else if (value instanceof ManagedAllocation allocation) {
-                    if (allocation.isPinned()) throw failure(1);
+                    if (allocation.isPinned()) throw failure(frame, 1);
                     var copy = ManagedAllocation.immutableGuest(allocation.copyBytesOut(0, allocation.getSize()), allocation.getAddressWidth());
                     publish(current, value, copy, 16L + copy.getSize(), sharing, known, path, allocated, pending);
                 } else if (value instanceof byte[] bytes) {
@@ -91,7 +100,7 @@ public final class CompactCopyNode extends Node {
                         ? ManagedAllocation.immutableGuest(bytes, (int) java.lang.foreign.ValueLayout.ADDRESS.byteSize()) : bytes.clone();
                     publish(current, value, copy, 16L + bytes.length, sharing, known, path, allocated, pending);
                 } else if (value instanceof Object[] array) {
-                    if (!ManagedArray.isFrozen(array)) throw failure(2);
+                    if (!ManagedArray.isFrozen(array)) throw failure(frame, 2);
                     var copy = ManagedArray.freeze(new Object[array.length]);
                     publish(current, value, copy, 24L + 8L * copy.length, sharing, known, path, allocated, pending);
                     for (int index = array.length - 1; index >= 0; index--) {
@@ -99,7 +108,7 @@ public final class CompactCopyNode extends Node {
                         pending.addLast(new Copy(array[index], child -> copy[field] = child));
                     }
                 } else if (value instanceof SmallArrayStorage array) {
-                    if (!array.getFrozen()) throw failure(2);
+                    if (!array.getFrozen()) throw failure(frame, 2);
                     var copy = ManagedSmallArray.freeze(new SmallArrayStorage(new Object[array.getLogicalSize()]));
                     publish(current, value, copy, 16L + 8L * copy.getLogicalSize(), sharing, known, path, allocated, pending);
                     int length = array.getLogicalSize();
@@ -107,8 +116,8 @@ public final class CompactCopyNode extends Node {
                         int field = index;
                         pending.addLast(new Copy(array.getElements()[index], child -> copy.getElements()[field] = child));
                     }
-                } else if (value instanceof Closure) throw failure(0);
-                else throw failure(2);
+                } else if (value instanceof Closure) throw failure(frame, 0);
+                else throw failure(frame, 2);
             }
             region.finish(allocated);
             registry.record(region, allocated);
@@ -126,5 +135,10 @@ public final class CompactCopyNode extends Node {
         allocated.add(new ManagedCompact.Allocation(copy, bytes));
         task.store().accept(copy);
     }
-    private GuestException failure(int index) { return new GuestException(failures[index].read(), this); }
+    private GuestException failure(VirtualFrame frame, int index) {
+        Object payload;
+        try { payload = failures[index].execute(frame); }
+        catch (AstCapture cut) { throw cut.append((saved, input) -> { throw new GuestException(input, this); }); }
+        return new GuestException(payload, this);
+    }
 }

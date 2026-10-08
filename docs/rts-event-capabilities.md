@@ -28,8 +28,8 @@ immutable eligible CPU count for its best-effort native affinity request.
 Platform count changes do not repin existing carriers or change their initial
 affinity-acceptance report. Neither mode creates CPUs, resizes JVM/compiler/GC
 pools, or supplies GHC `-N` scheduling. Safe completion publishes the new count
-before an enabled async exception poll; resumption does not replay the setter. AST async capture
-remains explicitly opt-in and bytecode remains enabled by default.
+before an enabled async exception poll; resumption does not replay the setter.
+Ordinary async polling is explicitly opt-in on both backends.
 
 The following first-writer shared CAF stores use the existing context-owned
 stable-pointer protocol, each with an independent slot:
@@ -44,10 +44,12 @@ pointers, invalid candidates, freeing a winner and use after disposal reject.
 These slots do not themselves start a timer or event-manager thread.
 
 `__hscore_f_setfd` (`Int32#`), `__hscore_fd_cloexec` (`Int64#`) and
-`__hscore_sizeof_siginfo_t` (`Word64#`, safe) return values measured by the native
-C ABI probe, without requiring guest native-access authority. The size grants
-no access to a host signal record. The original `fcntl` write wrapper also
-executes `F_SETFD` on an owned native resource, including `FD_CLOEXEC`.
+`__hscore_sizeof_siginfo_t` (`Word64#`, safe) use ordinary package-declared
+native linkage through Sulong, with the embedding context's native-access
+authority. They have no THC-owned override; their package supplies the native
+ABI values. The size grants no access to a host signal record. The original
+`fcntl` write wrapper executes `F_SETFD` on an owned native resource, including
+`FD_CLOEXEC`. See [foreign-code setup](interface-foreign.md).
 
 ## Native anonymous descriptors
 
@@ -90,3 +92,15 @@ the registrations. Ordinary embedding streams cannot acquire this authority.
 The existing original process-signal dispatcher remains the only signal delivery
 path, in either hosting mode. Capability count changes update Loom HEC
 routing but do not reconfigure event-manager threads automatically.
+
+## Validation scope
+
+The fixture-free [EnabledCapabilitiesTest](../src/test/java/thc/runtime/EnabledCapabilitiesTest.java)
+checks typed Core lowering, logical count publication, owned label reads and
+AST safe-completion masking/resumption. Existing [NativeEventDescriptorsTest](../src/test/java/thc/runtime/NativeEventDescriptorsTest.java),
+[NativeEventWaitTest](../src/test/java/thc/runtime/NativeEventWaitTest.java) and
+[NativeEpollTest](../src/test/java/thc/runtime/NativeEpollTest.java) check the runtime
+owners' descriptor lifetimes, kernel readiness, cancellation and control-fd
+protocol where their platform requirements are met. These component checks do
+not qualify complete installed `ghc-internal` event-manager execution or its
+package linkage.

@@ -1,0 +1,101 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: Hourly qualification
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Unix runner for bounded qualification
+        type: choice
+        options: [ubuntu-latest, macos-latest]
+        default: ubuntu-latest
+        required: true
+      group:
+        description: Exact existing Hourly group
+        type: string
+        default: scalar-memory-utilities
+        required: true
+      exact_class:
+        description: Optional exact admitted class within the group (empty runs the group)
+        type: string
+        required: false
+      expected_sha:
+        description: Expected source commit (empty uses this run's commit)
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  bounded:
+    name: Bounded Hourly qualification
+    runs-on: ${{ inputs.platform == 'macos-latest' && 'macos-latest' || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    env:
+      CI_PLATFORM: ${{ inputs.platform }}
+      CI_GROUP: ${{ inputs.group }}
+      CI_EXACT_CLASS: ${{ inputs.exact_class }}
+      EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          submodules: false
+          persist-credentials: false
+      - name: Validate bounded revision and Hourly selection before setup
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          python3 - <<'BOUNDED'
+          import json, os, platform, sys
+          from pathlib import Path
+          sys.path.insert(0, '.github/scripts')
+          import fast_select
+          system = platform.system()
+          if {'ubuntu-latest': 'Linux', 'macos-latest': 'Darwin'}.get(os.environ['CI_PLATFORM']) != system:
+              raise SystemExit('Bounded qualification requires the selected Unix platform')
+          group = os.environ['CI_GROUP']
+          groups = fast_select.groups(Path.cwd(), system=system, cadence='hourly')
+          if not groups.get(group):
+              raise SystemExit('Select one nonempty Hourly group admitted on this platform')
+          selection = fast_select.group_selection(Path.cwd(), group, cadence='hourly',
+              exact_class=os.environ['CI_EXACT_CLASS'] or None)
+          destination = Path('build/ci/bounded-selection.json')
+          destination.parent.mkdir(parents=True, exist_ok=True)
+          destination.write_text(json.dumps(selection, indent=2) + '\n')
+          print(json.dumps(selection))
+          BOUNDED
+      - uses: ./.github/actions/setup
+        with:
+          cache-cabal-project: 'true'
+      - name: Compile existing shared tools and run bounded Hourly selection
+        timeout-minutes: 7
+        shell: bash
+        run: |
+          python3 .github/scripts/fast_ci.py start --report-dir build/ci/common-results
+          python3 .github/scripts/fast_ci.py compile-common --reuse-daemon --report-dir build/ci/common-results
+          python3 .github/scripts/fast_ci.py compile-test-support --reuse-daemon --report-dir build/ci/common-results
+          exact_class=()
+          if test -n "$CI_EXACT_CLASS"; then exact_class=(--exact-class "$CI_EXACT_CLASS"); fi
+          python3 .github/scripts/fast_ci.py group "${exact_class[@]}" --group "$CI_GROUP" --cadence hourly --reuse-daemon --report-dir build/ci/group-results/bounded
+      - name: Stop the qualification's Gradle worker
+        if: always() && env.JAVA_HOME != ''
+        run: ./gradlew --stop
+      - name: Preserve bounded selection, preparation and both handoff results
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: bounded-hourly-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/ci/bounded-selection.json
+            build/ci/setup-results/
+            build/ci/common-results/
+            build/ci/group-results/
+            build/reports/profile/
+            build/test-results/testDefault/
+            build/test-results/testDense/
+            build/reports/tests/testDefault/
+            build/reports/tests/testDense/
+          if-no-files-found: warn
+          retention-days: 7

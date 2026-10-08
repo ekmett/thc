@@ -13,7 +13,7 @@ final class JvmRuntimeTraceJfr implements RuntimeTraceJfr {
         catch (SecurityException ignored) { return RuntimeServiceStatus.DENIED; }
     }
 
-    @Override public long emit(long contextId, String phase, long token, String name, long elapsedNanos) {
+    @Override public long emit(long contextId, String phase, long token, String name, long elapsedNanos, String payloadHex) {
         long available = support();
         if (available != 0L) return available;
         try {
@@ -24,6 +24,7 @@ final class JvmRuntimeTraceJfr implements RuntimeTraceJfr {
             event.spanId = token;
             event.message = name;
             event.elapsedNanos = elapsedNanos;
+            event.payloadHex = payloadHex;
             event.commit();
             return 0L;
         } catch (SecurityException ignored) { return RuntimeServiceStatus.DENIED; }

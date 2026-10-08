@@ -66,6 +66,36 @@ class RuntimeTest {
             }
         }
     }
+    /** Consumes the shared pre-Tidy CBD/native oracle; publishes no products.
+     * Real newtype casts must erase without changing the scalar carrier. */
+    @Test void genuineScalarNewtypeIdentityPreservesNativeFullWidthInBothBackends() throws Exception {
+        var bindings = objects(CoreCbdFixtures.read(root.resolve("build/core/Fixtures.cbd")).get("bindings"));
+        for (String name : list("wrapRaw", "unwrapRaw", "scalarCastEntry")) {
+            var binding = bindings.stream().filter(b -> ("main:Fixtures." + name).equals(b.get("id"))).findFirst().orElseThrow();
+            var signature = Objects.requireNonNull(CoreRepresentations.knownFunctionSignature((List<?>) binding.get("expr"), bindings));
+            assertEquals(list(list("IntRep")), signature.inputs().stream().map(CoreRepresentation::getPrimReps).toList(), name);
+            assertEquals(list("IntRep"), signature.result().getPrimReps(), name);
+        }
+        var rows = oracle().stream().filter(row -> row.entry.equals("scalarCastEntry")).toList();
+        var interpreted = rows.stream().filter(row -> row.input == 7L).findFirst().orElseThrow();
+        var firstInstalled = rows.stream().filter(row -> row.input == Long.MIN_VALUE).findFirst().orElseThrow();
+        assertTrue(rows.stream().anyMatch(row -> row.input == Long.MAX_VALUE));
+        assertTrue(rows.stream().anyMatch(row -> row.input == 4_294_967_311L));
+        for (var row : rows) assertEquals(row.input, row.expected, "Native GHC scalar identity");
+        for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
+            var function = context.eval("thc", CoreModules.request(modules, "main:Fixtures.scalarCastEntry", true, false, backend));
+            assertEquals(interpreted.expected, function.execute(interpreted.input).asLong(), backend);
+            assertTrue(function.invokeMember("compile").asBoolean(), backend);
+            long before = count(function, "compiledEntries");
+            assertEquals(firstInstalled.expected, function.execute(firstInstalled.input).asLong(), backend + " first installed call");
+            assertTrue(count(function, "compiledEntries") > before, backend);
+            for (var row : rows) assertEquals(row.expected, function.execute(row.input).asLong(), backend + "/" + row.input);
+            var installed = object(diagnostics(function).get("explicitCompilation"));
+            assertEquals(true, installed.get("sameTargets"), backend);
+            assertEquals(true, installed.get("validLastTier"), backend);
+            assertEquals(0L, count(function, "blackholes"), backend);
+        }
+    }
     @Test void sharingPapAndOverapplicationHaveObservableRuntimeCoverage() throws Exception {
         try (var context = Main.executionContext(false)) {
             var shared = Main.loadEntry(context, modules, "main:Fixtures.shared"); assertEquals(120L, shared.execute(7L).asLong());

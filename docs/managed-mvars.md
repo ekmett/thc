@@ -47,5 +47,10 @@ asynchronous interruption or embedding cancellation to terminate. See the
 Both backends use these requests for
 [asynchronous exception delivery](async-exceptions.md). Interruption cancels
 an uncommitted request and saves a retry at the guest continuation cut.
-[Explicit weak registration/finalization](weak-explicit.md), other Handle
-dependencies and native IO are separate contracts; automatic weak GC is deferred.
+[Managed weak registrations](weak-explicit.md) also allow actionless raw `MVar#`
+keys to own distinct lazy values. An otherwise unrooted value-to-key cycle can
+collect; a retained request keeps its cell and conditional values alive even
+after cancellation. Explicit finalization and context close detach these values.
+Haskell actions and C callbacks remain explicit-only; `addMVarFinalizer` does not
+gain automatic execution. Other Handle dependencies and native IO are separate
+contracts.

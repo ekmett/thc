@@ -94,6 +94,7 @@ class RtsFlagsTest {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
+                Language.currentState().getRuntimeTrace().control(500, 1);
                 var base = CoreDataLabels.fromCore("RtsFlags", proof(), layout);
                 assertEquals(1L, base.plus(101).plus(7).readWord8(0));
                 assertEquals(1L, base.readWord8(108));
@@ -115,6 +116,7 @@ class RtsFlagsTest {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
+                Language.currentState().getRuntimeTrace().control(500, 1);
                 var address = CoreDataLabels.fromCore("RtsFlags", proof(), first);
                 assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", proof(), layout("another-build")));
                 assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", proof(), differentOffset));
@@ -132,6 +134,7 @@ class RtsFlagsTest {
         ManagedAddress field;
         first.initialize("thc"); second.initialize("thc"); first.enter();
         try {
+            Language.currentState().getRuntimeTrace().control(500, 1);
             base = CoreDataLabels.fromCore("RtsFlags", proof(), layout);
             assertSame(base, CoreDataLabels.fromCore("RtsFlags", proof(), layout));
             field = base.plus(layout.offset("rtsTraceFlagsOffset")).plus(layout.offset("traceUserOffset"));
@@ -160,6 +163,7 @@ class RtsFlagsTest {
         } finally { first.leave(); }
         second.enter();
         try {
+            Language.currentState().getRuntimeTrace().control(500, 1);
             assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof(), layout).readWord8(user));
             assertThrows(RuntimeFault.class, () -> field.readWord8(0));
             assertEquals("Compiler RTS cell belongs to another or closed THC context",
@@ -226,6 +230,7 @@ class RtsFlagsTest {
             var threads = Language.currentState(null).getThreads();
             threads.enterCurrent(null, false, true, null);
             try {
+                Language.currentState().getRuntimeTrace().control(500, 1);
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, getterModule(layout), false, false)
                     : new BytecodeProgram(language, getterModule(layout));
@@ -249,6 +254,7 @@ class RtsFlagsTest {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
+                Language.currentState().getRuntimeTrace().control(500, 1);
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var address = CoreDataLabels.fromCore("RtsFlags", proof(), layout);
                 var root = new RootNode(language) {
@@ -283,7 +289,14 @@ class RtsFlagsTest {
                     var threads = Language.currentState(null).getThreads();
                     threads.enterCurrent(null, false, true, null);
                     try {
-                        assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof(), layout).readWord8(userOffset(layout)));
+                        var trace = Language.currentState().getRuntimeTrace();
+                        var flags = CoreDataLabels.fromCore("RtsFlags", proof(), layout);
+                        assertEquals(0L, flags.readWord8(userOffset(layout)));
+                        for (long sink : new long[]{1L, 2L, 3L, 0L}) {
+                            assertEquals(0L, trace.control(500, sink));
+                            assertEquals(sink == 0 ? 0L : 1L, flags.readWord8(userOffset(layout)));
+                        }
+                        trace.control(500, 1);
                         var text = ManagedAddress.fromByteArray(new byte[]{65, 0});
                         for (var operation : TraceOp.values()) RtsDiagnostics.trace(null, operation, text, 1);
                     } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }

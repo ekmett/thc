@@ -67,6 +67,10 @@ public final class NativeFileProvider implements Closeable {
     }
     /** No arbitrary Builder, FileSystem, provider attachment, or global map. */
     public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, boolean allowProcesses) {
+        return createContext(endpoints, profile, allowProcesses, false);
+    }
+    /** Helper process permission is independent of the Linux guest process transport. */
+    public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, boolean allowProcesses, boolean interfaceHelper) {
         if (!supportedHost()) throw new UnsupportedOperationException("Native files require matching selected-ABI resources");
         if (allowProcesses && !NativeIO.supportedPosixHost())
             throw new UnsupportedOperationException("Native subprocesses require the Linux pidfd transport");
@@ -74,7 +78,7 @@ public final class NativeFileProvider implements Closeable {
         Context context;
         try {
             context = withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
-                .allowCreateProcess(allowProcesses).allowIO(IOAccess.newBuilder().fileSystem(filesystem).build()), profile).build();
+                .allowCreateProcess(allowProcesses || interfaceHelper).allowIO(IOAccess.newBuilder().fileSystem(filesystem).build()), profile).build();
         } catch (Throwable failure) {
             try { filesystem.getDirectoryOwner().close(); } catch (Throwable closing) { failure.addSuppressed(closing); }
             throw propagate(failure);

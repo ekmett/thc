@@ -30,7 +30,7 @@ public final class CoreCbdTestSupport {
         }
     }
 
-    private static synchronized String fixtures() throws IOException {
+    static synchronized String fixtures() throws IOException {
         if (fixtureExecutable == null) {
             var configured = System.getenv("THC_FIXTURES");
             var prepared = Path.of("build/thc-fixtures.path");

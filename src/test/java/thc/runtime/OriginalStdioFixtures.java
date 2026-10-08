@@ -33,8 +33,13 @@ public final class OriginalStdioFixtures {
         signatures.put("seek_end", Arrays.asList((String) null));
         signatures.put("strerror", Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null));
     }
+    // Open is an explicitly requested declaration, not part of the shared stdio safety matrix.
+    private static List<String> signature(String name) {
+        return name.equals("open") ? Arrays.asList("AddrRep", "Int32Rep", "Word32Rep", null)
+            : Objects.requireNonNull(signatures.get(name));
+    }
     public static String convention(String name) {
-        return Set.of("errno", "set_errno", "dup", "dup2", "strerror", "unlink").contains(name) ? "ccall" : "capi";
+        return Set.of("errno", "set_errno", "dup", "dup2", "strerror", "unlink", "open").contains(name) ? "ccall" : "capi";
     }
     public static String safety(String name) { return name.equals("safe_write") || name.equals("strerror") ? "safe" : "unsafe"; }
     public static Map<String, Object> scalar(String rep) { return scalar(rep, true); }
@@ -54,15 +59,15 @@ public final class OriginalStdioFixtures {
     }
     public static Map<String, Object> closure() { return scalar("BoxedRep (Just Lifted)"); }
     public static Map<String, Object> descriptor(String name) {
-        var reps = Objects.requireNonNull(signatures.get(name));
+        var reps = signature(name);
         var arguments = new ArrayList<Object>();
         for (var rep : reps) arguments.add(scalar(rep, false));
-        return map("schema", 1L, "target", map("kind", "static", "symbol", Objects.requireNonNull(symbols.get(name)),
+        return map("schema", 1L, "target", map("kind", "static", "symbol", name.equals("open") ? "__hscore_open" : Objects.requireNonNull(symbols.get(name)),
             "unit", "ghc-internal", "isFunction", true), "convention", convention(name), "safety", safety(name),
             "arity", (long) reps.size(), "suppliedArity", (long) reps.size(), "argumentReps", arguments, "resultRep", tuple(name, false));
     }
     public static List<Object> call(String name) {
-        var reps = Objects.requireNonNull(signatures.get(name));
+        var reps = signature(name);
         var arguments = new ArrayList<Object>();
         for (int i = 0; i < reps.size(); i++) arguments.add(list("var", "p" + i, map("rep", scalar(reps.get(i)))));
         return new ArrayList<>(list("app", list("var", "foreign-" + name, map("rep", closure())), arguments,
@@ -78,7 +83,7 @@ public final class OriginalStdioFixtures {
     public static Map<String, Object> module(Iterable<String> names, Consumer<List<Object>> mutate) {
         var bindings = new ArrayList<Object>();
         for (String name : names) {
-            var reps = Objects.requireNonNull(signatures.get(name));
+            var reps = signature(name);
             var formals = new ArrayList<Object>();
             for (int i = 0; i < reps.size(); i++) formals.add(map("id", "p" + i, "name", name + "_" + i,
                 "lifted", false, "rep", scalar(reps.get(i))));

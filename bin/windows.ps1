@@ -59,11 +59,65 @@ try {
     }
     $focusedTests = @()
     if ($testRuntime) {
+        $env:THC_FIXTURES = $fixture
         Invoke-ThcTool $fixture @('tuple-arithmetic')
         Invoke-ThcTool $fixture @('bit')
         Invoke-ThcTool $fixture @('signed-narrow')
         $focusedTests += @('thc.runtime.TupleArithmeticTest', 'thc.runtime.WordCarryTest',
-            'thc.runtime.BitPrimopsTest', 'thc.SignedNarrowPrimopsTest')
+            'thc.runtime.BitPrimopsTest', 'thc.SignedNarrowPrimopsTest',
+            'thc.runtime.ScalarBitCastTest.directTypedCallsPreserveBitsOnFirstCompiledCallAndRejectWrongCarriers',
+            'thc.runtime.ScalarBitCastTest.typedNodesKeepRawBitsAndNeverUseBoxedOperandExecution',
+            'thc.ThreadedThunkTest.sparkedWorkRunsBeforeDemandAndFirstCompiledHintsShareTheOriginalThunk',
+            'thc.ThreadedThunkTest.disabledSparkHintsKeepWorkUnforcedAndDoNotAdmitAWorker',
+            'thc.ThreadedThunkTest.sparkedGuestFailureIsDeferredAndDoesNotStopUnrelatedWork',
+            'thc.ThreadedThunkTest.cancellingSparkWorkerLeavesTheSameThunkResumableWithoutReplayingItsEffect',
+            'thc.ThreadedThunkTest.disposingSparkContextStopsClaimedWorkAndDiscardsUnstartedHints',
+            'thc.runtime.GhcBCOContinuationTest.sparkedUpdatingApplicationsShareWorkAndResumeCancelledWorkersWithoutReplay',
+            'thc.runtime.AdaptiveAsyncTest.firstExternalRequestReachesRequestFreeCompiledConcurrentLoop',
+            'thc.runtime.ContextOwnershipTest.preinitializedContextReplacesBuildAuthority',
+            'thc.runtime.PreparedAdmissionCompatibilityTest.preparedMyThreadIdObservesEachCurrentContext',
+            'thc.ReusableBytesTest.preparedNarrowAddressReadsUseRuntimeAllocation',
+            'thc.runtime.ResumableThunkProofTest.globalInitializerRunsOutsidePreparationLockAndUsesItsFirstEvaluatorMask',
+            'thc.runtime.ResumableThunkProofTest.suspendedGlobalReadPublishesItsCompletedValueWithoutReplayingInitializer',
+            'thc.runtime.ManagedWeakTest.identityOnlyGuestWeaksCollectWhileLiveKeysAndFirstCompiledCallsPreserveIdentity',
+            'thc.runtime.ManagedWeakTest.mutVarKeyValueBackReferencesCollectOnFirstCompiledCalls',
+            'thc.runtime.ManagedWeakTest.liveMutVarKeysRetainDroppedRegistrationsUntilDetached',
+            'thc.runtime.ManagedWeakTest.callbackAttachmentPromotesIdentityWeaksAndDependentPayloadsRemainExplicit',
+            'thc.runtime.ManagedWeakTest.actualContextCloseInvalidatesHandlesWithoutRunningHaskellActions',
+            'thc.runtime.ManagedWeakTest.retainedMVarRequestKeepsConditionalValueAliveUntilRequestIsDropped',
+            'thc.runtime.ManagedWeakTest.ownedFreeRetiresCollectedMutVarKeysAtManagedGcRequests',
+            'thc.runtime.ManagedWeakTest.ownedFreeAutomaticallyRetiresCollectedKeysAndCompletedBorrows',
+            'thc.runtime.ManagedWeakTest.ownedFreeRetiresCollectedIdentityKeysAtManagedGcRequests',
+            'thc.runtime.ManagedWeakTest.ownedFreeWaitsForRetainedMVarRequestsBeforeRetiringCollectedKeys',
+            'thc.runtime.ManagedWeakTest.ownedFreeDefersBorrowedAllocationsUntilBorrowCompletion',
+            'thc.runtime.ManagedWeakTest.ownedFreePromotionPreservesCanonicalAdmissionAndNewestFirstCallbacks',
+            'thc.runtime.ManagedWeakTest.ownedFreeBorrowDeferralLetsOneLoomHecRunTheBorrowerAgain',
+            'thc.runtime.ManagedWeakTest.ownedFreeExplicitFinalizeRacesManagedGcWithoutReplayingRetirement',
+            'thc.runtime.ManagedWeakTest.ownedFreeDrainCannotOutliveContextCancellation',
+            'thc.runtime.ManagedWeakTest.finalizationIsLinearizableAndFailureDoesNotReviveRegistration',
+            'thc.runtime.ManagedWeakTest.explicitCallbacksRunNewestFirstAfterDeathOutsideTheRegistryLock',
+            'thc.runtime.CompilerHeapHintTest.gcCallsReturnHonestResultsFromTheFirstCompiledCall',
+            'thc.runtime.ManagedMVarCellTest',
+            'thc.runtime.TupleJoinLoweringTest.emptyOperandRunsInLogicalOrderBeforeParallelMovesAndFailureTransfersNothing',
+            'thc.runtime.TupleJoinLoweringTest.tupleResultScratchIsClearedAfterCopyingUnlessTheDestinationAliasesIt',
+            'thc.runtime.EmptyArgumentRuntimeTest.emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow',
+            'thc.runtime.EmptyArgumentRuntimeTest.exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples',
+            'thc.runtime.EmptyArgumentRuntimeTest.ignoredScalarStateTupleFieldExecutesBeforeLaterWorkAndRejectsInvalidCarrier',
+            'thc.runtime.UnknownBoxedSumTest.poisonPointerSurvivesResultsArgumentsPapCaptureCaseAndConstructor',
+            'thc.runtime.TupleRepresentationTest',
+            'thc.AggregateFrontierTest',
+            'thc.runtime.ManagedStackRuntimeTest.rejectedDestinationsAndUnknownKeysNeverPartiallyWrite',
+            'thc.runtime.ManagedStackRuntimeTest.layoutMismatchesAndMalformedIpeLayoutsFailBeforeAnyWrite',
+            'thc.CoreUnitLoadTest.coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding',
+            'thc.CoreUnitLoadTest.missingOrBadColdUnitFailsOnlyAtDemandAndDoesNotTouchThirdUnit',
+            'thc.NarrowPublicEntryTest.partialApplicationUsesRemainingNotOriginalInputProofs',
+            'thc.runtime.NativeByteArrayPolicyTest.nativeStorageRequiresNativeAuthorityAtContextCreation',
+            'thc.runtime.NativeByteArrayPolicyTest.nativeOwnerOutlivesContextWhileRegistriesAndPointerCellBoundariesStayChecked',
+            'thc.runtime.NativeByteArrayPolicyTest.launcherDefaultsToNativeButHonorsHeapWithoutChangingEmbeddings',
+            'thc.runtime.NativeByteArrayPolicyTest.guestCreationQueriesResizeAndAliasesRespectContextPolicyOnBothBackends',
+            'thc.runtime.PinnedPointerCellsTest.orderedAddressesRequireOneAllocationAndPreserveCheckedOffsets',
+            'thc.runtime.CallerContinuationProofTest.childFailureAfterSuspensionReentersCallerAndMemoizesNormally',
+            'thc.runtime.NarrowIntegerCarrierTest.narrowLiteralsRetainIntrinsicValuesWhenProofsAreErased')
     }
     if ($testRuntime -or $Action -eq 'ArrayTest') {
         Assert-ThcJava

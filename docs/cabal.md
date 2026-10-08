@@ -4,6 +4,23 @@ Use `thc build [TARGETS...] [FLAGS]` inside a Cabal project to build components
 and acquire their dependency Core. Omit targets for the current package, use
 `all`, or name libraries and runnable components together. `thc run [TARGET]
 [FLAGS] [-- ARG...]` performs acquisition and executes one component on THC.
+
+Use `thc build --native-image [TARGETS...]` to produce fresh THC Native Images
+for selected executables, `exitcode-stdio-1.0` test suites and benchmarks after
+normal acquisition; libraries still acquire. The current producer requires
+Linux x86_64, the pinned GraalVM and synchronous AST execution. The driver uses
+the qualified `resource-copy` profile by default; override it with
+`THC_NATIVE_IMAGE_VECTOR_PROFILE`. Per-component artifacts and their concrete
+`completion.json` inventory are under `DIST/native-images/<unit-id SHA256>/`.
+Each runnable has a separate `packages.json` dependency closure and exception
+bridge; the shared `DIST/packages.json` is acquisition inventory. Deployable
+outputs are `artifacts/program` and the runtime files/directories listed in
+`completion.json`, taken from Native Image's own artifact report.
+Use `--installed-core pinned` (default) or `required`; the `demand` provider
+converts interfaces inside a running THC context and cannot supply offline image
+capture. Images are built afresh, with no image cache or static-linking guarantee. This
+option is accepted only by `build` and does not execute the application.
+
 `thc acquire` retains the same single-runnable selection as `run` for compatibility.
 Build the driver with
 `cabal build exe:thc`; from the THC checkout, invoke it with `cabal run thc -- ...`.
@@ -82,6 +99,13 @@ instead reads Core already retained in installed interfaces, using the matching
 configured source tree where required. Missing Core fails explicitly; the driver
 does not silently switch providers. Follow [GHC library Core](ghc-core.md) to
 prepare that installation. Acquisition alone does not establish runtime support.
+
+The opt-in `--installed-core demand` provider defers eligible whole installed
+units to the selected-GHC helper on actual module demand. Units with native or
+startup obligations retain ordinary CBD acquisition and linking. Thin requested
+units fail acquisition. The initial mode requires explicit context process
+permission and does not support `--verify-artifacts`; see the
+[eligibility and verification limits](driver.md#installed-library-core).
 
 Package C/C++ and CAPI imports use the configured native sources and link
 settings. See [foreign imports and exports](interface-foreign.md) for LLVM setup,

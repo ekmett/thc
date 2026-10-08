@@ -294,10 +294,11 @@ recordImports options environment
                   let (parameters,result) = splitFunTys function in
                   case tcSplitIOType_maybe result of
                     Just (_,value) | value `eqType` unitTy,
-                        [parameter] <- parameters,
-                        Just (pointer,[_]) <- splitTyConApp_maybe (scaledThing parameter),
-                        tyConUnique pointer == ptrTyConKey ->
-                      Just (["AddrRep"],"void")
+                        length parameters `elem` [1,2],
+                        all (\parameter -> case splitTyConApp_maybe (scaledThing parameter) of
+                          Just (pointer,[_]) -> tyConUnique pointer == ptrTyConKey
+                          _ -> False) parameters ->
+                      Just (replicate (length parameters) "AddrRep","void")
                     _ -> Nothing
                 _ -> Nothing
           -- GHC's stock CLabel desugaring ignores the ccall/capi convention

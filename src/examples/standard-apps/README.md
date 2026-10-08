@@ -1,6 +1,6 @@
 # Application examples
 
-These inputs exercise ordinary upstream Haskell applications. Use the
+These examples exercise ordinary Haskell applications. Use the
 [driver guide](../../../docs/driver.md#run-real-applications) for setup and
 Happy, Alex and HsColour commands, including compiling their generated output.
 Acquisition builds and exports a program; it does not execute the guest.
@@ -10,6 +10,7 @@ Acquisition builds and exports a program; it does not execute the guest.
 | `TinyLexer.x` | Alex lexer; its generated program prints `["sum","+","42"]` |
 | `TinyParser.y` | Happy parser; its generated program prints `3` |
 | `TinyMath.hs` | HsColour HTML input and doctest examples |
+| [Word frequency](word-frequency/README.md) | UTF-8 file input, case folding and sorted word counts |
 | [lens](lens/README.md) | Public optics operations and original upstream tests |
 | [ad](ad/README.md) | Differentiation and sharing-sensitive graph traversal |
 | [containers](containers/README.md) | Original IntMap benchmark component |

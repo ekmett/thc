@@ -23,6 +23,40 @@ class NarrowIntegerCarrierTest {
     }
     private CoreRepresentation proof(String rep) { return new CoreRepresentation(CoreKind.LONG, true, true, list(rep), null, null, null, null, null); }
     private CoreRepresentation proof(NarrowInteger integer) { return proof(integer.getRep()); }
+    private ExecutableProgram literalProgram(Language language, String backend, List<Object> literal) {
+        var input = map("id", "ignored", "name", "ignored", "lifted", false,
+            "rep", map("kind", "long", "primReps", list("IntRep"), "evaluated", true));
+        var module = map("schema", 1, "ghc", "9.14.1", "module", "NarrowLiteral", "constructors", list(),
+            "bindings", list(map("id", "entry", "name", "entry", "arity", 1, "lifted", true,
+                "expr", list("lam", list(input), literal))));
+        return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+    }
+    @Test void narrowLiteralsRetainIntrinsicValuesWhenProofsAreErased() throws Exception {
+        record Literal(String kind, String value, Object expected) {}
+        var cases = list(new Literal("int8", "-128", -128), new Literal("word8", "255", 255),
+            new Literal("int", "255", 255L));
+        var unknown = map("kind", "unknown", "primReps", null, "evaluated", false);
+        entered(language -> {
+            for (var backend : list("ast", "bytecode")) for (var value : cases) {
+                // Literal kind recovers narrow values without an exported proof;
+                // ordinary machine literals must not acquire narrow certification.
+                for (boolean erased : new boolean[]{false, true}) {
+                    var literal = new ArrayList<Object>(list("lit", value.kind(), value.value()));
+                    if (erased) literal.add(map("rep", unknown));
+                    if (value.kind().equals("int")) assertFalse(CoreRepresentations.expression(literal).isInt());
+                    var program = literalProgram(language, backend, literal);
+                    assertEquals(value.expected(), Calls.target(program.hostEntryTarget(1),
+                        new Object[]{program.entryValue("entry"), new Object[]{0L}}), backend + "/" + value.kind());
+                }
+                if (!value.kind().equals("int")) {
+                    List<Object> malformed = list("lit", value.kind(), value.value(), map("rep", list()));
+                    assertThrows(RuntimeFault.class, () -> literalProgram(language, backend, malformed));
+                    List<Object> outOfRange = list("lit", value.kind(), value.kind().equals("int8") ? "128" : "256");
+                    assertThrows(RuntimeFault.class, () -> literalProgram(language, backend, outOfRange));
+                }
+            }
+        });
+    }
     @Test void exactLoweredProofSeparatesIntComputationFromMachineAnd64BitLong() {
         for (var integer : NarrowInteger.values()) {
             var proof = proof(integer); assertTrue(proof.isInt()); assertFalse(proof.isLong()); assertEquals(list(integer.getRep()), proof.getPrimReps());

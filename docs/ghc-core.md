@@ -69,8 +69,12 @@ driver executable:
 
 ```haskell
 loadInterfaceCore :: HscEnv -> Module -> FilePath -> IO (Maybe InterfaceCore)
+interfaceCoreCBD :: [CommandLineOption] -> InterfaceCore -> IO ByteString
 interfaceCoreJSON :: [CommandLineOption] -> InterfaceCore -> IO String
 ```
+
+Use `interfaceCoreCBD` for executable output; `interfaceCoreJSON` provides
+explicit diagnostic inspection.
 
 Resolve the expected `Module` (including its exact package unit) and interface
 path using the selected compiler session and package databases. `Nothing`
@@ -86,8 +90,8 @@ bindings do not grant executable status. Ordinary foreign calls still require
 the runtime's normal support audit.
 
 The result exposes the original module, `ModDetails`, `CoreProgram` and foreign
-metadata. Acquisition serializes each module before loading the next, allowing
-its decoded tree to be released.
+metadata. Installed-Core acquisition converts each module in an isolated helper
+and retains serialized bytes rather than decoded GHC trees.
 
 Executable IDs use GHC's mangled occurrence spelling. In GHC 9.14, a record
 selector such as `field` has a constructor-qualified namespace represented by
@@ -126,11 +130,13 @@ cabal list-bin exe:thc-interface --with-compiler=/path/to/ghc
 /path/to/thc-interface --libdir /path/from/selected-ghc-print-libdir \
   --unit exact-installed-unit-id --module Package.Module \
   --interface /path/to/Package/Module.hi --package-db /path/to/package.conf.d \
-  --way vanilla --source-notes
+  --way vanilla --source-notes > Package.Module.cbd
 ```
 
 `--libdir`, `--unit`, `--module` and `--interface` are required. Package databases
-may be repeated in GHC stack order. The stack is explicitly the selected libdir's
+may be repeated in GHC stack order. `--source-spans` preserves retained file
+identities and line/column spans without reading source files; `--source-notes`
+keeps its existing optional text and UTF-16 offset capture. These flags are exclusive. The stack is explicitly the selected libdir's
 global database plus those arguments: implicit user databases and package
 environments are disabled. The helper does not discover packages, rebuild them,
 or run guest code. The caller must select a helper built against the same GHC
@@ -143,21 +149,40 @@ canonical-name alias is accepted in place of an exact registered ID.
 Ways are `vanilla` (default), `dynamic`, or `profiling`; the interface header must
 match the requested way. Only vanilla/dynamic synthetic packages are tested.
 
-Except for `--help`, stdout is one UTF-8 JSON object with `schema: 1`:
+For a single-module load, successful stdout is the raw
+[CBD container](compact-core-format.md). Missing-Core and failure responses are
+one UTF-8 JSON object with `schema: 1`:
 
-| Exit | Status | Payload |
+| Exit | Stdout | Payload |
 | --- | --- | --- |
-| 0 | `loaded` | `core` contains the existing post-Tidy module JSON |
-| 3 | `unavailable` | `capability: "complete-interface-core"`, unit/module/way/path; no Core |
-| 1 | `error` | `category: "interface"` and a diagnostic message; no Core |
-| 2 | `error` | `category: "usage"`, diagnostic and usage; no Core |
+| 0 | Binary CBD | Complete serialized module |
+| 3 | JSON | `status: "unavailable"`, `capability: "complete-interface-core"`, `unit`, `module`, `way`, `interface`; no Core |
+| 1 | JSON | `status: "error"`, `category: "interface"`, `message`; no Core |
+| 2 | JSON | `status: "error"`, `category: "usage"`, `message`, `usage`; no Core |
 
-The complete serialized Core, including each character, is deeply forced before
-any success bytes are emitted.
+The helper finishes serialization into a strict `ByteString` before writing
+successful output. Capture stdout as bytes and check the exit status before
+treating the result as CBD. Keep stderr separate from the payload.
 Cancellation is not converted to a missing-capability result. An unavailable
 result never substitutes inline unfoldings. In the driver's installed-Core
 required mode it is a capability failure; choosing the pinned source provider
 is an explicit option, not a retry policy.
+
+The helper converts one requested interface. The default `pinned` and explicit
+`required` providers convert every module in each selected installed registration
+before runtime binding demand. The opt-in `demand` provider instead publishes
+checked retained-interface descriptors for whole units whose startup, native,
+main-alias and delimited-control facts are all provably false. GHC decodes the
+interface syntax for eligibility without hydrating or serializing every module.
+The private inventory protocol adds Boolean `demandEligible` alongside
+`completeCore`; false eligibility selects ordinary CBD/native acquisition, while
+missing complete Core in a requested unit fails acquisition.
+
+The JVM invokes this same helper only when a selected module is requested, then
+uses the existing compact reader and checks the emitted header facts against
+those recorded in the directory. It does not parse GHC binary interfaces.
+[Demand eligibility and limits](driver.md#installed-library-core) describe the
+process permission, source snapshot and explicit offline-audit restriction.
 
 ## Build a compiler with complete Core
 

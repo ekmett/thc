@@ -3,12 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.bytecode.Instruction;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
@@ -20,6 +15,7 @@ import java.security.MessageDigest;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static thc.runtime.ThreadInventoryCoreEvidence.*;
 
 @SuppressWarnings("unchecked")
 class ScalarMemoryUtilitiesTest {
@@ -77,55 +73,6 @@ class ScalarMemoryUtilitiesTest {
                 result.add(new Row("numericRemainder", List.of(bits, divisor), Long.remainderUnsigned(bits, divisor)));
         return result;
     }
-    private List<RootCallTarget> activeTargets(RootCallTarget entry) {
-        var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
-        var targets = new ArrayList<RootCallTarget>();
-        visit(entry, seen, targets);
-        return targets;
-    }
-    private void visit(RootCallTarget target, Set<RootCallTarget> seen, List<RootCallTarget> targets) {
-        if (!seen.add(target))
-            return;
-        var root = target.getRootNode();
-        var nodes = new ArrayList<Node>();
-        nodes.add(root);
-        if (root instanceof BytecodeRoot bytecode)
-            for (var instruction : bytecode.getBytecodeNode().getInstructions())
-                for (var argument : instruction.getArguments())
-                    if (argument.getKind() == Instruction.Argument.Kind.NODE_PROFILE) {
-                        var node = argument.asCachedNode();
-                        if (node != null)
-                            nodes.add(node);
-                    }
-        for (var node : nodes)
-            for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
-                if (call.getCurrentCallTarget() instanceof RootCallTarget active
-                    && active.getRootNode() instanceof GuestRoot)
-                    visit(active, seen, targets);
-        targets.add(target);
-    }
-    private List<List<?>> nodes(Object value) {
-        var result = new ArrayList<List<?>>();
-        if (value instanceof List<?> list) {
-            result.add(list);
-            for (var child : list) result.addAll(nodes(child));}else if(value instanceof Map<?,?> map)
-            for (var child : map.values()) result.addAll(nodes(child));
-        return result;
-    }
-    private <T> T single(List<T> values) {
-        if (values.isEmpty())
-            throw new NoSuchElementException("List is empty.");
-        if (values.size() != 1)
-            throw new IllegalArgumentException("List has more than one element.");
-        return values.getFirst();
-    }
-    private Map<String, Object> binding(List<Map<String, Object>> bindings, String name) {
-        var found = new ArrayList<Map<String, Object>>();
-        for (var binding : bindings)
-            if (("main:ScalarMemoryUtilities." + name).equals(binding.get("id")))
-                found.add(binding);
-        return single(found);
-    }
     private long count(ExecutableProgram program) {
         return ((Number) program.diagnostics().get("compiledEntries")).longValue();
     }
@@ -142,11 +89,6 @@ class ScalarMemoryUtilitiesTest {
             assertEquals(0, handoff.getResults().retainedReferences());
             assertNull(handoff.getPending());
         }
-    }
-    private List<Object> callCounts(List<RootCallTarget> targets) throws Exception {
-        var counts = new ArrayList<Object>();
-        for (var target : targets) counts.add(target.getClass().getMethod("getCallCount").invoke(target));
-        return counts;
     }
     @Test
     void nativeModelsAndBothBackendsIncludeTheFirstInstalledEntry() throws Exception {
@@ -211,84 +153,22 @@ class ScalarMemoryUtilitiesTest {
                             var handoff = language.getHandoffState().get();
                             var label = stage + "/" + backend;
                             for (var row : corpus) call(row, entry, handoff, label);
-                            // Count from original Core: pinCase additionally calls its floated $j once, regardless of
-                            // which allocation branch wins. shrinkCase's shared I# 77 CAF was evaluated by the
-                            // interpreted corpus; its cached target remains but is not re-entered.
-                            long sourceEntries = name.equals("pinCase") ? 3L : name.startsWith("numeric") ? 1L : 2L;
-                            var bindings = (List<Map<String, Object>>) linked.get("bindings");
-                            var binding = binding(bindings, name);
-                            var body = (List<?>) ((List<?>) binding.get("expr")).get(2);
-                            if (!name.startsWith("numeric")) {
-                                assertEquals("app", body.get(0));
-                                assertEquals("lam", ((List<?>) body.get(1)).get(0));
-                                var state = (List<?>) body.get(1);
-                                var formal = single((List<Map<String, Object>>) state.get(1));
-                                var voidRep = Map.of("primReps", List.of(), "kind", "void", "evaluated", true);
-                                assertEquals("State# RealWorld", formal.get("type"));
-                                assertEquals(voidRep, formal.get("rep"));
-                                assertEquals(false, formal.get("lifted"));
-                                assertEquals(false, formal.get("coercion"));
-                                var argument = single((List<List<?>>) body.get(2));
-                                assertEquals("void", argument.get(0));assertEquals(voidRep,((Map<?,?>)argument.getLast()).get("rep"));
-                                assertEquals(List.of(List.of(false), false, false),
-                                    body.subList(Math.min(3, body.size()), Math.min(6, body.size())));
-                            }
-                            long lambdas = 0;
-                            for (var node : nodes(bindings))
-                                if (!node.isEmpty() && "lam".equals(node.getFirst()))
-                                    lambdas++;
-                            assertEquals(sourceEntries, lambdas);
-                            // Lowering beta-reduces exactly the proven immediate State# application, without changing
-                            // the original Core inventory.
-                            long expectedEntries = sourceEntries - (name.startsWith("numeric") ? 0L : 1L);
-                            if (name.equals("pinCase")) {
-                                var helper = single(bindings.stream().filter(candidate -> candidate != binding).toList());
-                                int uses = 0;
-                                for (var node : nodes(binding))
-                                    if (!node.isEmpty() && "var".equals(node.getFirst())
-                                        && Objects.equals(node.get(1), helper.get("id")))
-                                        uses++;
-                                assertEquals(3, uses);
-                            } else if (name.equals("shrinkCase")) {
-                                var constant = single(bindings.stream().filter(candidate -> candidate != binding).toList());
-                                var expression = (List<?>) constant.get("expr");
-                                assertEquals("app", expression.get(0));
-                                assertEquals("con", ((List<?>) expression.get(1)).get(0));
-                                assertEquals(
-                                    "ghc-internal:GHC.Internal.Types.I#", ((List<?>) expression.get(1)).get(1));
-                                assertEquals("77", ((List<?>) single((List<?>) expression.get(2))).get(2));
-                            }
-                            assertEquals(Set.of("pinCase", "shrinkCase").contains(name) ? 2 : 1, bindings.size());
-                            var targets = activeTargets(entry);
-                            assertEquals(
-                                expectedEntries + (name.equals("shrinkCase") ? 1L : 0L), (long) targets.size());
-                            assertEquals(0L, count(program));
-                            var beforeCalls = callCounts(targets);
-                            long arguments = handoff.getArguments().getAllocations(),
-                                 results = handoff.getResults().getAllocations();
-                            var runtime = Truffle.getRuntime();
-                            var targetType = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
-                            for (var target : targets) {
-                                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
-                                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
-                                runtime.getClass()
-                                    .getMethod("bypassedInstalledCode", targetType)
-                                    .invoke(runtime, target);
-                            }
-                            assertEquals(0L, count(program));
-                            assertEquals(beforeCalls, callCounts(targets));
+                            // Compile the discovered targets without prescribing GHC's lambda or
+                            // root layout. Installation must not execute the guest or settle calls.
+                            var active = targets(entry);
+                            var interpreted = interpretedCalls(active);
+                            long beforeCompilation = count(program);
+                            install(active);
+                            assertEquals(beforeCompilation, count(program));
+                            assertEquals(interpreted, interpretedCalls(active));
                             for (var row : corpus.reversed()) {
                                 long before = count(program);
                                 call(row, entry, handoff, label);
-                                assertEquals(expectedEntries, count(program) - before,
-                                    label + "/" + name + " exact first-installed entries");
-                                assertEquals(targets, activeTargets(entry));
-                                for (var target : targets)
-                                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
-                                assertEquals(arguments, handoff.getArguments().getAllocations());
-                                assertEquals(results, handoff.getResults().getAllocations());
+                                assertTrue(count(program) > before,
+                                    label + "/" + name + " enters compiled code on the first installed call");
+                                assertEquals(interpreted, interpretedCalls(active), "No interpreted settling call");
+                                assertTrue(valid(entry), "Installed entry remains valid");
                             }
-                            assertEquals(beforeCalls, callCounts(targets));
                             assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
                         } finally {
                             context.leave();

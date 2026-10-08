@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Publish immutable per-module CBD from final linked binary Core. Acquisition
--- ZIPs remain provenance caches; every executable manifest reference is CBD.
+-- | Publish immutable per-module CBD from final linked binary Core, or preserve
+-- a checked demand-interface source. Acquisition ZIPs remain provenance caches.
 module THC.Driver.CoreSymbols (publishCoreUnit) where
 
 import Control.Exception (IOException, bracketOnError, catch, evaluate)
@@ -30,6 +30,9 @@ import THC.Driver.Zip (ZipMember, decodeZipMembers, readZipMember)
 publishCoreUnit :: FilePath -> Bool -> Value -> IO Value
 publishCoreUnit cache verify unit
   | any (\key -> member unit key /= Nothing) ["json","symbols"] = fail "JSON Core unit artifacts are not supported"
+  | member unit "interfaceSource" /= Nothing = do
+      unless (member unit "bundle" == Nothing) (fail "Interface unit also contains a CBD bundle")
+      pure unit
   | otherwise = case (member unit "bundle", member unit "modules") of
   (Just bundle, Just (Array modules)) | not (null modules) -> do
     source <- field bundle "path"

@@ -140,7 +140,13 @@ stop-the-world snapshot. No collection is requested.
 ## `THC.Trace`
 
 `getTraceSink`, `supportedTraceSinks` and `setTraceSink` use typed `TraceOff`,
-`TraceStderr`, `TraceJFR` and `TraceStderrAndJFR` values. Selection is context-local.
+`TraceStderr`, `TraceJFR` and `TraceStderrAndJFR` values. Selection is context-local
+and starts at `TraceOff`. The same sink selects GHC's original `traceEvent#`,
+`traceMarker#` and `traceBinaryEvent#`; see [their payload contract](hints-and-tracing.md).
+Enabling tracing invalidates the initial disabled assumption, so already compiled
+guest code observes the change. Disabling silences subsequent emissions; re-enabling
+uses the newly selected sink. This is a behavior guarantee, not a measured claim
+about the cost of compiled disabled code.
 JFR availability does not imply an active recording, and selecting its sink
 never starts a process-wide recording. With only JFR selected and no enabled
 recording consumer, emitting/beginning a span returns `Disabled`. With both

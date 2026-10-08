@@ -7,8 +7,8 @@
 -- Cost and overlap: Keep only THC-owned transport/aliasing semantics. Hundreds of
 --   observations do not justify retesting arbitrary libc implementations; consolidate
 --   overlapping copies/fills.
--- Build status: Value review only; admission still requires explicit inputs and single-
---   owner outputs.
+-- Build status: Admitted by fixture-scalar-memory-utilities in CMake. Native values
+--   and managed lifetime/aliasing checks are independent of compiler root layouts.
 -- Detailed file inputs/outputs: docs/fixture-inputs.log, entry 053.
 {-# LANGUAGE OverloadedStrings #-}
 

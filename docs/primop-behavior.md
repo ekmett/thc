@@ -20,10 +20,35 @@ The tables distinguish unsupported behavior from intentional target choices
 and performance-only hints. Linked implementation guides supply detail and
 test commands.
 
+## Narrow Core literals
+
+Narrow literal tags preserve their signed or unsigned values when representation
+metadata is absent or unconstrained. Both loaders reject malformed present proofs
+and noncanonical or out-of-range values; ordinary machine literals do not acquire
+narrow certification. Real exported 16-bit and 32-bit literals have dedicated
+array-suite controls. A genuine GHC 8-bit literal with erased argument proof remains
+unqualified; synthetic loader controls do not establish that compiler behavior.
+
+## Aggregate-result local joins
+
+Fixture-free controls cover tuple-result ownership and local tuple capture.
+Genuine GHC-exported tuple-result join capture remains unqualified; see
+[tuple joins](tuple-joins.md) for the owning controls and scope.
+
+Fixture-free mixed sum-result joins retain lazy identity and clear inactive
+references through zero-arity and recursive returns in both backends. Genuine
+GHC-exported sum-result joins and `runRW#` transfers remain unqualified; see
+[sum results](sum-results.md) for the owning controls.
+
+Fixture-free empty-argument controls cover ordinary calls, PAPs, overapplication
+and tail transfers. Genuine GHC-exported ordinary empty-argument call boundaries
+remain unqualified; see [empty tuple inputs](empty-tuple-inputs.md).
+
 ## Original working-directory foreign calls
 
 | Original declaration | Current behavior and consequence |
 | --- | --- |
+| ghc-internal `open` | The explicit native provider retains native flags, unsigned mode transport, descriptor reservation and safe/interruptible request ownership on Linux x86_64 and Darwin x86_64/arm64. Qualification covers synthetic Word32 Core open and owning native controls. Actual installed GHC wrappers, native Word16 wrapper execution, the full three-safety Core matrix and Loom-hosted open remain unqualified. See [open and cancellation](native-file-provider.md#open-and-cancellation). |
 | Unix 2.8.8.0 `chdir` / `getcwd` | Both backends use the explicit Linux x86_64 NativeIO context's directory descriptor; process CWD stays unchanged. `getcwd` supports non-null caller-owned buffers and rejects GNU NULL allocation. Verified physical naming can return EACCES for inaccessible ancestors where native process `getcwd` succeeds; relative IO remains descriptor-based. See [native files](native-file-provider.md#working-directory-and-path-operations) for lifetime and platform requirements. |
 | Process 1.6.26.1 `runInteractiveProcess`, `getProcessExitCode`, `waitForProcess`, `terminateProcess` | Both backends preserve the original unsafe/interruptible declarations on Linux x86_64 with an explicit process grant. Only launched context-owned children are valid; real PIDs remain observable and retained IDs cannot be rebound after reuse. Interruptible wait saves result and errno before delivery and never replays a reap. Credential changes, unsupported flags, auto-reaping SIGCHLD policies and arbitrary host PIDs reject; stable host signal/reaping policy is required. See [owned process transport](process-lifecycle.md). |
 | Unix 2.8.8.0 directory streams | Exact unsafe opendir/fdopendir/closedir/readdir/d_name/free_dirent calls use context-owned handles on Linux x86_64 glibc 2.23+. Readdir preserves raw names and EOF errno; views expire at the next read or close. Successful fdopendir consumes only its input guest descriptor. See [native files](native-file-provider.md#directory-streams) for ownership and validation. |
@@ -35,10 +60,10 @@ test commands.
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `par#` | Discards the speculative evaluation hint without forcing its argument; returns `1`. No parallel evaluation is started. |
-| `spark#` | Discards the hint and returns the identical, unforced payload. |
-| `numSparks#` | Always returns `0`; there is no spark queue. |
-| `getSpark#` | Always returns failure flag `0` and the pinned GHC boxed `False` filler; no work is dequeued. |
+| `par#` | Returns `1`; discards hints by default. With opt-in `thc.SparkQueueCapacity`, submits suitable context-owned AST/bytecode or updating GHC BCO thunks with continuation capture for speculative WHNF evaluation without forcing on the caller. |
+| `spark#` | Returns the identical, unforced payload; completes its state operand before optional queue submission. |
+| `numSparks#` | Returns queued entries in the context-owned opt-in queue; defaults to `0`. |
+| `getSpark#` | Dequeues an unclaimed thunk with flag `1`, or returns flag `0` and the pinned GHC boxed `False` filler when the queue is empty or disabled. |
 | `fork#` | Creates a Truffle-managed platform thread by default, or one virtual thread per guest thread with opt-in `thc.ThreadHosting=loom`. Thread creation must be allowed by the embedding. Platform mode clears inherited CPU affinity; Loom routes unmounted work between exclusive logical HEC workers. Fork admission enables ordinary asynchronous polling before child publication on both backends, including with `asyncExceptions: false`; see `killThread#` below. |
 | `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
@@ -47,8 +72,12 @@ test commands.
 | `setThreadAllocationCounter#` | Accounts JVM heap bytes during outer guest-entry extents, including runtime bookkeeping and excluding native/Sulong allocations and host work between entries. Requires JVM thread-allocation accounting support; Loom reads/resets reject. Does **not** enforce allocation limits. |
 | `setOtherThreadAllocationCounter#` | Same accounting and missing allocation-limit enforcement, for the selected context-owned thread. |
 
-Discarding sparks is a deliberate hint policy, not a claim of parallel speedup.
-Real forks are independent of that policy. CPU pins can be inherited by native
+Spark queues are bounded, default disabled, and use one managed worker. Only
+this context's original AST/bytecode thunks with async continuation capture are
+admitted; unsupported hints and overflow are discarded. Failures remain on the
+shared thunk; cooperative worker cancellation preserves its saved continuation
+for demand and stops further speculative work. See [thread scheduling](thread-scheduling.md).
+No parallel speedup is claimed. Real forks are independent of the hint policy. CPU pins can be inherited by native
 or JVM helper threads. The version-pinned Graal compiler-worker listener resets
 recognized workers before compilation, including replacement workers; helpers
 created earlier during initialization and unrecognized workers are not covered.
@@ -90,7 +119,7 @@ The representation and composition limits below still apply.
 | `maskAsyncExceptions#` | Implements interruptible masking/restoration with the same concrete typed result layouts as `catch#`; no exception-specific scalar whitelist. |
 | `maskUninterruptible#` | Implements uninterruptible masking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |
 | `unmaskAsyncExceptions#` | Implements unmasking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |
-| `killThread#` | Both ordinary backends support `throwTo` through saved guest continuations, including external delivery to a live or saved delimited catch. `asyncExceptions: false` suppresses ordinary polls while the per-context single guest admission origin assumption holds; fork/signal publication or different-origin public admission invalidates it before effects. Self-delivery remains mandatory under both masks. The reached handler acknowledges the original request without forcing its payload; the interrupted child's one-shot continuation is not cloned into the multi-shot image. Delimited invocations drain scheduling cuts and AST stack spills through separate one-shot owners; new `control0#` capture across those parked caller chains still rejects. Prepared synchronous code rejects concurrency admission. Arbitrary Java/native foreign frames do not gain resumable interruption. Resumable sends to host carriers outside guest invocations are no-ops, not messages queued for a later unrelated host call. |
+| `killThread#` | Both ordinary backends support `throwTo` through saved guest continuations, including external delivery to a live or saved delimited catch. `asyncExceptions: false` suppresses ordinary polls while the per-context single guest admission origin assumption holds; fork/signal publication or different-origin public admission invalidates it before effects. Self-delivery remains mandatory under both masks. The reached handler acknowledges the original request without forcing its payload; the interrupted child's one-shot continuation is not cloned into the multi-shot image. Delimited invocations drain scheduling cuts and AST stack spills through separate one-shot owners; new `control0#` capture across those parked caller chains still rejects. Prepared AST code retains continuation capture and uses runtime-context admission for default-off polling; an explicitly eager policy is preserved through preparation. Arbitrary Java/native foreign frames do not gain resumable interruption. Resumable sends to host carriers outside guest invocations are no-ops, not messages queued for a later unrelated host call. |
 | `waitRead#`, `waitWrite#` | Wait for context-owned native descriptors on Linux x86_64 and Darwin x86_64/arm64. Close or replacement wakes the original wait without following descriptor reuse. Bad descriptors raise the original lazy `blockedOnBadFD`; opaque embedding streams remain unsupported. See [descriptor waits](file-wait.md). |
 | `takeMVar#` | Blocking transfers and supported interruption work, but no GC-driven `BlockedIndefinitelyOnMVar` detection. A wait with no future producer needs supported interruption or embedding cancellation to end. |
 | `putMVar#` | Same missing deadlock exception for a blocked put; FIFO handoff and cancellation-before-commit are implemented. |
@@ -122,16 +151,16 @@ and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 | Primop | Current behavior and consequence |
 | --- | --- |
 | `mkWeak#` | Strongly retains its lazy key, value and Haskell action until explicit finalization or context disposal. **No automatic weak-key/ephemeron collection**; otherwise unreachable resources can remain for the context lifetime. Dropping the `Weak#` does not remove its registration. |
-| `mkWeakNoFinalizer#` | Same retained key/value behavior, without a Haskell finalizer. |
-| `deRefWeak#` | Liveness changes through explicit finalization/disposal, not GC discovering a dead key. An unfinalized registration still returns its retained value. |
-| `finalizeWeak#` | Explicit finalization marks the weak dead, invokes registered supported C callbacks, and returns the actual Haskell action to the caller. Returning rather than running that action is intentional GHC primop behavior. Automatic GC finalization is absent; context close discards outstanding callbacks instead of executing them. |
-| `addCFinalizerToWeak#` | Accepts source-certified one-address callbacks (`free` for owned allocation bases and typed package finalizers from completely linked native components), with zero environment flag. Package callbacks require the retained `FunPtr (Ptr a -> IO ())` declaration and an exact rooted `void(pointer)` entry. Unknown labels and the two-address/environment ABI are unsupported. Callbacks run through explicit finalization only. See [C finalizers](c-finalizers.md). |
+| `mkWeakNoFinalizer#` | Without callbacks, identical key/value carriers are weakly held; raw managed `MutVar#` or `MVar#` keys can also own distinct lazy values without rooting an otherwise unreachable key/value cycle. Finalization/disposal detaches those values. Distinct values with other key carriers remain strongly retained; general ephemeron collection is absent. |
+| `deRefWeak#` | Returns flag 0 after explicit finalization or collection of an identity-only or actionless raw `MutVar#` or `MVar#` key. Otherwise returns the original lazy value without forcing it. |
+| `finalizeWeak#` | Explicit finalization marks the weak dead, invokes registered supported C callbacks, and returns the actual Haskell action to the caller. Returning rather than running that action is intentional GHC primop behavior. JVM collection can automatically retire one canonical owned malloc free on an actionless identity-only or raw `MutVar#`/`MVar#` key; general automatic finalization remains absent. Context close discards outstanding callbacks instead of executing them and disposes remaining native allocations. |
+| `addCFinalizerToWeak#` | Accepts source-certified C callbacks: zero calls `f(object)`, every nonzero flag calls `f(environment, object)`. Typed package callbacks require a retained normalized `FunPtr (Ptr a -> IO ())` or `FunPtr (Ptr env -> Ptr a -> IO ())` declaration and a matching exact rooted `void(pointer)` or `void(pointer, pointer)` definition in a completely linked component. Both arguments use the ordinary typed address transport and shared native borrowing. Unknown labels reject. The reserved `free` remains one-address with zero flag and checked owned allocation bases. A single canonical current-context owned free on an actionless identity-only or raw `MutVar#`/`MVar#` key weakly references its direct malloc owner (or null) and can retire through JDK Cleaner without a managed GC request. Busy borrows/free/realloc defer until completion without waiting or another collection; failures are retained without replay. Other callbacks, including a second callback, restore strong retention of the original key and value and remain explicit-only; a collected registration returns 0. See [C finalizers](c-finalizers.md). |
 
 This limitation is not shared by stable names: `makeStableName#` really uses a
 weak identity map and does not retain its referent. Stable pointers intentionally
 root their referents; their separate native interoperability limits appear below.
 
-Details: [explicit weak finalization](weak-explicit.md), [C finalizers](c-finalizers.md),
+Details: [managed weak registrations](weak-explicit.md), [C finalizers](c-finalizers.md),
 [stable names](stable-names.md).
 
 ## Addresses, pinning and pointer-containing storage
@@ -218,7 +247,7 @@ Details: [native address projection](native-addresses.md), [managed pinning](pin
 | `compactAllocateBlock#` | Allocates blocks for that THC image, not arbitrary GHC heap images or cross-context/process import. Abandoned raw imports are retained until context disposal. |
 | `compactFixupPointers#` | Reconstructs a fresh graph using originating-context constructor metadata. Corrupt/incompatible images fail through the API's `Nothing` result; portable constructor resolution is not implemented. |
 | `newBCO#` | Decodes and executes the documented GHC 9.14.1 **opcode/ABI subset**, including scalar cases, internal tuple continuations, packed subword stacks and captured AP/PAP application. Function arity is independent of continuation bitmap width. Ordinary external function entry still requires one word per argument; external Core tuple and SIMD conventions require unsupported ABI adapters. |
-| `mkApUpd0#` | Creates an updating wrapper for a zero-arity BCO with an empty entry bitmap. Native calls, info-table/PACK instructions, breakpoints and explicit delimited capture through the interpreter remain unsupported. One-shot asynchronous and stack cuts preserve pending work and the shared update. |
+| `mkApUpd0#` | Creates an updating wrapper for a zero-arity BCO with an empty entry bitmap. Native calls, info-table/PACK instructions, breakpoints and explicit delimited capture through the interpreter remain unsupported. One-shot asynchronous and stack cuts preserve pending work and the shared update. Context-owned updating BCO/AP thunks are eligible for the existing opt-in spark pool; cooperative worker cancellation leaves their work resumable by demand. |
 
 Details: [compact regions and serialization](compact-regions.md),
 [BCO opcode list and ABI](ghc-bco.md).
@@ -227,7 +256,7 @@ Details: [compact regions and serialization](compact-regions.md),
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `prompt#` | Reusable/multi-shot IO continuations support saved catch/mask scopes, async delivery and invocation-local scheduling owners. Capturing applications with unboxed tuple/vector inputs and new capture across a parked one-shot caller chain are not yet supported. |
+| `prompt#` | Reusable/multi-shot IO continuations support saved catch/mask scopes, async delivery and invocation-local scheduling owners. AST typed calls retain their remaining logical arguments and authenticated aggregate result descriptors across capture. Bytecode aggregate-input capture remains unqualified; new capture across a parked one-shot caller chain retains the limits described in the delimited-continuation guide. |
 | `control0#` | Same supported control slice and composition/input restrictions as `prompt#`; saved frames share heap effects rather than rolling them back. |
 | `annotateStack#` | Real lazy annotations follow dynamic stack extent and supported saved continuations. Snapshots are managed metadata, not raw GHC `ANN_FRAME` memory. Mixed async/delimited composition has the restriction above. |
 | `keepAlive#` | Retains the reference through actual completion, including supported AST and bytecode suspension, with reachability fences on ordinary and exceptional exits. Continuations preserve scalar, direct vector, tuple and supported sum result representations; they may throw without producing any result carrier. Exact reference, State and continuation input requirements remain. |
@@ -297,16 +326,15 @@ semantics. Native instruction bit parity is not guaranteed for NaNs or signed ze
 | `prefetchMutableByteArray0#`, `prefetchMutableByteArray1#`, `prefetchMutableByteArray2#`, `prefetchMutableByteArray3#` | Same no-op policy. |
 | `prefetchAddr0#`, `prefetchAddr1#`, `prefetchAddr2#`, `prefetchAddr3#` | Same no-op policy; opaque addresses are not dereferenced. |
 | `prefetchValue0#`, `prefetchValue1#`, `prefetchValue2#`, `prefetchValue3#` | Same no-op policy; lifted payloads are not forced. |
-| `traceEvent#` | Emits escaped NUL-terminated text to context stderr, not a GHC eventlog. No event-selection flags, timestamps or eventlog-tool integration. |
-| `traceBinaryEvent#` | Emits exactly the supplied payload as lowercase hex to context stderr. Length must fit `0..Int.MAX_VALUE`; zero length does not read the address. Same eventlog limitations. |
-| `traceMarker#` | Emits escaped text with a marker label to context stderr, with the same eventlog limitations. |
+| `traceEvent#` | Ignored by default. The context-local `THC.Trace` sink enables escaped NUL-terminated text on stderr or `thc.RuntimeTrace` JFR events. |
+| `traceBinaryEvent#` | Same sink selection. When enabled, preserves exactly the supplied bytes as lowercase hex. Length must fit `0..Int.MAX_VALUE`; zero length does not read the address. |
+| `traceMarker#` | Same sink selection. Enabled markers preserve NUL-terminated text with a marker label/phase. |
 
 Details: [hints and tracing](hints-and-tracing.md).
 
 The selected GHC 9.14.1 `RtsFlags.TraceFlags.user` getter with header-derived
-schema-2 RTS layout metadata reports true for
-THC's always-enabled context stderr trace sink, independently of diagnostic
-counters. This single read-only CBool mapping does not implement a native RTS
+schema-2 RTS layout metadata reports whether the context's `THC.Trace` sink
+is selected, independently of diagnostic counters and active JFR recordings. This single read-only CBool mapping does not implement a native RTS
 image or GHC event-selection flags; unknown fields/widths and writes reject.
 The supported producing layout and native-default difference are documented
 in the tracing guide above.
@@ -329,7 +357,8 @@ The compiler's original `setHeapSize` evaluates its byte-count/state operands an
 returns, ignoring the heap-size advisory: THC does not resize the process-wide
 JVM heap, request GC, or invent mutable native RTS sizing flags.
 Original `performGC`, `performMajorGC` and `performBlockingMajorGC` request JVM
-collection without GHC generation or completion guarantees. `getRTSStatsEnabled`
+collection and attempt pending eligible owned frees without waiting for borrows;
+there are no GHC generation or completion guarantees. `getRTSStatsEnabled`
 is false, and direct `getRTSStats` rejects without modifying its buffer; original
 Haskell retains its disabled-statistics exception. `getMonotonicNSec` uses the
 JVM monotonic clock with an arbitrary process-local origin. See
