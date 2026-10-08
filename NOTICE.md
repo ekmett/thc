@@ -7,6 +7,13 @@ terms in [LICENSE.txt](LICENSE.txt). Edward Kmett's copyright notice extends
 through 2026; the Oracle notices are unchanged. Third-party components retain
 the terms identified below.
 
+## Jam Lifted API
+
+`nih/pinned/jam-lifted` contains the unchanged ordinary Java interface from
+Jam commit `92a0cbcda6b9413dc2df3b2a6e327f06d90ea94b`. Its
+`BSD-2-Clause OR Apache-2.0` terms and Edward Kmett copyright are retained in
+the source and [upstream license](nih/licenses/jam-LICENSE.txt).
+
 ## zlib checksum source provider
 
 `nih/pinned/zlib-1.2.11` contains unchanged checksum sources and supporting

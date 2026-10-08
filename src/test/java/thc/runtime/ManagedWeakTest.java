@@ -563,6 +563,33 @@ class ManagedWeakTest {
         assertEquals(2, key.getState(), "The ordinary Force update published the indirection");
         return new Registration(weak, new WeakReference<>(key, queue));
     }
+    private record LiftedAlias(jam.vm.Lifted answer) implements jam.vm.Lifted {
+        @Override public jam.vm.Lifted resolve() { return answer; }
+        @Override public jam.vm.Lifted project(int field) { return answer.project(field); }
+    }
+    private Registration liftedProtocolKey(ManagedWeaks registry, jam.vm.Lifted answer,
+            ReferenceQueue<Object> queue, Object value) {
+        var alias = new LiftedAlias(answer);
+        return new Registration(registry.make(alias, value, null, null), new WeakReference<>(alias, queue));
+    }
+    @Test
+    void liftedProtocolKeysUseTheExistingAnswerWithoutForcing() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var answer = new DataLayout(language, "test:Answer", "Answer", new String[]{"IntRep"}).createLong(42L);
+                var registry = Language.currentState().getWeaks();
+                var value = new Object(); var queue = new ReferenceQueue<Object>();
+                var registration = liftedProtocolKey(registry, answer, queue, value);
+                collect(queue, registration.referent());
+                assertSame(value, registry.dereference(registration.weak()).getValue());
+                registry.finalize(registration.weak());
+                assertEquals(0L, registry.dereference(registration.weak()).getFlag());
+                Reference.reachabilityFence(answer);
+            } finally { context.leave(); }
+        }
+    }
     @Test
     void completedThunkWeakKeysFollowIndependentlyLiveWhnfAliases() throws Exception {
         for (var backend : List.of("ast", "bytecode"))

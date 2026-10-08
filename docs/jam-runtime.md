@@ -10,6 +10,14 @@ carriers. General weak support remains unqualified. THC implements
 using ordinary weak registrations and bootstrap finalizers. The collector needs
 no language resolver callback or additional interface for this design.
 
+The ordinary `jam.vm.Lifted` value protocol is supplied by the unchanged source
+from Jam commit `92a0cbcda6b9413dc2df3b2a6e327f06d90ea94b` in
+[`nih/pinned/jam-lifted`](../nih/pinned/jam-lifted/README.md), compiled with THC.
+The current provider predates this interface. This supplemental compile input
+adds no native API and does not replace `jam.vm.Weak` or its bridge. It can be
+removed when the pinned provider includes it. See
+[nonforcing value resolution](thunk-updates.md#nonforcing-lifted-values).
+
 ## Toolchain ownership
 
 The VM, Graal compiler, SubstrateVM, `jam.vm.Weak` API and native collector

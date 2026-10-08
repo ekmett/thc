@@ -248,3 +248,36 @@ Views cannot cross THC contexts or outlive context closure. Unknown-length
 `Addr#` values are not buffers, and managed heap storage never acquires a native
 address merely by being exported. Original pointer-cell exclusion and native
 allocation lifetime checks still apply.
+
+## Lazy Haskell values
+
+A lifted guest value can cross the Truffle boundary without being evaluated.
+The existing context-owned `HostReference` holds the actual thunk; exporting,
+querying its numeric capabilities and displaying it without side effects do not
+force it. A pending thunk is executable. Invoking a nonfunction thunk with no
+arguments demands its shared result:
+
+```java
+Value lazy = guestArray.getArrayElement(0);
+Value evaluated = lazy.execute();
+long answer = evaluated.asLong();
+```
+
+Function-valued thunks retain the existing signature-driven invocation behavior:
+the arguments apply to the resulting Haskell function. Ordinary invocation uses
+THC's guest-thread admission, async exception handling and memoized update, so
+repeated invocation does not repeat the thunk's computation. Context ownership
+and lifetime checks remain in the boundary view.
+
+Published builtin signed and unsigned integer, Float and Double constructors
+expose Truffle's numeric messages through the existing foreign-export scalar
+codec. Conversions preserve exact ranges, unsigned high bits and floating-point
+values; a lossy conversion remains unsupported. Unrelated one-field records are
+not interpreted as numbers. The language constructor continues to store its
+primitive payload; a scalar conversion at the host boundary may box that value.
+
+Truffle specifies that numeric predicates and conversions have no observable
+side effects. They therefore do not force a pending thunk: invoke it first.
+After evaluation, the original view can also observe the published numeric
+answer. This policy allows foreign code to choose when to demand a lazy value
+without adding context ownership to every guest thunk.

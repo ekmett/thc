@@ -9,7 +9,6 @@ import com.oracle.truffle.api.nodes.Node;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
-import java.util.IdentityHashMap;
 import jam.vm.Weak;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
@@ -143,7 +142,7 @@ public final class ManagedWeaks {
             if (runner == null) throw fault("Missing original Haskell weak finalizer runner");
         }
         Drainer.start();
-        Object referent = resolvedKey(key);
+        Object referent = LiftedValues.resolveBoxed(key);
         var handle = new Handle(this);
         var finalizer = new Finalizer(handle, action, runner,
             action == null ? null : new ForkActionRoot(language, null, true, 2).getCallTarget());
@@ -154,17 +153,6 @@ public final class ManagedWeaks {
         live = handle;
         Reference.reachabilityFence(key);
         return handle;
-    }
-    /** State 2 publishes the answer; every other thunk state is opaque here. */
-    private static Object resolvedKey(Object key) {
-        Object current = key;
-        IdentityHashMap<Object, Boolean> seen = null;
-        while (current instanceof Thunk thunk && thunk.getState() == 2) {
-            if (seen == null) seen = new IdentityHashMap<>();
-            if (seen.put(current, Boolean.TRUE) != null) return key;
-            current = ManagedMutVar.completedBoxedIdentity(current);
-        }
-        return current;
     }
     private void install(Handle handle, Object key, Object value, Finalizer finalizer) {
         boolean bootstrap = key instanceof Thunk;
@@ -217,7 +205,7 @@ public final class ManagedWeaks {
         if (handle.retired) return bootstrap.release();
         if (stopping) { retire(handle); bootstrap.release(); return null; }
         try {
-            Object replacement = resolvedKey(bootstrap.key);
+            Object replacement = LiftedValues.resolveBoxed(bootstrap.key);
             if (replacement == bootstrap.key) {
                 retire(handle);
                 return bootstrap.release();
