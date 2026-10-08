@@ -118,9 +118,13 @@ to the key, value or callbacks. Install and publish the successor before releasi
 the old captures. Retiring a bootstrap token is not logical death: dereference
 and callback attachment must settle queued/running handoff, including when called
 from a pump thread or nested finalizer. Explicit finalization races with the same
-claim protocol and runs the real finalizer at most once. Failed replacement must
-preserve its cleanup obligation and report failure; its recovery policy remains
-under review.
+claim protocol and runs the real finalizer at most once. Successor-installation
+`OutOfMemoryError` preserves the resolved successor and cleanup obligation. The
+existing drainer retries installation with capped backoff, including after the
+public handle is dropped. Publication restores that same handle before releasing
+failed captures. Explicit finalization or shutdown cancels retries; real cleanup
+and non-allocation failures are not retried. Continued allocation failure may
+retain the captures; recovery from actual heap exhaustion remains unqualified.
 
 Bootstrap captures can retain the key, answer and backing value until another
 collection. This may delay finalization and affect other weak associations;
@@ -211,9 +215,9 @@ provider at Jam `5deba3e`. No THC runtime change was needed for this handoff.
 
 This qualifies that consumer on the combined Native Image candidate; the base
 JVM was unchanged. The current production pin remains an explicitly labelled
-`fastdebug` preview. A designated versioned release package, replacement-failure
-policy, refreshed HotSpot qualification, macOS execution and remaining Windows
-coverage are still open. Production release-flavor qualification is tracked in
+`fastdebug` preview. A designated versioned release package, recovery from actual
+heap exhaustion, refreshed HotSpot qualification, macOS execution and remaining
+Windows coverage are still open. Production release-flavor qualification is tracked in
 [Jam #10](https://github.com/ekmett/jam/issues/10).
 
 The ordinary executable runs reuse verified producer inputs, artifact hashes and
