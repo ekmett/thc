@@ -1,0 +1,103 @@
+--- a/com/oracle/truffle/polyglot/JDKSupport.java
++++ b/com/oracle/truffle/polyglot/JDKSupport.java
+@@ -490,7 +490,7 @@
+         private final MethodHandle addOpensToAllUnnamed;
+         private final MethodHandle addEnableNativeAccess;
+         private final MethodHandle addEnableNativeAccessToAllUnnamed;
+-        private final MethodHandle currentCarrierThread;
++        private final Class<?> generatedModules;
+         private final MethodHandle createTerminatingThreadLocal;
+         private final Module targetModule;
+ 
+@@ -504,7 +504,7 @@
+ 
+             // GeneratedModules
+             ClassWriter modulesClassWriter = new ClassWriter(0);
+-            modulesClassWriter.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC + Opcodes.ACC_SUPER, modulesBinaryClassName, null, "java/lang/Object", null);
++            modulesClassWriter.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC + Opcodes.ACC_SUPER, modulesBinaryClassName, null, "java/lang/Object", new String[]{"java/util/function/Supplier"});
+             FieldVisitor fv = modulesClassWriter.visitField(Opcodes.ACC_PRIVATE + Opcodes.ACC_STATIC + Opcodes.ACC_FINAL, "javaLangAccess", "Ljdk/internal/access/JavaLangAccess;", null, null);
+             fv.visitEnd();
+             generateModulesClassInit(modulesClassWriter, modulesBinaryClassName);
+@@ -516,6 +516,7 @@
+             generateModulesAddEnableNativeAccess(modulesClassWriter);
+             generateModulesAddEnableNativeAccessToAllUnnamed(modulesClassWriter);
+             generateModulesCurrentCarrierThread(modulesClassWriter, modulesBinaryClassName);
++            generateModulesCarrierSupplier(modulesClassWriter, modulesBinaryClassName);
+             generateModulesCreateTerminatingThreadLocal(modulesClassWriter, terminatingThreadLocalBinaryClassName);
+             modulesClassWriter.visitEnd();
+ 
+@@ -606,7 +607,7 @@
+             this.addOpensToAllUnnamed = l.findStatic(generatedClass, "addOpensToAllUnnamed", MethodType.methodType(void.class, Module.class, String.class));
+             this.addEnableNativeAccess = l.findStatic(generatedClass, "addEnableNativeAccess", MethodType.methodType(void.class, Module.class));
+             this.addEnableNativeAccessToAllUnnamed = l.findStatic(generatedClass, "addEnableNativeAccessToAllUnnamed", MethodType.methodType(void.class));
+-            this.currentCarrierThread = l.findStatic(generatedClass, "currentCarrierThread", MethodType.methodType(Thread.class));
++            this.generatedModules = generatedClass;
+             this.createTerminatingThreadLocal = l.findStatic(generatedClass, "createTerminatingThreadLocal", MethodType.methodType(ThreadLocal.class, Supplier.class, Consumer.class));
+         }
+ 
+@@ -723,6 +724,15 @@
+             mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "jdk/internal/access/JavaLangAccess", "currentCarrierThread", "()Ljava/lang/Thread;", true);
+             mv.visitInsn(Opcodes.ARETURN);
+             mv.visitMaxs(1, 0);
++            mv.visitEnd();
++        }
++
++        private static void generateModulesCarrierSupplier(ClassWriter modulesClassWriter, String modulesBinaryClassName) {
++            MethodVisitor mv = modulesClassWriter.visitMethod(Opcodes.ACC_PUBLIC, "get", "()Ljava/lang/Object;", null, null);
++            mv.visitCode();
++            mv.visitMethodInsn(Opcodes.INVOKESTATIC, modulesBinaryClassName, "currentCarrierThread", "()Ljava/lang/Thread;", false);
++            mv.visitInsn(Opcodes.ARETURN);
++            mv.visitMaxs(1, 1);
+             mv.visitEnd();
+         }
+ 
+@@ -849,7 +859,7 @@
+              * For performance reasons, it is necessary for CURRENT_CARRIER_THREAD to be declared as
+              * static final.
+              */
+-            private static final MethodHandle CURRENT_CARRIER_THREAD;
++            private static final Supplier<Thread> CURRENT_CARRIER_THREAD;
+             private static final MethodHandle CREATE_TERMINATING_THREAD_LOCAL;
+             static {
+                 if (JDKSupport.MODULES_ACCESSOR == null) {
+@@ -857,7 +867,14 @@
+                 } else if (!(JDKSupport.MODULES_ACCESSOR.getLeft() instanceof IsolatedImpl)) {
+                     throw new IllegalStateException("JDKSupport.MODULES_ACCESSOR initialized with wrong type " + JDKSupport.MODULES_ACCESSOR.getClass());
+                 } else {
+-                    CURRENT_CARRIER_THREAD = ((IsolatedImpl) JDKSupport.MODULES_ACCESSOR.getLeft()).currentCarrierThread;
++                    try {
++                        // MODULES_ACCESSOR has installed the qualified exports before this class is initialized.
++                        @SuppressWarnings("unchecked")
++                        Supplier<Thread> carrier = (Supplier<Thread>) ((IsolatedImpl) JDKSupport.MODULES_ACCESSOR.getLeft()).generatedModules.getConstructor().newInstance();
++                        CURRENT_CARRIER_THREAD = carrier;
++                    } catch (ReflectiveOperationException e) {
++                        throw new InternalError(e);
++                    }
+                     CREATE_TERMINATING_THREAD_LOCAL = ((IsolatedImpl) JDKSupport.MODULES_ACCESSOR.getLeft()).createTerminatingThreadLocal;
+                 }
+             }
+@@ -865,22 +882,12 @@
+             private static final JavaLangSupport INSTANCE = new JavaLangSupportImpl();
+ 
+             private JavaLangSupportImpl() {
+-                /*
+-                 * Ensure the CURRENT_CARRIER_THREAD method handle is initialized by invoking it.
+-                 * This prevents the interpreter from triggering class initialization during the
+-                 * virtual thread hooks which must not trigger class loading or suspend the
+-                 * VirtualThread.
+-                 */
+-                currentCarrierThread();
+             }
+ 
+             @Override
+             public Thread currentCarrierThread() {
+-                try {
+-                    return (Thread) CURRENT_CARRIER_THREAD.invokeExact();
+-                } catch (Throwable e) {
+-                    throw new InternalError(e);
+-                }
++                // A mount hook cannot class-load or suspend through MethodHandle customization.
++                return CURRENT_CARRIER_THREAD.get();
+             }
+ 
+             @Override

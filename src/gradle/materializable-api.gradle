@@ -34,10 +34,10 @@ def requireApiArchive = { File file, String hash ->
 def prepareMaterializableApi = tasks.register("prepareMaterializableApi", Sync) {
     from(provider { zipTree(materializableApiSource.singleFile) })
     include("com/oracle/truffle/api/nodes/RootNode.java", "com/oracle/truffle/api/nodes/NodeAccessor.java",
-        "com/oracle/truffle/api/bytecode/ContinuationRootNode.java")
+        "com/oracle/truffle/api/bytecode/ContinuationRootNode.java", "com/oracle/truffle/polyglot/JDKSupport.java")
     into(layout.buildDirectory.dir("materializable-api/source"))
     inputs.files("tools/truffle-protocol/materializable-root.patch", "tools/truffle-protocol/declared-return-api.patch",
-        "tools/truffle-protocol/graph-budget-api.patch")
+        "tools/truffle-protocol/graph-budget-api.patch", "tools/truffle-protocol/mount-carrier-lookup.patch")
     doFirst {
         requireApiArchive(materializableApiSource.singleFile,
             "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064")
@@ -58,6 +58,11 @@ def prepareMaterializableApi = tasks.register("prepareMaterializableApi", Sync) 
             environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
             commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/graph-budget-api.patch").absolutePath)
         }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/mount-carrier-lookup.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
         checkBuild(destinationDir.toPath().resolve("com/oracle/truffle/api/nodes/RootNode.java").toFile().getText("UTF-8")
             .contains("materializableFramePolicyVersion")) { "Materializable-root API patch was not applied" }
     }
@@ -65,24 +70,41 @@ def prepareMaterializableApi = tasks.register("prepareMaterializableApi", Sync) 
 def compileMaterializableApi = tasks.register("compileMaterializableApi", JavaCompile) {
     source(prepareMaterializableApi)
     include("**/*.java")
+    exclude("com/oracle/truffle/polyglot/JDKSupport.java")
     classpath = materializableApiCompile
     destinationDirectory.set(layout.buildDirectory.dir("materializable-api/classes"))
     options.release.set(17)
     options.compilerArgs.add("-proc:none")
 }
+// JDKSupport uses upstream JDK internals; --release hides these compiler inputs.
+def compileCarrierLookupApi = tasks.register("compileCarrierLookupApi", JavaCompile) {
+    source(prepareMaterializableApi)
+    include("com/oracle/truffle/polyglot/JDKSupport.java")
+    classpath = materializableApiCompile
+    destinationDirectory.set(layout.buildDirectory.dir("materializable-api/carrier-classes"))
+    sourceCompatibility = "17"
+    targetCompatibility = "17"
+    options.compilerArgs.addAll(["-proc:none",
+        "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+        "--add-exports=java.base/jdk.internal.module=ALL-UNNAMED",
+        "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED"])
+}
 def materializableApiJar = tasks.register("materializableApiJar", Jar) {
     group = "build"
     description = "Build pinned API source classes with declared materialization and completion contracts."
     archiveBaseName.set("thc-truffle-api")
-    archiveVersion.set("$materializableApiVersion-protocol3")
+    archiveVersion.set("$materializableApiVersion-protocol3-carrier1")
     destinationDirectory.set(layout.buildDirectory.dir("materializable-api"))
     preserveFileTimestamps = false
     reproducibleFileOrder = true
     from(compileMaterializableApi.flatMap { it.destinationDirectory })
+    from(compileCarrierLookupApi.flatMap { it.destinationDirectory })
     from(provider { zipTree(materializableApiBinary.singleFile) }) {
         exclude("com/oracle/truffle/api/nodes/RootNode.class", "com/oracle/truffle/api/nodes/RootNode\$*.class",
             "com/oracle/truffle/api/nodes/NodeAccessor.class", "com/oracle/truffle/api/nodes/NodeAccessor\$*.class",
-            "com/oracle/truffle/api/bytecode/ContinuationRootNode.class", "META-INF/MANIFEST.MF")
+            "com/oracle/truffle/api/bytecode/ContinuationRootNode.class",
+            "com/oracle/truffle/polyglot/JDKSupport.class", "com/oracle/truffle/polyglot/JDKSupport\$*.class",
+            "META-INF/MANIFEST.MF")
     }
     from("tools/truffle-protocol/LICENSE-UPL.txt") { into("META-INF") }
     inputs.files(materializableApiBinary)
@@ -93,7 +115,7 @@ def materializableApiJar = tasks.register("materializableApiJar", Jar) {
             manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
         }
         manifest.attributes(["Implementation-Title": "THC declared root protocol Truffle API",
-            "Implementation-Version": "$materializableApiVersion-protocol3",
+            "Implementation-Version": "$materializableApiVersion-protocol3-carrier1",
             "Upstream-Source-SHA256": "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064"])
     }
 }
@@ -137,7 +159,9 @@ tasks.register("verifyMaterializableApiSelection") {
             name.startsWith("com/oracle/truffle/api/nodes/RootNode\$") ||
             name == "com/oracle/truffle/api/nodes/NodeAccessor.class" ||
             name.startsWith("com/oracle/truffle/api/nodes/NodeAccessor\$") ||
-            name == "com/oracle/truffle/api/bytecode/ContinuationRootNode.class" }
+            name == "com/oracle/truffle/api/bytecode/ContinuationRootNode.class" ||
+            name == "com/oracle/truffle/polyglot/JDKSupport.class" ||
+            name.startsWith("com/oracle/truffle/polyglot/JDKSupport\$") }
         def digest = { byte[] bytes -> MessageDigest.getInstance("SHA-256").digest(bytes)
             .encodeHex().toString() }
         new JarFile(materializableApiBinary.singleFile).withCloseable { stock ->
@@ -161,6 +185,7 @@ tasks.register("verifyMaterializableApiSelection") {
                     digest(file("tools/truffle-protocol/materializable-root.patch").bytes) + "  materializable-root.patch\n" +
                     digest(file("tools/truffle-protocol/declared-return-api.patch").bytes) + "  declared-return-api.patch\n" +
                     digest(file("tools/truffle-protocol/graph-budget-api.patch").bytes) + "  graph-budget-api.patch\n" +
+                    digest(file("tools/truffle-protocol/mount-carrier-lookup.patch").bytes) + "  mount-carrier-lookup.patch\n" +
                     "Preserved upstream nonreplacement entries: " + stockEntries.count { !replaced(it.name) } + "\n", "UTF-8")
             }
         }
