@@ -5,9 +5,11 @@ SubstrateVM for native executables. The purpose is general `System.Mem.Weak`
 semantics, including keys held by Java code and finalizers that can resurrect
 their keys. Selecting the collector alone does not implement THC weak pointers.
 The current draft uses real `jam.vm.Weak` associations and guest finalizer
-carriers. General weak support cannot yet be advertised: completed-thunk key
-retargeting fails, public Haskell automatic execution is pending, and upstream
-dead-record reclamation remains unresolved.
+carriers. Linux diagnostic qualification passes public Haskell automatic
+finalization and completed-thunk key retargeting. The retained release still
+lacks the required key hook and registration-lifetime correction; a qualified
+replacement package and THC Native Image execution remain prerequisites for
+advertising general weak support.
 
 ## Toolchain ownership
 
@@ -154,9 +156,11 @@ supplies the original GHC runner, CBD dependencies and native oracle.
 These results qualify the tested Linux JVM behavior. They do not qualify the
 current release pin, macOS/Windows THC execution or Native Image. A reproducible
 producer release containing the hook and Native Image execution remain required
-before general weak support can be advertised. The diagnostic run also exposed
-excessive collection in the automatic-law polling loop; its cost is not an
-acceptable commit-CI baseline.
+before general weak support can be advertised. The automatic law requests one
+major collection and waits on its finalizer signal, rather than repeatedly
+collecting while the finalizer runs. Its native-GHC oracle, CBDs and audits were
+regenerated through the declared producer; the law and first-compiled composite
+then passed again on both backends and handoff modes.
 
 A package startup check proves startup. A native image build proves construction.
 Neither proves general weak semantics, guest compilation or another platform.

@@ -2,6 +2,11 @@
 
 [![Build](https://github.com/ekmett/thc/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/ekmett/thc/actions/workflows/build.yml)
 
+![Haskell](https://img.shields.io/badge/Haskell-%235e5086.svg?style=for-the-badge&logo=haskell&logoColor=white)
+![Gradle](https://img.shields.io/badge/Gradle-%2302303A.svg?style=for-the-badge&logo=Gradle&logoColor=white)
+![C++](https://img.shields.io/badge/C%2B%2B-00599C?style=flat&logo=c%2B%2B&logoColor=white)
+![Java](https://img.shields.io/badge/Java-ED8B00?style=flat&logo=openjdk&logoColor=white)
+
 Haskell on Truffle/Graal.
 
 I'm experimenting with using GHC as a frontend for a high performance Haskell
