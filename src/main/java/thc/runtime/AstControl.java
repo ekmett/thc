@@ -43,11 +43,11 @@ public final class AstControl {
             throw new AstCapture(marker, SynchronousMasking.current(node)).append(step);
         }
         if (!(input instanceof ChildResume resumed)) throw fault("AST child continuation requires ChildResume");
-        if (resumed.getFailure() != null) throw resumed.getFailure();
+        if (resumed.getFailure() != null) throw resumed.takeFailure();
         boolean valid = child instanceof Thunk thunk && thunk.getState() == 2 && thunk.getValue() == resumed.getValue() ||
             child instanceof CallSegment segment && segment.getState() == 2 && segment.getValue() == resumed.getValue();
         if (!valid) throw fault("AST child continuation lost its completed update");
-        return resumed.getValue();
+        return resumed.takeValue();
     }
     private static final class RetryForce implements AstResumeStep {
         private final Node node;

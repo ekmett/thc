@@ -8,7 +8,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import java.util.Arrays;
-import java.util.List;
+import java.util.ArrayDeque;
 import static thc.runtime.Applications.requireClosure;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
@@ -111,9 +111,9 @@ public final class AstTailApplication extends Expr {
     @ExplodeLoop private void clear(VirtualFrame frame) { for (int slot : temporaries) frame.clear(slot); }
     private static final class Cleanup implements AstResumeStep, DelimitedStep {
         private final AstTailApplication owner;
-        private final List<AstResumeStep> steps;
-        @TruffleBoundary Cleanup(AstTailApplication owner) { this(owner, List.of()); }
-        Cleanup(AstTailApplication owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
+        private final ArrayDeque<AstResumeStep> steps;
+        @TruffleBoundary Cleanup(AstTailApplication owner) { this(owner, new ArrayDeque<>()); }
+        Cleanup(AstTailApplication owner, ArrayDeque<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             boolean suspended = false;
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }

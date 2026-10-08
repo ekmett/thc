@@ -12,7 +12,7 @@ import thc.runtime.Unit;
 final class AstTailAnchor implements SavedGuestContinuation {
     private final FunctionRoot root;
     private final MaterializedFrame frame;
-    private final SavedGuestContinuation child;
+    private SavedGuestContinuation child;
     private final MaskingState mask;
     private final StackAnnotationState annotations;
     private final AtomicBoolean claimed = new AtomicBoolean();
@@ -56,6 +56,7 @@ final class AstTailAnchor implements SavedGuestContinuation {
         SynchronousMasking.INSTANCE.set(root, mask);
         StackAnnotations.set(root, annotations);
         SavedGuestContinuation pending = child;
+        child = null;
         TailCall transfer = null;
         try {
             while (true) {

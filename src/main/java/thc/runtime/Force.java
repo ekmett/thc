@@ -241,8 +241,14 @@ public final class Force extends Node {
             }
             Object current = leaf;
             SavedGuestContinuation expected = leafContinuation;
+            // Traversal has transferred ownership to the active boundary. These
+            // interpreter locals must not root a completed leaf while its parent runs.
+            leaf = null;
+            leafContinuation = null;
             Object input = thc.runtime.Unit.INSTANCE;
             while (true) {
+                AsyncRequest pending = input instanceof AstChildSuspension suspension ? suspension.getRequest() :
+                    input instanceof ChildResume child && child.getFailure() instanceof AsyncDelivery delivered ? delivered.getRequest() : null;
                 boolean spilled = false;
                 Object outcome;
                 try {
@@ -287,8 +293,6 @@ public final class Force extends Node {
                     if (!AstTailAnchor.accepts(astStackScope(this).getTailAnchor(), tail)) throw tail;
                     outcome = tail;
                 }
-                AsyncRequest pending = input instanceof AstChildSuspension suspension ? suspension.getRequest() :
-                    input instanceof ChildResume child && child.getFailure() instanceof AsyncDelivery delivered ? delivered.getRequest() : null;
                 if (pending != null && pending.getState() != AsyncRequestState.CLAIMED) pending = null;
                 if (pending != null && (outcome instanceof ChildResume || outcome == null && !spilled)) {
                     // A concurrent evaluator advancing this caller never consumes delivery.
@@ -304,8 +308,8 @@ public final class Force extends Node {
                 if (parked.isEmpty()) {
                     if (outcome instanceof TailCall tail) throw tail;
                     if (!(outcome instanceof ChildResume completed)) throw fault("AST child cut has no saved caller");
-                    if (completed.getFailure() != null) throw completed.getFailure();
-                    return completed.getValue();
+                    if (completed.getFailure() != null) throw completed.takeFailure();
+                    return completed.takeValue();
                 }
                 Parked parent = parked.removeLast();
                 current = parent.boundary(); expected = parent.continuation(); input = outcome;
@@ -349,7 +353,11 @@ public final class Force extends Node {
                                              boolean delimitedInvocation, boolean tailSpill, Metrics invocationMetrics) {
         MaskingState mask = SynchronousMasking.current(this);
         if (!(initial.getSourceRoot() instanceof GuestRoot root)) throw fault("AST stack cut has no guest root");
-        MaskingState parkedMask = initial.getYielded() instanceof CallSegmentSuspended cut ? cut.getParkedActiveMask() : null;
+        // A pattern binding also leaves a synthetic marker local in this long-lived
+        // interpreter frame. Transfer the mask without retaining that child edge.
+        Object yielded = initial.getYielded();
+        MaskingState parkedMask = yielded instanceof CallSegmentSuspended ? ((CallSegmentSuspended) yielded).getParkedActiveMask() : null;
+        yielded = null;
         if (parkedMask == null) parkedMask = mask;
         CallSegment segment = new CallSegment(initial.getIdentity(), parkedMask, mask, resultShape, false, tailSpill);
         while (true) {

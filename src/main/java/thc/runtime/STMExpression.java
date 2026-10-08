@@ -70,7 +70,7 @@ public final class STMExpression extends Expr {
         finish(frame, action, alternative, nested, null, null);
     }
     private void finish(VirtualFrame frame, Object action, Object alternative, Object nested,
-            java.util.List<AstResumeStep> steps, Object input) {
+            java.util.ArrayDeque<AstResumeStep> steps, Object input) {
         try {
             Object result = steps == null ? call.execute(frame, action, alternative, nested)
                 : AstContinuations.resumeAstSteps(frame, steps, input);

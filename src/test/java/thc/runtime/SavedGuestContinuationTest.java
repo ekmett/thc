@@ -15,14 +15,89 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
 import java.util.Arrays;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import thc.Language;
 import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SavedGuestContinuationTest {
+    private static final class LifetimeOwner extends GuestRoot {
+        LifetimeOwner(Language language) { super(language, com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build()); }
+        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Only the saved activation is entered"); }
+        @Override public long bloom(VirtualFrame frame) { return 0L; }
+    }
+    private static final class LifetimeDriver extends RootNode {
+        @Child private Force force = new Force(new Metrics(false));
+        LifetimeDriver(Language language) { super(language); }
+        @Override public Object execute(VirtualFrame frame) {
+            return force.drainStack((SavedGuestContinuation) frame.getArguments()[0]);
+        }
+    }
+    private static final class LifetimeObservation {
+        WeakReference<Object> produced;
+    }
+    private static WeakReference<Object> deadWitness() { return new WeakReference<>(new Object()); }
+    private static boolean collect(WeakReference<Object> reference) {
+        long deadline = System.nanoTime() + 3_000_000_000L;
+        do {
+            System.gc();
+            if (reference.refersTo(null)) return true;
+            try { Thread.sleep(10); }
+            catch (InterruptedException failure) { Thread.currentThread().interrupt(); throw new AssertionError(failure); }
+        } while (System.nanoTime() < deadline);
+        return reference.refersTo(null);
+    }
+    private static Object observeReleasedChild(LifetimeObservation observation) {
+        Object live = new Object();
+        var liveReference = new WeakReference<>(live);
+        var witness = deadWitness();
+        try {
+            boolean collected = collect(observation.produced);
+            assertTrue(witness.refersTo(null), "Independent dead key must establish collector progress");
+            assertTrue(liveReference.refersTo(live), "A Java-held key must remain live");
+            assertTrue(collected, "A discarded child result must die during the unrelated suffix");
+            return Unit.INSTANCE;
+        } finally { Reference.reachabilityFence(live); }
+    }
+    private static AstContinuation lifetimeActivation(Language language, LifetimeObservation observation, int scopes) {
+        var owner = new LifetimeOwner(language);
+        var childFrame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor());
+        var child = new AstContinuation(owner, AstStackSpill.INSTANCE, MaskingState.UNMASKED, childFrame,
+            List.of((frame, input) -> {
+                assertSame(Unit.INSTANCE, input);
+                Object key = new Object();
+                observation.produced = new WeakReference<>(key);
+                return key;
+            }), StackAnnotationState.EMPTY);
+        var suspended = new CallSegmentSuspended(new CallSegment(child), null, null, true);
+        var cut = AstControl.captureChild(owner, suspended)
+            .append((frame, input) -> Unit.INSTANCE)
+            .append((frame, input) -> { assertSame(Unit.INSTANCE, input); return observeReleasedChild(observation); });
+        for (int i = 0; i < scopes; i++)
+            cut.enclose(steps -> (frame, input) -> AstContinuations.resumeAstSteps(frame, steps, input));
+        return cut.freeze(owner, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, owner.getFrameDescriptor()));
+    }
+    @ParameterizedTest @ValueSource(ints = {0, 2})
+    void consumedChildDoesNotOwnItsDiscardedResultDuringSuffix(int scopes) {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var observation = new LifetimeObservation();
+                // The factory returns before the child creates its key; the driver
+                // legitimately retains the parent activation during the suffix.
+                assertSame(Unit.INSTANCE, Calls.target(new LifetimeDriver(language).getCallTarget(),
+                    new Object[]{lifetimeActivation(language, observation, scopes)}));
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void compiledBytecodeResumeRestoresTransactionFromSavedLocals() {
         try (var context = Main.executionContext()) {
             context.initialize("thc"); context.enter();

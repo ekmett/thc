@@ -7,7 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import java.util.List;
+import java.util.ArrayDeque;
 
 /** Sequenced operands retain completed prefixes across cuts, never replaying effects. */
 public final class AstOperands extends Expr {
@@ -50,9 +50,9 @@ public final class AstOperands extends Expr {
     @ExplodeLoop private void clear(VirtualFrame frame) { for (int slot : temporaries) frame.clear(slot); }
     private static final class Cleanup implements AstResumeStep, DelimitedStep {
         private final AstOperands owner;
-        private final List<AstResumeStep> steps;
-        @TruffleBoundary Cleanup(AstOperands owner) { this(owner, List.of()); }
-        Cleanup(AstOperands owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
+        private final ArrayDeque<AstResumeStep> steps;
+        @TruffleBoundary Cleanup(AstOperands owner) { this(owner, new ArrayDeque<>()); }
+        Cleanup(AstOperands owner, ArrayDeque<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             boolean suspended = false;
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }

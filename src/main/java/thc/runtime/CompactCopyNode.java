@@ -9,7 +9,7 @@ import com.oracle.truffle.api.nodes.Node;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
-import java.util.List;
+import java.util.ArrayDeque;
 import java.util.function.Consumer;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
@@ -43,7 +43,7 @@ public final class CompactCopyNode extends Node {
         CompilerDirectives.transferToInterpreter();
         return traverse(frame, new Traversal(region, root, sharing), null, null, null);
     }
-    private Object traverse(VirtualFrame frame, Traversal saved, Copy interrupted, List<AstResumeStep> steps, Object input) {
+    private Object traverse(VirtualFrame frame, Traversal saved, Copy interrupted, ArrayDeque<AstResumeStep> steps, Object input) {
         var region = saved.region;
         boolean sharing = saved.sharing;
         var registry = region.getOwner();

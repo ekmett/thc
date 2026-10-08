@@ -4,14 +4,14 @@ package thc.runtime;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import java.util.List;
+import java.util.ArrayDeque;
 
 /** Restore the annotation scope even when an earlier resumed step fails or captures. */
 final class AstAnnotationScope implements AstResumeStep {
     private final Node node;
     private final StackAnnotationState prior;
-    private final List<AstResumeStep> steps;
-    AstAnnotationScope(Node node, StackAnnotationState prior, List<AstResumeStep> steps) {
+    private final ArrayDeque<AstResumeStep> steps;
+    AstAnnotationScope(Node node, StackAnnotationState prior, ArrayDeque<AstResumeStep> steps) {
         this.node = node; this.prior = prior; this.steps = steps;
     }
     @Override public Object resume(VirtualFrame frame, Object input) {

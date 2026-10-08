@@ -40,7 +40,7 @@ class ForceLocalWritebackTest {
                 var child = (Thunk) binding;
                 b.beginResumeForcedLocal(local, false);
                 b.emitLoadConstant(new ThunkSuspended(child));
-                b.emitLoadConstant(new ChildResume(child.getValue(), null));
+                b.emitLoadArgument(1);
                 b.endResumeForcedLocal();
             } else {
                 b.beginForceLocal(new Metrics(true), local, false, false);
@@ -60,7 +60,10 @@ class ForceLocalWritebackTest {
                 if (resumed) { child.setValue(value); child.setState(2); }
                 var caller = target(language, child, resumed);
                 for (int repeat = 0; repeat < 20; repeat++) {
-                    assertSame(value, Calls.target(caller, new Object[]{0L}), "A thunk's object local must reuse its published result");
+                    // Each caller consumes its own completion carrier; the thunk's
+                    // memoized result remains shared across all these invocations.
+                    Object completion = resumed ? new ChildResume(value, null) : Unit.INSTANCE;
+                    assertSame(value, Calls.target(caller, new Object[]{0L, completion}), "A thunk's object local must reuse its published result");
                     assertSame(value, child.getValue()); assertEquals(2, child.getState());
                 }
                 assertEquals(resumed ? 0 : 1, evaluations[0], "Writeback must not replay the thunk");

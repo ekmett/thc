@@ -7,7 +7,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.*;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import com.oracle.truffle.api.Truffle;
-import java.util.List;
+import java.util.ArrayDeque;
 public final class LocalJoinRegion extends Expr {
     private final Object group;
     private final int selector, result;
@@ -40,10 +40,10 @@ public final class LocalJoinRegion extends Expr {
     }
     private static final class ResumeAsyncRegion implements AstResumeStep {
         private final LocalJoinRegion region;
-        private final List<AstResumeStep> steps;
+        private final ArrayDeque<AstResumeStep> steps;
         private final int[] slots;
         private final int offset;
-        ResumeAsyncRegion(LocalJoinRegion region, List<AstResumeStep> steps, int[] slots, int offset) { this.region = region; this.steps = steps; this.slots = slots; this.offset = offset; }
+        ResumeAsyncRegion(LocalJoinRegion region, ArrayDeque<AstResumeStep> steps, int[] slots, int offset) { this.region = region; this.steps = steps; this.slots = slots; this.offset = offset; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             try {
                 try { AstContinuations.resumeAstSteps(frame, steps, input); }

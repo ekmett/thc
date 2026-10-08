@@ -4,7 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import java.util.List;
+import java.util.ArrayDeque;
 import thc.Language;
 
 /** Shared transaction scopes. Internal cuts retain the original log and remaining work;
@@ -73,7 +73,7 @@ public final class STMCall extends Node {
     }
 
     private Object atomic(VirtualFrame frame, Object action, ManagedSTM.Transaction saved,
-            List<AstResumeStep> steps, Object input) {
+            ArrayDeque<AstResumeStep> steps, Object input) {
         ManagedSTM stm = Language.currentState(this).stm;
         ManagedSTM.Transaction ambient = stm.currentTransaction();
         while (true) {
@@ -100,7 +100,7 @@ public final class STMCall extends Node {
         }
     }
     private record AtomicResume(STMCall site, Object action, ManagedSTM.Transaction transaction,
-            List<AstResumeStep> steps) implements AstResumeStep {
+            ArrayDeque<AstResumeStep> steps) implements AstResumeStep {
         @Override public Object resume(VirtualFrame frame, Object input) {
             MaskingState mask = SynchronousMasking.current(site);
             StackAnnotationState annotations = StackAnnotations.current(site);
@@ -110,7 +110,7 @@ public final class STMCall extends Node {
     }
 
     private Object choice(VirtualFrame frame, Object action, Object alternative,
-            List<AstResumeStep> steps, Object input) {
+            ArrayDeque<AstResumeStep> steps, Object input) {
         ManagedSTM stm = Language.currentState(this).stm;
         ManagedSTM.Transaction parent = stm.parent();
         try {
@@ -128,7 +128,7 @@ public final class STMCall extends Node {
         }
     }
     private Object nested(VirtualFrame frame, ManagedSTM.Transaction parent, Object action,
-            PreparedDispatch dispatch, ManagedSTM.Transaction saved, List<AstResumeStep> steps, Object input) {
+            PreparedDispatch dispatch, ManagedSTM.Transaction saved, ArrayDeque<AstResumeStep> steps, Object input) {
         ManagedSTM stm = Language.currentState(this).stm;
         ManagedSTM.Transaction child = saved == null ? stm.beginNested(parent) : saved;
         stm.restore(child);

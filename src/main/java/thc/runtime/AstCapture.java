@@ -6,6 +6,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.function.Function;
 
@@ -21,11 +22,18 @@ public final class AstCapture extends ControlFlowException {
     @TruffleBoundary public AstCapture append(AstResumeStep step) { steps.add(step); return this; }
 
     /** Keep the lexical exception/cleanup scope around the saved child work. */
-    @TruffleBoundary public AstCapture enclose(Function<List<AstResumeStep>, AstResumeStep> wrapper) {
-        AstResumeStep scope = wrapper.apply(List.copyOf(steps));
+    @TruffleBoundary public AstCapture enclose(Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper) {
+        AstResumeStep scope = new ScopeRecipe(wrapper, List.copyOf(steps));
         steps.clear();
         steps.add(scope);
         return this;
+    }
+    private record ScopeRecipe(Function<ArrayDeque<AstResumeStep>, AstResumeStep> wrapper,
+                               List<AstResumeStep> steps) implements AstResumeStep {
+        @Override public AstResumeStep forInvocation() { return wrapper.apply(new ArrayDeque<>(steps)); }
+        @Override public Object resume(com.oracle.truffle.api.frame.VirtualFrame frame, Object input) {
+            throw new IllegalStateException("Captured scope recipe must be instantiated before resumption");
+        }
     }
     public AsyncRequest asyncRequest() {
         return switch (yielded) {
@@ -40,8 +48,9 @@ public final class AstCapture extends ControlFlowException {
         return new AstContinuation(root, yielded instanceof AstPendingTail tail ? tail.publish() : yielded,
             logicalMask, frame, List.copyOf(steps), annotations, rootEntrySpill, yielded instanceof AstPendingTail);
     }
-    @TruffleBoundary public AstCapture appendRemaining(List<AstResumeStep> old, int first) {
-        for (int i = first; i < old.size(); i++) steps.add(old.get(i));
+    @TruffleBoundary public AstCapture appendRemaining(ArrayDeque<AstResumeStep> pending) {
+        steps.addAll(pending);
+        pending.clear();
         return this;
     }
     public AstPendingTail pendingTail() {

@@ -18,7 +18,9 @@ Both backends resume actual executable suffixes. Bytecode uses cloned Truffle
 continuation frames and their continuation roots. AST nodes retain explicit
 remaining case/result steps. The internal capture exception is an unwinding
 transport, not a substitute for saved continuation state. This multi-shot image
-does not reuse the existing one-shot asynchronous continuation owners.
+does not reuse the existing one-shot asynchronous continuation owners. Saved AST
+scope recipes are immutable; each invocation instantiates its own pending steps,
+so consuming one invocation does not change a later invocation's nested scopes.
 
 ## Supported behavior and limits
 
