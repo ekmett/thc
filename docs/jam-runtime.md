@@ -93,10 +93,13 @@ registration. Dead associations are classified before finalizer rescue.
 Resurrecting a key does not revive its retired registration. Dead registration
 metadata must be reclaimable without making old tokens valid again; collection
 and idle polling costs must not grow with all registrations since process startup.
-The currently pinned JAM adapter retains and scans those dead records, so this
-lifetime behavior also needs an upstream correction. Finalizer state
-retains its actual captures, without an invented reference to the entire value
-payload after death.
+The currently pinned JAM adapter retains and scans those dead records. The
+combined supplier candidate described below reuses retired slots with generation
+tokens and keeps active scans separate from historical capacity. Registration
+metadata failure returns to Java as an allocation failure without publishing a
+partial association. This does not cover arbitrary collector allocation failure.
+Finalizer state retains its actual captures, without an invented reference to the
+entire value payload after death.
 
 THC's completed thunk is an indirection to its exact WHNF. Both backends can
 replace a local thunk alias with that value. A weak registration created before
@@ -199,14 +202,19 @@ it has no source, CBD, GHC or JDK dependency at execution time. The original GHC
 finalizer runner is included by the shared Core dependency selector. This check
 does not extend the JVM first-compiled-call evidence to Native Image.
 
-That image uses the diagnostic Linux release provider at Jam `5deba3e` with the
-source-verified root-repair fix in [Jam #18](https://github.com/ekmett/jam/pull/18).
-It is functional evidence, not a production package or acceptable performance
-claim. The current pinned supplier remains an explicitly labelled `fastdebug`
-preview. Production release-flavor qualification is tracked in
-[Jam #10](https://github.com/ekmett/jam/issues/10). Replacement-failure policy,
-native registration metadata lifetime, macOS execution and remaining Windows
-coverage are still open.
+The same unchanged executable also passes with the combined Jam Native Image
+component candidate `2626ef4f3a69dd7e1979a8430a2d717257fdc905`: root repair,
+pinning and reusable weak-registration metadata. Its Java API, native libraries
+and single Jam builder overlay come from one verified supplier bundle. It composes
+with THC's existing two-class builder correction and the diagnostic Linux release
+provider at Jam `5deba3e`. No THC runtime change was needed for this handoff.
+
+This qualifies that consumer on the combined Native Image candidate; the base
+JVM was unchanged. The current production pin remains an explicitly labelled
+`fastdebug` preview. A designated versioned release package, replacement-failure
+policy, refreshed HotSpot qualification, macOS execution and remaining Windows
+coverage are still open. Production release-flavor qualification is tracked in
+[Jam #10](https://github.com/ekmett/jam/issues/10).
 
 The ordinary executable runs reuse verified producer inputs, artifact hashes and
 Core audits. A separate optional `--verify-artifacts` run exceeded its time bound
