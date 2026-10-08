@@ -11,6 +11,7 @@ Acquisition builds and exports a program; it does not execute the guest.
 | `TinyParser.y` | Happy parser; its generated program prints `3` |
 | `TinyMath.hs` | HsColour HTML input and doctest examples |
 | [Word frequency](word-frequency/README.md) | UTF-8 file input, case folding and sorted word counts |
+| [Foreign resource lifetime](foreign-resource/README.md) | Native buffers, interior aliases and automatic Haskell finalizers |
 | [lens](lens/README.md) | Public optics operations and original upstream tests |
 | [ad](ad/README.md) | Differentiation and sharing-sensitive graph traversal |
 | [containers](containers/README.md) | Original IntMap benchmark component |
