@@ -123,12 +123,12 @@ runtimeEntryArguments modules manifest entry =
 -- Native build output is never executed; the exported GHC Core is.
 runResolvedPackage :: RunOptions -> FilePath -> FilePath -> (FilePath -> IO ([String], FilePath)) -> IO ()
 runResolvedPackage opts working target prepareRuntime = do
-  unless (runGhcSource opts == Nothing) $
-    fail "the Windows simple-package backend does not support --ghc-source"
   unless (not (null (runTarget opts))) $ fail "resolved runnable component has no name"
   unless (not (null (runThcRoot opts))) $ fail "run requires --thc-root DIR"
-  unless (runInstalledCore opts == "pinned") $
-    fail "the Windows simple-package backend does not support --installed-core required"
+  unless (runInstalledCore opts `elem` ["pinned", "required"]) $
+    fail "the Windows simple-package backend requires pinned or required installed Core"
+  unless (runGhcSource opts == Nothing || runInstalledCore opts == "required") $
+    fail "--ghc-source requires --installed-core required on Windows"
   launchEnvironment <- runtimeDebugEnvironment os opts =<< getEnvironment
   (cabalFile, lbi) <- configurePackage (runPlan opts) target
   let packageRoot = takeDirectory cabalFile

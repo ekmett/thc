@@ -182,7 +182,7 @@ runWindowsProject opts working = do
       ghcPkgPath = Just packageTool,
       selectedFlags = [(mkFlagName name, value) | (name, value) <- Map.toList selectedPackageFlags]}}
     working cabalFile (prepareWindowsRuntimeWithVerification (runVerifyArtifacts opts)
-      (runThcRoot opts) compiler packageTool driver)
+      (runInstalledCore opts) (runGhcSource opts) (runThcRoot opts) compiler packageTool driver)
   where
     -- Match the PowerShell exporter: bindist launchers narrow wide argv.
     -- Keep one actual tool identity through Cabal acquisition and export.
@@ -197,10 +197,10 @@ runWindowsProject opts working = do
 -- exports, using vanilla interfaces and the selected compiler's plugin archive.
 -- This does not claim that arbitrary installed dependency Core is available.
 prepareWindowsRuntime :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> IO ([String], FilePath)
-prepareWindowsRuntime = prepareWindowsRuntimeWithVerification True
+prepareWindowsRuntime = prepareWindowsRuntimeWithVerification True "pinned" Nothing
 
-prepareWindowsRuntimeWithVerification :: Bool -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> IO ([String], FilePath)
-prepareWindowsRuntimeWithVerification verify repository selectedCompiler selectedPkg selectedDriver output = do
+prepareWindowsRuntimeWithVerification :: Bool -> String -> Maybe FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> IO ([String], FilePath)
+prepareWindowsRuntimeWithVerification verify policy source repository selectedCompiler selectedPkg selectedDriver output = do
   require (Host.os == "mingw32") "vanilla Windows runtime acquisition requires native Windows"
   root <- canonicalizePath repository
   compiler <- canonicalizePath selectedCompiler
@@ -264,14 +264,16 @@ prepareWindowsRuntimeWithVerification verify repository selectedCompiler selecte
         jsonField value "type" == Just ("pre-existing" :: String)] of
       [value] -> readUnit value
       _ -> fail "Windows plugin plan has no unique installed ghc-internal unit"
-    wired <- wiredGhcInternal context root (unitId internal)
+    (prepared, wired) <- wiredGhcInternal context root policy source (unitId internal)
+    let selectedContext = context { contextCoreView =
+          if policy == "required" then Just prepared else contextCoreView context }
     -- The genuine source bundle owns wired Core, while Cabal dependencies name
     -- its selected installed registration. Preserve that empty registration
     -- record, as installedRecords does; otherwise the sidecar reacquires the
     -- already supplied Core owner and correctly rejects the collision.
     let supplied = wired : [object ["id" .= unitId internal, "depends" .= unitDepends internal,
           "modules" .= ([] :: [Value])] | jsonField wired "id" /= Just (unitId internal)]
-    (owner, records) <- linkForeignExceptionRuntime context environment "pinned" Nothing archive supplied
+    (owner, records) <- linkForeignExceptionRuntime selectedContext environment policy source archive supplied
     let manifest = output </> "runtime-support/packages.json"
     selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules verify records
     require (selected == Just owner) "Windows runtime dictionary identity differs from its manifest"
@@ -1266,16 +1268,25 @@ installedRecords registrationUnit artifact =
 -- inventory and its configured native archive. Acquire through that recipe
 -- before projecting Windows runtime modules; do not relink a private subset
 -- against the whole wired Core owner.
-wiredGhcInternal :: ExportContext -> FilePath -> String -> IO Value
-wiredGhcInternal context root registeredUnit = do
+wiredGhcInternal :: ExportContext -> FilePath -> String -> Maybe FilePath -> String -> IO (InstalledContext, Value)
+wiredGhcInternal context root policy source registeredUnit = do
   require (Host.os == "mingw32" && contextPlatform context == "x86_64-windows")
     "Windows wired native acquisition requires the selected native compiler"
   specification <- readJson (root </> "etc/ghc/9.14.1/windows-ghc-internal.json")
-  original <- prepareInterfaceHelper context root
+  native <- prepareInterfaceHelper context root
+  original <- case source of
+    Nothing -> pure native
+    Just path -> configuredView native path
   registered <- discoverInstalled original registeredUnit
-  prepared <- preparePinnedInterfaces (contextCache context)
-    (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context)
-    original [registered]
+  prepared <- if policy == "pinned" then preparePinnedInterfaces (contextCache context)
+      (contextPluginDb context) (contextPluginUnit context) (contextPluginLibrary context)
+      original [registered]
+    else case source of
+      Nothing -> pure original
+      Just path -> prepareForeignInterfaces
+        (ForeignCompiler (contextGhc context) (contextPluginDb context) (contextPluginUnit context)
+          (contextPluginLibrary context) (contextPluginLibrary context) (contextDriverHash context))
+        (contextCache context) path original [registered]
   selected <- discoverInstalled prepared (registeredId registered)
   result <- prepareInstalledBundleWithVerification (contextVerifyArtifacts context) (contextNativeTools context)
     (contextCache context) (contextNative context </> "cache/thc/staging")
@@ -1286,7 +1297,7 @@ wiredGhcInternal context root registeredUnit = do
   let full = installedBundle artifact
   projection <- projectWindowsWiredBundle (contextVerifyArtifacts context)
     (takeDirectory (bundlePath full)) full specification
-  pure (object ["id" .= installedOwner artifact, "depends" .= installedDepends selected,
+  pure (prepared, object ["id" .= installedOwner artifact, "depends" .= installedDepends selected,
     "modules" .= bundleModules projection,
     "bundle" .= object ["path" .= bundlePath projection, "sha256" .= bundleHash projection]])
 

@@ -33,12 +33,13 @@ import System.IO (openTempFile, hClose)
 import System.IO.Error (tryIOError)
 import qualified System.Info as Host
 import Numeric (showHex)
-import Test.HUnit (Test(..), assertBool, assertEqual)
+import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
 import THC.Compact.Module (readModuleValue)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign (missingForeignProof, createView, viewContext, observeProbeInterfaces,
-  retainedUsageFiles, verifyUsageFiles, matchUsageFiles, ForeignCompiler(..), prepareForeignInterfaces)
-import TestSupport (Env(..), runExe, assertSuccess, out, field, string, array, readJson)
+  retainedUsageFiles, verifyUsageFiles, matchUsageFiles, ForeignCompiler(..), prepareForeignInterfaces, configuredView)
+import THC.Driver.NativeDependencies (configuredSourceBuild)
+import TestSupport (Env(..), runExe, assertSuccess, assertContains, out, field, string, array, readJson)
 
 unixModules :: [String]
 unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals",
@@ -193,6 +194,17 @@ sourceTests env = TestLabel "original configured-source foreign provenance" $ Te
     warm <- acquire
     assertEqual "unchanged inputs reuse the exact acquisition view" cold warm
     regenerated <- discoverInstalled cold identifier
+    when windows $ do
+      owner <- maybe (fail "nominal view lost its configured native owner") pure (installedSource cold)
+      (_, info) <- either (fail . show) pure
+        (parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack (registration regenerated))))
+      actual <- configuredSourceBuild owner info
+      expected <- canonicalizePath (owner </> "dist")
+      assertEqual "copied nominal view retains the exact configured native owner"
+        (Just (expected, False)) actual
+      annotated <- prepareForeignInterfaces producer cache source cold [regenerated]
+      assertEqual "already annotated interfaces retain the same native owner"
+        (installedSource cold) (installedSource annotated)
     -- Corrupt only this test's produced artifacts. Unix exercises a replaced
     -- interface; directory exercises an object not read by the Core helper.
     -- Both must invalidate the receipt and produce a fresh verified generation.
@@ -302,6 +314,10 @@ viewTests env = TestLabel "acquisition view preserves native registration" $ Tes
     -- No replacement outputs: every view link must resolve to the exact
     -- existing interface, while the native package fields remain unchanged.
     view <- createView context original directory []
+    when (Host.os == "mingw32") $ do
+      canonicalView <- canonicalizePath view
+      assertEqual "normal configured source view retains native compiler selection"
+        (viewContext context canonicalView) =<< configuredView context directory
     selected <- discoverInstalled (viewContext context view) identifier
     before <- parsed (registration original)
     after <- parsed (registration selected)
@@ -319,6 +335,18 @@ viewTests env = TestLabel "acquisition view preserves native registration" $ Tes
       (installedInterfaces original) (installedInterfaces selected)
     expectedDirectory <- canonicalizePath (view </> "interfaces")
     assertEqual "view uses its own interface directory" [expectedDirectory] (Package.importDirs after)
+    when (Host.os == "mingw32") $ do
+      let record = directory </> "registration.conf"
+          update info = do
+            writeFile record (showInstalledPackageInfo info)
+            assertSuccess =<< runExe env directory Nothing 30 pkg
+              ["--global-package-db", view </> "lib/package.conf.d", "--global", "update", record]
+      update after { Package.libraryDirs = Package.libraryDirs after ++ [directory] }
+      rejected <- tryIOError (configuredView context directory)
+      case rejected of
+        Left problem -> assertContains "changed native registration or ABI" (show problem)
+        Right _ -> assertFailure "configured source view accepted changed native libraries"
+      update after
     unchanged <- discoverInstalled context identifier
     assertEqual "original installed registration is untouched" original unchanged
     -- Actual copied interface artifacts model one registered dependency. The

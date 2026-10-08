@@ -13,7 +13,7 @@
 -- An acquisition-only view of genuine recompiled interfaces. Native compilation
 -- always retains the caller's compiler, package database and installed libraries.
 module THC.Driver.InstalledForeign
-  ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext
+  ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext, configuredView
   , observeProbeInterfaces, retainedUsageFiles, verifyUsageFiles, matchUsageFiles ) where
 
 import Control.Monad (filterM, forM, forM_, unless)
@@ -56,6 +56,7 @@ import qualified System.Info as Host
 import THC.Driver.Lock (withLock)
 import System.Process (proc, CreateProcess(..), readCreateProcessWithExitCode)
 import THC.Driver.Installed
+import THC.Driver.NativeDependencies (configuredSourceBuild)
 import THC.Compact.Module (readModuleMetadata)
 
 -- | The published plugin library and the actual Cabal registration are both
@@ -117,6 +118,14 @@ prepareForeignInterfaces producer cache source context registrations = do
       case candidates of
         [] -> pure selected
         [unit] -> do
+          owned <- if Host.os == "mingw32" then do
+            registered <- parseRegistration (registration unit)
+            configuration <- configuredSourceBuild source registered
+            owner <- case configuration of
+              Just (path, False) -> canonicalizePath (takeDirectory path)
+              _ -> fail "Windows nominal view lost its retained Cabal native owner"
+            pure selected { installedSource = Just owner }
+            else pure selected
           -- Regenerate the same unit in one view: a second overlay would
           -- otherwise lose earlier Bound/Posix provenance from this unit.
           let selectedNames = names ++ [name | names == [boundModule, posixModule],
@@ -131,7 +140,7 @@ prepareForeignInterfaces producer cache source context registrations = do
             pure (name, core, missing, (path, before))
           let needed = [(name, core) | (name, core, True, _) <- original]
               observed = [observation | (_, _, _, observation) <- original]
-          if null needed then pure selected else prepare selected unit selectedNames needed observed
+          if null needed then pure owned else prepare owned unit selectedNames needed observed
         _ -> fail "multiple installed units contain the original foreign modules"
     prepare selected unit names needed originalFiles = do
       root <- canonicalizePath source
@@ -223,14 +232,21 @@ configuredRecipe producer context unit root names = do
     _ | names == unixModules -> pure "unix"
     [directory] | directory == directoryModule -> pure "directory"
     _ -> fail "unsupported installed foreign source profile"
+  ownerRoot <- if Host.os == "mingw32" then do
+    registered <- parseRegistration (registration unit)
+    configuration <- configuredSourceBuild root registered
+    case configuration of
+      Just (path, False) -> canonicalizePath (takeDirectory path)
+      _ -> fail "Windows nominal source requires its actual retained Cabal owner"
+    else pure root
   let windows = Host.os == "mingw32"
       way = installedInterfaceWay context
       suffix = if way == VanillaInterfaces then "hi" else "dyn_hi"
       hscProfile = packageName /= "ghc-internal"
       includeDirectory = if packageName == "directory" then "." else "include"
       stage = root </> "_build/stage1"
-      packageRoot = if windows then root </> "source" else root </> "libraries" </> packageName
-      configured = if windows then root </> "dist" else stage </> "libraries" </> packageName
+      packageRoot = if windows then ownerRoot </> "source" else root </> "libraries" </> packageName
+      configured = if windows then ownerRoot </> "dist" else stage </> "libraries" </> packageName
       built = configured </> "build"
       autogen = built </> "autogen"
       src = if hscProfile then packageRoot else packageRoot </> "src"
@@ -470,6 +486,29 @@ viewContext context view
   | otherwise = context { installedLibdir = view </> "lib",
       installedGlobalDb = view </> "lib/package.conf.d",
       installedLibdirGlobalDb = view </> "lib/package.conf.d", installedPackageTool = view </> "ghc-pkg" }
+
+-- | Select a retained complete Windows source view while preserving every
+-- native registration field. Only interface locations may differ.
+configuredView :: InstalledContext -> FilePath -> IO InstalledContext
+configuredView context source = do
+  check (Host.os == "mingw32") "configured source view selection requires native Windows"
+  view <- canonicalizePath (source </> "view")
+  let selected = viewContext context view
+      records current = do
+        dumped <- command (installedPackageTool current) (packageGlobalArguments current ++ ["dump"]) Nothing
+        mapM parseRegistration (splitRegistrations (lines dumped))
+      identifier = prettyShow . Package.installedUnitId
+  original <- records context
+  changed <- records selected
+  let originals = Map.fromList [(identifier record, record) | record <- original]
+  check (sort (map identifier original) == sort (map identifier changed))
+    "configured source view changed the installed unit inventory"
+  forM_ changed $ \record -> do
+    before <- maybe (fail "configured source view introduced an installed unit") pure
+      (Map.lookup (identifier record) originals)
+    check (record { Package.importDirs = Package.importDirs before } == before)
+      "configured source view changed native registration or ABI fields"
+  pure selected
 
 validateView :: InstalledContext -> InstalledUnit -> [(String, Value)] -> IO ()
 validateView context original needed = do

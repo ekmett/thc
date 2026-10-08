@@ -590,8 +590,20 @@ corrupting its own output. Failed producer generations retain their arguments
 and artifacts; only validated generations get cache receipts. This producer
 qualification does not by itself qualify canonical executable entry semantics,
 compiled guest execution or general Windows IO.
-The ordinary Windows simple-package driver currently rejects `--ghc-source`;
-its pinned acquisition route does not yet consume this nominal interface view.
+The ordinary Windows simple-package driver accepts `--installed-core required`
+with `--ghc-source DIR`. The directory selects its retained `view/` and the
+actual Cabal source owner for nominal regeneration. The driver checks that
+native registration and ABI fields match the selected compiler, carries the
+resulting view into exception-sidecar acquisition, and publishes native-bearing
+units through the ordinary configured C/C++ and CBD path. A copied nominal view
+retains the original `dist/setup-config` owner; it never replaces registered
+native archives with the two diagnostic objects.
+
+Every required dependency must already have complete Core in the selected view.
+Missing Core fails explicitly; this policy does not rebuild boot libraries or
+fall back to pinned sources. The default `pinned` policy and its compilation-key
+dependencies are unchanged. This propagation alone does not qualify canonical
+entry execution or remove the Windows deep-path copy limit.
 
 - Stock GHC interfaces may lack complete installed-library Core. Run
   `./bin/windows.ps1 -Action CheckCore` for the selected installation; see

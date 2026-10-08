@@ -15,7 +15,7 @@
 module THC.Driver.NativeDependencies
   ( NativeProduct, nativeProductProof, nativeProductPieces, readNativeProduct
   , selectNativePieces, nativeLinkInputs, nativeSymbolArchives, nativeSymbolArchivesWithProduct, configuredNativeArchive
-  , nativeWindowsRtsInputs
+  , nativeWindowsRtsInputs, configuredSourceBuild
   ) where
 
 import Control.Exception (evaluate)
@@ -224,36 +224,49 @@ nativeSymbolArchivesWithProduct ghcPkg libdir root owner arguments capturedProdu
             pure ([(archive,defined) | not (null defined)] ++ following)
       select symbols archives
 
--- | Native objects from the selected configured Hadrian tree or pinned Core
--- producer. Cabal supplies the active C/C++ source inventory. Hadrian retains
--- its dynamic-way objects; pinned producers compile that inventory as PIC.
--- Never load mixed Haskell shared libraries, Cmm or native RTS objects.
---
--- The caller passes the returned archive as an ordinary -optl input and records
--- the returned files in its existing cache observations. GHC registrations and
--- the ordinary installed-package path remain unchanged.
-configuredNativeArchive :: (FilePath -> FilePath -> [String] -> IO Value) ->
-  FilePath -> FilePath -> Value -> String -> String -> IO (Maybe (FilePath,[Value],Maybe NativeProduct))
-configuredNativeArchive capture source destination compilerIdentity owner registration = do
-  (_,info) <- either (fail . show) pure (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
+-- | Resolve retained source configuration for this exact registered unit.
+-- An explicit Cabal owner survives a copied acquisition view; other units
+-- retain their own import-directory or Hadrian configuration.
+configuredSourceBuild :: FilePath -> Package.InstalledPackageInfo -> IO (Maybe (FilePath, Bool))
+configuredSourceBuild source info = do
   root <- canonicalizePath source
   let package = prettyShow (pkgName (Package.sourcePackageId info))
       hadrian = root </> "_build/stage1/libraries" </> package
   builtByHadrian <- doesFileExist (hadrian </> "setup-config")
+  let direct = root </> "dist"
+  directExists <- doesFileExist (direct </> "setup-config")
+  owned <- if not directExists then pure [] else do
+    lbi <- getPersistBuildConfig Nothing (makeSymbolicPath direct)
+    component <- case allComponentsInBuildOrder lbi of
+      [value] -> pure value
+      _ -> fail "configured source owner has multiple components"
+    pure [direct | componentUnitId component == Package.installedUnitId info]
   pinned <- filterM (doesFileExist . (</> "setup-config"))
     [takeDirectory (takeDirectory path) </> "dist" | path <- Package.importDirs info,
       takeFileName path == "interfaces", takeFileName (takeDirectory path) == "view"]
-  selected <- case if builtByHadrian then [hadrian] else nub pinned of
+  paths <- nub <$> mapM canonicalizePath (if builtByHadrian then [hadrian] else owned ++ pinned)
+  case paths of
     [] -> pure Nothing
-    [path] -> pure (Just path)
+    [path] -> pure (Just (path, builtByHadrian))
     _ -> fail "configured native provider has multiple source configurations"
+
+-- | Capture Cabal's complete declared C/C++ inventory from the selected source
+-- owner. Hadrian retains its dynamic objects; pinned producers compile PIC.
+-- Never load mixed Haskell shared libraries, Cmm or native RTS objects.
+-- The caller records these products and inputs through ordinary publication.
+configuredNativeArchive :: (FilePath -> FilePath -> [String] -> IO Value) ->
+  FilePath -> FilePath -> Value -> String -> String -> IO (Maybe (FilePath,[Value],Maybe NativeProduct))
+configuredNativeArchive capture source destination compilerIdentity owner registration = do
+  (_,info) <- either (fail . show) pure (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
+  selected <- configuredSourceBuild source info
+  let package = prettyShow (pkgName (Package.sourcePackageId info))
   -- This producing compiler's C inventory is native RTS state: cutils mutates
   -- RtsFlags, genSym's unique cells live in the RTS, and keepCAFsForGHCi has a native
   -- constructor. Apply the same context-ownership boundary as nativeSymbolArchives.
   if package == "rts" || prettyShow (Package.installedUnitId info) == "ghc-9.14.1-inplace"
     then pure Nothing else case selected of
     Nothing -> pure Nothing
-    Just configured -> do
+    Just (configured, builtByHadrian) -> do
       configuredArchive info configured builtByHadrian
   where
   configuredArchive info configured builtByHadrian = do
