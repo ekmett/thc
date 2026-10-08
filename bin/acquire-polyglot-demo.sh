@@ -11,6 +11,7 @@ shift
 case "$demo" in
   javascript) module=JavaScriptDemo ;;
   polyglot) module=PolyglotDemo ;;
+  host-resource) module=HostResource ;;
   *) echo "Unknown demo: $demo" >&2; exit 1 ;;
 esac
 . "$root/bin/toolchain.sh"
